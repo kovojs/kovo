@@ -1,6 +1,17 @@
 import { isUntrusted, revealUntrusted, type ScopedKey } from '@kovojs/core';
 
 import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
+import { provenPrincipalFromRequest } from '../auth-principal.js';
+import { frameworkRevealUntrustedPolicy } from '../declassification-policy.js';
+import {
+  assertPrincipalEpochFresh,
+  assertPrincipalEpochFreshForRequest,
+  currentPrincipalEpoch,
+  PrincipalEpochStaleError,
+  snapshotPrincipalEpochStore,
+  type PrincipalEpochState,
+  type PrincipalEpochStore,
+} from '../principal-epoch.js';
 import {
   MutationReplayConflictError,
   MutationReplaySettlementExpiredError,
@@ -24,6 +35,7 @@ import type { ResolvedGuardFailure } from '../guards.js';
 import type { MutationFail, MutationSuccess } from './definition.js';
 import type { ValidationFailurePayload } from '../schema.js';
 import {
+  witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
@@ -35,7 +47,16 @@ import { requestStateExactCompositeKey } from '../request-state-intrinsics.js';
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): Promise<void> | void;
   commit(response: Response): Promise<void> | void;
+  /** @internal Exact principal epoch that owned this replay reservation. */
+  principalEpochAdmission?: ReplayPrincipalEpochAdmission;
 };
+
+/** @internal Carries one reservation's principal epoch into handler admission. */
+export interface ReplayPrincipalEpochAdmission {
+  readonly epoch: number;
+  readonly principal: string;
+  readonly store: PrincipalEpochStore;
+}
 
 export type MutationLifecycleReplayPolicy<Response> = {
   read(): Promise<Response | undefined> | Response | undefined;
@@ -101,18 +122,31 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   }
   const idemFacts = validateMutationIdemToken(idem);
   if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
+  const principalEpochStore = optionalPrincipalEpochStore(mode.request.principalEpochStore);
   const replayStore = mode.request.replayStore;
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
   const freshnessCheckedStore = {
-    async get(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async get(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const response = await replayStore.get(key, scope, token, fingerprint);
+      const response = await replayStore.get(key, scope, token, fingerprint, principal);
       assertFreshMutationIdem(idemFacts.token);
       return response;
     },
-    async reserve(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async reserve(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const reservation = await replayStore.reserve(key, scope, token, fingerprint);
+      const reservation = await replayStore.reserve(key, scope, token, fingerprint, principal);
       if (validateMutationIdemToken(idemFacts.token) === undefined) {
         await reservation?.abort?.();
         throw new MutationReplayConflictError();
@@ -125,13 +159,14 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
       token: string,
       response: BufferedMutationWireResponse,
       fingerprint?: string,
+      principal?: string,
     ) {
-      return replayStore.set(key, scope, token, response, fingerprint);
+      return replayStore.set(key, scope, token, response, fingerprint, principal);
     },
   };
   let context: ReturnType<typeof mutationReplayContext> | undefined;
-  let scopedContext: Awaited<ReturnType<typeof mutationReplayContext>> | undefined;
-  const replayContext = async () => {
+  let baseScopedContext: Awaited<ReturnType<typeof mutationReplayContext>> | undefined;
+  const replayContext = async (): Promise<PrincipalEpochReplayContext> => {
     const resolved = await (context ??= mutationReplayContext(mode.csrf ?? false, {
       ...mode.request,
       idem: idemFacts.token,
@@ -141,21 +176,32 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
     // SPEC §10.3 atomic reservation applies to csrf:false machine clients too. With neither an
     // anonymous-CSRF cookie nor a session, isolate their enhanced replay truth by mutation key;
     // no-JS uses its own `nojs:` namespace below so response vocabularies cannot cross-replay.
-    return (scopedContext ??=
+    const base = (baseScopedContext ??=
       resolved.scope === null
         ? {
             ...resolved,
             scope: requestStateExactCompositeKey('enhanced-sessionless', mode.mutationKey),
           }
         : resolved);
+    return principalEpochReplayContext(
+      base,
+      principalEpochStore,
+      mode.request.request,
+      idemFacts.issuedAtMs,
+    );
   };
   return {
     async read() {
-      return enhancedReplayResponseOrConflict(await readMutationReplay(await replayContext()));
+      const scoped = await replayContext();
+      const response = enhancedReplayResponseOrConflict(await readMutationReplay(scoped.context));
+      if (response !== undefined) await assertReplayResponseEpochFresh(scoped);
+      return response;
     },
     async reserve() {
-      const result = await reserveMutationReplayBeforeRun(await replayContext());
+      const scoped = await replayContext();
+      const result = await reserveMutationReplayBeforeRun(scoped.context);
       if (result.kind === 'replayed') {
+        await assertReplayResponseEpochFresh(scoped);
         return {
           kind: 'replayed',
           response: enhancedReplayResultOrConflict(result.response),
@@ -168,8 +214,12 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
           ...(result.reservation.abort === undefined
             ? {}
             : { abort: () => result.reservation.abort?.() }),
-          commit(response: BufferedMutationWireResponse) {
+          ...(scoped.binding === undefined
+            ? {}
+            : { principalEpochAdmission: replayPrincipalEpochAdmission(scoped.binding) }),
+          async commit(response: BufferedMutationWireResponse) {
             assertFreshMutationIdemSettlement(idemFacts.token);
+            await assertReplaySettlementEpochFresh(scoped);
             return result.reservation.commit(response);
           },
         },
@@ -193,19 +243,32 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   }
   const idemFacts = validateMutationIdemToken(idem);
   if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
+  const principalEpochStore = optionalPrincipalEpochStore(mode.request.principalEpochStore);
   const replayStore = mode.request.replayStore;
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
 
   const freshnessCheckedStore = {
-    async get(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async get(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const response = await replayStore.get(key, scope, token, fingerprint);
+      const response = await replayStore.get(key, scope, token, fingerprint, principal);
       assertFreshMutationIdem(idemFacts.token);
       return response;
     },
-    async reserve(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async reserve(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const reservation = await replayStore.reserve(key, scope, token, fingerprint);
+      const reservation = await replayStore.reserve(key, scope, token, fingerprint, principal);
       if (validateMutationIdemToken(idemFacts.token) === undefined) {
         await reservation?.abort?.();
         throw new MutationReplayConflictError();
@@ -215,8 +278,8 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   };
 
   let context: ReturnType<typeof mutationReplayContext> | undefined;
-  const replayContext = () =>
-    (context ??= mutationReplayContext(mode.csrf ?? false, {
+  const replayContext = async (): Promise<PrincipalEpochReplayContext> => {
+    const base = await (context ??= mutationReplayContext(mode.csrf ?? false, {
       idem: idemFacts.token,
       mutationKey: mode.mutationKey,
       rawInput: mode.request.rawInput,
@@ -225,12 +288,25 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         ? {}
         : { requestFingerprint: mode.request.requestFingerprint }),
     }));
+    return principalEpochReplayContext(
+      base.scope === null
+        ? {
+            ...base,
+            scope: requestStateExactCompositeKey('nojs-sessionless', mode.mutationKey),
+          }
+        : base,
+      principalEpochStore,
+      mode.request.request,
+      idemFacts.issuedAtMs,
+    );
+  };
   // Keep response vocabularies separated while deriving both enhanced and no-JS principal/fingerprint
   // facts from the same session-or-anonymous-CSRF binding. csrf:false sessionless no-JS retains its
   // mutation-key fallback for the existing public-machine submission contract.
   return {
     async read() {
-      const context = await replayContext();
+      const scoped = await replayContext();
+      const context = scoped.context;
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
       const response = await freshnessCheckedStore.get(
         mutationReplayScopedKey(scope, idemFacts.token),
@@ -238,12 +314,15 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         idemFacts.token,
         context.fingerprint,
       );
-      return noJsReplayResponseOrConflict(
+      const replayed = noJsReplayResponseOrConflict(
         response === undefined ? undefined : snapshotMutationReplayResponse(response),
       );
+      if (replayed !== undefined) await assertReplayResponseEpochFresh(scoped);
+      return replayed;
     },
     async reserve() {
-      const context = await replayContext();
+      const scoped = await replayContext();
+      const context = scoped.context;
       const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
       const replayKey = mutationReplayScopedKey(scope, idemFacts.token);
       const result = await reserveReplayBeforeRun<
@@ -255,14 +334,27 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         scope,
         store: {
           get(_scope: string, _idem: string, fingerprint?: string) {
-            return freshnessCheckedStore.get(replayKey, scope, idemFacts.token, fingerprint);
+            return freshnessCheckedStore.get(
+              replayKey,
+              scope,
+              idemFacts.token,
+              fingerprint,
+              context.principal,
+            );
           },
           reserve(_scope: string, _idem: string, fingerprint?: string) {
-            return freshnessCheckedStore.reserve(replayKey, scope, idemFacts.token, fingerprint);
+            return freshnessCheckedStore.reserve(
+              replayKey,
+              scope,
+              idemFacts.token,
+              fingerprint,
+              context.principal,
+            );
           },
         },
       });
       if (result.kind === 'replayed') {
+        await assertReplayResponseEpochFresh(scoped);
         return {
           kind: 'replayed',
           response: noJsReplayResultOrConflict(snapshotMutationReplayResponse(result.response)),
@@ -271,7 +363,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       if (result.kind !== 'reserved') return result;
       return {
         kind: 'reserved',
-        reservation: noJsReplayReservation(result.reservation, idemFacts.token),
+        reservation: noJsReplayReservation(result.reservation, idemFacts.token, scoped),
       };
     },
   };
@@ -395,14 +487,109 @@ function noJsReplayResultOrConflict(
 function noJsReplayReservation(
   reservation: NoJsMutationReplayReservation,
   token: string,
+  scoped: PrincipalEpochReplayContext,
 ): MutationLifecycleReplayReservation<NoJsMutationResponse> {
   return {
     ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
-    commit(response) {
+    ...(scoped.binding === undefined
+      ? {}
+      : { principalEpochAdmission: replayPrincipalEpochAdmission(scoped.binding) }),
+    async commit(response) {
       assertFreshMutationIdemSettlement(token);
+      await assertReplaySettlementEpochFresh(scoped);
       return reservation.commit(response);
     },
   };
+}
+
+function replayPrincipalEpochAdmission(
+  binding: PrincipalEpochReplayBinding,
+): ReplayPrincipalEpochAdmission {
+  return witnessFreeze({
+    epoch: binding.state.epoch,
+    principal: binding.principal,
+    store: binding.store,
+  });
+}
+
+interface PrincipalEpochReplayBinding {
+  readonly principal: string;
+  readonly state: PrincipalEpochState;
+  readonly store: PrincipalEpochStore;
+  readonly requestCarrier: unknown;
+}
+
+interface PrincipalEpochReplayContext {
+  readonly binding?: PrincipalEpochReplayBinding;
+  readonly context: Awaited<ReturnType<typeof mutationReplayContext>>;
+}
+
+function optionalPrincipalEpochStore(
+  store: PrincipalEpochStore | undefined,
+): PrincipalEpochStore | undefined {
+  return store === undefined ? undefined : snapshotPrincipalEpochStore(store);
+}
+
+async function principalEpochReplayContext(
+  context: Awaited<ReturnType<typeof mutationReplayContext>>,
+  store: PrincipalEpochStore | undefined,
+  requestCarrier: unknown,
+  issuedAtMs: number,
+): Promise<PrincipalEpochReplayContext> {
+  const principal = provenPrincipalFromRequest(requestCarrier);
+  if (store === undefined || principal === undefined) return { context };
+  const state = await currentPrincipalEpoch(store, principal);
+  // Epoch 1 is identity initialization, not revocation. A form stamped in the same millisecond as
+  // first authenticated resolution remains valid; equality at every later epoch is closed because
+  // ordering within the revocation millisecond is unknowable.
+  if (
+    state.status !== 'active' ||
+    issuedAtMs < state.changedAtMs ||
+    (issuedAtMs === state.changedAtMs && state.epoch > 1)
+  ) {
+    throw new MutationReplayConflictError();
+  }
+  if (context.scope === null) throw new MutationReplayConflictError();
+  return {
+    binding: { principal, requestCarrier, state, store },
+    context: {
+      ...context,
+      // The durable receipt embeds the current epoch in its unique replay namespace. The original
+      // scope is already principal-bound; append only the epoch to stay below the 4096-unit ceiling.
+      scope: requestStateExactCompositeKey(context.scope, `epoch:${state.epoch}`),
+    },
+  };
+}
+
+async function assertReplayResponseEpochFresh(scoped: PrincipalEpochReplayContext): Promise<void> {
+  const binding = scoped.binding;
+  if (binding === undefined) return;
+  try {
+    await assertPrincipalEpochFresh(binding.store, binding.principal, binding.state.epoch);
+  } catch (error) {
+    if (error instanceof PrincipalEpochStaleError) throw new MutationReplayConflictError();
+    throw error;
+  }
+}
+
+async function assertReplaySettlementEpochFresh(
+  scoped: PrincipalEpochReplayContext,
+): Promise<void> {
+  const binding = scoped.binding;
+  if (binding === undefined) return;
+  try {
+    await assertPrincipalEpochFreshForRequest(
+      binding.store,
+      binding.requestCarrier,
+      binding.principal,
+      binding.state.epoch,
+    );
+  } catch (error) {
+    if (error instanceof PrincipalEpochStaleError) {
+      throw new MutationReplaySettlementExpiredError();
+    }
+    throw error;
+  }
 }
 
 interface MutationIdemFieldSnapshot {
@@ -425,7 +612,7 @@ function readNoJsIdemField(rawInput: unknown): MutationIdemFieldSnapshot {
   if (!('value' in descriptor)) return { present: true, value: undefined };
   const rawValue = descriptor.value;
   const value = isUntrusted(rawValue)
-    ? revealUntrusted(rawValue, 'validated request-derived no-js idempotency token')
+    ? revealUntrusted(rawValue, frameworkRevealUntrustedPolicy)
     : rawValue;
   return { present: true, value };
 }

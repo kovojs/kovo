@@ -14,6 +14,8 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
+import { isProvenPrincipal, provenPrincipalFromRequest } from './auth-principal.js';
 import { parseMutationIdemToken } from './mutation-idem.js';
 import { formLikeToRecord } from './schema.js';
 import {
@@ -52,6 +54,7 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import { securityEvent, securityEventResourceIdentity } from './security-event.js';
 import {
   requestStateBoundedMutationReplayIdentity,
   requestStateExactCompositeKey,
@@ -104,12 +107,14 @@ export interface MutationReplayStore<
     scope: string,
     idem: string,
     fingerprint?: string,
+    principal?: string,
   ): Promise<Response | undefined> | Response | undefined;
   reserve(
     key: ScopedKey,
     scope: string,
     idem: string,
     fingerprint?: string,
+    principal?: string,
   ):
     | MutationReplayReservation<Response>
     | Promise<MutationReplayReservation<Response> | undefined>
@@ -120,6 +125,7 @@ export interface MutationReplayStore<
     idem: string,
     response: Response,
     fingerprint?: string,
+    principal?: string,
   ): Promise<void> | void;
 }
 
@@ -134,31 +140,54 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
   const reserve = stableMutationReplayMethod(source, 'reserve', true)!;
   const set = stableMutationReplayMethod(source, 'set', true)!;
   const snapshot: MutationReplayStore<Response> = witnessFreeze({
-    get(key: ScopedKey, scope: string, idem: string, fingerprint?: string) {
+    get(key: ScopedKey, scope: string, idem: string, fingerprint?: string, principal?: string) {
       assertMutationReplayScopedKey(key, scope, idem);
-      return witnessReflectApply(get, source, [key, scope, idem, fingerprint]);
+      assertOptionalReplayPrincipal(principal);
+      return witnessReflectApply(
+        get,
+        source,
+        principal === undefined
+          ? [key, scope, idem, fingerprint]
+          : [key, scope, idem, fingerprint, principal],
+      );
     },
-    async reserve(key: ScopedKey, scope: string, idem: string, fingerprint?: string) {
+    async reserve(
+      key: ScopedKey,
+      scope: string,
+      idem: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertMutationReplayScopedKey(key, scope, idem);
-      const reservation = await witnessReflectApply<unknown>(reserve, source, [
-        key,
-        scope,
-        idem,
-        fingerprint,
-      ]);
+      assertOptionalReplayPrincipal(principal);
+      const reservation = await witnessReflectApply<unknown>(
+        reserve,
+        source,
+        principal === undefined
+          ? [key, scope, idem, fingerprint]
+          : [key, scope, idem, fingerprint, principal],
+      );
       return reservation === undefined
         ? undefined
         : snapshotMutationReplayReservation<Response>(reservation);
     },
-    set(key: ScopedKey, scope: string, idem: string, response: Response, fingerprint?: string) {
+    set(
+      key: ScopedKey,
+      scope: string,
+      idem: string,
+      response: Response,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertMutationReplayScopedKey(key, scope, idem);
-      return witnessReflectApply<Promise<void> | void>(set, source, [
-        key,
-        scope,
-        idem,
-        response,
-        fingerprint,
-      ]);
+      assertOptionalReplayPrincipal(principal);
+      return witnessReflectApply<Promise<void> | void>(
+        set,
+        source,
+        principal === undefined
+          ? [key, scope, idem, response, fingerprint]
+          : [key, scope, idem, response, fingerprint, principal],
+      );
     },
   });
   if (witnessWeakSetHas(memoryMutationReplayStores, source)) {
@@ -257,6 +286,8 @@ export interface MutationReplayContext<
   fingerprint?: string;
   idem?: string;
   replayStore?: MutationReplayStore<Response>;
+  /** Additive erasure index; never participates in replay authorization identity. */
+  principal?: string;
   scope: string | null;
 }
 
@@ -548,6 +579,12 @@ function assertMutationReplayStoreOptions(options: {
   }
 }
 
+function assertOptionalReplayPrincipal(value: unknown): asserts value is string | undefined {
+  if (value !== undefined && !isProvenPrincipal(value)) {
+    throw new TypeError('Mutation replay principal index must be a proven principal id.');
+  }
+}
+
 export async function mutationReplayContext<Request, Response extends MutationReplayResponse>(
   csrf: CsrfReplayScope<Request>,
   wireRequest: {
@@ -560,10 +597,12 @@ export async function mutationReplayContext<Request, Response extends MutationRe
   },
 ): Promise<MutationReplayContext<Response>> {
   const sessionScope = mutationReplayScope(csrf, wireRequest.request);
+  const principal = provenPrincipalFromRequest(wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
     ...(await replayFingerprint(csrf, wireRequest)),
     ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
+    ...(principal === undefined ? {} : { principal }),
     // Security finding M4: fold the mutation key into the replay scope so
     // idempotency is per-(session, mutation, idem). Without this, one mutation's
     // cached response/Set-Cookie could be replayed under a different mutation
@@ -657,6 +696,7 @@ export async function readMutationReplay<Response extends MutationReplayResponse
       replay.scope,
       replay.idem,
       replay.fingerprint,
+      replay.principal,
     );
     return response === undefined ? undefined : cloneMutationReplayResponse(response);
   } catch (error) {
@@ -695,10 +735,16 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
       ? undefined
       : {
           get(_scope: string, _idem: string, fingerprint?: string) {
-            return replay.replayStore!.get(replayKey, scope!, idem!, fingerprint);
+            return replay.replayStore!.get(replayKey, scope!, idem!, fingerprint, replay.principal);
           },
           reserve(_scope: string, _idem: string, fingerprint?: string) {
-            return replay.replayStore!.reserve(replayKey, scope!, idem!, fingerprint);
+            return replay.replayStore!.reserve(
+              replayKey,
+              scope!,
+              idem!,
+              fingerprint,
+              replay.principal,
+            );
           },
         };
   const result = await reserveReplayBeforeRun({
@@ -721,17 +767,19 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   replay: ReplayReservationRequest<Response, Reservation>,
 ): Promise<ReplayReservationResult<Response, Reservation>> {
   if (replay.idem === undefined || replay.scope === null || replay.store === undefined) {
-    return { kind: 'disabled' };
+    return replayReservationDecision(replay, { kind: 'disabled' });
   }
 
   let reservation: Reservation | undefined;
   try {
     reservation = await replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     throw error;
   }
-  if (reservation) return { kind: 'reserved', reservation };
+  if (reservation) return replayReservationDecision(replay, { kind: 'reserved', reservation });
 
   // reserve() returned undefined: a concurrent request created the record between
   // our get() miss and this reserve(). Await the now-present pending entry rather
@@ -740,9 +788,11 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   // running ourselves rather than propagating the abort.
   try {
     const pending = await replay.store.get(replay.scope, replay.idem, replay.fingerprint);
-    if (pending) return { kind: 'replayed', response: pending };
+    if (pending) return replayReservationDecision(replay, { kind: 'replayed', response: pending });
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
@@ -753,24 +803,63 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   try {
     retryReservation = await replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     throw error;
   }
-  if (retryReservation) return { kind: 'reserved', reservation: retryReservation };
+  if (retryReservation) {
+    return replayReservationDecision(replay, {
+      kind: 'reserved',
+      reservation: retryReservation,
+    });
+  }
 
   // Another request snuck in again — await that one.
   try {
     const pending = await replay.store.get(replay.scope, replay.idem, replay.fingerprint);
-    if (pending) return { kind: 'replayed', response: pending };
+    if (pending) return replayReservationDecision(replay, { kind: 'replayed', response: pending });
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
   // Still can't reserve. A bounded replay store is shedding distinct pending work (for
   // example maxPending saturation), so callers must fail closed instead of running the
   // mutation without the atomic replay reservation SPEC §10.3 requires.
-  return { kind: 'unavailable' };
+  return replayReservationDecision(replay, { kind: 'unavailable' });
+}
+
+function replayReservationDecision<Response, Reservation>(
+  replay: ReplayReservationRequest<Response, Reservation>,
+  result: ReplayReservationResult<Response, Reservation>,
+): ReplayReservationResult<Response, Reservation> {
+  // @kovo-security-decision replay reservation-admission
+  securityEvent({
+    decisionSite: 'framework:replay:reservation-admission',
+    door: 'replay',
+    outcome: result.kind === 'conflict' || result.kind === 'unavailable' ? 'deny' : 'allow',
+    principal: {
+      epoch: null,
+      id: null,
+      kind: 'unresolved',
+      reason: 'outside-request-context',
+      tenant: null,
+    },
+    resourceScope: {
+      identity:
+        replay.scope === null || replay.idem === undefined
+          ? 'global'
+          : securityEventResourceIdentity(
+              `${replay.scope}\u0000${replay.idem}\u0000${replay.fingerprint ?? ''}`,
+            ),
+      kind: 'reservation',
+    },
+    type: 'security-decision',
+  });
+  return result;
 }
 
 export class MutationReplayAbortedError extends Error {
@@ -922,7 +1011,7 @@ async function canonicalJson(value: unknown): Promise<string> {
   // fingerprint compares the validated wire value, so reveal wrappers at this internal choke
   // before structural canonicalization.
   if (isUntrusted(value)) {
-    return canonicalJson(revealUntrusted(value, 'validated request-derived replay fingerprint'));
+    return canonicalJson(revealUntrusted(value, frameworkRevealUntrustedPolicy));
   }
   if (value instanceof ReplayFormDataFingerprintInput) {
     return canonicalFormDataEntries(value.entries);

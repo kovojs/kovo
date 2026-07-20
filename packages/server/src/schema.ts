@@ -11,6 +11,12 @@ import {
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
+
+import {
+  createGuardArgsFileReceipt,
+  registerGuardArgsNativeFileReceipt,
+} from './guard-args-file-receipt.js';
 import {
   type UnverifiedAcceptance,
   mintStorageKey,
@@ -62,6 +68,7 @@ import {
 import { revealRequestProvenanceContainer } from './request-body-provenance.js';
 import {
   assertResponseSecurityIntrinsics,
+  securityArrayBufferSlice,
   securityArrayIsArray,
   securityArrayJoin,
   securityCreateDate,
@@ -90,6 +97,7 @@ import {
   securityStringToLowerCase,
   securityStringTrim,
   securityUint8ArrayFromArrayBuffer,
+  securityUint8ArrayLength,
   securityUint8ArraySlice,
 } from './response-security-intrinsics.js';
 
@@ -725,7 +733,11 @@ export interface FileSchemaOptions {
 export interface StoredFileUpload {
   file: FileLike;
   key: ScopedKey;
-  storage: StorageObjectInfo;
+  /**
+   * Framework-pinned storage metadata. Mutable `Date` internal slots cannot cross the validated
+   * args receipt, so `lastModified` is normalized to an ISO timestamp string (SPEC §10.3 C15).
+   */
+  storage: Readonly<Omit<StorageObjectInfo, 'lastModified'> & { readonly lastModified?: string }>;
 }
 
 /** Stored-upload schema produced by `s.file().store(...)` (SPEC.md §6). */
@@ -1338,10 +1350,8 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID), never
     // derived from the client filename. This kills path traversal / overwrite by construction — an
     // attacker `../../etc/passwd` name can no longer become the storage key.
-    const key = frameworkScopedKey(
-      'framework-upload',
-      mintStorageKey(this.#storageOptions.keyPrefix),
-    );
+    const appKey = mintStorageKey(this.#storageOptions.keyPrefix);
+    const key = frameworkScopedKey('framework-upload', appKey);
 
     // KV428: mint the stored contentType from the SNIFFED bytes (server truth overrides the client
     // lie). The audited `accept.unverified(...)` escape trusts the client-declared `file.type`
@@ -1351,19 +1361,151 @@ class StoredFileSchemaImpl implements StoredFileSchema {
       ? type
       : sniffed.contentType;
 
-    const storage = await this.#storageOptions.storage.put(key, securityUint8ArraySlice(bytes), {
-      ...(contentType === '' ? {} : { contentType }),
-      metadata: {
-        ...this.#storageOptions.metadata?.(file),
-        // The client filename is sanitized framework-owned download METADATA only — never the key.
-        // Keep it last so app metadata cannot replace the value that later reaches
-        // Content-Disposition at the stored-file sink (SPEC §6.6 / §9.1).
-        filename: sanitizeDownloadFilename(name),
+    const storageResult = await this.#storageOptions.storage.put(
+      key,
+      securityUint8ArraySlice(bytes),
+      {
+        ...(contentType === '' ? {} : { contentType }),
+        metadata: {
+          ...this.#storageOptions.metadata?.(file),
+          // The client filename is sanitized framework-owned download METADATA only — never the key.
+          // Keep it last so app metadata cannot replace the value that later reaches
+          // Content-Disposition at the stored-file sink (SPEC §6.6 / §9.1).
+          filename: sanitizeDownloadFilename(name),
+        },
       },
-    });
+    );
+    const storage = snapshotStoredFileStorageInfo(storageResult, appKey);
 
-    return { file, key, storage };
+    const upload = witnessCreateNullRecord<unknown>();
+    witnessDefineProperty(upload, 'file', {
+      configurable: false,
+      enumerable: true,
+      value: file,
+      writable: false,
+    });
+    witnessDefineProperty(upload, 'key', {
+      configurable: false,
+      enumerable: true,
+      value: key,
+      writable: false,
+    });
+    witnessDefineProperty(upload, 'storage', {
+      configurable: false,
+      enumerable: true,
+      value: storage,
+      writable: false,
+    });
+    return witnessFreeze(upload) as unknown as StoredFileUpload;
   }
+}
+
+function snapshotStoredFileStorageInfo(
+  source: StorageObjectInfo,
+  expectedKey: string,
+): StoredFileUpload['storage'] {
+  if (!requestIsPlainRecord(source)) {
+    throw new TypeError('Stored upload storage.put() must return a plain object-info record.');
+  }
+
+  const key = stableStoredFileInfoValue(source, 'key');
+  if (key !== expectedKey) {
+    throw new TypeError('Stored upload storage.put() returned a mismatched object key.');
+  }
+
+  const output = witnessCreateNullRecord<unknown>();
+  defineStoredFileInfoValue(output, 'key', expectedKey);
+
+  const contentType = stableStoredFileInfoValue(source, 'contentType', true);
+  if (contentType !== undefined) {
+    if (typeof contentType !== 'string') {
+      throw new TypeError('Stored upload contentType must be a string.');
+    }
+    defineStoredFileInfoValue(output, 'contentType', contentType);
+  }
+
+  const etag = stableStoredFileInfoValue(source, 'etag', true);
+  if (etag !== undefined) {
+    if (typeof etag !== 'string') throw new TypeError('Stored upload etag must be a string.');
+    defineStoredFileInfoValue(output, 'etag', etag);
+  }
+
+  const size = stableStoredFileInfoValue(source, 'size', true);
+  if (size !== undefined) {
+    if (
+      typeof size !== 'number' ||
+      !securityNumberIsInteger(size) ||
+      size < 0 ||
+      size > 9_007_199_254_740_991
+    ) {
+      throw new TypeError('Stored upload size must be a non-negative safe integer.');
+    }
+    defineStoredFileInfoValue(output, 'size', size);
+  }
+
+  const lastModified = stableStoredFileInfoValue(source, 'lastModified', true);
+  if (lastModified !== undefined) {
+    if (!securityIsDate(lastModified) || securityNumberIsNaN(securityDateGetTime(lastModified))) {
+      throw new TypeError('Stored upload lastModified must be a valid Date.');
+    }
+    defineStoredFileInfoValue(output, 'lastModified', securityDateToISOString(lastModified));
+  }
+
+  const metadata = stableStoredFileInfoValue(source, 'metadata', true);
+  if (metadata !== undefined) {
+    if (!requestIsPlainRecord(metadata)) {
+      throw new TypeError('Stored upload metadata must be a plain string record.');
+    }
+    const metadataOutput = witnessCreateNullRecord<unknown>();
+    const keys = witnessObjectKeys(metadata);
+    for (let index = 0; index < keys.length; index += 1) {
+      const metadataKey = keys[index]!;
+      const metadataValue = stableStoredFileInfoValue(metadata, metadataKey);
+      if (typeof metadataValue !== 'string') {
+        throw new TypeError('Stored upload metadata values must be strings.');
+      }
+      defineStoredFileInfoValue(metadataOutput, metadataKey, metadataValue);
+    }
+    defineStoredFileInfoValue(output, 'metadata', witnessFreeze(metadataOutput));
+  }
+
+  return witnessFreeze(output) as StoredFileUpload['storage'];
+}
+
+function stableStoredFileInfoValue(
+  source: object,
+  property: PropertyKey,
+  optional = false,
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (before === undefined && after === undefined && optional) return undefined;
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    throw new TypeError('Stored upload storage metadata must use stable own-data properties.');
+  }
+  return before.value;
+}
+
+function defineStoredFileInfoValue(
+  target: Record<PropertyKey, unknown>,
+  property: PropertyKey,
+  value: unknown,
+): void {
+  witnessDefineProperty(target, property, {
+    configurable: false,
+    enumerable: true,
+    value,
+    writable: false,
+  });
 }
 
 // SPEC §6.6: schema constructors are retained executable authority. Pin their method tables before
@@ -1526,7 +1668,14 @@ async function parseVerifiedFileLike(
   type: string;
 }> {
   const snapshot = parseFileLikeShape(input, options);
-  const bytes = securityUint8ArrayFromArrayBuffer(await snapshot.readBytes());
+  // Commit the bytes once after the async application callback. The object that crosses into a
+  // guard/handler is a framework receipt over this exact copy, never the app-owned FileLike whose
+  // method or internal source could change after schema validation (SPEC §6.6 / §10.3 C15).
+  const committedBuffer = securityArrayBufferSlice(await snapshot.readBytes());
+  const bytes = securityUint8ArrayFromArrayBuffer(committedBuffer);
+  if (options.maxBytes !== undefined && securityUint8ArrayLength(bytes) > options.maxBytes) {
+    throw validationError(`Expected file <= ${options.maxBytes} bytes`);
+  }
   const sniffed = sniffUploadBytes(bytes);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
@@ -1537,9 +1686,17 @@ async function parseVerifiedFileLike(
     throw validationError(`Expected file type ${securityArrayJoin(accept, ', ')}`);
   }
 
+  const fileReceipt = createGuardArgsFileReceipt(committedBuffer, snapshot.name, snapshot.type);
+  // Preserve the long-standing direct `s.file().parseAsync(nativeFile)` identity contract. Native
+  // File bytes/metadata are immutable internal slots; the request runner still substitutes the
+  // separately committed receipt before a guard or handler observes parsed args. Structural
+  // FileLike objects do not have that platform guarantee and therefore return the receipt now.
+  const file = requestIsFile(snapshot.file) ? snapshot.file : fileReceipt;
+  if (file === snapshot.file) registerGuardArgsNativeFileReceipt(snapshot.file, fileReceipt);
+
   return {
     bytes,
-    file: snapshot.file,
+    file,
     name: snapshot.name,
     sniffed,
     type: snapshot.type,
@@ -1873,13 +2030,10 @@ function stableSchemaArrayValue(values: readonly unknown[], index: number): unkn
   return descriptor.value;
 }
 
-const SCHEMA_UNTRUSTED_REVEAL_REASON =
-  'validated request-derived input through Kovo schema parsing';
-
 function revealSchemaInput(input: unknown): unknown {
   input = revealRequestProvenanceContainer(input);
   if (isUntrusted(input)) {
-    input = revealUntrusted(input, SCHEMA_UNTRUSTED_REVEAL_REASON);
+    input = revealUntrusted(input, frameworkRevealUntrustedPolicy);
   }
   return revealRequestProvenanceContainer(input);
 }

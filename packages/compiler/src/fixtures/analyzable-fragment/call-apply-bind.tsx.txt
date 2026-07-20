@@ -1,0 +1,11 @@
+import { endpoint } from '@kovojs/server';
+
+export const root = endpoint('/ledger/indirect-call', {
+  async handler(_input, context) {
+    await context.fetch.call(null, 'https://example.test/call');
+    await context.fetch.apply(null, ['https://example.test/apply']);
+    const bound = context.fetch.bind(null);
+    await bound('https://example.test/bind');
+    return Response.json({ ok: true });
+  },
+});

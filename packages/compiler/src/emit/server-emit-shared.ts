@@ -15,7 +15,11 @@ import {
   compilerStringToLowerCase,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from '../diagnostics.js';
 import {
   outputContextForAttribute,
   type GeneratedOutputWriteFact,
@@ -658,14 +662,16 @@ export function writerConflictDiagnostic(
   firstWriter: string,
   secondWriter: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV231',
       options.source,
       attribute.start,
       attribute.end - attribute.start,
     ),
-    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
-  };
+    {
+      message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+    },
+  );
 }

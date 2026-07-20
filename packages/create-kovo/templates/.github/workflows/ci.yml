@@ -32,6 +32,9 @@ jobs:
           key: kovo-tsc-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             kovo-tsc-${{ runner.os }}-
+      # This dependency-free gate runs before installation so an allow-all or allowlist weakening
+      # cannot execute an app dependency's lifecycle script before CI reports the policy failure.
+      - run: node scripts/check-lifecycle-policy.mjs
       - run: vp install --frozen-lockfile
       # Run the package script, not bare `vp check`: the script also enforces the
       # sound TypeScript subset, endpoint posture, and production graph proof.

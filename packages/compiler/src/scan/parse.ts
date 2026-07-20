@@ -1,5 +1,10 @@
 import * as ts from 'typescript';
 
+import type {
+  CacheInfluenceAuditedEscape,
+  CacheInfluenceDerivationInput,
+  CacheInfluenceExternalDataVersionInput,
+} from '@kovojs/core/internal/cache-influence';
 import {
   canonicalFrameworkExportForExpression,
   expressionResolvesToFrameworkExport,
@@ -71,6 +76,8 @@ import {
 } from './ast.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
+  AgentDefinitionModel,
+  AgentToolModel,
   ArrowFunctionPartsModel,
   CallExpressionModel,
   ConditionalExpressionModel,
@@ -90,6 +97,7 @@ import type {
   JsxElementChildBody,
   JsxElementModel,
   JsxExpressionModel,
+  JsxPragmaModel,
   LocalConstAliasModel,
   ModuleScopeBindingModel,
   ModuleSpecifierModel,
@@ -121,10 +129,22 @@ export type * from './model.js';
 ensureTypescriptRuntime(ts);
 
 const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
+const frameworkTrustedUrlReasonFacts = compilerCreateWeakMap<object, string>();
+const frameworkTrustedUrlValueFacts = compilerCreateWeakMap<object, string>();
 
 /** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
 export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
   return compilerWeakMapGet(frameworkTrustedUrlFacts, fact) === true;
+}
+
+/** @internal Static audited reason carried by an exact framework trustedUrl call, when present. */
+export function parserFactFrameworkTrustedUrlReason(fact: object): string | undefined {
+  return compilerWeakMapGet(frameworkTrustedUrlReasonFacts, fact);
+}
+
+/** @internal Exact first-argument source carried by a parser-proven trustedUrl call. */
+export function parserFactFrameworkTrustedUrlValue(fact: object): string | undefined {
+  return compilerWeakMapGet(frameworkTrustedUrlValueFacts, fact);
 }
 
 interface ComponentFactoryBindings {
@@ -137,11 +157,15 @@ interface ModuleScopeStaticStringBinding {
 }
 
 const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const AGENT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'agent');
 const DOMAIN_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
+const PUBLIC_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'publicAccess');
 const QUERY_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
+const TOOL_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'tool');
+const VERIFIED_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'verifiedAccess');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 const CSRF_FIELD_IDENTITIES: readonly FrameworkExportIdentity[] = [
   frameworkExport('@kovojs/server', 'csrfField'),
@@ -159,10 +183,12 @@ const JSX_RUNTIME_FACTORY_IDENTITIES = {
 } as const;
 const TRUSTED_URL_IDENTITY = frameworkExport('@kovojs/browser', 'trustedUrl');
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
+  AGENT_FACTORY_IDENTITY,
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
   QUERY_FACTORY_IDENTITY,
   TASK_FACTORY_IDENTITY,
+  TOOL_FACTORY_IDENTITY,
   WEBHOOK_FACTORY_IDENTITY,
 ];
 const HANDLER_WRITE_SINK_OPERATIONS = compilerCreateSet<HandlerWriteSinkOperationKind>();
@@ -326,6 +352,9 @@ export function parseComponentModule(
   }
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
+  const agentDefinitions: AgentDefinitionModel[] = [];
+  const agentHandlers: MutationHandlerModel[] = [];
+  const agentTools: AgentToolModel[] = [];
   const compilerJsxRuntimeImports: CompilerJsxRuntimeImportModel[] = [];
   const componentIdentityAssignments: ComponentIdentityAssignmentModel[] = [];
   const components: ComponentModel[] = [];
@@ -333,6 +362,7 @@ export function parseComponentModule(
   const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
+  const jsxPragmas = jsxPragmaModels(sourceFile, source);
   const moduleScopeBindings: ModuleScopeBindingModel[] = [];
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
@@ -430,13 +460,19 @@ export function parseComponentModule(
       );
       const frameworkFactory = frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)
         ? 'endpoint'
-        : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
-          ? 'mutation'
-          : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
-            ? 'task'
-            : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
-              ? 'webhook'
-              : undefined;
+        : frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)
+          ? 'agent'
+          : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
+            ? 'mutation'
+            : frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)
+              ? 'query'
+              : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
+                ? 'task'
+                : frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)
+                  ? 'tool'
+                  : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
+                    ? 'webhook'
+                    : undefined;
       const frameworkSecurityOperation = frameworkIdentityIn(factoryIdentity, CSRF_FIELD_IDENTITIES)
         ? 'csrf-field'
         : frameworkIdentityIn(factoryIdentity, CSRF_TOKEN_IDENTITIES)
@@ -462,6 +498,11 @@ export function parseComponentModule(
           'Endpoint handler models',
         );
       }
+      if (frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)) {
+        const definition = agentDefinitionModel(sourceFile, source, node);
+        compilerArrayAppend(agentDefinitions, definition, 'Agent definition models');
+        compilerArrayAppend(agentHandlers, definition.modelHandler, 'Agent model handlers');
+      }
       if (frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)) {
         appendDenseValues(
           mutationHandlers,
@@ -482,6 +523,9 @@ export function parseComponentModule(
           taskRunHandlerModels(sourceFile, source, node),
           'Task run handler models',
         );
+      }
+      if (frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)) {
+        compilerArrayAppend(agentTools, agentToolModel(sourceFile, node), 'Agent tool models');
       }
       if (frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)) {
         appendDenseValues(
@@ -505,6 +549,9 @@ export function parseComponentModule(
   visit(sourceFile);
 
   const model: ComponentModuleModel = {
+    agentDefinitions,
+    agentHandlers,
+    agentTools,
     calls,
     compilerJsxRuntimeImports,
     componentIdentityAssignments,
@@ -513,6 +560,7 @@ export function parseComponentModule(
     jsxComments,
     jsxExpressions,
     jsxElements,
+    jsxPragmas,
     moduleScopeBindings,
     moduleSpecifiers,
     mutationHandlers,
@@ -526,7 +574,105 @@ export function parseComponentModule(
   // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
   compilerDefineOwnDataProperty(model, 'sourceFile', sourceFile, false);
+  // SPEC §5.2 rule 10: keep comment-derived JSX transform authority as non-serialized parser
+  // facts so every post-parse consumer uses the same comment ranges and closed verdict.
+  compilerDefineOwnDataProperty(model, 'jsxPragmas', jsxPragmas, false);
   return model;
+}
+
+function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaModel[] {
+  const ranges: ts.CommentRange[] = [];
+  const seen = compilerCreateSet<string>();
+
+  const appendRanges = (candidates: readonly ts.CommentRange[] | undefined): void => {
+    if (candidates === undefined) return;
+    const length = compilerArrayLength(candidates, 'JSX pragma comment ranges');
+    for (let index = 0; index < length; index += 1) {
+      const range = compilerOwnDataValue(candidates, index, 'JSX pragma comment ranges') as
+        | ts.CommentRange
+        | undefined;
+      if (!range) throw new TypeError(`JSX pragma comment ranges[${index}] must be own data.`);
+      const key = `${range.pos}:${range.end}`;
+      if (compilerSetHas(seen, key)) continue;
+      compilerSetAdd(seen, key);
+      compilerArrayAppend(ranges, range, 'Distinct JSX pragma comment ranges');
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    appendRanges(ts.getLeadingCommentRanges(source, node.getFullStart()));
+    appendRanges(ts.getTrailingCommentRanges(source, node.getEnd()));
+    const children = node.getChildren(sourceFile);
+    const length = compilerArrayLength(children, 'JSX pragma AST children');
+    for (let index = 0; index < length; index += 1) {
+      const child = compilerOwnDataValue(children, index, 'JSX pragma AST children');
+      if (!child) throw new TypeError(`JSX pragma AST children[${index}] must be own data.`);
+      visit(child as ts.Node);
+    }
+  };
+  visit(sourceFile);
+
+  const facts: JsxPragmaModel[] = [];
+  const rangeLength = compilerArrayLength(ranges, 'Distinct JSX pragma comment ranges');
+  for (let rangeIndex = 0; rangeIndex < rangeLength; rangeIndex += 1) {
+    const range = compilerOwnDataValue(ranges, rangeIndex, 'Distinct JSX pragma comment ranges') as
+      | ts.CommentRange
+      | undefined;
+    if (!range) {
+      throw new TypeError(`Distinct JSX pragma comment ranges[${rangeIndex}] must be own data.`);
+    }
+    appendDenseValues(
+      facts,
+      jsxPragmaModelsFromComment(compilerStringSlice(source, range.pos, range.end), range.pos),
+      'JSX pragma models',
+    );
+  }
+  return facts;
+}
+
+function jsxPragmaModelsFromComment(comment: string, commentStart: number): JsxPragmaModel[] {
+  const facts: JsxPragmaModel[] = [];
+  const pattern = /@(jsxruntime|jsximportsource|jsxfrag|jsx)\b(?:[ \t]+([^\s*]+))?/giu;
+  while (true) {
+    const match = compilerRegExpExec(pattern, comment);
+    if (!match) break;
+    const rawKind = compilerOwnDataValue(match, 1, 'JSX pragma kind');
+    const value = compilerOwnDataValue(match, 2, 'JSX pragma value');
+    if (typeof rawKind !== 'string') {
+      throw new TypeError('JSX pragma match must contain an own directive kind.');
+    }
+    if (value !== undefined && typeof value !== 'string') {
+      throw new TypeError('JSX pragma match value must be an own string when present.');
+    }
+    const kind = jsxPragmaKind(rawKind);
+    const start = commentStart + match.index;
+    compilerArrayAppend(
+      facts,
+      {
+        end: start + match[0].length,
+        kind,
+        start,
+        ...(value === undefined ? {} : { value }),
+      },
+      'JSX pragma models',
+    );
+  }
+  return facts;
+}
+
+function jsxPragmaKind(value: string): JsxPragmaModel['kind'] {
+  switch (compilerStringToLowerCase(value)) {
+    case 'jsx':
+      return 'jsx';
+    case 'jsxfrag':
+      return 'jsxFrag';
+    case 'jsximportsource':
+      return 'jsxImportSource';
+    case 'jsxruntime':
+      return 'jsxRuntime';
+    default:
+      throw new TypeError(`Unknown JSX pragma kind: ${value}`);
+  }
 }
 
 function componentIdentityAssignmentModel(
@@ -2521,6 +2667,356 @@ function mutationHandlerModels(
   return result;
 }
 
+function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): AgentToolModel {
+  const violations: SecurityOperationViolationModel[] = [];
+  const binding = localConstInitializerName(call) ?? `UNRESOLVED@${call.getStart(sourceFile)}`;
+  const nameArgument = callArgument(call, 0);
+  const name =
+    nameArgument && ts.isStringLiteralLike(nameArgument) && isStaticAgentName(nameArgument.text)
+      ? nameArgument.text
+      : undefined;
+  if (name === undefined) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        nameArgument ?? call,
+        'tool name must be one exact 1..128 character stable token',
+      ),
+      'Agent tool violations',
+    );
+  }
+  const optionsArgument = callArgument(call, 1);
+  const options = optionsArgument && unwrapExpression(optionsArgument);
+  let mutationBinding: string | undefined;
+  let resultIntegrity: AgentToolModel['resultIntegrity'] = 'untrusted';
+  if (!options || !ts.isObjectLiteralExpression(options)) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        optionsArgument ?? call,
+        'tool options must be one inline object literal',
+      ),
+      'Agent tool violations',
+    );
+  } else {
+    let mutationCount = 0;
+    let integrityCount = 0;
+    const properties = compilerSnapshotDenseArray(options.properties, 'Agent tool properties');
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (
+        ts.isSpreadAssignment(property) ||
+        (property.name && ts.isComputedPropertyName(property.name))
+      ) {
+        compilerArrayAppend(
+          violations,
+          agentConfigurationViolation(
+            sourceFile,
+            property,
+            'tool definition cannot use spread or computed properties',
+          ),
+          'Agent tool violations',
+        );
+        continue;
+      }
+      const propertyName = propertyNameText(property.name);
+      if (propertyName === 'mutation') {
+        mutationCount += 1;
+        const initializer = ts.isPropertyAssignment(property)
+          ? unwrapExpression(property.initializer)
+          : ts.isShorthandPropertyAssignment(property)
+            ? property.name
+            : undefined;
+        if (initializer && ts.isIdentifier(initializer)) mutationBinding = initializer.text;
+        else {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'tool mutation must be an exact same-file mutation identifier',
+            ),
+            'Agent tool violations',
+          );
+        }
+      }
+      if (propertyName === 'resultIntegrity') {
+        integrityCount += 1;
+        const initializer = ts.isPropertyAssignment(property)
+          ? unwrapExpression(property.initializer)
+          : undefined;
+        if (
+          initializer &&
+          ts.isStringLiteralLike(initializer) &&
+          (initializer.text === 'untrusted' || initializer.text === 'retrieved')
+        ) {
+          resultIntegrity = initializer.text;
+        } else {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'tool resultIntegrity must be the literal untrusted or retrieved',
+            ),
+            'Agent tool violations',
+          );
+        }
+      }
+    }
+    if (mutationCount !== 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(
+          sourceFile,
+          options,
+          'tool must declare exactly one mutation property',
+        ),
+        'Agent tool violations',
+      );
+    }
+    if (integrityCount > 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(
+          sourceFile,
+          options,
+          'tool declares competing resultIntegrity properties',
+        ),
+        'Agent tool violations',
+      );
+    }
+  }
+  return {
+    binding,
+    callSpan: { end: call.getEnd(), start: call.getStart(sourceFile) },
+    ...(mutationBinding === undefined ? {} : { mutationBinding }),
+    ...(name === undefined ? {} : { name }),
+    resultIntegrity,
+    ...(violations.length === 0 ? {} : { violations }),
+  };
+}
+
+function agentDefinitionModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): AgentDefinitionModel {
+  const violations: SecurityOperationViolationModel[] = [];
+  const binding = localConstInitializerName(call);
+  const nameArgument = callArgument(call, 0);
+  const name =
+    nameArgument && ts.isStringLiteralLike(nameArgument) && isStaticAgentName(nameArgument.text)
+      ? nameArgument.text
+      : `UNRESOLVED@${call.getStart(sourceFile)}`;
+  if (compilerStringStartsWith(name, 'UNRESOLVED@')) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        nameArgument ?? call,
+        'agent name must be one exact 1..128 character stable token',
+      ),
+      'Agent definition violations',
+    );
+  }
+  const optionsArgument = callArgument(call, 1);
+  const options = optionsArgument && unwrapExpression(optionsArgument);
+  let model: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration | undefined;
+  const toolBindings: string[] = [];
+  if (!options || !ts.isObjectLiteralExpression(options)) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        optionsArgument ?? call,
+        'agent options must be one inline object literal',
+      ),
+      'Agent definition violations',
+    );
+  } else {
+    let modelCount = 0;
+    let toolsCount = 0;
+    const properties = compilerSnapshotDenseArray(
+      options.properties,
+      'Agent definition properties',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (
+        ts.isSpreadAssignment(property) ||
+        (property.name && ts.isComputedPropertyName(property.name))
+      ) {
+        compilerArrayAppend(
+          violations,
+          agentConfigurationViolation(
+            sourceFile,
+            property,
+            'agent definition cannot use spread or computed properties',
+          ),
+          'Agent definition violations',
+        );
+        continue;
+      }
+      const propertyName = propertyNameText(property.name);
+      if (propertyName === 'model') {
+        modelCount += 1;
+        if (ts.isMethodDeclaration(property) && property.body) model = property;
+        else if (ts.isPropertyAssignment(property)) {
+          const initializer = unwrapExpression(property.initializer);
+          if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+            model = initializer;
+          else {
+            compilerArrayAppend(
+              violations,
+              agentConfigurationViolation(
+                sourceFile,
+                property.initializer,
+                'agent model must be an inline function inside the mediation door',
+              ),
+              'Agent definition violations',
+            );
+          }
+        } else {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'agent model must be an inline callable data property',
+            ),
+            'Agent definition violations',
+          );
+        }
+      }
+      if (propertyName === 'tools') {
+        toolsCount += 1;
+        const initializer = ts.isPropertyAssignment(property)
+          ? unwrapExpression(property.initializer)
+          : undefined;
+        if (!initializer || !ts.isArrayLiteralExpression(initializer)) {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'agent tools must be one dense inline identifier array',
+            ),
+            'Agent definition violations',
+          );
+        } else {
+          const elements = compilerSnapshotDenseArray(
+            initializer.elements,
+            'Agent tool references',
+          );
+          for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+            const element = unwrapExpression(elements[elementIndex]! as ts.Expression);
+            if (ts.isIdentifier(element)) {
+              compilerArrayAppend(toolBindings, element.text, 'Agent tool bindings');
+            } else {
+              compilerArrayAppend(
+                violations,
+                agentConfigurationViolation(
+                  sourceFile,
+                  element,
+                  'agent tools must contain only exact same-file tool identifiers',
+                ),
+                'Agent definition violations',
+              );
+            }
+          }
+        }
+      }
+    }
+    if (modelCount !== 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(sourceFile, options, 'agent must declare exactly one model'),
+        'Agent definition violations',
+      );
+    }
+    if (toolsCount !== 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(
+          sourceFile,
+          options,
+          'agent must declare exactly one tools array',
+        ),
+        'Agent definition violations',
+      );
+    }
+  }
+
+  let modelHandler: MutationHandlerModel;
+  if (model?.body) {
+    const scanned = serverSecurityOperationModel(
+      sourceFile,
+      model.body,
+      'agent',
+      model.parameters,
+      `agent:${name}`,
+      model,
+      call,
+    );
+    const operationViolations = [...(scanned.securityOperationViolations ?? []), ...violations];
+    modelHandler = {
+      ...functionBodyModel(sourceFile, source, model.body, model.parameters),
+      ...scanned,
+      ...(operationViolations.length === 0
+        ? {}
+        : { securityOperationViolations: operationViolations }),
+    };
+  } else {
+    const opaque: MutationHandlerModel[] = [];
+    appendOpaqueHandlerRootModel(opaque, sourceFile, source, call, `agent:${name}`, violations);
+    modelHandler = opaque[0] ?? {
+      body: '',
+      bodyEnd: call.getEnd(),
+      bodyPropertyAccesses: [],
+      bodyStart: call.getStart(sourceFile),
+      paramNames: [],
+      params: [],
+      paramSpans: [],
+      securityOperationViolations: violations,
+    };
+  }
+  return {
+    ...(binding === undefined ? {} : { binding }),
+    modelHandler,
+    name,
+    toolBindings,
+  };
+}
+
+function agentConfigurationViolation(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  detail: string,
+): SecurityOperationViolationModel {
+  return {
+    detail,
+    kind: 'computed-security-operation',
+    span: { end: node.getEnd(), start: node.getStart(sourceFile) },
+    surface: 'agent',
+  };
+}
+
+function isStaticAgentName(value: string): boolean {
+  return compilerRegExpTest(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u, value);
+}
+
+function localConstInitializerName(call: ts.CallExpression): string | undefined {
+  const declaration = call.parent;
+  return ts.isVariableDeclaration(declaration) &&
+    declaration.initializer === call &&
+    ts.isIdentifier(declaration.name)
+    ? declaration.name.text
+    : undefined;
+}
+
 /**
  * Trace the handler's second (request) parameter to Headers aliases and classify
  * Cookie reads. Decisions are AST/provenance-based, never raw source text. A
@@ -3434,12 +3930,803 @@ function staticHeaderName(
   return ts.isIdentifier(value) ? compilerMapGet(values, value.text) : undefined;
 }
 
+type CacheInfluenceHandlerSurface = 'endpoint' | 'query';
+
+interface MutableCacheInfluences {
+  authorization?: true;
+  cookie?: true;
+  externalDataVersions?: CacheInfluenceExternalDataVersionInput[];
+  frameworkState?: true;
+  principal?: true;
+  requestHeaders?: string[];
+  secret?: true;
+  session?: true;
+  unclassified?: string[];
+  urlPath?: true;
+  urlSearch?: true;
+}
+
+interface CacheInfluenceDeclarationModel {
+  authored: CacheInfluenceDerivationInput['authored'];
+  authorization: boolean;
+  externalDataVersions: CacheInfluenceExternalDataVersionInput[];
+  principalSession: boolean;
+  unclassified: string[];
+}
+
+/**
+ * Scanner-owned cache-axis derivation. This is deliberately adjacent to the finite handler AST
+ * scanner: later compiler phases consume typed facts and never re-parse source (SPEC §5.2 rule 10).
+ */
+function handlerCacheInfluenceModel(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  root: string,
+  surface: CacheInfluenceHandlerSurface,
+): CacheInfluenceDerivationInput {
+  const declaration = cacheInfluenceDeclarationModel(sourceFile, call, surface);
+  const influences: MutableCacheInfluences = {
+    urlPath: true,
+    urlSearch: true,
+    ...(declaration.externalDataVersions.length === 0
+      ? {}
+      : { externalDataVersions: declaration.externalDataVersions }),
+    ...(declaration.authorization ? { authorization: true as const } : {}),
+    ...(declaration.principalSession ? { principal: true as const, session: true as const } : {}),
+    ...(declaration.unclassified.length === 0 ? {} : { unclassified: declaration.unclassified }),
+  };
+  collectHandlerCacheInfluences(sourceFile, body, parameters, surface, influences);
+  return { authored: declaration.authored, influences, root, surface };
+}
+
+function opaqueCacheInfluenceModel(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  root: string,
+  surface: CacheInfluenceHandlerSurface,
+): CacheInfluenceDerivationInput {
+  const declaration = cacheInfluenceDeclarationModel(sourceFile, call, surface);
+  return {
+    authored: declaration.authored,
+    influences: {
+      urlPath: true,
+      urlSearch: true,
+      ...(declaration.externalDataVersions.length === 0
+        ? {}
+        : { externalDataVersions: declaration.externalDataVersions }),
+      ...(declaration.authorization ? { authorization: true as const } : {}),
+      ...(declaration.principalSession ? { principal: true as const, session: true as const } : {}),
+      unclassified: [
+        ...declaration.unclassified,
+        `${surface} handler root is outside the finite analyzable cache language`,
+      ],
+    },
+    root,
+    surface,
+  };
+}
+
+function cacheInfluenceDeclarationModel(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  surface: CacheInfluenceHandlerSurface,
+): CacheInfluenceDeclarationModel {
+  const unclassified: string[] = [];
+  const externalDataVersions: CacheInfluenceExternalDataVersionInput[] = [];
+  const definition = taskDefinitionObject(call);
+  if (!definition) {
+    return {
+      authored: { posture: 'non-public' },
+      authorization: false,
+      externalDataVersions,
+      principalSession: false,
+      unclassified: [`${surface} definition is not a static object`],
+    };
+  }
+  const postureObjectName = surface === 'query' ? 'read' : 'response';
+  const postureObjectExpression = componentPropertyInitializer(definition, postureObjectName);
+  const postureObject =
+    postureObjectExpression &&
+    ts.isObjectLiteralExpression(unwrapExpression(postureObjectExpression))
+      ? (unwrapExpression(postureObjectExpression) as ts.ObjectLiteralExpression)
+      : undefined;
+  if (postureObjectExpression && !postureObject) {
+    compilerArrayAppend(
+      unclassified,
+      `${surface} ${postureObjectName} posture is not a static object`,
+      'Cache influence declaration closure',
+    );
+  }
+  const cacheProperty = surface === 'query' ? 'cacheControl' : 'cache';
+  const cacheExpression = componentPropertyInitializer(postureObject, cacheProperty);
+  const cacheControl =
+    cacheExpression && ts.isStringLiteralLike(unwrapExpression(cacheExpression))
+      ? (unwrapExpression(cacheExpression) as ts.StringLiteralLike).text
+      : undefined;
+  if (cacheExpression && cacheControl === undefined) {
+    compilerArrayAppend(
+      unclassified,
+      `${surface} cache posture is runtime-selected`,
+      'Cache influence declaration closure',
+    );
+  }
+  const cacheInfluenceExpression = componentPropertyInitializer(postureObject, 'cacheInfluence');
+  const cacheInfluence =
+    cacheInfluenceExpression &&
+    ts.isObjectLiteralExpression(unwrapExpression(cacheInfluenceExpression))
+      ? (unwrapExpression(cacheInfluenceExpression) as ts.ObjectLiteralExpression)
+      : undefined;
+  if (cacheInfluenceExpression && !cacheInfluence) {
+    compilerArrayAppend(
+      unclassified,
+      `${surface} cacheInfluence declaration is not a static object`,
+      'Cache influence declaration closure',
+    );
+  }
+  if (cacheInfluence) {
+    appendExternalDataVersionDeclarations(cacheInfluence, externalDataVersions, unclassified);
+  }
+  const auditedEscape = cacheInfluence
+    ? cacheInfluenceAuditedEscape(cacheInfluence, unclassified)
+    : undefined;
+  const accessInfluence = cacheAccessInfluence(sourceFile, definition);
+  if (accessInfluence === 'unclassified') {
+    compilerArrayAppend(
+      unclassified,
+      `${surface} access posture is outside the finite cache language`,
+      'Cache influence access closure',
+    );
+  }
+  const publicPosture =
+    cacheControl !== undefined &&
+    (surface === 'endpoint'
+      ? cacheControl === 'public'
+      : compilerRegExpTest(/(?:^|,)\s*public(?:\s|,|$)/iu, cacheControl));
+  return {
+    authored: {
+      ...(auditedEscape === undefined ? {} : { auditedEscape }),
+      ...(cacheControl === undefined ? {} : { cacheControl }),
+      posture: publicPosture ? 'public' : 'non-public',
+    },
+    authorization:
+      (surface === 'endpoint' && componentPropertyInitializer(definition, 'auth') !== null) ||
+      accessInfluence === 'authorization',
+    externalDataVersions,
+    principalSession:
+      (surface === 'query' && componentPropertyInitializer(definition, 'guard') !== null) ||
+      accessInfluence === 'principal',
+    unclassified,
+  };
+}
+
+function cacheAccessInfluence(
+  sourceFile: ts.SourceFile,
+  definition: ts.ObjectLiteralExpression,
+): 'authorization' | 'none' | 'principal' | 'unclassified' {
+  const expression = componentPropertyInitializer(definition, 'access');
+  if (!expression) return 'none';
+  const access = unwrapExpression(expression);
+  if (
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      access,
+      VERIFIED_ACCESS_IDENTITY,
+    )
+  ) {
+    return 'authorization';
+  }
+  if (
+    ts.isCallExpression(access) &&
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      access.expression,
+      PUBLIC_ACCESS_IDENTITY,
+    )
+  ) {
+    return 'none';
+  }
+  if (ts.isArrayLiteralExpression(access)) return 'principal';
+  if (!ts.isObjectLiteralExpression(access)) return 'unclassified';
+  const kindExpression = componentPropertyInitializer(access, 'kind');
+  const kind =
+    kindExpression && ts.isStringLiteralLike(unwrapExpression(kindExpression))
+      ? (unwrapExpression(kindExpression) as ts.StringLiteralLike).text
+      : undefined;
+  if (kind === 'public') return 'none';
+  if (kind === 'verified-machine-auth') return 'authorization';
+  if (kind === 'guard-chain') return 'principal';
+  return 'unclassified';
+}
+
+function appendExternalDataVersionDeclarations(
+  cacheInfluence: ts.ObjectLiteralExpression,
+  target: CacheInfluenceExternalDataVersionInput[],
+  unclassified: string[],
+): void {
+  const expression = componentPropertyInitializer(cacheInfluence, 'externalDataVersions');
+  if (!expression) return;
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isArrayLiteralExpression(unwrapped)) {
+    compilerArrayAppend(
+      unclassified,
+      'external data versions are not a static array',
+      'Cache influence external-version closure',
+    );
+    return;
+  }
+  const elements = compilerSnapshotDenseArray(unwrapped.elements, 'External data version elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = unwrapExpression(elements[index]!);
+    if (!ts.isObjectLiteralExpression(element)) {
+      compilerArrayAppend(
+        unclassified,
+        'external data version is not a static object',
+        'Cache influence external-version closure',
+      );
+      continue;
+    }
+    const nameExpression = componentPropertyInitializer(element, 'name');
+    const name =
+      nameExpression && ts.isStringLiteralLike(unwrapExpression(nameExpression))
+        ? (unwrapExpression(nameExpression) as ts.StringLiteralLike).text
+        : undefined;
+    if (!name) {
+      compilerArrayAppend(
+        unclassified,
+        'external data version name is not a static string',
+        'Cache influence external-version closure',
+      );
+      continue;
+    }
+    const keyExpression = componentPropertyInitializer(element, 'key');
+    const key = keyExpression ? cacheInfluenceKeyContribution(keyExpression) : undefined;
+    if (keyExpression && !key) {
+      compilerArrayAppend(
+        unclassified,
+        `external data version ${name} has a dynamic key contribution`,
+        'Cache influence external-version closure',
+      );
+    }
+    compilerArrayAppend(
+      target,
+      { ...(key === undefined ? {} : { key }), name },
+      'Cache influence external-version declarations',
+    );
+  }
+}
+
+function cacheInfluenceKeyContribution(
+  expression: ts.Expression,
+): CacheInfluenceExternalDataVersionInput['key'] | undefined {
+  const object = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(object)) return undefined;
+  const axisExpression = componentPropertyInitializer(object, 'axis');
+  const axis =
+    axisExpression && ts.isStringLiteralLike(unwrapExpression(axisExpression))
+      ? (unwrapExpression(axisExpression) as ts.StringLiteralLike).text
+      : undefined;
+  if (axis === 'url-path') return { axis };
+  if (axis !== 'url-search' && axis !== 'request-header') return undefined;
+  const nameExpression = componentPropertyInitializer(object, 'name');
+  const name =
+    nameExpression && ts.isStringLiteralLike(unwrapExpression(nameExpression))
+      ? (unwrapExpression(nameExpression) as ts.StringLiteralLike).text
+      : undefined;
+  return name ? { axis, name } : undefined;
+}
+
+function cacheInfluenceAuditedEscape(
+  cacheInfluence: ts.ObjectLiteralExpression,
+  unclassified: string[],
+): CacheInfluenceAuditedEscape | undefined {
+  const expression = componentPropertyInitializer(cacheInfluence, 'auditedEscape');
+  if (!expression) return undefined;
+  const object = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(object)) {
+    compilerArrayAppend(
+      unclassified,
+      'cache audited escape is not a static object',
+      'Cache influence audited-escape closure',
+    );
+    return undefined;
+  }
+  const nameExpression = componentPropertyInitializer(object, 'name');
+  const obligationExpression = componentPropertyInitializer(object, 'retainedObligation');
+  const name =
+    nameExpression && ts.isStringLiteralLike(unwrapExpression(nameExpression))
+      ? (unwrapExpression(nameExpression) as ts.StringLiteralLike).text
+      : undefined;
+  const retainedObligation =
+    obligationExpression && ts.isStringLiteralLike(unwrapExpression(obligationExpression))
+      ? (unwrapExpression(obligationExpression) as ts.StringLiteralLike).text
+      : undefined;
+  if (!name || !retainedObligation) {
+    compilerArrayAppend(
+      unclassified,
+      'cache audited escape name and retained obligation must be static strings',
+      'Cache influence audited-escape closure',
+    );
+    return undefined;
+  }
+  return { name, retainedObligation };
+}
+
+function collectHandlerCacheInfluences(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  surface: CacheInfluenceHandlerSurface,
+  influences: MutableCacheInfluences,
+): void {
+  const requestNames = compilerCreateSet<string>();
+  const contextNames = compilerCreateSet<string>();
+  const headerNames = compilerCreateSet<string>();
+  const inputNames = compilerCreateSet<string>();
+  const dbNames = compilerCreateSet<string>();
+  const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Cache influence parameters');
+  if (surface === 'query') {
+    collectCacheBindingNames(parameterSnapshot[0]?.name, inputNames);
+    collectCacheContextBindings(parameterSnapshot[1]?.name, contextNames, requestNames, dbNames);
+  } else {
+    collectCacheBindingNames(parameterSnapshot[0]?.name, requestNames);
+    collectCacheContextBindings(parameterSnapshot[1]?.name, contextNames, requestNames, dbNames);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visitAliases = (node: ts.Node): void => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        const kind = cacheCarrierKind(
+          node.initializer,
+          requestNames,
+          contextNames,
+          headerNames,
+          inputNames,
+          dbNames,
+        );
+        if (kind !== undefined) {
+          changed =
+            collectCacheAliasBinding(
+              node.name,
+              kind,
+              requestNames,
+              contextNames,
+              headerNames,
+              inputNames,
+              dbNames,
+            ) || changed;
+        }
+      }
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        const kind = cacheCarrierKind(
+          node.right,
+          requestNames,
+          contextNames,
+          headerNames,
+          inputNames,
+          dbNames,
+        );
+        if (kind !== undefined) {
+          changed =
+            collectCacheAliasBinding(
+              node.left,
+              kind,
+              requestNames,
+              contextNames,
+              headerNames,
+              inputNames,
+              dbNames,
+            ) || changed;
+        }
+      }
+      ts.forEachChild(node, visitAliases);
+    };
+    visitAliases(body);
+  }
+
+  if (compilerSetCount(dbNames) > 0) influences.frameworkState = true;
+  const staticStrings = handlerStaticStrings(body);
+  const requestHeaders: string[] = influences.requestHeaders ?? [];
+  const unclassified: string[] = influences.unclassified ?? [];
+  const appendUnclassified = (detail: string): void => {
+    if (!compilerArrayIncludes(unclassified, detail)) {
+      compilerArrayAppend(unclassified, detail, 'Cache influence unclassified facts');
+    }
+  };
+  if (handlerReferencesUnprovenFreeAuthority(body, parameters)) {
+    appendUnclassified('handler captures authority outside the finite cache-influence language');
+  }
+
+  const visit = (node: ts.Node): void => {
+    // Ambient runtime environment bags are secret-bearing framework-external state even when an
+    // author aliases the global before reading `.env`. Treat the whole carrier as influence; the
+    // cache proof does not attempt value-sensitive recovery from one execution.
+    if (
+      ts.isIdentifier(node) &&
+      (node.text === 'process' || node.text === 'Deno' || node.text === 'Bun')
+    ) {
+      influences.secret = true;
+    }
+    if (ts.isElementAccessExpression(node)) {
+      const receiverKind = cacheCarrierKind(
+        node.expression,
+        requestNames,
+        contextNames,
+        headerNames,
+        inputNames,
+        dbNames,
+      );
+      if (receiverKind === 'request' || receiverKind === 'context' || receiverKind === 'headers') {
+        appendUnclassified(`computed ${receiverKind} member`);
+      }
+      const member = node.argumentExpression && unwrapExpression(node.argumentExpression);
+      if (
+        member &&
+        ts.isStringLiteralLike(member) &&
+        (member.text === 'process' || member.text === 'env')
+      ) {
+        influences.secret = true;
+      }
+    }
+    if (ts.isPropertyAccessExpression(node)) {
+      const path = propertyAccessPath(node);
+      if (path === 'process.env' || (path && compilerStringStartsWith(path, 'process.env.'))) {
+        influences.secret = true;
+      }
+      const receiverKind = cacheCarrierKind(
+        node.expression,
+        requestNames,
+        contextNames,
+        headerNames,
+        inputNames,
+        dbNames,
+      );
+      if (receiverKind === 'request') {
+        switch (node.name.text) {
+          case 'headers':
+          case 'url':
+          case 'clone':
+            break;
+          case 'session':
+            influences.session = true;
+            influences.principal = true;
+            break;
+          case 'principalPosture':
+            influences.principal = true;
+            break;
+          case 'db':
+            influences.frameworkState = true;
+            break;
+          default:
+            appendUnclassified(`request member ${node.name.text}`);
+        }
+      } else if (receiverKind === 'context') {
+        if (node.name.text === 'db' || node.name.text === 'fetch' || node.name.text === 'storage') {
+          influences.frameworkState = true;
+        } else if (node.name.text !== 'request') {
+          appendUnclassified(`context member ${node.name.text}`);
+        }
+      }
+    }
+
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      let classifiedCall = false;
+      if (ts.isPropertyAccessExpression(callee)) {
+        const receiverKind = cacheCarrierKind(
+          callee.expression,
+          requestNames,
+          contextNames,
+          headerNames,
+          inputNames,
+          dbNames,
+        );
+        if (
+          receiverKind === 'headers' &&
+          (callee.name.text === 'get' || callee.name.text === 'has')
+        ) {
+          classifiedCall = true;
+          const header = staticHeaderName(callArgument(node, 0), staticStrings);
+          if (header === undefined) {
+            appendUnclassified('dynamic request-header name');
+          } else {
+            const normalized = compilerStringToLowerCase(compilerStringTrim(header));
+            if (normalized === 'cookie') influences.cookie = true;
+            else if (normalized === 'authorization') influences.authorization = true;
+            else if (compilerRegExpTest(/^[!#$%&'*+.^_`|~0-9a-z-]+$/u, normalized)) {
+              appendUniqueSortedCompilerString(requestHeaders, normalized);
+            } else {
+              appendUnclassified('invalid request-header name');
+            }
+          }
+        } else if (receiverKind === 'headers') {
+          classifiedCall = true;
+          appendUnclassified(`unsupported Headers.${callee.name.text} influence`);
+        } else if (receiverKind === 'db') {
+          classifiedCall = true;
+          influences.frameworkState = true;
+        } else if (receiverKind === 'request' && callee.name.text === 'clone') {
+          classifiedCall = true;
+        } else if (
+          receiverKind === 'context' &&
+          (callee.name.text === 'fetch' || callee.name.text === 'storage')
+        ) {
+          classifiedCall = true;
+          influences.frameworkState = true;
+        }
+      } else if (ts.isIdentifier(callee) && compilerSetHas(dbNames, callee.text)) {
+        classifiedCall = true;
+        influences.frameworkState = true;
+      }
+      if (!classifiedCall) appendUnclassified('call outside the finite cache-influence language');
+      const argumentsSnapshot = compilerSnapshotDenseArray(
+        node.arguments,
+        'Cache influence call arguments',
+      );
+      for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+        if (
+          cacheExpressionContainsAuthorityCarrier(
+            argumentsSnapshot[index]!,
+            requestNames,
+            contextNames,
+            headerNames,
+          )
+        ) {
+          appendUnclassified('request authority transferred through an unsupported call');
+        }
+      }
+    }
+    if (ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node)) {
+      appendUnclassified('construction outside the finite cache-influence language');
+    }
+    if (
+      isHeaderCarrierExpression(node, requestNames, headerNames) &&
+      !isSafeHeaderCarrierUse(node, requestNames, headerNames)
+    ) {
+      appendUnclassified('request headers leave the finite cache-influence language');
+    }
+    if (
+      isRequestCarrierExpression(node, requestNames, headerNames) &&
+      !isSafeRequestCarrierUse(node, requestNames, headerNames)
+    ) {
+      appendUnclassified('request authority leaves the finite cache-influence language');
+    }
+    if (ts.isExpression(node)) {
+      const carrier = cacheCarrierKind(
+        node,
+        requestNames,
+        contextNames,
+        headerNames,
+        inputNames,
+        dbNames,
+      );
+      if ((carrier === 'context' || carrier === 'db') && !isSafeCacheContextCarrierUse(node)) {
+        appendUnclassified(`${carrier} authority leaves the finite cache-influence language`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  if (requestHeaders.length > 0) influences.requestHeaders = requestHeaders;
+  if (unclassified.length > 0) influences.unclassified = unclassified;
+}
+
+type CacheCarrierKind = 'context' | 'db' | 'headers' | 'input' | 'request';
+
+function cacheCarrierKind(
+  expression: ts.Expression,
+  requestNames: ReadonlySet<string>,
+  contextNames: ReadonlySet<string>,
+  headerNames: ReadonlySet<string>,
+  inputNames: ReadonlySet<string>,
+  dbNames: ReadonlySet<string>,
+): CacheCarrierKind | undefined {
+  const value = unwrapExpression(expression);
+  if (ts.isIdentifier(value)) {
+    if (compilerSetHas(requestNames, value.text)) return 'request';
+    if (compilerSetHas(contextNames, value.text)) return 'context';
+    if (compilerSetHas(headerNames, value.text)) return 'headers';
+    if (compilerSetHas(inputNames, value.text)) return 'input';
+    if (compilerSetHas(dbNames, value.text)) return 'db';
+    return undefined;
+  }
+  if (ts.isPropertyAccessExpression(value)) {
+    const receiver = cacheCarrierKind(
+      value.expression,
+      requestNames,
+      contextNames,
+      headerNames,
+      inputNames,
+      dbNames,
+    );
+    if (receiver === 'context' && value.name.text === 'request') return 'request';
+    if ((receiver === 'context' || receiver === 'request') && value.name.text === 'db') return 'db';
+    if (receiver === 'request' && value.name.text === 'headers') return 'headers';
+    return undefined;
+  }
+  if (
+    ts.isCallExpression(value) &&
+    ts.isPropertyAccessExpression(value.expression) &&
+    value.expression.name.text === 'clone' &&
+    cacheCarrierKind(
+      value.expression.expression,
+      requestNames,
+      contextNames,
+      headerNames,
+      inputNames,
+      dbNames,
+    ) === 'request'
+  ) {
+    return 'request';
+  }
+  return undefined;
+}
+
+function collectCacheBindingNames(name: ts.BindingName | undefined, target: Set<string>): void {
+  if (!name) return;
+  if (ts.isIdentifier(name)) {
+    compilerSetAdd(target, name.text);
+    return;
+  }
+  collectBindingIdentifiers(name, target);
+}
+
+function collectCacheContextBindings(
+  name: ts.BindingName | undefined,
+  contextNames: Set<string>,
+  requestNames: Set<string>,
+  dbNames: Set<string>,
+): void {
+  if (!name) return;
+  if (ts.isIdentifier(name)) {
+    compilerSetAdd(contextNames, name.text);
+    return;
+  }
+  if (!ts.isObjectBindingPattern(name)) return;
+  const elements = compilerSnapshotDenseArray(name.elements, 'Cache context binding elements');
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    const property = element.propertyName
+      ? bindingPropertyNameText(element.propertyName)
+      : ts.isIdentifier(element.name)
+        ? element.name.text
+        : undefined;
+    if (property === 'request') collectBindingIdentifiers(element.name, requestNames);
+    if (property === 'db') collectBindingIdentifiers(element.name, dbNames);
+  }
+}
+
+function collectCacheAliasBinding(
+  name: ts.BindingName,
+  kind: CacheCarrierKind,
+  requestNames: Set<string>,
+  contextNames: Set<string>,
+  headerNames: Set<string>,
+  inputNames: Set<string>,
+  dbNames: Set<string>,
+): boolean {
+  const target =
+    kind === 'request'
+      ? requestNames
+      : kind === 'context'
+        ? contextNames
+        : kind === 'headers'
+          ? headerNames
+          : kind === 'input'
+            ? inputNames
+            : dbNames;
+  const before = compilerSetCount(target);
+  collectBindingIdentifiers(name, target);
+  return compilerSetCount(target) !== before;
+}
+
+function compilerSetCount(values: ReadonlySet<string>): number {
+  let count = 0;
+  compilerSetForEach(values, () => {
+    count += 1;
+  });
+  return count;
+}
+
+function cacheExpressionContainsAuthorityCarrier(
+  expression: ts.Expression,
+  requestNames: ReadonlySet<string>,
+  contextNames: ReadonlySet<string>,
+  headerNames: ReadonlySet<string>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      ts.isIdentifier(node) &&
+      (compilerSetHas(requestNames, node.text) ||
+        compilerSetHas(contextNames, node.text) ||
+        compilerSetHas(headerNames, node.text))
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+}
+
+function isSafeCacheContextCarrierUse(node: ts.Expression): boolean {
+  const parent = node.parent;
+  if (ts.isIdentifier(node) && ts.isPropertyAccessExpression(parent) && parent.name === node) {
+    return true;
+  }
+  if (
+    (ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent)) &&
+    parent.name === node
+  ) {
+    return true;
+  }
+  if (
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent)) &&
+    parent.expression === node
+  ) {
+    return true;
+  }
+  if (
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  ) {
+    return true;
+  }
+  if (ts.isVariableDeclaration(parent) && parent.initializer === node) {
+    return ts.isIdentifier(parent.name);
+  }
+  if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    if (parent.left === node) return true;
+    return parent.right === node && ts.isIdentifier(parent.left);
+  }
+  return false;
+}
+
+function appendUniqueSortedCompilerString(values: string[], value: string): void {
+  for (let index = 0; index < values.length; index += 1) {
+    const current = values[index]!;
+    if (current === value) return;
+    if (current > value) {
+      compilerArrayAppend(values, '', 'Cache influence sorted strings');
+      for (let move = values.length - 1; move > index; move -= 1) {
+        compilerSetOwnDataProperty(values, move, values[move - 1]);
+      }
+      compilerSetOwnDataProperty(values, index, value);
+      return;
+    }
+  }
+  compilerArrayAppend(values, value, 'Cache influence sorted strings');
+}
+
+function compilerArrayIncludes(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
+}
+
 function endpointHandlerModels(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
   const owner = endpointOwner(call);
+  const root = `endpoint:${owner.value}`;
   const inspection = inspectHandlerProperty(sourceFile, source, call, 'handler', 'endpoint');
   const entries = inspection.entries;
   const result: MutationHandlerModel[] = [];
@@ -3453,6 +4740,14 @@ function endpointHandlerModels(
       result,
       {
         ...entry.model,
+        cacheInfluence: handlerCacheInfluenceModel(
+          sourceFile,
+          call,
+          entry.body,
+          entry.parameters,
+          root,
+          'endpoint',
+        ),
         handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, entry.body, {
           owner,
           surface: 'endpoint',
@@ -3462,7 +4757,7 @@ function endpointHandlerModels(
           entry.body,
           'endpoint',
           entry.parameters,
-          `endpoint:${owner.value}`,
+          root,
           entry.handler,
           call,
         ),
@@ -3475,8 +4770,9 @@ function endpointHandlerModels(
     sourceFile,
     source,
     call,
-    `endpoint:${owner.value}`,
+    root,
     inspection.violations,
+    opaqueCacheInfluenceModel(sourceFile, call, root, 'endpoint'),
   );
   return result;
 }
@@ -3645,6 +4941,7 @@ function appendOpaqueHandlerRootModel(
   call: ts.CallExpression,
   root: string,
   violations: readonly SecurityOperationViolationModel[],
+  cacheInfluence?: MutationHandlerModel['cacheInfluence'],
 ): void {
   if (violations.length === 0) return;
   const span = { end: call.getEnd(), start: call.getStart(sourceFile) };
@@ -3655,6 +4952,7 @@ function appendOpaqueHandlerRootModel(
       bodyEnd: span.end,
       bodyPropertyAccesses: [],
       bodyStart: span.start,
+      ...(cacheInfluence === undefined ? {} : { cacheInfluence }),
       paramNames: [],
       params: [],
       paramSpans: [],
@@ -3686,6 +4984,14 @@ function queryLoadHandlerModels(
       result,
       {
         ...entry.model,
+        cacheInfluence: handlerCacheInfluenceModel(
+          sourceFile,
+          call,
+          entry.body,
+          entry.parameters,
+          root,
+          'query',
+        ),
         ...serverSecurityOperationModel(
           sourceFile,
           entry.body,
@@ -3699,7 +5005,15 @@ function queryLoadHandlerModels(
       'Query load handler models',
     );
   }
-  appendOpaqueHandlerRootModel(result, sourceFile, source, call, root, inspection.violations);
+  appendOpaqueHandlerRootModel(
+    result,
+    sourceFile,
+    source,
+    call,
+    root,
+    inspection.violations,
+    opaqueCacheInfluenceModel(sourceFile, call, root, 'query'),
+  );
   return result;
 }
 
@@ -4432,7 +5746,14 @@ function serverSecurityOperationModel(
   'securityOperations' | 'securityOperationViolations' | 'securitySemanticRoot'
 > {
   const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root, {
-    callback: surface === 'query' ? 'load' : surface === 'task' ? 'run' : 'handler',
+    callback:
+      surface === 'query'
+        ? 'load'
+        : surface === 'task'
+          ? 'run'
+          : surface === 'agent'
+            ? 'model'
+            : 'handler',
     callableSpan: { end: handler.getEnd(), start: handler.getStart(sourceFile) },
     factory: surface,
     factoryCallSpan: { end: factoryCall.getEnd(), start: factoryCall.getStart(sourceFile) },
@@ -6050,6 +7371,22 @@ function recordFrameworkTrustedUrlFact(
   )
     return;
   compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
+  const rawValue = candidate.arguments[0];
+  if (rawValue !== undefined) {
+    compilerWeakMapSet(
+      frameworkTrustedUrlValueFacts,
+      fact,
+      compilerStringTrim(
+        compilerStringSlice(sourceFile.text, rawValue.getStart(sourceFile), rawValue.getEnd()),
+      ),
+    );
+  }
+  const rawReason = candidate.arguments[1];
+  if (rawReason === undefined) return;
+  const reason = unwrapExpression(rawReason);
+  if (!ts.isStringLiteralLike(reason) && !ts.isNoSubstitutionTemplateLiteral(reason)) return;
+  const normalized = compilerStringTrim(reason.text);
+  if (normalized !== '') compilerWeakMapSet(frameworkTrustedUrlReasonFacts, fact, normalized);
 }
 
 function jsxAttributeExpressionStaticValue(

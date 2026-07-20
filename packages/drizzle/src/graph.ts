@@ -1,4 +1,4 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import {
   createRegisteredDiagnostic,
   diagnosticDefinitions,
@@ -60,10 +60,7 @@ export interface UnresolvedSummaryInput {
 }
 
 /** @internal */
-export interface TouchGraphDiagnostic {
-  code: DiagnosticCode;
-  message: string;
-  severity: DiagnosticSeverity;
+export interface TouchGraphDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   site: string;
 }
 

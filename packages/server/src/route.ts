@@ -11,6 +11,7 @@ import { substituteRoutePatternParams } from '@kovojs/core/internal/route-patter
 import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { reportServerError } from './diagnostics.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import {
   htmlAttributeValue,
   joinHtmlAttributeTokens,
@@ -652,9 +653,7 @@ function revealRouteRequestValue(value: unknown): unknown {
   // parser tags them before validation. Routes without explicit schemas retain Kovo's historical
   // typed-string fallback; reveal only after route matching has selected this declaration.
   if (isUntrusted(value)) {
-    return revealRouteRequestValue(
-      revealUntrusted(value, 'matched route request value without explicit schema'),
-    );
+    return revealRouteRequestValue(revealUntrusted(value, frameworkRevealUntrustedPolicy));
   }
   if (witnessIsArray(value)) {
     const revealed: unknown[] = [];
@@ -1882,7 +1881,7 @@ function appendSearchParams(entries: [string, string][], key: string, value: unk
 
 function searchParamValue(value: unknown): string {
   if (isUntrusted(value)) {
-    return searchParamValue(revealUntrusted(value, 'matched route request URL reconstruction'));
+    return searchParamValue(revealUntrusted(value, frameworkRevealUntrustedPolicy));
   }
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;

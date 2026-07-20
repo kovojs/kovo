@@ -1,11 +1,14 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
   diagnosticDefinitions,
   isDiagnosticCode,
+  isRegisteredDiagnostic,
 } from '@kovojs/core/internal/diagnostics';
-import { snapshotBuildArray } from './build-security-intrinsics.js';
-import { witnessArrayAppend } from './security-witness-intrinsics.js';
+import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
+import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
  * Route-level diagnostic emitted when a request-shell route cannot be represented
@@ -18,12 +21,9 @@ import { witnessArrayAppend } from './security-witness-intrinsics.js';
  * pattern (`routePath`). Route-level diagnostics with no single concrete target leave
  * `concretePath` undefined.
  */
-export interface StaticExportDiagnostic {
-  code: DiagnosticCode | 'KV229';
+export interface StaticExportDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   concretePath?: string;
-  message: string;
   routePath: string;
-  severity: DiagnosticSeverity;
 }
 
 /** Severity label used when formatting static-export diagnostics. */
@@ -35,11 +35,9 @@ export type StaticExportDiagnosticSeverity = 'ERROR' | 'WARN';
  * Input to the public {@link assertStaticExportCompileDiagnostics} and
  * {@link blockingStaticExportDiagnostics}, which fail static export on error-severity codes.
  */
-export interface StaticExportCompileDiagnostic {
-  code: DiagnosticCode;
+export interface StaticExportCompileDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   help?: string;
-  message: string;
   start?: { column: number; line: number };
 }
 
@@ -49,14 +47,15 @@ export class StaticExportError extends Error {
   readonly diagnostics: readonly StaticExportDiagnostic[];
 
   constructor(diagnostics: readonly StaticExportDiagnostic[]) {
+    const registered = registeredStaticExportDiagnostics(diagnostics, 'static-export error');
     super(
-      diagnostics.length === 1
-        ? diagnostics[0]?.message
-        : `KV229 static export found ${diagnostics.length} non-exportable routes.`,
+      registered.length === 1
+        ? registered[0]!.message
+        : `KV229 static export found ${registered.length} non-exportable routes.`,
     );
     this.name = 'StaticExportError';
-    this.code = diagnostics[0]?.code ?? 'KV229';
-    this.diagnostics = diagnostics;
+    this.code = registered[0]?.code ?? 'KV229';
+    this.diagnostics = witnessFreeze(registered);
   }
 }
 
@@ -74,6 +73,7 @@ export function staticExportDiagnostic(
  * @internal Static-export diagnostic shape guard for framework export tooling (SPEC.md §9.5).
  */
 export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {
+  if (!isRegisteredDiagnostic(value)) return false;
   const concretePath = (value as StaticExportDiagnostic | null)?.concretePath;
   const code = (value as StaticExportDiagnostic | null)?.code;
   return (
@@ -93,12 +93,27 @@ export function isStaticExportDiagnostic(value: unknown): value is StaticExportD
 export function isStaticExportDiagnosticError(
   error: unknown,
 ): error is { diagnostics: readonly StaticExportDiagnostic[] } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    Array.isArray((error as { diagnostics?: unknown }).diagnostics) &&
-    (error as { diagnostics: unknown[] }).diagnostics.every(isStaticExportDiagnostic)
-  );
+  if (typeof error !== 'object' || error === null) return false;
+  let diagnostics: ReturnType<typeof buildOwnDataProperty>;
+  try {
+    diagnostics = buildOwnDataProperty(error, 'diagnostics', 'static-export error diagnostics');
+  } catch {
+    return false;
+  }
+  if (!diagnostics.present) return false;
+  let source: readonly unknown[];
+  try {
+    source = snapshotBuildArray(
+      diagnostics.value as readonly unknown[],
+      'static-export error diagnostics',
+    );
+  } catch {
+    return false;
+  }
+  for (let index = 0; index < source.length; index += 1) {
+    if (!isStaticExportDiagnostic(source[index])) return false;
+  }
+  return true;
 }
 
 /**
@@ -108,6 +123,7 @@ export function formatStaticExportDiagnostic(
   diagnostic: StaticExportDiagnostic,
   severity: StaticExportDiagnosticSeverity,
 ): string {
+  assertRegisteredDiagnostic(diagnostic, 'Static-export diagnostic formatter input');
   return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableDiagnosticText(
     diagnostic.message,
   )}`;
@@ -149,18 +165,149 @@ export function blockingStaticExportDiagnostics(
   const blocking: StaticExportDiagnostic[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const diagnostic = source[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Static-export compile diagnostics[${index}]`);
     if (diagnosticDefinitions[diagnostic.code].severity !== 'error') continue;
     witnessArrayAppend(
       blocking,
-      createRegisteredDiagnostic(
-        diagnostic.code,
-        { routePath: diagnostic.fileName },
-        { message: staticExportCompileDiagnosticMessage(diagnostic) },
-      ),
+      blockingStaticExportDiagnostic(diagnostic),
       'Server packages/server/src/static-export-diagnostics.ts collection',
     );
   }
   return blocking;
+}
+
+/**
+ * @internal Collect compiler diagnostics from an app module inside the same framework-owned SSR
+ * realm that loaded that module. Private diagnostic provenance is realm-local, so the CLI must not
+ * inject a constructor or attempt to bless a structural value after it crosses the realm boundary
+ * (SPEC §2/§11.3).
+ */
+export function staticExportCompileDiagnosticsFromModule(
+  moduleValue: unknown,
+): StaticExportCompileDiagnostic[] {
+  if (typeof moduleValue !== 'object' || moduleValue === null) return [];
+
+  let diagnostics: ReturnType<typeof buildOwnDataProperty>;
+  try {
+    diagnostics = buildOwnDataProperty(
+      moduleValue,
+      'diagnostics',
+      'Static-export app module diagnostics',
+    );
+  } catch {
+    return [];
+  }
+  if (!diagnostics.present) return [];
+
+  let source: readonly unknown[];
+  try {
+    source = snapshotBuildArray(
+      diagnostics.value as readonly unknown[],
+      'Static-export app module diagnostics',
+    );
+  } catch {
+    return [];
+  }
+
+  const transferred: StaticExportCompileDiagnostic[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = registeredStaticExportCompileDiagnostic(source[index], index);
+    if (diagnostic !== undefined) {
+      witnessArrayAppend(
+        transferred,
+        diagnostic,
+        'Server packages/server/src/static-export-diagnostics.ts compile collection',
+      );
+    }
+  }
+  return transferred;
+}
+
+function registeredStaticExportCompileDiagnostic(
+  value: unknown,
+  index: number,
+): StaticExportCompileDiagnostic | undefined {
+  if (!isRegisteredDiagnostic(value) || typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const label = `Static-export compile diagnostics[${index}]`;
+  const code = buildOwnDataProperty(value, 'code', `${label}.code`);
+  const fileName = buildOwnDataProperty(value, 'fileName', `${label}.fileName`);
+  const help = buildOwnDataProperty(value, 'help', `${label}.help`);
+  const message = buildOwnDataProperty(value, 'message', `${label}.message`);
+  const rawStart = buildOwnDataProperty(value, 'start', `${label}.start`);
+  if (
+    !code.present ||
+    !isDiagnosticCode(code.value) ||
+    !fileName.present ||
+    typeof fileName.value !== 'string' ||
+    !message.present ||
+    typeof message.value !== 'string' ||
+    (help.present && typeof help.value !== 'string')
+  ) {
+    return undefined;
+  }
+
+  let start: StaticExportCompileDiagnostic['start'];
+  if (rawStart.present) {
+    if (typeof rawStart.value !== 'object' || rawStart.value === null) return undefined;
+    const column = buildOwnDataProperty(rawStart.value, 'column', `${label}.start.column`);
+    const line = buildOwnDataProperty(rawStart.value, 'line', `${label}.start.line`);
+    if (
+      !column.present ||
+      typeof column.value !== 'number' ||
+      !line.present ||
+      typeof line.value !== 'number'
+    ) {
+      return undefined;
+    }
+    start = { column: column.value, line: line.value };
+  }
+
+  return rehydrateStaticExportCompileDiagnostic(
+    code.value,
+    { fileName: fileName.value, ...(start === undefined ? {} : { start }) },
+    {
+      ...(help.present ? { help: help.value as string } : {}),
+      message: message.value,
+    },
+  );
+}
+
+function rehydrateStaticExportCompileDiagnostic(
+  code: DiagnosticCode,
+  fields: { fileName: string; start?: { column: number; line: number } },
+  options: { help?: string; message: string },
+): StaticExportCompileDiagnostic {
+  return createRegisteredDiagnostic(code, fields, options);
+}
+
+function registeredStaticExportDiagnostics(
+  diagnostics: readonly StaticExportDiagnostic[],
+  label: string,
+): StaticExportDiagnostic[] {
+  const source = snapshotBuildArray(diagnostics, `${label} diagnostics`);
+  const registered: StaticExportDiagnostic[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = source[index];
+    assertRegisteredDiagnostic(diagnostic, `${label} diagnostics[${index}]`);
+    witnessArrayAppend(
+      registered,
+      diagnostic,
+      'Server packages/server/src/static-export-diagnostics.ts collection',
+    );
+  }
+  return registered;
+}
+
+function blockingStaticExportDiagnostic(
+  diagnostic: StaticExportCompileDiagnostic,
+): StaticExportDiagnostic {
+  return deriveRegisteredDiagnostic(
+    diagnostic,
+    { routePath: diagnostic.fileName },
+    { message: staticExportCompileDiagnosticMessage(diagnostic) },
+  );
 }
 
 function stableDiagnosticText(value: string): string {

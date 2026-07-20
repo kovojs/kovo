@@ -23,9 +23,9 @@ describe('provenance closure artifact gate', () => {
       summary: {
         browserStates: 20,
         closedReasons: 8,
-        memberClasses: 56,
-        relationPairs: 2_128,
-        serverStates: 38,
+        memberClasses: 57,
+        relationPairs: 2_508,
+        serverStates: 44,
       },
     });
   });
@@ -49,6 +49,8 @@ describe('provenance closure artifact gate', () => {
       'conditional-expression',
       'static-member',
       'foreign-executable-containment',
+      'governed-data-containment',
+      'unsafe-wire-data-containment',
       'authority-containment',
     ]);
   });
@@ -80,6 +82,18 @@ describe('provenance closure artifact gate', () => {
     );
     expect(extractServerExpressionProvenanceArms(switchMutant)).toContain(
       'unclassified-statement:SwitchStatement',
+    );
+  });
+
+  it('recognizes only the exact registered final containment payload', () => {
+    const source = readFileSync(`${repoRoot()}/${scannerPath}`, 'utf8');
+    const mutant = source.replace(
+      "'fallthrough-contained-local',\n    expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',",
+      "'unreviewed-local-grant',\n    expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',",
+    );
+    expect(mutant).not.toBe(source);
+    expect(extractServerExpressionProvenanceArms(mutant)).toContain(
+      'unclassified-return:CallExpression',
     );
   });
 });

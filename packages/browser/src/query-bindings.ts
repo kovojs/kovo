@@ -16,7 +16,7 @@ import type {
 import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import type { QueryStore } from './query-store.js';
-import { kovoBoundAttributeValue } from './security-output.js';
+import { kovoBoundAttributeValue, trustedUrl as mintTrustedUrl } from './security-output.js';
 import {
   applySecurityIntrinsic,
   securityArrayAppend,
@@ -97,6 +97,7 @@ export interface CompiledQueryStamp {
   attr: string;
   select(value: unknown, root: QueryBindingRoot, context: CompiledQueryUpdateContext): unknown;
   selector: string;
+  trustedUrl?: true;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -308,6 +309,7 @@ export function applyCompiledQueryUpdatePlan(
     const attr = requiredOwnString(stamp, 'attr', 'stamp');
     const selector = requiredOwnString(stamp, 'selector', 'stamp');
     const select = requiredOwnFunction<CompiledQueryStamp['select']>(stamp, 'select', 'stamp');
+    const trustedUrlWrite = readOwnPlanField(stamp, 'trustedUrl') === true;
     const selected = applySecurityIntrinsic(select, stamp, [value, root, context]);
 
     const elements = queryBindingElements(root, selector);
@@ -317,7 +319,7 @@ export function applyCompiledQueryUpdatePlan(
       if (selected === undefined || selected === null) {
         removeBoundAttribute(element, attr);
       } else {
-        setBoundAttribute(element, attr, selected);
+        setBoundAttribute(element, attr, selected, trustedUrlWrite);
       }
       securityArrayAppend(applied.stamps, attr, 'Browser applied compiled query stamps');
     }
@@ -951,7 +953,12 @@ function reconcileDialogOpen(element: QueryBindingElement, value: unknown): bool
   return true;
 }
 
-function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
+function setBoundAttribute(
+  element: QueryBindingElement,
+  name: string,
+  value: unknown,
+  trustedUrlWrite = false,
+): void {
   if (
     stripDeclarativeShadowDomBindingControls(element) &&
     isDeclarativeShadowDomBindingControl(name, value)
@@ -981,7 +988,10 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   // security behavior remains auditable in emitted code and in the live update path.
   // F2 / SPEC §4.8: `null` removes a blocked primitive; `undefined` preserves the compiler-reviewed
   // live value when the element/attribute pair is itself the execution or isolation control.
-  const rendered = kovoBoundAttributeValue(name, value, boundAttributeWriteContext(element));
+  const sinkValue = trustedUrlWrite
+    ? mintTrustedUrl(securityString(value), 'compiler-reviewed reactive URL')
+    : value;
+  const rendered = kovoBoundAttributeValue(name, sinkValue, boundAttributeWriteContext(element));
   if (rendered === undefined) return;
   if (rendered === null) {
     removeBoundAttribute(element, name, true);
@@ -1060,9 +1070,9 @@ function snapshotDenseArray<Value>(value: unknown, label: string): Value[] {
   return snapshot;
 }
 
-function readOwnPlanField(
-  plan: CompiledQueryUpdatePlan,
-  name: keyof CompiledQueryUpdatePlan,
+function readOwnPlanField<Plan extends object, Name extends string & keyof Plan>(
+  plan: Plan,
+  name: Name,
 ): unknown {
   const descriptor = securityGetOwnPropertyDescriptor(plan, name);
   if (!descriptor) return undefined;

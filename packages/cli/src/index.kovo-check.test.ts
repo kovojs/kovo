@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { EXPLAIN_USAGE_LINE } from './commands-manifest.js';
 import { kovoCheck, kovoExplain, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
@@ -488,9 +489,10 @@ describe('kovo check', () => {
     expect(result.output).toContain('request-derived SQL text');
   });
 
-  // SPEC §6.6 (KV424, error-severity): the dangerous-sink producer rides through deriveAppGraph and
-  // `kovo check` fails on an app handler-body innerHTML/eval write.
-  it('fails kovo check end-to-end when the app dangerous-sink producer rides into the merged graph', async () => {
+  // SPEC §6.6 (KV424, error-severity): unsupported imperative browser registration is opaque
+  // request authority, so the producer rides through deriveAppGraph and `kovo check` fails closed.
+  // Compiler-owned JSX handlers close separately through KV449's finite browser IR.
+  it('fails kovo check end-to-end when opaque browser authority rides into the merged graph', async () => {
     const { collectUnregisteredSinksFromProject } = await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 
@@ -498,11 +500,7 @@ describe('kovo check', () => {
       files: [
         {
           fileName: 'widget.tsx',
-          source: [
-            'export const Widget = () => (',
-            '  <div onClick={(e: any) => { e.target.innerHTML = location.hash; }} />',
-            ');',
-          ].join('\n'),
+          source: ["element.addEventListener('click', () => { element.focus(); });"].join('\n'),
         },
       ],
     });
@@ -516,7 +514,7 @@ describe('kovo check', () => {
     const result = kovoCheck(checkInput);
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain('ERROR KV424 widget.tsx');
-    expect(result.output).toContain('sink=innerHTML');
+    expect(result.output).toContain('sink=request-handler.opaque-call');
   });
 
   it('fails on KV310 optimistic coverage gaps', () => {
@@ -2255,6 +2253,29 @@ describe('kovo check', () => {
     expect(result.exitCode).not.toBe(0);
   });
 
+  it('accepts a csrf-exempt endpoint with explicit non-session authority', () => {
+    const result = kovoCheck({
+      endpoints: [
+        {
+          appOwnedSafety: true,
+          auth: 'verifier:machine-signature',
+          body: 'text',
+          cache: 'no-store',
+          csrf: 'exempt',
+          csrfJustification: 'signed machine endpoint',
+          method: 'POST',
+          name: 'machine/sync',
+          path: '/machine/sync',
+          reason: 'signed machine endpoint',
+        },
+      ],
+      sessionAuthority: [{ kind: 'endpoint', name: 'machine/sync', referencesSession: false }],
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toBe('kovo-check/v1\nOK\n');
+  });
+
   it('treats duplicate session-authority facts as an order-independent positive lattice', () => {
     const result = kovoCheck({
       endpoints: [
@@ -2454,6 +2475,50 @@ describe('kovo check', () => {
     );
   });
 
+  it('fails kovo check coverage as a CLI command when renderOnce is invalidated (KV314)', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-coverage-kv314-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [{ key: 'cart/add', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'cart' }],
+          touchGraph: {
+            'cart.addItem': {
+              touches: [
+                { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              ],
+              unresolved: [],
+            },
+          },
+          updateCoverage: [
+            {
+              component: 'CartBadge',
+              detail: 'declared renderOnce',
+              position: 'expression',
+              query: 'cart.count',
+              status: 'renderOnce',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['check', 'coverage', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toContain('ERROR KV314 component=CartBadge query=cart.count');
+  });
+
   it('formats KV438 mass-assignment diagnostics through the real kovo check CLI command', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-kv438-'));
     const graphPath = join(tempDir, 'graph.json');
@@ -2508,7 +2573,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unsupported check family "optimstic". expected optimistic, coverage, endpoint-posture, or sources-sinks.\n',
+      'kovo: unsupported check family "optimstic". expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n',
     );
   });
 
@@ -2526,7 +2591,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json]\n',
+      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]\n',
     );
   });
 
@@ -2544,7 +2609,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unknown explain option "--json".\nkovo: usage: kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]\n',
+      `kovo: unknown explain option "--json".\nkovo: usage: ${EXPLAIN_USAGE_LINE}\n`,
     );
   });
 
@@ -2637,7 +2702,7 @@ describe('kovo check', () => {
       });
 
       expect(output).toBe(
-        'kovo: add, audit, build, dev, check, db, compile, explain, export, mcp, update-docs\n',
+        'kovo: add, audit, build, dev, check, db, compile, fix, explain, incident, export, mcp, update-docs\n',
       );
     } finally {
       rmSync(parent, { force: true, recursive: true });

@@ -41,6 +41,63 @@ export const browserSecurityOperationKinds = freezeSecurityValue([
 /** @internal */
 export type BrowserSecurityOperationKind = (typeof browserSecurityOperationKinds)[number];
 
+/** @internal Compiler/server schema for the derived browser response posture. */
+export const browserPostureManifestSchema = 'kovo-browser-posture/v1' as const;
+
+/** @internal CSP fetch directives owned by the compiler-derived browser asset census. */
+export type BrowserPostureCspDirective =
+  | 'connect-src'
+  | 'font-src'
+  | 'frame-src'
+  | 'img-src'
+  | 'media-src'
+  | 'script-src'
+  | 'style-src'
+  | 'worker-src';
+
+/** @internal One statically visible external asset origin and its authored source span. */
+export interface BrowserPostureExternalOrigin {
+  readonly directive: BrowserPostureCspDirective;
+  readonly fileName: string;
+  readonly origin: string;
+  readonly site: string;
+  readonly span: { readonly end: number; readonly start: number };
+}
+
+/** @internal One exact trustedUrl escape whose runtime origin cannot be derived statically. */
+export interface BrowserPostureOpaqueExternalUrl {
+  readonly directive: BrowserPostureCspDirective;
+  readonly fileName: string;
+  readonly reason: string;
+  readonly site: string;
+  readonly span: { readonly end: number; readonly start: number };
+}
+
+/** @internal Why the optional cross-origin-isolated response posture is not derivable. */
+export interface BrowserPostureIsolationBlocker {
+  readonly fileName: string;
+  readonly kind:
+    | 'dynamic-fetch-or-worker'
+    | 'external-resource'
+    | 'frame'
+    | 'opaque-resource'
+    | 'popup';
+  readonly site: string;
+  readonly span?: { readonly end: number; readonly start: number };
+}
+
+/**
+ * @internal Compiler-owned browser response posture. App code cannot mint this carrier; supported
+ * dev/build runners serialize it before evaluating the app module (SPEC §2, §4.8, §6.6).
+ */
+export interface BrowserPostureManifest {
+  readonly externalOrigins: readonly BrowserPostureExternalOrigin[];
+  readonly isolationBlockers: readonly BrowserPostureIsolationBlocker[];
+  readonly opaqueExternalUrls: readonly BrowserPostureOpaqueExternalUrl[];
+  readonly operations: readonly BrowserSecurityOperationKind[];
+  readonly schema: typeof browserPostureManifestSchema;
+}
+
 /**
  * @internal Closed server-effect and compiler-control inventory. `server.handler.root` is a source
  * census record and `server.helper.call` is an exact same-file authority-transfer edge; neither is
@@ -49,6 +106,7 @@ export type BrowserSecurityOperationKind = (typeof browserSecurityOperationKinds
  */
 export const serverSecurityOperationKinds = freezeSecurityValue([
   'server.authority.scope',
+  'server.data.declassify',
   'server.database.read',
   'server.database.trusted-sql',
   'server.database.write',
@@ -69,6 +127,95 @@ export const serverSecurityOperationKinds = freezeSecurityValue([
 /** @internal */
 export type ServerSecurityOperationKind = (typeof serverSecurityOperationKinds)[number];
 
+/** One compiler-derived server operation accepted by the generated agent-tool witness. */
+export type ServerSecurityOperationFact = SecurityOperationIr & {
+  readonly kind: ServerSecurityOperationKind;
+};
+
+/**
+ * Closed integrity lattice for capability-bounded agent sessions (SPEC §6.6).
+ * Ordering is low to high; runtime transitions may only move left.
+ */
+export const agentIntegrityLevels = freezeSecurityValue([
+  'untrusted',
+  'retrieved',
+  'validated',
+  'principal',
+] as const);
+
+/** Integrity carried by one agent turn and its retained tool closure. */
+export type AgentIntegrity = (typeof agentIntegrityLevels)[number];
+
+/** Return true when `actual` retains authority requiring `minimum`. */
+export function agentIntegrityAllows(actual: AgentIntegrity, minimum: AgentIntegrity): boolean {
+  return agentIntegrityRank(actual) >= agentIntegrityRank(minimum);
+}
+
+/** Meet operation for monotone integrity attenuation. */
+export function attenuateAgentIntegrity(
+  current: AgentIntegrity,
+  incoming: AgentIntegrity,
+): AgentIntegrity {
+  return agentIntegrityRank(current) <= agentIntegrityRank(incoming) ? current : incoming;
+}
+
+/**
+ * Derive the minimum integrity for an exact finite operation closure. Unknown kinds fail closed to
+ * `principal`; app-authored metadata never participates in this authority decision.
+ */
+export function agentMinimumIntegrityForOperations(
+  operations: readonly ServerSecurityOperationFact[],
+): AgentIntegrity {
+  let minimum: AgentIntegrity = 'untrusted';
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    if (operation === undefined) return 'principal';
+    const required = agentMinimumIntegrityForOperation(operation.kind);
+    if (agentIntegrityRank(required) > agentIntegrityRank(minimum)) minimum = required;
+  }
+  return minimum;
+}
+
+function agentMinimumIntegrityForOperation(kind: ServerSecurityOperationKind): AgentIntegrity {
+  switch (kind) {
+    case 'server.handler.root':
+    case 'server.helper.call':
+      return 'untrusted';
+    case 'server.database.read':
+    case 'server.storage.read':
+      return 'retrieved';
+    case 'server.authority.scope':
+    case 'server.data.declassify':
+    case 'server.database.trusted-sql':
+    case 'server.database.write':
+    case 'server.egress.request':
+    case 'server.output.trusted-html':
+    case 'server.response.cookie':
+    case 'server.response.header':
+    case 'server.response.outcome':
+    case 'server.response.raw':
+    case 'server.response.redirect':
+    case 'server.storage.write':
+    case 'server.task.compose':
+      return 'principal';
+    default:
+      return 'principal';
+  }
+}
+
+function agentIntegrityRank(integrity: AgentIntegrity): number {
+  switch (integrity) {
+    case 'untrusted':
+      return 0;
+    case 'retrieved':
+      return 1;
+    case 'validated':
+      return 2;
+    case 'principal':
+      return 3;
+  }
+}
+
 /** @internal */
 export type SecurityOperationKind = BrowserSecurityOperationKind | ServerSecurityOperationKind;
 
@@ -78,6 +225,27 @@ export const securityOperationKinds: readonly SecurityOperationKind[] = freezeSe
   ...serverSecurityOperationKinds,
 ]);
 
+/**
+ * @internal Closed capability-root inventory shared by compiler closure, public-export posture,
+ * and the decision-surface coverage denominator. `none` is a posture, not a generated root.
+ */
+export const securityRootKinds = freezeSecurityValue([
+  'agent-tool-callback',
+  'application',
+  'durable-task',
+  'endpoint',
+  'layout',
+  'mutation',
+  'query',
+  'route',
+  'scheduled-task',
+  'serialized-browser-handler',
+  'webhook',
+] as const);
+
+/** @internal */
+export type SecurityRootKind = (typeof securityRootKinds)[number];
+
 /** @internal */
 export type SecurityOperationDoor =
   | 'Response'
@@ -86,6 +254,7 @@ export type SecurityOperationDoor =
   | 'compiler-state'
   | 'context.setCookie'
   | 'delegated-event'
+  | 'declassify'
   | 'framework-storage'
   | 'framework-timer'
   | 'handler-root'
@@ -123,15 +292,19 @@ export interface SecuritySemanticBudgets {
 }
 
 /** @internal Every non-proved semantic path closes under one stable reason. */
-export type SecuritySemanticClosedReason =
-  | 'budget-call-depth'
-  | 'budget-node-count'
-  | 'budget-operation-count'
-  | 'budget-summary-count'
-  | 'helper-cycle'
-  | 'opaque-transfer'
-  | 'unknown-operation'
-  | 'unsupported-authority-use';
+export const securitySemanticClosedReasons = freezeSecurityValue([
+  'budget-call-depth',
+  'budget-node-count',
+  'budget-operation-count',
+  'budget-summary-count',
+  'helper-cycle',
+  'opaque-transfer',
+  'unknown-operation',
+  'unsupported-authority-use',
+] as const);
+
+/** @internal */
+export type SecuritySemanticClosedReason = (typeof securitySemanticClosedReasons)[number];
 
 /** @internal One finite reviewed operation reached through the normalized helper graph. */
 export interface SecuritySemanticProvedTrace {
@@ -170,10 +343,10 @@ export interface SecuritySemanticSummary {
 
 /** @internal Exact authored factory/callback identity that owns one semantic root. */
 export interface SecuritySemanticRootBinding {
-  readonly callback: 'handler' | 'load' | 'run';
+  readonly callback: 'handler' | 'load' | 'model' | 'run';
   /** Exact authored callback identity within the root's immutable source snapshot. */
   readonly callableSpan: { readonly end: number; readonly start: number };
-  readonly factory: 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook';
+  readonly factory: 'agent' | 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook';
   /** Exact enrolled factory invocation within the same immutable source snapshot. */
   readonly factoryCallSpan: { readonly end: number; readonly start: number };
   readonly root: string;
@@ -238,6 +411,8 @@ export function securityOperationDoorForKind(kind: SecurityOperationKind): Secur
       return 'framework-timer';
     case 'server.authority.scope':
       return 'principal-scope';
+    case 'server.data.declassify':
+      return 'declassify';
     case 'server.egress.request':
       return 'ctx.fetch';
     case 'server.helper.call':
@@ -298,6 +473,7 @@ export function isServerSecurityOperationKind(
 ): value is ServerSecurityOperationKind {
   switch (value) {
     case 'server.authority.scope':
+    case 'server.data.declassify':
     case 'server.database.read':
     case 'server.database.trusted-sql':
     case 'server.database.write':
@@ -322,6 +498,7 @@ export function isServerSecurityOperationKind(
 /** @internal */
 export function securityOperationNeedsJustification(kind: SecurityOperationKind): boolean {
   return (
+    kind === 'server.data.declassify' ||
     kind === 'server.database.trusted-sql' ||
     kind === 'server.output.trusted-html' ||
     kind === 'server.response.raw'

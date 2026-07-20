@@ -258,8 +258,7 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV435 postgres-reader-role-secret-grant-floor
   // @kovo-security-certifies KV435 postgres-reader-role-secret-view-floor
   // @kovo-security-certifies KV435 runtime-secret-explicit-box-egress
-  // @kovo-security-certifies KV435 runtime-secret-audited-reveal-acceptance
-  it('distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance', async () => {
+  it('distinguishes Postgres reader-role denials from runtime Secret wire refusal', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-runtime-secret-boundary-'));
@@ -279,7 +278,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         join(root, 'migrations/001_runtime_secret_boundary.sql'),
         'utf8',
       );
-      expect(proofQueries).toContain("import { secret, trustedReveal } from '@kovojs/core';");
+      expect(proofQueries).toContain("import { secret } from '@kovojs/core';");
       expect(proofQueries).not.toContain("from './_kovo/app-runtime-db.js'");
       expect(generatedRuntimeDb).not.toContain('declareSecretReadCapability');
       expect(proofQueries).not.toContain('declareSecretReadCapability');
@@ -313,8 +312,6 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofApp).toContain(
         'env: s.object({ KOVO_CONFIG_SECRET_PROOF: s.secret(s.string()) })',
       );
-      expect(proofQueries).toContain("trustedReveal(secret('runtime-secret-value'), {");
-      expect(proofQueries).toContain('audited runtime query-wire reveal acceptance proof');
       expect(proofQueries).not.toContain('if (false)');
 
       // SPEC §6.6/§9.5: build derives the app graph with framework-owned unavailable
@@ -465,20 +462,6 @@ describe('create-kovo starter (build integration: production security artifacts)
           expect(requestOutput).not.toContain(secretValue);
         });
       }
-
-      const revealOutputOffset = output().length;
-      const revealResponse = await fetch(
-        `${origin}/_q/queries/runtime-secret-reveal-acceptance-query`,
-        { headers: { cookie: cookieHeader(jar) } },
-      );
-      const revealBody = await revealResponse.text();
-
-      expect(revealResponse.status, revealBody).toBe(200);
-      expect(revealBody).toContain(
-        '<kovo-query name="queries/runtime-secret-reveal-acceptance-query"',
-      );
-      expect(revealBody).toContain('runtime-secret-value');
-      expect(output().slice(revealOutputOffset)).not.toContain('KV435');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -706,16 +689,6 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(publicProjectionBody).toContain(`<kovo-query name="${publicProjectionKey}"`);
       expect(publicProjectionBody).toContain('public label');
       expect(publicProjectionBody).not.toContain('runtime-secret-value');
-
-      const revealKey = 'queries/sqlite-secret-reveal-query';
-      const revealResponse = await fetch(`${origin}/_q/${revealKey}`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const revealBody = await revealResponse.text();
-
-      expect(revealResponse.status, revealBody).toBe(200);
-      expect(revealBody).toContain(`<kovo-query name="${revealKey}"`);
-      expect(revealBody).toContain('runtime-secret-value:revealed');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

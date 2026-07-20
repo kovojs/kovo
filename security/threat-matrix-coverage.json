@@ -22,8 +22,8 @@
     },
     "trust-escape-audit": {
       "disposition": "audited-escape",
-      "control": "The static trust collector emits every registered kind to kovo explain --trust with its source site and justification posture.",
-      "evidence": ["packages/drizzle/src/trust-escapes-static.test.ts"]
+      "control": "The static trust collector emits every registered kind to kovo explain --trust with its source root and justification posture, and the metric-E gate fails on unsupported kinds or producer gaps.",
+      "evidence": ["pnpm run check:escape-census"]
     },
     "capability-escape-audit": {
       "disposition": "audited-escape",
@@ -112,6 +112,17 @@
       "escapeCells": { "C": "c9-escape-audit", "I": "c9-escape-audit" }
     },
     {
+      "sink": "data.derived.persistence",
+      "escapeHatches": ["derived(adapter,{key,kind:vector})"],
+      "surface": "runtime-infra",
+      "cells": { "C": "c9-control", "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": {
+        "C": "c9-escape-audit",
+        "I": "c9-escape-audit",
+        "Au": "c9-escape-audit"
+      }
+    },
+    {
       "sink": "auth.data-access",
       "escapeHatches": ["public-read-justification"],
       "surface": "auth",
@@ -153,7 +164,7 @@
   "auditedEscapeMappings": [
     {
       "channel": "trust",
-      "kinds": ["customVerifier", "rawEndpoint", "webhookVerifyNone"],
+      "kinds": ["csrfFalse", "customVerifier", "rawEndpoint", "webhookVerifyNone"],
       "surface": "wire-http",
       "cells": { "C": "trust-escape-audit", "I": "trust-escape-audit", "Au": "trust-escape-audit" }
     },
@@ -161,6 +172,18 @@
       "channel": "trust",
       "kinds": ["staticExportPathOverride"],
       "surface": "build-compiler",
+      "cells": { "I": "trust-escape-audit" }
+    },
+    {
+      "channel": "trust",
+      "kinds": ["kovoAnalyzerSummary"],
+      "surface": "build-compiler",
+      "cells": { "I": "trust-escape-audit", "Au": "trust-escape-audit" }
+    },
+    {
+      "channel": "trust",
+      "kinds": ["allowControlChars"],
+      "surface": "wire-http",
       "cells": { "I": "trust-escape-audit" }
     },
     {

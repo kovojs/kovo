@@ -204,7 +204,9 @@ maintainers" with no SLA into v1. (~0.5 pm)
 - [ ] Enable GitHub private vulnerability reporting, assign a monitored owner or rotation, and run a
       successful private-report response drill before launch.
   - External evidence gap: `gh api repos/kovojs/kovo/private-vulnerability-reporting` returned
-    `{"enabled":false}` on 2026-07-19.
+    `{"enabled":false}` on 2026-07-20; the corresponding `PUT` returned HTTP 403
+    `Resource not accessible by integration`, so an administrator with repository-administration
+    write authority must enable it and name the monitored responder before the drill can run.
 - [x] `STABILITY.md` supported-version window, stated honestly for technical preview: latest minor
       only, no backports. Add `site/public/.well-known/security.txt` and a `Security response
 readiness` row (status `pending`) to `rules/prelaunch-checklist.md`.
@@ -219,14 +221,14 @@ readiness` row (status `pending`) to `rules/prelaunch-checklist.md`.
 `package.json` sets `onlyBuiltDependencies` (good hygiene) but it is not a pipeline invariant.
 (~0.5 pm, outsized return)
 
-- [ ] `check:hermetic-proof-stage`: analysis, certificate generation, and signing run with no
+- [x] `check:hermetic-proof-stage`: analysis, certificate generation, and signing run with no
       lifecycle-script execution, no network, and no reachability from the app dependency closure to
       signing material. Fail if the proof stage's process tree could have executed app-graph code.
       This is the difference between "this certificate is evidence" and "this certificate is a rumor".
-  - Current evidence: the pinned Linux/amd64 and macOS sandbox self-test closes the exact process,
-    network, mount, key, and repository vectors and kills override mutants. It prints
-    `proof-tooling=UNBOUND`; keep this item open until the real analyzer/generator/signer is forced
-    through the executor.
+  - Evidence: `pnpm run check:hermetic-proof-stage` forces the production analyzer, generator, and
+    caller-keyed Ed25519 signer through separate sealed macOS processes and prints
+    `sandbox=closed proof-tooling=kovo-certificate-v1-signed BOUND OK`; exact-vector mutants cover
+    Linux mounts, network, lifecycle, app-graph, repository, and signing-key reachability.
 
 ---
 
@@ -241,13 +243,13 @@ a **counterexample path**, not a flaky seed.
 - [x] Enumerate the arms of `serverExpressionProvenance`
       (`packages/compiler/src/scan/security-operation-ir.ts:4331-4394`) and classify each as
       _compositional_ (depends only on subterm provenance values) or _syntax-dependent_. Expected:
-      five compositional arms, one object-literal shape test, and two whole-subtree containment walks
+      five compositional arms, one object-literal shape test, and three whole-subtree containment walks
       in the fallthrough. **Do not abandon on that result** — define the decided relation over the
       compositional core and model the fallthrough as one named nondeterministic oracle edge yielding
-      `{local, foreign-executable, unknown-authority}`. If materially more arms inspect syntax, narrow
-      the finite-state frame and record the narrowing in §4.5.
-  - Evidence: `check:provenance-closure` extracts the exact nine-arm order and its 12/12 tests pin
-    five compositional arms, one leaf, one syntax predicate, and the two-walk nondeterministic edge.
+      `{local, foreign-executable, unsafe-wire-data, unknown-authority}`. If materially more arms
+      inspect syntax, narrow the finite-state frame and record the narrowing in §4.5.
+  - Evidence: `check:provenance-closure` extracts the exact ten-arm order and its 13/13 tests pin
+    five compositional arms, one leaf, one syntax predicate, and the three-walk nondeterministic edge.
 
 ### 1.1 Reify and decide the provenance relation
 
@@ -257,14 +259,14 @@ file.** Today there is no declared partial order, no join, and no ⊑: joins are
 negative denylist**, so a newly-added exempt constant silently widens the TCB with no test that would
 notice. (~1.5 pm after §1.0)
 
-- [x] Emit `security-provenance-relation/v1.json`: the 38 server + 20 browser states
+- [x] Emit `security-provenance-relation/v1.json`: the 43 server + 20 browser states
       (`scan/security-operation-ir.ts:72-104`), the **quotient** member alphabet (literal names +
       `databaseOperationKind` domain + `isRawDatabaseCapabilityMember` domain + `other`), the authority
       set, and the `State × MemberClass → State` table currently written as nested ifs (`:4456-4520`).
       Gate: the emitted state set equals the `ServerValueProvenance`/`BrowserValueProvenance` unions and
       `securityOperationKinds`; a new tag without a table row fails CI.
-  - Evidence: the committed v1 artifact and `check:provenance-closure` cover 38 server states, 20
-    browser states, 56 quotient member classes, and all 2,128 server relation pairs.
+  - Evidence: `node scripts/provenance-closure.mjs` validates the committed v1 artifact over 43 server
+    states, 20 browser states, 57 quotient member classes, and all 2,451 server relation pairs.
 - [x] Replace the authority denylist with a table-derived `p ⊑ authorityTop` test; verify with an
       exhaustive per-state test that old and new predicates agree element-by-element, then confirm a
       planted new element defaults to authority-bearing.
@@ -274,12 +276,12 @@ notice. (~1.5 pm after §1.0)
       `table[s][m] === serverMemberProvenance(s,m)`, asserting the executed pair count equals
       `|states| × |classes|` exactly, plus a mutated-cell negative test. Because the domain is finite
       this is a **proof** of table/implementation agreement, not a test of it.
-  - Evidence: the focused compiler relation suite exhausts all 2,128 pairs and kills a mutated cell.
+  - Evidence: the focused compiler relation suite exhausts all 2,451 pairs and kills a mutated cell.
 - [x] `check:provenance-closure`: least-fixpoint reachability from every authority state, asserting no
       path reaches a sink position except via an enrolled `operation:*` state with a C9 door owner, or
       via `unknown-authority` (which must always yield one of the 8 `SecuritySemanticClosedReason`
       values). Emit the reachability relation as a diffable artifact; fail with a counterexample path.
-  - Evidence: `check:provenance-closure` passes 12/12, validating the least fixpoint, eight closed
+  - Evidence: `check:provenance-closure` passes 13/13, validating the least fixpoint, eight closed
     reasons, exact C9 operation-door ownership, and counterexample-path negative controls.
 
 ### 1.2 Decide the authorization correspondence for the shipped fragment
@@ -297,22 +299,35 @@ Confirmed divergence, expressible today, caught by nothing: `authzPolicy: sql\`o
 current_setting('kovo.principal', true) OR visibility = 'org'\``guarded by`all(authed, guards.role('billing'))`—`kovo.principal` is the \_user* id, so SQL admits by org while
 the guard checks a role SQL never sees.
 
-- [ ] **Freeze the emission door first** (cheap, pure anti-drift, worth doing standalone): a test
-      enumerating the five and only five RLS-SQL emission sites — owner `:7736`, ownerVia `:7788-7833`,
-      authzPolicy `:7767`, system `USING(true)` `:7877`, admin `USING(true)` `:7903`.
-  - Remaining gap: the current focused test freezes the central emitter inventory and each runtime
-    call, but does not yet reject a sixth raw `CREATE POLICY` emitter added in another production file.
-- [ ] **Ship the non-correspondence explain record second, not last**: place the generated RLS
+- [x] **Freeze the trusted-source emission door first** (cheap, pure anti-drift, worth doing
+      standalone): enumerate the five and only five policy-creation calls — owner, ownerVia,
+      authzPolicy, system `USING(true)`, and admin `USING(true)` — plus the four exact policy-reset
+      renderers. Reject statically visible `CREATE`/`ALTER`/`DROP POLICY` mutations elsewhere across
+      production package and starter-template source, and bind the reviewed emitter by TS symbol
+      identity so aliases, re-exports, dynamic loads, and extra calls fail closed.
+  - Evidence: `pnpm run check:rls-emission-door` passes 48/48 with exactly 3 CREATE renderers, 4 DROP
+    renderers, and 5 constructor calls, including URL/CJS, percent, Windows-path, Unicode case-fold,
+    and filesystem-inode loader identities. The 144/144 four-file PostgreSQL suite rejects an extra
+    policy with `KV433_POLICY_SET`, an `ALTER POLICY ... USING (true)` weakening with
+    `KV433_OWNER_POLICY`, and a sixth policy that survives a provisioning reset; external Postgres
+    defaults the post-provision boot audit on.
+  - Honesty boundary: the source gate recognizes a deliberately finite static grammar over trusted
+    framework source; it does not claim to decide arbitrary JavaScript or dynamically assembled SQL.
+    The supported-deployment security boundary is the live boot posture check over the engine's exact
+    policy set and policy shape, which the two catalog-state regressions pin.
+- [x] **Ship the non-correspondence explain record second, not last**: place the generated RLS
       predicate text and the `explainGuard` audit facts side by side with status `unproven` for every
       table outside the decided fragment (hand `authzPolicy`, arbitrary `ownsRow`, system/admin
       `USING(true)`). Include the dead `kovo.role` fact as a first-class explain warning. Both halves
       already exist in the system and are simply never placed next to each other.
-  - Remaining gap: the typed record and honest statuses exist, but no production explain/env output
-    consumes the record yet.
+  - Evidence: the 210/210 seven-file authorization suite proves `kovo explain --authorization`
+    emits per-surface guard/RLS records with `unproven`, `divergent`, or `environment-unchecked`
+    status plus the dead-role warning; `kovo db check --env` reports the exact escaped live policy
+    rows as verified only when FORCE RLS and the complete expected policy set and shapes pass.
 - [x] Retarget `resolveProtectedPostgresTables` (`:7710-7778`) to build a 2-constructor algebra term
       and render SQL **from** the term; first proof obligation is byte-identity against today's
       predicate strings (already pinned by `postgres-runtime.test.ts` / `postgres-authz.test.ts`).
-  - Evidence: the combined four-file PostgreSQL suite passes 140/140 and pins owner/ownerVia SQL
+  - Evidence: the combined four-file PostgreSQL suite passes 144/144 and pins owner/ownerVia SQL
     byte identity while the live runtime resolves both through the shared term.
 - [x] Implement the three-valued Kleene denotation and an **exhaustive** enumerator over
       `{true,false,null}` per equality and `{present,absent,null}` per FK edge, up to the shipped
@@ -328,15 +343,18 @@ the guard checks a role SQL never sees.
 - [x] Close the SQL-side extraction gap against a real engine: a PGlite test materializes every
       enumerated model as rows under FORCE RLS with the actually-generated policy and asserts observed
       visibility equals the denotation for all models. Finite and enumerated, not sampled.
-  - Evidence: `postgres-authorization-correspondence.pglite.test.ts` passes inside the 140/140 root
+  - Evidence: `postgres-authorization-correspondence.pglite.test.ts` passes inside the 144/144 root
     run and compares all 243 model rows under FORCE RLS.
 
 > Sequencing: the framework-generated `ownsRow` default is a **breaking change to a shipped public
 > guard**. Land it as its own change _after_ the decision procedure is green — never bundled into it.
 
-- [ ] In a separately reviewed breaking change, bind the shipped owner-guard path to the
+- [x] In a separately reviewed breaking change, bind the shipped owner-guard path to the
       framework-derived evaluator and remove arbitrary app callback semantics from the proven
       fragment; retain a distinctly named audited escape for intentionally unproven predicates.
+  - Evidence: the 148/148 integration suite proves `guards.owns(keyOf, table.keyColumn)` against exact
+    manifest identity, live unique-key/owner lookup, real PGlite denial controls, and `unprovenOwns`;
+    `pnpm run check:rls-emission-door` passes 48/48.
 
 ### 1.3 Grammar containment: a kABNF → DFA substrate
 
@@ -373,12 +391,16 @@ Kovo has three unrelated de facto label systems: confidentiality (`secret.ts` �
 and authority (`security-operation-ir.ts:72/82`). SPEC states confidentiality purely as a sink rule
 (`spec/10-data-plane.md:277`); there is no execution-level property anywhere. (~1.5 pm)
 
-- [ ] Publish SPEC §10.x "label lattice + intended non-interference statement": define
+- [x] Publish SPEC §10.x "label lattice + intended non-interference statement": define
       `L = Conf × Integ × Owner`, promote `joinSymbolProvenance` to the normative integrity join, and
       write the principal-indexed termination-insensitive sentence.
-- [ ] `check:label-clause-map`: every confidentiality/integrity diagnostic (KV435, KV426, KV438,
+  - Evidence: `spec/10-data-plane.md` defines the product lattice, exact integrity join, five stable
+    clauses, principal-indexed termination-insensitive statement, and explicit non-claims.
+- [x] `check:label-clause-map`: every confidentiality/integrity diagnostic (KV435, KV426, KV438,
       KV439, KV414, KV410, KV411) maps to a clause of the theorem; an unmapped one fails the gate.
       This converts "per-sink chokes" into "sinks that discharge a stated obligation".
+  - Evidence: `pnpm run check:label-clause-map` passes 8/8 gate and implementation-binding tests,
+    including missing-map, unknown-clause, class-relabel, SPEC-deletion, and join-drift mutants.
 
 ---
 
@@ -392,53 +414,76 @@ pass**. Requires §0.4 and §0.6 to mean anything.
 
 ### 2.0 Two-week kill gate — does module identity survive?
 
-- [ ] Throwaway parser over the exact file list in `scripts/pack-security.files.json` for
+- [x] Throwaway parser over the exact file list in `scripts/pack-security.files.json` for
       `@kovojs/better-auth` and `@kovojs/server`, reporting recovered module count and resolved import
       edges. **Target the published framework dist trees, not the app's bundled handler** — app-side
       module identity is destroyed by bundling. If edges do not resolve, **abandon the certificate
       entirely**.
+  - Evidence: `pnpm run check:pack-security && pnpm run check:certificate-module-identity` recovers 99
+    exact modules and resolves all 589 in-scope edges against 12 packed Kovo packages; 75
+    third-party/builtin imports and the three Node module-loader modules remain explicit for §2.1's
+    lexical-authority audit, and 7/7 negative controls pass.
 
 ### 2.1 `kovo.certificate/v1` and a standalone checker
 
-- [ ] Freeze the schema over the published `@kovojs/*` dist trees:
-      `{artifacts:[{path,sha512}], domain:<the 7 capability kinds>, cap:{module→kinds[]}, edges:[[m,n]],
+- [x] Freeze the schema over the published `@kovojs/*` dist trees:
+      `{artifacts:[{path,sha512}], domain:<the 9 capability kinds>, cap:{module→kinds[]}, edges:[[m,n]],
 roots:[{module,rootKind}], doors:[{module,site,escapeId}], opaque:[{module,reason}]}`, reusing
-      verbatim the 7-member capability union already frozen at `packages/core/src/graph.ts:703-710` and
+      verbatim the 9-member capability union frozen at `packages/core/src/graph.ts` and
       the frozen `rootKind` union.
-- [ ] Emit it alongside `dist/.kovo/graph.json`, with per-artifact sha512 computed exactly as
+  - Evidence: `pnpm run check:certificate` validates the exact schema and 192 sha512-bound packed
+    modules with the frozen 9-kind domain, including binding-sensitive `crypto-acquisition` versus
+    `digest`, and the frozen root vocabulary.
+- [x] Emit it alongside `dist/.kovo/graph.json`, with per-artifact sha512 computed exactly as
       `scripts/publish-packed-packages.mjs` computes tarball integrity.
-- [ ] `@kovojs/verify` as a standalone checker: three linear obligations (coverage, post-fixpoint
+  - Evidence: the focused `index.kovo-build.test.ts` node-preset build passes and proves the emitted
+    `.kovo/certificate.json` is byte-stable and exactly equals the reviewed packed certificate.
+- [x] `@kovojs/verify` as a standalone checker: three linear obligations (coverage, post-fixpoint
       stability `cap[n] ⊆ cap[m]` per edge and `local(m) ⊆ cap[m]`, closure `cap[r] ⊆ doors(r)`) — no
       iteration, widening, budget, or recursion logic on the checker side. One pinned parser
       dependency, **zero Kovo imports**, mechanically enforced by extending `scripts/import-boundary.mjs`.
       Publish checker LOC and dependency closure as the honesty numbers.
-- [ ] **Three negative controls that must fail on three distinct obligations**, checker importing zero
+  - Evidence: `pnpm run check:certificate` reports three checker runtime files, 2,893 runtime LOC,
+    one exact parser dependency (`es-module-lexer@2.1.0`), and zero Kovo imports.
+- [x] **Three negative controls that must fail on three distinct obligations**, checker importing zero
       Kovo code: (i) drop a capability from `cap[m]` that the module imports → _stability_ failure;
       (ii) inject `require('node:child_process')` into a shipped chunk without regenerating →
       _coverage_ failure; (iii) omit a real import edge → _coverage_ failure. If they do not fail
       cleanly, stop.
-- [ ] Adequacy audit of the lexical authority table (the checker's true TCB): enumerate known-unmodeled
+  - Evidence: `pnpm run check:certificate` passes 26/26 focused tests, including the three exact
+    controls plus an independent root-door closure failure.
+- [x] Adequacy audit of the lexical authority table (the checker's true TCB): enumerate known-unmodeled
       authority routes (re-exported bindings, computed dynamic import, `eval`/`new Function`, host
       globals, native addons, WASM) and require each to be modeled or listed in §4.6.
+  - Evidence: `security/certificate-lexical-authority.json` covers all seven routes, and
+    `scripts/kovo-certificate.test.mjs` fails any missing or drifted disposition.
 
 ### 2.2 Translation validation, folded into the same checker
 
 Do not fund a second certificate format or a second checker.
 
-- [ ] Re-derive the import-specifier set from the emitted `*.client.js` **text** and require it ⊆ the
+- [x] Re-derive the import-specifier set from the emitted `*.client.js` **text** and require it ⊆ the
       KV437 reviewed set (`packages/compiler/src/validate/client-capture.ts`). This closes the exact
       channel that gate's doc comment names ("lowering re-emits `import { STRIPE_SECRET_KEY }`
       verbatim"); the adversarial fixture already exists at `client-secret-capture.test.ts:38-50`. (~0.5 pm)
-- [ ] Require the exact secret field names refused by `validateSecretQueryWire`
+  - Evidence: `packages/verify/src/translation.test.ts` reparses imports and rejects an emitted binding
+    absent from the KV437 decision record; `client-secret-capture.test.ts` remains green.
+- [x] Require the exact secret field names refused by `validateSecretQueryWire`
       (`compiler/src/validate/confidentiality.ts:16`) to be absent from emitted client and registry
       sources. (~0.5 pm)
-- [ ] Emitted-artifact coverage guard: every file kind produced at `compiler/src/compile.ts:959-980`
+  - Evidence: `query-bindings.test.ts` proves KV435-refused fields are withheld, while
+    `translation.test.ts` rejects exact secret tokens without substring false positives.
+- [x] Emitted-artifact coverage guard: every file kind produced at `compiler/src/compile.ts:959-980`
       (server, client, css, registry) is covered by a relation or a reviewed exclusion list; a synthetic
       new kind fails the build until classified. (~0.25 pm)
-- [ ] Serialization-integrity only (**not** body re-derivation): assert the operation-kind multiset in
+  - Evidence: `translation.test.ts` covers server, client, registry, and CSS and rejects a synthetic
+    `source-map` kind.
+- [x] Serialization-integrity only (**not** body re-derivation): assert the operation-kind multiset in
       `__kovoSecurityOperationManifest_v1` (`emit/server-render.ts:107-127`) and each
       `securityHandler([...])` call (`emit/client.ts:957`) parses out of the emitted text as own-data
       JSON, is drawn only from the frozen vocabularies, and equals the decision record. (~0.5 pm)
+  - Evidence: `translation.test.ts` rejects non-JSON, unknown-vocabulary, and multiset-drift mutants;
+    `pnpm run check:certificate` passes 26 tests against the regenerated packed certificate.
 
 ### 2.3 Structural code emission
 
@@ -446,12 +491,16 @@ Three correct patterns already exist in isolation (`propertyKey` at `drizzle/src
 `buildSecuritySourceLiteral` at `server/src/build-security-intrinsics.ts:511`, `quoteSqliteIdentifier`
 at `server/src/sqlite.ts:1583`) but are not a shared door.
 
-- [ ] **First, a hostile-emission oracle**: assert the emitted _parse tree_ confines each hostile value
+- [x] **First, a hostile-emission oracle**: assert the emitted _parse tree_ confines each hostile value
       to one leaf. It must go red today on `derive-codegen.ts:179`, or the harness is wrong.
-- [ ] Promote the three patterns into one module (`jsStringLiteral`/`jsIdentifier`/`tsPropertyKey`/
+  - Evidence: the `derive-codegen.test.ts` hostile parse-tree oracle was committed red at
+    `1b741cfd3` and now passes in `pnpm run check:emission-constructor-closure`.
+- [x] Promote the three patterns into one module (`jsStringLiteral`/`jsIdentifier`/`tsPropertyKey`/
       `importSpecifier`), each grammar-validated and fail-closed with a KV; migrate
       `derive-codegen.ts:68/89/179` and `emit/registry.ts:284`; add `check:emission-constructor-closure`
       modeled on `source-reparse-boundary.test.ts:28`'s allowlist gate.
+  - Evidence: `pnpm run check:emission-constructor-closure` passes 27/27 behavior and closure tests
+    for the four KV451 constructors, the two reviewed consumers, and six bypass mutants.
 
 ---
 
@@ -467,19 +516,23 @@ path, so model output is **already** a live ingress).
 
 ### 3.1 Capability-bounded agent mediation (~2 pm)
 
-- [ ] A framework-owned `tool()` door that is the **only** path from a model action to an effect,
+- [x] A framework-owned `tool()` door that is the **only** path from a model action to an effect,
       lowering to plan-1 L2's finite operation set so the tool vocabulary is census-derived (a
       hand-registered vocabulary drifts immediately and makes the theorem vacuous).
-- [ ] Every tool call runs the **same** guard chain and RLS principal pinning as an HTTP mutation — the
+  - Evidence: the focused agent mediation suite passes 12/12 and pins compiler-derived tool effects.
+- [x] Every tool call runs the **same** guard chain and RLS principal pinning as an HTTP mutation — the
       model never receives an ambient service principal, making cross-tenant model exfiltration
       _inexpressible_ rather than prompt-mitigated. Models invoked outside the door are a KV **compile
       error**, not a warning.
-- [ ] Monotone attenuation over a 3–4 level integrity lattice: once low-integrity retrieved or
+  - Evidence: the same 12/12 suite rejects ambient principals and reuses the ordinary mutation guard.
+- [x] Monotone attenuation over a 3–4 level integrity lattice: once low-integrity retrieved or
       tool-returned content enters context, high-authority tools are removed from the offered set for
       the rest of the session — a decidable per-turn check, **no content classifier**. Add
       `kovo explain --agent` printing the exact effect closure a session can reach.
-- [ ] Honest claim, in SPEC: no action exceeds the invoking principal's authority and injected content
+  - Evidence: the same suite proves monotone tool removal and stable `kovo explain --agent` output.
+- [x] Honest claim, in SPEC: no action exceeds the invoking principal's authority and injected content
       cannot _raise_ authority. It does **not** prevent an authorized-but-undesired action.
+  - Evidence: `spec/06-type-system.md` states the bounded claim and the 12/12 suite enforces its doors.
 
 ### 3.2 Grant-graph safety (~1.5–2 pm)
 
@@ -488,16 +541,19 @@ membership to be modeled as an `owner`/`ownerVia`/`authzPolicy` table — so the
 app-mutable data**, and the hard part is handed to the app. Guard≡RLS can be perfectly proven while a
 member-role principal executes a legal write that makes them an owner.
 
-- [ ] Derive a grant model (principals, resources, right-kinds, delegation edges) from the annotations
+- [x] Derive a grant model (principals, resources, right-kinds, delegation edges) from the annotations
       that already exist, so it cannot drift from the schema.
-- [ ] Enumerate every mutation whose declared write scope intersects an authz-bearing table; those are
+  - Evidence: the focused grant-model suite passes 11/11 over schema-derived resources and rights.
+- [x] Enumerate every mutation whose declared write scope intersects an authz-bearing table; those are
       the transition rules. Restrict to a monotone/attenuating fragment where the HRU safe-state
       question is decidable; bounded-model-check it; **fail closed to ⊤ for any write the analyzer
       cannot classify**.
-- [ ] Delegation and impersonation as first-class **attenuating** constructs (`onBehalfOf` yielding a
+  - Evidence: the same 11/11 suite checks the bounded transition relation and KV414 top verdict.
+- [x] Delegation and impersonation as first-class **attenuating** constructs (`onBehalfOf` yielding a
       provably subset right-set, carrying plan-2 §3.3's epoch so revocation propagates) — `owns()` is
       explicitly single-hop today and impersonation/support-access appears nowhere in SPEC. Grant edges
       outside the fragment become named budgeted escapes in `kovo explain --grants`.
+  - Evidence: the same suite proves subset-only delegation with epoch binding and explain-visible escapes.
 
 ### 3.3 Assume-guarantee deployment contract (~1–1.5 pm)
 
@@ -505,15 +561,18 @@ member-role principal executes a legal write that makes them an owner.
 `spec/09-wire-protocol.md:223-231` already carries an ad-hoc forwarded-scheme operator contract and
 §6.6 rule (6) already carves out host preload / `NODE_OPTIONS`.
 
-- [ ] Give every guarantee a machine-readable **antecedent**, derived from the doors that _consume_
+- [x] Give every guarantee a machine-readable **antecedent**, derived from the doors that _consume_
       those environment facts (sole occupant of the registrable domain, exactly-N trusted proxy hops
       with a pinned edge, no non-Kovo writer on the schema, TLS terminator identity, no shared cache,
       bootstrap order) — plan-2's derive-don't-author rule applied to assumptions.
-- [ ] `kovo check env`: discharge what is probeable, print the rest as **retained obligations** naming
+  - Evidence: the deployment environment suite passes 5/5 against the consuming-door registry.
+- [x] `kovo check env`: discharge what is probeable, print the rest as **retained obligations** naming
       the exact guarantees they suspend.
-- [ ] A composition operator for the two real cases: Kovo × Kovo on a shared registrable domain (cookie
+  - Evidence: the same 5/5 suite keeps unobservable facts retained and suspends dependent guarantees.
+- [x] A composition operator for the two real cases: Kovo × Kovo on a shared registrable domain (cookie
       tossing defeats CSRF binding regardless of how well the mint door is proven), and Kovo mounted
       under a foreign host — with a `mounted` posture that refuses to claim what it cannot own.
+  - Evidence: the same suite rejects shared-domain CSRF claims and withholds host-owned mounted claims.
 
 ### 3.4 Derived-dataset authorization inheritance (~1–1.5 pm; needs plan-2 §3.1 ScopedKey)
 
@@ -521,22 +580,32 @@ Kovo's confidentiality claim anchors on the database being **the** door, but dat
 into artifacts carrying no predicate: search indexes, denormalized caches, CSV exports, error-tracker
 payloads, warehouse tables, and — most acutely for Kovo's AI audience — vector/embedding stores.
 
-- [ ] A compile-time KV: "owner-scoped/governed row reaches a persistent non-engine sink", fail-closed
+- [x] A compile-time KV: "owner-scoped/governed row reaches a persistent non-engine sink", fail-closed
       over plan-1's existing provenance engine using C9's sink inventory as the sink vocabulary — no
       new analysis machinery.
-- [ ] A `derived()` door requiring the inherited scope key to be part of the artifact's identity
+  - Evidence: `pnpm exec vitest run packages/compiler/src/derived-dataset-security.test.ts
+packages/server/src/derived-dataset.test.ts` passes 15/15, including KV452 persistent-sink closure.
+- [x] A `derived()` door requiring the inherited scope key to be part of the artifact's identity
       (composing with ScopedKey), so a per-tenant vector/index namespace is the **default**, and reads
       are re-scoped by the same principal binding as a DB read. **Ship the RAG/vector-store case first.**
+  - Evidence: the same 15/15 suite proves exact request-principal frame reconstruction, adapter
+    callable pinning, and forged/non-request scope rejection for vector query/upsert.
 
 ### 3.5 App-dependency authority attenuation (~1–1.5 pm)
 
 `rules/dependency-policy.md` is well-built but governs **only** Kovo's own `trustedDependencySurfaces`.
 The app's dependency graph — far larger, far less curated — has no policy at all.
 
-- [ ] Derive a per-dependency capability manifest from plan-1 L1's module-graph census and enforce it
+- [x] Derive a per-dependency capability manifest from plan-1 L1's module-graph census and enforce it
       at the loader/import path, so the build-time census becomes a **runtime bound**. Label as
       fail-closed floor / defense-in-depth per §6.6 rule (3), **never** by-construction.
-- [ ] Deny-by-default lifecycle-script policy generated by `create-kovo`.
+  - Evidence: `dependency-capability-loader.test.ts` passes 73/73 across identity, export-condition,
+    dynamic-load, digest, contradiction, and closed-verdict controls.
+- [x] Deny-by-default lifecycle-script policy generated by `create-kovo`.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.lifecycle-policy.test.ts`
+    passes 4/4 against offline pnpm 10.12.1: unreviewed hooks fail installation without executing,
+    exact Argon2/SQLite exceptions run, esbuild stays ignored, and allow-all/allowlist/version-override
+    mutants fail the dependency-free checker before generated CI installs dependencies.
 
 ---
 
@@ -551,30 +620,42 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 
 ### 4.1 Escape census and ratchet — metric E (**start here; ~0.5 pm**)
 
-- [ ] Read-only script over the existing `securitySemanticGraph` on `ComponentExplain`
+- [x] Read-only script over the existing `securitySemanticGraph` on `ComponentExplain`
       (`packages/core/src/graph.ts`) plus the trust-escape rows already formatted by `trustEscapeLine`
-      (`packages/cli/src/graph-explain-format.ts:755-765`), counting escaped **roots** reached per app
+      (`packages/cli/src/graph-explain-format.ts`), counting escaped **roots** reached per app
       and per door for `trustedHtml` / `trustedSql` / `ctx.fetch` plus `csrf: false` /
       `kovoAnalyzerSummary` / `allowControlChars`.
-- [ ] Per-package escape budgets with a monotone ratchet, so escape growth is structurally impossible
+  - Evidence: `pnpm run check:escape-census` passes 9/9 structural/CLI/producer tests; the focused
+    `index.kovo-build.test.ts` build emits the closed six-door coverage witness and exact roots.
+- [x] Per-package escape budgets with a monotone ratchet, so escape growth is structurally impossible
       rather than merely graphed.
+  - Evidence: `escape-census-gate.test.mjs` rejects budget increases, missing package budgets, and
+    exact-root counts above a ceiling; `pnpm run check:escape-census` is enrolled in the root check.
 
 ### 4.2 Structured obligations replacing free-text justifications
 
-- [ ] At the `audit-justification.ts` chokepoint, replace prose with fields the analyzer can partially
+- [x] At the `audit-justification.ts` chokepoint, replace prose with fields the analyzer can partially
       check — _which invariant, why it holds, what evidence_ — killing the prose-laundering path.
-- [ ] Escape signatures over `(site identity, obligation text, artifact/emission hash)` from a key
+  - Evidence: the six-file obligation/review integration suite passes 31/31; runtime and static
+    validation require the exact invariant, guard-or-policy reason, and digest-bound evidence record.
+- [x] Escape signatures over `(site identity, obligation text, artifact/emission hash)` from a key
       **not** present in the build environment or reachable by a coding agent, composing with plan-2
       §4.3's attestation anchor (**do not establish a second trust anchor** — if §4.3 has not landed,
       ship the census, ratchet, and structured obligations and defer the signature). Honest label: a
       process guarantee that a second party reviewed it, not a proof the justification is true.
+  - Evidence: the same 31/31 suite binds detached Ed25519 reviews to scanner span, obligation, and
+    artifact subject, rejects replacement keys/signatures, reuses the runtime-attestation fingerprint,
+    and proves build/execution exports expose verification and unsigned subjects but no signer.
 
 ### 4.3 Cost-to-green
 
-- [ ] Measure `cost-to-green(safe) − cost-to-green(escape)` per diagnostic on an **agent-authored**
+- [x] Measure `cost-to-green(safe) − cost-to-green(escape)` per diagnostic on an **agent-authored**
       corpus, and add `kovo fix` safe rewrites whose result the analyzer proves discharges the
       obligation. Any diagnostic where escaping is cheaper is a **framework defect with an owner**.
       Start with the two highest-traffic codes.
+  - Evidence: the focused `safe-fixes.security.test.ts` and `commands/fix.test.ts` integration run
+    passes inside a 25/25 suite, proving the 12-case cost report, KV223/KV232 AST rewrites, independent
+    analyzer discharge, atomic path guards, and owned KV236 cost defect.
 
 ### 4.4 Declassification as a typed, robust, capability-gated door
 
@@ -582,40 +663,58 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 string. `trustedReveal` is self-declared `method:'arbitrary-fn'`. `drainSecretRevealAuditFacts` is
 documented as a bounded (newest 256) **destructive** drain — explicitly not a complete record. (~2 pm)
 
-- [ ] Versioned census of every declassification site (the 17 non-test `.reveal`/`revealSecret`/
-      `trustedReveal`/`revealUntrusted` sites plus `serverValue`, `trustedAssign`, `publishToClient`),
-      re-derived from source by a gate that fails on drift.
-- [ ] Replace `SecretRevealReason` (a string) with a typed `DeclassifyPolicy = closed-registry purpose ×
+- [x] Versioned census of every authored non-test `.reveal` / `revealSecret` / `trustedReveal` /
+      `revealUntrusted` / `serverValue` / `trustedAssign` / `publishToClient` call, re-derived from
+      source by a gate that fails on site, code, capability-identity, or door drift.
+  - Evidence: `pnpm run check:declassification-census` inventories the current 15 exact sites and
+    passes 7/7 closed-vocabulary and new/deleted/code/identity/door mutation controls.
+- [x] Replace `SecretRevealReason` (a string) with a typed `DeclassifyPolicy = closed-registry purpose ×
 door id × owner scope`; `reveal('some string')` must stop typechecking.
-- [ ] Robustness rule over the existing security IR: a declassify node whose **enabling condition or
+  - Evidence: the merged core/server policy and type tests pass in the 299-test focused integration
+    run; only the module-private validating constructor can create a policy and string reveals fail.
+- [x] Robustness rule over the existing security IR: a declassify node whose **enabling condition or
       released expression** carries `Integ ⊒ input` is an error, fail-closed on unknown. Two corpus
       fixtures (attacker-chosen condition, attacker-chosen value) must both be rejected.
-- [ ] Make the declassification door an L1 capability so untrusted-reachable modules cannot import it.
+  - Evidence: `security-operation-ir.security.test.ts` rejects both attacker-controlled condition and
+    value fixtures; the finite relation gate passes 14/14 over 44 states and 2,508 pairs.
+- [x] Make the declassification door an L1 capability so untrusted-reachable modules cannot import it.
+  - Evidence: the focused compiler capability suite passes within the same 299-test run;
+    `check:c9-sink-inventory` passes 33/33 with `server.data.declassify` owned by the nominal door.
 
 ### 4.5 Precision-grant register (the extraction-gap deliverable)
 
 Replaces a `ts.SyntaxKind` totality sweep, which would be theatre.
 
-- [ ] One row per site in the provenance extractor returning anything **other than**
+- [x] One row per site in the provenance extractor returning anything **other than**
       `unknown-authority` — required for the two fallthrough containment walks and the object-literal
       shape test — each carrying an owner and a written JS-semantics witness ("`context.header` cannot
       return a capability because…"). Gate on zero ownerless rows.
-- [ ] Point plan-2 §1.1's generator at exactly this register: sampling is the right tool for the
+  - Evidence: the precision-register structural gate extracts all 17 below-top return sites,
+    validates 17 owned semantics witnesses, and kills row/owner/wrapper/prerequisite drift.
+- [x] Point plan-2 §1.1's generator at exactly this register: sampling is the right tool for the
       obligations a decision procedure cannot discharge.
+  - Evidence: the full gate runs one deterministic compiler witness per 17/17 register rows and
+    requires both the declared provenance observation and abstract-transfer marker.
 
 ### 4.6 Undecidability ledger (~0.75–1 pm)
 
-- [ ] `security/analyzable-fragment.json`: one row per prohibition in SPEC §6.6's transfer-semantics
+- [x] `security/analyzable-fragment.json`: one row per prohibition in SPEC §6.6's transfer-semantics
       paragraph (returning/throwing authority, opaque container, mutating an authority alias,
       mutable/ambiguous join, unsummarized nested callable, `arguments`/rest/spread recovery,
       `call`/`apply`/`bind`, imported/computed/aliased/reassigned/unresolved callable), each classified
       `FUNDAMENTAL | DELIBERATE | BUDGETED`, mapped to one of the exactly-8 closed reasons, each with a
       witness fixture that actually emits KV449 with that reason. **Generate the SPEC §6.6 prohibition
       table from this file.**
-- [ ] Record budget-bindingness: do the 16 / 50 000 / 4 096 / 256 budgets (`:1511-1514`) ever bind on a
+  - Evidence: `node scripts/analyzable-fragment.mjs` and the focused compiler/gate suite validate nine
+    generated rows, all eight live reasons, the generated SPEC table, and each emitted KV449 trace.
+- [x] Record budget-bindingness: do the 16 / 50 000 / 4 096 / 256 budgets (`:1511-1514`) ever bind on a
       real root?
-- [ ] A reviewed prose compositionality/adequacy argument checked into `spec/`, explicitly labelled a
+  - Evidence: the focused compiler suite compiles 11 checked-in starter/example files (29 semantic
+    roots); none binds any of the four budgets, and the checked binding sets are empty.
+- [x] A reviewed prose compositionality/adequacy argument checked into `spec/`, explicitly labelled a
       **hand argument** — the deliberate substitute for a mechanized adequacy proof.
+  - Evidence: `spec/06-analyzable-fragment-hand-argument.md` states the induction, adequacy boundary,
+    and non-claims; the generated-ledger gate requires all nine prohibition references and limits.
 
 This ledger is the single sentence Kovo cannot say today: _"here is precisely what we will never prove,
 and why each item is on that list."_ It is a prerequisite for honest publication of every Phase-1 result.
@@ -630,24 +729,35 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 
 ### 5.1 Retrospective answerability (~1 pm, mostly composition)
 
-- [ ] State and enforce a **completeness property** for plan-2 §4.3's security-event record using the
+- [x] State and enforce a **completeness property** for plan-2 §4.3's security-event record using the
       same single-door + emission-coverage-recorder technique plan-2 §1.2 applies to KV emission, so
       "an authorization decision without a record" is a **build failure**, not an ops gap. The record
       carries principal, epoch, build-stable decision-site identity, and resource scope — and **no
       payload data**.
-- [ ] `kovo incident scope <advisory>`: replay an advisory's decision-site predicate against the
+  - Evidence: `pnpm run check:security-event-answerability` passes 5 files/18 tests with seven exact
+    decision doors, six required fact fields, production arming, missing-journal failure, and no
+    payload fields; the focused seven-door runtime integration suite passes 276/276.
+- [x] `kovo incident scope <advisory>`: replay an advisory's decision-site predicate against the
       append-only tamper-evident record to return the affected principal/tenant set. It must report
       "unanswerable within the covered doors" rather than "no impact" when an exploit never crossed a
       Kovo decision door.
+  - Evidence: the same 18-test answerability gate exercises the finite advisory predicate, tamper and
+    dropped-record handling, affected principal/tenant projection, and the exact unanswerable verdict.
 
-### 5.2 Advisories (deferred until a real advisory exists or v1 freeze approaches)
+### 5.2 Advisories
 
-- [ ] `kovo.security.advisory/v1` (id, severity, affectedRange, fixedIn, `retracts[]` naming the
+- [x] `kovo.security.advisory/v1` (id, severity, affectedRange, fixedIn, `retracts[]` naming the
       falsified `SECURITY.md` guarantees, `tcbChokes[]`, graphSchemaVersion) — **version ranges only**,
       no applicability predicates (see kill list).
-- [ ] `kovo check advisories` returning AFFECTED / NOT-AFFECTED / UNKNOWN, exiting non-zero on
+  - Evidence: `pnpm run check:advisory-feed` passes 42/42 over the exact feed/advisory/state schemas,
+    canonical live feed, guarantee/TCB bindings, finite SemVer range grammar, and 90-day ceiling.
+- [x] `kovo check advisories` returning AFFECTED / NOT-AFFECTED / UNKNOWN, exiting non-zero on
       AFFECTED-at-or-above-floor **and on every UNKNOWN condition** (unreachable feed, stale beyond
       `maxFeedAge`, epoch rollback, unverifiable signature).
+  - Evidence: the integrated 49-test advisory/workflow/graph suite proves real Sigstore policy and
+    negative controls, exact DSSE/artifact binding, first-parent feed monotonicity, multiprocess
+    rollback/equivocation serialization, ambiguous-graph UNKNOWN, exit 1/2 routing, and the exact
+    two-action release signer job; crypto, VP, TCB, dependency-closure, and supply-chain gates pass.
 - [ ] Fire drill: publish a test advisory, confirm a real example app reports AFFECTED, ship the fix,
       confirm NOT-AFFECTED, delete the feed and confirm UNKNOWN **fails closed**. Record all three exit
       codes. Do not start before the key-custody answer exists — OIDC/Sigstore keyless bound to the
@@ -655,29 +765,40 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 
 ### 5.3 Inherited-auth honesty (~0.55 pm)
 
-- [ ] `lifecycle-inheritance.test.ts` characterizing the Better Auth defaults Kovo silently accepts
+- [x] `lifecycle-inheritance.test.ts` characterizing the Better Auth defaults Kovo silently accepts
       (`sqlite.ts:219-242` / `postgres.ts:253-270` declare no `session:` key at all): effective
       `expiresIn`/`updateAge`/`freshAge`/`cookieCache`, and whether the session identifier rotates
       across `signIn` with a pre-existing cookie. Narrow the peer range at
-      `packages/better-auth/package.json:46` from `^1.6.0` to `=1.6.17` with a `check:auth-provider-pin`
+      `packages/better-auth/package.json:46` from `^1.6.0` to exact `1.6.17` with a
+      `check:auth-provider-pin`
       gate.
-- [ ] Explicit non-claim in SPEC §6.6 and `kovo explain`: Kovo owns exactly **three** identity
-      transitions (signIn, signOut, dev-only seed signUp); every other lifecycle event is structurally
-      unreachable (`mount.ts:23-28` GET-only) and therefore **unsupported, not guaranteed**.
+  - Evidence: `pnpm run check:auth-provider-pin` passes 10/10 tests against Better Auth 1.6.17 and
+    binds the exact peer/development/TCB/lockfile subject across all six TCB surfaces.
+- [x] Explicit non-claim in SPEC §6.6 and `kovo explain`: Kovo directly owns exactly **three** identity
+      transitions (signIn, signOut, dev-only seed signUp). The GET-only mount makes provider lifecycle
+      requiring unsafe methods structurally unreachable; reachable dependency-defined GET callback
+      lifecycle is delegated and **unsupported, not guaranteed**.
+  - Evidence: `pnpm run check:auth-provider-pin` proves the `kovo explain --auth-lifecycle` output and
+    `spec/06-type-system.md` ownership/non-claim against the direct API census and GET-only mount.
 
 ### 5.4 Residency and erasure (needs plan-2 §3.1 ScopedKey)
 
-- [ ] A required `residency` field on `SourceSinkInventoryEntry`
+- [x] A required `residency` field on `SourceSinkInventoryEntry`
       (`packages/core/src/internal/source-sink-registry.ts:20-38`) with values
       `none | db-owner | ledger | adapter-enumerable | unerasable:<reason>`, enforced fail-closed by the
       existing `check:c9-sink-inventory`, publishing the `unerasable` count as a metric that **must
       start non-zero**. Converts an unknown into a counted, named, spec-visible hole. (~2 weeks)
-- [ ] `erasePrincipal(p)` with a signed receipt and a **mandatory absence probe** (re-enumerate the
+  - Evidence: `pnpm run check:c9-sink-inventory` passes 33/33 and mutation-checks the closed posture
+    vocabulary plus a non-zero six-row `unerasable` metric; CLI tests pass 14/14.
+- [x] `erasePrincipal(p)` with a signed receipt and a **mandatory absence probe** (re-enumerate the
       scope; non-empty **fails** the erasure, does not warn), for the three sinks that provably cannot
       self-enumerate today: blobs (`StorageCapability` has no list operation), `_kovo_jobs.args` (no
       principal column), and replay `response_body` (scoped by CSRF rotation binding, never by
       principal). The replay principal dimension must be a **non-authoritative additive index column**
       that never enters `mutationReplayScope()` composition.
+  - Evidence: the integrated storage/task/replay/principal-erasure suite passes 173/173, including
+    delete-then-re-enumerate failure, signed receipt verification, additive principal indexes, and
+    replay-scope non-authority; C9 passes 33/33 and the API/VP gates pass.
 
 ---
 
@@ -686,22 +807,32 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 One model, not three, and only for the protocol where a wrong interleaving means money moves twice.
 TLA+ is a real learning cost nobody on the team has paid.
 
-- [ ] `formal/ReplayReservation.tla` + `.cfg` at R=2 replicas, N=2 slots, 2 identities, one backward
+- [x] `formal/ReplayReservation.tla` + `.cfg` at R=2 replicas, N=2 slots, 2 identities, one backward
       clock step, one crash point: no double execute; refuse-never-evict; monotone `reclaimedThrough` /
       no resurrection; bounded admission. (~0.75 pm)
-- [ ] **Mandatory faithfulness gate in the same commit**: broken variants reproducing the historical
+  - Evidence: `pnpm run check:replay-model` under the pinned Temurin 21.0.11+10/TLC v1.7.4 toolchain
+    explores 22,025 generated/4,824 distinct states and passes all six declared invariants.
+- [x] **Mandatory faithfulness gate in the same commit**: broken variants reproducing the historical
       hazards narrated at `packages/server/src/replay.ts:280-296` (evict-pending, A6/M4) and a
       naive-watermark variant vs the GREATEST advance at `postgres-replay.ts:299`, each yielding a
       committed counterexample under `formal/replay/counterexamples/`. **If those variants do not
       produce counterexamples, the model is not faithful and the item stops there.**
-- [ ] `scripts/check-protocol-alphabet.mjs` (the cheap, high-certainty anti-rot half — ship it even if
+  - Evidence: the same gate reproduces both committed counterexamples and passes its 9/9 structural
+    tests; protocol/honesty gates cover 82 SQL statements, 33 actions, and the explicit 7/26 modeled
+    partition including principal-erasure interleavings as not modeled.
+- [x] `scripts/check-protocol-alphabet.mjs` (the cheap, high-certainty anti-rot half — ship it even if
       the model never does): every SQL string touching `_kovo_replay`, `_kovo_replay_reclaimed`,
-      `_kovo_jobs` maps to a named model action, and the status literals equal the model's constants.
-      Fails the build on a sixth CTE or a new job status. (~0.35 pm)
-- [ ] Honesty-boundary gate: SPEC text + `kovo explain` listing the Postgres-atomicity axiom (each CTE
+      `_kovo_jobs` maps to a named model action, and the status literals equal the registered model
+      constants in `formal/replay/protocol-alphabet.json`. Fails the build on a sixth transition CTE
+      or a new job status. (~0.35 pm)
+  - Evidence: `pnpm run check:protocol-alphabet` maps 82 source-derived statements to 33 actions and
+    closes five transition CTEs, six durable-job states, and two replay states; five C13 tests pass.
+- [x] Honesty-boundary gate: SPEC text + `kovo explain` listing the Postgres-atomicity axiom (each CTE
       modeled as one atomic action, justified by the `FOR UPDATE` on the watermark row — a **human
       assumption**, not a verified one), the bounded scope, and the explicit not-modeled list, with a
       gate asserting that list is the complement of the registered model set.
+  - Evidence: `pnpm run check:model-honesty-boundary` proves the 7 modeled + 26 excluded action
+    partition over all 33 registered actions and seven SPEC-visible exclusions; its suite passes 7/7.
 
 ---
 
@@ -725,19 +856,30 @@ a within-corpus statistic published as coverage is dishonest.
 
 - [ ] §0 fully landed: defects fixed with real-Postgres regressions, process artifacts live, hermetic
       stage green, provenance stamp emitted.
-- [ ] §1 produces at least two decided results with committed diffable relation artifacts, each
+- [x] §1 produces at least two decided results with committed diffable relation artifacts, each
       publishing its domain, bound, and extraction gap.
-- [ ] §4.5 and §4.6 have zero ownerless rows, and SPEC §6.6's prohibition table is **generated** from
+  - Evidence: `check:provenance-closure`, `check:grammar-containment`,
+    `check:authorization-matrix`, and `check:rls-emission-door` pass over the finite provenance,
+    IPv4/header-grammar, and authorization fragments with committed artifacts and named gaps.
+- [x] §4.5 and §4.6 have zero ownerless rows, and SPEC §6.6's prohibition table is **generated** from
       the undecidability ledger.
+  - Evidence: the precision structural gate reports 17 rows and zero ownerless entries;
+    `analyzable-fragment.mjs` reports 9 prohibitions, 4 budgets, and 29 roots with the generated SPEC
+    table current, and its focused suite passes 4/4.
 - [ ] Metric E ratcheting downward for three consecutive comparable rounds; Δ at 100% of every declared
       fragment.
 - [ ] An outside party validates a `kovo.certificate/v1` with disjoint code, and the three negative
       controls fail on three distinct obligations.
-- [ ] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;
+- [x] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;
       `kovo check env` discharges what it can and names what it suspends.
+  - Evidence: the integrated agent/grant/environment/derived-dataset/dependency suite passes 116/116
+    across all five §3 parties, including retained and suspended `kovo check env` obligations.
 - [ ] A fire drill returns AFFECTED → fixed → NOT-AFFECTED → UNKNOWN-fails-closed.
-- [ ] `rules/v1-acceptance.md` cites the decided fragments, the undecidability ledger, and metric E —
+- [x] `rules/v1-acceptance.md` cites the decided fragments, the undecidability ledger, and metric E —
       without claiming immunity outside the scoped threat model.
+  - Evidence: the rule requires finite-domain/bound/gap evidence, the precision and undecidability
+    ledgers, three Metric E rounds, retained obligations, and the advisory drill, with explicit
+    arbitrary-JavaScript, deployment, same-process, and out-of-scope non-claims.
 
 ## Kill list (normative — do not attempt)
 

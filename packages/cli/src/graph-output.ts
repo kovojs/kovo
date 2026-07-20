@@ -1,10 +1,16 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
   diagnosticDefinitionText,
 } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import {
+  agentIntegrityAllows,
+  agentMinimumIntegrityForOperations,
+  type AgentIntegrity,
+} from '@kovojs/core/internal/security-operation-ir';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 
 import type { KovoCheckFamily, KovoExplainOptions } from './graph-args.js';
@@ -13,10 +19,13 @@ import {
   accessKv436Line,
   accessLine,
   accessSummary,
+  authorizationCorrespondenceLine,
+  authorizationRoleGucWarningLine,
   capabilityClosureLine,
   capabilityLine,
   collectCapabilityFacts,
   compareCapabilityClosureFact,
+  compareAuthorizationCorrespondenceFact,
   compareCookieDowngrade,
   compareEndpointExplain,
   compareRevealExplain,
@@ -60,6 +69,7 @@ import {
   optimisticProofLine,
   optimisticSummary,
   optimisticUnhandledFixLine,
+  postgresPostureLeaseContractLines,
   queryWriteReachabilityExplainLine,
   queryWriteReachabilityForQuery,
   queryWriteReachabilityLine,
@@ -102,9 +112,13 @@ import {
 export type {
   ExplainKind,
   KovoAccessExplainOptions,
+  KovoAgentExplainOptions,
+  KovoAuthLifecycleExplainOptions,
+  KovoAuthorizationExplainOptions,
   KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainOptions,
+  KovoGrantExplainOptions,
   KovoRevealedExplainOptions,
   KovoSourcesSinksExplainOptions,
   KovoTargetExplainOptions,
@@ -123,6 +137,8 @@ export {
 } from './graph-args.js';
 export { inputErrorMessage, readGraphInput, runGraphCommand } from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
+import { authLifecycleExplainResult } from './auth-lifecycle.js';
+import { modelBoundariesExplainResult } from './model-boundaries.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
 import {
   graphVerifierSecurityFailure,
@@ -132,6 +148,76 @@ import {
 export const outputVersion = 'kovo-check/v1';
 export const explainOutputVersion = 'kovo-explain/v1';
 export const auditOutputVersion = 'kovo-audit/v1';
+
+function operationKinds(operations: readonly { kind: string }[]): string[] {
+  return [...new Set(operations.map((operation) => operation.kind))].sort();
+}
+
+function compareGrantFacts(
+  left: CoreGraph.GrantExplainFact,
+  right: CoreGraph.GrantExplainFact,
+): number {
+  const order: Readonly<Record<CoreGraph.GrantExplainFact['kind'], number>> = {
+    principal: 0,
+    resource: 1,
+    delegation: 2,
+    transition: 3,
+    escape: 4,
+  };
+  const rank = order[left.kind] - order[right.kind];
+  if (rank !== 0) return rank;
+  const leftKey = grantFactKey(left);
+  const rightKey = grantFactKey(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+function grantFactKey(fact: CoreGraph.GrantExplainFact): string {
+  switch (fact.kind) {
+    case 'principal':
+      return fact.principal;
+    case 'resource':
+      return fact.table;
+    case 'delegation':
+      return `${fact.parent}\u0000${fact.child}`;
+    case 'transition':
+      return `${fact.mutation}\u0000${fact.resource}\u0000${fact.operation}\u0000${fact.site}`;
+    case 'escape':
+      return fact.name;
+  }
+}
+
+function grantFactLine(fact: CoreGraph.GrantExplainFact): string {
+  switch (fact.kind) {
+    case 'principal':
+      return `PRINCIPAL ${fact.principal}`;
+    case 'resource':
+      return `RESOURCE ${fact.table} domain=${fact.domain} rights=${list(fact.rightKinds)}`;
+    case 'delegation':
+      return `DELEGATION ${fact.child} parent=${fact.parent} rights=${list(fact.rightKinds)}`;
+    case 'transition':
+      return [
+        `TRANSITION ${fact.mutation}`,
+        `operation=${fact.operation}`,
+        `resource=${fact.resource}`,
+        `verdict=${fact.verdict}`,
+        fact.checkedStates === undefined ? '' : `checked-states=${fact.checkedStates}`,
+        fact.reason === undefined ? '' : `reason=${JSON.stringify(fact.reason)}`,
+        `site=${JSON.stringify(fact.site)}`,
+      ]
+        .filter(Boolean)
+        .join(' ');
+    case 'escape':
+      return [
+        `ESCAPE ${fact.name}`,
+        `mutation=${fact.mutation}`,
+        `operation=${fact.operation}`,
+        `resource=${fact.resource}`,
+        `budget=${fact.budget}`,
+        `retained-obligation=${JSON.stringify(fact.retainedObligation)}`,
+        `site=${JSON.stringify(fact.site)}`,
+      ].join(' ');
+  }
+}
 
 /**
  * Opaque graph input accepted by `kovoCheck`.
@@ -173,6 +259,92 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
   const graph = input as CoreGraph.KovoExplainInput;
   const lines = [explainOutputVersion];
+
+  if ('authLifecycle' in options) {
+    return authLifecycleExplainResult(explainOutputVersion);
+  }
+
+  if ('modelBoundaries' in options) {
+    return modelBoundariesExplainResult(explainOutputVersion);
+  }
+
+  if ('agent' in options) {
+    const agents = [...(graph.agents ?? [])].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    const integrityLevels: readonly AgentIntegrity[] = [
+      'principal',
+      'validated',
+      'retrieved',
+      'untrusted',
+    ];
+    for (const agent of agents) {
+      const modelEffects = operationKinds(agent.modelOperations);
+      lines.push(`AGENT ${agent.name} model-effects=${list(modelEffects)}`);
+      const tools = [...agent.tools].sort((left, right) => left.name.localeCompare(right.name));
+      for (const tool of tools) {
+        const minimumIntegrity = agentMinimumIntegrityForOperations(tool.operations);
+        if (minimumIntegrity !== tool.minimumIntegrity) {
+          return invalidGraphInputResult(explainOutputVersion, [
+            {
+              message: `minimum integrity must be ${minimumIntegrity} for the compiler-derived operations`,
+              path: `agents.${agent.name}.tools.${tool.name}.minimumIntegrity`,
+            },
+          ]);
+        }
+        lines.push(
+          `TOOL ${tool.name} mutation=${tool.mutation} minimum-integrity=${minimumIntegrity} result-integrity=${tool.resultIntegrity} effects=${list(operationKinds(tool.operations))}`,
+        );
+      }
+      for (const integrity of integrityLevels) {
+        const retained = tools.filter((tool) =>
+          agentIntegrityAllows(integrity, agentMinimumIntegrityForOperations(tool.operations)),
+        );
+        const effects = new Set(modelEffects);
+        for (const tool of retained) {
+          for (const effect of operationKinds(tool.operations)) effects.add(effect);
+        }
+        lines.push(
+          `CLOSURE integrity=${integrity} tools=${list(retained.map((tool) => tool.name))} effects=${list([...effects].sort())}`,
+        );
+      }
+    }
+    return ok(lines);
+  }
+
+  if ('grants' in options) {
+    const facts = [...(graph.grants ?? [])].sort(compareGrantFacts);
+    const resources = facts.filter((fact) => fact.kind === 'resource').length;
+    const delegations = facts.filter((fact) => fact.kind === 'delegation').length;
+    const transitions = facts.filter((fact) => fact.kind === 'transition').length;
+    const escapes = facts.filter((fact) => fact.kind === 'escape').length;
+    const top = facts.filter((fact) => fact.kind === 'transition' && fact.verdict === 'top').length;
+    lines.push('GRANTS');
+    for (const fact of facts) lines.push(grantFactLine(fact));
+    lines.push(
+      `SUMMARY resources=${resources} delegations=${delegations} transitions=${transitions} escapes=${escapes} top=${top}`,
+    );
+    return ok(lines);
+  }
+
+  if ('authorization' in options) {
+    const facts = [...(graph.authorizationCorrespondence ?? [])].sort(
+      compareAuthorizationCorrespondenceFact,
+    );
+    lines.push('AUTHORIZATION');
+    if (facts[0] !== undefined) lines.push(authorizationRoleGucWarningLine(facts[0]));
+    for (const fact of facts) lines.push(authorizationCorrespondenceLine(fact));
+    lines.push(
+      [
+        `SUMMARY total=${facts.length}`,
+        `proved=${facts.filter((fact) => fact.correspondence.status === 'proved').length}`,
+        `unproven=${facts.filter((fact) => fact.correspondence.status === 'unproven').length}`,
+        `divergent=${facts.filter((fact) => fact.correspondence.status === 'divergent').length}`,
+        `environmentUnchecked=${facts.filter((fact) => fact.activation.status === 'environment-unchecked').length}`,
+      ].join(' '),
+    );
+    return ok(lines);
+  }
 
   if ('access' in options) {
     const access = accessDecisions(graph);
@@ -305,6 +477,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     // escapes, each with its recorded justification. Surfacing informs review; it enforces nothing.
     const capabilities = collectCapabilityFacts(graph);
     lines.push('CAPABILITIES');
+    lines.push(...postgresPostureLeaseContractLines());
 
     for (const capability of capabilities) {
       lines.push(capabilityLine(capability));
@@ -742,9 +915,20 @@ export function kovoCheck(
   };
 
   if (includeAll) {
+    for (const fact of graph.grants ?? []) {
+      if (fact.kind !== 'transition' || fact.verdict !== 'top') continue;
+      const reason = fact.reason ?? 'authz-bearing write is outside the decided grant fragment';
+      pushFinding(
+        `ERROR KV414 GRANT ${fact.mutation} operation=${fact.operation} resource=${fact.resource} verdict=fail-closed-top site=${JSON.stringify(fact.site)} reason=${JSON.stringify(reason)}`,
+        true,
+      );
+    }
+
     const diagnostics = diagnosticsForTouchGraph(graph.touchGraph ?? {});
 
-    for (const diagnostic of diagnostics) {
+    for (let index = 0; index < diagnostics.length; index += 1) {
+      const diagnostic = diagnostics[index]!;
+      assertRegisteredDiagnostic(diagnostic, `CLI touch-graph diagnostics[${index}]`);
       pushFinding(
         `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
         diagnostic.severity === 'error',

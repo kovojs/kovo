@@ -5,9 +5,45 @@ import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 
 import { nodeRequestToWebRequest } from './node.js';
+import { query, renderQueryEndpointResponse } from './query.js';
 
 // @kovo-security-classifier-corpus request-ingress
 describe('SPEC §9.5 request-ingress closed corpus', () => {
+  // @kovo-security-certifies C13 query-search-requires-args-schema
+  it('rejects query search input when the endpoint declares no args schema', async () => {
+    let guardCalls = 0;
+    let loadCalls = 0;
+    let providerCalls = 0;
+    const definition = query('no-args-search-ingress', {
+      guard() {
+        guardCalls += 1;
+        return true;
+      },
+      load() {
+        loadCalls += 1;
+        return { ok: true };
+      },
+      reads: [],
+    });
+
+    const response = await renderQueryEndpointResponse(definition, {
+      request: {},
+      search: new URLSearchParams([['admin', 'true']]),
+      sessionProvider() {
+        providerCalls += 1;
+        return null;
+      },
+    });
+
+    expect(response).toMatchObject({
+      body: '{"code":"VALIDATION","payload":{"issues":[{"message":"Search input requires a declared query args schema.","path":[]}]}}',
+      status: 422,
+    });
+    expect(guardCalls).toBe(0);
+    expect(loadCalls).toBe(0);
+    expect(providerCalls).toBe(0);
+  });
+
   it('preserves the complete closed method-identity verdict before Fetch construction', () => {
     for (const method of [
       '',

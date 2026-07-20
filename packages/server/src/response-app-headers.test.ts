@@ -56,6 +56,19 @@ describe('structured app response-header classifier', () => {
     ).toThrow(/KV415.*X-Accel-Redirect.*outside the direct allowlist/u);
   });
 
+  it('accepts a whole dynamic bag when every name is directly allowlisted', () => {
+    expect(() =>
+      assertAllowedAppResponseHeaders(
+        [
+          { name: 'Cache-Control', value: 'private, no-store' },
+          { name: 'Last-Modified', value: 'Wed, 01 Jan 2025 00:00:00 GMT' },
+          { name: 'Vary', value: 'Accept-Encoding' },
+        ],
+        classify,
+      ),
+    ).not.toThrow();
+  });
+
   it('routes dedicated response fields to their structured APIs', () => {
     expect(() =>
       assertAllowedAppResponseHeaders([{ name: 'Content-Type', value: 'text/html' }], classify),

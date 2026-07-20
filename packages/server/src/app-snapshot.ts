@@ -6,6 +6,10 @@ import {
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import {
+  assertRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
+import {
   accessDecisionFor,
   assertUnambiguousAccessDeclaration,
   pinAccessDecision,
@@ -35,6 +39,7 @@ import type { LiveTargetRenderer } from './mutation-wire.js';
 import { validateMutationCsrfPosture } from './mutation/csrf-posture.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { snapshotMutationReplayStore } from './replay.js';
+import { snapshotPrincipalEpochStore } from './principal-epoch.js';
 import { layout, route, type LayoutDeclaration } from './route.js';
 import { snapshotSchemaForRuntime, type Schema } from './schema.js';
 import type { AppDiagnostic, AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
@@ -589,6 +594,7 @@ export function snapshotAppTask(source: AppTaskDeclaration, index = 0): AppTaskD
 /** Reconstruct one runtime-blocking diagnostic so app code cannot rewrite dispatch policy. */
 function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnostic {
   const label = `app.diagnostics[${index}]`;
+  assertRegisteredDiagnostic(source, label);
   const record = snapshotOwnDataRecord(source, label);
   if (
     typeof record.code !== 'string' ||
@@ -597,8 +603,7 @@ function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnos
     (record.help !== undefined && typeof record.help !== 'string') ||
     (record.length !== undefined &&
       (!nativeNumberIsSafeInteger(record.length) || record.length < 0)) ||
-    (record.severity !== undefined &&
-      record.severity !== 'error' &&
+    (record.severity !== 'error' &&
       record.severity !== 'warn' &&
       record.severity !== 'lint' &&
       record.severity !== 'notice')
@@ -617,7 +622,18 @@ function snapshotAppDiagnostic(source: AppDiagnostic, index: number): AppDiagnos
     }
     record.start = witnessFreeze(start);
   }
-  return witnessFreeze(record) as AppDiagnostic;
+  return deriveRegisteredDiagnostic(
+    source,
+    {
+      fileName: record.fileName,
+      ...(record.length === undefined ? {} : { length: record.length }),
+      ...(record.start === undefined ? {} : { start: record.start }),
+    },
+    {
+      ...(record.help === undefined ? {} : { help: record.help }),
+      message: record.message,
+    },
+  );
 }
 
 /**
@@ -656,6 +672,10 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     source.mutationReplayStore === undefined
       ? undefined
       : snapshotMutationReplayStore(source.mutationReplayStore);
+  const principalEpochStore =
+    source.principalEpochStore === undefined
+      ? undefined
+      : snapshotPrincipalEpochStore(source.principalEpochStore);
 
   const aggregate = witnessFreeze({
     ...source,
@@ -667,6 +687,7 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     liveTargetRenderers,
     mutations,
     ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
+    ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
     queries,
     routes,
     stylesheets,

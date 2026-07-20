@@ -1,0 +1,71 @@
+{
+  "schema": "kovo-security-event-denial-sites/v1",
+  "denialSites": [
+    {
+      "eventType": "egress-denied",
+      "file": "packages/server/src/egress.ts",
+      "marker": "@kovo-security-denial egress-denied egress-blocked-error",
+      "operationKinds": ["network-egress"]
+    },
+    {
+      "eventType": "csrf-rejected",
+      "file": "packages/server/src/app-dispatch.ts",
+      "marker": "@kovo-security-denial csrf-rejected endpoint-csrf",
+      "operationKinds": ["endpoint-dispatch"]
+    },
+    {
+      "eventType": "csrf-rejected",
+      "file": "packages/server/src/mutation.ts",
+      "marker": "@kovo-security-denial csrf-rejected mutation-lifecycle-csrf",
+      "operationKinds": ["mutation-dispatch"]
+    },
+    {
+      "eventType": "csrf-rejected",
+      "file": "packages/server/src/mutation.ts",
+      "marker": "@kovo-security-denial csrf-rejected mutation-run-csrf",
+      "operationKinds": ["mutation-dispatch"]
+    },
+    {
+      "eventType": "budget-exhausted",
+      "file": "packages/server/src/app-load-shed.ts",
+      "marker": "@kovo-security-denial budget-exhausted database-admission",
+      "operationKinds": ["database-admission"]
+    },
+    {
+      "eventType": "budget-exhausted",
+      "file": "packages/server/src/app-load-shed.ts",
+      "marker": "@kovo-security-denial budget-exhausted request-rate",
+      "operationKinds": ["request-admission"]
+    },
+    {
+      "eventType": "budget-exhausted",
+      "file": "packages/server/src/app-load-shed.ts",
+      "marker": "@kovo-security-denial budget-exhausted content-length",
+      "operationKinds": ["request-admission"]
+    },
+    {
+      "eventType": "budget-exhausted",
+      "file": "packages/server/src/app-request.ts",
+      "marker": "@kovo-security-denial budget-exhausted streamed-body",
+      "operationKinds": ["request-admission"]
+    },
+    {
+      "eventType": "budget-exhausted",
+      "file": "packages/server/src/app-request.ts",
+      "marker": "@kovo-security-denial budget-exhausted request-url",
+      "operationKinds": ["request-admission"]
+    },
+    {
+      "eventType": "capability-closed",
+      "file": "packages/server/src/app-request.ts",
+      "marker": "@kovo-security-denial capability-closed runtime-registry",
+      "operationKinds": ["runtime-registry"]
+    },
+    {
+      "eventType": "closure-audit-refused",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "marker": "@kovo-security-denial closure-audit-refused postgres-runtime-posture",
+      "operationKinds": ["database-closure-audit"]
+    }
+  ]
+}

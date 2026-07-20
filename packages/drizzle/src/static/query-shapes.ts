@@ -26,7 +26,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import type { QueryProjectedColumn, RevealExplainFact } from '@kovojs/core/internal/graph';
-import { drizzleDiagnostic, sourceSiteForNode } from './diagnostics.js';
+import { drizzleDiagnostic } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
   boundReceiverMethodAccessName,
@@ -83,6 +83,7 @@ import {
 } from '../static.js';
 
 const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
+const DECLASSIFY_POLICY_IDENTITY = frameworkExport('@kovojs/core', 'DeclassifyPolicy');
 const DECLARE_OFF_WIRE_IDENTITY = frameworkExport('@kovojs/core', 'declareOffWire');
 const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
 const DRIZZLE_SQL_IDENTITY = frameworkExport('drizzle-orm', 'sql');
@@ -1276,12 +1277,12 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 
     return [
-      {
+      drizzleDiagnostic({
         code: 'KV406' as const,
-        message: `Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
-        severity: 'error' as const,
-        site: sourceSiteForNode(call),
-      },
+        detail: `Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        messageVariant: 'raw-query-read',
+        node: call,
+      }),
     ];
   });
 }
@@ -2950,28 +2951,72 @@ function trustedRevealMetadata(
   value: ts.Expression,
   shape: QueryShape,
 ): QueryShapeReveal | undefined {
-  const options = call.arguments[1];
-  const object = options ? unwrappedTsExpression(options) : undefined;
-  if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
-
-  const justification = staticStringProperty(object, 'justification')?.trim();
-  if (!justification) return undefined;
-
-  const requestedMethod = staticStringProperty(object, 'method');
-  const method = requestedMethod === 'server-projection' ? 'server-projection' : 'arbitrary-fn';
+  if (call.arguments.length !== 2) return undefined;
+  const policy = exactTrustedRevealPolicy(call.arguments[1]!);
+  if (!policy) return undefined;
   const selectedSecret = queryShapeContainsSecret(shape);
   const opaque = isOpaqueProjection(value);
-  const source = staticStringProperty(object, 'source') ?? staticTsExpressionPath(value);
+  const source = staticTsExpressionPath(value);
 
   return {
     callIdentity: sourceCallIdentity(call),
-    grade: method === 'server-projection' && !selectedSecret && !opaque ? 'proof' : 'audit',
-    justification,
-    method,
+    grade: !selectedSecret && !opaque ? 'proof' : 'audit',
+    justification: policy.label,
+    method: 'server-projection',
     selectedSecret,
     site: sourcePosition(call),
     ...(source === undefined ? {} : { source }),
   };
+}
+
+function exactTrustedRevealPolicy(
+  expression: ts.Expression,
+): { label: string; ownerScope: string } | undefined {
+  const call = unwrappedTsExpression(expression);
+  if (!ts.isCallExpression(call) || call.arguments.length !== 1) return undefined;
+  const callee = unwrappedTsExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'create') return undefined;
+  if (
+    !expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      call.getSourceFile(),
+      unwrappedTsExpression(callee.expression),
+      DECLASSIFY_POLICY_IDENTITY,
+    )
+  ) {
+    return undefined;
+  }
+  const options = unwrappedTsExpression(call.arguments[0]!);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 3) return undefined;
+  const fields = new Map<string, string>();
+  for (const property of options.properties) {
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return undefined;
+    }
+    const name = projectionPropertyName(property.name);
+    const value = unwrappedTsExpression(property.initializer);
+    if (
+      !name ||
+      !['door', 'ownerScope', 'purpose'].includes(name) ||
+      fields.has(name) ||
+      !ts.isStringLiteralLike(value)
+    ) {
+      return undefined;
+    }
+    fields.set(name, value.text);
+  }
+  const door = fields.get('door');
+  const ownerScope = fields.get('ownerScope');
+  const purpose = fields.get('purpose');
+  if (
+    door !== 'trustedReveal' ||
+    purpose !== 'public-projection' ||
+    !ownerScope ||
+    !['application', 'current-principal', 'current-tenant', 'framework'].includes(ownerScope)
+  ) {
+    return undefined;
+  }
+  return { label: `${purpose}:${door}:${ownerScope}`, ownerScope };
 }
 
 function staticStringProperty(object: ts.ObjectLiteralExpression, key: string): string | undefined {

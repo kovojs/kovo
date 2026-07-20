@@ -7,13 +7,19 @@ import {
   resolve as builtinResolve,
 } from 'node:path';
 
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
+import { deriveBrowserPostureManifestFromSourceFiles } from '@kovojs/compiler/internal';
 import {
   compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
   type CompilerSourceFileSystem,
 } from '@kovojs/compiler/internal/source-filesystem';
-import { createRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 import {
   outputSchemaQueryShapeFactsFromProject,
   type QueryShape,
@@ -61,22 +67,22 @@ export interface DataPlaneSourceFile {
 }
 
 /** @internal Normalized error-severity finding from the data-plane analyzers. */
-export interface DataPlaneDiagnostic {
-  code: DiagnosticCode;
+export interface DataPlaneDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   line: number;
-  message: string;
   site: string;
 }
 
 /** @internal Static facts consumed by build/check graph derivation. */
 export interface StaticDataPlaneBuildFacts {
+  grants: readonly CoreGraph.GrantExplainFact[];
   massAssignmentFacts: readonly CoreGraph.MassAssignmentFact[];
   ownerDomains: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly QueryReadFactLike[];
   queryShapeFacts: readonly QueryShapeFact[];
   queryWriteReachability: readonly CoreGraph.QueryWriteReachabilityFact[];
   revealed?: readonly CoreGraph.RevealExplainFact[];
+  runtimeTableSecurityManifest?: RuntimeRegistryWireFacts['tableSecurity'];
   scopeAudits: readonly CoreGraph.ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly CoreGraph.SqlSafetyDiagnosticFact[];
   toctouFacts: readonly CoreGraph.ToctouFact[];
@@ -116,9 +122,9 @@ export interface RuntimeMutationTouchSiteLike {
 }
 
 interface TouchGraphDiagnosticLike {
-  code: string;
+  code: DiagnosticCode;
   message: string;
-  severity?: string;
+  severity: DiagnosticSeverity;
   site: string;
 }
 
@@ -130,6 +136,7 @@ interface ToctouFactLike {
 }
 
 interface StaticBuildAnalysisFactsLike {
+  grants?: readonly CoreGraph.GrantExplainFact[];
   massAssignmentFacts?: readonly CoreGraph.MassAssignmentFact[];
   ownerDomains?: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly unknown[];
@@ -142,7 +149,7 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.reveal-facts.v1';
+const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.grant-graph.v1';
 const existsSync = builtinExistsSync;
 const dirname = builtinDirname;
 const relative = builtinRelative;
@@ -305,9 +312,16 @@ export async function collectRuntimeRegistryFacts(options: {
   root: string;
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
-  if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
+  if (analysis.files.length === 0) {
+    return {
+      browserPosture: deriveBrowserPostureManifestFromSourceFiles([]),
+      mutationTouches: {},
+      queryReads: [],
+    };
+  }
 
   return {
+    browserPosture: deriveBrowserPostureManifestFromSourceFiles(analysis.files),
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(
       analysis.staticFacts.touchGraph === undefined
         ? {}
@@ -355,7 +369,12 @@ export async function staticDataPlaneBuildFacts(
       );
     }
   }
+  const runtimeTableSecurityManifest =
+    rawFacts.runtimeTableSecurityManifest === undefined
+      ? undefined
+      : runtimeRegistryTableSecurityFromFacts(rawFacts.runtimeTableSecurityManifest);
   const result: StaticDataPlaneBuildFacts = {
+    grants: snapshotDenseArray(rawFacts.grants ?? [], 'Static grant-graph facts'),
     massAssignmentFacts: snapshotDenseArray(
       rawFacts.massAssignmentFacts ?? [],
       'Static mass-assignment facts',
@@ -368,6 +387,10 @@ export async function staticDataPlaneBuildFacts(
       'Static query-write facts',
     ),
     revealed: snapshotDenseArray(rawFacts.revealed ?? [], 'Static query reveal facts'),
+    ...(runtimeTableSecurityManifest === undefined ||
+    runtimeTableSecurityManifest.tables.length === 0
+      ? {}
+      : { runtimeTableSecurityManifest }),
     scopeAudits: snapshotDenseArray(rawFacts.scopeAudits ?? [], 'Static scope-audit facts'),
     sqlSafetyDiagnostics,
     toctouFacts: projectToctouFacts(rawFacts.toctouFacts),
@@ -436,10 +459,11 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
     'Vite SQL-safety diagnostics',
   );
   for (let index = 0; index < sqlDiagnostics.length; index += 1) {
-    const projected = sqlSafetyDiagnosticFact(sqlDiagnostics[index]);
-    for (let projectedIndex = 0; projectedIndex < projected.length; projectedIndex += 1) {
-      staticAnalysisArrayAppend(raw, projected[projectedIndex]!, 'Vite SQL diagnostics');
-    }
+    staticAnalysisArrayAppend(
+      raw,
+      registeredSqlSafetyDiagnostic(sqlDiagnostics[index]),
+      'Vite SQL diagnostics',
+    );
   }
   const toctouFacts = projectToctouFacts(staticFacts.toctouFacts);
   for (let index = 0; index < toctouFacts.length; index += 1) {
@@ -459,17 +483,16 @@ function dataPlaneErrorDiagnosticsFromStaticFacts(
   const diagnostics: DataPlaneDiagnostic[] = [];
   for (let index = 0; index < raw.length; index += 1) {
     const diagnostic = raw[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Vite data-plane diagnostics[${index}]`);
     if (!isDiagnosticCode(diagnostic.code) || (diagnostic.severity ?? 'error') !== 'error') {
       continue;
     }
     const { fileName, line } = parseDiagnosticSite(diagnostic.site);
-    const projected: DataPlaneDiagnostic = {
-      code: diagnostic.code,
-      fileName,
-      line,
-      message: diagnostic.message,
-      site: diagnostic.site,
-    };
+    const projected = deriveRegisteredDiagnostic(
+      diagnostic,
+      { fileName, line, site: diagnostic.site },
+      { message: diagnostic.message },
+    ) as DataPlaneDiagnostic;
     let insertAt = diagnostics.length;
     while (insertAt > 0 && projected.site < diagnostics[insertAt - 1]!.site) {
       staticAnalysisArraySet(
@@ -491,6 +514,7 @@ function emptyStaticBuildAnalysisFactsLike(): StaticBuildAnalysisFactsLike {
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
   return {
+    grants: [],
     massAssignmentFacts: [],
     ownerDomains: [],
     queries: [],
@@ -549,6 +573,7 @@ async function cachedStaticBuildAnalysisFacts(
   try {
     const facts = snapshotStaticBuildAnalysisFacts(
       staticAnalysisJsonParse(await entry.resultPreimage),
+      { diagnosticCarrier: 'serialized' },
     );
     if (facts === undefined) {
       throw new TypeError('Kovo process-local static-analysis cache returned invalid facts.');
@@ -577,6 +602,7 @@ async function runStaticBuildAnalysisFacts(
     }
     const facts = snapshotStaticBuildAnalysisFacts(
       extractStaticBuildAnalysisFactsFromProject({ files }),
+      { diagnosticCarrier: 'registered' },
     );
     if (facts === undefined) {
       throw new TypeError(
@@ -678,7 +704,9 @@ function snapshotDataPlaneAnalysisPreimage(preimage: string): DataPlaneAnalysis 
       throw new TypeError('Kovo process-local data-plane cache returned an invalid query shape.');
     }
   }
-  const staticFacts = snapshotStaticBuildAnalysisFacts(staticFactsValue);
+  const staticFacts = snapshotStaticBuildAnalysisFacts(staticFactsValue, {
+    diagnosticCarrier: 'serialized',
+  });
   if (staticFacts === undefined) {
     throw new TypeError('Kovo process-local data-plane cache returned invalid static facts.');
   }
@@ -694,6 +722,7 @@ function snapshotDataPlaneAnalysisPreimage(preimage: string): DataPlaneAnalysis 
 
 function snapshotStaticBuildAnalysisFacts(
   value: unknown,
+  options: { diagnosticCarrier: 'registered' | 'serialized' },
 ): StaticBuildAnalysisFactsLike | undefined {
   if (!value || typeof value !== 'object' || staticAnalysisArrayIsArray(value)) return undefined;
   const queries = staticAnalysisOwnDataValue(value, 'queries', 'Static-analysis facts');
@@ -734,17 +763,27 @@ function snapshotStaticBuildAnalysisFacts(
     return snapshotDenseArray(candidate, property);
   };
   const massAssignmentFacts = optionalArray('massAssignmentFacts');
+  const grants = optionalArray('grants');
   const ownerDomains = optionalArray('ownerDomains');
   const queryWriteReachability = optionalArray('queryWriteReachability');
   const revealed = optionalArray('revealed');
   const scopeAudits = optionalArray('scopeAudits');
   if (invalidOptionalArray) return undefined;
-  const sqlSafetySnapshot = snapshotDenseArray(
+  const rawSqlSafetySnapshot = snapshotDenseArray(
     sqlSafetyDiagnostics,
     'Static SQL-safety diagnostics',
   ) as readonly TouchGraphDiagnosticLike[];
-  for (let index = 0; index < sqlSafetySnapshot.length; index += 1) {
-    sqlSafetyDiagnosticFact(sqlSafetySnapshot[index]);
+  const sqlSafetySnapshot: TouchGraphDiagnosticLike[] = [];
+  for (let index = 0; index < rawSqlSafetySnapshot.length; index += 1) {
+    const diagnostic =
+      options.diagnosticCarrier === 'registered'
+        ? registeredSqlSafetyDiagnostic(rawSqlSafetySnapshot[index])
+        : rehydrateSerializedSqlSafetyDiagnostic(rawSqlSafetySnapshot[index]);
+    staticAnalysisArrayAppend(
+      sqlSafetySnapshot,
+      diagnostic,
+      'Static SQL-safety diagnostic snapshot',
+    );
   }
   const toctouSnapshot = snapshotDenseArray(
     toctouFacts,
@@ -752,6 +791,7 @@ function snapshotStaticBuildAnalysisFacts(
   ) as readonly ToctouFactLike[];
   projectToctouFacts(toctouSnapshot);
   return {
+    ...(grants === undefined ? {} : { grants: grants as readonly CoreGraph.GrantExplainFact[] }),
     ...(massAssignmentFacts === undefined
       ? {}
       : { massAssignmentFacts: massAssignmentFacts as readonly CoreGraph.MassAssignmentFact[] }),
@@ -1340,33 +1380,51 @@ function isIgnoredDataPlaneDirectory(entry: string): boolean {
 }
 
 function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticFact[] {
-  if (!isRecord(value)) {
-    throw new TypeError('Static SQL-safety diagnostic must be an own-data record.');
-  }
+  const diagnostic = registeredSqlSafetyDiagnostic(value);
+  const code = diagnostic.code;
+  const message = diagnostic.message;
+  const severity = diagnostic.severity;
+  const site = diagnostic.site;
+  return [{ code, message, severity, site }];
+}
+
+function registeredSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike {
+  assertRegisteredDiagnostic(value, 'Static SQL-safety diagnostic');
   const code = staticAnalysisOwnDataValue(value, 'code', 'SQL-safety diagnostic');
   const message = staticAnalysisOwnDataValue(value, 'message', 'SQL-safety diagnostic');
   const severity = staticAnalysisOwnDataValue(value, 'severity', 'SQL-safety diagnostic');
   const site = staticAnalysisOwnDataValue(value, 'site', 'SQL-safety diagnostic');
-  const normalizedSeverity = severity ?? 'error';
   if (
     isDiagnosticCode(code) &&
     typeof message === 'string' &&
     typeof site === 'string' &&
-    (normalizedSeverity === 'error' ||
-      normalizedSeverity === 'warn' ||
-      normalizedSeverity === 'lint' ||
-      normalizedSeverity === 'notice')
+    (severity === 'error' || severity === 'warn' || severity === 'lint' || severity === 'notice')
   ) {
-    return [
-      {
-        code,
-        message,
-        severity: normalizedSeverity,
-        site,
-      },
-    ];
+    return { code, message, severity, site };
   }
   throw new TypeError('Static SQL-safety diagnostic has malformed authority fields.');
+}
+
+function rehydrateSerializedSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike {
+  const code = staticAnalysisOwnDataValue(value, 'code', 'Serialized SQL-safety diagnostic');
+  const message = staticAnalysisOwnDataValue(value, 'message', 'Serialized SQL-safety diagnostic');
+  const severity = staticAnalysisOwnDataValue(
+    value,
+    'severity',
+    'Serialized SQL-safety diagnostic',
+  );
+  const site = staticAnalysisOwnDataValue(value, 'site', 'Serialized SQL-safety diagnostic');
+  if (!isDiagnosticCode(code) || typeof message !== 'string' || typeof site !== 'string') {
+    throw new TypeError('Serialized SQL-safety diagnostic has malformed authority fields.');
+  }
+  // SPEC §2/§11: the process-local cache stores canonical JSON, so constructor identity cannot
+  // survive the round trip. Re-mint only after validating the finite registry code and exact
+  // registry-owned severity; arbitrary analyzer output still has to arrive registered above.
+  const diagnostic = createRegisteredDiagnostic(code, { site }, { message });
+  if (severity !== diagnostic.severity) {
+    throw new TypeError('Serialized SQL-safety diagnostic severity does not match the registry.');
+  }
+  return diagnostic;
 }
 
 function projectToctouFacts(values: readonly ToctouFactLike[]): CoreGraph.ToctouFact[] {

@@ -1,7 +1,9 @@
 import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
-import { requestPrincipalSnapshot } from './auth-principal.js';
+import { provenPrincipalFromRequest, requestPrincipalSnapshot } from './auth-principal.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
+import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   isExactlyOnceAdapterSettlementAmbiguousError,
   runExactlyOnceAdapter,
@@ -19,6 +21,7 @@ import {
   type CsrfOptions,
 } from './csrf.js';
 import { invalidate, mutationRegistryChangeRecords, type ChangeRecord } from './change-record.js';
+import { securityEvent } from './security-event.js';
 import {
   explainGuard,
   guardFailureToResult,
@@ -59,6 +62,16 @@ import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
 import { durableTaskScheduleInput } from './task-runner.js';
 import { MutationReplayConflictError } from './replay.js';
 import {
+  applyPrincipalEpochMutationTransition,
+  assertPrincipalEpochFresh,
+  assertPrincipalEpochFreshForRequest,
+  currentPrincipalEpoch,
+  PrincipalEpochUnavailableError,
+  PrincipalEpochStaleError,
+  snapshotPrincipalEpochStore,
+  type PrincipalEpochStore,
+} from './principal-epoch.js';
+import {
   formLikeToRecord,
   isSchemaValidationError,
   parseSchemaAsync,
@@ -73,6 +86,7 @@ import {
   optionalReplayPolicy,
   type MutationLifecycleReplayPolicy,
   type MutationLifecycleReplayReservation,
+  type ReplayPrincipalEpochAdmission,
 } from './mutation/replay-policy.js';
 import {
   enhancedMutationReauthResponse,
@@ -91,6 +105,7 @@ import {
   runSqliteAsyncTransaction,
 } from './sql-safe-handle.js';
 import { runWithRequestInputProvenance } from './request-input-provenance.js';
+import { assertCurrentRequestDeadlineActive } from './request-deadline.js';
 import { pinnedRequestCarrier } from './request-carrier.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import {
@@ -138,6 +153,7 @@ export type {
   MutationOptimisticEntry,
   MutationOptimisticMap,
   MutationOptimisticTransform,
+  PrincipalEpochMutationDeclaration,
   MutationQueue,
   MutationRequestDb,
   MutationRegistry,
@@ -180,6 +196,7 @@ type ValidatedMutationLifecycle<Input, Request> = {
   readonly [mutationLifecycleGate]: true;
   readonly input: Input;
   readonly lifecycleRequest: Request;
+  readonly principalEpochAdmission?: ReplayPrincipalEpochAdmission;
 };
 
 type InternalRunMutationOptions<Request, Input = unknown> = RunMutationOptions<Request> & {
@@ -230,6 +247,8 @@ async function executeMutationLifecycle<
     csrf === undefined ||
     (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
   ) {
+    securityEvent({ reason: 'invalid-token', type: 'csrf-rejected' });
+    // @kovo-security-denial csrf-rejected mutation-lifecycle-csrf
     return {
       failure: { error: { code: 'CSRF', payload: {} }, ok: false, status: 422 },
       kind: 'csrf-failure',
@@ -243,7 +262,7 @@ async function executeMutationLifecycle<
     : await parseMutationInput(definition.input, rawInput);
   if (!inputResult.ok) return { failure: inputResult.failure, kind: 'validation-failure' };
 
-  const input = inputResult.value as InferSchema<InputSchema>;
+  const input = snapshotGuardArgsReceipt(inputResult.value as InferSchema<InputSchema>);
   const lifecycleRequest = withGuardArgs(
     await resolveLifecycleRequest(
       request,
@@ -274,6 +293,7 @@ async function executeMutationLifecycle<
       replayed = await options.replay.read();
     } catch (error) {
       if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
+      if (error instanceof PrincipalEpochUnavailableError) return { kind: 'replay-unavailable' };
       throw error;
     }
     if (replayed) return { kind: 'replayed', response: replayed };
@@ -285,6 +305,7 @@ async function executeMutationLifecycle<
       reservationResult = await options.replay.reserve();
     } catch (error) {
       if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
+      if (error instanceof PrincipalEpochUnavailableError) return { kind: 'replay-unavailable' };
       throw error;
     }
     if (reservationResult.kind === 'conflict') return { kind: 'replay-conflict' };
@@ -303,6 +324,7 @@ async function executeMutationLifecycle<
         options,
         input,
         lifecycleRequest,
+        reservation?.principalEpochAdmission,
       ),
       {
         catchHandlerErrors: options.catchHandlerErrors,
@@ -319,6 +341,7 @@ async function executeMutationLifecycle<
       options,
       input,
       lifecycleRequest,
+      undefined,
     ),
     {
       catchHandlerErrors: options.catchHandlerErrors,
@@ -331,6 +354,7 @@ function validatedMutationLifecycleOptions<Request, Input>(
   options: ExecuteMutationLifecycleOptions<Request, unknown>,
   input: Input,
   lifecycleRequest: Request,
+  principalEpochAdmission: ReplayPrincipalEpochAdmission | undefined,
 ): InternalRunMutationOptions<Request, Input> {
   return {
     ...options,
@@ -338,6 +362,7 @@ function validatedMutationLifecycleOptions<Request, Input>(
       [mutationLifecycleGate]: true,
       input,
       lifecycleRequest,
+      ...(principalEpochAdmission === undefined ? {} : { principalEpochAdmission }),
     },
   };
 }
@@ -364,6 +389,14 @@ async function runMutationLifecycleHandler<
   try {
     result = await runMutation(definition, rawInput, request, options);
   } catch (error) {
+    if (error instanceof PrincipalEpochStaleError) {
+      await state.reservation?.abort?.();
+      return { kind: 'replay-conflict' };
+    }
+    if (error instanceof PrincipalEpochUnavailableError) {
+      await state.reservation?.abort?.();
+      return { kind: 'replay-unavailable' };
+    }
     // SPEC §10.3: a successful transaction callback followed by an adapter/COMMIT rejection is
     // ambiguous, not a proven rollback. Preserve its pending replay claim so a remote retry cannot
     // execute work that the database may already have committed. Setup and callback failures still
@@ -431,6 +464,8 @@ export async function runMutation<
       csrf === undefined ||
       (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
     ) {
+      securityEvent({ reason: 'invalid-token', type: 'csrf-rejected' });
+      // @kovo-security-denial csrf-rejected mutation-run-csrf
       return {
         error: { code: 'CSRF', payload: {} },
         ok: false,
@@ -441,7 +476,7 @@ export async function runMutation<
     const inputResult = await parseMutationInput(definition.input, rawInput);
     if (!inputResult.ok) return inputResult.failure;
 
-    input = inputResult.value as InferSchema<InputSchema>;
+    input = snapshotGuardArgsReceipt(inputResult.value as InferSchema<InputSchema>);
     // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)"): merge the mutation's *validated*
     // args onto the request so an arg-aware guard (`guards.owns` reading `req.args`) and the handler
     // both see the same `s.*`-coerced values, discharging KV414 for the covered key.
@@ -461,11 +496,114 @@ export async function runMutation<
     if (guardFailure) return mutationGuardFailureToResult(guardFailure);
   }
 
+  const principalEpochAdmission = await mutationPrincipalEpochAdmission(
+    options.principalEpochStore,
+    lifecycleRequest,
+    validatedLifecycle?.principalEpochAdmission,
+  );
+  const result = await runWithRequestInputProvenance(input, (trackedInput) =>
+    runMutationWithTrackedInput(
+      definition,
+      trackedInput as InferSchema<InputSchema>,
+      lifecycleRequest,
+      request,
+      principalEpochAdmission,
+      options,
+    ),
+  );
+  return result;
+}
+
+interface MutationPrincipalEpochAdmission {
+  readonly epoch: number;
+  readonly principal: string;
+  readonly store: PrincipalEpochStore;
+}
+
+async function mutationPrincipalEpochAdmission(
+  configuredStore: PrincipalEpochStore | undefined,
+  lifecycleRequest: unknown,
+  replayAdmission: ReplayPrincipalEpochAdmission | undefined,
+): Promise<MutationPrincipalEpochAdmission | undefined> {
+  const principal = provenPrincipalFromRequest(lifecycleRequest);
+  if (replayAdmission !== undefined) {
+    if (configuredStore === undefined || principal !== replayAdmission.principal) {
+      throw new PrincipalEpochStaleError();
+    }
+    const state = await assertPrincipalEpochFresh(
+      replayAdmission.store,
+      replayAdmission.principal,
+      replayAdmission.epoch,
+    );
+    return witnessFreeze({
+      epoch: state.epoch,
+      principal: replayAdmission.principal,
+      store: replayAdmission.store,
+    });
+  }
+  if (configuredStore === undefined || principal === undefined) return undefined;
+  const store = snapshotPrincipalEpochStore(configuredStore);
+  const state = await currentPrincipalEpoch(store, principal);
+  if (state.status !== 'active') throw new PrincipalEpochStaleError();
+  return witnessFreeze({ epoch: state.epoch, principal, store });
+}
+
+/**
+ * Execute a compiler-witnessed agent tool through the ordinary mutation parse → managed-DB/RLS →
+ * guard → transaction path without pretending the server-to-server invocation is a browser form.
+ * The caller must supply a request whose session principal was already pinned by the framework
+ * lifecycle; this function is intentionally reachable only from the private agent witness
+ * (SPEC §6.6 and §10.3).
+ *
+ * @internal
+ */
+export async function runAgentToolMutation<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  rawInput: unknown,
+  pinnedRequest: Request,
+  options: Omit<
+    RunMutationOptions<Request>,
+    'csrf' | 'guardResolved' | 'preParsedInput' | 'principalPosture' | 'sessionProvider'
+  > = {},
+): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
+  const inputResult = await parseMutationInput(definition.input, rawInput);
+  if (!inputResult.ok) return inputResult.failure;
+
+  const input = snapshotGuardArgsReceipt(inputResult.value as InferSchema<InputSchema>);
+  const lifecycleRequest = withGuardArgs(
+    await resolveLifecycleRequest(
+      pinnedRequest,
+      mutationLifecycleOptionsWithSqlPolicy(definition, options),
+    ),
+    input,
+  );
+  const guardFailure = await runAccessDecisionGuards(
+    accessDecisionFor(definition),
+    definition.guard,
+    lifecycleRequest,
+  );
+  if (guardFailure) return mutationGuardFailureToResult(guardFailure);
+
+  const principalEpochAdmission = await mutationPrincipalEpochAdmission(
+    options.principalEpochStore,
+    lifecycleRequest,
+    undefined,
+  );
+
   return runWithRequestInputProvenance(input, (trackedInput) =>
     runMutationWithTrackedInput(
       definition,
       trackedInput as InferSchema<InputSchema>,
-      withGuardArgs(lifecycleRequest, trackedInput) as Request,
+      lifecycleRequest,
+      pinnedRequest,
+      principalEpochAdmission,
       options,
     ),
   );
@@ -482,6 +620,8 @@ async function runMutationWithTrackedInput<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   input: InferSchema<InputSchema>,
   lifecycleRequest: Request,
+  requestCarrier: Request,
+  principalEpochAdmission: MutationPrincipalEpochAdmission | undefined,
   options: RunMutationOptions<Request>,
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const manualInvalidations: ChangeRecord[] = [];
@@ -549,6 +689,7 @@ async function runMutationWithTrackedInput<
     setSessionRevocationClearSiteData: () => void;
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
+    assertCurrentRequestDeadlineActive('mutation transaction');
     const authorityNeutralHandlerRequest = csrfExempt
       ? (withoutRequestProperty(handlerRequest, 'clientIp') as GuardedRequest)
       : handlerRequest;
@@ -557,9 +698,34 @@ async function runMutationWithTrackedInput<
       options.taskScheduler,
     );
     const handlerValue = await definition.handler(input, scheduledHandlerRequest, context);
+    // This checkpoint still runs inside the framework/custom transaction callback. Expiry here
+    // throws before callback success can request COMMIT; expiry after callback success is an
+    // ambiguous/post-commit case and is discarded at the response door, never called rollback.
+    assertCurrentRequestDeadlineActive('mutation transaction');
 
     if (isMutationFail(handlerValue)) {
       throw new MutationRollback(handlerValue);
+    }
+
+    // SPEC §6.6/§10.3: privilege changes must not commit while their revocation version is
+    // unchanged. Run the explicit registry transition before the transaction callback succeeds;
+    // an epoch-store outage therefore throws through the normal rollback path. If the epoch
+    // advances but the app transaction later rejects or has an ambiguous COMMIT, the conservative
+    // outcome is over-revocation rather than stale privilege authority.
+    if (definition.principalEpoch !== undefined) {
+      await applyPrincipalEpochMutationTransition(
+        options.principalEpochStore,
+        requestCarrier,
+        definition.principalEpoch,
+        input,
+        lifecycleRequest,
+      );
+    }
+    if (principalEpochAdmission !== undefined) {
+      await assertMutationPrincipalEpochTransactionComplete(
+        requestCarrier,
+        principalEpochAdmission,
+      );
     }
 
     return handlerValue as Value;
@@ -569,6 +735,7 @@ async function runMutationWithTrackedInput<
   let value: Value;
 
   try {
+    assertCurrentRequestDeadlineActive('mutation transaction');
     value = definition.transaction
       ? await runExactlyOnceAdapter(
           (run) => definition.transaction!(lifecycleRequest, run),
@@ -626,6 +793,7 @@ async function runInDefaultTransaction<Request, GuardedRequest, Value>(
   runHandler: (handlerRequest: GuardedRequest) => Promise<Value>,
   guardedRequest: GuardedRequest,
 ): Promise<Value> {
+  assertCurrentRequestDeadlineActive('mutation transaction');
   const db = transactionCapableRequestDb(lifecycleRequest);
   if (!db) return runHandler(guardedRequest);
 
@@ -658,6 +826,18 @@ function transactionCapableRequestDb(request: unknown): TransactionCapableReques
     target: db,
     transaction,
   };
+}
+
+async function assertMutationPrincipalEpochTransactionComplete(
+  requestCarrier: unknown,
+  admission: MutationPrincipalEpochAdmission,
+): Promise<void> {
+  await assertPrincipalEpochFreshForRequest(
+    admission.store,
+    requestCarrier,
+    admission.principal,
+    admission.epoch,
+  );
 }
 
 function asyncMutationTransaction(
@@ -1087,6 +1267,9 @@ export async function renderMutationEndpointResponse<
     ...(endpointRequest.replayStore === undefined
       ? {}
       : { replayStore: endpointRequest.replayStore }),
+    ...(endpointRequest.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: endpointRequest.principalEpochStore }),
     ...(endpointRequest.renderFailurePage === undefined
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
@@ -1270,7 +1453,10 @@ async function parseMutationInput<InputSchema extends Schema<unknown>>(
 
 function runMutationOptions<Request>(
   csrf: CsrfOptions<Request> | false | undefined,
-  lifecycle?: RequestLifecycleOptions<Request> & { taskScheduler?: TaskScheduler },
+  lifecycle?: RequestLifecycleOptions<Request> & {
+    principalEpochStore?: import('./principal-epoch.js').PrincipalEpochStore;
+    taskScheduler?: TaskScheduler;
+  },
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
@@ -1282,6 +1468,9 @@ function runMutationOptions<Request>(
     ...(lifecycle?.sessionProvider === undefined
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
+    ...(lifecycle?.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: lifecycle.principalEpochStore }),
     ...(lifecycle?.taskScheduler === undefined ? {} : { taskScheduler: lifecycle.taskScheduler }),
   };
 }
@@ -1382,9 +1571,7 @@ function hasSubmittedCsrfTokenShape(rawInput: unknown, field: string): boolean {
 }
 
 function revealCsrfTokenInput(input: unknown): unknown {
-  return isUntrusted(input)
-    ? revealUntrusted(input, 'validated request-derived CSRF token shape')
-    : input;
+  return isUntrusted(input) ? revealUntrusted(input, frameworkRevealUntrustedPolicy) : input;
 }
 
 function mutationGuardFailureToResult(guardFailure: ResolvedGuardFailure): MutationFail {

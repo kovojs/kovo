@@ -10,6 +10,7 @@ import {
   text,
 } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
 import { runMutation } from '../../server/src/mutation.js';
+import { currentPrincipalEpoch } from '../../server/src/principal-epoch.js';
 import { mount } from './mount.js';
 import { betterAuthSqliteSecret, createBetterAuthSqliteBindings } from './sqlite.js';
 
@@ -108,6 +109,7 @@ describe('Better Auth development seed session posture', () => {
           id: authSession.id,
           user: { email: authUser.email, id: authUser.id, name: authUser.name },
         }),
+        principalEpochStore: runtime.principalEpochStore,
         schema: authSchema,
         secret: betterAuthSqliteSecret(authSecret),
         signInAccess: { kind: 'public', reason: 'cookie-toss repro sign-in' },
@@ -174,6 +176,16 @@ describe('Better Auth development seed session posture', () => {
         ? resolved.value
         : resolved;
     expect(value).toMatchObject({ user: { email: 'victim@example.com' } });
+    if (value === null || typeof value !== 'object' || !('user' in value)) {
+      throw new Error('expected mapped Better Auth session');
+    }
+    const principal = (value.user as { id: string }).id;
+    await expect(
+      currentPrincipalEpoch(runtime.principalEpochStore, principal),
+    ).resolves.toMatchObject({
+      epoch: 1,
+      status: 'active',
+    });
   });
 
   it('rejects canonical-origin skew before minting or reading a bare session cookie', async () => {

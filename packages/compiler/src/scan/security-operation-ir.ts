@@ -38,6 +38,7 @@ import {
   compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringEndsWith,
   compilerStringSlice,
   compilerStringStartsWith,
   compilerStringTrim,
@@ -68,6 +69,7 @@ import {
   serverBindingProjectionTransfer,
   serverConditionalTransfer,
 } from './security-abstract-interpreter.js';
+import { serverPrecisionGrant } from './security-provenance-precision-grants.js';
 
 interface SecurityOperationScanResult<Operation> {
   readonly operations: readonly Operation[];
@@ -97,6 +99,7 @@ const DECLARE_SECRET_READ_CAPABILITY_IDENTITY = frameworkExport(
   'declareSecretReadCapability',
 );
 const SECRET_IDENTITY = frameworkExport('@kovojs/core', 'secret');
+const DECLASSIFY_POLICY_IDENTITY = frameworkExport('@kovojs/core', 'DeclassifyPolicy');
 const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
 const DRIZZLE_ALIAS_IDENTITY = frameworkExport('drizzle-orm', 'alias');
 const TRUSTED_HTML_IDENTITIES = [
@@ -109,6 +112,7 @@ const PUBLIC_SCOPED_KEY_IDENTITIES = [
   frameworkExport('@kovojs/server', 'publicScopedKey'),
 ] as const;
 const SCOPED_KEY_IDENTITY = frameworkExport('@kovojs/server', 'scopedKey');
+const DERIVED_IDENTITY = frameworkExport('@kovojs/server', 'derived');
 const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
 const SERVER_STORAGE_FACTORY_IDENTITIES = [
   frameworkExport('@kovojs/core', 'createFileSystemStorage'),
@@ -259,8 +263,10 @@ function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex
     for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
       const statement = statements[statementIndex]!;
       if (ts.isFunctionDeclaration(statement) && statement.name) {
-        securityIrIndexDeclaration(declarations, statement.name.text, {
-          ...(statement.body
+        securityIrIndexDeclaration(
+          declarations,
+          statement.name.text,
+          statement.body
             ? {
                 callable: {
                   body: statement.body,
@@ -269,8 +275,8 @@ function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex
                   parameters: statement.parameters,
                 },
               }
-            : {}),
-        });
+            : {},
+        );
         continue;
       }
       if ((ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
@@ -1658,7 +1664,7 @@ function analyzeServerSecurityCallable(options: {
   const signature =
     callable === undefined
       ? undefined
-      : `${surface}\0${callable.name}\0${compilerArrayJoin(authorityInputs, ',')}`;
+      : `${surface}\0${callable.name}\0${compilerArrayJoin(parameterProvenances ?? [], ',')}`;
 
   if (signature !== undefined && compilerSetHas(state.active, signature)) {
     securityAbstractTransfer('helper.cycle-close');
@@ -2277,6 +2283,8 @@ function semanticReasonForViolation(
       return 'opaque-transfer';
     case 'unknown-security-operation':
       return 'unknown-operation';
+    case 'derived-dataset-scope':
+    case 'governed-data-persistence':
     case 'incomplete-mutation-form':
     case 'raw-capability-operation':
     case 'raw-dom-operation':
@@ -2645,6 +2653,12 @@ function scanServerSecurityOperationsDirect(
       const provenance = serverExpressionProvenance(callee, aliases);
       if (provenance === 'response-constructor') {
         if (surface === 'endpoint' || surface === 'webhook') {
+          appendUnsafeWireBodyViolation(
+            node.arguments?.[0],
+            'new Response',
+            aliases,
+            appendViolation,
+          );
           appendOperation(
             'server.response.raw',
             node,
@@ -2959,6 +2973,77 @@ interface ServerScopedKeySink {
   readonly key?: ts.Node;
   readonly proven: boolean;
   readonly target: string;
+}
+
+interface ServerDerivedDatasetCall {
+  readonly kind: 'query' | 'upsert';
+  readonly request: ts.Node;
+  readonly requestScoped: boolean;
+  readonly target: string;
+}
+
+/**
+ * Recognize only operations on the module-constant handle returned by the exact framework
+ * `derived()` constructor. Structural lookalikes never acquire `derived-dataset` provenance.
+ */
+function serverDerivedDatasetCall(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerDerivedDatasetCall | undefined {
+  const callee = unwrapExpression(call.expression);
+  const calleeProvenance = serverExpressionProvenance(callee, aliases);
+  const kind =
+    calleeProvenance === 'derived-query-call'
+      ? 'query'
+      : calleeProvenance === 'derived-upsert-call'
+        ? 'upsert'
+        : undefined;
+  if (kind === undefined) return undefined;
+
+  const request = call.arguments[0] ?? call;
+  return {
+    kind,
+    request,
+    requestScoped:
+      call.arguments.length === 2 &&
+      call.arguments[0] !== undefined &&
+      serverExpressionProvenance(call.arguments[0], aliases) === 'request',
+    target: expressionPath(callee) ?? `derived.${kind}`,
+  };
+}
+
+/**
+ * SPEC §6.6/§10.3 C9: governed data may leave the managed engine only through `derived()`.
+ * This vocabulary deliberately names the existing durable non-engine doors rather than trying to
+ * classify arbitrary JavaScript effects.
+ */
+function serverPersistentNonEngineSink(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ts.Expression | undefined {
+  const member = staticMember(unwrapExpression(call.expression));
+  if (!member) return undefined;
+  const receiver = serverExpressionProvenance(member.receiver, aliases);
+  let firstPayloadIndex: number | undefined;
+  if (receiver === 'storage' && member.name === 'put') {
+    firstPayloadIndex = 1;
+  } else if (receiver === 'context' && member.name === 'fetch') {
+    firstPayloadIndex = 0;
+  } else if ((receiver === 'request' || receiver === 'context') && member.name === 'schedule') {
+    firstPayloadIndex = 1;
+  }
+  if (firstPayloadIndex === undefined) return undefined;
+
+  const argumentsList = compilerSnapshotDenseArray(
+    call.arguments,
+    'Persistent non-engine sink arguments',
+  );
+  for (let index = firstPayloadIndex; index < argumentsList.length; index += 1) {
+    const argument = argumentsList[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'governed-data') return expression;
+  }
+  return undefined;
 }
 
 type ServerExactObjectProperty =
@@ -3364,6 +3449,30 @@ function classifyServerCall(
     callee,
     { legacyGlobals: SERVER_OPERATION_LEGACY_IDENTITIES },
   );
+  const derivedCall = serverDerivedDatasetCall(call, aliases);
+  if (derivedCall !== undefined) {
+    if (!derivedCall.requestScoped) {
+      appendViolation(
+        derivedCall.request,
+        'derived-dataset-scope',
+        `${derivedCall.target} requires the exact framework request principal binding`,
+      );
+    }
+    appendOperation(
+      derivedCall.kind === 'query' ? 'server.storage.read' : 'server.storage.write',
+      call,
+      derivedCall.target,
+    );
+    return;
+  }
+  const persistentSink = serverPersistentNonEngineSink(call, aliases);
+  if (persistentSink !== undefined) {
+    appendViolation(
+      persistentSink,
+      'governed-data-persistence',
+      'owner-scoped or governed data reaches a persistent non-engine sink; use the framework-owned derived() door',
+    );
+  }
   if (serverCallIsExactScopedKeyConstructor(sourceFile, call, surface, aliases)) {
     // SPEC §6.6: these are the only app-authored constructors whose module identity and request or
     // task authority let a key reach a non-database stateful sink. Runtime witness validation at
@@ -3424,9 +3533,58 @@ function classifyServerCall(
     // public constructor and immutable trustedSql statement shape.
     return;
   }
-  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {
-    // trustedReveal is an audited value projection, not capability authority. Its strict options
-    // and direct import shape mirror the confidentiality analyzer's reviewed escape.
+  if (serverCallIsExactDeclassifyPolicyConstructor(sourceFile, call)) {
+    // The runtime constructor independently validates and registers the immutable policy. Static
+    // admission requires the same direct class import and closed literal registry tuple.
+    return;
+  }
+  if (frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {
+    const policy = serverExactTrustedRevealPolicy(sourceFile, call);
+    const released = call.arguments[0];
+    const releaseProvenance = released
+      ? serverDeclassifyExpressionProvenance(sourceFile, released, aliases)
+      : 'unknown-authority';
+    const condition = serverDeclassifyEnablingCondition(call, aliases);
+    if (
+      !serverCallUsesExactNamedFrameworkImport(
+        sourceFile,
+        call,
+        callee,
+        'trustedReveal',
+        TRUSTED_REVEAL_IDENTITY,
+      ) ||
+      call.arguments.length !== 2 ||
+      policy === undefined
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        'trustedReveal declassification requires an exact named import and inline validated DeclassifyPolicy.create tuple',
+      );
+    } else if (!serverDeclassifyProvenanceIsRobust(releaseProvenance)) {
+      appendViolation(
+        released ?? call,
+        'computed-security-operation',
+        `declassification released expression has attacker-controlled or unknown integrity (${releaseProvenance})`,
+      );
+    } else if (condition !== undefined) {
+      appendViolation(
+        condition.node,
+        'computed-security-operation',
+        `declassification enabling condition has attacker-controlled or unknown integrity (${condition.provenance})`,
+      );
+    } else if (
+      serverArgumentsContainAuthority(call.arguments, aliases) ||
+      serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        'declassification cannot receive server authority or foreign executable values',
+      );
+    } else {
+      appendOperation('server.data.declassify', call, 'trustedReveal', policy.label);
+    }
     return;
   }
   if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {
@@ -3437,6 +3595,13 @@ function classifyServerCall(
   if (serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {
     // A schema alias is reviewed data only for an exact Drizzle alias(table, staticName) call over
     // an independently proven project table declaration.
+    return;
+  }
+  if (serverCallIsExactGeneratedReadonlyAppDbRead(sourceFile, call)) {
+    // SPEC §6.6 / §9.4 / §10.3: the generated app DB re-export is a read-only managed door only
+    // through its exact direct import and reviewed generated source graph. Local aliases,
+    // computed members, forged exports, and mutable re-exports never reach this branch.
+    appendOperation('server.database.read', call, nodeName(callee));
     return;
   }
   if (serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {
@@ -3511,6 +3676,7 @@ function classifyServerCall(
       call,
       callee.text,
       surface,
+      aliases,
       appendOperation,
       appendViolation,
     );
@@ -3588,6 +3754,7 @@ function classifyServerCall(
       call,
       target,
       surface,
+      aliases,
       appendOperation,
       appendViolation,
     )
@@ -3622,6 +3789,23 @@ function classifyServerCall(
     );
     return;
   }
+  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&
+      !serverArgumentsContainAuthority(call.arguments, aliases) &&
+      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)
+    ) {
+      return;
+    }
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `unknown or authority-bearing generated readonly database builder continuation ${member.name} ` +
+        'is outside the finite server IR',
+    );
+    return;
+  }
   if (!securityIrMemberCallableIsStable(sourceFile, callee, call)) {
     appendViolation(
       call,
@@ -3643,7 +3827,13 @@ function classifyServerCall(
     appendOperation('server.helper.call', call, `local:${local.name}`);
     return;
   }
-  if (provenance === 'safe-call') return;
+  if (
+    provenance === 'safe-call' ||
+    provenance === 'governed-data' ||
+    provenance === 'unsafe-wire-data'
+  ) {
+    return;
+  }
   const localRoot = securityIrLeftmostExecutableRoot(callee);
   if (
     provenance === 'local' &&
@@ -3770,24 +3960,186 @@ function serverCallIsExactDeclaredSecretReadCapability(
   return ts.isCallExpression(raw) && serverCallIsExactTrustedSqlRaw(sourceFile, raw);
 }
 
-function serverCallIsExactTrustedReveal(
+interface ServerExactDeclassifyPolicy {
+  readonly door: 'trustedReveal';
+  readonly label: string;
+  readonly ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
+  readonly purpose: 'public-projection';
+}
+
+function serverExactTrustedRevealPolicy(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerExactDeclassifyPolicy | undefined {
+  if (call.arguments.length !== 2) return undefined;
+  const policyExpression = unwrapExpression(call.arguments[1]!);
+  if (!ts.isCallExpression(policyExpression)) return undefined;
+  return serverExactDeclassifyPolicy(sourceFile, policyExpression, 'trustedReveal');
+}
+
+function serverCallIsExactDeclassifyPolicyConstructor(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
 ): boolean {
+  return serverExactDeclassifyPolicy(sourceFile, call, 'trustedReveal') !== undefined;
+}
+
+function serverExactDeclassifyPolicy(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  expectedDoor: 'trustedReveal',
+): ServerExactDeclassifyPolicy | undefined {
   const callee = unwrapExpression(call.expression);
-  return !!(
-    serverCallUsesExactNamedFrameworkImport(
-      sourceFile,
-      call,
-      callee,
-      'trustedReveal',
-      TRUSTED_REVEAL_IDENTITY,
-    ) &&
-    call.arguments.length === 2 &&
-    !serverArgumentsContainAuthority(call.arguments, aliases) &&
-    !serverArgumentsContainForeignExecutable(call.arguments, aliases) &&
-    serverExpressionIsExactTrustedRevealOptions(call.arguments[1]!)
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'create') return undefined;
+  const receiver = unwrapExpression(callee.expression);
+  if (
+    !ts.isIdentifier(receiver) ||
+    receiver.text !== 'DeclassifyPolicy' ||
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        receiver,
+      ),
+      DECLASSIFY_POLICY_IDENTITY,
+    ) ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, receiver) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call) ||
+    call.arguments.length !== 1
+  ) {
+    return undefined;
+  }
+  const options = unwrapExpression(call.arguments[0]!);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 3) return undefined;
+  let door: string | undefined;
+  let ownerScope: string | undefined;
+  let purpose: string | undefined;
+  const seen = compilerCreateSet<string>();
+  const properties = compilerSnapshotDenseArray(
+    options.properties,
+    'Finite DeclassifyPolicy options',
+  );
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return undefined;
+    }
+    const name = staticPropertyName(property.name);
+    const value = unwrapExpression(property.initializer);
+    if (
+      !name ||
+      (name !== 'door' && name !== 'ownerScope' && name !== 'purpose') ||
+      compilerSetHas(seen, name) ||
+      !ts.isStringLiteralLike(value)
+    ) {
+      return undefined;
+    }
+    compilerSetAdd(seen, name);
+    if (name === 'door') door = value.text;
+    else if (name === 'ownerScope') ownerScope = value.text;
+    else purpose = value.text;
+  }
+  if (
+    door !== expectedDoor ||
+    purpose !== 'public-projection' ||
+    (ownerScope !== 'application' &&
+      ownerScope !== 'current-principal' &&
+      ownerScope !== 'current-tenant' &&
+      ownerScope !== 'framework')
+  ) {
+    return undefined;
+  }
+  return {
+    door,
+    label: `${purpose}:${door}:${ownerScope}`,
+    ownerScope,
+    purpose,
+  };
+}
+
+function serverDeclassifyExpressionProvenance(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerValueProvenance {
+  const current = unwrapExpression(expression);
+  if (ts.isCallExpression(current)) {
+    if (serverCallIsExactSecretBox(sourceFile, current, aliases)) {
+      const value = current.arguments[0];
+      return value === undefined
+        ? 'unknown-authority'
+        : serverDeclassifyExpressionProvenance(sourceFile, value, aliases);
+    }
+    const callee = serverExpressionProvenance(current.expression, aliases);
+    if (callee === 'foreign-executable' || callee === 'unknown-authority') {
+      return 'unknown-authority';
+    }
+  }
+  return serverExpressionProvenance(current, aliases);
+}
+
+function serverDeclassifyProvenanceIsRobust(provenance: ServerValueProvenance): boolean {
+  return (
+    provenance !== 'foreign-executable' &&
+    provenance !== 'unsafe-wire-data' &&
+    provenance !== 'unknown-authority'
+  );
+}
+
+interface ServerDeclassifyClosedCondition {
+  readonly node: ts.Node;
+  readonly provenance: ServerValueProvenance;
+}
+
+function serverDeclassifyEnablingCondition(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerDeclassifyClosedCondition | undefined {
+  let child: ts.Node = call;
+  for (let parent = call.parent; parent; child = parent, parent = parent.parent) {
+    if (isSecurityIrFunctionScope(parent)) return undefined;
+    let condition: ts.Expression | undefined;
+    if (ts.isIfStatement(parent) && !serverNodeContains(parent.expression, child)) {
+      condition = parent.expression;
+    } else if (ts.isConditionalExpression(parent) && !serverNodeContains(parent.condition, child)) {
+      condition = parent.condition;
+    } else if (
+      ts.isBinaryExpression(parent) &&
+      parent.right === child &&
+      (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+        parent.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+        parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+    ) {
+      condition = parent.left;
+    } else if (
+      (ts.isWhileStatement(parent) || ts.isDoStatement(parent)) &&
+      !serverNodeContains(parent.expression, child)
+    ) {
+      condition = parent.expression;
+    } else if (
+      ts.isForStatement(parent) &&
+      parent.condition !== undefined &&
+      !serverNodeContains(parent.condition, child)
+    ) {
+      condition = parent.condition;
+    } else if (ts.isSwitchStatement(parent) && !serverNodeContains(parent.expression, child)) {
+      condition = parent.expression;
+    } else if (ts.isCatchClause(parent)) {
+      return { node: parent, provenance: 'unknown-authority' };
+    }
+    if (condition === undefined) continue;
+    const provenance = serverExpressionProvenance(condition, aliases);
+    if (!serverDeclassifyProvenanceIsRobust(provenance)) {
+      return { node: condition, provenance };
+    }
+  }
+  return undefined;
+}
+
+function serverNodeContains(container: ts.Node, candidate: ts.Node): boolean {
+  return (
+    candidate.getStart(container.getSourceFile()) >=
+      container.getStart(container.getSourceFile()) && candidate.getEnd() <= container.getEnd()
   );
 }
 
@@ -4030,43 +4382,6 @@ function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression)
   return true;
 }
 
-function serverExpressionIsExactTrustedRevealOptions(expression: ts.Expression): boolean {
-  const options = unwrapExpression(expression);
-  if (
-    !ts.isObjectLiteralExpression(options) ||
-    options.properties.length < 1 ||
-    options.properties.length > 3
-  ) {
-    return false;
-  }
-  const expectedOrder = ['justification', 'method', 'source'] as const;
-  let lastIndex = -1;
-  let sawJustification = false;
-  const properties = compilerSnapshotDenseArray(options.properties, 'Finite trustedReveal options');
-  for (let index = 0; index < properties.length; index += 1) {
-    const property = properties[index]!;
-    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
-      return false;
-    const name = staticPropertyName(property.name);
-    const optionIndex = name ? expectedOrder.indexOf(name as (typeof expectedOrder)[number]) : -1;
-    if (optionIndex <= lastIndex || optionIndex < 0) return false;
-    lastIndex = optionIndex;
-    const value = unwrapExpression(property.initializer);
-    if (!serverExpressionIsNonEmptyStaticString(value)) return false;
-    if (name === 'justification') {
-      sawJustification = true;
-    } else if (
-      name === 'method' &&
-      ts.isStringLiteralLike(value) &&
-      value.text !== 'arbitrary-fn' &&
-      value.text !== 'server-projection'
-    ) {
-      return false;
-    }
-  }
-  return sawJustification;
-}
-
 function serverExpressionIsNonEmptyStaticString(expression: ts.Expression): boolean {
   const value = unwrapExpression(expression);
   return ts.isStringLiteralLike(value) && compilerStringTrim(value.text).length > 0;
@@ -4089,6 +4404,60 @@ function serverCallDescendsFromReviewedDatabaseOperation(
   }
   const member = staticMember(current);
   return member ? serverCallDescendsFromReviewedDatabaseOperation(member.receiver, aliases) : false;
+}
+
+function serverCallIsExactGeneratedReadonlyAppDbRead(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.questionDotToken) return false;
+  const receiver = unwrapExpression(callee.expression);
+  if (
+    !ts.isIdentifier(receiver) ||
+    !serverExpressionIsExactGeneratedReadonlyAppDb(sourceFile, receiver) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call)
+  ) {
+    return false;
+  }
+  return (
+    serverMemberProvenanceFromRelation('database-read-namespace', callee.name.text) ===
+    'operation:server.database.read'
+  );
+}
+
+function serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (ts.isCallExpression(current)) {
+    if (serverCallIsExactGeneratedReadonlyAppDbRead(sourceFile, current)) return true;
+    const callee = unwrapExpression(current.expression);
+    if (
+      !ts.isPropertyAccessExpression(callee) ||
+      callee.questionDotToken ||
+      !compilerSetHas(serverReviewedDatabaseBuilderMethods, callee.name.text) ||
+      serverArgumentsContainAuthority(current.arguments, aliases) ||
+      serverArgumentsContainUnreviewedForeignExecutable(sourceFile, current.arguments, aliases)
+    ) {
+      return false;
+    }
+    return serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
+      sourceFile,
+      callee.expression,
+      aliases,
+    );
+  }
+  if (ts.isPropertyAccessExpression(current) && !current.questionDotToken) {
+    return serverCallDescendsFromExactGeneratedReadonlyAppDbRead(
+      sourceFile,
+      current.expression,
+      aliases,
+    );
+  }
+  return false;
 }
 
 interface ServerImportedProjectValue {
@@ -4183,6 +4552,236 @@ function serverExpressionIsReviewedDatabaseTable(
     initializer.expression,
   );
   return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);
+}
+
+function serverExpressionIsExactGeneratedReadonlyAppDb(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (
+    !ts.isIdentifier(current) ||
+    current.text !== 'readonlyAppDb' ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, current)
+  ) {
+    return false;
+  }
+  const imported = serverImportedProjectValue(sourceFile, current);
+  if (!imported || imported.exportName !== 'readonlyAppDb') return false;
+  const dbSource = resolveFrameworkIdentityProjectSourceFile(sourceFile, imported.specifier);
+  if (!dbSource) return false;
+
+  const dbExport = serverExactModuleConstDeclaration(dbSource, 'readonlyAppDb', true);
+  const dbInitializer = dbExport?.initializer ? unwrapExpression(dbExport.initializer) : undefined;
+  if (
+    !dbExport ||
+    !dbInitializer ||
+    !ts.isIdentifier(dbInitializer) ||
+    dbInitializer.text !== 'appRuntimeReadonlyDb' ||
+    !securityIrExpressionUsesDirectImportBinding(dbSource, dbInitializer) ||
+    !serverBindingHasOnlyExactValueUses(dbSource, 'readonlyAppDb', []) ||
+    !serverBindingHasOnlyExactValueUses(dbSource, 'appRuntimeReadonlyDb', [dbInitializer])
+  ) {
+    return false;
+  }
+
+  const runtimeImport = serverImportedProjectValue(dbSource, dbInitializer);
+  if (!runtimeImport || runtimeImport.exportName !== 'appRuntimeReadonlyDb') return false;
+  const runtimeSource = resolveFrameworkIdentityProjectSourceFile(
+    dbSource,
+    runtimeImport.specifier,
+  );
+  if (!runtimeSource) return false;
+  const runtimeExport = serverExactModuleConstDeclaration(
+    runtimeSource,
+    'appRuntimeReadonlyDb',
+    true,
+  );
+  const runtimeInitializer = runtimeExport?.initializer
+    ? unwrapExpression(runtimeExport.initializer)
+    : undefined;
+  const runtimeMember = runtimeInitializer ? staticMember(runtimeInitializer) : undefined;
+  const databaseIdentifier = runtimeMember ? unwrapExpression(runtimeMember.receiver) : undefined;
+  if (
+    !runtimeExport ||
+    !runtimeInitializer ||
+    !ts.isPropertyAccessExpression(runtimeInitializer) ||
+    runtimeMember?.name !== 'readonlyDb' ||
+    !databaseIdentifier ||
+    !ts.isIdentifier(databaseIdentifier) ||
+    databaseIdentifier.text !== 'appDatabase' ||
+    !serverBindingHasOnlyExactValueUses(runtimeSource, 'appRuntimeReadonlyDb', []) ||
+    !serverGeneratedAppDatabaseUsesAreExact(runtimeSource, databaseIdentifier.text)
+  ) {
+    return false;
+  }
+
+  const databaseDeclaration = serverExactModuleConstDeclaration(
+    runtimeSource,
+    databaseIdentifier.text,
+    false,
+  );
+  const databaseInitializer = databaseDeclaration?.initializer
+    ? unwrapExpression(databaseDeclaration.initializer)
+    : undefined;
+  if (!databaseInitializer || !ts.isCallExpression(databaseInitializer)) return false;
+  const factory = unwrapExpression(databaseInitializer.expression);
+  return !!(
+    serverExpressionIsExactGeneratedAppDatabaseFactory(runtimeSource, factory) &&
+    securityIrMemberCallableIsStable(runtimeSource, factory, databaseInitializer)
+  );
+}
+
+function serverExpressionIsExactGeneratedAppDatabaseFactory(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (!ts.isIdentifier(current)) return false;
+  const expectedSpecifier =
+    current.text === 'createPostgresAppRuntimeDb'
+      ? '@kovojs/server'
+      : current.text === 'createSqliteAppRuntime'
+        ? '@kovojs/server/sqlite'
+        : undefined;
+  if (!expectedSpecifier) return false;
+
+  let matches = 0;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite generated app database imports',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== expectedSpecifier
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    const elements = compilerSnapshotDenseArray(
+      bindings.elements,
+      'Finite generated app database named imports',
+    );
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex]!;
+      if (element.name.text === current.text && element.propertyName === undefined) matches += 1;
+    }
+  }
+  return matches === 1;
+}
+
+function serverExactModuleConstDeclaration(
+  sourceFile: ts.SourceFile,
+  name: string,
+  exported: boolean,
+): ts.VariableDeclaration | undefined {
+  let found: ts.VariableDeclaration | undefined;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Finite generated app database statements',
+  );
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (
+      !ts.isVariableStatement(statement) ||
+      (statement.declarationList.flags & ts.NodeFlags.Const) === 0 ||
+      securityIrNodeHasExportModifier(statement) !== exported
+    ) {
+      continue;
+    }
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Finite generated app database declarations',
+    );
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const declaration = declarations[declarationIndex]!;
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name) continue;
+      if (found) return undefined;
+      found = declaration;
+    }
+  }
+  const indexed = securityIrDeclarationFact(sourceFile, sourceFile, name);
+  return found && indexed?.matches === 1 && !serverBindingOrMemberIsAssigned(sourceFile, name)
+    ? found
+    : undefined;
+}
+
+function serverBindingHasOnlyExactValueUses(
+  sourceFile: ts.SourceFile,
+  name: string,
+  allowedUses: readonly ts.Identifier[],
+): boolean {
+  const allowed = compilerCreateSet<ts.Identifier>();
+  const uses = compilerSnapshotDenseArray(allowedUses, 'Finite generated DB allowed uses');
+  for (let index = 0; index < uses.length; index += 1) compilerSetAdd(allowed, uses[index]!);
+  let exact = true;
+  const visit = (node: ts.Node): void => {
+    if (!exact) return;
+    if (ts.isImportDeclaration(node)) return;
+    if (ts.isIdentifier(node) && node.text === name) {
+      const parent = node.parent;
+      if (
+        compilerSetHas(allowed, node) ||
+        (ts.isVariableDeclaration(parent) && parent.name === node) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node)
+      ) {
+        return;
+      }
+      exact = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return exact;
+}
+
+function serverGeneratedAppDatabaseUsesAreExact(sourceFile: ts.SourceFile, name: string): boolean {
+  let exact = true;
+  const visit = (node: ts.Node): void => {
+    if (!exact) return;
+    if (ts.isIdentifier(node) && node.text === name) {
+      const parent = node.parent;
+      if (ts.isVariableDeclaration(parent) && parent.name === node) return;
+      if (!ts.isPropertyAccessExpression(parent) || parent.expression !== node) {
+        exact = false;
+        return;
+      }
+      const member = parent.name.text;
+      if (member === 'systemDb') {
+        const call = parent.parent;
+        if (!ts.isCallExpression(call) || unwrapExpression(call.expression) !== parent) {
+          exact = false;
+        }
+        return;
+      }
+      const expected =
+        member === 'db'
+          ? 'appRuntimeDbProvider'
+          : member === 'mutationReplayStore'
+            ? 'appRuntimeMutationReplayStore'
+            : member === 'readonlyDb'
+              ? 'appRuntimeReadonlyDb'
+              : member === 'ready'
+                ? 'appRuntimeDbReady'
+                : undefined;
+      if (
+        !expected ||
+        serverExactVariableDeclarationForInitializer(parent, expected) === undefined
+      ) {
+        exact = false;
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return exact;
 }
 
 function serverImportedProjectValue(
@@ -4324,6 +4923,7 @@ function classifyServerProvenanceCall(
   call: ts.CallExpression,
   target: string,
   surface: ServerSecurityScanSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendOperation: (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -4400,6 +5000,9 @@ function classifyServerProvenanceCall(
   }
   if (kind === 'server.response.raw') {
     if (surface === 'endpoint' || surface === 'webhook') {
+      if (compilerStringEndsWith(target, '.json')) {
+        appendUnsafeWireBodyViolation(call.arguments[0], target, aliases, appendViolation);
+      }
       appendOperation(kind, call, target, `${surface} access/CSRF posture`);
     } else {
       appendViolation(
@@ -4412,6 +5015,26 @@ function classifyServerProvenanceCall(
   }
   appendOperation(kind, call, target);
   return true;
+}
+
+function appendUnsafeWireBodyViolation(
+  body: ts.Expression | undefined,
+  target: string,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  appendViolation: (
+    node: ts.Node,
+    kind: SecurityOperationViolationModel['kind'],
+    detail: string,
+  ) => void,
+): void {
+  if (body === undefined || serverExpressionProvenance(body, aliases) !== 'unsafe-wire-data') {
+    return;
+  }
+  appendViolation(
+    body,
+    'computed-security-operation',
+    `${target} body carries catch-bound error or request-derived data outside an audited render door`,
+  );
 }
 
 function serverAliasProvenance(
@@ -4441,7 +5064,27 @@ function serverAliasProvenance(
     if (surface === 'mutation' && parameterSnapshot[1]) {
       setServerAliasPattern(parameterSnapshot[1]!.name, 'request', aliases);
     }
+    if (surface === 'mutation' && parameterSnapshot[0]) {
+      setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases);
+    } else if (
+      (surface === 'endpoint' || surface === 'query' || surface === 'webhook') &&
+      parameterSnapshot[0]
+    ) {
+      setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases);
+    }
   }
+
+  // SPEC §9.2: catch-bound internals and remotely influenced request values share one
+  // non-authority provenance state. That state is inert during ordinary computation and closes
+  // only when an unaudited raw response body attempts to consume it.
+  const seedCatchBindings = (node: ts.Node): void => {
+    if (node !== body && isSecurityIrFunctionScope(node)) return;
+    if (ts.isCatchClause(node) && node.variableDeclaration) {
+      setServerAliasPattern(node.variableDeclaration.name, 'unsafe-wire-data', aliases);
+    }
+    ts.forEachChild(node, seedCatchBindings);
+  };
+  seedCatchBindings(body);
 
   securityAbstractTransfer('alias.fixed-point');
   let changed = true;
@@ -4569,6 +5212,19 @@ function serverModuleFrameworkCapabilityFactoryProvenance(
     sourceFile,
     callee,
   );
+  if (frameworkExportEquals(identity, DERIVED_IDENTITY)) {
+    if (
+      !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
+      !securityIrMemberCallableIsStable(sourceFile, callee, current) ||
+      !serverCallHasExactDerivedOptions(current)
+    ) {
+      return 'unknown-authority';
+    }
+    // SPEC §6.6/§10.3 C9: derived() is the reviewed containment door for one foreign vector
+    // adapter. Its module-constant result is authority, but the adapter never receives an
+    // app-selected namespace; each runtime operation reconstructs one from the request ScopedKey.
+    return 'derived-dataset';
+  }
   if (!frameworkIdentityIn(identity, SERVER_STORAGE_FACTORY_IDENTITIES)) return undefined;
   if (
     !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
@@ -4582,6 +5238,44 @@ function serverModuleFrameworkCapabilityFactoryProvenance(
   // storage capability. Request-time factories and mutable/aliased/lookalike callables never reach
   // this module-constant fixed point.
   return 'storage';
+}
+
+function serverCallHasExactDerivedOptions(call: ts.CallExpression): boolean {
+  const argumentsList = compilerSnapshotDenseArray(
+    call.arguments,
+    'Finite derived dataset constructor arguments',
+  );
+  if (argumentsList.length !== 2) return false;
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    if (ts.isSpreadElement(argumentsList[index]!)) return false;
+  }
+  const options = unwrapExpression(argumentsList[1]!);
+  if (!ts.isObjectLiteralExpression(options)) return false;
+
+  let key: string | undefined;
+  let kind: string | undefined;
+  const properties = compilerSnapshotDenseArray(
+    options.properties,
+    'Finite derived dataset options',
+  );
+  if (properties.length !== 2) return false;
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return false;
+    }
+    const name = staticPropertyName(property.name);
+    const value = unwrapExpression(property.initializer);
+    if (!ts.isStringLiteralLike(value)) return false;
+    if (name === 'key' && key === undefined) {
+      key = value.text;
+    } else if (name === 'kind' && kind === undefined) {
+      kind = value.text;
+    } else {
+      return false;
+    }
+  }
+  return key !== undefined && key.length > 0 && key.length <= 960 && kind === 'vector';
 }
 
 function serverModuleInitializerReturnsAuthority(
@@ -4772,7 +5466,10 @@ function serverExpressionProvenance(
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) {
     securityAbstractTransfer('expression.identifier');
-    return compilerMapGet(aliases, current.text) ?? 'local';
+    return serverPrecisionGrant(
+      'identifier-environment-lookup',
+      compilerMapGet(aliases, current.text) ?? 'local',
+    );
   }
   if (ts.isObjectLiteralExpression(current) && serverObjectLiteralHasImplicitCallable(current)) {
     securityAbstractTransfer('expression.implicit-protocol');
@@ -4781,66 +5478,165 @@ function serverExpressionProvenance(
   if (ts.isNewExpression(current)) {
     securityAbstractTransfer('expression.new');
     const constructor = serverExpressionProvenance(current.expression, aliases);
-    if (constructor === 'response-constructor') return 'response-outcome';
-    if (constructor === 'foreign-executable') return 'foreign-executable';
+    if (constructor === 'response-constructor') {
+      return serverPrecisionGrant('new-response-outcome', 'response-outcome');
+    }
+    if (constructor === 'foreign-executable') {
+      return serverPrecisionGrant('new-foreign-executable', 'foreign-executable');
+    }
     if (
       serverProvenanceCarriesAuthority(constructor) ||
       serverArgumentsContainAuthority(current.arguments ?? [], aliases)
     ) {
       return 'unknown-authority';
     }
-    return 'local';
+    if (serverArgumentsContainUnsafeWireData(current.arguments ?? [], aliases)) {
+      return serverPrecisionGrant('new-unsafe-wire-data', 'unsafe-wire-data');
+    }
+    return serverPrecisionGrant('new-local-constructor', 'local');
   }
   if (ts.isCallExpression(current)) {
     const callee = serverExpressionProvenance(current.expression, aliases);
     if (callee === 'scope-call') {
       securityAbstractTransfer('expression.call-scope');
-      return 'context';
+      return serverPrecisionGrant('call-principal-scope', 'context');
     }
     if (callee === 'scoped-key-call') {
       securityAbstractTransfer('expression.call-scoped-key');
-      return 'local';
+      return serverPrecisionGrant('call-scoped-key', 'local');
     }
     if (callee === 'intrinsic-identity-call') {
       securityAbstractTransfer('expression.call-intrinsic-identity');
-      return current.arguments.length === 1
-        ? serverExpressionProvenance(current.arguments[0]!, aliases)
-        : 'unknown-authority';
+      return serverPrecisionGrant(
+        'call-intrinsic-identity',
+        current.arguments.length === 1
+          ? serverExpressionProvenance(current.arguments[0]!, aliases)
+          : 'unknown-authority',
+      );
     }
     if (callee === 'response-constructor' || callee === 'operation:server.response.raw') {
       securityAbstractTransfer('expression.call-response');
-      return 'response-outcome';
+      return serverPrecisionGrant('call-response-constructor', 'response-outcome');
     }
     if (callee === 'unknown-authority') {
       securityAbstractTransfer('expression.call-unknown-authority');
       return 'unknown-authority';
     }
+    if (
+      callee === 'governed-data' ||
+      callee === 'operation:server.database.read' ||
+      serverCallReadsDerivedDataset(current, aliases) ||
+      serverArgumentsContainGovernedData(current.arguments, aliases)
+    ) {
+      securityAbstractTransfer('expression.call-local');
+      return serverPrecisionGrant('call-governed-data', 'governed-data');
+    }
+    if (
+      callee === 'unsafe-wire-data' ||
+      serverArgumentsContainUnsafeWireData(current.arguments, aliases)
+    ) {
+      securityAbstractTransfer('expression.call-local');
+      return serverPrecisionGrant('call-unsafe-wire-data', 'unsafe-wire-data');
+    }
     securityAbstractTransfer('expression.call-local');
-    return 'local';
+    return serverPrecisionGrant('call-local', 'local');
   }
   if (ts.isBinaryExpression(current)) {
     const left = serverExpressionProvenance(current.left, aliases);
     const right = serverExpressionProvenance(current.right, aliases);
-    return serverBinaryTransfer(left, right);
+    return serverPrecisionGrant('binary-finite-join', serverBinaryTransfer(left, right));
   }
   if (ts.isConditionalExpression(current)) {
     const whenTrue = serverExpressionProvenance(current.whenTrue, aliases);
     const whenFalse = serverExpressionProvenance(current.whenFalse, aliases);
-    return serverConditionalTransfer(whenTrue, whenFalse);
+    return serverPrecisionGrant(
+      'conditional-finite-join',
+      serverConditionalTransfer(whenTrue, whenFalse),
+    );
   }
   const member = staticMember(current);
   if (member) {
     securityAbstractTransfer('expression.static-member');
-    return serverMemberProvenance(
-      serverExpressionProvenance(member.receiver, aliases),
-      member.name,
+    return serverPrecisionGrant(
+      'static-member-relation',
+      serverMemberProvenance(serverExpressionProvenance(member.receiver, aliases), member.name),
     );
   }
   if (expressionContainsServerForeignExecutable(current, aliases)) {
     securityAbstractTransfer('expression.fallthrough-foreign');
-    return 'foreign-executable';
+    return serverPrecisionGrant('fallthrough-foreign-containment', 'foreign-executable');
   }
-  return expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local';
+  if (expressionContainsServerGovernedData(current, aliases)) {
+    securityAbstractTransfer('expression.fallthrough-authority');
+    return serverPrecisionGrant('fallthrough-governed-data-containment', 'governed-data');
+  }
+  if (expressionContainsServerUnsafeWireData(current, aliases)) {
+    securityAbstractTransfer('expression.fallthrough-authority');
+    return serverPrecisionGrant('fallthrough-unsafe-wire-data', 'unsafe-wire-data');
+  }
+  return serverPrecisionGrant(
+    'fallthrough-contained-local',
+    expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',
+  );
+}
+
+function serverCallReadsDerivedDataset(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  return serverExpressionProvenance(call.expression, aliases) === 'derived-query-call';
+}
+
+function expressionContainsServerGovernedData(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== expression && isSecurityIrFunctionScope(node)) return;
+    if (ts.isIdentifier(node) && compilerMapGet(aliases, node.text) === 'governed-data') {
+      found = true;
+      return;
+    }
+    if (
+      node !== expression &&
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      serverExpressionProvenance(node, aliases) === 'governed-data'
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
+}
+
+function expressionContainsServerUnsafeWireData(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== expression && isSecurityIrFunctionScope(node)) return;
+    if (ts.isIdentifier(node) && compilerMapGet(aliases, node.text) === 'unsafe-wire-data') {
+      found = true;
+      return;
+    }
+    if (
+      node !== expression &&
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      serverExpressionProvenance(node, aliases) === 'unsafe-wire-data'
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
 }
 
 function serverObjectLiteralHasImplicitCallable(object: ts.ObjectLiteralExpression): boolean {
@@ -4963,6 +5759,35 @@ function serverArgumentsContainAuthority(
   );
   for (let index = 0; index < snapshot.length; index += 1) {
     if (serverExpressionCarriesAuthority(snapshot[index]!, aliases)) return true;
+  }
+  return false;
+}
+
+function serverArgumentsContainGovernedData(
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(argumentsList, 'Server governed-data call arguments');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'governed-data') return true;
+  }
+  return false;
+}
+
+function serverArgumentsContainUnsafeWireData(
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(
+    argumentsList,
+    'Server response-body provenance arguments',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'unsafe-wire-data') return true;
   }
   return false;
 }

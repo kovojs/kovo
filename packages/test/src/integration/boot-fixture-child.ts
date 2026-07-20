@@ -13,7 +13,10 @@ import { createServer as createHttpServer, ServerResponse, type Server } from 'n
 import path from 'node:path';
 
 import { createFrameworkFileSystemBoundary } from '@kovojs/core/internal/filesystem';
-import { projectMutationRegistryFactsFromFiles } from '@kovojs/compiler/internal';
+import {
+  deriveBrowserPostureManifestFromSourceFiles,
+  projectMutationRegistryFactsFromFiles,
+} from '@kovojs/compiler/internal';
 import { toNodeHandler } from '@kovojs/server';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
 import { dataPlaneSourceFiles } from '@kovojs/server/internal/data-plane-static-analysis';
@@ -109,9 +112,9 @@ export async function bootFixtureInLockedChild(
   // SPEC §5.2 rule 10 / §6.3: fixture lowering consumes the same immutable, project-scoped
   // mutation provenance as production Vite and CLI builds. A bare imported identifier never
   // becomes form authority merely because the evaluated runtime object looks mutation-shaped.
-  const projectMutationFacts = projectMutationRegistryFactsFromFiles(
-    dataPlaneSourceFiles(fixtureDir, fixtureDir),
-  );
+  const sourceFiles = dataPlaneSourceFiles(fixtureDir, fixtureDir);
+  const projectMutationFacts = projectMutationRegistryFactsFromFiles(sourceFiles);
+  const browserPosture = deriveBrowserPostureManifestFromSourceFiles(sourceFiles);
   const fixtureCompiler = kovoFixtureCompilerPlugin(undefined, projectMutationFacts);
   const vite = await createViteServer({
     appType: 'custom',
@@ -150,6 +153,16 @@ export async function bootFixtureInLockedChild(
     }
     lockCompilerSecurityRealm();
     await vite.ssrLoadModule('@kovojs/server/runtime-bootstrap');
+    const executionModule = await vite.ssrLoadModule('@kovojs/server/internal/execution');
+    const registerGeneratedBrowserPostureManifest = (
+      executionModule as { registerGeneratedBrowserPostureManifest?: unknown }
+    ).registerGeneratedBrowserPostureManifest;
+    if (typeof registerGeneratedBrowserPostureManifest !== 'function') {
+      throw new TypeError(
+        'Fixture server could not register the compiler-derived browser posture manifest.',
+      );
+    }
+    registerGeneratedBrowserPostureManifest(browserPosture);
     // The private stylesheet registry shares the authored SSR realm. Evaluate it only after both
     // irreversible locks, but before any fixture dependency, so its dense-array controls cannot
     // inherit later prototype setters.

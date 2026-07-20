@@ -1,10 +1,18 @@
+import {
+  encodeFrameworkLiveTargetHeader,
+  encodeFrameworkTargetHeader,
+  FRAMEWORK_WIRE_INPUT_GRAMMAR,
+  frameworkWireAttestationIsValid,
+  frameworkWireComponentIsValid,
+  frameworkWireIdentityIsValid,
+  type FrameworkWireTarget,
+} from '@kovojs/core/internal/wire-input-grammar';
+
 import { readDeps } from './pending.js';
 import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
-
-const liveTargetHeaderSeparator = '; ';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface LiveTargetSnapshot {
@@ -29,13 +37,22 @@ export function readLiveTargets(root: TargetCollectorRoot): string[] {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSnapshot {
-  const { liveTargets, targets } = collectLiveTargetSnapshot(root);
+  const { liveTargets, targetEntries, targets } = collectLiveTargetSnapshot(root);
+  const attestedLiveTargets = liveTargets.flatMap((descriptor) =>
+    descriptor.attestation === undefined
+      ? []
+      : [
+          {
+            attestation: descriptor.attestation,
+            component: descriptor.component,
+            props: descriptor.props,
+            target: descriptor.target,
+          },
+        ],
+  );
   return {
-    header: targets.join(liveTargetHeaderSeparator),
-    liveHeader: liveTargets
-      .map(formatLiveTargetDescriptor)
-      .filter((descriptor) => descriptor !== '')
-      .join(liveTargetHeaderSeparator),
+    header: encodeFrameworkTargetHeader(targetEntries),
+    liveHeader: encodeFrameworkLiveTargetHeader(attestedLiveTargets, JSON.stringify),
     liveTargets,
     targets,
   };
@@ -43,9 +60,10 @@ export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSna
 
 function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
   liveTargets: LiveTargetDescriptor[];
+  targetEntries: FrameworkWireTarget[];
   targets: string[];
 } {
-  const targets = new Set<string>();
+  const targetEntries = new Map<string, FrameworkWireTarget>();
   const liveTargets = new Map<string, LiveTargetDescriptor>();
 
   for (const element of root.querySelectorAll('[kovo-deps]')) {
@@ -58,14 +76,22 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
       element.getAttribute('kovo-c');
     const deps = readDeps(element.getAttribute('kovo-deps'));
     if (!target) continue;
-    if (!isHeaderSafeIdentity(target) || !deps.every(isHeaderSafeIdentity)) continue;
+    if (!frameworkWireIdentityIsValid(target) || !deps.every(frameworkWireIdentityIsValid))
+      continue;
 
-    targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
+    if (
+      !targetEntries.has(target) &&
+      targetEntries.size < FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries
+    ) {
+      targetEntries.set(target, { deps, target });
+    }
 
-    if (liveTargets.has(target)) continue;
+    if (liveTargets.has(target) || liveTargets.size >= FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries) {
+      continue;
+    }
     const component =
       element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target;
-    if (!isHeaderSafeLiveComponentIdentity(component)) continue;
+    if (!frameworkWireComponentIsValid(component)) continue;
     const attestation = readLiveTargetAttestation(element);
     liveTargets.set(target, {
       ...(attestation === undefined ? {} : { attestation }),
@@ -75,38 +101,17 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
     });
   }
 
-  return { liveTargets: [...liveTargets.values()], targets: [...targets] };
-}
-
-function formatLiveTargetDescriptor(descriptor: LiveTargetDescriptor): string {
-  if (descriptor.attestation === undefined) return '';
-  return `${descriptor.target}#${descriptor.component}@${descriptor.attestation}:${JSON.stringify(descriptor.props)}`;
+  const entries = [...targetEntries.values()];
+  return {
+    liveTargets: [...liveTargets.values()],
+    targetEntries: entries,
+    targets: entries.map((entry) => encodeFrameworkTargetHeader([entry])),
+  };
 }
 
 function readLiveTargetAttestation(element: TargetElementLike): string | undefined {
   const value = element.getAttribute('kovo-live-token');
-  return value && isHeaderSafeIdentity(value) ? value : undefined;
-}
-
-function isHeaderSafeIdentity(value: string): boolean {
-  // SPEC.md §9.1: browser-collected live target identities are serialized into
-  // delimiter-based headers. Keep selector-hostile values such as quotes and
-  // backslashes working, but reject characters that would corrupt header field
-  // boundaries or target/dependency assignment. Colon remains valid here because
-  // SPEC.md §13.2 instance identities use it and the live descriptor target ends
-  // before the `#` component separator.
-  if (value === '') return false;
-  for (const char of value) {
-    const code = char.charCodeAt(0);
-    if (code <= 0x1f || code === 0x7f || /\s/.test(char) || ';,#='.includes(char)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function isHeaderSafeLiveComponentIdentity(value: string): boolean {
-  return isHeaderSafeIdentity(value) && !value.includes(':');
+  return frameworkWireAttestationIsValid(value) ? value : undefined;
 }
 
 function readLiveProps(value: string | null): Record<string, unknown> {

@@ -1,10 +1,12 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   executableGuardAccessDecision,
   snapshotAccessDecision,
   type AccessDecision,
 } from './access.js';
-import { snapshotAuditText } from './audit-justification.js';
+import { snapshotAuditJustification, snapshotAuditText } from './audit-justification.js';
+import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   mergeVaryHeader,
   renderErrorDocument,
@@ -24,10 +26,15 @@ import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
   explainPostgresAuthorizationCorrespondence,
+  type FrameworkPostgresOwnerPolicyAudit,
   type PostgresAuthorizationCorrespondenceExplainRecord,
   type PostgresOwnerPolicyModel,
   type PostgresAuthorizationPolicyExplainInput,
 } from './postgres-authorization-correspondence.js';
+import {
+  evaluateFrameworkPostgresOwnerGuard,
+  snapshotFrameworkPostgresOwnerGuardColumn,
+} from './postgres-owner-guard.js';
 import {
   inheritFrameworkPrincipalSnapshot,
   type NonRequestPrincipalPosture,
@@ -60,6 +67,7 @@ import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessDefineProperty,
+  witnessEncodeURIComponent,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
@@ -78,10 +86,20 @@ import {
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 import {
+  assertCurrentRequestDeadlineActive,
+  awaitWithCurrentRequestDeadline,
+  currentRequestDeadlineSignal,
+} from './request-deadline.js';
+import {
   securityStringSlice,
   securityStringStartsWith,
   securityStringTrim,
 } from './response-security-intrinsics.js';
+import {
+  securityEvent,
+  type SecurityDecisionOutcome,
+  type SecurityEventPrincipalScope,
+} from './security-event.js';
 
 /**
  * A guard denial that expresses the user-facing *intent* of a rejection, leaving
@@ -183,14 +201,27 @@ export interface RateLimitGuardAuditFact {
   per: 'global' | 'session' | 'ip' | 'custom';
 }
 
-export interface OwnershipGuardAuditFact {
+interface OwnershipGuardAuditFactBase {
   auth: 'session-user';
   kind: 'owns';
   name: string;
   principal: GuardPrincipalKeyAudit;
   resourceKey?: GuardResourceKeyAudit;
+}
+
+export interface FrameworkDerivedOwnershipGuardAuditFact extends OwnershipGuardAuditFactBase {
+  ownerPolicy: FrameworkPostgresOwnerPolicyAudit;
+  staticProof: 'framework-derived-owner-column';
+}
+
+export interface UnprovenOwnershipGuardAuditFact extends OwnershipGuardAuditFactBase {
+  justification: string;
   staticProof: 'not-claimed';
 }
+
+export type OwnershipGuardAuditFact =
+  | FrameworkDerivedOwnershipGuardAuditFact
+  | UnprovenOwnershipGuardAuditFact;
 
 export interface OwnershipGuardAuditOptions {
   /**
@@ -206,6 +237,18 @@ export interface OwnershipGuardAuditOptions {
   /** Optional stable label for this ownership guard in explain/audit output. */
   name?: string;
 }
+
+export interface UnprovenOwnershipGuardAuditOptions extends OwnershipGuardAuditOptions {
+  /** Required review reason retained in authorization explain output. */
+  justification: string;
+}
+
+/**
+ * A Postgres column whose Drizzle data type is the resource key consumed by `guards.owns`.
+ * Runtime proof does not trust this structural type: Kovo authenticates the exact column identity
+ * against the compiler manifest and the managed request DB before executing its fixed lookup.
+ */
+export type FrameworkPostgresOwnerKeyColumn<Key> = AnyPgColumn<{ data: Key }>;
 
 const guardAuditFacts = createWitnessWeakMap<Function, readonly GuardAuditFact[]>();
 
@@ -309,8 +352,8 @@ export type AuthenticatedRequest<Request extends SessionRequestLike> = Request &
  * guard inspects (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4). The query/mutation
  * runners thread the same `s.*`-coerced `args` the loader/handler see onto the request *after*
  * schema parse/coerce and *before* the guard chain, so an ownership guard's `keyOf` can read
- * `req.args` without a cast and discharge the KV414 IDOR obligation for that key. Compose over the
- * app request, e.g. `guards.owns<GuardArgsRequest<AppRequest, { id: string }>, string>(...)`.
+ * `req.args` without a cast. Pass it as the keyed request view while the guard remains base-typed,
+ * e.g. `guards.owns<AppRequest, GuardArgsRequest<AppRequest, { id: string }>, string>(...)`.
  */
 export type GuardArgsRequest<Request, Args = unknown> = Request & { args: Args };
 
@@ -465,17 +508,29 @@ export type DbProvider<RawRequest, DbValue, SessionValue = unknown> =
   | FrameworkManagedDbProvider<DbValue>
   | ((request: LifecycleRequest<RawRequest, SessionValue, never>) => Promise<DbValue> | DbValue);
 
-type FrameworkManagedDbResolver = (request: unknown) => Promise<unknown> | unknown;
-const frameworkManagedDbProviders = createWitnessWeakMap<object, FrameworkManagedDbResolver>();
+type FrameworkManagedDbResolver = (request: unknown) => unknown;
+interface FrameworkManagedDbRegistration {
+  readonly admit?: () => Promise<void> | void;
+  readonly resolver: FrameworkManagedDbResolver;
+}
+const frameworkManagedDbProviders = createWitnessWeakMap<object, FrameworkManagedDbRegistration>();
 
 /** @internal Register a package-owned resolver behind an opaque, frozen provider token. */
 export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionValue = unknown>(
   resolver: (
     request: LifecycleRequest<RawRequest, SessionValue, never>,
   ) => Promise<DbValue> | DbValue,
+  options: { readonly admit?: () => Promise<void> | void } = {},
 ): FrameworkManagedDbProvider<DbValue> {
   const token = witnessFreeze(witnessCreateNullRecord());
-  witnessWeakMapSet(frameworkManagedDbProviders, token, resolver as FrameworkManagedDbResolver);
+  witnessWeakMapSet(
+    frameworkManagedDbProviders,
+    token,
+    witnessFreeze({
+      ...(options.admit === undefined ? {} : { admit: options.admit }),
+      resolver: resolver as FrameworkManagedDbResolver,
+    }),
+  );
   // The private WeakMap is the runtime proof; this assertion only carries the already-minted
   // provider's DB type through createApp authoring without placing a forgeable brand on the token.
   return token as unknown as FrameworkManagedDbProvider<DbValue>;
@@ -492,22 +547,40 @@ export function isFrameworkManagedDbProvider(
   );
 }
 
+/** @internal Run a framework-owned provider's admission gate before session/auth/handler work. */
+export async function admitFrameworkManagedDbProvider(provider: unknown): Promise<void> {
+  if (typeof provider !== 'object' || provider === null) return;
+  const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
+  if (registration?.admit !== undefined) {
+    assertCurrentRequestDeadlineActive('database admission');
+    await awaitWithCurrentRequestDeadline(
+      Promise.resolve(witnessReflectApply<Promise<void> | void>(registration.admit, undefined, [])),
+      'database admission',
+    );
+  }
+}
+
 /** @internal Resolve either a conventional callback provider or a framework-owned opaque token. */
 export function resolveDbProvider<RawRequest, DbValue, SessionValue = unknown>(
   provider: DbProvider<RawRequest, DbValue, SessionValue>,
   request: LifecycleRequest<RawRequest, SessionValue, never>,
 ): Promise<DbValue> | DbValue {
+  let resolved: Promise<DbValue> | DbValue;
   if (typeof provider === 'function') {
-    return witnessReflectApply<Promise<DbValue> | DbValue>(provider, undefined, [request]);
-  }
-  if (typeof provider !== 'object' || provider === null) {
+    resolved = witnessReflectApply<Promise<DbValue> | DbValue>(provider, undefined, [request]);
+  } else if (typeof provider !== 'object' || provider === null) {
     throw new TypeError('Framework-managed DB provider capability is invalid (SPEC §6.6/§10.3).');
+  } else {
+    const registration = witnessWeakMapGet(frameworkManagedDbProviders, provider);
+    if (registration === undefined) {
+      throw new TypeError('Framework-managed DB provider capability is forged (SPEC §6.6/§10.3).');
+    }
+    resolved = witnessReflectApply<Promise<DbValue> | DbValue>(registration.resolver, undefined, [
+      request,
+    ]);
   }
-  const resolver = witnessWeakMapGet(frameworkManagedDbProviders, provider);
-  if (resolver === undefined) {
-    throw new TypeError('Framework-managed DB provider capability is forged (SPEC §6.6/§10.3).');
-  }
-  return witnessReflectApply<Promise<DbValue> | DbValue>(resolver, undefined, [request]);
+  if (currentRequestDeadlineSignal() === undefined) return resolved;
+  return awaitWithCurrentRequestDeadline(Promise.resolve(resolved), 'database provider');
 }
 
 /** Request shape after the framework has installed configured lifecycle channels. */
@@ -681,6 +754,68 @@ export function guard<Request, RefinedRequest extends Request = Request>(
   return stampGuardAudit(namedGuard, facts);
 }
 
+type OwnershipGuardProofAudit =
+  | {
+      readonly ownerPolicy: FrameworkPostgresOwnerPolicyAudit;
+      readonly staticProof: 'framework-derived-owner-column';
+    }
+  | { readonly justification: string; readonly staticProof: 'not-claimed' };
+
+function createOwnershipGuard<
+  Request extends SessionRequestLike,
+  KeyedRequest extends Request,
+  Key,
+>(
+  keyOf: (request: KeyedRequest) => Key,
+  ownsRow: (
+    request: KeyedRequest,
+    key: Key,
+    principal: string | undefined,
+  ) => boolean | Promise<boolean>,
+  audit: OwnershipGuardAuditOptions | undefined,
+  proof: OwnershipGuardProofAudit,
+  auditLabel: 'guards.owns()' | 'guards.unprovenOwns()',
+): Guard<Request> {
+  const closedAudit = snapshotOwnershipGuardAuditOptions(audit, auditLabel);
+  const fact: OwnershipGuardAuditFact =
+    proof.staticProof === 'framework-derived-owner-column'
+      ? {
+          auth: 'session-user',
+          kind: 'owns',
+          name: frameworkDerivedOwnershipAuditName(proof.ownerPolicy),
+          ownerPolicy: proof.ownerPolicy,
+          principal: closedAudit.principal,
+          ...(closedAudit.resourceKey === undefined
+            ? {}
+            : { resourceKey: closedAudit.resourceKey }),
+          staticProof: 'framework-derived-owner-column',
+        }
+      : {
+          auth: 'session-user',
+          kind: 'owns',
+          justification: proof.justification,
+          name: closedAudit.name,
+          principal: closedAudit.principal,
+          ...(closedAudit.resourceKey === undefined
+            ? {}
+            : { resourceKey: closedAudit.resourceKey }),
+          staticProof: 'not-claimed',
+        };
+  return stampGuardAudit(
+    async (request) => {
+      const principal = requestPrincipalSnapshot(request);
+      if (principal.kind !== 'proven') return unauthenticatedGuardFailure();
+      // The runners merge validated args / resolved params before the guard chain. Only selectors
+      // and the closed framework binding see this keyed view; the attached guard remains base-typed.
+      const keyedRequest = request as unknown as KeyedRequest;
+      return (await ownsRow(keyedRequest, keyOf(keyedRequest), principal.principal)) === true
+        ? true
+        : unauthorizedGuardFailure();
+    },
+    [fact],
+  );
+}
+
 /**
  * Built-in guard factories for routes, queries, and mutations. `guards.authed()`
  * requires a logged-in session (and refines the request type), `guards.role(r)`
@@ -823,61 +958,60 @@ export const guards = witnessFreeze({
     );
   },
   /**
-   * Ownership guard (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4): passes only
-   * when the authenticated principal owns the row the validated key selects, discharging the
-   * KV414 IDOR obligation for that key. `keyOf` reads the owned-row key from the request, which —
-   * because guards run *after* schema parse/coerce — carries the query's/mutation's validated
-   * `args` (queries/mutations) or the route's resolved `params` (route pages) the framework
-   * merges on before the guard chain (the query/mutation/route runners do this; without it
-   * `req.args` is `undefined` and a correct predicate would deny every owner — latent IDOR). Type
-   * the keyed request with {@link GuardArgsRequest}/{@link GuardParamsRequest} so `req.args`/
-   * `req.params` need no cast. The returned guard is a `Guard<Request>` over the *base* (app)
-   * request, so it attaches to a query/route/mutation typed on the app request without a
-   * contravariant-assignment cast — only `keyOf`/`ownsRow` see the merged `KeyedRequest`. `ownsRow`
-   * is the app-provided ownership predicate — the app owns the data layer, so the guard stays
-   * decoupled from Drizzle (the SPEC `owns((a) => a.id, table.col)` column-form is the planned
-   * compile-time sugar over this runtime contract). Composes with the other guards, e.g.
-   * `all(authed, owns((req) => req.args.id, ownsOrder))`.
+   * Proof-bearing ownership guard (SPEC §10.3). The second argument is the exact single-column
+   * `kovo({ key })` identity from a compiler-generated direct-owner Postgres table. Kovo performs
+   * one fixed key/owner lookup through the same principal-scoped managed request DB that the
+   * handler receives. SQLite, ownerVia, composite/custom keys, and arbitrary callbacks belong on
+   * {@link unprovenOwns} and remain visibly unproven in authorization explain.
    */
   owns<Request extends SessionRequestLike, KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
-    ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
+    keyColumn: FrameworkPostgresOwnerKeyColumn<Key>,
     audit?: OwnershipGuardAuditOptions,
   ): Guard<Request> {
-    const closedAudit = snapshotOwnershipGuardAuditOptions(audit);
-    return stampGuardAudit(
-      async (request) => {
-        if (requestPrincipalSnapshot(request).kind !== 'proven') {
-          return unauthenticatedGuardFailure();
-        }
-        // The query/mutation/route runners merge the validated args / resolved params onto `request`
-        // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
-        // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
-        const keyedRequest = request as unknown as KeyedRequest;
-        return (await ownsRow(keyedRequest, keyOf(keyedRequest))) === true
-          ? true
-          : unauthorizedGuardFailure();
+    const column = snapshotFrameworkPostgresOwnerGuardColumn(keyColumn);
+    return createOwnershipGuard(
+      keyOf,
+      (request, key, principal) =>
+        evaluateFrameworkPostgresOwnerGuard(request, key, column, principal),
+      audit,
+      {
+        ownerPolicy: column.ownerPolicy,
+        staticProof: 'framework-derived-owner-column',
       },
-      [
-        {
-          auth: 'session-user',
-          kind: 'owns',
-          name: closedAudit.name,
-          principal: closedAudit.principal,
-          ...(closedAudit.resourceKey === undefined
-            ? {}
-            : { resourceKey: closedAudit.resourceKey }),
-          staticProof: 'not-claimed',
-        },
-      ],
+      'guards.owns()',
+    );
+  },
+  /**
+   * Explicit escape for an intentionally app-authored ownership predicate. This is the former
+   * `guards.owns(keyOf, ownsRow, audit?)` callback behavior under a name that cannot be mistaken for
+   * framework-derived guard/RLS correspondence. A pinned justification is mandatory, and explain
+   * output always retains it beside `staticProof: 'not-claimed'`.
+   */
+  unprovenOwns<
+    Request extends SessionRequestLike,
+    KeyedRequest extends Request = Request,
+    Key = unknown,
+  >(
+    keyOf: (request: KeyedRequest) => Key,
+    ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
+    audit: UnprovenOwnershipGuardAuditOptions,
+  ): Guard<Request> {
+    const justification = snapshotUnprovenOwnershipJustification(audit);
+    return createOwnershipGuard(
+      keyOf,
+      (request, key) => ownsRow(request, key),
+      audit,
+      { justification, staticProof: 'not-claimed' },
+      'guards.unprovenOwns()',
     );
   },
 });
 
 /**
  * Return framework-owned audit metadata stamped on a built-in guard. These facts are intentionally
- * narrower than static proof: an `owns` fact declares the runtime principal/resource-key intent for
- * OPP-28 review, while the app predicate and future static analyzer still own enforcement/proof.
+ * narrower than whole-program static proof. A framework-derived owner fact authenticates the exact
+ * generated Postgres policy binding; an unproven fact records only principal/resource-key intent.
  */
 export function explainGuard<Request>(
   guard: Guard<Request> | undefined,
@@ -887,8 +1021,6 @@ export function explainGuard<Request>(
 
 /**
  * @internal Pair one generated Postgres RLS predicate with the executable guard's audit facts.
- * SPEC §10.3: arbitrary public `guards.owns` callbacks remain explicitly unproven. A finite
- * abstract match is evidence, not executable binding; the later migration owns that claim.
  */
 export function explainPostgresGuardCorrespondence<Request>(input: {
   guard: Guard<Request> | undefined;
@@ -908,17 +1040,52 @@ export function explainPostgresGuardCorrespondence<Request>(input: {
 export function guardAuditName<Request>(guard: Guard<Request>): string {
   const facts = explainGuard(guard);
   let firstName: string | undefined;
+  let namedName: string | undefined;
+  let derivedOwnerName: string | undefined;
+  let derivedOwnerCount = 0;
+  let hasUnprovenOwner = false;
   for (let index = 0; index < facts.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(facts, index);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError('Guard audit facts must be a dense own-data array.');
     }
     const fact = descriptor.value as GuardAuditFact;
-    if (fact.kind === 'named') return fact.name;
+    if (fact.kind === 'owns') {
+      if (fact.staticProof === 'not-claimed') hasUnprovenOwner = true;
+      else {
+        derivedOwnerCount += 1;
+        derivedOwnerName ??= fact.name;
+      }
+    }
+    if (fact.kind === 'named' && namedName === undefined) namedName = fact.name;
     if (firstName === undefined) firstName = fact.name;
+  }
+  // Fail closed for serialized access names: app labels and named wrappers cannot make the
+  // arbitrary escape look like the exact `owns` token consumed by ownership-posture derivation.
+  if (hasUnprovenOwner) return 'unprovenOwns';
+  if (derivedOwnerCount === 1) return derivedOwnerName!;
+  if (derivedOwnerCount > 1) return 'opaque';
+  if (namedName !== undefined) {
+    return isReservedOwnershipAuditName(namedName) ? 'opaque' : namedName;
   }
   if (firstName !== undefined) return firstName;
   return stableGuardFunctionAuditName(guard);
+}
+
+function frameworkDerivedOwnershipAuditName(policy: FrameworkPostgresOwnerPolicyAudit): string {
+  return snapshotAuditText(
+    `owns#${witnessEncodeURIComponent(policy.domain)}#${witnessEncodeURIComponent(policy.keyColumnName)}#${witnessEncodeURIComponent(policy.columnName)}`,
+    'framework-derived ownership audit name',
+  );
+}
+
+function isReservedOwnershipAuditName(name: string): boolean {
+  return (
+    name === 'owns' ||
+    securityStringStartsWith(name, 'owns#') ||
+    securityStringStartsWith(name, 'owns:') ||
+    securityStringStartsWith(name, 'owns(')
+  );
 }
 
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
@@ -972,6 +1139,9 @@ function freezeGuardAuditFact(fact: GuardAuditFact): GuardAuditFact {
   if (fact.kind === 'owns') {
     return witnessFreeze({
       ...fact,
+      ...(fact.staticProof === 'framework-derived-owner-column'
+        ? { ownerPolicy: witnessFreeze({ ...fact.ownerPolicy }) }
+        : {}),
       principal: witnessFreeze({ ...fact.principal }),
       ...(fact.resourceKey === undefined
         ? {}
@@ -1041,7 +1211,18 @@ function normalizeResourceKeyAudit(value: GuardResourceKeyAudit | string): Guard
   };
 }
 
-function snapshotOwnershipGuardAuditOptions(value: OwnershipGuardAuditOptions | undefined): {
+function snapshotUnprovenOwnershipJustification(value: UnprovenOwnershipGuardAuditOptions): string {
+  const label = 'guards.unprovenOwns() audit metadata';
+  return snapshotAuditJustification(
+    stableGuardAuditDataValue(value, 'justification', label),
+    `${label}.justification`,
+  );
+}
+
+function snapshotOwnershipGuardAuditOptions(
+  value: OwnershipGuardAuditOptions | undefined,
+  label: 'guards.owns()' | 'guards.unprovenOwns()',
+): {
   name: string;
   principal: GuardPrincipalKeyAudit;
   resourceKey?: GuardResourceKeyAudit;
@@ -1053,22 +1234,14 @@ function snapshotOwnershipGuardAuditOptions(value: OwnershipGuardAuditOptions | 
     };
   }
   if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
-    throw new TypeError('guards.owns() audit metadata must be a stable own-data record.');
+    throw new TypeError(`${label} audit metadata must be a stable own-data record.`);
   }
-  const name = stableOptionalGuardAuditDataValue(value, 'name', 'guards.owns() audit metadata');
-  const principal = stableOptionalGuardAuditDataValue(
-    value,
-    'principal',
-    'guards.owns() audit metadata',
-  );
-  const resourceKey = stableOptionalGuardAuditDataValue(
-    value,
-    'resourceKey',
-    'guards.owns() audit metadata',
-  );
+  const auditMetadataLabel = `${label} audit metadata`;
+  const name = stableOptionalGuardAuditDataValue(value, 'name', auditMetadataLabel);
+  const principal = stableOptionalGuardAuditDataValue(value, 'principal', auditMetadataLabel);
+  const resourceKey = stableOptionalGuardAuditDataValue(value, 'resourceKey', auditMetadataLabel);
   return {
-    name:
-      name === undefined ? 'owns' : snapshotAuditText(name, 'guards.owns() audit metadata name'),
+    name: name === undefined ? 'owns' : snapshotAuditText(name, `${auditMetadataLabel} name`),
     principal: normalizePrincipalKeyAudit(
       principal === undefined ? 'session.user.id' : (principal as GuardPrincipalKeyAudit | string),
     ),
@@ -1244,11 +1417,31 @@ export async function runAccessDecisionGuards<Request>(
   request: Request,
 ): Promise<ResolvedGuardFailure | null> {
   const decision = snapshotAccessDecision(access);
+  let failure: ResolvedGuardFailure | null;
   if (witnessIsArray(decision)) {
-    return runGuardChain(decision as readonly Guard<Request>[], request);
+    failure = await runGuardChain(decision as readonly Guard<Request>[], request);
+  } else if (decision !== undefined) {
+    failure = null;
+  } else {
+    failure = await runGuard(fallbackGuard, request);
   }
-  if (decision !== undefined) return null;
-  return runGuard(fallbackGuard, request);
+  emitAuthorizationDecision(failure === null ? 'allow' : 'deny', request);
+  return failure;
+}
+
+function emitAuthorizationDecision<Request>(
+  outcome: SecurityDecisionOutcome,
+  request: Request,
+): void {
+  // @kovo-security-decision authorization access-guard-chain
+  securityEvent({
+    decisionSite: 'framework:authorization:access-guard-chain',
+    door: 'authorization',
+    outcome,
+    principal: securityEventPrincipalForRequest(request),
+    resourceScope: { identity: 'global', kind: 'resource' },
+    type: 'security-decision',
+  });
 }
 
 /**
@@ -1273,17 +1466,18 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     const envelope = snapshotSessionProviderEnvelope<SessionValue>(resolved);
     if (envelope !== undefined) {
       sessionValue = snapshotPinnedLifecycleValue(envelope.value ?? null) as SessionValue | null;
-      if (options.onSessionSetCookie) {
-        for (let index = 0; index < envelope.setCookies.length; index += 1) {
-          options.onSessionSetCookie(envelope.setCookies[index]!);
-        }
-      }
     } else {
       sessionValue = snapshotPinnedLifecycleValue(
         (resolved as SessionValue | null | undefined) ?? null,
       ) as SessionValue | null;
     }
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
+    emitAuthSessionDecision(sessionValue === null ? 'deny' : 'allow', lifecycleRequest);
+    if (envelope !== undefined && options.onSessionSetCookie) {
+      for (let index = 0; index < envelope.setCookies.length; index += 1) {
+        options.onSessionSetCookie(envelope.setCookies[index]!);
+      }
+    }
   }
 
   if (options.principalPosture !== undefined) {
@@ -1348,6 +1542,44 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     SessionValue,
     DbValue
   >;
+}
+
+function emitAuthSessionDecision<Request>(
+  outcome: SecurityDecisionOutcome,
+  request: Request,
+): void {
+  // @kovo-security-decision auth session-resolution
+  securityEvent({
+    decisionSite: 'framework:auth:session-resolution',
+    door: 'auth',
+    outcome,
+    principal: securityEventPrincipalForRequest(request),
+    resourceScope: { identity: 'global', kind: 'credential' },
+    type: 'security-decision',
+  });
+}
+
+function securityEventPrincipalForRequest(request: unknown): SecurityEventPrincipalScope {
+  const principal = requestPrincipalSnapshot(request);
+  if (principal.kind === 'anonymous') {
+    return { epoch: null, id: null, kind: 'anonymous', tenant: null };
+  }
+  if (principal.kind === 'proven' && principal.principal !== undefined) {
+    return {
+      epoch: null,
+      id: principal.principal,
+      kind: 'unresolved',
+      reason: 'epoch-unavailable',
+      tenant: null,
+    };
+  }
+  return {
+    epoch: null,
+    id: null,
+    kind: 'unresolved',
+    reason: 'principal-not-proven',
+    tenant: null,
+  };
 }
 
 const pinnedPrivateScopeRequestCarriers = createWitnessWeakSet<object>();
@@ -1662,7 +1894,10 @@ export function withGuardArgs<Request, Args>(
   request: Request,
   args: Args,
 ): GuardArgsRequest<Request, Args> {
-  return requestWithProperty(request, 'args', args) as GuardArgsRequest<Request, Args>;
+  return requestWithProperty(request, 'args', snapshotGuardArgsReceipt(args)) as GuardArgsRequest<
+    Request,
+    Args
+  >;
 }
 
 /**

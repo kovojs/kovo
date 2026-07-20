@@ -1,6 +1,11 @@
 import { dirname, join } from 'node:path';
 
 import {
+  createCacheInfluenceManifest,
+  type CacheInfluenceManifest,
+  type CacheInfluenceManifestEntry,
+} from '@kovojs/core/internal/cache-influence';
+import {
   createRegisteredDiagnostic,
   diagnosticDefinitions,
 } from '@kovojs/core/internal/diagnostics';
@@ -20,6 +25,7 @@ import {
   compilerCreateMap,
   compilerCreateNullRecord,
   compilerCreateSet,
+  compilerJsonStringify,
   compilerMapForEach,
   compilerMapGet,
   compilerMapSet,
@@ -28,6 +34,7 @@ import {
   compilerRegExpReplace,
   compilerSetAdd,
   compilerSetHas,
+  compilerSetOwnDataProperty,
   compilerSnapshotDenseArray,
   compilerSnapshotJsonValue,
   compilerStringLocaleCompare,
@@ -92,6 +99,24 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
         'componentGraphFacts',
         'Component graph facts',
       ),
+    ),
+  );
+  const agents = mergeAgentExplainFacts(
+    concatDense(
+      graphInput?.agents ?? [],
+      flattenFactProperty<CoreGraph.AgentExplainFact>(
+        componentInputs,
+        'agentGraphFacts',
+        'Agent graph facts',
+      ),
+    ),
+  );
+  const cacheInfluence = mergeCacheInfluenceManifest(
+    graphInput?.cacheInfluence,
+    flattenFactProperty<CacheInfluenceManifestEntry>(
+      components,
+      'cacheInfluence',
+      'Cache influence facts',
     ),
   );
   const tasks = mergeTaskExplainFacts(
@@ -175,9 +200,11 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   );
   const graph: RegistryGraphInput = {
     ...graphInput,
+    ...(agents.length > 0 ? { agents } : {}),
     ...(access.length > 0 ? { access } : {}),
     ...(authPosture.length > 0 ? { authPosture } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
+    ...(cacheInfluence === undefined ? {} : { cacheInfluence }),
     components,
     ...(endpoints.length > 0 ? { endpoints } : {}),
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
@@ -226,6 +253,54 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     },
     'Compile app graph result',
   );
+}
+
+function mergeAgentExplainFacts(
+  source: readonly CoreGraph.AgentExplainFact[],
+): CoreGraph.AgentExplainFact[] {
+  const agents = compilerSnapshotDenseArray(source, 'Agent explain facts');
+  const names = compilerCreateSet<string>();
+  for (let index = 0; index < agents.length; index += 1) {
+    const name = agents[index]!.name;
+    if (compilerSetHas(names, name)) {
+      throw new TypeError(`Duplicate capability-bounded agent name ${name}.`);
+    }
+    compilerSetAdd(names, name);
+  }
+  return agents;
+}
+
+function mergeCacheInfluenceManifest(
+  existing: CacheInfluenceManifest | undefined,
+  derived: readonly CacheInfluenceManifestEntry[],
+): CacheInfluenceManifest | undefined {
+  if (existing === undefined && derived.length === 0) return undefined;
+  const byRoot = compilerCreateMap<string, CacheInfluenceManifestEntry>();
+  const append = (entry: CacheInfluenceManifestEntry): void => {
+    const current = compilerMapGet(byRoot, entry.root);
+    if (current !== undefined && compilerJsonStringify(current) !== compilerJsonStringify(entry)) {
+      throw new TypeError(`Conflicting cache influence facts for ${entry.root}.`);
+    }
+    compilerMapSet(byRoot, entry.root, entry);
+  };
+  const existingEntries = compilerSnapshotDenseArray(
+    existing?.entries ?? [],
+    'Existing cache influence entries',
+  );
+  for (let index = 0; index < existingEntries.length; index += 1) append(existingEntries[index]!);
+  const derivedEntries = compilerSnapshotDenseArray(derived, 'Derived cache influence entries');
+  for (let index = 0; index < derivedEntries.length; index += 1) append(derivedEntries[index]!);
+  const entries: CacheInfluenceManifestEntry[] = [];
+  compilerMapForEach(byRoot, (entry) => {
+    let index = 0;
+    while (index < entries.length && entries[index]!.root < entry.root) index += 1;
+    compilerArrayAppend(entries, entry, 'Merged cache influence entries');
+    for (let move = entries.length - 1; move > index; move -= 1) {
+      compilerSetOwnDataProperty(entries, move, entries[move - 1]);
+    }
+    compilerSetOwnDataProperty(entries, index, entry);
+  });
+  return createCacheInfluenceManifest(entries);
 }
 
 function mergeAccessExplainFacts(
@@ -739,6 +814,7 @@ export function componentGraphFact(
   mutationForms: readonly CoreGraph.MutationFormExplain[] = [],
   component: ComponentModel | null = firstComponentModel(model),
   sourceFileName?: string,
+  cacheInfluence: NonNullable<CoreGraph.ComponentExplain['cacheInfluence']> = [],
   securityOperations: NonNullable<CoreGraph.ComponentExplain['securityOperations']> = [],
   securitySemanticGraph?: CoreGraph.ComponentExplain['securitySemanticGraph'],
 ): ComponentGraphFact {
@@ -760,6 +836,7 @@ export function componentGraphFact(
   }
 
   return {
+    ...(cacheInfluence.length === 0 ? {} : { cacheInfluence }),
     ...(clocks.length === 0 ? {} : { clocks }),
     domName,
     ...(exportName === undefined ? {} : { exportName }),
@@ -1096,23 +1173,23 @@ function registryTypeDriftDiagnostic(
 ): CompilerDiagnostic {
   const code = kind === 'mutation' ? 'KV246' : 'KV247';
   const definition = diagnosticDefinitions[code];
-  return createRegisteredDiagnostic(
-    code,
-    { fileName: `app graph ${kind} table` },
-    {
-      help: joinStrings(
-        [
-          definition.help,
-          `Previous registry key: ${previousKey}`,
-          `Current registry key: ${currentKey}`,
-          `Registry type: ${typeSource}`,
-          `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
-        ],
-        '\n',
-      ),
-      message: `${definition.message} ${previousKey} -> ${currentKey}.`,
-    },
-  );
+  const fields = { fileName: `app graph ${kind} table` };
+  const options = {
+    help: joinStrings(
+      [
+        definition.help,
+        `Previous registry key: ${previousKey}`,
+        `Current registry key: ${currentKey}`,
+        `Registry type: ${typeSource}`,
+        `Registry writer: previousRegistryFacts.${kind === 'mutation' ? 'mutations' : 'queries'}`,
+      ],
+      '\n',
+    ),
+    message: `${definition.message} ${previousKey} -> ${currentKey}.`,
+  };
+  return kind === 'mutation'
+    ? createRegisteredDiagnostic('KV246', fields, options)
+    : createRegisteredDiagnostic('KV247', fields, options);
 }
 
 function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {

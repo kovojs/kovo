@@ -14,6 +14,7 @@ import {
   digestAnalyzerOracleReplayInput,
   evaluateAnalyzerOracleLatticeWitness,
   generateAnalyzerOracleLatticeWitnesses,
+  generateAnalyzerOraclePrecisionGrantWitnesses,
   generateAnalyzerOraclePrograms,
   generateAnalyzerOracleTransferWitnesses,
   persistAnalyzerOracleNonCanaryReplayProbeForTest,
@@ -24,6 +25,10 @@ import {
   securityAbstractInterpreterCensus,
   securityAbstractTransferIds,
 } from './scan/security-abstract-interpreter.js';
+import {
+  serverProvenancePrecisionGrantIds,
+  serverProvenancePrecisionGrantRows,
+} from './scan/security-provenance-precision-grants.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -87,6 +92,19 @@ describe('SPEC §11.2 finite analyzer soundness-falsification oracle', () => {
     expect(analyzerOracleWitnessedLatticeElements()).toEqual(
       securityAbstractInterpreterCensus.lattice.elements,
     );
+    const precisionWitnesses = generateAnalyzerOraclePrecisionGrantWitnesses();
+    expect(precisionWitnesses.map((witness) => witness.id)).toEqual(
+      serverProvenancePrecisionGrantIds,
+    );
+    expect(precisionWitnesses.map((witness) => witness.expectedProvenance)).toEqual(
+      serverProvenancePrecisionGrantRows.map((row) => row.generatorExpectedProvenance),
+    );
+    expect(precisionWitnesses.map((witness) => witness.transferId)).toEqual(
+      serverProvenancePrecisionGrantRows.map((row) => row.generatorTransfer),
+    );
+    expect(new Set(precisionWitnesses.map((witness) => witness.source)).size).toBe(
+      serverProvenancePrecisionGrantIds.length,
+    );
 
     const sourceFor = (id: (typeof securityAbstractTransferIds)[number]): string =>
       witnesses.find((witness) => witness.id === id)!.source;
@@ -118,6 +136,7 @@ describe('SPEC §11.2 finite analyzer soundness-falsification oracle', () => {
     expect(result.witnessedLatticeElements).toEqual(
       securityAbstractInterpreterCensus.lattice.elements,
     );
+    expect(result.witnessedPrecisionGrants).toEqual(serverProvenancePrecisionGrantIds);
     expect(result.witnessedTransfers).toEqual(securityAbstractTransferIds);
   }, 120_000);
 

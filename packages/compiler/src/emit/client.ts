@@ -1194,7 +1194,8 @@ function emitDerivePlan(derive: QueryDeriveFact): string {
 }
 
 function emitStampPlan(stamp: QueryStampFact): string {
-  return `{ attr: ${compilerJsonSource(stamp.attr, 'Query stamp attribute')}, selector: ${compilerJsonSource(stamp.selector, 'Query stamp selector')}, select(value, root, context) { return ${emitDeriveRun(stamp.derive)}; } }`;
+  const trustedUrl = stamp.trustedUrl === true ? ' trustedUrl: true,' : '';
+  return `{ attr: ${compilerJsonSource(stamp.attr, 'Query stamp attribute')}, selector: ${compilerJsonSource(stamp.selector, 'Query stamp selector')},${trustedUrl} select(value, root, context) { return ${emitDeriveRun(stamp.derive)}; } }`;
 }
 
 function deriveInputs(derive: QueryDeriveFact): readonly string[] {

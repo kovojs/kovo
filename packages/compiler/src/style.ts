@@ -16,7 +16,10 @@ import {
   type CompiledStyle,
   type KeyframesResult,
 } from '@kovojs/style/internal';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 
 import {
   compilerArrayAppend,
@@ -26,6 +29,8 @@ import {
   compilerCreateMap,
   compilerCreateNullRecord,
   compilerCreateSet,
+  compilerDefineOwnDataProperty,
+  compilerFreeze,
   compilerJsonStringify,
   compilerMapForEach,
   compilerMapGet,
@@ -40,9 +45,7 @@ import {
   compilerSetOwnDataProperty,
   compilerSetSize,
   compilerSnapshotJsonValue,
-  compilerStringEndsWith,
   compilerStringReplaceAll,
-  compilerStringSlice,
   compilerStringSplit,
   compilerStringStartsWith,
 } from './compiler-security-intrinsics.js';
@@ -54,7 +57,11 @@ import {
   type SourceReplacement,
 } from './shared.js';
 import type { StyleRuleUsage } from './css.js';
-import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from './diagnostics.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { propertyNameText } from './scan/ast.js';
 import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
@@ -318,7 +325,6 @@ export function extractKovoStyles(
   }
   const extraction = {
     css,
-    diagnostics,
     handledSpans: lowered.handledSpans,
     outputContexts: css
       ? [
@@ -336,7 +342,34 @@ export function extractKovoStyles(
     stateDerives,
     updateCoverage,
   };
-  return compilerSnapshotJsonValue(extraction, 'Style extraction result') as KovoStyleExtraction;
+  const snapshot = compilerSnapshotJsonValue(extraction, 'Style extraction result');
+  const result = compilerCreateNullRecord<unknown>();
+  const keys = compilerObjectKeys(snapshot);
+  const keyCount = compilerArrayLength(keys, 'Style extraction result keys');
+  for (let index = 0; index < keyCount; index += 1) {
+    const key = compilerOwnDataValue(keys, index, 'Style extraction result keys');
+    if (typeof key !== 'string') {
+      throw new TypeError(`Style extraction result keys[${index}] must be an own string.`);
+    }
+    compilerDefineOwnDataProperty(
+      result,
+      key,
+      compilerOwnDataValue(snapshot, key, 'Style extraction result'),
+    );
+  }
+  const diagnosticSnapshot: CompilerDiagnostic[] = [];
+  const diagnosticCount = compilerArrayLength(diagnostics, 'Style extraction diagnostics');
+  for (let index = 0; index < diagnosticCount; index += 1) {
+    const diagnostic = compilerOwnDataValue(diagnostics, index, 'Style extraction diagnostics');
+    assertRegisteredDiagnostic(diagnostic, `Style extraction diagnostics[${index}]`);
+    compilerArrayAppend(
+      diagnosticSnapshot,
+      diagnostic as CompilerDiagnostic,
+      'Style extraction diagnostics',
+    );
+  }
+  compilerDefineOwnDataProperty(result, 'diagnostics', compilerFreeze(diagnosticSnapshot));
+  return compilerFreeze(result) as unknown as KovoStyleExtraction;
 }
 
 function hasInlineStyleExpressions(model: ComponentModuleModel): boolean {
@@ -1641,16 +1674,18 @@ function styleWriterConflictDiagnostic(
   firstWriter: string,
   secondWriter: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV231',
       options.source,
       attribute.start,
       attribute.end - attribute.start,
     ),
-    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
-  };
+    {
+      message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+    },
+  );
 }
 
 function resolveStyleBindings(
@@ -2096,19 +2131,21 @@ function staticStyleDiagnostic(
   node: ts.Node,
   api: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV236', source, node.getStart(), node.getWidth()),
-    help: compilerArrayJoin(
-      [
-        `Would lower to: static CSS rules extracted from ${api}.`,
-        'Blocked reason: the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references.',
-        'Fixes: move the value into a static object literal, import the public tokens object from @kovojs/style, or keep dynamic styling behind an explicit raw style escape.',
-        'SPEC §5.2 requires post-parse compiler decisions to use typed facts; SPEC §13.1 requires StyleX-authored component styles to extract into CSS assets.',
-      ],
-      '\n',
-    ),
-    message: `Static style extraction could not prove ${api} values.`,
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(fileName, 'KV236', source, node.getStart(), node.getWidth()),
+    {
+      help: compilerArrayJoin(
+        [
+          `Would lower to: static CSS rules extracted from ${api}.`,
+          'Blocked reason: the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references.',
+          'Fixes: move the value into a static object literal, import the public tokens object from @kovojs/style, or keep dynamic styling behind an explicit raw style escape.',
+          'SPEC §5.2 requires post-parse compiler decisions to use typed facts; SPEC §13.1 requires StyleX-authored component styles to extract into CSS assets.',
+        ],
+        '\n',
+      ),
+      message: `Static style extraction could not prove ${api} values.`,
+    },
+  );
 }
 
 function staticCssValue(

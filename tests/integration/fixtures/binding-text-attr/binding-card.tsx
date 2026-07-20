@@ -16,15 +16,7 @@ export const BindingCard = component({
   render: ({ card }: { card: CardResult }) => (
     <binding-card>
       <output>{card.text}</output>
-      <button
-        type="button"
-        {...{
-          'aria-label': card.label,
-          'data-bind:aria-label': 'card.label',
-          'data-bind:data-state': 'card.status',
-          'data-state': card.status,
-        }}
-      >
+      <button type="button" aria-label={card.label} data-state={card.status}>
         Server binding
       </button>
       <form mutation={updateCard} enhance>

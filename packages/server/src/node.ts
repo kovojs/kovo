@@ -17,6 +17,10 @@ import type { RequestHandler } from './app-types.js';
 import { requestUrlLimitFailure } from './request-url-limits.js';
 import { requestStateCanonicalClientIpValue } from './request-state-intrinsics.js';
 import {
+  bindRequestDeadlineResponseTransport,
+  registerRequestDeadlineTransport,
+} from './request-deadline.js';
+import {
   witnessCreateNullRecord,
   createWitnessWeakMap,
   createWitnessSet,
@@ -659,6 +663,7 @@ export function toNodeHandler(
         return;
       }
       const request = nodeRequestToWebRequestFromPrepared(prepared.value, nodeResponse);
+      registerRequestDeadlineTransport(request);
       const requestMethod = witnessReflectApply<string>(nativeRequestMethodGetter, request, []);
       // L16-2 (RFC 8297): thread the request's HTTP version so 103 Early Hints is gated to
       // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
@@ -673,6 +678,19 @@ export function toNodeHandler(
       };
 
       const response = await handler(request);
+      const completeDeadlineTransport = bindRequestDeadlineResponseTransport(request, () => {
+        if (responseTransport.destroy !== undefined) {
+          witnessReflectApply(responseTransport.destroy, nodeResponse, []);
+        }
+      });
+      witnessReflectApply(nativeServerResponseOnce, nodeResponse, [
+        'finish',
+        completeDeadlineTransport,
+      ]);
+      witnessReflectApply(nativeServerResponseOnce, nodeResponse, [
+        'close',
+        completeDeadlineTransport,
+      ]);
       armIncompleteNodeRequestClose(nodeRequest, nodeResponse);
 
       await writeWebResponseToNode(response, nodeResponse, requestMethod, writeOptions);

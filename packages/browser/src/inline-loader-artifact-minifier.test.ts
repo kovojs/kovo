@@ -50,8 +50,13 @@ describe('inline loader minified artifact', () => {
     expect(() =>
       assertMinifiedInlineKovoLoaderInstallerWireParserParity(inlineKovoLoaderInstallerSource),
     ).not.toThrow();
-    expect(inlineKovoLoaderInstallerSource).toContain("sj(rlt(),'; ')");
-    expect(inlineKovoLoaderInstallerSource).toContain("sj(rt(),'; ')");
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'frameworkWireTargetCodec.encodeEntryList(rlt())',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'frameworkWireTargetCodec.encodeEntryList(rt())',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain('kovo.wire-input-grammar/v1');
     expect(inlineKovoLoaderInstallerSource).not.toContain(".join('; ')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('[...new Set(');
     expect(inlineKovoLoaderInstallerSource).toContain('function ri(');
@@ -62,10 +67,10 @@ describe('inline loader minified artifact', () => {
       "ras(el,'kovo-fragment-target')??ras(el,'id')??ras(el,'kovo-c')",
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'const hsaf=(value)=>value&&!bns.regExpTest(/[\\x00-\\x1f\\x7f\\s;,#=]/,value);',
+      'const hsaf=frameworkWireTargetCodec.identityIsValid;',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const hsc=(value)=>hsaf(value)&&bns.indexOf(value,':')<0;",
+      'const hsc=frameworkWireTargetCodec.componentIsValid;',
     );
     // SPEC.md §9.1 + security finding M10: the fragment-target lookup uses the
     // same escaped precedence as the modular runtime and still guards

@@ -180,6 +180,11 @@ export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
   value: BetterAuthSanitizedSessionPayload<AuthSession, AuthUser>,
 ) => SessionValue;
 
+/** Framework-owned lifecycle observer invoked before an authenticated session reaches app code. */
+export type BetterAuthSessionObserver<AuthSession, AuthUser> = (
+  value: BetterAuthSanitizedSessionPayload<AuthSession, AuthUser>,
+) => Promise<void> | void;
+
 /**
  * @internal Build the fixed binding's Kovo `SessionProvider`. This function is deliberately absent
  * from package exports; the exact `auth` object must already be privately registered by the
@@ -210,6 +215,7 @@ export function betterAuthSession<
 >(
   auth: BetterAuthLike<AuthSession, AuthUser>,
   map: BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue>,
+  observe?: BetterAuthSessionObserver<AuthSession, AuthUser>,
 ): SessionProvider<Request, SessionValue> {
   const pinnedAuth = pinBetterAuthGetSession(auth);
   return async (request): Promise<SessionProviderResult<SessionValue> | SessionValue | null> => {
@@ -248,7 +254,12 @@ export function betterAuthSession<
             | null
             | undefined)
         : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);
-      const value = payload ? map(sanitizeBetterAuthSessionPayload(payload)) : null;
+      let value: SessionValue | null = null;
+      if (payload) {
+        const sanitized = sanitizeBetterAuthSessionPayload(payload);
+        await observe?.(sanitized);
+        value = map(sanitized);
+      }
       const headers = isEnvelope ? (headersDescriptor.value as Headers) : undefined;
       const setCookies = getBetterAuthSessionSetCookie(headers);
 

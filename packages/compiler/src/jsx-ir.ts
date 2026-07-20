@@ -1,4 +1,5 @@
 import {
+  parserFactFrameworkTrustedUrlReason,
   parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -41,7 +42,7 @@ export interface JsxIrProvenance {
 
 export type JsxIrAttributeValue =
   | { kind: 'boolean'; value: boolean }
-  | { kind: 'expression'; source: string; trustedUrl?: true }
+  | { kind: 'expression'; source: string; trustedUrl?: true; trustedUrlReason?: string }
   | { kind: 'number'; value: number }
   | { kind: 'string'; value: string };
 
@@ -646,12 +647,15 @@ function jsxIrSpreadAttribute(
 
 function attributeValue(attribute: JsxAttributeModel): JsxIrAttributeValue {
   if (attribute.value !== undefined) return { kind: 'string', value: attribute.value };
-  if (attribute.expression !== undefined)
+  if (attribute.expression !== undefined) {
+    const trustedUrlReason = parserFactFrameworkTrustedUrlReason(attribute);
     return {
       kind: 'expression',
       source: attribute.expression,
       ...(parserFactHasFrameworkTrustedUrl(attribute) ? { trustedUrl: true as const } : {}),
+      ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
     };
+  }
   return { kind: 'boolean', value: true };
 }
 

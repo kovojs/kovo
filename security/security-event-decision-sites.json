@@ -1,0 +1,61 @@
+{
+  "schema": "kovo-security-event-decision-sites/v1",
+  "decisionSites": [
+    {
+      "decisionSite": "framework:auth:session-resolution",
+      "door": "auth",
+      "file": "packages/server/src/guards.ts",
+      "marker": "@kovo-security-decision auth session-resolution",
+      "recorder": "securityEvent",
+      "resourceKind": "credential"
+    },
+    {
+      "decisionSite": "framework:authorization:access-guard-chain",
+      "door": "authorization",
+      "file": "packages/server/src/guards.ts",
+      "marker": "@kovo-security-decision authorization access-guard-chain",
+      "recorder": "securityEvent",
+      "resourceKind": "resource"
+    },
+    {
+      "decisionSite": "framework:declassification:policy-admission",
+      "door": "declassification",
+      "file": "packages/core/src/secret.ts",
+      "marker": "@kovo-security-decision declassification policy-admission",
+      "recorder": "core-bridge",
+      "resourceKind": "secret"
+    },
+    {
+      "decisionSite": "framework:egress:destination-admission",
+      "door": "egress",
+      "file": "packages/server/src/egress.ts",
+      "marker": "@kovo-security-decision egress destination-admission",
+      "recorder": "securityEvent",
+      "resourceKind": "destination"
+    },
+    {
+      "decisionSite": "framework:storage:scoped-key-admission",
+      "door": "storage",
+      "file": "packages/core/src/storage.ts",
+      "marker": "@kovo-security-decision storage scoped-key-admission",
+      "recorder": "core-bridge",
+      "resourceKind": "object"
+    },
+    {
+      "decisionSite": "framework:task:enqueue-scope-admission",
+      "door": "task",
+      "file": "packages/server/src/task-queue.ts",
+      "marker": "@kovo-security-decision task enqueue-scope-admission",
+      "recorder": "securityEvent",
+      "resourceKind": "task"
+    },
+    {
+      "decisionSite": "framework:replay:reservation-admission",
+      "door": "replay",
+      "file": "packages/server/src/replay.ts",
+      "marker": "@kovo-security-decision replay reservation-admission",
+      "recorder": "securityEvent",
+      "resourceKind": "reservation"
+    }
+  ]
+}

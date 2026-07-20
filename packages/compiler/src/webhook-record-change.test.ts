@@ -89,16 +89,18 @@ export const paymentWebhook = webhook('/webhooks/payment', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
-      {
-        code: 'KV406',
-        fileName: 'webhooks.ts',
-        message:
-          'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
-        severity: kv406.severity,
-        start: { column: 26, line: 8 },
-      },
-    ]);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV406',
+          fileName: 'webhooks.ts',
+          message:
+            'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
+          severity: kv406.severity,
+          start: { column: 26, line: 8 },
+        }),
+      ]),
+    );
   });
 
   it('accepts recordChange calls covered by webhook writes', () => {

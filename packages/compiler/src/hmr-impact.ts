@@ -1,4 +1,7 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 
 import type { ComponentCssAsset } from './css.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -35,11 +38,14 @@ interface HmrImpactMetadataInput {
  */
 export function createComponentHmrImpactMetadata(input: HmrImpactMetadataInput): HmrImpactMetadata {
   const component = singleComponentFact(input.componentGraphFacts);
-  const diagnostics = input.diagnostics.map((diagnostic) => ({
-    code: diagnostic.code,
-    message: diagnostic.message,
-    severity: diagnosticSeverity(diagnostic),
-  }));
+  const diagnostics = input.diagnostics.map((diagnostic, index) => {
+    assertRegisteredDiagnostic(diagnostic, `HMR diagnostics[${index}]`);
+    return {
+      code: diagnostic.code,
+      message: diagnostic.message,
+      severity: diagnosticSeverity(diagnostic),
+    };
+  });
   const stylesheetContentHashes = new Map(
     (input.stylesheetSources ?? []).map((source) => [
       source.sourceFileName,

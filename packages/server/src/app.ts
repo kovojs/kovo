@@ -2,6 +2,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
+import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { snapshotAuditJustification } from './audit-justification.js';
 import {
   appRequestUrlLimitResponse,
@@ -33,12 +34,14 @@ import {
 } from './live-target-app-identity.js';
 import { mutation } from './mutation.js';
 import { assertCompatibleAnonymousCsrfCookiePostures } from './csrf.js';
+import type { CspAllowlistEntry } from './csp.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { query } from './query.js';
 import { layout, route, routeLayoutLiveTargetRenderers } from './route.js';
 import { task } from './task.js';
 import {
   createWitnessSet,
+  createWitnessWeakMap,
   witnessArrayAppend,
   witnessCreateNullRecord,
   witnessDefineProperty,
@@ -47,6 +50,8 @@ import {
   witnessOwnKeys,
   witnessSetAdd,
   witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { denseOwnArrayForEach } from './registry-lookup.js';
 import { securityStringTrim } from './response-security-intrinsics.js';
@@ -59,6 +64,7 @@ import {
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
 import { isDurableMutationReplayStore } from './replay.js';
+import { isDurablePrincipalEpochStore, snapshotPrincipalEpochStore } from './principal-epoch.js';
 import {
   cloneRequestForAuthorityNeutralization,
   requestForAuthorityNeutralMetadata,
@@ -109,6 +115,7 @@ import type {
 
 const nativeArrayIsArray = Array.isArray;
 const nativeNumberIsFinite = Number.isFinite;
+const appEgressPostures = createWitnessWeakMap<KovoApp, AppEgressOptions | undefined>();
 if (!nativeArrayIsArray([]) || nativeArrayIsArray({}) || !nativeNumberIsFinite(1)) {
   throw new TypeError('Kovo app snapshot controls were modified before framework initialization.');
 }
@@ -154,6 +161,14 @@ export function createApp<
     options,
     'mutationReplayStore',
   ) as KovoApp['mutationReplayStore'];
+  const configuredPrincipalEpochStore = appOptionOwnDataValue(
+    options,
+    'principalEpochStore',
+  ) as KovoApp['principalEpochStore'];
+  const principalEpochStore =
+    configuredPrincipalEpochStore === undefined
+      ? undefined
+      : snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
   const configuredClientModules = appOptionOwnDataValue(options, 'clientModules') as
     | KovoApp['clientModules']
     | undefined;
@@ -298,6 +313,16 @@ export function createApp<
       'KV436: createApp() refused a missing, custom, or volatile memory mutationReplayStore in production; declared mutations require createPostgresAppRuntimeDb().mutationReplayStore so idempotency truth survives restart and replicas (SPEC §10.3).',
     );
   }
+  if (
+    resolveBootMode() === 'production' &&
+    sessionProvider !== undefined &&
+    mutations.length > 0 &&
+    !isDurablePrincipalEpochStore(principalEpochStore)
+  ) {
+    throw new Error(
+      'KV436: createApp() refused a missing, custom, or volatile principalEpochStore in production; authenticated mutations require createPostgresAppRuntimeDb().principalEpochStore so revocation survives restart and replicas (SPEC §6.6/§10.3).',
+    );
+  }
   const tasks = assertUniqueTaskKeys(
     resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
       tasksSource,
@@ -321,6 +346,7 @@ export function createApp<
       ...(csrf === undefined ? {} : { csrf }),
       ...(db === undefined ? {} : { db }),
       ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
+      ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
       ...(onError === undefined ? {} : { onError }),
       ...(renderRoute === undefined ? {} : { renderRoute }),
       ...(sessionProvider === undefined ? {} : { sessionProvider }),
@@ -328,11 +354,18 @@ export function createApp<
     } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest, EnvValue>,
     snapshotContext,
   );
+  witnessWeakMapSet(appEgressPostures, app, egress);
   registerAppLiveTargetIdentity(app, appId);
   // Validate the registry token before the app can escape. A late empty token would otherwise let a
   // mutation commit and fail only while rendering its response, so retries could duplicate writes.
   appLiveTargetAttestationAudience(app);
   return app;
+}
+
+/** @internal Return the createApp-owned egress snapshot used by build posture projection. */
+export function appEgressPosture(app: KovoApp): AppEgressOptions | undefined {
+  if (!isKovoApp(app)) throw new TypeError('Egress posture requires a Kovo app aggregate.');
+  return witnessWeakMapGet(appEgressPostures, app);
 }
 
 function rejectRemovedLiveTargetRenderersOption(source: object): void {
@@ -596,16 +629,23 @@ function normalizeAppDocumentOptions(
 function snapshotAppDocumentCsp(value: unknown): NonNullable<KovoApp['document']['csp']> {
   const record = appDocumentRecord(value, 'document.csp');
   const allowlist = appDocumentOwnDataValue(record, 'allowlist');
+  const crossOriginIsolation = appDocumentOwnDataValue(record, 'crossOriginIsolation');
   const reporting = appDocumentOwnDataValue(record, 'reporting');
   const trustedTypes = appDocumentOwnDataValue(record, 'trustedTypes');
+  if (crossOriginIsolation !== undefined && crossOriginIsolation !== true) {
+    throw new TypeError(
+      'createApp document.csp.crossOriginIsolation must be true when present (SPEC §6.6).',
+    );
+  }
   if (trustedTypes !== undefined && typeof trustedTypes !== 'boolean') {
     throw new TypeError('createApp document.csp.trustedTypes must be boolean (SPEC §6.6).');
   }
   if (reporting !== undefined && reporting !== false && typeof reporting !== 'object') {
     throw new TypeError('createApp document.csp.reporting must be false or an options object.');
   }
-  return witnessFreeze({
+  const snapshot = witnessFreeze({
     ...(allowlist === undefined ? {} : { allowlist: snapshotAppDocumentCspAllowlist(allowlist) }),
+    ...(crossOriginIsolation === undefined ? {} : { crossOriginIsolation: true as const }),
     ...(reporting === undefined
       ? {}
       : {
@@ -613,22 +653,79 @@ function snapshotAppDocumentCsp(value: unknown): NonNullable<KovoApp['document']
             reporting === false ? false : snapshotAppDocumentCspReporting(reporting as object),
         }),
     ...(trustedTypes === undefined ? {} : { trustedTypes }),
-  });
+  }) as NonNullable<KovoApp['document']['csp']>;
+  return snapshot;
 }
 
 function snapshotAppDocumentCspAllowlist(
   value: unknown,
 ): NonNullable<NonNullable<KovoApp['document']['csp']>['allowlist']> {
   const record = appDocumentRecord(value, 'document.csp.allowlist');
-  const snapshot = witnessCreateNullRecord<readonly string[]>() as Record<
+  const snapshot = witnessCreateNullRecord<readonly CspAllowlistEntry[]>() as Record<
     string,
-    readonly string[]
+    readonly CspAllowlistEntry[]
   >;
-  for (const field of ['connectSrc', 'frameSrc', 'imgSrc', 'scriptSrc', 'styleSrc'] as const) {
+  for (const field of [
+    'connectSrc',
+    'fontSrc',
+    'frameSrc',
+    'imgSrc',
+    'mediaSrc',
+    'scriptSrc',
+    'styleSrc',
+    'workerSrc',
+  ] as const) {
     const entries = appDocumentOwnDataValue(record, field);
     if (entries !== undefined) {
-      snapshot[field] = snapshotAppDocumentStringArray(entries, `document.csp.allowlist.${field}`);
+      snapshot[field] = snapshotAppDocumentCspEntries(entries, `document.csp.allowlist.${field}`);
     }
+  }
+  return witnessFreeze(snapshot) as NonNullable<
+    NonNullable<KovoApp['document']['csp']>['allowlist']
+  >;
+}
+
+function snapshotAppDocumentCspEntries(
+  value: unknown,
+  label: string,
+): readonly CspAllowlistEntry[] {
+  if (!nativeArrayIsArray(value)) {
+    throw new TypeError(`createApp ${label} must be a dense CSP origin array.`);
+  }
+  if (value.length > 100_000) {
+    throw new TypeError(`createApp ${label} must be a bounded CSP origin array.`);
+  }
+  const snapshot: CspAllowlistEntry[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`createApp ${label} must contain stable own entries.`);
+    }
+    const entry = descriptor.value;
+    let closed: CspAllowlistEntry;
+    if (typeof entry === 'string') {
+      closed = entry;
+    } else {
+      const entryRecord = appDocumentRecord(entry, `${label}[${index}]`);
+      const origin = appDocumentOwnDataValue(entryRecord, 'origin');
+      const rationale = appDocumentOwnDataValue(entryRecord, 'rationale');
+      if (
+        typeof origin !== 'string' ||
+        typeof rationale !== 'string' ||
+        securityStringTrim(rationale) === ''
+      ) {
+        throw new TypeError(
+          `createApp ${label}[${index}] requires string origin and non-empty rationale.`,
+        );
+      }
+      closed = witnessFreeze({ origin, rationale: securityStringTrim(rationale) });
+    }
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: closed,
+      writable: true,
+    });
   }
   return witnessFreeze(snapshot);
 }
@@ -804,7 +901,10 @@ function appendAppDiagnosticGroup(
 ): void {
   denseOwnArrayForEach(
     group,
-    (diagnostic) => witnessArrayAppend(diagnostics, diagnostic, 'createApp diagnostics'),
+    (diagnostic) => {
+      assertRegisteredDiagnostic(diagnostic, 'createApp diagnostic group entry');
+      witnessArrayAppend(diagnostics, diagnostic, 'createApp diagnostics');
+    },
     'createApp diagnostic group',
   );
 }

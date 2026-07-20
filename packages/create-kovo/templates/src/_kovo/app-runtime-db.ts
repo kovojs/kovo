@@ -3,6 +3,7 @@ import {
   type AccessDecision,
   type CsrfOptions,
   type MutationReplayStore,
+  type PrincipalEpochStore,
 } from '@kovojs/server';
 import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
 
@@ -22,6 +23,7 @@ const authSystemDb = appDatabase.systemDb({
 
 /** Durable SPEC §10.3 replay token; opaque and non-callable in app-authored modules. */
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
+export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
 interface AppAuthBindingOptions {
   csrf: CsrfOptions<AppRequest>;
@@ -47,6 +49,7 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
       id: authSession.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
+    principalEpochStore: appRuntimePrincipalEpochStore,
     schema: appRuntimeSchema.authSchema,
     signInAccess: options.signInAccess,
     signOutAccess: options.signOutAccess,

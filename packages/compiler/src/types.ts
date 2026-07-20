@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type {
+  BrowserPostureManifest,
   BrowserSecurityOperationKind,
   SecurityOperationDoor,
 } from '@kovojs/core/internal/security-operation-ir';
@@ -26,7 +27,11 @@ import {
   compilerStringSplit,
   compilerStringToUpperCase,
 } from './compiler-security-intrinsics.js';
-import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { attributeKebabCase, normalizeComponentFileName, replaceExtension } from './shared.js';
@@ -74,6 +79,7 @@ export interface ProductionRenderPlanGateOptions {
  */
 export type ComponentGraphFact = Pick<
   CoreGraph.ComponentExplain,
+  | 'cacheInfluence'
   | 'disambiguatedDomName'
   | 'clocks'
   | 'domName'
@@ -90,6 +96,9 @@ export type ComponentGraphFact = Pick<
 
 /** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
 export type TaskGraphFact = CoreGraph.TaskExplain;
+
+/** @internal Capability-bounded agent graph fact emitted from exact compiler roots. */
+export type AgentGraphFact = CoreGraph.AgentExplainFact;
 
 /** @internal Compiler-owned handler write-sink fact (SPEC §10.3/§11). */
 export type HandlerWriteSinkFact = CoreGraph.HandlerWriteSinkExplain;
@@ -233,9 +242,11 @@ export interface CompileDependencyReads {
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
   | 'access'
+  | 'agents'
   | 'authPosture'
   | 'capabilities'
   | 'capabilityClosure'
+  | 'cacheInfluence'
   | 'components'
   | 'cookieDowngrades'
   | 'endpoints'
@@ -266,6 +277,7 @@ export interface RegistryTypeFactOptions {
 
 export interface CompileAppGraphOptions {
   components?: readonly {
+    agentGraphFacts?: readonly AgentGraphFact[];
     componentGraphFacts: readonly ComponentGraphFact[];
     endpointGraphFacts?: readonly EndpointGraphFact[];
     handlerWriteSinkFacts?: readonly HandlerWriteSinkFact[];
@@ -412,6 +424,9 @@ export interface CompileArtifactFileNames {
  * hand-write these lowered artifacts (SPEC.md §5.2).
  */
 export interface CompileResult {
+  agentGraphFacts: readonly AgentGraphFact[];
+  /** Compiler-derived browser fetch/effect posture consumed by generated response assembly. */
+  browserPostureManifest: BrowserPostureManifest;
   clientModuleImportManifest: readonly ClientModuleImportManifestEntry[];
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
@@ -648,6 +663,14 @@ export function elementParamNameFromAttribute(attributeName: string): string {
  */
 export function createEmptyCompileResult(): CompileResult {
   return {
+    agentGraphFacts: [],
+    browserPostureManifest: {
+      externalOrigins: [],
+      isolationBlockers: [],
+      opaqueExternalUrls: [],
+      operations: [],
+      schema: 'kovo-browser-posture/v1',
+    },
     clientModuleImportManifest: [],
     clientExports: [],
     componentGraphFacts: [],
@@ -772,6 +795,8 @@ export interface QueryStampFact {
   derive: QueryDeriveFact;
   outputContext: GeneratedOutputWriteFact;
   selector: string;
+  /** Exact compiler-owned sink verdict; never inferred from query/wire value shape. */
+  trustedUrl?: true;
 }
 
 /**
@@ -1211,11 +1236,10 @@ export function queryShapeFactDiagnostics(
     const base = diagnosticFor(fileName, 'KV240');
     compilerArrayAppend(
       diagnostics,
-      {
-        ...base,
+      contextualizeCompilerDiagnostic(base, {
         help: diagnosticDefinitions.KV240.help,
         message: `${base.message} query="${query}" sources=${sources}`,
-      },
+      }),
       'Compiler packages/compiler/src/types.ts collection',
     );
   });

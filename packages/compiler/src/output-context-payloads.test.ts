@@ -7,6 +7,7 @@ import {
   kovoStyleProperty,
   runQueryUpdatePlan,
 } from '@kovojs/browser/generated';
+import { trustedUrl } from '@kovojs/browser';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint } from './index.js';
@@ -187,7 +188,7 @@ export const PayloadCard = component({
 
       export const PayloadCard$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind\\\\:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind\\\\:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind\\\\:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "clientText": "<img src=x onerror=alert(1)> & "quoted"",
@@ -262,9 +263,9 @@ export const PayloadCard = component({
                   "input": "product",
                   "name": "PayloadCard$article_aria_description_derive",
                   "param": "product",
-                  "selector": "[data-bind:aria-description="product.PayloadCard$article_aria_description_derive"]",
+                  "selector": "[data-bind\\:aria-description="product.PayloadCard$article_aria_description_derive"]",
                 },
-                "selector": "[data-bind:aria-description="product.PayloadCard$article_aria_description_derive"]",
+                "selector": "[data-bind\\:aria-description="product.PayloadCard$article_aria_description_derive"]",
               },
               {
                 "attr": "aria-label",
@@ -274,9 +275,9 @@ export const PayloadCard = component({
                   "input": "product",
                   "name": "PayloadCard$article_aria_label_derive",
                   "param": "product",
-                  "selector": "[data-bind:aria-label="product.PayloadCard$article_aria_label_derive"]",
+                  "selector": "[data-bind\\:aria-label="product.PayloadCard$article_aria_label_derive"]",
                 },
-                "selector": "[data-bind:aria-label="product.PayloadCard$article_aria_label_derive"]",
+                "selector": "[data-bind\\:aria-label="product.PayloadCard$article_aria_label_derive"]",
               },
               {
                 "attr": "title",
@@ -286,9 +287,9 @@ export const PayloadCard = component({
                   "input": "product",
                   "name": "PayloadCard$article_title_derive",
                   "param": "product",
-                  "selector": "[data-bind:title="product.PayloadCard$article_title_derive"]",
+                  "selector": "[data-bind\\:title="product.PayloadCard$article_title_derive"]",
                 },
-                "selector": "[data-bind:title="product.PayloadCard$article_title_derive"]",
+                "selector": "[data-bind\\:title="product.PayloadCard$article_title_derive"]",
               },
             ],
           },
@@ -327,6 +328,44 @@ export const PayloadCard = component({
       }
     `);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  // @kovo-security-certifies C13 generated-query-plan-css-selector-escaping
+  it('escapes generated data-bind attribute names for browser CSS selectors', () => {
+    const result = compileComponentModule({
+      fileName: 'selector-card.tsx',
+      source: `
+export const SelectorCard = component({
+  queries: { card: cardQuery },
+  render: ({ card }) => (
+    <button aria-label={card.label} data-state={card.status} hidden={card.hidden}>Card</button>
+  ),
+});
+`,
+    });
+
+    const stamps = result.queryUpdatePlans[0]?.stamps?.map(({ attr, selector }) => ({
+      attr,
+      selector,
+    }));
+    expect(stamps).toEqual([
+      {
+        attr: 'aria-label',
+        selector: '[data-bind\\:aria-label="card.SelectorCard$button_aria_label_derive"]',
+      },
+      {
+        attr: 'data-state',
+        selector: '[data-bind\\:data-state="card.SelectorCard$button_data_state_derive"]',
+      },
+      {
+        attr: 'hidden',
+        selector: '[data-bind\\:hidden="card.SelectorCard$button_hidden_derive"]',
+      },
+    ]);
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+    expect(clientSource).toContain('[data-bind\\\\:aria-label=');
+    expect(clientSource).toContain('[data-bind\\\\:data-state=');
+    expect(clientSource).toContain('[data-bind\\\\:hidden=');
   });
 
   it('snapshots literal URL attributes across internal, external, and unsafe schemes', () => {
@@ -424,12 +463,14 @@ export const LiteralUrlPayloads = component({
     const result = compileComponentModule({
       fileName: 'dynamic-url-payloads.tsx',
       source: `
+import { trustedUrl } from '@kovojs/browser';
+
 export const DynamicUrlPayloads = component({
   queries: { product: productQuery },
   render: ({ product }) => (
     <article>
       <a href={product.href}>Product</a>
-      <img src={product.image} />
+      <img src={trustedUrl(product.image, 'reviewed product image origin')} />
     </article>
   ),
 });
@@ -472,7 +513,7 @@ export const DynamicUrlPayloads = component({
 
       export const DynamicUrlPayloads$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", trustedUrl: true, select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "diagnostics": [],
@@ -632,6 +673,7 @@ function executeClientModule(source: string): Record<string, unknown> {
         kovoEscapeHtml,
         kovoStyleProperty,
         runQueryUpdatePlan,
+        trustedUrl,
       },
     },
     { timeout: 1000 },

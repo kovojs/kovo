@@ -13,10 +13,12 @@ describe('bounded Better Auth credential rate-limit storage', () => {
     const options = createBetterAuthBoundedRateLimitStorage(secret, async () => true);
     const signInRule = options.customRules?.['/sign-in/email'];
     const signUpRule = options.customRules?.['/sign-up/email'];
+    const passwordResetRule = options.customRules?.['/request-password-reset'];
 
     expect(options.enabled).toBe(true);
     expect(options.storage).toBe('database');
     expect(Object.keys(options.customRules ?? {})).toEqual([
+      '/request-password-reset',
       '/sign-in/email',
       '/sign-up/email',
       '/**',
@@ -25,6 +27,12 @@ describe('bounded Better Auth credential rate-limit storage', () => {
       throw new Error('missing exact credential rules');
     }
     expect(await signInRule(new Request('https://app.test/sign-in/email'), rule)).toBe(false);
+    expect(
+      await passwordResetRule(
+        new Request('https://app.test/request-password-reset', { method: 'POST' }),
+        rule,
+      ),
+    ).toEqual({ max: 3, window: 10 });
     expect(
       await signUpRule(new Request('https://app.test/sign-up/email', { method: 'POST' }), rule),
     ).toEqual(rule);
@@ -53,6 +61,34 @@ describe('bounded Better Auth credential rate-limit storage', () => {
     expect(buckets.size).toBeLessThanOrEqual(4);
     expect(buckets.size).toBeGreaterThan(1);
     expect([...buckets].every((key) => /^000[0-3]$/u.test(key))).toBe(true);
+  });
+
+  it('never reacquires ambient WebCrypto after the server crypto authority bootstraps', async () => {
+    const originalCrypto = globalThis.crypto;
+    let poisonedCalls = 0;
+    try {
+      vi.stubGlobal('crypto', {
+        subtle: {
+          importKey() {
+            poisonedCalls += 1;
+            throw new Error('late ambient crypto acquisition');
+          },
+          sign() {
+            poisonedCalls += 1;
+            throw new Error('late ambient crypto acquisition');
+          },
+        },
+      });
+      const options = createBetterAuthBoundedRateLimitStorage(secret, async () => true, {
+        bucketCount: 4,
+      });
+      await expect(
+        options.customStorage?.consume('198.51.100.2|/sign-in/email', rule),
+      ).resolves.toEqual({ allowed: true, retryAfter: null });
+      expect(poisonedCalls).toBe(0);
+    } finally {
+      vi.stubGlobal('crypto', originalCrypto);
+    }
   });
 
   it('aggregates HMAC collisions so the shared ceiling fails closed', async () => {

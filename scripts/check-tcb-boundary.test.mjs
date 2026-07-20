@@ -3,8 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { checkTcbBoundary, collectTcbBoundarySourceFiles } from './check-tcb-boundary.mjs';
 
 const manifestPath = 'security/TCB.md';
+const testIntegrity =
+  'sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==';
+const mutatedIntegrity =
+  'sha512-z2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==';
 
 function manifestWithOptions({
+  analysisToolchain,
   budgets = { entryMaxLines: 20, totalTcbMaxLines: 50 },
   entries,
   plannedEntries,
@@ -18,6 +23,7 @@ ${JSON.stringify(
     schema: 'kovo.security.tcb/v1',
     source: 'test',
     budgets,
+    ...(analysisToolchain === undefined ? {} : { analysisToolchain }),
     ...(trustedDependencySurfaces === undefined ? {} : { trustedDependencySurfaces }),
     ...(plannedEntries === undefined ? {} : { plannedEntries }),
     entries,
@@ -44,6 +50,7 @@ function entry(overrides = {}) {
 function run(files, entries, options = {}) {
   const all = {
     [manifestPath]: manifestWithOptions({
+      analysisToolchain: options.analysisToolchain,
       budgets: options.budgets,
       entries,
       plannedEntries: options.plannedEntries,
@@ -57,6 +64,7 @@ function run(files, entries, options = {}) {
     readText: (file) => all[file] ?? '',
     repoRoot: '/repo',
     sourceFiles: Object.keys(all).filter((file) => file.endsWith('.ts')),
+    workspacePackageJsons: Object.keys(all).filter((file) => file.endsWith('package.json')),
   });
 }
 
@@ -65,6 +73,7 @@ function surface(overrides = {}) {
     dependency: 'pg',
     guarantee: 'node-pg binds values out-of-band.',
     id: 'dep.node-pg.query-parameterization',
+    integrity: testIntegrity,
     packageJson: 'packages/server/package.json',
     pinnedVersion: '8.22.0',
     reviewTrigger: 'Re-confirm parameterization on any pg bump.',
@@ -360,7 +369,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.22.0' } }),
-        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
+        'pnpm-lock.yaml': `packages:\n  pg@8.22.0:\n    resolution: {integrity: ${testIntegrity}}\n`,
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface()] },
@@ -374,7 +383,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { pg: '^8.22.0' } }),
-        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
+        'pnpm-lock.yaml': `packages:\n  pg@8.22.0:\n    resolution: {integrity: ${testIntegrity}}\n`,
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface()] },
@@ -391,7 +400,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.99.0' } }),
-        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
+        'pnpm-lock.yaml': `packages:\n  pg@8.22.0:\n    resolution: {integrity: ${testIntegrity}}\n`,
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface({ pinnedVersion: '8.99.0' })] },
@@ -408,7 +417,7 @@ export function boxSecretReadRows(rows) {
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/server/package.json': JSON.stringify({ dependencies: { undici: '7.28.0' } }),
-        'pnpm-lock.yaml': 'packages:\n  pg@8.22.0:\n    resolution: {integrity: sha}\n',
+        'pnpm-lock.yaml': `packages:\n  pg@8.22.0:\n    resolution: {integrity: ${testIntegrity}}\n`,
       },
       [entry({ kind: 'function' })],
       { trustedDependencySurfaces: [surface()] },
@@ -427,8 +436,7 @@ export function boxSecretReadRows(rows) {
         'packages/server/package.json': JSON.stringify({
           dependencies: { '@node-rs/argon2': '2.0.2' },
         }),
-        'pnpm-lock.yaml':
-          "packages:\n  '@node-rs/argon2@2.0.2':\n    resolution: {integrity: sha}\n",
+        'pnpm-lock.yaml': `packages:\n  '@node-rs/argon2@2.0.2':\n    resolution: {integrity: ${testIntegrity}}\n`,
       },
       [entry({ kind: 'function' })],
       {
@@ -458,4 +466,91 @@ export function boxSecretReadRows(rows) {
       'dep.node-pg.query-parameterization.guarantee must be a non-empty string',
     );
   });
+
+  it('rejects a same-version trusted dependency integrity swap', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/package.json': JSON.stringify({ dependencies: { pg: '8.22.0' } }),
+        'pnpm-lock.yaml': `packages:\n  pg@8.22.0:\n    resolution: {integrity: ${mutatedIntegrity}}\n`,
+      },
+      [entry({ kind: 'function' })],
+      { trustedDependencySurfaces: [surface()] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      `pins pg@8.22.0 to ${testIntegrity} but the lockfile resolves ${mutatedIntegrity}`,
+    );
+  });
+
+  it('enrolls every workspace declaration of an analysis tool at its exact pin', () => {
+    const result = run(
+      {
+        'package.json': JSON.stringify({ devDependencies: { typescript: '6.0.3' } }),
+        'packages/compiler/package.json': JSON.stringify({
+          devDependencies: { typescript: '6.0.3' },
+        }),
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'pnpm-lock.yaml': `packages:\n  typescript@6.0.3:\n    resolution: {integrity: ${testIntegrity}}\n`,
+      },
+      [entry({ kind: 'function' })],
+      {
+        analysisToolchain: [toolchainEntry()],
+      },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('kills the compiler TypeScript caret mutant through the analysis toolchain enrollment', () => {
+    const result = run(
+      {
+        'package.json': JSON.stringify({ devDependencies: { typescript: '6.0.3' } }),
+        'packages/compiler/package.json': JSON.stringify({
+          devDependencies: { typescript: '^6.0.3' },
+        }),
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'pnpm-lock.yaml': `packages:\n  typescript@6.0.3:\n    resolution: {integrity: ${testIntegrity}}\n`,
+      },
+      [entry({ kind: 'function' })],
+      {
+        analysisToolchain: [toolchainEntry()],
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'packages/compiler/package.json: devDependencies.typescript must be exact-pinned to 6.0.3',
+    );
+  });
+
+  it('kills a same-version analysis tool integrity swap', () => {
+    const result = run(
+      {
+        'package.json': JSON.stringify({ devDependencies: { typescript: '6.0.3' } }),
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'pnpm-lock.yaml': `packages:\n  typescript@6.0.3:\n    resolution: {integrity: ${mutatedIntegrity}}\n`,
+      },
+      [entry({ kind: 'function' })],
+      { analysisToolchain: [toolchainEntry()] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      `pins typescript@6.0.3 to ${testIntegrity} but the lockfile resolves ${mutatedIntegrity}`,
+    );
+  });
 });
+
+function toolchainEntry(overrides = {}) {
+  return {
+    dependency: 'typescript',
+    id: 'analysis.typescript',
+    integrity: testIntegrity,
+    pinnedVersion: '6.0.3',
+    reviewTrigger: 'Re-run analyzer soundness evidence on any TypeScript bump.',
+    role: 'Compiler AST parser and type checker.',
+    ...overrides,
+  };
+}

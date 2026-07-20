@@ -1,4 +1,4 @@
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayLength,
@@ -163,7 +163,8 @@ function eventTriggerDiagnostic(
   code: 'KV211' | 'KV212',
   attribute: { index: number; name: string },
 ): CompilerDiagnostic {
-  return diagnostics.at(
+  return diagnosticAt(
+    diagnostics,
     code,
     { start: attribute.index, length: attribute.name.length + 3 },
     `on:${attribute.name}`,

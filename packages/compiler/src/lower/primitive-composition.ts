@@ -1,4 +1,4 @@
-import type { CompilerDiagnostic } from '../diagnostics.js';
+import { contextualizeCompilerDiagnostic, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   generatedJsxIrAttribute,
   markJsxIrChanged,
@@ -10,6 +10,7 @@ import {
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
+  mergeableAttributeFrameworkTrustedUrlReason,
   mergeableAttributeHasFrameworkTrustedUrl,
   primitiveIdRewrite,
   primitiveObjectEntryAttributes,
@@ -244,6 +245,7 @@ function mergeableToIrAttribute(
   const value = mergeableValueToIr(
     attribute.value,
     mergeableAttributeHasFrameworkTrustedUrl(attribute),
+    mergeableAttributeFrameworkTrustedUrlReason(attribute),
   );
   const base =
     attribute.origin === 'primitive'
@@ -269,12 +271,14 @@ function mergeableToIrAttribute(
 function mergeableValueToIr(
   value: MergeableAttributeValue,
   frameworkTrustedUrl: boolean,
+  trustedUrlReason?: string,
 ): JsxIrAttributeValue {
   if (value.kind === 'boolean') return value;
   if (value.kind === 'expression') {
     return {
       ...value,
       ...(frameworkTrustedUrl ? { trustedUrl: true as const } : {}),
+      ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
     };
   }
   if (value.kind === 'number') return value;
@@ -292,10 +296,9 @@ function withMergeWriterNames(diagnostics: readonly CompilerDiagnostic[]): Compi
     ) as CompilerDiagnostic;
     appendCompositionFact(
       result,
-      {
-        ...diagnostic,
+      contextualizeCompilerDiagnostic(diagnostic, {
         message: `${diagnostic.message} (writers: primitive attrs, author JSX)`,
-      },
+      }),
       'Primitive merge diagnostics',
     );
   }

@@ -4,11 +4,13 @@ import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './public-packages.mjs';
+import { deterministicPackEnvironment } from './lib/deterministic-tarball.mjs';
 
 export function checkPublish({ exec = execFileSync } = {}) {
   for (const script of ['build-publish.mjs', 'pack-public-packages.mjs']) {
     exec(process.execPath, [path.join(repoRoot, 'scripts', script)], {
       cwd: repoRoot,
+      env: deterministicPackEnvironment(process.env),
       stdio: 'inherit',
     });
   }

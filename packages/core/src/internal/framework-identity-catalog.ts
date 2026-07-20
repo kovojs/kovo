@@ -56,7 +56,9 @@ const SERVER_COMMAND_SPECIFIERS = ['@kovojs/server'] as const;
 const CORE_STORAGE_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
 
 const serverDataSourceFiles = [
+  'agent',
   'api/data',
+  'derived-dataset',
   'domain',
   'index',
   'managed-db',
@@ -252,6 +254,7 @@ appendCatalogEntry(catalogEntries, serverApp('createApp'));
 appendCatalogFactories(
   catalogEntries,
   [
+    'agent',
     'declareSecretReadCapability',
     'domain',
     'mutation',
@@ -261,6 +264,7 @@ appendCatalogFactories(
     'scopedKey',
     'tag',
     'task',
+    'tool',
     'write',
   ],
   serverData,
@@ -302,6 +306,7 @@ appendCatalogFactories(
 );
 appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
 appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
+appendCatalogEntry(catalogEntries, serverData('derived'));
 appendCatalogEntry(catalogEntries, serverData('hashPassword'));
 appendCatalogEntry(catalogEntries, serverWriteGovernance('serverValue'));
 appendCatalogEntry(catalogEntries, serverData('stream'));
@@ -313,7 +318,16 @@ appendCatalogFactories(
 );
 appendCatalogFactories(
   catalogEntries,
-  ['component', 'declareOffWire', 'publishToClient', 'secret', 'trustedReveal'],
+  [
+    'component',
+    'DeclassifyPolicy',
+    'declareOffWire',
+    'publishToClient',
+    'revealSecret',
+    'revealUntrusted',
+    'secret',
+    'trustedReveal',
+  ],
   coreAuthoring,
 );
 for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; index += 1) {
@@ -490,8 +504,4 @@ export function frameworkCatalogExportsForModule(
     });
   }
   return snapshot;
-}
-
-function catalogIdentity(entry: FrameworkExportIdentity): FrameworkExportIdentity {
-  return freezeSecurityValue({ exportName: entry.exportName, module: entry.module });
 }

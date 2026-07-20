@@ -3,12 +3,15 @@ import {
   compilerArrayAppend,
   compilerArrayIsArray,
   compilerArrayLength,
+  compilerCreateSet,
   compilerObjectKeys,
   compilerOwnDataValue,
+  compilerSetAdd,
+  compilerSetHas,
 } from '../compiler-security-intrinsics.js';
 import { componentOptionObjectKeys } from '../scan/parse.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
-import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes } from '../analyze/query-shapes.js';
 import type { CompileComponentOptions, QueryShape } from '../types.js';
 import { isArrayQueryShape, isQueryShapeObject, isQueryShapeWrapper } from '../types.js';
@@ -40,7 +43,8 @@ export const validateSecretQueryWire = securityClassifier(
       if (requiresClosedQueryShapeFacts(options) && shape === undefined) {
         compilerArrayAppend(
           missingShapeDiagnostics,
-          diagnostics.at(
+          diagnosticAt(
+            diagnostics,
             'KV435',
             undefined,
             `query="${query}" missing query-shape fact for production query-wire validation`,
@@ -62,7 +66,8 @@ export const validateSecretQueryWire = securityClassifier(
       for (let pathIndex = 0; pathIndex < secretPaths.length; pathIndex += 1) {
         compilerArrayAppend(
           result,
-          diagnostics.at(
+          diagnosticAt(
+            diagnostics,
             'KV435',
             undefined,
             `query="${query}" path="${pathForDiagnostic(query, secretPaths[pathIndex]!)}"`,
@@ -74,7 +79,8 @@ export const validateSecretQueryWire = securityClassifier(
       for (let pathIndex = 0; pathIndex < tablePaths.length; pathIndex += 1) {
         compilerArrayAppend(
           result,
-          diagnostics.at(
+          diagnosticAt(
+            diagnostics,
             'KV439',
             undefined,
             `query="${query}" path="${pathForDiagnostic(query, tablePaths[pathIndex]!)}"`,
@@ -93,7 +99,7 @@ function requiresClosedQueryShapeFacts(options: CompileComponentOptions): boolea
 
 const secretQueryShapePaths = securityClassifier(
   'compiler.confidentiality.secret-query-paths',
-  function (shape: QueryShape | undefined, path: readonly string[] = []): string[] {
+  function (shape: QueryShape | undefined, path: readonly string[] = []): string[][] {
     if (shape === undefined) return [];
 
     const malformedRevealInner = malformedRevealInnerShape(shape);
@@ -106,7 +112,7 @@ const secretQueryShapePaths = securityClassifier(
       // records that decision for `kovo explain --revealed`; KV435 remains the
       // default for un-revealed secret fields.
       if (shape.kind === 'revealed') return [];
-      if (shape.kind === 'secret') return [joinShapePath(path)];
+      if (shape.kind === 'secret') return [copyShapePath(path)];
       return secretQueryShapePaths(shape.shape, path);
     }
 
@@ -115,18 +121,63 @@ const secretQueryShapePaths = securityClassifier(
       return secretQueryShapePaths((item ?? 'object') as QueryShape, path);
     }
     if (isQueryShapePrimitive(shape)) return [];
-    if (!isQueryShapeObject(shape)) return [joinShapePath(path)];
+    if (!isQueryShapeObject(shape)) return [copyShapePath(path)];
 
-    const result: string[] = [];
+    const result: string[][] = [];
     const keys = compilerObjectKeys(shape);
     for (let index = 0; index < keys.length; index += 1) {
       const key = keys[index]!;
       const child = compilerOwnDataValue(shape, key, 'Secret query object shape') as QueryShape;
-      appendStrings(result, secretQueryShapePaths(child, appendShapePath(path, key)));
+      appendShapePaths(result, secretQueryShapePaths(child, appendShapePath(path, key)));
     }
     return result;
   },
 );
+
+/**
+ * Project the exact KV435 secret-path classifier result into typed emission-check facts.
+ * This does not reclassify shapes: both diagnostics and Plan 3 §2.2 consume the same
+ * `secretQueryShapePaths` verdict.
+ */
+export function secretQueryWireDecisionFacts(
+  model: ComponentModuleModel,
+  options: CompileComponentOptions,
+): { fieldNames: string[]; refusedQueryNames: string[] } {
+  const queryShapes = componentQueryShapes(options);
+  if (!queryShapes) return { fieldNames: [], refusedQueryNames: [] };
+
+  const fieldNames: string[] = [];
+  const refusedQueryNames: string[] = [];
+  const seenFields = compilerCreateSet<string>();
+  const seenQueries = compilerCreateSet<string>();
+  const queryNames = componentOptionObjectKeys(model, 'queries');
+  const queryNameLength = compilerArrayLength(queryNames, 'Secret query decision names');
+  for (let index = 0; index < queryNameLength; index += 1) {
+    const query = compilerOwnDataValue(queryNames, index, 'Secret query decision names');
+    if (typeof query !== 'string') {
+      throw new TypeError(`Secret query decision names[${index}] must be an own string.`);
+    }
+    const shape = compilerOwnDataValue(queryShapes, query, 'Component query shapes') as
+      | QueryShape
+      | undefined;
+    const secretPaths = secretQueryShapePaths(shape);
+    if (secretPaths.length === 0) continue;
+    appendUniqueString(refusedQueryNames, seenQueries, query, 'Secret query decision query names');
+    for (let pathIndex = 0; pathIndex < secretPaths.length; pathIndex += 1) {
+      const path = secretPaths[pathIndex]!;
+      if (path.length === 0) continue;
+      const fieldName = compilerOwnDataValue(path, path.length - 1, 'Secret query decision path');
+      if (typeof fieldName !== 'string') {
+        throw new TypeError(`Secret query decision path[${path.length - 1}] must be a string.`);
+      }
+      appendUniqueString(fieldNames, seenFields, fieldName, 'Secret query decision field names');
+    }
+  }
+  return {
+    fieldNames: sortStrings(fieldNames),
+    refusedQueryNames: sortStrings(refusedQueryNames),
+  };
+}
 
 const tableRowQueryShapePaths = securityClassifier(
   'compiler.confidentiality.table-row-query-paths',
@@ -191,12 +242,37 @@ function appendStrings(target: string[], values: readonly string[]): void {
   }
 }
 
+function appendShapePaths(target: string[][], values: readonly string[][]): void {
+  for (let index = 0; index < values.length; index += 1) {
+    compilerArrayAppend(target, values[index]!, 'Confidentiality shape-path merge');
+  }
+}
+
+function appendUniqueString(
+  target: string[],
+  seen: Set<string>,
+  value: string,
+  label: string,
+): void {
+  if (compilerSetHas(seen, value)) return;
+  compilerSetAdd(seen, value);
+  compilerArrayAppend(target, value, label);
+}
+
 function appendShapePath(path: readonly string[], key: string): string[] {
   const result: string[] = [];
   for (let index = 0; index < path.length; index += 1) {
     compilerArrayAppend(result, path[index]!, 'Confidentiality path');
   }
   compilerArrayAppend(result, key, 'Confidentiality path');
+  return result;
+}
+
+function copyShapePath(path: readonly string[]): string[] {
+  const result: string[] = [];
+  for (let index = 0; index < path.length; index += 1) {
+    compilerArrayAppend(result, path[index]!, 'Confidentiality classified path');
+  }
   return result;
 }
 
@@ -209,6 +285,22 @@ function joinShapePath(path: readonly string[]): string {
   return result;
 }
 
-function pathForDiagnostic(query: string, path: string): string {
-  return path === '' ? query : `${query}.${path}`;
+function pathForDiagnostic(query: string, path: string | readonly string[]): string {
+  const suffix = typeof path === 'string' ? path : joinShapePath(path);
+  return suffix === '' ? query : `${query}.${suffix}`;
+}
+
+function sortStrings(values: readonly string[]): string[] {
+  const sorted: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]!;
+    let insertAt = sorted.length;
+    while (insertAt > 0 && value < sorted[insertAt - 1]!) insertAt -= 1;
+    compilerArrayAppend(sorted, '', 'Confidentiality sorted strings');
+    for (let move = sorted.length - 1; move > insertAt; move -= 1) {
+      sorted[move] = sorted[move - 1]!;
+    }
+    sorted[insertAt] = value;
+  }
+  return sorted;
 }

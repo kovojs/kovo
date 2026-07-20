@@ -1,0 +1,164 @@
+{
+  "$comment": "Syntax-derived closed census of authored non-test declassification calls. It closes site/code/capability identity drift; it does not prove declassification semantics or justification quality.",
+  "schema": "kovo-declassification-census/v1",
+  "scope": {
+    "excluded": ["docs", "generated-output", "tests"],
+    "policy": "kovo-authored-production-js-source/v1",
+    "roots": ["examples", "packages"]
+  },
+  "doors": [
+    ".reveal",
+    "publishToClient",
+    "revealSecret",
+    "revealUntrusted",
+    "serverValue",
+    "trustedAssign",
+    "trustedReveal"
+  ],
+  "summary": {
+    "byDoor": {
+      ".reveal": 1,
+      "publishToClient": 0,
+      "revealSecret": 0,
+      "revealUntrusted": 8,
+      "serverValue": 2,
+      "trustedAssign": 1,
+      "trustedReveal": 0
+    },
+    "total": 12
+  },
+  "sites": [
+    {
+      "site": "examples/commerce/src/domain.ts#site-0001",
+      "file": "examples/commerce/src/domain.ts",
+      "line": 118,
+      "column": 9,
+      "owner": "commitAddToCartRows",
+      "door": "serverValue",
+      "identity": "import:@kovojs/server#serverValue",
+      "callee": "serverValue",
+      "expressionSha256": "edea1946ceb59cb76056743491a99f6ec68f5ecd7e6da3b9a7a4fd43f3b70c5d"
+    },
+    {
+      "site": "examples/commerce/src/domain.ts#site-0002",
+      "file": "examples/commerce/src/domain.ts",
+      "line": 122,
+      "column": 13,
+      "owner": "commitAddToCartRows",
+      "door": "serverValue",
+      "identity": "import:@kovojs/server#serverValue",
+      "callee": "serverValue",
+      "expressionSha256": "1c6cb2e491670dfb8b9306ad7d1171b81f46c011a8994c8975dccc478b17bf8f"
+    },
+    {
+      "site": "packages/core/src/secret.ts#site-0001",
+      "file": "packages/core/src/secret.ts",
+      "line": 793,
+      "column": 30,
+      "owner": "revealRedacted",
+      "door": ".reveal",
+      "identity": "member:.reveal",
+      "callee": "(value as RedactedValue<T>).reveal",
+      "expressionSha256": "28fe08ec540dfc448e612f12976db3372bf3454a50528aeeac39fb4ce92987f3"
+    },
+    {
+      "site": "packages/create-kovo/templates/src/mutations.ts#site-0001",
+      "file": "packages/create-kovo/templates/src/mutations.ts",
+      "line": 36,
+      "column": 9,
+      "owner": "writeContact",
+      "door": "trustedAssign",
+      "identity": "import:@kovojs/server#trustedAssign",
+      "callee": "trustedAssign",
+      "expressionSha256": "5c80b32f16c0a4af425b0030cc562665efc7a8f5ceb13b64cb04ed3b8bc2c5d2"
+    },
+    {
+      "site": "packages/server/src/csrf.ts#site-0001",
+      "file": "packages/server/src/csrf.ts",
+      "line": 671,
+      "column": 31,
+      "owner": "revealCsrfInput",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "42b56ec8c0512beb8e6fc4df5fc80f18421bcb19c138f634810615eefdb7ded5"
+    },
+    {
+      "site": "packages/server/src/mutation.ts#site-0001",
+      "file": "packages/server/src/mutation.ts",
+      "line": 1574,
+      "column": 31,
+      "owner": "revealCsrfTokenInput",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "42b56ec8c0512beb8e6fc4df5fc80f18421bcb19c138f634810615eefdb7ded5"
+    },
+    {
+      "site": "packages/server/src/mutation/replay-policy.ts#site-0001",
+      "file": "packages/server/src/mutation/replay-policy.ts",
+      "line": 578,
+      "column": 7,
+      "owner": "readNoJsIdemField",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "f99c7ae591279fe984fd1b852ee35e294b46e49be36b6c31592ab8a264679f7e"
+    },
+    {
+      "site": "packages/server/src/replay.ts#site-0001",
+      "file": "packages/server/src/replay.ts",
+      "line": 970,
+      "column": 26,
+      "owner": "canonicalJson",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "83df907d337c7ee4f03a4e188de89513e0ef501b3cbee3e88554dc34271ca91b"
+    },
+    {
+      "site": "packages/server/src/route.ts#site-0001",
+      "file": "packages/server/src/route.ts",
+      "line": 656,
+      "column": 36,
+      "owner": "revealRouteRequestValue",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "83df907d337c7ee4f03a4e188de89513e0ef501b3cbee3e88554dc34271ca91b"
+    },
+    {
+      "site": "packages/server/src/route.ts#site-0002",
+      "file": "packages/server/src/route.ts",
+      "line": 1884,
+      "column": 29,
+      "owner": "searchParamValue",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "83df907d337c7ee4f03a4e188de89513e0ef501b3cbee3e88554dc34271ca91b"
+    },
+    {
+      "site": "packages/server/src/schema.ts#site-0001",
+      "file": "packages/server/src/schema.ts",
+      "line": 2036,
+      "column": 13,
+      "owner": "revealSchemaInput",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "42b56ec8c0512beb8e6fc4df5fc80f18421bcb19c138f634810615eefdb7ded5"
+    },
+    {
+      "site": "packages/server/src/untrusted-request-body.ts#site-0001",
+      "file": "packages/server/src/untrusted-request-body.ts",
+      "line": 284,
+      "column": 15,
+      "owner": "revealRequestValue",
+      "door": "revealUntrusted",
+      "identity": "import:@kovojs/core#revealUntrusted",
+      "callee": "revealUntrusted",
+      "expressionSha256": "83df907d337c7ee4f03a4e188de89513e0ef501b3cbee3e88554dc34271ca91b"
+    }
+  ]
+}

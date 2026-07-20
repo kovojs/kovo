@@ -1,7 +1,11 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { isCompilerOwnedResidualAttribute } from '@kovojs/core/internal/semantic-attributes';
 
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from '../diagnostics.js';
 import {
   kovoExecutableReferenceAttributeKind,
   type KovoExecutableReferenceAttributeKind,
@@ -173,19 +177,21 @@ function appendCompilerJsxRuntimeImportDiagnostics(
     }
     compilerArrayAppend(
       diagnostics,
-      {
-        ...diagnosticFor(fileName, 'KV235', source, imported.start, imported.end - imported.start),
-        help: compilerArrayJoin(
-          [
-            `Blocked reason: app source imports compiler-owned JSX construction ABI ${compilerJsonStringify(imported.factories)} from \`${imported.specifier}\`.`,
-            'Fixes: author render output as TSX/JSX and let the configured JSX transform call the runtime after Kovo has validated the source.',
-            'SPEC.md §5.2 rules 3 and 7: the JSX runtime is emitted execution ABI, not a second app-authoring surface.',
-            'Escape: there is no app-authored import or call suppression for compiler JSX constructors.',
-          ],
-          '\n',
-        ),
-        message: 'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
-      },
+      contextualizeCompilerDiagnostic(
+        diagnosticFor(fileName, 'KV235', source, imported.start, imported.end - imported.start),
+        {
+          help: compilerArrayJoin(
+            [
+              `Blocked reason: app source imports compiler-owned JSX construction ABI ${compilerJsonStringify(imported.factories)} from \`${imported.specifier}\`.`,
+              'Fixes: author render output as TSX/JSX and let the configured JSX transform call the runtime after Kovo has validated the source.',
+              'SPEC.md §5.2 rules 3 and 7: the JSX runtime is emitted execution ABI, not a second app-authoring surface.',
+              'Escape: there is no app-authored import or call suppression for compiler JSX constructors.',
+            ],
+            '\n',
+          ),
+          message: 'App source imports the compiler-owned JSX runtime; author TSX/JSX instead.',
+        },
+      ),
       'Authoring-surface diagnostics',
     );
   }
@@ -204,8 +210,7 @@ function compilerJsxRuntimeCallDiagnostic({
   source: string;
   start: number;
 }): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV235', source, start, length),
+  return contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV235', source, start, length), {
     help: compilerArrayJoin(
       [
         `Blocked reason: app source calls exact framework JSX constructor \`${factory}\` through an alias or reviewed re-export.`,
@@ -216,7 +221,7 @@ function compilerJsxRuntimeCallDiagnostic({
       '\n',
     ),
     message: `App source calls compiler-owned JSX constructor ${factory}; author TSX/JSX instead.`,
-  };
+  });
 }
 
 /**
@@ -403,26 +408,27 @@ function appendAuthoredExecutableReferenceDiagnosticForName(
   if (kind === undefined) {
     compilerArrayAppend(
       diagnostics,
-      {
-        ...diagnosticFor(fileName, 'KV235', source, start, end - start),
-        help: compilerArrayJoin(
-          [
-            `Blocked lowered selector: ${name}.`,
-            'Fix: remove the raw control attribute and author the typed JSX expression, mutation/stream primitive, list expression, or public component API that owns the behavior.',
-            'SPEC.md §5.2 rules 3 and 7: app-authored TSX is the input; only compiler/framework output may mint residual runtime control-plane stamps.',
-          ],
-          '\n',
-        ),
-        message: `App source hand-authors framework control-plane lowered IR; use typed TSX and let the compiler emit it. ${name}`,
-      },
+      contextualizeCompilerDiagnostic(
+        diagnosticFor(fileName, 'KV235', source, start, end - start),
+        {
+          help: compilerArrayJoin(
+            [
+              `Blocked lowered selector: ${name}.`,
+              'Fix: remove the raw control attribute and author the typed JSX expression, mutation/stream primitive, list expression, or public component API that owns the behavior.',
+              'SPEC.md §5.2 rules 3 and 7: app-authored TSX is the input; only compiler/framework output may mint residual runtime control-plane stamps.',
+            ],
+            '\n',
+          ),
+          message: `App source hand-authors framework control-plane lowered IR; use typed TSX and let the compiler emit it. ${name}`,
+        },
+      ),
       'Authoring-surface diagnostics',
     );
     return;
   }
   compilerArrayAppend(
     diagnostics,
-    {
-      ...diagnosticFor(fileName, 'KV235', source, start, end - start),
+    contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV235', source, start, end - start), {
       help: compilerArrayJoin(
         [
           authoredExecutableReferenceFix(kind),
@@ -432,7 +438,7 @@ function appendAuthoredExecutableReferenceDiagnosticForName(
         '\n',
       ),
       message: `App source hand-authors an executable lowered-IR reference; use typed TSX and let the compiler emit it. ${name}`,
-    },
+    }),
     'Authoring-surface diagnostics',
   );
 }
@@ -501,25 +507,27 @@ function appendComponentIdentityAssignmentDiagnostics(
     if (!targetsComponent) continue;
     compilerArrayAppend(
       diagnostics,
-      {
-        ...diagnosticFor(
+      contextualizeCompilerDiagnostic(
+        diagnosticFor(
           fileName,
           'KV235',
           source,
           assignment.start,
           assignment.end - assignment.start,
         ),
-        help: compilerArrayJoin(
-          [
-            `Blocked reason: app source assigns compiler-owned derived identity \`${assignment.target}.name = ${compilerJsonStringify(assignment.value)}\`.`,
-            'Fixes: remove the identity assignment and any copied lowered output; configure the component in TSX and let Kovo derive its registry and kovo-c identity.',
-            'SPEC.md §5.2 rules 3 and 7: compiler output is proof/fixpoint material, not a second app-authoring surface.',
-          ],
-          '\n',
-        ),
-        message:
-          'App source assigns a compiler-owned component identity; remove copied lowered output.',
-      },
+        {
+          help: compilerArrayJoin(
+            [
+              `Blocked reason: app source assigns compiler-owned derived identity \`${assignment.target}.name = ${compilerJsonStringify(assignment.value)}\`.`,
+              'Fixes: remove the identity assignment and any copied lowered output; configure the component in TSX and let Kovo derive its registry and kovo-c identity.',
+              'SPEC.md §5.2 rules 3 and 7: compiler output is proof/fixpoint material, not a second app-authoring surface.',
+            ],
+            '\n',
+          ),
+          message:
+            'App source assigns a compiler-owned component identity; remove copied lowered output.',
+        },
+      ),
       'Authoring-surface diagnostics',
     );
   }
@@ -557,8 +565,7 @@ function nonPublicKovoImportDiagnostic({
   specifier: string;
   start: number;
 }): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV235', source, start, length),
+  return contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV235', source, start, length), {
     help: compilerArrayJoin(
       [
         `Blocked reason: app source imports non-public Kovo subpath \`${specifier}\`.`,
@@ -568,7 +575,7 @@ function nonPublicKovoImportDiagnostic({
       '\n',
     ),
     message: 'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
-  };
+  });
 }
 
 function appLocalGeneratedImportDiagnostic({
@@ -584,8 +591,7 @@ function appLocalGeneratedImportDiagnostic({
   specifier: string;
   start: number;
 }): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV235', source, start, length),
+  return contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV235', source, start, length), {
     help: compilerArrayJoin(
       [
         `Blocked reason: app source imports app-local generated artifact \`${specifier}\`.`,
@@ -596,7 +602,7 @@ function appLocalGeneratedImportDiagnostic({
     ),
     message:
       'App source imports an app-local generated artifact; import the authored source instead.',
-  };
+  });
 }
 
 function keyFirstRegistryCall(
@@ -630,8 +636,7 @@ function keyFirstRegistryIdentityDiagnostic({
 }): CompilerDiagnostic {
   const sourceForm =
     primitive === 'mutation' ? 'mutation({ input, handler })' : 'query({ load, reads })';
-  return {
-    ...diagnosticFor(fileName, 'KV235', source, start, length),
+  return contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV235', source, start, length), {
     help: compilerArrayJoin(
       [
         `Blocked reason: app source hard-codes a ${primitive} registry identity that the compiler can derive from the exported binding and module path.`,
@@ -641,7 +646,7 @@ function keyFirstRegistryIdentityDiagnostic({
       '\n',
     ),
     message: `App source hard-codes a ${primitive} registry identity; use the source-derived object form.`,
-  };
+  });
 }
 
 function compilerIrDiagnostic(options: InternalCompileComponentOptions): CompilerDiagnostic {
@@ -750,10 +755,9 @@ function kv235Diagnostic({
     ? `TSX equivalent direction: render with JSX, for example \`render: (...) => (<${tagName}>...</${tagName}>)\`, and use typed expressions such as \`{cart.count}\` instead of data-bind strings.`
     : 'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.';
 
-  return {
-    ...diagnosticFor(fileName, 'KV235', source, start, length),
+  return contextualizeCompilerDiagnostic(diagnosticFor(fileName, 'KV235', source, start, length), {
     help: compilerArrayJoin([diagnosticDefinitions.KV235.help, tsxDirection], '\n'),
-  };
+  });
 }
 
 function optionalTagName(tagName: string | null): { tagName: string } | {} {

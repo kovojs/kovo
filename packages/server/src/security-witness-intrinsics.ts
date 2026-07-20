@@ -19,6 +19,7 @@ const NativeProxy = globalThis.Proxy;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeJSON = globalThis.JSON;
+const nativeEncodeURIComponent = globalThis.encodeURIComponent;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectConstruct = NativeReflect.construct;
 const nativeReflectGet = NativeReflect.get;
@@ -86,6 +87,7 @@ function capturedControlsAreSound(): boolean {
     if (apply(nativeJsonStringify, NativeJSON, [42]) !== '42') return false;
     if (apply(nativeJsonStringify, NativeJSON, [null]) !== 'null') return false;
     if (apply(nativeJsonStringify, NativeJSON, [undefined]) !== undefined) return false;
+    if (apply(nativeEncodeURIComponent, undefined, ['a#b:c']) !== 'a%23b%3Ac') return false;
     const key = {};
     const other = {};
     const value = {};
@@ -454,6 +456,11 @@ export function witnessObjectIs(left: unknown, right: unknown): boolean {
   return apply(nativeObjectIs, NativeObject, [left, right]);
 }
 
+export function witnessNumberIsSafeInteger(value: unknown): value is number {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeNumberIsSafeInteger, NativeNumber, [value]);
+}
+
 export function witnessObjectKeys(value: object): string[] {
   assertSecurityWitnessIntrinsics();
   return apply(nativeObjectKeys, NativeObject, [value]);
@@ -573,6 +580,11 @@ export function witnessJsonStringifyPrimitive(
 ): string | undefined {
   assertSecurityWitnessIntrinsics();
   return apply(nativeJsonStringify, NativeJSON, [value]);
+}
+
+export function witnessEncodeURIComponent(value: string): string {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeEncodeURIComponent, undefined, [value]);
 }
 
 export function witnessStringReplaceAll(

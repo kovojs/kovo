@@ -1,0 +1,828 @@
+{
+  "schema": "kovo-security-coverage/v1",
+  "summary": {
+    "cells": 48,
+    "inapplicable": 1,
+    "witnessed": 47
+  },
+  "cells": [
+    {
+      "id": "browser-operation:browser.dialog.close",
+      "surface": "browser-operation",
+      "value": "browser.dialog.close",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.dialog.open",
+      "surface": "browser-operation",
+      "value": "browser.dialog.open",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.dom.focus",
+      "surface": "browser-operation",
+      "value": "browser.dom.focus",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.event.control",
+      "surface": "browser-operation",
+      "value": "browser.event.control",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "realistic-reviewed-browser-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.event.read",
+      "surface": "browser-operation",
+      "value": "browser.event.read",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.form.reset",
+      "surface": "browser-operation",
+      "value": "browser.form.reset",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.form.submit",
+      "surface": "browser-operation",
+      "value": "browser.form.submit",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.framework.call",
+      "surface": "browser-operation",
+      "value": "browser.framework.call",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "realistic-reviewed-browser-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.state.read",
+      "surface": "browser-operation",
+      "value": "browser.state.read",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.state.write",
+      "surface": "browser-operation",
+      "value": "browser.state.write",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "browser-operation-real-workflows",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.timer.cancel",
+      "surface": "browser-operation",
+      "value": "browser.timer.cancel",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "realistic-reviewed-browser-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "browser-operation:browser.timer.schedule",
+      "surface": "browser-operation",
+      "value": "browser.timer.schedule",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "realistic-reviewed-browser-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.authority.scope",
+      "surface": "server-operation",
+      "value": "server.authority.scope",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "server-framework-identity-and-principal-scope-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.data.declassify",
+      "surface": "server-operation",
+      "value": "server.data.declassify",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "declassification-policy-and-provenance-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.database.read",
+      "surface": "server-operation",
+      "value": "server.database.read",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "server-framework-identity-and-principal-scope-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.database.trusted-sql",
+      "surface": "server-operation",
+      "value": "server.database.trusted-sql",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.database.write",
+      "surface": "server-operation",
+      "value": "server.database.write",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "server-framework-identity-and-principal-scope-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.egress.request",
+      "surface": "server-operation",
+      "value": "server.egress.request",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.handler.root",
+      "surface": "server-operation",
+      "value": "server.handler.root",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "server-root-census-and-query-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.helper.call",
+      "surface": "server-operation",
+      "value": "server.helper.call",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-summary-provenance",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.output.trusted-html",
+      "surface": "server-operation",
+      "value": "server.output.trusted-html",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.response.cookie",
+      "surface": "server-operation",
+      "value": "server.response.cookie",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.response.header",
+      "surface": "server-operation",
+      "value": "server.response.header",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.response.outcome",
+      "surface": "server-operation",
+      "value": "server.response.outcome",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.response.raw",
+      "surface": "server-operation",
+      "value": "server.response.raw",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.response.redirect",
+      "surface": "server-operation",
+      "value": "server.response.redirect",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "structured-server-and-exception-doors",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.storage.read",
+      "surface": "server-operation",
+      "value": "server.storage.read",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "finite-scoped-key-sink-provenance",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.storage.write",
+      "surface": "server-operation",
+      "value": "server.storage.write",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "finite-scoped-key-sink-provenance",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.task.compose",
+      "surface": "server-operation",
+      "value": "server.task.compose",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "server-framework-identity-and-principal-scope-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "root:agent-tool-callback",
+      "surface": "root",
+      "value": "agent-tool-callback",
+      "disposition": "inapplicable",
+      "reason": "No shipping constructor registers an agent-tool callback root; fabricated exports close before root registration.",
+      "review": {
+        "basis": "packages/compiler/src/capability-closure.security.test.ts",
+        "id": "DEC-COV-AGENT-TOOL-DEFERRED"
+      },
+      "witnesses": []
+    },
+    {
+      "id": "root:application",
+      "surface": "root",
+      "value": "application",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:durable-task",
+      "surface": "root",
+      "value": "durable-task",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:endpoint",
+      "surface": "root",
+      "value": "endpoint",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:layout",
+      "surface": "root",
+      "value": "layout",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:mutation",
+      "surface": "root",
+      "value": "mutation",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:query",
+      "surface": "root",
+      "value": "query",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:route",
+      "surface": "root",
+      "value": "route",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:scheduled-task",
+      "surface": "root",
+      "value": "scheduled-task",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:serialized-browser-handler",
+      "surface": "root",
+      "value": "serialized-browser-handler",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "root:webhook",
+      "surface": "root",
+      "value": "webhook",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "complete-root-census",
+          "corpus": "capability-closure"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:budget-call-depth",
+      "surface": "closed-verdict",
+      "value": "budget-call-depth",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:budget-node-count",
+      "surface": "closed-verdict",
+      "value": "budget-node-count",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:budget-operation-count",
+      "surface": "closed-verdict",
+      "value": "budget-operation-count",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:budget-summary-count",
+      "surface": "closed-verdict",
+      "value": "budget-summary-count",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:helper-cycle",
+      "surface": "closed-verdict",
+      "value": "helper-cycle",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:opaque-transfer",
+      "surface": "closed-verdict",
+      "value": "opaque-transfer",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "runtime-selected-executable-reference-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:unknown-operation",
+      "surface": "closed-verdict",
+      "value": "unknown-operation",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "string-timer-and-unknown-browser-receiver-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "closed-verdict:unsupported-authority-use",
+      "surface": "closed-verdict",
+      "value": "unsupported-authority-use",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    }
+  ]
+}

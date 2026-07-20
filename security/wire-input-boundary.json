@@ -1,0 +1,530 @@
+{
+  "rows": [
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/enhanced-navigation.ts",
+      "id": "packages/browser/src/enhanced-navigation.ts#contentType",
+      "inputName": "content-type",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Enhanced navigation accepts only the registered response media-type field.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#reauth",
+      "inputName": "kovo-reauth",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation handling validates the registered same-origin reauthentication path.",
+      "registryId": "response-header.kovo-reauth"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#changesHeader",
+      "inputName": "kovo-changes",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation handling parses the registered finite change-envelope JSON field.",
+      "registryId": "response-header.kovo-changes"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#buildToken",
+      "inputName": "kovo-build",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation handling compares the registered deployment build token.",
+      "registryId": "response-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#contentType",
+      "inputName": "content-type",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation handling accepts only the registered response media-type field.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#readSessionTransition.return",
+      "inputName": "kovo-session-transition",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation handling recognizes the registered session-transition token.",
+      "registryId": "response-header.kovo-session-transition"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#headerLocation",
+      "inputName": "location",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation redirect handling validates the registered response location.",
+      "registryId": "response-header.location"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/query-refetch.ts",
+      "id": "packages/browser/src/query-refetch.ts#responseBuildToken",
+      "inputName": "kovo-build",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Query refetch compares the registered deployment build token.",
+      "registryId": "response-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#noStore",
+      "inputName": "cookie",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Document cache proof treats any registered Cookie field as a narrowing credential signal.",
+      "registryId": "request-header.cookie"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#noStore~2",
+      "inputName": "authorization",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Document cache proof treats any registered Authorization field as a narrowing credential signal.",
+      "registryId": "request-header.authorization"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#cacheControl",
+      "inputName": "cache-control",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Document cache verification compares the exact response Cache-Control field with compiler proof and can only narrow.",
+      "registryId": "response-header.cache-control"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#actualVary",
+      "inputName": "vary",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Document cache verification compares the exact response Vary field with the compiler-derived axis set and can only narrow.",
+      "registryId": "response-header.vary"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-mutation-request.ts",
+      "id": "packages/server/src/app-mutation-request.ts#handleAppMutationRequest.call",
+      "inputName": "kovo-current-url",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation transport rejects an authored duplicate of the framework current-URL field.",
+      "registryId": "request-header.kovo-current-url"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-mutation-request.ts",
+      "id": "packages/server/src/app-mutation-request.ts#source",
+      "inputName": "kovo-current-url",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation source derivation validates the registered framework current URL.",
+      "registryId": "request-header.kovo-current-url"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-mutation-request.ts",
+      "id": "packages/server/src/app-mutation-request.ts#source~2",
+      "inputName": "referer",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation source derivation validates the standard request referrer fallback.",
+      "registryId": "request-header.referer"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-system-response.ts",
+      "id": "packages/server/src/app-system-response.ts#appSystemResponse",
+      "inputName": "location",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "System response reconstruction validates the registered response location.",
+      "registryId": "response-header.location"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/app-system-response.ts",
+      "id": "packages/server/src/app-system-response.ts#appSystemResponseHeaders.call",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "System response reconstruction checks the registered response media type.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["search-param"],
+      "api": "capabilityUrlParam",
+      "file": "packages/server/src/capability-route.ts",
+      "id": "packages/server/src/capability-route.ts#token",
+      "inputName": "kovo-cap",
+      "symbol": "packages/server/src/capability-intrinsics.ts#capabilityUrlParam",
+      "reason": "The capability route reads only its registered signed-token search parameter.",
+      "registryId": "search-param.kovo-cap"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "readUntrustedRequestHeader",
+      "file": "packages/server/src/csrf.ts",
+      "id": "packages/server/src/csrf.ts#originInput",
+      "inputName": "origin",
+      "symbol": "packages/server/src/untrusted-request-body.ts#readUntrustedRequestHeader",
+      "reason": "CSRF validation reads the registered request Origin security input.",
+      "registryId": "request-header.origin"
+    },
+    {
+      "allowedCarriers": ["request-cookie"],
+      "api": "readUntrustedCookieValue",
+      "file": "packages/server/src/csrf.ts",
+      "id": "packages/server/src/csrf.ts#value",
+      "inputName": null,
+      "symbol": "packages/server/src/untrusted-request-body.ts#readUntrustedCookieValue",
+      "reason": "CSRF validation reads the configuration-selected cookie through the reviewed dynamic-name door.",
+      "registryId": "request-cookie.dynamic-name"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/document-core.ts",
+      "id": "packages/server/src/document-core.ts#contentType",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Document rendering inspects the registered response media-type field.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/mutation-wire.ts",
+      "id": "packages/server/src/mutation-wire.ts#fragmentHeader",
+      "inputName": "kovo-fragment",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Mutation wire parsing recognizes the registered fragment-mode literal.",
+      "registryId": "request-header.kovo-fragment"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/mutation-wire.ts",
+      "id": "packages/server/src/mutation-wire.ts#idemHeader",
+      "inputName": "kovo-idem",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Mutation wire parsing validates the registered idempotency token.",
+      "registryId": "request-header.kovo-idem"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/mutation-wire.ts",
+      "id": "packages/server/src/mutation-wire.ts#streamHeader",
+      "inputName": "kovo-stream",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Mutation wire parsing recognizes the registered streaming-mode literal.",
+      "registryId": "request-header.kovo-stream"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/mutation-wire.ts",
+      "id": "packages/server/src/mutation-wire.ts#formTargetHeader",
+      "inputName": "kovo-form-target",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Mutation wire parsing validates the registered fragment target identity.",
+      "registryId": "request-header.kovo-form-target"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/mutation-wire.ts",
+      "id": "packages/server/src/mutation-wire.ts#liveTargets",
+      "inputName": "kovo-targets",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Mutation wire parsing uses the shared finite target-list grammar.",
+      "registryId": "request-header.kovo-targets"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/mutation-wire.ts",
+      "id": "packages/server/src/mutation-wire.ts#liveTargetDescriptors",
+      "inputName": "kovo-live-targets",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Mutation wire parsing uses the shared finite live-target grammar.",
+      "registryId": "request-header.kovo-live-targets"
+    },
+    {
+      "allowedCarriers": ["search-params"],
+      "api": "querySearchInputEntries",
+      "file": "packages/server/src/query.ts",
+      "id": "packages/server/src/query.ts#renderQueryEndpointResponse",
+      "inputName": "*",
+      "symbol": "packages/server/src/query.ts#snapshotQuerySearchInputEntries",
+      "reason": "The query endpoint snapshots the whole bounded search carrier before schema validation.",
+      "registryId": "search-params.query-input"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/query.ts",
+      "id": "packages/server/src/query.ts#queryRequestHeader.return",
+      "inputName": "cookie",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The native query cache floor observes only the exact registered Cookie credential field.",
+      "registryId": "request-header.cookie"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/query.ts",
+      "id": "packages/server/src/query.ts#queryRequestHeader.return~2",
+      "inputName": "authorization",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The native query cache floor observes only the exact registered Authorization credential field.",
+      "registryId": "request-header.authorization"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/query.ts",
+      "id": "packages/server/src/query.ts#queryRequestHeader.return~3",
+      "inputName": "cookie",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The structural query cache fallback observes only the exact registered Cookie credential field.",
+      "registryId": "request-header.cookie"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/query.ts",
+      "id": "packages/server/src/query.ts#queryRequestHeader.return~4",
+      "inputName": "authorization",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The structural query cache fallback observes only the exact registered Authorization credential field.",
+      "registryId": "request-header.authorization"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/request-body-intrinsics.ts",
+      "id": "packages/server/src/request-body-intrinsics.ts#contentType",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Request-body selection parses only the registered content-type field.",
+      "registryId": "request-header.content-type"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/response-posture.ts",
+      "id": "packages/server/src/response-posture.ts#responsePostureHeader.return",
+      "inputName": null,
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Response-posture verification routes a reviewed dynamic name through the generic header door.",
+      "registryId": "header.dynamic-framework-door"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "responseRequestHeader",
+      "file": "packages/server/src/response.ts",
+      "id": "packages/server/src/response.ts#routeOutcomeResponse",
+      "inputName": "if-none-match",
+      "symbol": "packages/server/src/response.ts#requestHeader",
+      "reason": "Conditional route responses compare the registered request entity tag.",
+      "registryId": "request-header.if-none-match"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/response.ts",
+      "id": "packages/server/src/response.ts#requestHeader.return",
+      "inputName": null,
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The request-header adapter forwards one reviewed dynamic name to the generic reader.",
+      "registryId": "header.dynamic-framework-door"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/response.ts",
+      "id": "packages/server/src/response.ts#requestHeader.return~2",
+      "inputName": null,
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The structural request-header fallback forwards one reviewed dynamic name to the generic reader.",
+      "registryId": "header.dynamic-framework-door"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/untrusted-request-body.ts",
+      "id": "packages/server/src/untrusted-request-body.ts#value",
+      "inputName": null,
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The untrusted-header adapter forwards a caller-censused dynamic request name.",
+      "registryId": "request-header.dynamic-framework-door"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/untrusted-request-body.ts",
+      "id": "packages/server/src/untrusted-request-body.ts#header",
+      "inputName": "cookie",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The untrusted cookie adapter reads only the registered Cookie request field.",
+      "registryId": "request-header.cookie"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/untrusted-request-body.ts",
+      "id": "packages/server/src/untrusted-request-body.ts#carrier",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "The untrusted body adapter classifies only the registered content-type field.",
+      "registryId": "request-header.content-type"
+    },
+    {
+      "allowedCarriers": ["search-param"],
+      "api": "viteDevUrlSearchParam",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#target",
+      "inputName": "url",
+      "symbol": "packages/server/src/vite-dev.ts#viteDevUrlSearchParam",
+      "reason": "The dev refresh endpoint validates its registered same-origin URL parameter.",
+      "registryId": "search-param.url"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#target~2",
+      "inputName": "kovo-current-url",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The dev refresh endpoint accepts the registered framework current-URL field.",
+      "registryId": "request-header.kovo-current-url"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#target~3",
+      "inputName": "referer",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The dev refresh endpoint validates the standard request referrer fallback.",
+      "registryId": "request-header.referer"
+    },
+    {
+      "allowedCarriers": ["search-param"],
+      "api": "viteDevUrlSearchParam",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#previousHmrBuildToken.return",
+      "inputName": "oldBuild",
+      "symbol": "packages/server/src/vite-dev.ts#viteDevUrlSearchParam",
+      "reason": "The dev refresh endpoint reads its registered previous-build parameter.",
+      "registryId": "search-param.old-build"
+    },
+    {
+      "allowedCarriers": ["search-param"],
+      "api": "viteDevUrlSearchParam",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#previousHmrBuildToken.return~2",
+      "inputName": "build",
+      "symbol": "packages/server/src/vite-dev.ts#viteDevUrlSearchParam",
+      "reason": "The dev refresh endpoint reads its registered build parameter fallback.",
+      "registryId": "search-param.build"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#previousHmrBuildToken.return~3",
+      "inputName": "kovo-build",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The dev refresh endpoint reads the registered build request field fallback.",
+      "registryId": "request-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#injectKovoHmrScriptIntoRouteResponse.call",
+      "inputName": "content-type",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Dev response injection checks the registered response media type.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#fragment",
+      "inputName": "kovo-fragment",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The dev request handler recognizes the registered fragment-mode literal.",
+      "registryId": "request-header.kovo-fragment"
+    },
+    {
+      "allowedCarriers": ["search-param"],
+      "api": "viteDevUrlSearchParam",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#isUnversionedKovoAppShellClientModuleRequest.return",
+      "inputName": "v",
+      "symbol": "packages/server/src/vite-dev.ts#viteDevUrlSearchParam",
+      "reason": "The dev module endpoint reads only its registered version parameter.",
+      "registryId": "search-param.version"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#accept",
+      "inputName": "accept",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "The dev handler negotiates only the registered Accept request field.",
+      "registryId": "request-header.accept"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#renderKovoAppShellViteDevDiagnosticResponse.call",
+      "inputName": "kovo-fragment",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Dev diagnostics recognize the registered fragment-mode literal.",
+      "registryId": "request-header.kovo-fragment"
+    },
+    {
+      "allowedCarriers": ["header", "request-header", "response-header"],
+      "api": "serverReadHeader",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#source",
+      "inputName": "kovo-targets",
+      "symbol": "packages/server/src/response.ts#readHeader",
+      "reason": "Dev target parsing uses the shared finite target-list grammar.",
+      "registryId": "request-header.kovo-targets"
+    }
+  ],
+  "schema": "kovo-wire-input-boundary/v1",
+  "summary": {
+    "classified": 52,
+    "dynamicNames": 5,
+    "sites": 52
+  }
+}

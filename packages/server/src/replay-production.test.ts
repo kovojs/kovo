@@ -148,6 +148,38 @@ describe('production replay truth posture', () => {
     expect(replayApi.isDurableMutationReplayStore(app.mutationReplayStore)).toBe(true);
   });
 
+  it('requires framework-authenticated durable principal epochs for authenticated mutations', () => {
+    const common = {
+      egress: egressDisabled,
+      mutationReplayStore: postgresRuntime.mutationReplayStore,
+      mutations: [declaredMutation()],
+      sessionProvider: () => ({ user: { id: 'u1' } }),
+    };
+
+    expect(() => createApp(common)).toThrow(/KV436.*principalEpochStore.*Postgres/u);
+    expect(() =>
+      createApp({
+        ...common,
+        principalEpochStore: serverPublicApi.createMemoryPrincipalEpochStore(),
+      }),
+    ).toThrow(/KV436.*principalEpochStore.*Postgres/u);
+    expect(() =>
+      createApp({
+        ...common,
+        principalEpochStore: {
+          advance: () => ({ changedAtMs: 2, epoch: 2, status: 'active' as const }),
+          current: () => ({ changedAtMs: 1, epoch: 1, status: 'active' as const }),
+          initialize: () => ({ changedAtMs: 1, epoch: 1, status: 'active' as const }),
+          tombstone: () => ({ changedAtMs: 2, epoch: 2, status: 'tombstoned' as const }),
+        },
+      }),
+    ).toThrow(/KV436.*principalEpochStore.*Postgres/u);
+
+    expect(() =>
+      createApp({ ...common, principalEpochStore: postgresRuntime.principalEpochStore }),
+    ).not.toThrow();
+  });
+
   it('refuses the framework memory webhook store at declaration', () => {
     expect(() =>
       webhookApi.webhook('/webhooks/volatile', {

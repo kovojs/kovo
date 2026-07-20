@@ -23,7 +23,7 @@ import type {
   RouteComponentImportRewrite,
 } from '@kovojs/compiler';
 import type { DiagnosticCode } from '@kovojs/core';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { assertRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import {
@@ -57,6 +57,10 @@ import {
   stableValue,
 } from '../shared.js';
 import { findNearestFile, isRecord, readJsonRecord } from '../tooling.js';
+import {
+  readCapabilityPackageSummaries,
+  resolveCapabilityPackages,
+} from '../capability-closure-packages.js';
 
 const requireFromCli = createRequire(import.meta.url);
 const cliPackageManifest = readCliPackageManifest();
@@ -907,6 +911,7 @@ async function runCompileComponentCommand(
     >;
   }
   const result = await compileFrameworkComponentModule(compileOptions);
+  assertCompileResultDiagnostics(result.diagnostics, 'CLI component compiler diagnostics');
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
   const warnings = result.diagnostics.filter((diagnostic) =>
     allowedDiagnosticCodes.has(diagnostic.code),
@@ -1067,6 +1072,7 @@ async function runCompileDrizzleStaticCommand(
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
     extractMassAssignmentFromProject,
+    extractGrantGraphFactsFromProject,
     extractMaterializedViewRefreshFactsFromProject,
     extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
@@ -1091,6 +1097,7 @@ async function runCompileDrizzleStaticCommand(
         'algebraicShapes',
         'capabilities',
         'cookieDowngrades',
+        'grantGraph',
         'massAssignmentFacts',
         'materializedViewRefreshFacts',
         'ownerAudit',
@@ -1120,6 +1127,9 @@ async function runCompileDrizzleStaticCommand(
       // SPEC §11.1 / secure-framework Phase 3: governed-column mass-assignment facts
       // the graph emission feeds to `kovo check` (KV438).
       output.massAssignmentFacts = extractMassAssignmentFromProject({ files });
+    }
+    if (extract.has('grantGraph')) {
+      output.grants = extractGrantGraphFactsFromProject({ files });
     }
     if (extract.has('queryWriteReachability')) {
       // SPEC §6.6/§9.4 / secure-framework Phase 5: query-loader write-reachability facts
@@ -1173,12 +1183,27 @@ async function runCompileDrizzleStaticCommand(
       // SPEC §5.2/§6.6: standalone static extraction follows the same compiler-owned finite
       // handler graph as `kovo build`. The exact supplied byte snapshot supplies both framework
       // identity and semantic summaries; TASK B keeps its non-handler request/process coverage.
-      const compilerVerdict = await compileStaticHandlerSecurityVerdict(files);
+      const staticInputDirectory = dirname(resolve(options.inputPath));
+      const staticInputManifest =
+        findNearestPackageJson(staticInputDirectory) ?? findNearestPackageJson(process.cwd());
+      const staticInputRoot =
+        staticInputManifest === undefined ? staticInputDirectory : dirname(staticInputManifest);
+      const compilerVerdict = await compileStaticHandlerSecurityVerdict(
+        files,
+        staticInputRoot,
+        resolve(staticInputRoot, files[0]?.fileName ?? 'app.ts'),
+      );
       if (compilerVerdict.diagnostics.length > 0) {
         appendDrizzleStaticDiagnostics(output, compilerVerdict.diagnostics);
       }
       output.unregisteredSinks = collectUnregisteredSinksFromProject({
         compilerSecuritySemanticSources: compilerVerdict.semanticSources,
+        compilerTaskBClosure: {
+          capabilityFacts: compilerVerdict.capabilityClosure.facts,
+          dependencyManifest: compilerVerdict.capabilityClosure.dependencyManifest,
+          files,
+          schema: 'kovo-task-b-closure/v1',
+        },
         files,
       });
     }
@@ -1267,6 +1292,7 @@ async function runCompileDrizzleStaticCommand(
 }
 
 interface StaticHandlerSecurityVerdict {
+  capabilityClosure: import('@kovojs/compiler/internal').AnalyzeCapabilityClosureResult;
   diagnostics: CoreGraph.StaticDiagnosticFact[];
   semanticSources: {
     fileName: string;
@@ -1277,8 +1303,17 @@ interface StaticHandlerSecurityVerdict {
 
 async function compileStaticHandlerSecurityVerdict(
   files: readonly { fileName: string; source: string }[],
+  root: string,
+  importerPath: string,
 ): Promise<StaticHandlerSecurityVerdict> {
+  const {
+    analyzeCapabilityClosure,
+    collectCapabilityPackageRequests,
+    compilerGeneratedCapabilityDependencies,
+  } = await import('@kovojs/compiler/internal');
   const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
+  const compilerDependencies: import('@kovojs/compiler/internal').CompilerGeneratedCapabilityDependency[] =
+    [];
   const semanticSources: StaticHandlerSecurityVerdict['semanticSources'] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]!;
@@ -1292,6 +1327,10 @@ async function compileStaticHandlerSecurityVerdict(
       readonly extraFiles?: readonly { fileName: string; source: string }[];
     };
     const result: CompileResult = await compileFrameworkComponentModule(options);
+    assertCompileResultDiagnostics(
+      result.diagnostics,
+      `CLI static handler diagnostics for ${file.fileName}`,
+    );
     for (const diagnostic of result.diagnostics) {
       if (diagnostic.code !== 'KV449') continue;
       diagnostics.push({
@@ -1302,6 +1341,13 @@ async function compileStaticHandlerSecurityVerdict(
         ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
       });
     }
+    for (const dependency of compilerGeneratedCapabilityDependencies({
+      authoredSource: file.source,
+      fileName: file.fileName,
+      loweredSource: result.loweredSource,
+    })) {
+      compilerDependencies.push(dependency);
+    }
     semanticSources.push({
       fileName: file.fileName,
       graphs: result.componentGraphFacts.flatMap((fact) =>
@@ -1310,7 +1356,27 @@ async function compileStaticHandlerSecurityVerdict(
       source: file.source,
     });
   }
-  return { diagnostics, semanticSources };
+  const packageRequests = collectCapabilityPackageRequests(files, compilerDependencies);
+  const capabilityClosure = analyzeCapabilityClosure({
+    compilerDependencies,
+    files,
+    packageSummaries: readCapabilityPackageSummaries(root),
+    packages: resolveCapabilityPackages(packageRequests, importerPath),
+  });
+  assertCompileResultDiagnostics(
+    capabilityClosure.diagnostics,
+    'CLI static capability-closure diagnostics',
+  );
+  for (const diagnostic of capabilityClosure.diagnostics) {
+    diagnostics.push({
+      code: diagnostic.code,
+      message: diagnostic.message,
+      severity: diagnostic.severity ?? 'error',
+      site: diagnostic.fileName,
+      ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+    });
+  }
+  return { capabilityClosure, diagnostics, semanticSources };
 }
 
 interface SqlSafetyDiagnosticLike {
@@ -1795,18 +1861,16 @@ async function compileArtifactActionLines(
   ];
 }
 
-function warningLines(
-  diagnostics: readonly { code: DiagnosticCode; fileName: string; message: string }[],
-): string[] {
+function warningLines(diagnostics: CompileResult['diagnostics']): string[] {
+  assertCompileResultDiagnostics(diagnostics, 'CLI warning diagnostics');
   return diagnostics.map(
     (diagnostic) =>
       `WARN ${diagnostic.code} file=${JSON.stringify(diagnostic.fileName)} ${stableText(diagnostic.message)}`,
   );
 }
 
-function compileDiagnosticResult(
-  diagnostics: readonly { code: DiagnosticCode; fileName: string; message: string }[],
-): CliCommandResult {
+function compileDiagnosticResult(diagnostics: CompileResult['diagnostics']): CliCommandResult {
+  assertCompileResultDiagnostics(diagnostics, 'CLI blocking compiler diagnostics');
   return {
     error: [
       compileCommandOutputVersion,
@@ -1818,6 +1882,15 @@ function compileDiagnosticResult(
     ].join('\n'),
     exitCode: 1,
   };
+}
+
+function assertCompileResultDiagnostics(
+  diagnostics: CompileResult['diagnostics'],
+  label: string,
+): void {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `${label}[${index}]`);
+  }
 }
 
 function readJsonFile(path: string): unknown {

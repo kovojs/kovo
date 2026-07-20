@@ -11,7 +11,10 @@ export const packageCapabilitySummarySchema = 'kovo-package-capabilities/v1' as 
 
 /** @internal */
 export type RawCapabilityKind =
+  | 'crypto-acquisition'
   | 'database-driver'
+  | 'declassification'
+  | 'digest'
   | 'dynamic-loader'
   | 'filesystem'
   | 'network'
@@ -58,14 +61,43 @@ const rawDatabasePackages = new Set([
   'sqlite3',
 ]);
 
+const exactDigestOnlyCryptoExports = new Set(['createHash', 'hash']);
+
+/**
+ * Binding-sensitive raw import classifier (SPEC §6.6).
+ *
+ * A crypto namespace is itself high authority. Only an exact non-empty set of named, non-keyed
+ * digest exports receives the lower `digest` classification; a mixed import canonicalizes to the
+ * stronger verdict.
+ * @internal
+ */
+export function classifyRawCapabilityImport(
+  specifier: string,
+  importedNames: readonly string[],
+): RawCapabilityKind | undefined {
+  const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  if (withoutNode === 'crypto') {
+    return importedNames.length > 0 &&
+      importedNames.every((name) => exactDigestOnlyCryptoExports.has(name))
+      ? 'digest'
+      : 'crypto-acquisition';
+  }
+  if (capabilityPackageNameForSpecifier(specifier) === '@node-rs/argon2') {
+    return 'crypto-acquisition';
+  }
+  return classifyRawCapabilityModuleSpecifier(specifier);
+}
+
 /** @internal One C13-enrolled raw-module classifier shared by scanner and graph analysis. */
 export function classifyRawCapabilityModuleSpecifier(
   specifier: string,
 ): RawCapabilityKind | undefined {
   const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  if (withoutNode === 'crypto') return 'crypto-acquisition';
   const builtin = rawModuleCapabilities.get(withoutNode.split('/')[0]!);
   if (builtin !== undefined) return builtin;
   const packageName = capabilityPackageNameForSpecifier(specifier);
+  if (packageName === '@node-rs/argon2') return 'crypto-acquisition';
   if (rawDatabasePackages.has(packageName)) return 'database-driver';
   if (
     packageName === 'drizzle-orm' &&
@@ -86,17 +118,7 @@ function capabilityPackageNameForSpecifier(specifier: string): string {
 
 /** @internal */
 export type CapabilityRootKind =
-  | 'agent-tool-callback'
-  | 'application'
-  | 'durable-task'
-  | 'endpoint'
-  | 'layout'
-  | 'mutation'
-  | 'query'
-  | 'route'
-  | 'scheduled-task'
-  | 'serialized-browser-handler'
-  | 'webhook';
+  import('@kovojs/core/internal/security-operation-ir').SecurityRootKind;
 
 /** @internal */
 export interface CapabilityClosureSourceFile {
@@ -167,11 +189,32 @@ export interface ScannedCapabilityModule {
   readonly aliases: readonly ScannedBindingAliasFact[];
   readonly browserHandlers: readonly ScannedBrowserHandlerFact[];
   readonly calls: readonly ScannedCallFact[];
+  readonly compilerDependencies: readonly ScannedCompilerDependencyFact[];
   readonly exports: readonly ScannedExportBindingFact[];
   readonly fileName: string;
   readonly globals: readonly ScannedGlobalCapabilityFact[];
   readonly importBindings: readonly ScannedImportBindingFact[];
   readonly imports: readonly ScannedImportFact[];
+}
+
+/** @internal Exact package edges inserted only by the reviewed compiler transform. */
+export interface ScannedCompilerDependencyFact {
+  readonly importedNames: readonly string[];
+  readonly kind: 'generated-internal-abi' | 'jsx-runtime';
+  readonly site: string;
+  readonly specifier:
+    | '@kovojs/browser/internal/output'
+    | '@kovojs/server/internal/csrf'
+    | '@kovojs/server/internal/escape'
+    | '@kovojs/server/internal/route'
+    | '@kovojs/server/internal/wire'
+    | '@kovojs/server/jsx-dev-runtime'
+    | '@kovojs/server/jsx-runtime';
+}
+
+/** @internal Exact compiler dependency fact bound to the authored module that was lowered. */
+export interface CompilerGeneratedCapabilityDependency extends ScannedCompilerDependencyFact {
+  readonly importer: string;
 }
 
 /**
@@ -181,6 +224,8 @@ export interface ScannedCapabilityModule {
 export interface ResolvedCapabilityPackage {
   readonly conditions: readonly string[];
   readonly exportStatus: 'resolved' | 'unresolved';
+  /** Normalized authored module that owns this exact resolution fact. */
+  readonly importer?: string;
   /** Exact compiler-derived source or packed implementation identity; never package metadata. */
   readonly implementationDigest?: string;
   readonly manifestFingerprint: string;
@@ -220,6 +265,31 @@ export interface PackageCapabilitySummary {
 
 /** @internal */
 export interface CapabilityPackageRequest {
+  /** Normalized authored module that contains this package edge. */
+  readonly importer?: string;
   readonly importedNames: readonly string[];
   readonly specifier: string;
 }
+
+/** @internal Version token for the compiler-derived app dependency loader manifest. */
+export const appDependencyCapabilityManifestSchema = 'kovo-app-dependency-capabilities/v1' as const;
+
+/** @internal One exact export permission retained from the L1 package verdict. */
+export type AppDependencyCapabilityImport =
+  import('@kovojs/core/internal/graph').AppDependencyCapabilityImport;
+
+/** @internal One exact package subpath used by an untrusted-data-reachable app root. */
+export type AppDependencyCapabilityEntry =
+  import('@kovojs/core/internal/graph').AppDependencyCapabilityEntry;
+
+/** @internal Exact installed identity plus the least-authority verdict used by the loader floor. */
+export type AppDependencyCapability = import('@kovojs/core/internal/graph').AppDependencyCapability;
+
+/**
+ * Compiler-derived dependency import bound consumed by supported build/dev loader paths.
+ *
+ * This is a fail-closed runtime/build-loader floor, not a same-realm sandbox proof (SPEC §6.6).
+ * @internal
+ */
+export type AppDependencyCapabilityManifest =
+  import('@kovojs/core/internal/graph').AppDependencyCapabilityManifest;

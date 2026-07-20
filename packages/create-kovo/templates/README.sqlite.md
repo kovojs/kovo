@@ -59,6 +59,21 @@ peer while this starter uses Drizzle `1.0.0-rc.4`. The resulting pnpm peer warni
 is expected; Kovo's Better Auth adapter and starter tests cover this Drizzle 1.0
 shape.
 
+## Dependency install scripts
+
+Dependency lifecycle scripts are denied by default. The only reviewed build exceptions are the exact
+direct `@node-rs/argon2@2.0.2` and `better-sqlite3@12.11.1` pins; `esbuild`'s install hook is
+explicitly ignored because its platform package supplies the binary without that hook. pnpm
+runs in `strict-dep-builds` mode, so a new dependency with an unreviewed `preinstall`, `install`, or
+`postinstall` script makes installation fail instead of merely printing a warning.
+`scripts/check-lifecycle-policy.mjs` runs before install in CI and again under `pnpm run check`; update
+the pin, reviewed allowlist, and checker together after a security review. Matching pnpm overrides
+prevent transitive copies of either allowed package name from resolving to unreviewed versions.
+
+This policy bounds dependency install hooks, not application scripts or code imported at build or
+runtime. Command-line, environment, or machine-global pnpm overrides remain operator-controlled and
+must not weaken the checked-in project policy.
+
 ## Deploying
 
 `kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then

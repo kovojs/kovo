@@ -32,7 +32,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts --dts --deps.never-bundle @kovojs/compiler",
+    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
@@ -42,8 +42,10 @@
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/ui": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "esbuild": "0.28.1",
+    "parse5": "8.0.1",
+    "sigstore": "5.0.0",
     "vite-plus": "0.1.24"
   },
   "devDependencies": {
@@ -52,7 +54,7 @@
   "kovoBuildProvenance": {
     "securityGuarantees": {
       "schema": "kovo.security.guarantees/v1",
-      "canonicalHash": "sha256:5520ba2631adaa1b36f077f5f3ce7fc52b16b49f748856f586c0a5e445f9b7db"
+      "canonicalHash": "sha256:3d01b8455b5a772930b63b89c5b5713e71ac7e3961d9d65329ea3b581e562547"
     }
   }
 }

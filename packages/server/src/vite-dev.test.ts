@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
+import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
@@ -30,6 +31,10 @@ import {
 } from './vite-dev.js';
 import { renderedHtml } from './html.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
+
+function devDiagnostic(code: DiagnosticCode, fileName: string, message: string) {
+  return createRegisteredDiagnostic(code, { fileName }, { message });
+}
 
 function withCompilerLiveTargetRenderers<Result>(
   renderers: readonly LiveTargetRenderer<any>[],
@@ -108,11 +113,11 @@ describe('server app shell Vite dev seam', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/cart.tsx',
-          message: 'JSX nesting violates the HTML content model.',
-        },
+        devDiagnostic(
+          'KV225',
+          'src/components/cart.tsx',
+          'JSX nesting violates the HTML content model.',
+        ),
       ],
       fileName: 'src/components/cart.tsx',
     });
@@ -281,11 +286,11 @@ describe('server app shell Vite dev seam', () => {
     });
     integration.onModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/cart.tsx',
-          message: 'JSX nesting violates the HTML content model.',
-        },
+        devDiagnostic(
+          'KV225',
+          'src/components/cart.tsx',
+          'JSX nesting violates the HTML content model.',
+        ),
       ],
       fileName: 'src/components/cart.tsx',
       source: 'export const Cart = component({ render: () => <p><div /></p> });',
@@ -463,11 +468,11 @@ describe('server app shell Vite dev seam', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV210',
-          fileName: 'src/components/cart.tsx',
-          message: 'Anonymous handler; name it for stable identity.',
-        },
+        devDiagnostic(
+          'KV210',
+          'src/components/cart.tsx',
+          'Anonymous handler; name it for stable identity.',
+        ),
       ],
       fileName: 'src/components/cart.tsx',
       moduleHrefs: ['/c/custom-cart.client.js?v=lint'],
@@ -487,11 +492,11 @@ describe('server app shell Vite dev seam', () => {
 
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/cart.tsx',
-          message: 'JSX nesting violates the HTML content model.',
-        },
+        devDiagnostic(
+          'KV225',
+          'src/components/cart.tsx',
+          'JSX nesting violates the HTML content model.',
+        ),
       ],
       fileName: 'src/components/cart.tsx',
     });
@@ -511,11 +516,11 @@ describe('server app shell Vite dev seam', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/mutations/cart.ts',
-          message: 'JSX nesting violates the HTML content model.',
-        },
+        devDiagnostic(
+          'KV225',
+          'src/mutations/cart.ts',
+          'JSX nesting violates the HTML content model.',
+        ),
       ],
       fileName: 'src/mutations/cart.ts',
       moduleHrefs: ['/_m/cart/add'],
@@ -1090,11 +1095,11 @@ describe('server app shell Vite dev seam', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/cart.tsx',
-          message: 'JSX nesting violates the HTML content model.',
-        },
+        devDiagnostic(
+          'KV225',
+          'src/components/cart.tsx',
+          'JSX nesting violates the HTML content model.',
+        ),
       ],
       fileName: 'src/components/cart.tsx',
       source: 'export const Cart = component({ render: () => <p><div /></p> });',

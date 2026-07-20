@@ -11,7 +11,9 @@ import type {
   DurableTaskStatusSqlResult,
   DurableTaskStatusSqlStatement,
 } from './task-observability.js';
+import { isProvenPrincipal } from './auth-principal.js';
 import { scrubSecretLifecycleValue } from './logging.js';
+import { securityEvent, securityEventResourceIdentity } from './security-event.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import {
@@ -64,6 +66,8 @@ export interface DurableTaskJob {
   readonly lineage: string;
   readonly generation: number;
   readonly priority: number;
+  /** Proven request principal whose scheduling path admitted these persisted args. */
+  readonly principal?: string;
   readonly status: DurableTaskJobStatus;
   readonly attempts: number;
   /** Persisted crash/redelivery ceiling owned by the task declaration. */
@@ -85,6 +89,8 @@ export interface DurableTaskEnqueueInput {
   readonly generation?: number;
   readonly lineage?: string;
   readonly priority?: number;
+  /** Proven request principal used only for complete erasure indexing and child propagation. */
+  readonly principal?: string;
   readonly status?: 'ready' | 'dead';
   readonly lastError?: string;
   /** Persisted so lease reaping cannot redeliver a process-killing task forever. */
@@ -208,6 +214,7 @@ interface DurableTaskJobRow {
   lineage: string | null;
   generation: number | null;
   priority: number | null;
+  principal: string | null;
   status: DurableTaskJobStatus;
   attempts: number;
   max_attempts: number;
@@ -232,6 +239,7 @@ export const KOVO_JOBS_TABLE_SQL: readonly DurableTaskSqlStatement[] = [
   lineage text null,
   generation integer not null default 0,
   priority integer not null default 0,
+  principal text null,
   run_at timestamptz not null,
   leased_until timestamptz null,
   lease_owner text null,
@@ -247,6 +255,11 @@ export const KOVO_JOBS_TABLE_SQL: readonly DurableTaskSqlStatement[] = [
   {
     text: `alter table _kovo_jobs
 add column if not exists max_attempts integer not null default 1 check (max_attempts > 0)`,
+    values: [],
+  },
+  {
+    text: `alter table _kovo_jobs
+add column if not exists principal text null`,
     values: [],
   },
   {
@@ -267,7 +280,41 @@ on _kovo_jobs (leased_until)
 where status = 'running'`,
     values: [],
   },
+  {
+    text: `create index if not exists _kovo_jobs_principal
+on _kovo_jobs (principal)
+where principal is not null`,
+    values: [],
+  },
 ];
+
+/** @internal Delete all durable task rows indexed to one proven principal. */
+export async function eraseDurableTaskPrincipalRows(
+  executor: DurableTaskSqlExecutor,
+  principal: string,
+): Promise<number> {
+  assertTaskPrincipal(principal);
+  const result = await executor.execute<{ deleted_count: number }>({
+    text:
+      'WITH deleted AS (DELETE FROM _kovo_jobs WHERE principal = $1 RETURNING 1) ' +
+      'SELECT COUNT(*)::int AS deleted_count FROM deleted',
+    values: [principal],
+  });
+  return exactTaskCount(result, 'Durable task principal erasure');
+}
+
+/** @internal Independently count durable task rows still indexed to one proven principal. */
+export async function countDurableTaskPrincipalRows(
+  executor: DurableTaskSqlExecutor,
+  principal: string,
+): Promise<number> {
+  assertTaskPrincipal(principal);
+  const result = await executor.execute<{ remaining_count: number }>({
+    text: 'SELECT COUNT(*)::int AS remaining_count FROM _kovo_jobs WHERE principal = $1',
+    values: [principal],
+  });
+  return exactTaskCount(result, 'Durable task principal absence probe', 'remaining_count');
+}
 
 export async function ensureDurableTaskSchema(executor: DurableTaskSqlExecutor): Promise<void> {
   for (let index = 0; index < KOVO_JOBS_TABLE_SQL.length; index += 1) {
@@ -344,8 +391,9 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const priority = normalizePriority(input.priority);
     const maxAttempts = normalizePositiveInteger(input.maxAttempts, 1);
     const status = input.status ?? 'ready';
+    const principal = normalizeTaskPrincipal(input.principal);
     const lastError = input.lastError === undefined ? null : scrubErrorMessage(input.lastError);
-    const logicalKeyFrame = input.key === undefined ? null : scopedKeyFactsFor(input.key).frame;
+    const logicalKeyFrame = taskQueueKeyAdmission(input);
 
     if (input.key !== undefined && coalesce === 'throttle') {
       const result = await this.executor.execute<{ id: string }>(
@@ -362,6 +410,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
           status,
           lastError,
           maxAttempts,
+          principal,
         ]),
       );
       const row = result.rows[0];
@@ -384,6 +433,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
         status,
         lastError,
         maxAttempts,
+        principal,
       ]),
     );
     const row = result.rows[0];
@@ -493,7 +543,8 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const priority = normalizePriority(input.priority);
     const maxAttempts = normalizePositiveInteger(input.maxAttempts, 1);
     const status = input.status ?? 'ready';
-    if (input.key !== undefined) scopedKeyFactsFor(input.key);
+    const principal = normalizeTaskPrincipal(input.principal);
+    taskQueueKeyAdmission(input);
 
     if (input.key !== undefined) {
       let ready: MutableDurableTaskJob | undefined;
@@ -512,6 +563,8 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
           ready.args = args;
           ready.runAt = copyDate(runAt);
           ready.updatedAt = now;
+          if (principal === null) delete ready.principal;
+          else ready.principal = principal;
         }
         ready.maxAttempts = maxAttempts;
         return { id: ready.id, task: ready.task };
@@ -531,6 +584,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
       maxAttempts,
       createdAt: now,
       updatedAt: now,
+      ...(principal === null ? {} : { principal }),
     };
     if (input.key !== undefined) job.key = input.key;
     if (input.lastError !== undefined) job.lastError = scrubErrorMessage(input.lastError);
@@ -666,6 +720,58 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
   }
 }
 
+function taskQueueKeyAdmission(input: DurableTaskEnqueueInput): string | null {
+  let facts: ReturnType<typeof scopedKeyFactsFor> | undefined;
+  try {
+    facts = input.key === undefined ? undefined : scopedKeyFactsFor(input.key);
+  } catch (error) {
+    emitTaskQueueDecision('deny', input.task);
+    throw error;
+  }
+  emitTaskQueueDecision('allow', input.task, facts);
+  return facts?.frame ?? null;
+}
+
+function emitTaskQueueDecision(
+  outcome: 'allow' | 'deny',
+  task: string,
+  facts?: ReturnType<typeof scopedKeyFactsFor>,
+): void {
+  // @kovo-security-decision task enqueue-scope-admission
+  securityEvent({
+    decisionSite: 'framework:task:enqueue-scope-admission',
+    door: 'task',
+    outcome,
+    principal:
+      facts === undefined
+        ? {
+            epoch: null,
+            id: null,
+            kind: 'unresolved',
+            reason: 'outside-request-context',
+            tenant: null,
+          }
+        : facts.posture === 'public'
+          ? { epoch: null, id: null, kind: 'anonymous', tenant: null }
+          : facts.posture === 'system'
+            ? { epoch: null, id: facts.authority, kind: 'system', tenant: null }
+            : {
+                epoch: null,
+                id: facts.authority,
+                kind: 'unresolved',
+                reason: 'epoch-unavailable',
+                tenant: null,
+              },
+    resourceScope: {
+      identity: securityEventResourceIdentity(
+        facts === undefined ? `task:${task}` : `task:${task}\u0000${facts.frame}`,
+      ),
+      kind: 'task',
+    },
+    type: 'security-decision',
+  });
+}
+
 interface MutableDurableTaskJob {
   id: string;
   task: string;
@@ -675,6 +781,7 @@ interface MutableDurableTaskJob {
   lineage: string;
   generation: number;
   priority: number;
+  principal?: string;
   status: DurableTaskJobStatus;
   attempts: number;
   maxAttempts: number;
@@ -689,24 +796,25 @@ interface MutableDurableTaskJob {
 const taskQueueSql = {
   enqueueUnkeyed: `insert into _kovo_jobs (
   id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
-  lineage, generation, priority, last_error, max_attempts
-) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12)
+  lineage, generation, priority, last_error, max_attempts, principal
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12, $13)
 returning id`,
   enqueueDebounce: `insert into _kovo_jobs (
   id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
-  lineage, generation, priority, last_error, max_attempts
-) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12)
+  lineage, generation, priority, last_error, max_attempts, principal
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12, $13)
 on conflict (task_key, logical_key) where status = 'ready' and logical_key is not null
 do update set args = excluded.args,
   run_at = excluded.run_at,
   priority = excluded.priority,
+  principal = excluded.principal,
   max_attempts = excluded.max_attempts,
   updated_at = excluded.updated_at
 returning id`,
   enqueueThrottle: `insert into _kovo_jobs (
   id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
-  lineage, generation, priority, last_error, max_attempts
-) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12)
+  lineage, generation, priority, last_error, max_attempts, principal
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11, $12, $13)
 on conflict (task_key, logical_key) where status = 'ready' and logical_key is not null
 do update set updated_at = _kovo_jobs.updated_at,
   max_attempts = excluded.max_attempts
@@ -730,7 +838,7 @@ set status = 'running',
   updated_at = $1
 where id in (select id from claimed)
 returning id, task_key, args, run_at, logical_key, status, attempts, max_attempts, created_at, updated_at,
-  leased_until, lease_owner, lease_token, last_error, lineage, generation, priority`,
+  leased_until, lease_owner, lease_token, last_error, lineage, generation, priority, principal`,
   heartbeat: `update _kovo_jobs
 set leased_until = $3,
   updated_at = $2
@@ -783,6 +891,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
   const lineage = taskJobRowValue(row, 'lineage');
   const generation = taskJobRowValue(row, 'generation');
   const priority = taskJobRowValue(row, 'priority');
+  const principal = taskJobRowValue(row, 'principal');
   const status = taskJobRowValue(row, 'status');
   const attempts = taskJobRowValue(row, 'attempts');
   const maxAttempts = taskJobRowValue(row, 'max_attempts');
@@ -808,7 +917,8 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     !taskNumberIsSafeInteger(maxAttempts) ||
     maxAttempts < 1 ||
     (generation !== null && (!taskNumberIsSafeInteger(generation) || generation < 0)) ||
-    (priority !== null && !taskNumberIsSafeInteger(priority))
+    (priority !== null && !taskNumberIsSafeInteger(priority)) ||
+    (principal !== null && !isProvenPrincipal(principal))
   ) {
     throw new TypeError('Durable task SQL job row contains invalid authority fields.');
   }
@@ -826,6 +936,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     createdAt: validTaskRowDate(createdAt),
     updatedAt: validTaskRowDate(updatedAt),
     ...(logicalKey === null ? {} : { key: restoreScopedKey(logicalKey) }),
+    ...(principal === null ? {} : { principal }),
     ...(leasedUntil === null ? {} : { leasedUntil: validTaskRowDate(leasedUntil) }),
     ...(leaseOwner === null ? {} : { leaseOwner }),
     ...(leaseToken === null ? {} : { leaseToken }),
@@ -932,6 +1043,31 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return taskIsRecord(value);
 }
 
+function normalizeTaskPrincipal(value: unknown): string | null {
+  if (value === undefined) return null;
+  assertTaskPrincipal(value);
+  return value;
+}
+
+function assertTaskPrincipal(value: unknown): asserts value is string {
+  if (!isProvenPrincipal(value)) {
+    throw new TypeError('Durable task principal must be a proven non-empty principal id.');
+  }
+}
+
+function exactTaskCount(
+  result: DurableTaskSqlResult<Record<string, unknown>>,
+  label: string,
+  property = 'deleted_count',
+): number {
+  if (result.rows.length !== 1) throw new Error(`${label} returned invalid count truth.`);
+  const value = taskOwnDataValue(result.rows[0]!, property);
+  if (!taskNumberIsSafeInteger(value) || value < 0) {
+    throw new Error(`${label} returned invalid count truth.`);
+  }
+  return value;
+}
+
 function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
   return {
     id: job.id,
@@ -947,6 +1083,7 @@ function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
     createdAt: copyDate(job.createdAt),
     updatedAt: copyDate(job.updatedAt),
     ...(job.key === undefined ? {} : { key: job.key }),
+    ...(job.principal === undefined ? {} : { principal: job.principal }),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
     ...(job.leaseToken === undefined ? {} : { leaseToken: job.leaseToken }),

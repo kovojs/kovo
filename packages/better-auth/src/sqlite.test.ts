@@ -8,6 +8,7 @@ import {
   text,
 } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
 import { mount } from './mount.js';
+import { betterAuthPasswordResetMailDoor } from './password-reset-mail.js';
 import {
   betterAuthSqliteSecret,
   createBetterAuthSqliteBindings,
@@ -44,7 +45,7 @@ const authMocks = vi.hoisted(() => {
   };
   return {
     auth,
-    betterAuth: vi.fn(() => auth),
+    betterAuth: vi.fn((_options?: unknown) => auth),
     drizzleAdapter: vi.fn(() => Object.freeze({ kind: 'sqlite-adapter' })),
     handler,
   };
@@ -177,6 +178,7 @@ describe('Better Auth SQLite bindings', () => {
           },
           rateLimit: expect.objectContaining({
             customRules: {
+              '/request-password-reset': expect.any(Function),
               '/**': false,
               '/sign-in/email': expect.any(Function),
               '/sign-up/email': expect.any(Function),
@@ -214,6 +216,45 @@ describe('Better Auth SQLite bindings', () => {
       if (previousTrustedOrigins === undefined) delete process.env.BETTER_AUTH_TRUSTED_ORIGINS;
       else process.env.BETTER_AUTH_TRUSTED_ORIGINS = previousTrustedOrigins;
     }
+  });
+
+  it('exposes password reset only with an exact purpose-closed mail capability', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const runtime = createSqliteAppRuntime({ tables: [proof, rateLimit] });
+    runtimes.push(runtime);
+    const options = bindingOptions(runtime);
+    options.passwordReset = {
+      access: { kind: 'public', reason: 'test account recovery' },
+      mail: betterAuthPasswordResetMailDoor(async () => {}),
+      resetPath: '/reset-password',
+    };
+
+    const bindings = createBetterAuthSqliteBindings(options);
+
+    expect(Object.keys(bindings).sort()).toEqual([
+      'mountAdapter',
+      'requestPasswordReset',
+      'seedDemoUser',
+      'sessionProvider',
+      'signIn',
+      'signOut',
+    ]);
+    expect(bindings.requestPasswordReset).toBeDefined();
+    expect(authMocks.betterAuth.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        emailAndPassword: expect.objectContaining({ sendResetPassword: expect.any(Function) }),
+      }),
+    );
+
+    const forged = bindingOptions(runtime);
+    forged.passwordReset = {
+      access: { kind: 'public', reason: 'forged account recovery' },
+      mail: {} as never,
+      resetPath: '/reset-password',
+    };
+    expect(() => createBetterAuthSqliteBindings(forged)).toThrow(
+      /opaque password-reset mail door/u,
+    );
   });
 });
 

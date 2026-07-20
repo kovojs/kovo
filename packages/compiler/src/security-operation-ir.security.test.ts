@@ -299,6 +299,28 @@ export const Raw = component({
   );
 
   it.each([
+    ['direct trusted-URL derivation marker', 'data-kovo-trusted-url:src=""'],
+    ['static-spread trusted-URL derivation marker', "{...{ 'data-kovo-trusted-url:src': '' }}"],
+  ])('closes app-authored %s', (_label, attributes) => {
+    const source = `
+import { component } from '@kovojs/core';
+export const Raw = component({
+  render: () => <img ${attributes} alt="" />,
+});
+`;
+
+    expect(kv235(source)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'App source hand-authors framework control-plane lowered IR',
+          ),
+        }),
+      ]),
+    );
+  });
+
+  it.each([
     ['handler ref', "'on:click': '/c/other.client.js#privileged'"],
     ['derive ref', "'data-bind:hidden': '/c/other.client.js#privileged'"],
     ['text binding path', "'data-bind': 'cart.count'"],
@@ -694,7 +716,7 @@ export const verify = mutation({
   it('accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations', () => {
     const diagnostics = kv449Project(
       `
-import { secret, trustedReveal } from '@kovojs/core';
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
 import { sql, trustedSql } from '@kovojs/drizzle';
 import { endpoint, declareSecretReadCapability } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
@@ -722,11 +744,14 @@ export const report = endpoint('/report', {
       .from(owned)
       .innerJoin(items, eq(items.accountId, owned.id))
       .union(db.select({ classified: accounts.classified, id: accounts.id }).from(accounts));
-    const reviewed = trustedReveal(secret(rows[0]?.classified ?? rawRows[0]?.classified), {
-      justification: 'publish the reviewed fixture projection',
-      method: 'server-projection',
-      source: 'accounts.classified',
-    });
+    const reviewed = trustedReveal(
+      secret(rows[0]?.classified ?? rawRows[0]?.classified),
+      DeclassifyPolicy.create({
+        door: 'trustedReveal',
+        ownerScope: 'application',
+        purpose: 'public-projection',
+      }),
+    );
     return Response.json({ reviewed });
   },
 });
@@ -750,6 +775,42 @@ export const items = pgTable('items', {
     );
 
     expect(diagnostics).toEqual([]);
+  });
+
+  // @kovo-security-classifier-corpus C13 declassification-robustness
+  it.each([
+    [
+      'attacker-controlled enabling condition',
+      `if (input.expose) {
+         return trustedReveal(secret('server-owned'), DeclassifyPolicy.create({
+           door: 'trustedReveal',
+           ownerScope: 'application',
+           purpose: 'public-projection',
+         }));
+       }
+       return { reviewed: false };`,
+    ],
+    [
+      'attacker-controlled released value',
+      `return trustedReveal(secret(input.value), DeclassifyPolicy.create({
+         door: 'trustedReveal',
+         ownerScope: 'application',
+         purpose: 'public-projection',
+       }));`,
+    ],
+  ])('rejects a declassification with an %s', (_label, statement) => {
+    const diagnostics = kv449(`
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(input) {
+    ${statement}
+  },
+});
+`);
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain('declassification');
   });
 
   // @kovo-security-classifier-corpus C13 finite-ir-declared-secret-read-execution
@@ -839,18 +900,18 @@ export const report = query({ async load(_input, context) {
     ],
     [
       'an aliased trustedReveal import',
-      `import { trustedReveal as reveal } from '@kovojs/core';`,
-      `return reveal(input.value, { justification: 'renamed reveal' });`,
+      `import { DeclassifyPolicy, trustedReveal as reveal } from '@kovojs/core';`,
+      `return reveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));`,
     ],
     [
-      'a dynamically justified trustedReveal',
-      `import { trustedReveal } from '@kovojs/core';`,
-      `return trustedReveal(input.value, { justification: input.reason });`,
+      'a dynamically defined trustedReveal policy',
+      `import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(input.value, DeclassifyPolicy.create(input.policy));`,
     ],
     [
       'authority passed to trustedReveal',
-      `import { trustedReveal } from '@kovojs/core';`,
-      `return trustedReveal(context.db, { justification: 'authority laundering' });`,
+      `import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(context.db, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));`,
     ],
     [
       'an aliased secret constructor',
@@ -2070,7 +2131,11 @@ import { contacts } from './schema.js';
 async function writeContact(db, row) {
   const id = crypto.randomUUID();
   await db.insert(contacts).values({
-    id: trustedAssign(id, 'framework-generated opaque identifier'),
+    id: trustedAssign(id, {
+      evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/contacts/generated-id' },
+      invariant: 'governed-write.authorized-principal',
+      why: { kind: 'policy', policy: 'contacts.generated-id/v1' }
+    }),
     email: row.email,
   });
 }
@@ -2111,6 +2176,138 @@ export const contacts = pgTable('contacts', {
         ],
       ),
     ).toEqual([]);
+  });
+
+  // @kovo-security-certifies C13 generated-readonly-app-db-finite-ir
+  it('accepts only the exact generated readonlyAppDb read chain in the finite server IR', () => {
+    const endpointSource = `
+import { endpoint, publicAccess } from '@kovojs/server';
+import { eq } from 'drizzle-orm';
+import { readonlyAppDb } from './db.js';
+import { contacts } from './schema.js';
+
+export const taskProofCount = endpoint('/api/task-proof-count', {
+  access: publicAccess('public task proof count'),
+  auth: { kind: 'none', justification: 'public read-only count' },
+  csrf: false,
+  csrfJustification: 'read-only GET endpoint',
+  method: 'GET',
+  async handler() {
+    const rows = await readonlyAppDb
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.id, 'task-proof'))
+      .limit(1);
+    return Response.json({ count: rows.length });
+  },
+  reason: 'read-only task proof count',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+});
+`;
+    const schemaSource = `
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+export const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
+`;
+    const runtimeSource = `
+import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+import { contacts } from '../schema.js';
+const APP_TABLES = [contacts];
+const APP_SEED = [{ table: contacts, rows: [{ id: 'task-proof' }] }];
+const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
+const authSystemDb = appDatabase.systemDb({
+  operation: 'write',
+  reason: 'generated auth binding',
+  surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
+});
+export const appRuntimeMutationReplayStore = appDatabase.mutationReplayStore;
+export const appRuntimeReadonlyDb = appDatabase.readonlyDb;
+export const appRuntimeDbReady = appDatabase.ready;
+export const appRuntimeDbProvider = appDatabase.db;
+void authSystemDb;
+`;
+    const dbSource = `
+import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
+export const readonlyAppDb = appRuntimeReadonlyDb;
+`;
+    const project = (source: string, runtime = runtimeSource, db = dbSource) =>
+      kv449Project(source, [
+        { fileName: 'src/schema.ts', source: schemaSource },
+        { fileName: 'src/_kovo/app-runtime-db.ts', source: runtime },
+        { fileName: 'src/db.ts', source: db },
+      ]);
+
+    expect(project(endpointSource)).toEqual([]);
+    expect(
+      project(
+        endpointSource,
+        runtimeSource
+          .replace(
+            "import { createSqliteAppRuntime } from '@kovojs/server/sqlite';",
+            "import { createPostgresAppRuntimeDb } from '@kovojs/server';",
+          )
+          .replace(
+            'createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES })',
+            'createPostgresAppRuntimeDb({ seed: APP_SEED, tables: APP_TABLES })',
+          ),
+      ),
+    ).toEqual([]);
+
+    for (const [label, source] of [
+      [
+        'local capability alias',
+        endpointSource.replace(
+          'const rows = await readonlyAppDb',
+          'const database = readonlyAppDb;\n    const rows = await database',
+        ),
+      ],
+      [
+        'computed read method',
+        endpointSource.replace('readonlyAppDb\n      .select', "readonlyAppDb\n      ['select']"),
+      ],
+      [
+        'foreign same-named import',
+        endpointSource.replace("from './db.js'", "from './lookalike.js'"),
+      ],
+    ] as const) {
+      expect(project(source).length, label).toBeGreaterThan(0);
+    }
+
+    expect(
+      project(
+        endpointSource,
+        runtimeSource.replace(
+          'appDatabase.readonlyDb',
+          `{ select() { return { from() { return eval('forged'); } }; } }`,
+        ),
+      ).length,
+      'forged generated runtime export',
+    ).toBeGreaterThan(0);
+    for (const [label, runtime] of [
+      [
+        'aliased generated runtime factory',
+        runtimeSource
+          .replace('createSqliteAppRuntime }', 'createSqliteAppRuntime as makeRuntime }')
+          .replace('createSqliteAppRuntime({', 'makeRuntime({'),
+      ],
+      [
+        'foreign same-named runtime factory',
+        runtimeSource.replace("from '@kovojs/server/sqlite'", "from './lookalike.js'"),
+      ],
+      [
+        'computed generated readonly projection',
+        runtimeSource.replace('appDatabase.readonlyDb', "appDatabase['readonlyDb']"),
+      ],
+    ] as const) {
+      expect(project(endpointSource, runtime).length, label).toBeGreaterThan(0);
+    }
+    expect(
+      project(
+        endpointSource,
+        runtimeSource,
+        `${dbSource}\nObject.defineProperty(readonlyAppDb, 'select', { value: () => ({}) });`,
+      ).length,
+      'mutated generated re-export',
+    ).toBeGreaterThan(0);
   });
 
   it.each([

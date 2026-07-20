@@ -23,16 +23,16 @@ describe('security derivation and re-witness denominator inventories', () => {
       summary: {
         derivation: {
           checkedIntent: 0,
-          derived: 2,
+          derived: 8,
           reviewedExempt: 0,
           total: 8,
-          uncovered: 6,
+          uncovered: 0,
         },
         rewitness: {
           reviewedExempt: 0,
-          rewitnessed: 3,
+          rewitnessed: 9,
           total: 9,
-          uncovered: 6,
+          uncovered: 0,
         },
       },
     });
@@ -108,7 +108,7 @@ describe('security derivation and re-witness denominator inventories', () => {
       findings: [],
       ok: true,
       summary: {
-        derivation: { reviewedExempt: 1, total: 8, uncovered: 5 },
+        derivation: { reviewedExempt: 1, total: 8, uncovered: 0 },
       },
     });
   });

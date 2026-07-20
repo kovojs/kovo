@@ -4,6 +4,11 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import {
+  isCanonicalSha512Integrity,
+  lookupPnpmPackageIntegrity,
+  parsePnpmPackageIntegrities,
+} from './lib/pnpm-lock-packages.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import { collectFiles, collectSourceFiles, productionSourceRoots } from './lib/source-files.mjs';
 
@@ -17,8 +22,25 @@ export const dependencySurfaceRequiredFields = [
   'dependency',
   'packageJson',
   'pinnedVersion',
+  'integrity',
   'guarantee',
   'reviewTrigger',
+];
+export const analysisToolchainRequiredFields = [
+  'id',
+  'dependency',
+  'pinnedVersion',
+  'integrity',
+  'role',
+  'reviewTrigger',
+];
+export const analysisToolchainPackageRoots = [
+  'packages',
+  'examples',
+  'benchmarks',
+  'conformance',
+  'site',
+  'tests',
 ];
 export const tcbClassification = 'tcb';
 export const generatedTemplateRoots = ['packages/create-kovo/templates'];
@@ -63,11 +85,24 @@ export function checkTcbBoundary(options = {}) {
       productionRoots: options.productionRoots,
       templateRoots: options.templateRoots,
     });
+  const workspacePackageJsons = options.workspacePackageJsons ?? collectWorkspacePackageJsons(root);
 
   const findings = [];
   const manifest = loadTcbManifest({ manifestPath, readText });
   findings.push(...validateManifestShape(manifest, manifestPath));
   if (findings.length > 0) return result(findings);
+
+  const dependencyInventory = loadDependencyInventory({
+    exists,
+    lockfilePath: options.lockfilePath ?? defaultLockfilePath,
+    manifestPath,
+    readText,
+    required:
+      (manifest.trustedDependencySurfaces?.length ?? 0) > 0 ||
+      (manifest.analysisToolchain?.length ?? 0) > 0 ||
+      (manifest.analysisDependencies?.length ?? 0) > 0,
+  });
+  findings.push(...dependencyInventory.findings);
 
   const entries = manifest.entries;
   const plannedEntries = manifest.plannedEntries ?? [];
@@ -187,6 +222,7 @@ export function checkTcbBoundary(options = {}) {
   findings.push(
     ...collectTrustedDependencySurfaceFindings({
       exists,
+      lockPackages: dependencyInventory.packages,
       lockfilePath: options.lockfilePath ?? defaultLockfilePath,
       manifestPath,
       readText,
@@ -194,7 +230,39 @@ export function checkTcbBoundary(options = {}) {
     }),
   );
 
+  findings.push(
+    ...collectAnalysisToolchainFindings({
+      entries: manifest.analysisToolchain ?? [],
+      exists,
+      lockPackages: dependencyInventory.packages,
+      lockfilePath: options.lockfilePath ?? defaultLockfilePath,
+      manifestPath,
+      readText,
+      workspacePackageJsons,
+    }),
+  );
+  findings.push(
+    ...collectAnalysisToolchainFindings({
+      enrollmentLabel: 'analysis dependency',
+      entries: manifest.analysisDependencies ?? [],
+      exists,
+      lockPackages: dependencyInventory.packages,
+      lockfilePath: options.lockfilePath ?? defaultLockfilePath,
+      manifestPath,
+      readText,
+      workspacePackageJsons,
+    }),
+  );
+
   return result(findings, totalTcbLines);
+}
+
+export function collectWorkspacePackageJsons(root) {
+  const nested = collectFiles(root, analysisToolchainPackageRoots, {
+    includeFile: ({ relativePath }) => relativePath.endsWith('/package.json'),
+    skipDirectory: ({ name }) => name === 'node_modules',
+  });
+  return ['package.json', ...nested];
 }
 
 export function collectTcbBoundarySourceFiles(root, options = {}) {
@@ -412,12 +480,65 @@ function validateManifestShape(manifest, manifestPath) {
         findings.push(`${manifestPath}: ${label}.${field} must be a non-empty string`);
       }
     }
+    if (surface?.integrity !== undefined && !isCanonicalSha512Integrity(surface.integrity)) {
+      findings.push(`${manifestPath}: ${label}.integrity must be a canonical sha512 digest`);
+    }
+  }
+
+  const toolchain = Array.isArray(manifest?.analysisToolchain) ? manifest.analysisToolchain : [];
+  if (manifest?.analysisToolchain !== undefined && !Array.isArray(manifest.analysisToolchain)) {
+    findings.push(`${manifestPath}: analysisToolchain must be an array when present`);
+  }
+  for (const [index, entry] of toolchain.entries()) {
+    const label = typeof entry?.id === 'string' ? entry.id : `analysisToolchain[${index}]`;
+    for (const field of analysisToolchainRequiredFields) {
+      if (typeof entry?.[field] !== 'string' || entry[field] === '') {
+        findings.push(`${manifestPath}: ${label}.${field} must be a non-empty string`);
+      }
+    }
+    if (entry?.integrity !== undefined && !isCanonicalSha512Integrity(entry.integrity)) {
+      findings.push(`${manifestPath}: ${label}.integrity must be a canonical sha512 digest`);
+    }
+  }
+  const analysisDependencies = Array.isArray(manifest?.analysisDependencies)
+    ? manifest.analysisDependencies
+    : [];
+  if (
+    manifest?.analysisDependencies !== undefined &&
+    !Array.isArray(manifest.analysisDependencies)
+  ) {
+    findings.push(`${manifestPath}: analysisDependencies must be an array when present`);
+  }
+  for (const [index, entry] of analysisDependencies.entries()) {
+    const label = typeof entry?.id === 'string' ? entry.id : `analysisDependencies[${index}]`;
+    for (const field of analysisToolchainRequiredFields) {
+      if (typeof entry?.[field] !== 'string' || entry[field] === '') {
+        findings.push(`${manifestPath}: ${label}.${field} must be a non-empty string`);
+      }
+    }
+    if (entry?.integrity !== undefined && !isCanonicalSha512Integrity(entry.integrity)) {
+      findings.push(`${manifestPath}: ${label}.integrity must be a canonical sha512 digest`);
+    }
   }
   return findings;
 }
 
+function loadDependencyInventory({ exists, lockfilePath, manifestPath, readText, required }) {
+  if (!required) return { findings: [], packages: new Map() };
+  if (!exists(lockfilePath)) {
+    return {
+      findings: [
+        `${manifestPath}: dependency inventory requires ${lockfilePath} but it is missing`,
+      ],
+      packages: new Map(),
+    };
+  }
+  return parsePnpmPackageIntegrities(readText(lockfilePath), { lockfilePath });
+}
+
 export function collectTrustedDependencySurfaceFindings({
   exists,
+  lockPackages,
   lockfilePath = defaultLockfilePath,
   manifestPath = defaultManifestPath,
   readText,
@@ -425,15 +546,6 @@ export function collectTrustedDependencySurfaceFindings({
 }) {
   const findings = [];
   if (surfaces.length === 0) return findings;
-
-  let lockfileText;
-  if (!exists(lockfilePath)) {
-    findings.push(
-      `${manifestPath}: trustedDependencySurfaces requires ${lockfilePath} but it is missing`,
-    );
-  } else {
-    lockfileText = readText(lockfilePath);
-  }
 
   const packageJsonCache = new Map();
   const seenIds = new Set();
@@ -443,7 +555,7 @@ export function collectTrustedDependencySurfaceFindings({
     }
     seenIds.add(surface.id);
 
-    const { dependency, packageJson, pinnedVersion } = surface;
+    const { dependency, integrity, packageJson, pinnedVersion } = surface;
     if (!exists(packageJson)) {
       findings.push(
         `${manifestPath}: trustedDependencySurfaces ${surface.id} packageJson ${packageJson} is missing`,
@@ -483,25 +595,95 @@ export function collectTrustedDependencySurfaceFindings({
       }
     }
 
-    if (
-      lockfileText !== undefined &&
-      !lockfileHasResolvedVersion(lockfileText, dependency, pinnedVersion)
-    ) {
+    const resolvedIntegrity = lookupPnpmPackageIntegrity(lockPackages, dependency, pinnedVersion);
+    if (resolvedIntegrity === undefined) {
       findings.push(
         `${lockfilePath}: TCB surface ${surface.id} pins ${dependency}@${pinnedVersion} but the lockfile has no resolved package at that version`,
+      );
+    } else if (resolvedIntegrity !== integrity) {
+      findings.push(
+        `${lockfilePath}: TCB surface ${surface.id} pins ${dependency}@${pinnedVersion} to ${integrity} but the lockfile resolves ${resolvedIntegrity}`,
       );
     }
   }
   return findings;
 }
 
-function lockfileHasResolvedVersion(lockfileText, dependency, version) {
-  const key = escapeRegExp(`${dependency}@${version}`);
-  return new RegExp(`^  '?${key}(?::|'|\\()`, 'mu').test(lockfileText);
-}
+export function collectAnalysisToolchainFindings({
+  enrollmentLabel = 'analysis toolchain',
+  entries,
+  exists,
+  lockPackages,
+  lockfilePath = defaultLockfilePath,
+  manifestPath = defaultManifestPath,
+  readText,
+  workspacePackageJsons,
+}) {
+  const findings = [];
+  if (entries.length === 0) return findings;
+  const declarations = new Map();
+  for (const packageJson of workspacePackageJsons) {
+    if (!exists(packageJson)) continue;
+    let manifest;
+    try {
+      manifest = JSON.parse(readText(packageJson));
+    } catch {
+      findings.push(`${packageJson}: analysis toolchain package manifest is not valid JSON`);
+      continue;
+    }
+    for (const bucket of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+      for (const [dependency, specifier] of Object.entries(manifest[bucket] ?? {})) {
+        const rows = declarations.get(dependency) ?? [];
+        rows.push({ bucket, packageJson, specifier });
+        declarations.set(dependency, rows);
+      }
+    }
+  }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const seenIds = new Set();
+  const seenDependencies = new Set();
+  for (const entry of entries) {
+    if (seenIds.has(entry.id)) {
+      findings.push(`${manifestPath}: duplicate analysisToolchain id ${entry.id}`);
+    }
+    seenIds.add(entry.id);
+    if (seenDependencies.has(entry.dependency)) {
+      findings.push(
+        `${manifestPath}: ${enrollmentLabel} dependency ${entry.dependency} must have one canonical pin`,
+      );
+    }
+    seenDependencies.add(entry.dependency);
+
+    const rows = declarations.get(entry.dependency) ?? [];
+    if (rows.length === 0) {
+      findings.push(
+        `${manifestPath}: ${enrollmentLabel} ${entry.id} names ${entry.dependency} but no workspace package declares it`,
+      );
+    }
+    for (const row of rows) {
+      if (row.specifier !== entry.pinnedVersion) {
+        findings.push(
+          `${row.packageJson}: ${row.bucket}.${entry.dependency} must be exact-pinned to ${entry.pinnedVersion} for ${enrollmentLabel} ${entry.id} but is declared as ${row.specifier}`,
+        );
+      }
+    }
+
+    const resolvedIntegrity = lookupPnpmPackageIntegrity(
+      lockPackages,
+      entry.dependency,
+      entry.pinnedVersion,
+    );
+    if (resolvedIntegrity === undefined) {
+      findings.push(
+        `${lockfilePath}: ${enrollmentLabel} ${entry.id} pins ${entry.dependency}@${entry.pinnedVersion} but the lockfile has no resolved package at that version`,
+      );
+    } else if (resolvedIntegrity !== entry.integrity) {
+      findings.push(
+        `${lockfilePath}: ${enrollmentLabel} ${entry.id} pins ${entry.dependency}@${entry.pinnedVersion} to ${entry.integrity} but the lockfile resolves ${resolvedIntegrity}`,
+      );
+    }
+  }
+  return findings;
 }
 
 function collectPlannedEntryEnrollmentFindings({

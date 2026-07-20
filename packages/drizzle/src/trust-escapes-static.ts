@@ -17,6 +17,8 @@ import { Node, Project, SyntaxKind, VariableDeclarationKind, ts, type SourceFile
 import { builtinModules as builtinNodeModules } from 'node:module';
 import { posix as nodePath } from 'node:path';
 import type {
+  AppDependencyCapabilityManifest,
+  CapabilityClosureExplainFact,
   CapabilityExplain,
   CookieDowngradeExplain,
   RevealExplainFact,
@@ -46,6 +48,7 @@ import {
   runtimeSetAdd,
   runtimeSetHas,
 } from './runtime-security-intrinsics.js';
+import { structuredTrustedAssignObligation } from './static/structured-audit-obligation.js';
 
 /** @internal */
 export interface TrustEscapeSourceFileInput {
@@ -66,12 +69,31 @@ export interface CompilerSecuritySemanticSource {
   source: string;
 }
 
+/**
+ * Compiler-owned L1 proof carrier for the exact source snapshot routed into TASK B.
+ *
+ * The carrier is intentionally redundant with `files`: TASK B reconstructs every request root
+ * from its own parser view and requires the corresponding capability-closure root row at the exact
+ * call site. A stale source census, malformed loader manifest, or missing root therefore closes
+ * instead of silently falling back to a syntax-only allow path (SPEC §6.6; Plan 1 Phase 3C).
+ *
+ * @internal
+ */
+export interface CompilerTaskBClosureProof {
+  readonly capabilityFacts: readonly CapabilityClosureExplainFact[];
+  readonly dependencyManifest: AppDependencyCapabilityManifest;
+  readonly files: readonly TrustEscapeSourceFileInput[];
+  readonly schema: 'kovo-task-b-closure/v1';
+}
+
 /** @internal */
 export interface TrustEscapeProjectOptions {
   /** Exact authored build-config entry whose deferred preset authority must use built-in witnesses. */
   buildConfigEntryFileName?: string;
   /** Same-snapshot compiler verdicts; never an app-authored assertion. */
   compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[];
+  /** Same-snapshot L1 root/package closure consumed before legacy residual analysis. */
+  compilerTaskBClosure?: CompilerTaskBClosureProof;
   files: readonly TrustEscapeSourceFileInput[];
 }
 
@@ -134,6 +156,81 @@ function syntacticFileName(fileName: string): string {
   return `${fileName}.tsx`;
 }
 
+interface StaticJsxPragmaFact {
+  kind: 'jsx' | 'jsxFrag' | 'jsxImportSource' | 'jsxRuntime';
+  start: number;
+  value?: string;
+}
+
+/**
+ * Parse JSX transform directives only from parser-classified comment trivia. Walking every AST
+ * token closes comments beyond source-leading trivia while strings and regular expressions never
+ * become candidates (SPEC §5.2 rule 10 / §6.6).
+ */
+function staticJsxPragmaFacts(sourceFile: SourceFile, source: string): StaticJsxPragmaFact[] {
+  const compilerSourceFile = sourceFile.compilerNode;
+  const ranges: ts.CommentRange[] = [];
+  const seen = new Set<string>();
+
+  const appendRanges = (candidates: readonly ts.CommentRange[] | undefined): void => {
+    if (!candidates) return;
+    for (const range of candidates) {
+      const key = `${range.pos}:${range.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ranges.push(range);
+    }
+  };
+  const visit = (node: ts.Node): void => {
+    appendRanges(ts.getLeadingCommentRanges(source, node.getFullStart()));
+    appendRanges(ts.getTrailingCommentRanges(source, node.getEnd()));
+    for (const child of node.getChildren(compilerSourceFile)) visit(child);
+  };
+  visit(compilerSourceFile);
+
+  const facts: StaticJsxPragmaFact[] = [];
+  for (const range of ranges) {
+    const comment = source.slice(range.pos, range.end);
+    const pattern = /@(jsxruntime|jsximportsource|jsxfrag|jsx)\b(?:[ \t]+([^\s*]+))?/giu;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(comment)) !== null) {
+      const rawKind = match[1]?.toLowerCase();
+      const kind: StaticJsxPragmaFact['kind'] =
+        rawKind === 'jsx'
+          ? 'jsx'
+          : rawKind === 'jsxfrag'
+            ? 'jsxFrag'
+            : rawKind === 'jsximportsource'
+              ? 'jsxImportSource'
+              : 'jsxRuntime';
+      facts.push({
+        kind,
+        start: range.pos + match.index,
+        ...(match[2] === undefined ? {} : { value: match[2] }),
+      });
+    }
+  }
+  return facts;
+}
+
+function staticJsxPragmaOverrideSinks(
+  file: TrustEscapeSourceFileInput,
+  sourceFile: SourceFile,
+): UnregisteredSinkFact[] {
+  if (!/\.[cm]?[jt]sx$/iu.test(file.fileName)) return [];
+  const facts: UnregisteredSinkFact[] = [];
+  for (const pragma of staticJsxPragmaFacts(sourceFile, file.source)) {
+    if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    facts.push({
+      safePath: 'use the compiler-owned automatic @kovojs/server JSX runtime',
+      sink: 'compiler.jsx-runtime-override',
+      site: `${file.fileName}:${lineForIndex(file.source, pragma.start)}`,
+      source: `@${pragma.kind}${pragma.value === undefined ? '' : ` ${pragma.value}`}`,
+    });
+  }
+  return facts;
+}
+
 // =====================================================================================
 // TASK A — KV426 trust-escape collector (SPEC §6.6, AUDIT-ONLY)
 // =====================================================================================
@@ -163,6 +260,9 @@ const TRUSTED_CALL_OWNER: Readonly<Record<string, string>> = {
  *  - `trustedHtml(...)`  call site → kind `trustedHtml`
  *  - `trustedUrl(...)`   call site → kind `trustedUrl`
  *  - `trustedSql(...)`   call site → kind `trustedSql`
+ *  - `mutation({ csrf: false })` → kind `csrfFalse`
+ *  - `kovoAnalyzerSummary(...)` → kind `kovoAnalyzerSummary`
+ *  - `s.string().allowControlChars()` → kind `allowControlChars`
  *  - `endpoint(...)`     declaration → kind `rawEndpoint`
  *  - `webhook({ verify: 'none' })` → kind `webhookVerifyNone`
  *
@@ -216,6 +316,22 @@ function trustEscapesForSourceFile(
       continue;
     }
 
+    if (requestCallIsExactKovoAnalyzerSummary(call)) {
+      escapes.push(buildAnalyzerSummaryEscape(file, call));
+      continue;
+    }
+
+    if (isAllowControlCharsEscape(call)) {
+      escapes.push(buildAllowControlCharsEscape(file, call));
+      continue;
+    }
+
+    if (isKovoServerTrustCallee(callee, 'mutation')) {
+      const escape = buildCsrfFalseEscape(file, call);
+      if (escape) escapes.push(escape);
+      continue;
+    }
+
     if (isKovoServerTrustCallee(callee, 'endpoint')) {
       escapes.push(buildRawEndpointEscape(file, call));
       continue;
@@ -233,8 +349,10 @@ function trustEscapesForSourceFile(
 function trustedCallNameForCallee(callee: Node): keyof typeof TRUSTED_CALL_KINDS | undefined {
   const candidates = [
     ['trustedHtml', '@kovojs/browser'],
+    ['trustedHtml', '@kovojs/server'],
     ['trustedSql', '@kovojs/drizzle'],
     ['trustedUrl', '@kovojs/browser'],
+    ['trustedUrl', '@kovojs/server'],
   ] as const;
   return candidates.find(([exportName, module]) =>
     expressionResolvesToFrameworkExport(callee, frameworkExport(module, exportName), {
@@ -243,7 +361,10 @@ function trustedCallNameForCallee(callee: Node): keyof typeof TRUSTED_CALL_KINDS
   )?.[0];
 }
 
-function isKovoServerTrustCallee(callee: Node, exportName: 'endpoint' | 'webhook'): boolean {
+function isKovoServerTrustCallee(
+  callee: Node,
+  exportName: 'endpoint' | 'mutation' | 'webhook',
+): boolean {
   return expressionResolvesToFrameworkExport(
     callee,
     frameworkExport('@kovojs/server', exportName),
@@ -265,11 +386,13 @@ function buildTrustedCallEscape(
     trailingStringJustification(args) ??
     leadingJustification(call);
   const owner = TRUSTED_CALL_OWNER[name];
+  const site = siteFor(file, call);
   return {
     kind,
     ...(owner ? { owner } : {}),
     safePath: TRUSTED_CALL_SAFE_PATH[name] ?? name,
-    site: siteFor(file, call),
+    root: site,
+    site,
     ...(args[0] ? { source: shortSource(args[0]) } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -285,11 +408,13 @@ function buildRawEndpointEscape(file: TrustEscapeSourceFileInput, call: Node): T
         objectStringProperty(definition, 'justification'))
       : undefined) ?? leadingJustification(call);
   const path = args[0] && isStringLiteralLike(args[0]) ? args[0].getLiteralText() : undefined;
+  const site = siteFor(file, call);
   return {
     kind: 'rawEndpoint',
     owner: 'ingress.endpoint.raw',
     safePath: 'endpoint(...)',
-    site: siteFor(file, call),
+    root: site,
+    site,
     ...(path ? { source: path } : args[0] ? { source: shortSource(args[0]) } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -312,12 +437,88 @@ function buildWebhookVerifyNoneEscape(
   // Webhook name is the first arg: webhook('order-paid', { ... }).
   const nameArg = args[0];
   const source = nameArg && isStringLiteralLike(nameArg) ? nameArg.getLiteralText() : undefined;
+  const site = siteFor(file, call);
   return {
     kind: 'webhookVerifyNone',
     owner: 'ingress.endpoint.webhook',
     safePath: 'webhook({verify:none})',
-    site: siteFor(file, call),
+    root: site,
+    site,
     ...(source ? { source } : {}),
+    ...(justification === undefined ? {} : { justification }),
+  };
+}
+
+function buildAnalyzerSummaryEscape(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): TrustEscapeExplain {
+  const site = siteFor(file, call);
+  const helper = call.getArguments()[0];
+  return {
+    kind: 'kovoAnalyzerSummary',
+    owner: 'compiler.provenance.summary',
+    root: site,
+    safePath: 'kovoAnalyzerSummary',
+    site,
+    ...(helper === undefined ? {} : { source: shortSource(helper) }),
+  };
+}
+
+function isAllowControlCharsEscape(call: import('ts-morph').CallExpression): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  const receiver = requestCallReceiver(callee);
+  return (
+    requestStaticCallMember(callee) === 'allowControlChars' &&
+    receiver !== undefined &&
+    requestExpressionResolvesToFrameworkSchemaBuilderValue(receiver, new Set(), 0)
+  );
+}
+
+function buildAllowControlCharsEscape(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): TrustEscapeExplain {
+  const site = siteFor(file, call);
+  return {
+    kind: 'allowControlChars',
+    owner: 'ingress.schema.control-characters',
+    root: site,
+    safePath: 's.string().allowControlChars()',
+    site,
+    source: shortSource(call),
+  };
+}
+
+function buildCsrfFalseEscape(
+  file: TrustEscapeSourceFileInput,
+  call: import('ts-morph').CallExpression,
+): TrustEscapeExplain | undefined {
+  const args = call.getArguments();
+  const definition = args.findLast(Node.isObjectLiteralExpression);
+  if (!definition) return undefined;
+  const csrfProperty = definition.getProperty('csrf');
+  if (!Node.isPropertyAssignment(csrfProperty)) return undefined;
+  const csrf = csrfProperty.getInitializer();
+  if (!csrf || csrf.getKind() !== SyntaxKind.FalseKeyword) return undefined;
+
+  const site = siteFor(file, call);
+  const explicitKey = args.length > 1 ? args[0] : undefined;
+  const variable = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  const source =
+    explicitKey && isStringLiteralLike(explicitKey)
+      ? explicitKey.getLiteralText()
+      : variable && Node.isIdentifier(variable.getNameNode())
+        ? variable.getName()
+        : site;
+  const justification = objectStringProperty(definition, 'csrfJustification');
+  return {
+    kind: 'csrfFalse',
+    owner: 'ingress.mutation.csrf',
+    root: `mutation:${source}`,
+    safePath: 'mutation({csrf:false})',
+    site,
+    source,
     ...(justification === undefined ? {} : { justification }),
   };
 }
@@ -396,6 +597,7 @@ export function collectUnregisteredSinksFromProject(
       sourceFiles,
       options.buildConfigEntryFileName,
       options.compilerSecuritySemanticSources,
+      options.compilerTaskBClosure,
     );
     return facts.sort(
       (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
@@ -406,9 +608,9 @@ export function collectUnregisteredSinksFromProject(
 }
 
 /**
- * Build-only aggregate for the three static trust surfaces consumed together by `kovo build`.
+ * Build-only aggregate for the static trust surfaces consumed together by `kovo build`.
  * One immutable in-memory syntactic project is shared across the passes so repeated build checks
- * do not retain four ts-morph programs for the same source snapshot. The project still has no
+ * do not retain separate ts-morph programs for the same source snapshot. The project still has no
  * ambient filesystem/module-resolution authority: unresolved package code remains a closed
  * verdict (SPEC §6.6 / §11.4).
  *
@@ -419,6 +621,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
   cookieDowngrades: CookieDowngradeExplain[];
   diagnostics: StaticDiagnosticFact[];
   revealed: RevealExplainFact[];
+  trustEscapes: TrustEscapeExplain[];
   unregisteredSinks: UnregisteredSinkFact[];
 } {
   const { sourceFiles, dispose } = createSyntacticProject(options.files);
@@ -427,11 +630,13 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
     const cookieDowngrades: CookieDowngradeExplain[] = [];
     const diagnostics: StaticDiagnosticFact[] = [];
     const revealed: RevealExplainFact[] = [];
+    const trustEscapes: TrustEscapeExplain[] = [];
     const unregisteredSinks: UnregisteredSinkFact[] = [];
     for (const [index, sourceFile] of sourceFiles.entries()) {
       const file = options.files[index];
       if (!file) continue;
       capabilities.push(...capabilityEscapesForSourceFile(file, sourceFile));
+      trustEscapes.push(...trustEscapesForSourceFile(file, sourceFile));
       for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
         const downgrade = cookieDowngradeForCall(file, call);
         if (downgrade) cookieDowngrades.push(downgrade);
@@ -473,6 +678,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
         sourceFiles,
         options.buildConfigEntryFileName,
         options.compilerSecuritySemanticSources,
+        options.compilerTaskBClosure,
       ),
     );
     return {
@@ -488,6 +694,9 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
       ),
       diagnostics: sortRuntimeRevealDiagnostics(diagnostics),
       revealed: sortRuntimeRevealFacts(revealed),
+      trustEscapes: trustEscapes.sort(
+        (left, right) => left.kind.localeCompare(right.kind) || left.site.localeCompare(right.site),
+      ),
       unregisteredSinks: unregisteredSinks.sort(
         (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
       ),
@@ -785,6 +994,10 @@ const REQUEST_HANDLER_FACTORIES = [
         property: 'mutationReplayStore.set',
         roles: ['input', 'input', 'input', 'input'],
       },
+      { property: 'principalEpochStore.initialize', roles: ['input'] },
+      { property: 'principalEpochStore.current', roles: ['input', 'capability'] },
+      { property: 'principalEpochStore.advance', roles: ['input', 'input'] },
+      { property: 'principalEpochStore.tombstone', roles: ['input', 'input'] },
     ],
   },
   {
@@ -1283,6 +1496,7 @@ interface RequestProcessScanContext {
   readonly provenance: RequestProvenanceSession;
   readonly retainedConfigTargets: Set<string>;
   readonly scanned: Set<string>;
+  readonly taskBClosure?: RequestTaskBClosureState;
 }
 
 interface RequestCompilerSemanticHelperProof {
@@ -1300,6 +1514,24 @@ interface RequestCompilerSemanticInventoryNode {
   readonly children: Map<string, RequestCompilerSemanticInventoryNode>;
   hasInvocation: boolean;
   readonly operationKinds: Set<ServerSecurityOperationKind>;
+}
+
+interface RequestCompilerSemanticProofIndex {
+  readonly helperProofs: ReadonlyMap<string, readonly RequestCompilerSemanticHelperProof[]>;
+  readonly invalidReason?: string;
+  readonly rootsByCallable: ReadonlyMap<string, readonly SecuritySemanticGraph['roots'][number][]>;
+}
+
+interface RequestTaskBClosureState {
+  readonly capabilityRootsBySite: ReadonlyMap<string, readonly CapabilityClosureExplainFact[]>;
+  readonly checkedCapabilityRoots: Set<string>;
+  readonly checkedSemanticRoots: Set<string>;
+  readonly dependencyRootKindsByImporter: ReadonlyMap<string, readonly ReadonlySet<string>[]>;
+  readonly invalidReason?: string;
+  readonly semanticRootsByCallable: ReadonlyMap<
+    string,
+    readonly SecuritySemanticGraph['roots'][number][]
+  >;
 }
 
 const REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS = runtimeSet<ServerSecurityOperationKind>();
@@ -1468,6 +1700,7 @@ function requestProcessSinksForProject(
   sourceFiles: readonly SourceFile[],
   buildConfigEntryFileName?: string,
   compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[],
+  compilerTaskBClosure?: CompilerTaskBClosureProof,
 ): UnregisteredSinkFact[] {
   const filesByPath = new Map<string, TrustEscapeSourceFileInput>();
   for (const [index, sourceFile] of sourceFiles.entries()) {
@@ -1475,17 +1708,36 @@ function requestProcessSinksForProject(
     if (file) filesByPath.set(sourceFile.getFilePath(), file);
   }
 
+  const semanticProofs = requestCompilerSemanticProofIndex(
+    files,
+    sourceFiles,
+    compilerSecuritySemanticSources,
+  );
+  const taskBClosure = compilerTaskBClosure
+    ? requestTaskBClosureState(files, compilerTaskBClosure, semanticProofs)
+    : undefined;
   const context: RequestProcessScanContext = {
     ...(buildConfigEntryFileName === undefined ? {} : { buildConfigEntryFileName }),
     facts: [],
     filesByPath,
-    provenance: createRequestProvenanceSession(
-      requestCompilerSemanticHelperProofs(files, sourceFiles, compilerSecuritySemanticSources),
-    ),
+    provenance: createRequestProvenanceSession(semanticProofs.helperProofs),
     retainedConfigTargets: new Set(),
     scanned: new Set(),
+    ...(taskBClosure === undefined ? {} : { taskBClosure }),
   };
+  if (taskBClosure?.invalidReason && sourceFiles[0]) {
+    appendRequestTaskBRouteFailure(
+      context,
+      sourceFiles[0],
+      `root=<census>; transfers=<none>; sink=compiler-route; verdict=closed:${taskBClosure.invalidReason}`,
+    );
+  }
   let requestRootCount = 0;
+
+  for (const [index, sourceFile] of sourceFiles.entries()) {
+    const file = files[index];
+    if (file) context.facts.push(...staticJsxPragmaOverrideSinks(file, sourceFile));
+  }
 
   scanRequestModuleInitializers(sourceFiles, context);
 
@@ -1510,6 +1762,7 @@ function requestProcessSinksForProject(
         }
         requestRootCount += 1;
         const { args, factory, site } = invocation;
+        verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);
         if (!args || args.length === 0) {
           appendOpaqueRequestHandlerFact(context, site, '<dynamic-or-empty-config>');
           continue;
@@ -1553,32 +1806,253 @@ function requestProcessSinksForProject(
   return context.facts;
 }
 
-function requestCompilerSemanticHelperProofs(
+function requestTaskBClosureState(
+  files: readonly TrustEscapeSourceFileInput[],
+  proof: CompilerTaskBClosureProof,
+  semanticProofs: RequestCompilerSemanticProofIndex,
+): RequestTaskBClosureState {
+  const invalid = (invalidReason: string): RequestTaskBClosureState => ({
+    capabilityRootsBySite: new Map(),
+    checkedCapabilityRoots: new Set(),
+    checkedSemanticRoots: new Set(),
+    dependencyRootKindsByImporter: new Map(),
+    invalidReason,
+    semanticRootsByCallable: semanticProofs.rootsByCallable,
+  });
+  if (proof.schema !== 'kovo-task-b-closure/v1') {
+    return invalid(`unsupported TASK B closure carrier ${String(proof.schema)}`);
+  }
+  if (proof.files.length !== files.length) {
+    return invalid(
+      `capability source census has ${proof.files.length} rows for ${files.length} source files`,
+    );
+  }
+  const proofFiles = new Map<string, string>();
+  for (const file of proof.files) {
+    if (proofFiles.has(file.fileName)) {
+      return invalid(`capability source census duplicates ${file.fileName}`);
+    }
+    proofFiles.set(file.fileName, file.source);
+  }
+  for (const file of files) {
+    if (proofFiles.get(file.fileName) !== file.source) {
+      return invalid(`capability source bytes do not match ${file.fileName}`);
+    }
+  }
+  if (proof.dependencyManifest.schema !== 'kovo-app-dependency-capabilities/v1') {
+    return invalid(
+      `unsupported capability dependency manifest ${String(proof.dependencyManifest.schema)}`,
+    );
+  }
+
+  const sourceNames = new Set(files.map((file) => requestTaskBNormalizeModule(file.fileName)));
+  const dependencyRootKindsByImporter = new Map<string, Set<string>[]>();
+  for (const dependency of proof.dependencyManifest.dependencies) {
+    for (const entry of dependency.entries) {
+      for (const importer of entry.importers) {
+        const normalized = requestTaskBNormalizeModule(importer);
+        if (!sourceNames.has(normalized)) {
+          return invalid(`capability dependency importer ${importer} is outside the source census`);
+        }
+        const kinds = new Set<string>();
+        for (const kind of entry.rootKinds) kinds.add(kind);
+        const entries = dependencyRootKindsByImporter.get(normalized) ?? [];
+        entries.push(kinds);
+        dependencyRootKindsByImporter.set(normalized, entries);
+      }
+    }
+  }
+
+  const capabilityRootsBySite = new Map<string, CapabilityClosureExplainFact[]>();
+  const rootKeys = new Set<string>();
+  for (const fact of proof.capabilityFacts) {
+    if (fact.kind !== 'root') continue;
+    if (!fact.module || !fact.rootKind || !fact.name) {
+      return invalid(`capability root at ${fact.site} has an incomplete identity`);
+    }
+    const module = requestTaskBNormalizeModule(fact.module);
+    if (!sourceNames.has(module)) {
+      return invalid(
+        `capability root ${fact.rootKind}:${fact.name} names unknown module ${fact.module}`,
+      );
+    }
+    const rootKey = `${fact.site}\0${module}\0${fact.rootKind}\0${fact.name}`;
+    if (rootKeys.has(rootKey)) {
+      return invalid(
+        `capability root census duplicates ${fact.rootKind}:${fact.name}@${fact.site}`,
+      );
+    }
+    rootKeys.add(rootKey);
+    const values = capabilityRootsBySite.get(fact.site) ?? [];
+    values.push(fact);
+    capabilityRootsBySite.set(fact.site, values);
+  }
+
+  for (const dependency of proof.dependencyManifest.dependencies) {
+    if (!dependency.entries.some((entry) => entry.rootKinds.length > 0)) continue;
+    const summaries = proof.capabilityFacts.filter(
+      (fact) =>
+        fact.kind === 'summary' &&
+        fact.packageName === dependency.packageName &&
+        fact.packageVersion === dependency.packageVersion,
+    );
+    const expectedStatus = dependency.verdict === 'open' ? 'valid' : undefined;
+    const hasCorrespondingSummary = summaries.some((fact) =>
+      expectedStatus === undefined ? fact.status !== 'valid' : fact.status === expectedStatus,
+    );
+    if (!hasCorrespondingSummary) {
+      return invalid(
+        `package ${dependency.packageName}@${dependency.packageVersion} has ${dependency.verdict} loader verdict without a corresponding capability summary`,
+      );
+    }
+  }
+
+  return {
+    capabilityRootsBySite,
+    checkedCapabilityRoots: new Set(),
+    checkedSemanticRoots: new Set(),
+    dependencyRootKindsByImporter,
+    ...(semanticProofs.invalidReason === undefined
+      ? {}
+      : { invalidReason: semanticProofs.invalidReason }),
+    semanticRootsByCallable: semanticProofs.rootsByCallable,
+  };
+}
+
+function requestTaskBNormalizeModule(value: string): string {
+  const normalized: string[] = [];
+  for (const part of value.replaceAll('\\', '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..' && normalized.length > 0 && normalized[normalized.length - 1] !== '..') {
+      normalized.pop();
+    } else {
+      normalized.push(part);
+    }
+  }
+  return normalized.join('/') || '.';
+}
+
+function requestTaskBCapabilityRootKinds(
+  factory: RequestHandlerFactoryName,
+): readonly NonNullable<CapabilityClosureExplainFact['rootKind']>[] {
+  switch (factory) {
+    case 'createApp':
+      return ['application'];
+    case 'endpoint':
+      return ['endpoint'];
+    case 'layout':
+      return ['layout'];
+    case 'mutation':
+      return ['mutation'];
+    case 'query':
+      return ['query'];
+    case 'route':
+      return ['route'];
+    case 'task':
+      return ['durable-task', 'scheduled-task'];
+    case 'webhook':
+      return ['webhook'];
+  }
+}
+
+function verifyRequestTaskBCapabilityRoot(
+  context: RequestProcessScanContext,
+  factory: RequestHandlerFactoryName,
+  siteNode: Node,
+): void {
+  const state = context.taskBClosure;
+  if (!state || state.invalidReason) return;
+  const sourceFile = siteNode.getSourceFile();
+  const input = context.filesByPath.get(sourceFile.getFilePath());
+  if (!input) {
+    appendRequestTaskBRouteFailure(
+      context,
+      siteNode,
+      `root=${factory}:<unknown>; transfers=source-census; sink=capability-closure; verdict=closed:source module is absent`,
+    );
+    return;
+  }
+  const position = sourceFile.getLineAndColumnAtPos(siteNode.getStart());
+  const site = `${input.fileName}:${position.line}:${position.column}`;
+  const expectedKinds = requestTaskBCapabilityRootKinds(factory);
+  const checkKey = `${site}\0${factory}`;
+  if (state.checkedCapabilityRoots.has(checkKey)) return;
+  state.checkedCapabilityRoots.add(checkKey);
+  const module = requestTaskBNormalizeModule(input.fileName);
+  const roots = (state.capabilityRootsBySite.get(site) ?? []).filter(
+    (fact) =>
+      fact.module !== undefined &&
+      requestTaskBNormalizeModule(fact.module) === module &&
+      fact.rootKind !== undefined &&
+      expectedKinds.includes(fact.rootKind),
+  );
+  if (roots.length !== 1) {
+    appendRequestTaskBRouteFailure(
+      context,
+      siteNode,
+      `root=${factory}:<reconstructed>; transfers=${module}; sink=capability-closure; verdict=closed:expected exactly one root row at ${site}, found ${roots.length}`,
+    );
+    return;
+  }
+  const rootKind = roots[0]!.rootKind!;
+  const dependencyRootKinds = state.dependencyRootKindsByImporter.get(module) ?? [];
+  if (
+    dependencyRootKinds.length === 0 ||
+    dependencyRootKinds.some((rootKinds) => !rootKinds.has(rootKind))
+  ) {
+    appendRequestTaskBRouteFailure(
+      context,
+      siteNode,
+      `root=${rootKind}:${roots[0]!.name}; transfers=${module}; sink=package-summary; verdict=closed:dependency manifest omits the reconstructed root kind`,
+    );
+  }
+}
+
+function requestCompilerSemanticProofIndex(
   files: readonly TrustEscapeSourceFileInput[],
   sourceFiles: readonly SourceFile[],
   semanticSources: readonly CompilerSecuritySemanticSource[] | undefined,
-): ReadonlyMap<string, readonly RequestCompilerSemanticHelperProof[]> {
-  if (!semanticSources || semanticSources.length !== files.length) return new Map();
+): RequestCompilerSemanticProofIndex {
+  const invalid = (invalidReason: string): RequestCompilerSemanticProofIndex => ({
+    helperProofs: new Map(),
+    invalidReason,
+    rootsByCallable: new Map(),
+  });
+  if (!semanticSources) return invalid('compiler semantic source carrier is absent');
+  if (semanticSources.length !== files.length) {
+    return invalid(
+      `compiler semantic source census has ${semanticSources.length} rows for ${files.length} source files`,
+    );
+  }
   const sourcesByName = new Map<string, CompilerSecuritySemanticSource>();
   for (const source of semanticSources) {
-    if (sourcesByName.has(source.fileName)) return new Map();
+    if (sourcesByName.has(source.fileName)) {
+      return invalid(`compiler semantic source census duplicates ${source.fileName}`);
+    }
     sourcesByName.set(source.fileName, source);
   }
 
   const proofs = new Map<string, RequestCompilerSemanticHelperProof[]>();
+  const rootsByCallable = new Map<string, SecuritySemanticGraph['roots'][number][]>();
   const invalidProofKeys = new Set<string>();
   for (const [index, file] of files.entries()) {
     const sourceFile = sourceFiles[index];
     const semanticSource = sourcesByName.get(file.fileName);
-    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();
+    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {
+      return invalid(`compiler semantic source bytes do not match ${file.fileName}`);
+    }
     const callsBySpan = new Map<string, import('ts-morph').CallExpression>();
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const key = `${call.getStart()}:${call.getEnd()}`;
-      if (callsBySpan.has(key)) return new Map();
+      if (callsBySpan.has(key)) {
+        return invalid(`compiler semantic call census duplicates ${file.fileName}:${key}`);
+      }
       callsBySpan.set(key, call);
     }
     for (const graph of semanticSource.graphs) {
-      if (graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();
+      if (graph.schema !== 'kovo-security-semantic-graph/v2') {
+        return invalid(`compiler semantic graph for ${file.fileName} is not version 2`);
+      }
       for (const root of graph.roots) {
         if (
           !requestCompilerSemanticRootFactsAreExact(
@@ -1588,8 +2062,12 @@ function requestCompilerSemanticHelperProofs(
             callsBySpan,
           )
         ) {
-          return new Map();
+          return invalid(`compiler semantic root ${root.root} does not match ${file.fileName}`);
         }
+        const rootKey = `${sourceFile.getFilePath()}:${root.binding.callableSpan.start}:${root.binding.callableSpan.end}`;
+        const roots = rootsByCallable.get(rootKey) ?? [];
+        roots.push(root);
+        rootsByCallable.set(rootKey, roots);
         const rootClosed = root.traces.some((trace) => trace.verdict === 'closed');
         for (const summary of root.summaries) {
           const { end, start } = summary.callableSpan;
@@ -1624,7 +2102,7 @@ function requestCompilerSemanticHelperProofs(
     }
   }
   for (const key of invalidProofKeys) proofs.delete(key);
-  return proofs;
+  return { helperProofs: proofs, rootsByCallable };
 }
 
 function requestCompilerSemanticRootFactsAreExact(
@@ -1767,6 +2245,8 @@ function requestCompilerSemanticRootForFactoryCall(
 
   const exported = requestCompilerSemanticExportedConstName(call);
   switch (factory) {
+    case 'agent':
+      return 'agent:UNRESOLVED';
     case 'endpoint':
       return 'endpoint:UNRESOLVED';
     case 'mutation': {
@@ -1876,6 +2356,8 @@ function requestCompilerSemanticCallbackForFactory(
   factory: SecuritySemanticRootBinding['factory'],
 ): SecuritySemanticRootBinding['callback'] {
   switch (factory) {
+    case 'agent':
+      return 'model';
     case 'query':
       return 'load';
     case 'task':
@@ -4282,7 +4764,14 @@ function requestRetainedConfigOpaqueDerivation(
     const receiver = node.getExpression();
     if (
       member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member) &&
+      [
+        'db',
+        'mutationReplayStore',
+        'principalEpochStore',
+        'readonlyDb',
+        'ready',
+        'webhookReplayStore',
+      ].includes(member) &&
       requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
       requestExactManagedAppRuntimeIsPristine(receiver)
     ) {
@@ -4746,9 +5235,17 @@ function requestRetainedConfigInitialTargets(
     if (seen.has(symbolKey)) return targets;
     seen.add(symbolKey);
     if (
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
-        (member) =>
-          requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
+      (
+        [
+          'db',
+          'mutationReplayStore',
+          'principalEpochStore',
+          'readonlyDb',
+          'ready',
+          'webhookReplayStore',
+        ] as const
+      ).some((member) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
       )
     ) {
       targets.add(symbolKey);
@@ -4825,7 +5322,14 @@ function requestRetainedConfigInitialTargets(
     // of createApp's retained config makes ordinary Drizzle reads look like table mutations.
     if (
       member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member) &&
+      [
+        'db',
+        'mutationReplayStore',
+        'principalEpochStore',
+        'readonlyDb',
+        'ready',
+        'webhookReplayStore',
+      ].includes(member) &&
       requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
       requestExactManagedAppRuntimeIsPristine(receiver)
     ) {
@@ -5224,8 +5728,18 @@ function requestExactMutationTaskScheduleOptionsArePlain(
     const value = Node.isPropertyAssignment(property)
       ? property.getInitializer()
       : property.getNameNode();
-    if (
-      !value ||
+    if (!value) {
+      return false;
+    }
+    if (member === 'key') {
+      const key = unwrapStaticExpression(value);
+      if (
+        !Node.isCallExpression(key) ||
+        !roots.every((root) => requestCallIsExactPublicScopedKey(key, root, session))
+      ) {
+        return false;
+      }
+    } else if (
       !roots.every((root) =>
         requestExactMutationTaskScheduleInputIsPlain(value, root, session, new Set()),
       )
@@ -5909,6 +6423,50 @@ function requestExactMutationTaskScheduleInputIsPlain(
   );
 }
 
+/**
+ * SPEC §6.6 / §9.1: `publicScopedKey` is reviewed construction of plain, runtime-witnessed key
+ * data. The legacy request graph admits only the same direct, pristine framework binding and
+ * compiler-provable plain argument as the finite IR; aliases, namespaces, computed members, and
+ * foreign same-named functions remain opaque.
+ */
+function requestCallIsExactPublicScopedKey(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    call.getArguments().length === 1 &&
+    (requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'publicScopedKey') ||
+      requestExactPristineDirectImport(
+        call.getExpression(),
+        '@kovojs/server',
+        'publicScopedKey',
+      )) &&
+    requestExactMutationTaskScheduleInputIsPlain(
+      call.getArguments()[0]!,
+      callable,
+      session,
+      new Set(),
+    )
+  );
+}
+
+function requestCallIsExactStaticPublicScopedKey(call: import('ts-morph').CallExpression): boolean {
+  const [key, ...extra] = call.getArguments();
+  const value = key ? unwrapStaticExpression(key) : undefined;
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    key &&
+    extra.length === 0 &&
+    isStringLiteralLike(value) &&
+    value.getLiteralText().length > 0 &&
+    value.getLiteralText().length <= 1_024 &&
+    (requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'publicScopedKey') ||
+      requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'publicScopedKey'))
+  );
+}
+
 function requestRetainedConfigCallIsReviewed(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
@@ -5938,6 +6496,7 @@ function requestRetainedConfigCallIsReviewed(
   if (requestCallIsExactMemoryStorageConstructor(call, session)) return true;
   if (requestCallIsExactMemoryStoragePut(call, session)) return true;
   if (requestCallIsExactStorageDownloadEndpoint(call, session)) return true;
+  if (requestCallIsExactStaticPublicScopedKey(call)) return true;
   if (requestCallIsExactClosedStylesheet(call)) return true;
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
@@ -6606,6 +7165,7 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
   const required = new Set([
     'csrf',
     'mapSession',
+    'principalEpochStore',
     'schema',
     'signInAccess',
     'signOutAccess',
@@ -6627,6 +7187,16 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
     )
       return false;
     if (name === 'mapSession' && !requestExpressionIsExactGeneratedMapSession(initializer))
+      return false;
+    if (
+      name === 'principalEpochStore' &&
+      !requestExpressionResolvesToExactManagedRuntimeMember(
+        initializer,
+        'principalEpochStore',
+        'appRuntimePrincipalEpochStore',
+        new Set(),
+      )
+    )
       return false;
     if (name === 'schema' && !requestExpressionIsExactGeneratedAuthSchema(initializer, call))
       return false;
@@ -7167,7 +7737,14 @@ function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): bool
       : staticMemberName(node.getArgumentExpression());
     return (
       !!member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member)
+      [
+        'db',
+        'mutationReplayStore',
+        'principalEpochStore',
+        'readonlyDb',
+        'ready',
+        'webhookReplayStore',
+      ].includes(member)
     );
   }
   return !!(
@@ -7176,9 +7753,11 @@ function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): bool
       'appRuntimeDbProvider',
       'appRuntimeDbReady',
       'appRuntimeMutationReplayStore',
+      'appRuntimePrincipalEpochStore',
       'appRuntimeReadonlyDb',
       'appRuntimeWebhookReplayStore',
       'mutationReplayStore',
+      'principalEpochStore',
       'webhookReplayStore',
     ].includes(node.getText())
   );
@@ -7806,27 +8385,36 @@ function requestCallIsExactBootOnlyGeneratedSetup(
   }
 }
 
-interface RequestManagedReplayStoreGrammar {
-  readonly exportedName: 'appRuntimeMutationReplayStore' | 'appRuntimeWebhookReplayStore';
-  readonly localName: 'mutationReplayStore' | 'webhookReplayStore';
-  readonly runtimeMember: 'mutationReplayStore' | 'webhookReplayStore';
+interface RequestManagedStoreGrammar {
+  readonly exportedName:
+    | 'appRuntimeMutationReplayStore'
+    | 'appRuntimePrincipalEpochStore'
+    | 'appRuntimeWebhookReplayStore';
+  readonly localName: 'mutationReplayStore' | 'principalEpochStore' | 'webhookReplayStore';
+  readonly runtimeMember: 'mutationReplayStore' | 'principalEpochStore' | 'webhookReplayStore';
 }
 
 const REQUEST_MANAGED_MUTATION_REPLAY_STORE = {
   exportedName: 'appRuntimeMutationReplayStore',
   localName: 'mutationReplayStore',
   runtimeMember: 'mutationReplayStore',
-} as const satisfies RequestManagedReplayStoreGrammar;
+} as const satisfies RequestManagedStoreGrammar;
+
+const REQUEST_MANAGED_PRINCIPAL_EPOCH_STORE = {
+  exportedName: 'appRuntimePrincipalEpochStore',
+  localName: 'principalEpochStore',
+  runtimeMember: 'principalEpochStore',
+} as const satisfies RequestManagedStoreGrammar;
 
 const REQUEST_MANAGED_WEBHOOK_REPLAY_STORE = {
   exportedName: 'appRuntimeWebhookReplayStore',
   localName: 'webhookReplayStore',
   runtimeMember: 'webhookReplayStore',
-} as const satisfies RequestManagedReplayStoreGrammar;
+} as const satisfies RequestManagedStoreGrammar;
 
-function requestExpressionResolvesToExactManagedReplayStore(
+function requestExpressionResolvesToExactManagedStore(
   expression: Node,
-  grammar: RequestManagedReplayStoreGrammar,
+  grammar: RequestManagedStoreGrammar,
   seen: Set<string>,
 ): boolean {
   const node = unwrapStaticExpression(expression);
@@ -7871,7 +8459,7 @@ function requestExpressionResolvesToExactManagedReplayStore(
   return (
     values.length > 0 &&
     values.every((value) =>
-      requestExpressionResolvesToExactManagedReplayStore(value, grammar, new Set(seen)),
+      requestExpressionResolvesToExactManagedStore(value, grammar, new Set(seen)),
     )
   );
 }
@@ -8493,11 +9081,13 @@ function requestMemoryStoragePutUseIsExact(
   }
   const [key, body, options, ...extra] = call.getArguments();
   const keyValue = key ? unwrapStaticExpression(key) : undefined;
+  const scopedKey = keyValue && Node.isCallExpression(keyValue) ? keyValue : undefined;
   return !!(
-    isStringLiteralLike(keyValue) &&
+    (isStringLiteralLike(keyValue) ||
+      (scopedKey && requestCallIsExactStaticPublicScopedKey(scopedKey))) &&
     body &&
     extra.length === 0 &&
-    keyValue.getLiteralText().length > 0 &&
+    (!isStringLiteralLike(keyValue) || keyValue.getLiteralText().length > 0) &&
     requestExpressionIsClosedStaticData(body) &&
     (options === undefined || requestExpressionIsClosedStaticData(options)) &&
     requestExactMemoryStorageDeclarationForExpression(reference) === declaration
@@ -9528,16 +10118,25 @@ function requestRoutePageRootForSignUrl(
   return exact.length === 1 ? exact[0] : undefined;
 }
 
-function requestSignUrlOptionsAreExact(expression: Node): boolean {
+function requestSignUrlOptionsAreExact(
+  expression: Node,
+  root: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
   const values = requestExactPropertyAssignmentMap(
     expression,
     new Set(['expiresIn', 'key', 'method', 'oneTime', 'scope']),
   );
   const key = values?.get('key');
   const keyValue = key ? unwrapStaticExpression(key) : undefined;
-  if (!values || !isStringLiteralLike(keyValue)) return false;
-  const keyText = keyValue.getLiteralText();
-  if (keyText.length === 0 || keyText.length > 1_024) return false;
+  if (
+    !values ||
+    !keyValue ||
+    !Node.isCallExpression(keyValue) ||
+    !requestCallIsExactPublicScopedKey(keyValue, root, session)
+  ) {
+    return false;
+  }
   const method = values.get('method');
   const methodValue = method ? unwrapStaticExpression(method) : undefined;
   if (
@@ -9600,14 +10199,19 @@ function requestCallIsExactRoutePageSignUrl(
     callee.getQuestionDotTokenNode() ||
     callee.getName() !== 'signUrl' ||
     call.getQuestionDotTokenNode() ||
-    call.getArguments().length !== 1 ||
-    !requestSignUrlOptionsAreExact(call.getArguments()[0]!)
+    call.getArguments().length !== 1
   ) {
     return false;
   }
   const root = requestRoutePageRootForSignUrl(call, session, knownRoot);
   const receiver = unwrapStaticExpression(callee.getExpression());
-  if (!root || !Node.isIdentifier(receiver)) return false;
+  if (
+    !root ||
+    !Node.isIdentifier(receiver) ||
+    !requestSignUrlOptionsAreExact(call.getArguments()[0]!, root, session)
+  ) {
+    return false;
+  }
   const parameter = requestCallableParameters(root.declaration)[0];
   const name = parameter?.getNameNode();
   return !!(
@@ -11810,22 +12414,30 @@ function scanRequestRootCallbackCandidate(
     }
     return;
   }
-  const replayGrammar = callback.startsWith('mutationReplayStore.')
+  const managedStoreGrammar = callback.startsWith('mutationReplayStore.')
     ? REQUEST_MANAGED_MUTATION_REPLAY_STORE
-    : callback.startsWith('replayStore.')
-      ? REQUEST_MANAGED_WEBHOOK_REPLAY_STORE
-      : undefined;
-  const replayMember = replayGrammar ? callback.slice(callback.indexOf('.') + 1) : undefined;
-  const replayAccess = unwrapStaticExpression(expression);
+    : callback.startsWith('principalEpochStore.')
+      ? REQUEST_MANAGED_PRINCIPAL_EPOCH_STORE
+      : callback.startsWith('replayStore.')
+        ? REQUEST_MANAGED_WEBHOOK_REPLAY_STORE
+        : undefined;
+  const managedStoreMember = managedStoreGrammar
+    ? callback.slice(callback.indexOf('.') + 1)
+    : undefined;
+  const managedStoreAccess = unwrapStaticExpression(expression);
+  const managedStoreMethods =
+    managedStoreGrammar?.runtimeMember === 'principalEpochStore'
+      ? ['advance', 'current', 'initialize', 'tombstone']
+      : ['get', 'reserve', 'set'];
   if (
-    replayGrammar &&
-    replayMember &&
-    ['get', 'reserve', 'set'].includes(replayMember) &&
-    Node.isPropertyAccessExpression(replayAccess) &&
-    replayAccess.getName() === replayMember &&
-    requestExpressionResolvesToExactManagedReplayStore(
-      replayAccess.getExpression(),
-      replayGrammar,
+    managedStoreGrammar &&
+    managedStoreMember &&
+    managedStoreMethods.includes(managedStoreMember) &&
+    Node.isPropertyAccessExpression(managedStoreAccess) &&
+    managedStoreAccess.getName() === managedStoreMember &&
+    requestExpressionResolvesToExactManagedStore(
+      managedStoreAccess.getExpression(),
+      managedStoreGrammar,
       new Set(),
     )
   ) {
@@ -13165,7 +13777,13 @@ function requestExactManagedAppRuntimeIsPristine(expression: Node): boolean {
 
 function requestExpressionResolvesToExactManagedRuntimeMember(
   expression: Node,
-  member: 'db' | 'mutationReplayStore' | 'readonlyDb' | 'ready' | 'webhookReplayStore',
+  member:
+    | 'db'
+    | 'mutationReplayStore'
+    | 'principalEpochStore'
+    | 'readonlyDb'
+    | 'ready'
+    | 'webhookReplayStore',
   expectedAlias: string | undefined,
   seen: Set<string>,
 ): boolean {
@@ -13963,6 +14581,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
   const key = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.rootFactory ?? 'nested'}:${callable.rootCallback ?? (callable.moduleInitializer ? 'module-initializer' : 'helper')}:${callable.rootParameterRoles?.join(',') ?? 'untyped'}:${callable.compilerSemanticHelper ? 'compiler-semantic' : 'legacy'}:${callable.lexicalParent ? requestNodeIdentity(callable.lexicalParent.declaration) : 'no-lexical-parent'}`;
   if (context.scanned.has(key)) return;
   context.scanned.add(key);
+  verifyRequestTaskBSemanticRoot(context, callable);
 
   if (!callable.moduleInitializer) {
     registerRequestPromiseSettlementCallables(callable, context.provenance);
@@ -14163,7 +14782,6 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     // timers) have already closed above. Dynamic loaders, document methods, constructor
     // indirection, and every other unresolved invocation close through the single callable
     // resolution boundary below. Do not reintroduce a parallel terminal-name lexicon here.
-    const callee = call.getExpression();
     const fetchInvocation = requestReviewedFetchInvocation(call, callable, context.provenance);
     if (
       fetchInvocation &&
@@ -16722,14 +17340,22 @@ function scanRequestPropertyAccessProtocols(
   if (
     !write &&
     (requestPropertyAccessIsExactReviewedSchemaTable(access) ||
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
-        (runtimeMember) =>
-          requestExpressionResolvesToExactManagedRuntimeMember(
-            access,
-            runtimeMember,
-            undefined,
-            new Set(),
-          ),
+      (
+        [
+          'db',
+          'mutationReplayStore',
+          'principalEpochStore',
+          'readonlyDb',
+          'ready',
+          'webhookReplayStore',
+        ] as const
+      ).some((runtimeMember) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(
+          access,
+          runtimeMember,
+          undefined,
+          new Set(),
+        ),
       ) ||
       requestPropertyAccessIsExactBetterAuthSeedCallTarget(access) ||
       (['sessionProvider', 'signIn', 'signOut'] as const).some((bindingMember) =>
@@ -19564,14 +20190,22 @@ function requestExpressionIsProtocolSafeUncached(
 
   if (
     (requestExpressionMayBeExactManagedRuntimeMember(node) &&
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
-        (runtimeMember) =>
-          requestExpressionResolvesToExactManagedRuntimeMember(
-            node,
-            runtimeMember,
-            undefined,
-            new Set(),
-          ),
+      (
+        [
+          'db',
+          'mutationReplayStore',
+          'principalEpochStore',
+          'readonlyDb',
+          'ready',
+          'webhookReplayStore',
+        ] as const
+      ).some((runtimeMember) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(
+          node,
+          runtimeMember,
+          undefined,
+          new Set(),
+        ),
       )) ||
     requestPropertyAccessIsExactBetterAuthSeedCallTarget(node) ||
     (requestExpressionMayBeExactBetterAuthBindingMember(node) &&
@@ -19683,6 +20317,7 @@ function requestExpressionIsProtocolSafeUncached(
     if (requestCallCrossesDeferredRootAuthorityBoundary(node, callable, session)) return false;
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
+    if (requestCallIsExactPublicScopedKey(node, callable, session)) return true;
     if (
       requestCallIsExactAcceptedFileParse(node, session) ||
       requestCallIsExactStoredFileParseAsync(node, session)
@@ -24409,6 +25044,10 @@ function requestCallIsKnownSafe(
   }
 
   if (requestCallIsPromiseSettlement(call, callable, context)) return true;
+  if (requestCallIsExactPublicScopedKey(call, callable, context.provenance)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
   if (requestCallIsExactAuthoredBetterAuthSessionProviderDelegation(call, context.provenance)) {
     scanRequestFunctionArguments(call, context);
     return true;
@@ -24519,6 +25158,11 @@ function requestCallIsKnownSafe(
     requestCallIsExactDeclaredSecretReadDeclaration(call) ||
     requestCallIsExactDeclaredSecretReadExecution(call, context.provenance)
   ) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+
+  if (requestCallIsExactTrustedRevealPolicyConstructor(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
   }
@@ -32460,6 +33104,74 @@ function requestCompilerSemanticRootCallbackMatches(root: RequestCallable): bool
   }
 }
 
+function verifyRequestTaskBSemanticRoot(
+  context: RequestProcessScanContext,
+  callable: RequestCallable,
+): void {
+  const state = context.taskBClosure;
+  if (!state || state.invalidReason || !requestCompilerSemanticRootCallbackMatches(callable)) {
+    return;
+  }
+  const factoryCall = requestExactDirectRootFactoryCall(callable, context.provenance);
+  const factory = callable.rootFactory;
+  const callback = callable.rootCallback;
+  if (!factory || !callback || !factoryCall) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${factory ?? '<unknown>'}:${callback ?? '<unknown>'}; transfers=<root-binding>; sink=finite-ir; verdict=closed:exact factory call is unresolved`,
+    );
+    return;
+  }
+  const checkKey = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.declaration.getEnd()}:${factoryCall.getStart()}:${factoryCall.getEnd()}`;
+  if (state.checkedSemanticRoots.has(checkKey)) return;
+  state.checkedSemanticRoots.add(checkKey);
+  const callableKey = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.declaration.getEnd()}`;
+  const candidates = state.semanticRootsByCallable.get(callableKey) ?? [];
+  const matches = candidates.filter((root) => {
+    const binding = root.binding;
+    return (
+      binding.factory === factory &&
+      binding.callback === callback &&
+      binding.callableSpan.start === callable.declaration.getStart() &&
+      binding.callableSpan.end === callable.declaration.getEnd() &&
+      binding.factoryCallSpan.start === factoryCall.getStart() &&
+      binding.factoryCallSpan.end === factoryCall.getEnd() &&
+      binding.root === root.root
+    );
+  });
+  if (matches.length !== 1) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${factory}:${callback}; transfers=<direct>; sink=finite-ir; verdict=closed:expected one exact semantic root, found ${matches.length}`,
+    );
+    return;
+  }
+  const root = matches[0]!;
+  const closed = root.traces.find((trace) => trace.verdict === 'closed');
+  if (closed) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${root.root}; transfers=${closed.transfers.join(' -> ') || '<direct>'}; sink=${closed.sink}; verdict=closed:${closed.reason}`,
+    );
+    return;
+  }
+  const closedSummary = root.summaries.find((summary) => summary.verdict === 'closed');
+  const closedInvocation = root.helperInvocations.find(
+    (invocation) => invocation.verdict === 'closed',
+  );
+  if (closedSummary || closedInvocation) {
+    const closedFact = closedSummary ?? closedInvocation!;
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${root.root}; transfers=${closedFact.callable}; sink=normalized-provenance; verdict=closed:helper summary is not proved`,
+    );
+  }
+}
+
 function requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
@@ -32683,36 +33395,91 @@ function requestCallIsExactTrustedReveal(call: Node): boolean {
   ) {
     return false;
   }
-  const options = unwrapStaticExpression(call.getArguments()[1]!);
-  if (!Node.isObjectLiteralExpression(options)) return false;
+  return requestExactTrustedRevealPolicy(call.getArguments()[1]!, true) !== undefined;
+}
+
+function requestCallIsExactTrustedRevealPolicyConstructor(call: Node): boolean {
+  return requestExactTrustedRevealPolicy(call, true) !== undefined;
+}
+
+interface RequestExactDeclassifyPolicy {
+  readonly label: string;
+  readonly ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
+}
+
+function requestExactTrustedRevealPolicy(
+  expression: Node,
+  requireExactPristineName: boolean,
+): RequestExactDeclassifyPolicy | undefined {
+  return requestExactDeclassifyPolicy(expression, 'trustedReveal', requireExactPristineName);
+}
+
+type RequestExactDeclassifyDoor = 'revealSecret' | 'trustedReveal';
+
+function requestExactDeclassifyPolicy(
+  expression: Node,
+  expectedDoor: RequestExactDeclassifyDoor,
+  requireExactPristineName: boolean,
+): RequestExactDeclassifyPolicy | undefined {
+  const call = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(call) || call.getArguments().length !== 1) return undefined;
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    staticMemberName(callee.getNameNode()) !== 'create'
+  ) {
+    return undefined;
+  }
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  const exactIdentity = requireExactPristineName
+    ? requestExactPristineDirectImport(receiver, '@kovojs/core', 'DeclassifyPolicy') !== undefined
+    : requestExpressionIsDirectImportedExport(receiver, '@kovojs/core', 'DeclassifyPolicy');
+  if (!exactIdentity) return undefined;
+
+  const options = unwrapStaticExpression(call.getArguments()[0]!);
+  if (!Node.isObjectLiteralExpression(options)) return undefined;
   const properties = options.getProperties();
-  if (properties.length === 0 || properties.length > 3) return false;
-  const expected = ['justification', 'method', 'source'] as const;
-  let next = 0;
-  let sawJustification = false;
+  if (properties.length !== 3) return undefined;
+  const fields = new Map<string, string>();
   for (const property of properties) {
     if (
       !Node.isPropertyAssignment(property) ||
       Node.isComputedPropertyName(property.getNameNode())
     ) {
-      return false;
+      return undefined;
     }
     const name = staticMemberName(property.getNameNode());
     const value = property.getInitializer();
-    if (!name || !value) return false;
-    const index = expected.indexOf(name as (typeof expected)[number]);
-    if (index < next || index === -1 || !isStringLiteralLike(value)) return false;
-    next = index + 1;
-    if (name === 'justification') {
-      if (index !== 0 || !runtimeRegExpTest(/\S/u, value.getLiteralText())) return false;
-      sawJustification = true;
-    } else if (name === 'method') {
-      if (!['arbitrary-fn', 'server-projection'].includes(value.getLiteralText())) return false;
-    } else if (!runtimeRegExpTest(/\S/u, value.getLiteralText())) {
-      return false;
+    if (
+      !name ||
+      !value ||
+      !['door', 'ownerScope', 'purpose'].includes(name) ||
+      fields.has(name) ||
+      !isStringLiteralLike(value)
+    ) {
+      return undefined;
     }
+    fields.set(name, value.getLiteralText());
   }
-  return sawJustification;
+  const door = fields.get('door');
+  const purpose = fields.get('purpose');
+  const ownerScope = fields.get('ownerScope');
+  if (
+    door !== expectedDoor ||
+    (expectedDoor === 'trustedReveal'
+      ? purpose !== 'public-projection'
+      : purpose !== 'credential-use' && purpose !== 'server-computation') ||
+    (ownerScope !== 'application' &&
+      ownerScope !== 'current-principal' &&
+      ownerScope !== 'current-tenant' &&
+      ownerScope !== 'framework')
+  ) {
+    return undefined;
+  }
+  return {
+    label: `${purpose}:${door}:${ownerScope}`,
+    ownerScope,
+  };
 }
 
 function requestExactTrustedRevealOutput(
@@ -32756,52 +33523,13 @@ function requestCallIsExactTrustedAssignOutput(call: Node): boolean {
   ) {
     return false;
   }
-  const [value, reason, ...extra] = call.getArguments();
-  if (!value || !reason || extra.length !== 0) return false;
-  const source = unwrapStaticExpression(reason);
-  const isNonEmptyStaticString = (candidate: Node): boolean => {
-    const string = unwrapStaticExpression(candidate);
-    return isStringLiteralLike(string) && runtimeRegExpTest(/\S/u, string.getLiteralText());
-  };
-  if (isStringLiteralLike(source)) return isNonEmptyStaticString(source);
-  if (!Node.isObjectLiteralExpression(source)) return false;
-
-  let sawReason = false;
-  const seen = runtimeSet<string>();
-  for (const property of source.getProperties()) {
-    if (
-      !Node.isPropertyAssignment(property) ||
-      Node.isComputedPropertyName(property.getNameNode())
-    ) {
-      return false;
-    }
-    const name = staticMemberName(property.getNameNode());
-    const initializer = property.getInitializer();
-    if (!name || !initializer || runtimeSetHas(seen, name)) return false;
-    runtimeSetAdd(seen, name);
-    if (name === 'columns') {
-      const columns = unwrapStaticExpression(initializer);
-      if (
-        !Node.isArrayLiteralExpression(columns) ||
-        !columns
-          .getElements()
-          .every((entry) => !Node.isSpreadElement(entry) && isNonEmptyStaticString(entry))
-      ) {
-        return false;
-      }
-      continue;
-    }
-    if (
-      !['actor', 'callsite', 'producer', 'reason', 'session', 'sourceProvenance', 'table'].includes(
-        name,
-      ) ||
-      !isNonEmptyStaticString(initializer)
-    ) {
-      return false;
-    }
-    if (name === 'reason') sawReason = true;
-  }
-  return sawReason;
+  const [value, obligation, ...extra] = call.getArguments();
+  return !!(
+    value &&
+    obligation &&
+    extra.length === 0 &&
+    structuredTrustedAssignObligation(obligation)
+  );
 }
 
 function requestExactServerValueCarriesRequestAuthority(
@@ -35648,6 +36376,31 @@ function appendOpaqueRequestHandlerFact(
       'keep request handler source inside the authoritative app snapshot; use runCommand(cmd(...)) for process execution',
     site: projectSiteFor(context.filesByPath, siteNode),
     source,
+  });
+}
+
+function appendRequestTaskBRouteFailure(
+  context: RequestProcessScanContext,
+  siteNode: Node,
+  trace: string,
+): void {
+  const site = projectSiteFor(context.filesByPath, siteNode);
+  if (
+    context.facts.some(
+      (fact) =>
+        fact.sink === 'request-handler.opaque-source' &&
+        fact.site === site &&
+        fact.source === trace,
+    )
+  ) {
+    return;
+  }
+  context.facts.push({
+    safePath:
+      'keep the exact authored root in the compiler capability census and finite semantic graph; inspect kovo explain --capabilities for the closed provenance path',
+    sink: 'request-handler.opaque-source',
+    site,
+    source: trace,
   });
 }
 
@@ -38800,8 +39553,9 @@ function methodCapabilityKind(name: string): CapabilityExplain['kind'] | undefin
 /**
  * Collect every app-authored escape-hatch call site as a `CapabilityExplain` (SPEC §6.6,
  * AUDIT-ONLY for `kovo explain --capabilities`, threat-matrix M3). One row per escape call; the
- * recorded `justification` (from a `reason`/`justification` argument, a trailing string, or a
- * leading `// justification:` comment) is the load-bearing audit field but is never required here.
+ * Legacy doors retain their recorded `justification`. `trustedAssign` instead carries an exact
+ * structured obligation plus scanner-owned call identity; artifact emission refuses an incomplete
+ * row before any deployable output is written.
  *
  * @internal
  */
@@ -38828,7 +39582,8 @@ export function collectCapabilityEscapesFromProject(
 }
 
 /**
- * Collect exact runtime `trustedReveal(...)` calls into the existing reveal-fact graph
+ * Collect exact runtime `revealSecret(...)` and `trustedReveal(...)` calls into the existing
+ * reveal-fact graph
  * (SPEC §6.6, audit-only). Query projection reveals remain owned by the typed query-shape
  * analyzer; callers merge only when both passes report the exact same AST call identity, so its
  * richer proof/audit verdict wins without dropping a second call on the same source line. A runtime
@@ -38899,23 +39654,22 @@ function runtimeRevealAuditForCall(
   file: TrustEscapeSourceFileInput,
   call: import('ts-morph').CallExpression,
 ): RuntimeRevealAuditCallResult | undefined {
-  if (!runtimeRevealCallUsesDirectCoreImport(call)) return undefined;
+  const door = runtimeRevealCallDoor(call);
+  if (!door) return undefined;
   const value = call.getArguments()[0];
-  const optionsArgument = call.getArguments()[1];
-  if (!value || !optionsArgument || call.getArguments().length !== 2) {
-    return { diagnostic: runtimeRevealAuditDiagnostic(file, call) };
+  const policyArgument = call.getArguments()[1];
+  if (!value || !policyArgument || call.getArguments().length !== 2) {
+    return { diagnostic: runtimeRevealAuditDiagnostic(file, call, door) };
   }
-  const fields = runtimeRevealAuditFields(optionsArgument);
-  if (!fields) return { diagnostic: runtimeRevealAuditDiagnostic(file, call) };
-  const requestedMethod = fields.method;
-  const method = requestedMethod === 'server-projection' ? requestedMethod : 'arbitrary-fn';
-  const source = fields.source ?? shortSource(value);
+  const policy = requestExactDeclassifyPolicy(policyArgument, door, false);
+  if (!policy) return { diagnostic: runtimeRevealAuditDiagnostic(file, call, door) };
+  const source = shortSource(value);
   return {
     fact: {
       callIdentity: runtimeRevealCallIdentity(file, call),
       grade: 'audit',
-      justification: fields.justification,
-      method,
+      justification: policy.label,
+      method: door === 'trustedReveal' ? 'server-projection' : 'arbitrary-fn',
       path: source,
       query: 'runtime',
       selectedSecret: true,
@@ -38925,70 +39679,31 @@ function runtimeRevealAuditForCall(
   };
 }
 
-function runtimeRevealCallUsesDirectCoreImport(call: import('ts-morph').CallExpression): boolean {
+function runtimeRevealCallDoor(
+  call: import('ts-morph').CallExpression,
+): RequestExactDeclassifyDoor | undefined {
   const callee = unwrapStaticExpression(call.getExpression());
-  return requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'trustedReveal');
-}
-
-function runtimeRevealAuditFields(expression: Node):
-  | {
-      justification: string;
-      method?: 'arbitrary-fn' | 'server-projection';
-      source?: string;
-    }
-  | undefined {
-  const object = unwrapStaticExpression(expression);
-  if (!Node.isObjectLiteralExpression(object)) return undefined;
-  const fields = new Map<string, string>();
-  const properties = object.getProperties();
-  if (properties.length === 0 || properties.length > 3) return undefined;
-  for (const property of properties) {
-    if (
-      !Node.isPropertyAssignment(property) ||
-      Node.isComputedPropertyName(property.getNameNode())
-    ) {
-      return undefined;
-    }
-    const name = staticMemberName(property.getNameNode());
-    const value = unwrapStaticExpression(property.getInitializer()!);
-    if (
-      !name ||
-      !['justification', 'method', 'source'].includes(name) ||
-      fields.has(name) ||
-      !isStringLiteralLike(value)
-    ) {
-      return undefined;
-    }
-    fields.set(name, value.getLiteralText());
+  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'revealSecret')) {
+    return 'revealSecret';
   }
-  const justification = fields.get('justification');
-  const method = fields.get('method');
-  const source = fields.get('source');
-  if (
-    justification === undefined ||
-    !runtimeRegExpTest(/\S/u, justification) ||
-    (method !== undefined && method !== 'arbitrary-fn' && method !== 'server-projection') ||
-    (source !== undefined && !runtimeRegExpTest(/\S/u, source))
-  ) {
-    return undefined;
+  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'trustedReveal')) {
+    return 'trustedReveal';
   }
-  return {
-    justification,
-    ...(method === undefined ? {} : { method }),
-    ...(source === undefined ? {} : { source }),
-  };
+  return undefined;
 }
 
 function runtimeRevealAuditDiagnostic(
   file: TrustEscapeSourceFileInput,
   call: import('ts-morph').CallExpression,
+  door: RequestExactDeclassifyDoor,
 ): StaticDiagnosticFact {
+  const purposes =
+    door === 'trustedReveal' ? 'public-projection' : 'credential-use or server-computation';
   return createRegisteredDiagnostic(
     'KV426',
     { site: siteFor(file, call) },
     {
-      detail:
-        'trustedReveal(...) must use exactly two arguments and an inline object literal with a non-empty literal justification plus optional literal method/source fields; dynamic options cannot be recorded by kovo explain --revealed (SPEC §6.6).',
+      detail: `${door}(...) must use exactly two arguments and an inline validated DeclassifyPolicy.create tuple for the ${door}/${purposes} door; dynamic policy cannot be recorded by kovo explain --revealed (SPEC §6.6).`,
     },
   );
 }
@@ -39050,11 +39765,17 @@ function frameworkCapabilityEscape(
   const args = call.getArguments();
   const target = capabilityTargetForCall(exportName, args);
   const justification = capabilityJustificationForCall(exportName, args, call);
+  const obligation =
+    exportName === 'trustedAssign' ? structuredTrustedAssignObligation(args[1]) : undefined;
   return {
     kind,
     site: siteFor(file, call),
+    ...(exportName === 'trustedAssign'
+      ? { siteIdentity: runtimeRevealCallIdentity(file, call) }
+      : {}),
     ...(target === undefined ? {} : { target }),
     ...(justification === undefined ? {} : { justification }),
+    ...(obligation === undefined ? {} : { obligation }),
   };
 }
 
@@ -39081,6 +39802,7 @@ function capabilityJustificationForCall(
   args: readonly Node[],
   call: Node,
 ): string | undefined {
+  if (exportName === 'trustedAssign') return undefined;
   if (exportName === 'declarePublicRelation') {
     const options = args[0];
     return options && Node.isObjectLiteralExpression(options)
@@ -39102,7 +39824,7 @@ function capabilityJustificationForCall(
       : leadingJustification(call);
   }
   if (exportName === 'usePostgresSystemDb') return leadingJustification(call);
-  // serverValue(v, reason) / trustedAssign(v, reason|{reason}) / unsafeRegex(re, justification):
+  // serverValue(v, reason) / unsafeRegex(re, justification):
   // the reason is the SECOND argument, as a string or a `{ reason }` object.
   const reasonArg = args[1];
   if (reasonArg && isStringLiteralLike(reasonArg)) return reasonArg.getLiteralText();

@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import {
   createBoundedRuntimeAuditCollector,
   mintFrameworkDurableReplayStoreReceipt,
+  mintFrameworkPrincipalEpochStoreReceipt,
 } from '@kovojs/core/internal/security-markers';
 import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
@@ -26,6 +27,7 @@ import {
   type KovoPostgresSystemDb,
 } from '@kovojs/server/internal/postgres-capability';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
+import { securityEvent } from './security-event.js';
 
 import {
   declareSystemPrincipal,
@@ -56,6 +58,7 @@ import {
   requestPassedRoleGuard,
   type FrameworkManagedDbProvider,
 } from './guards.js';
+import { mintFrameworkLoadShedError } from './app-load-shed.js';
 import {
   emitPostgresRlsPolicySql,
   postgresOwnerColumnPolicyTerm,
@@ -65,7 +68,12 @@ import {
   type PostgresOwnerColumnPolicyTerm,
   type PostgresOwnerPolicyTerm,
   type PostgresOwnerViaPolicyTerm,
+  type PostgresRlsSqlEmissionSite,
 } from './postgres-authorization-correspondence.js';
+import {
+  registerFrameworkPostgresOwnerGuardRequestDb,
+  registerFrameworkPostgresOwnerGuardSchema,
+} from './postgres-owner-guard.js';
 import {
   createPostgresCapabilityReplayStoreFromExecutor,
   createPostgresMutationReplayStoreFromExecutor,
@@ -79,8 +87,24 @@ import {
   type PostgresPendingReplayReleaseOptions,
   type PostgresPendingReplayTarget,
 } from './postgres-replay.js';
+import {
+  createPostgresPostureDigest,
+  createPostgresPostureLease,
+  POSTGRES_POSTURE_LEASE_MAX_FACTS,
+  POSTGRES_POSTURE_LEASE_WITNESS_TIMEOUT_MS,
+  type PostgresPostureFact,
+  type PostgresPostureLease,
+  type PostgresPostureLeaseSnapshot,
+  type PostgresPostureLeaseWitness,
+  type PostgresPosturePoolerStatementWitness,
+} from './postgres-posture-lease.js';
 import type { CapabilityReplayStore } from './capability-url.js';
 import type { MutationReplayStore } from './replay.js';
+import {
+  createPostgresPrincipalEpochStoreFromExecutor,
+  POSTGRES_PRINCIPAL_EPOCH_TABLE,
+} from './postgres-principal-epoch.js';
+import type { PrincipalEpochStore } from './principal-epoch.js';
 import {
   forEachReadonlyMapEntry,
   forEachReadonlySetValue,
@@ -145,7 +169,9 @@ const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
 const POSTGRES_DATABASE_INSTANCE_KEY = 'database_instance_id';
+const POSTGRES_POSTURE_EPOCH_KEY = 'posture_epoch';
 const POSTGRES_DATABASE_INSTANCE_ID_PATTERN = /^[0-9a-f]{64}$/u;
+const POSTGRES_POSTURE_EPOCH_PATTERN = /^(?:0|[1-9][0-9]{0,63})$/u;
 const postgresPinnedNodePools = createWitnessWeakMap<object, true>();
 const postgresPinnedNodeClients = createWitnessWeakMap<object, true>();
 const postgresNodeClientReleaseValues = createWitnessWeakMap<object, Function>();
@@ -153,6 +179,7 @@ const postgresAppRuntimeOptionSnapshots = createWitnessWeakMap<
   object,
   Readonly<KovoPostgresAppRuntimeOptions>
 >();
+const postgresRuntimePostureLeases = createWitnessWeakMap<object, PostgresPostureLease>();
 const POSTGRES_APP_RUNTIME_OPTION_KEYS = postgresStringSet([
   'adminDatabaseUrl',
   'adminRole',
@@ -173,8 +200,10 @@ const POSTGRES_APP_RUNTIME_OPTION_KEYS = postgresStringSet([
 ]);
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   '_kovo_jobs',
+  MIGRATIONS_TABLE,
   POSTGRES_REPLAY_TABLE,
   POSTGRES_REPLAY_WATERMARK_TABLE,
+  POSTGRES_PRINCIPAL_EPOCH_TABLE,
   '_kovo_task_cron_occurrences',
   SCHEMA_STATE_TABLE,
 ]);
@@ -596,6 +625,10 @@ function snapshotExtractedKovoRuntimeDbMetadata(
       'Kovo runtime governed column names',
       (names, tableName) =>
         snapshotExtractedReadonlySet(names, `Kovo runtime governed column names for ${tableName}`),
+    ),
+    keySourcesByTable: snapshotExtractedReadonlyMap(
+      metadata.keySourcesByTable,
+      'Kovo runtime declared row-key sources',
     ),
     ownerSourcesByTable: snapshotExtractedReadonlyMap(
       metadata.ownerSourcesByTable,
@@ -1140,8 +1173,9 @@ interface PostgresPolicyRow {
 
 interface ExpectedPostgresPolicy {
   cmd: 'ALL' | 'SELECT';
+  emissionSite: PostgresRlsSqlEmissionSite;
   issueCode: string;
-  name: string;
+  name: KovoPostgresPostureReport['authorizationPolicies'][number]['policyName'];
   permissive: 'PERMISSIVE';
   qual: string;
   roles: readonly string[];
@@ -1257,6 +1291,32 @@ interface RuntimeSqlClient extends RuntimeTransactionClient {
   transaction<Result>(callback: (tx: RuntimeTransactionClient) => Promise<Result>): Promise<Result>;
 }
 
+type PostgresSqlErrorObserver = (error: unknown) => void;
+
+interface PostgresPostureLeaseDeriveInput {
+  probeValue?: string;
+  relations: readonly { schemaName: string; tableName: string }[];
+  roles: readonly string[];
+}
+
+interface PostgresPostureCatalogRow extends QueryResultRow {
+  key: string;
+  kind: string;
+  value: string;
+}
+
+interface PostgresPosturePoolerRow extends QueryResultRow {
+  backend_pid: string;
+  current_database: string;
+  current_user: string;
+  probe_value: string;
+  session_user: string;
+}
+
+interface InitializedRuntimePosture {
+  runtimeLoginRole?: string;
+}
+
 interface ResolvedPostgresRuntimeConfig {
   adminRole: string;
   adminDatabaseUrl?: string;
@@ -1326,6 +1386,8 @@ const postgresPostureCheckOptOutFacts =
 
 interface CreatedRuntimeClient {
   close(): Promise<void>;
+  /** Retire idle sessions and poison active checkouts before lease recovery. */
+  drainRuntimeConnections(): Promise<void>;
   drizzleInternalDb(capability: typeof internalPostgresRuntimeDbCapability): KovoPostgresRuntimeDb;
   drizzleReadonlyDb(
     principal: string | undefined,
@@ -1342,6 +1404,7 @@ interface CreatedRuntimeClient {
   postureSql: RuntimeSqlClient;
   sql: RuntimeSqlClient;
   label: string;
+  observeRuntimeSqlErrors(observer: PostgresSqlErrorObserver): void;
 }
 
 interface PostgresRequestScope {
@@ -1521,6 +1584,8 @@ export interface KovoPostgresAppRuntimeDb {
   readonly db: FrameworkManagedDbProvider<KovoPostgresRuntimeDb>;
   /** Framework-system durable mutation idempotency truth (SPEC §10.3). */
   readonly mutationReplayStore: MutationReplayStore;
+  /** Framework-system persistent monotone principal revocation truth (SPEC §6.6/§10.3). */
+  readonly principalEpochStore: PrincipalEpochStore;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
   ready: Promise<void>;
   /** Operator reconciliation for an exact crash-orphaned pending replay claim (SPEC §10.3). */
@@ -1569,6 +1634,23 @@ export interface KovoPostgresPostureIssue {
 
 /** Result of checking an existing Postgres database against the app schema posture. */
 export interface KovoPostgresPostureReport {
+  /**
+   * Live policy activations derived from the same exact FORCE-RLS/policy-set posture check.
+   * `verified` describes engine policy activation only; it does not claim guard/RLS equivalence.
+   * SPEC §10.3.
+   */
+  authorizationPolicies: readonly {
+    /** The closed framework SQL-emission site that generated this expected policy. */
+    emissionSite: 'admin' | 'authzPolicy' | 'owner' | 'ownerVia' | 'system';
+    /** The exact generated Postgres policy name. */
+    policyName: 'kovo_admin_scope' | 'kovo_authz_policy' | 'kovo_owner_scope' | 'kovo_system_scope';
+    /** The live relation schema checked through the engine catalog. */
+    schemaName: string;
+    /** Whether FORCE RLS and the table's complete expected policy set and shapes matched exactly. */
+    status: 'unverified' | 'verified';
+    /** The live relation name checked through the engine catalog. */
+    tableName: string;
+  }[];
   driver: KovoPostgresResolvedRuntimeDriver;
   ok: boolean;
   issues: readonly KovoPostgresPostureIssue[];
@@ -1621,30 +1703,54 @@ export function createPostgresAppRuntimeDb(
     extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
   assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
+  registerFrameworkPostgresOwnerGuardSchema(metadata, schemaTables);
   const ddl = schemaDdl(schemaTables);
   const client = createRuntimeClient(config);
+  let initializedPosture: InitializedRuntimePosture | undefined;
+  const postureLease: PostgresPostureLease | undefined =
+    config.driver === 'node-postgres' && config.postureCheckOnBoot
+      ? createPostgresPostureLease({
+          drain: () => client.drainRuntimeConnections(),
+          mintAdmissionError: (message, retryAfterMs) =>
+            mintFrameworkLoadShedError({ code: 'KV433', reason: message, retryAfterMs }),
+          witness: () =>
+            derivePostgresPostureLeaseWitness(
+              client.sql,
+              client.postureSql,
+              postgresPostureLeaseDeriveInput(
+                config,
+                schemaTables,
+                initializedPosture?.runtimeLoginRole,
+              ),
+            ),
+        })
+      : undefined;
+  if (postureLease !== undefined) {
+    client.observeRuntimeSqlErrors((error) => postureLease.noteSqlError(error));
+  }
   const ready = initializeRuntimeDb(client.sql, {
     config,
     metadata,
     postureClient: client.postureSql,
     schemaDdl: ddl,
     schemaTables,
+  }).then(async (initialized) => {
+    initializedPosture = initialized;
+    await postureLease?.start();
   });
   let capabilityReplayStore: CapabilityReplayStore | undefined;
   let mutationReplayStore: MutationReplayStore | undefined;
+  let principalEpochStore: PrincipalEpochStore | undefined;
   let replaySqlExecutor: ReturnType<typeof createDurableTaskSqlExecutor> | undefined;
   let webhookReplayStore: WebhookReplayStore | undefined;
 
   const dbForRequest = (request?: unknown): KovoPostgresRuntimeDb => {
     const scope = postgresRequestScope(request, config);
-    return createRequestScopedDb(
-      client.drizzleRequestDb(scope.principal, scope.roleSetting),
-      client,
-      config,
-      metadata,
-      scope,
-      request,
-    );
+    const requestDb = client.drizzleRequestDb(scope.principal, scope.roleSetting);
+    registerFrameworkPostgresOwnerGuardRequestDb(requestDb, metadata, scope);
+    const scopedDb = createRequestScopedDb(requestDb, client, config, metadata, scope, request);
+    registerFrameworkPostgresOwnerGuardRequestDb(scopedDb, metadata, scope, requestDb);
+    return scopedDb;
   };
   const durableReplaySqlExecutor = (): ReturnType<typeof createDurableTaskSqlExecutor> => {
     replaySqlExecutor ??= createDurableTaskSqlExecutor(
@@ -1677,6 +1783,12 @@ export function createPostgresAppRuntimeDb(
     webhookReplayStore ??= createPostgresWebhookReplayStoreFromExecutor(durableReplaySqlExecutor());
     return webhookReplayStore;
   };
+  const durablePrincipalEpochStore = (): PrincipalEpochStore => {
+    principalEpochStore ??= createPostgresPrincipalEpochStoreFromExecutor(
+      durableReplaySqlExecutor(),
+    );
+    return principalEpochStore;
+  };
   const capabilityStore: CapabilityReplayStore = witnessFreeze({
     consume(id, expiresAt) {
       return durableCapabilityReplayStore().consume(id, expiresAt);
@@ -1684,17 +1796,32 @@ export function createPostgresAppRuntimeDb(
   });
   mintFrameworkDurableReplayStoreReceipt(capabilityStore, 'capability');
   const mutationStore: MutationReplayStore = witnessFreeze({
-    get(key, scope, idem, fingerprint) {
-      return durableMutationReplayStore().get(key, scope, idem, fingerprint);
+    get(key, scope, idem, fingerprint, principal) {
+      return durableMutationReplayStore().get(key, scope, idem, fingerprint, principal);
     },
-    reserve(key, scope, idem, fingerprint) {
-      return durableMutationReplayStore().reserve(key, scope, idem, fingerprint);
+    reserve(key, scope, idem, fingerprint, principal) {
+      return durableMutationReplayStore().reserve(key, scope, idem, fingerprint, principal);
     },
-    set(key, scope, idem, response, fingerprint) {
-      return durableMutationReplayStore().set(key, scope, idem, response, fingerprint);
+    set(key, scope, idem, response, fingerprint, principal) {
+      return durableMutationReplayStore().set(key, scope, idem, response, fingerprint, principal);
     },
   });
   mintFrameworkDurableReplayStoreReceipt(mutationStore, 'mutation');
+  const principalStore: PrincipalEpochStore = witnessFreeze({
+    current(principal, options) {
+      return durablePrincipalEpochStore().current(principal, options);
+    },
+    initialize(principal) {
+      return durablePrincipalEpochStore().initialize(principal);
+    },
+    advance(principal, reason) {
+      return durablePrincipalEpochStore().advance(principal, reason);
+    },
+    tombstone(principal, reason) {
+      return durablePrincipalEpochStore().tombstone(principal, reason);
+    },
+  });
+  mintFrameworkPrincipalEpochStoreReceipt(principalStore);
   const webhookStore: WebhookReplayStore = witnessFreeze({
     get(scope, idem) {
       return durableWebhookReplayStore().get(scope, idem);
@@ -1710,10 +1837,21 @@ export function createPostgresAppRuntimeDb(
 
   const runtime: KovoPostgresAppRuntimeDb = witnessFreeze({
     capabilityReplayStore: capabilityStore,
-    db: createFrameworkManagedDbProvider<unknown, KovoPostgresRuntimeDb>((request) =>
-      dbForRequest(request),
+    db: createFrameworkManagedDbProvider<unknown, KovoPostgresRuntimeDb>(
+      async (request) => {
+        await ready;
+        await postureLease?.admit();
+        return dbForRequest(request);
+      },
+      {
+        admit: async () => {
+          await ready;
+          await postureLease?.admit();
+        },
+      },
     ),
     mutationReplayStore: mutationStore,
+    principalEpochStore: principalStore,
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
     releasePendingReplay(target, releaseOptions) {
@@ -1735,8 +1873,13 @@ export function createPostgresAppRuntimeDb(
       );
     },
     webhookReplayStore: webhookStore,
-    close: () => client.close(),
+    close: async () => {
+      postureLease?.close();
+      await client.close();
+    },
   });
+  if (postureLease !== undefined)
+    witnessWeakMapSet(postgresRuntimePostureLeases, runtime, postureLease);
   registerPostgresAppRuntimeDb(runtime, dbForRequest);
   return runtime;
 }
@@ -1777,7 +1920,12 @@ export async function provisionPostgresAppDb(
       safeOptions.runtimeDatabaseUrl,
     );
     if (runtimeConnectionPosture?.issue !== undefined) {
-      return postgresRuntimeWitnessFailureReport(config, runtimeConnectionPosture);
+      return postgresRuntimeWitnessFailureReport(
+        config,
+        runtimeConnectionPosture,
+        schemaTables,
+        metadata,
+      );
     }
     const runtimeLoginRole =
       runtimeConnectionPosture?.runtimeLoginRole ??
@@ -1834,7 +1982,12 @@ export async function migratePostgresAppDb(
     if (runtimeConnectionPosture?.issue !== undefined) {
       return {
         ...migrations,
-        posture: postgresRuntimeWitnessFailureReport(config, runtimeConnectionPosture),
+        posture: postgresRuntimeWitnessFailureReport(
+          config,
+          runtimeConnectionPosture,
+          schemaTables,
+          metadata,
+        ),
       };
     }
     const runtimeLoginRole =
@@ -1875,12 +2028,19 @@ async function witnessConfiguredPostgresRuntimeDatabase(
 function postgresRuntimeWitnessFailureReport(
   config: ResolvedPostgresRuntimeConfig,
   witness: PostgresRuntimeConnectionPostureWitness,
+  schemaTables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
 ): KovoPostgresPostureReport {
   const issue = witness.issue ?? {
     code: 'KV433_RUNTIME_ROLE',
     detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
   };
   return {
+    authorizationPolicies: unverifiedPostgresAuthorizationPolicyActivations(
+      schemaTables,
+      metadata,
+      config,
+    ),
     driver: config.driver,
     issues: [issue],
     ok: false,
@@ -1952,6 +2112,11 @@ export async function checkPostgresAppDbPosture(
         : undefined;
     if (runtimeConnectionPosture?.issue !== undefined) {
       return {
+        authorizationPolicies: unverifiedPostgresAuthorizationPolicyActivations(
+          schemaTables,
+          metadata,
+          config,
+        ),
         driver: config.driver,
         issues: [runtimeConnectionPosture.issue],
         ok: false,
@@ -1998,7 +2163,7 @@ async function initializeRuntimeDb(
     schemaDdl: string;
     schemaTables: readonly PgTable[];
   },
-): Promise<void> {
+): Promise<InitializedRuntimePosture> {
   if (input.config.provisionOnBoot) {
     await provisionRuntimeDb(client, {
       ...input,
@@ -2026,6 +2191,8 @@ async function initializeRuntimeDb(
       runtimeLoginPostureWitnessed: input.config.driver === 'node-postgres',
     });
     if (!report.ok) {
+      securityEvent({ reason: 'database-role-closure', type: 'closure-audit-refused' });
+      // @kovo-security-denial closure-audit-refused postgres-runtime-posture
       if (
         input.config.driver === 'node-postgres' &&
         report.issues[0]?.code === 'KV433_RUNTIME_ROLE'
@@ -2048,6 +2215,7 @@ async function initializeRuntimeDb(
       ...input.config.postureCheckOptOut,
     });
   }
+  return runtimeLoginRole === undefined ? {} : { runtimeLoginRole };
 }
 
 async function provisionRuntimeDb(
@@ -2097,6 +2265,9 @@ async function provisionRuntimeDb(
     await withPostgresAppDdlSearchPath(tx, () =>
       provisionPostgresFrameworkReplayStore(tx, input.config, input.runtimeLoginRole),
     );
+    await withPostgresAppDdlSearchPath(tx, () =>
+      provisionPostgresPrincipalEpochStore(tx, input.config, input.runtimeLoginRole),
+    );
     await applyPostgresRlsPolicies(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
     await applyPostgresReaderColumnPrivileges(tx, input.schemaTables, input.metadata, input.config);
@@ -2118,6 +2289,7 @@ async function provisionRuntimeDb(
       if (input.config.driver === 'node-postgres') {
         await ensurePostgresDatabaseInstanceIdentity(tx, input.config);
       }
+      await reassertPostgresPostureEpoch(tx);
     });
     await grantPostgresRuntimeLoginRole(tx, roleTopology);
     await withPostgresAppDdlSearchPath(tx, async () => {
@@ -2140,6 +2312,364 @@ async function withPostgresAppDdlSearchPath<Result>(
   await client.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
   return result;
 }
+
+function postgresPostureLeaseDeriveInput(
+  config: ResolvedPostgresRuntimeConfig,
+  schemaTables: readonly PgTable[],
+  runtimeLoginRole?: string,
+): PostgresPostureLeaseDeriveInput {
+  const roleSet = createWitnessSet<string>();
+  for (const role of [
+    config.adminRole,
+    config.readerRole,
+    config.systemRole,
+    config.writerRole,
+    runtimeLoginRole,
+  ]) {
+    if (role !== undefined) witnessSetAdd(roleSet, role);
+  }
+  const roles: string[] = [];
+  witnessSetForEach(roleSet, (role) => appendPostgresDenseValue(roles, role));
+  securityArraySort(roles, postgresCompareStrings);
+
+  const relationMap = createWitnessMap<
+    string,
+    { readonly schemaName: string; readonly tableName: string }
+  >();
+  for (let index = 0; index < schemaTables.length; index += 1) {
+    const table = getTableConfig(
+      postgresDenseValue(schemaTables, index, 'Postgres posture lease schema tables'),
+    );
+    const schemaName = tableSchemaName(table);
+    witnessMapSet(relationMap, postgresRelationKey(schemaName, table.name), {
+      schemaName,
+      tableName: table.name,
+    });
+  }
+  witnessSetForEach(FRAMEWORK_INTERNAL_REACHABLE_TABLES, (tableName) => {
+    witnessMapSet(relationMap, postgresRelationKey('public', tableName), {
+      schemaName: 'public',
+      tableName,
+    });
+  });
+  witnessMapSet(relationMap, postgresRelationKey('public', MIGRATIONS_TABLE), {
+    schemaName: 'public',
+    tableName: MIGRATIONS_TABLE,
+  });
+  const relations: { schemaName: string; tableName: string }[] = [];
+  witnessMapForEach(relationMap, (relation) => appendPostgresDenseValue(relations, relation));
+  securityArraySort(relations, (left, right) => {
+    const schema = postgresCompareStrings(left.schemaName, right.schemaName);
+    return schema === 0 ? postgresCompareStrings(left.tableName, right.tableName) : schema;
+  });
+  return { relations, roles };
+}
+
+async function derivePostgresPostureLeaseWitness(
+  runtimeClient: RuntimeSqlClient,
+  postureClient: RuntimeSqlClient,
+  input: PostgresPostureLeaseDeriveInput,
+): Promise<PostgresPostureLeaseWitness> {
+  const probeValue = input.probeValue ?? randomBytes(16).toString('hex');
+  const pooler = await runtimeClient.transaction(async (tx) => {
+    await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    await tx.exec(`SET LOCAL statement_timeout = '${POSTGRES_POSTURE_LEASE_WITNESS_TIMEOUT_MS}ms'`);
+    const first = await tx.query<PostgresPosturePoolerRow>(
+      postgresJoin(
+        [
+          '/* kovo-posture-lease:pooler-first */ SELECT',
+          'pg_catalog.pg_backend_pid()::text AS backend_pid,',
+          'pg_catalog.current_database()::text AS current_database,',
+          'CURRENT_USER::text AS current_user,',
+          "pg_catalog.set_config('kovo.posture_lease_probe', $1, true)::text AS probe_value,",
+          'SESSION_USER::text AS session_user',
+        ],
+        ' ',
+      ),
+      [probeValue],
+    );
+    const second = await tx.query<PostgresPosturePoolerRow>(
+      postgresJoin(
+        [
+          '/* kovo-posture-lease:pooler-second */ SELECT',
+          'pg_catalog.pg_backend_pid()::text AS backend_pid,',
+          'pg_catalog.current_database()::text AS current_database,',
+          'CURRENT_USER::text AS current_user,',
+          "pg_catalog.current_setting('kovo.posture_lease_probe', true)::text AS probe_value,",
+          'SESSION_USER::text AS session_user',
+        ],
+        ' ',
+      ),
+    );
+    return {
+      first: postgresPosturePoolerStatement(first.rows, 'first'),
+      second: postgresPosturePoolerStatement(second.rows, 'second'),
+    };
+  });
+
+  const catalog = await postureClient.transaction(async (tx) => {
+    await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+    await tx.exec(`SET LOCAL statement_timeout = '${POSTGRES_POSTURE_LEASE_WITNESS_TIMEOUT_MS}ms'`);
+    await tx.exec(POSTGRES_SECURITY_SEARCH_PATH_SQL);
+    const roles = await tx.query<PostgresPostureCatalogRow>(POSTGRES_POSTURE_LEASE_ROLE_FACTS_SQL, [
+      postgresLeaseStringArray(input.roles, 'Postgres posture lease roles'),
+    ]);
+    const relationTargets = securityJsonStringify(
+      postgresMapDense(
+        input.relations,
+        (relation) => ({
+          schema_name: relation.schemaName,
+          table_name: relation.tableName,
+        }),
+        'Postgres posture lease relations',
+      ),
+    );
+    const relations = await tx.query<PostgresPostureCatalogRow>(
+      POSTGRES_POSTURE_LEASE_RELATION_FACTS_SQL,
+      [relationTargets],
+    );
+    const grants = await tx.query<PostgresPostureCatalogRow>(
+      POSTGRES_POSTURE_LEASE_GRANT_FACTS_SQL,
+      [postgresLeaseStringArray(input.roles, 'Postgres posture lease grant roles')],
+    );
+    const freshness = await tx.query<PostgresPostureCatalogRow>(
+      POSTGRES_POSTURE_LEASE_FRESHNESS_SQL,
+      [POSTGRES_POSTURE_EPOCH_KEY],
+    );
+    return {
+      freshness: snapshotPostgresQueryRows(freshness.rows, 'Postgres lease freshness rows'),
+      grants: snapshotPostgresQueryRows(grants.rows, 'Postgres lease grant rows'),
+      relations: snapshotPostgresQueryRows(relations.rows, 'Postgres lease relation rows'),
+      roles: snapshotPostgresQueryRows(roles.rows, 'Postgres lease role rows'),
+    };
+  });
+
+  const facts: PostgresPostureFact[] = [];
+  appendPostgresLeaseFacts(facts, catalog.roles);
+  appendPostgresLeaseFacts(facts, catalog.relations);
+  appendPostgresLeaseFacts(facts, catalog.grants);
+  const migrationRows: PostgresPostureCatalogRow[] = [];
+  let postureEpoch: string | undefined;
+  for (let index = 0; index < catalog.freshness.length; index += 1) {
+    const row = postgresDenseValue(catalog.freshness, index, 'Postgres lease freshness rows');
+    if (row.kind === 'posture-epoch' && row.key === POSTGRES_POSTURE_EPOCH_KEY) {
+      if (postureEpoch !== undefined) {
+        throw new Error('KV433: Postgres posture lease saw duplicate posture epochs (SPEC §10.3).');
+      }
+      postureEpoch = row.value;
+    } else if (row.kind === 'migration') {
+      appendPostgresDenseValue(migrationRows, row);
+    } else {
+      throw new Error(
+        `KV433: Postgres posture lease saw an unclassified freshness fact ${row.kind}:${row.key} (SPEC §10.3).`,
+      );
+    }
+  }
+  if (
+    postureEpoch === undefined ||
+    !securityRegExpTest(POSTGRES_POSTURE_EPOCH_PATTERN, postureEpoch)
+  ) {
+    throw new Error(
+      'KV433: Postgres posture lease requires one valid monotone posture epoch; run `kovo db migrate` (SPEC §10.3).',
+    );
+  }
+  securityArraySort(migrationRows, (left, right) => {
+    const key = postgresCompareStrings(left.key, right.key);
+    return key === 0 ? postgresCompareStrings(left.value, right.value) : key;
+  });
+  const migrationCanonical = securityJsonStringify(
+    postgresMapDense(
+      migrationRows,
+      (row) => ({ checksum: row.value, id: row.key }),
+      'Postgres posture lease migration rows',
+    ),
+  );
+  if (migrationCanonical === undefined) {
+    throw new Error(
+      'KV433: Postgres posture lease could not canonicalize the migration head (SPEC §10.3).',
+    );
+  }
+  const migrationHead = `sha256:${postgresSha256(migrationCanonical)}`;
+  const witness: PostgresPostureLeaseWitness = {
+    facts,
+    freshness: { migrationHead, postureEpoch },
+    pooler,
+  };
+  createPostgresPostureDigest(witness);
+  return witness;
+}
+
+function postgresLeaseStringArray(values: readonly string[], label: string): string[] {
+  const snapshot: string[] = [];
+  const count = postgresDenseArrayLength(values, label);
+  for (let index = 0; index < count; index += 1) {
+    const value = postgresDenseArrayValue(values, index, label);
+    if (typeof value !== 'string' || value === '') {
+      throw new TypeError(`${label} entries must be non-empty strings.`);
+    }
+    appendPostgresDenseValue(snapshot, value);
+  }
+  return snapshot;
+}
+
+function postgresPosturePoolerStatement(
+  rows: readonly PostgresPosturePoolerRow[],
+  label: string,
+): PostgresPosturePoolerStatementWitness {
+  const snapshot = snapshotPostgresQueryRows(rows, `Postgres posture lease ${label} pooler rows`);
+  if (snapshot.length !== 1) {
+    throw new Error(
+      `KV433: Postgres posture lease ${label} pooler statement returned ${snapshot.length} rows instead of one (SPEC §10.3).`,
+    );
+  }
+  const row = postgresDenseValue(snapshot, 0, `Postgres posture lease ${label} pooler rows`);
+  return {
+    backendPid: postgresLeaseRowString(row, 'backend_pid'),
+    currentDatabase: postgresLeaseRowString(row, 'current_database'),
+    currentUser: postgresLeaseRowString(row, 'current_user'),
+    probeValue: postgresLeaseRowString(row, 'probe_value'),
+    sessionUser: postgresLeaseRowString(row, 'session_user'),
+  };
+}
+
+function postgresLeaseRowString(row: QueryResultRow, property: string): string {
+  const value = postgresOwnDataValue(row as Record<PropertyKey, unknown>, property);
+  if (typeof value !== 'string') {
+    throw new Error(
+      `KV433: Postgres posture lease catalog field ${property} must be a string (SPEC §10.3).`,
+    );
+  }
+  return value;
+}
+
+function appendPostgresLeaseFacts(
+  destination: PostgresPostureFact[],
+  rows: readonly PostgresPostureCatalogRow[],
+): void {
+  for (let index = 0; index < rows.length; index += 1) {
+    if (destination.length >= POSTGRES_POSTURE_LEASE_MAX_FACTS) {
+      throw new Error(
+        `KV433: Postgres posture lease exceeded its ${POSTGRES_POSTURE_LEASE_MAX_FACTS}-fact interval budget (SPEC §10.3).`,
+      );
+    }
+    const row = postgresDenseValue(rows, index, 'Postgres posture lease catalog rows');
+    appendPostgresDenseValue(destination, {
+      key: postgresLeaseRowString(row, 'key'),
+      kind: postgresLeaseRowString(row, 'kind'),
+      value: postgresLeaseRowString(row, 'value'),
+    });
+  }
+}
+
+const POSTGRES_POSTURE_LEASE_ROLE_FACTS_SQL = postgresJoin(
+  [
+    '/* kovo-posture-lease:roles */ WITH RECURSIVE seed_roles AS',
+    '(SELECT r.oid, r.rolname FROM pg_catalog.pg_roles r WHERE r.rolname = ANY($1::text[])),',
+    'reachable(oid, rolname) AS',
+    '(SELECT oid, rolname FROM seed_roles UNION SELECT parent.oid, parent.rolname',
+    'FROM reachable child JOIN pg_catalog.pg_auth_members membership ON membership.member = child.oid',
+    'JOIN pg_catalog.pg_roles parent ON parent.oid = membership.roleid)',
+    "SELECT 'role'::text AS kind, role.rolname::text AS key,",
+    "pg_catalog.concat_ws(';', 'login=' || role.rolcanlogin::text, 'inherit=' || role.rolinherit::text,",
+    "'super=' || role.rolsuper::text, 'bypassrls=' || role.rolbypassrls::text,",
+    "'replication=' || role.rolreplication::text, 'createrole=' || role.rolcreaterole::text,",
+    "'createdb=' || role.rolcreatedb::text) AS value FROM reachable",
+    'JOIN pg_catalog.pg_roles role ON role.oid = reachable.oid',
+    "UNION ALL SELECT 'membership'::text AS kind,",
+    "member.rolname || '->' || parent.rolname AS key,",
+    "'admin=' || membership.admin_option::text || ';grantor=' || pg_catalog.pg_get_userbyid(membership.grantor) AS value",
+    'FROM reachable child JOIN pg_catalog.pg_auth_members membership ON membership.member = child.oid',
+    'JOIN pg_catalog.pg_roles member ON member.oid = membership.member',
+    'JOIN pg_catalog.pg_roles parent ON parent.oid = membership.roleid',
+    'ORDER BY kind, key, value',
+  ],
+  ' ',
+);
+
+const POSTGRES_POSTURE_LEASE_RELATION_FACTS_SQL = postgresJoin(
+  [
+    '/* kovo-posture-lease:relations */ WITH targets AS',
+    '(SELECT * FROM pg_catalog.jsonb_to_recordset($1::jsonb)',
+    'AS target(schema_name text, table_name text)), relations AS',
+    '(SELECT target.schema_name, target.table_name, relation.oid, relation.relkind,',
+    'relation.relrowsecurity, relation.relforcerowsecurity FROM targets target',
+    'LEFT JOIN pg_catalog.pg_namespace namespace ON namespace.nspname = target.schema_name',
+    'LEFT JOIN pg_catalog.pg_class relation ON relation.relnamespace = namespace.oid',
+    'AND relation.relname = target.table_name)',
+    "SELECT 'relation'::text AS kind, schema_name || '.' || table_name AS key,",
+    "CASE WHEN oid IS NULL THEN 'missing' ELSE pg_catalog.concat_ws(';',",
+    "'kind=' || relkind::text, 'rls=' || relrowsecurity::text, 'force=' || relforcerowsecurity::text) END AS value",
+    "FROM relations UNION ALL SELECT 'policy'::text AS kind,",
+    "relation.schema_name || '.' || relation.table_name || ':' || policy.polname AS key,",
+    "pg_catalog.concat_ws(';', 'permissive=' || policy.polpermissive::text,",
+    "'command=' || policy.polcmd::text, 'roles=' || COALESCE((SELECT pg_catalog.string_agg(",
+    "CASE WHEN role_oid = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(role_oid) END, ',' ORDER BY role_oid)",
+    "FROM pg_catalog.unnest(policy.polroles) role_oid), ''),",
+    "'using=' || COALESCE(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), ''),",
+    "'check=' || COALESCE(pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid), '')) AS value",
+    'FROM relations relation JOIN pg_catalog.pg_policy policy ON policy.polrelid = relation.oid',
+    'ORDER BY kind, key, value',
+  ],
+  ' ',
+);
+
+const POSTGRES_POSTURE_LEASE_GRANT_FACTS_SQL = postgresJoin(
+  [
+    '/* kovo-posture-lease:grants */ WITH RECURSIVE seed_roles AS',
+    '(SELECT r.oid FROM pg_catalog.pg_roles r WHERE r.rolname = ANY($1::text[])),',
+    'reachable(oid) AS (SELECT oid FROM seed_roles UNION SELECT membership.roleid',
+    'FROM reachable child JOIN pg_catalog.pg_auth_members membership ON membership.member = child.oid),',
+    'grantees(oid) AS (SELECT 0::oid UNION SELECT oid FROM reachable), facts AS (',
+    "SELECT 'table-grant'::text AS kind, namespace.nspname || '.' || relation.relname || ':' ||",
+    "CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END AS key,",
+    "acl.privilege_type::text || ';grantable=' || acl.is_grantable::text || ';grantor=' ||",
+    'pg_catalog.pg_get_userbyid(acl.grantor) AS value FROM pg_catalog.pg_class relation',
+    'JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace',
+    'CROSS JOIN LATERAL pg_catalog.aclexplode(relation.relacl) acl',
+    'WHERE relation.relacl IS NOT NULL AND acl.grantee IN (SELECT oid FROM grantees)',
+    "UNION ALL SELECT 'column-grant'::text, namespace.nspname || '.' || relation.relname || '.' ||",
+    "attribute.attname || ':' || CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE",
+    'pg_catalog.pg_get_userbyid(acl.grantee) END,',
+    "acl.privilege_type::text || ';grantable=' || acl.is_grantable::text || ';grantor=' ||",
+    'pg_catalog.pg_get_userbyid(acl.grantor) FROM pg_catalog.pg_attribute attribute',
+    'JOIN pg_catalog.pg_class relation ON relation.oid = attribute.attrelid',
+    'JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace',
+    'CROSS JOIN LATERAL pg_catalog.aclexplode(attribute.attacl) acl',
+    'WHERE attribute.attacl IS NOT NULL AND acl.grantee IN (SELECT oid FROM grantees)',
+    "UNION ALL SELECT 'schema-grant'::text, namespace.nspname || ':' ||",
+    "CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,",
+    "acl.privilege_type::text || ';grantable=' || acl.is_grantable::text || ';grantor=' ||",
+    'pg_catalog.pg_get_userbyid(acl.grantor) FROM pg_catalog.pg_namespace namespace',
+    'CROSS JOIN LATERAL pg_catalog.aclexplode(namespace.nspacl) acl',
+    'WHERE namespace.nspacl IS NOT NULL AND acl.grantee IN (SELECT oid FROM grantees)',
+    "UNION ALL SELECT 'routine-grant'::text, namespace.nspname || '.' || routine.proname || ':' ||",
+    "CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,",
+    "acl.privilege_type::text || ';grantable=' || acl.is_grantable::text || ';grantor=' ||",
+    'pg_catalog.pg_get_userbyid(acl.grantor) FROM pg_catalog.pg_proc routine',
+    'JOIN pg_catalog.pg_namespace namespace ON namespace.oid = routine.pronamespace',
+    'CROSS JOIN LATERAL pg_catalog.aclexplode(routine.proacl) acl',
+    'WHERE routine.proacl IS NOT NULL AND acl.grantee IN (SELECT oid FROM grantees)',
+    "UNION ALL SELECT 'default-grant'::text, owner.rolname || ':' || defaults.defaclobjtype::text || ':' ||",
+    "CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE pg_catalog.pg_get_userbyid(acl.grantee) END,",
+    "acl.privilege_type::text || ';grantable=' || acl.is_grantable::text || ';grantor=' ||",
+    'pg_catalog.pg_get_userbyid(acl.grantor) FROM pg_catalog.pg_default_acl defaults',
+    'JOIN pg_catalog.pg_roles owner ON owner.oid = defaults.defaclrole',
+    'CROSS JOIN LATERAL pg_catalog.aclexplode(defaults.defaclacl) acl',
+    'WHERE acl.grantee IN (SELECT oid FROM grantees))',
+    'SELECT kind, key, value FROM facts ORDER BY kind, key, value',
+  ],
+  ' ',
+);
+
+const POSTGRES_POSTURE_LEASE_FRESHNESS_SQL = postgresJoin(
+  [
+    "/* kovo-posture-lease:freshness */ SELECT 'posture-epoch'::text AS kind, key::text, value::text",
+    `FROM public.${quoteIdent(SCHEMA_STATE_TABLE)} WHERE key = $1`,
+    "UNION ALL SELECT 'migration'::text AS kind, id::text AS key, checksum::text AS value",
+    `FROM public.${quoteIdent(MIGRATIONS_TABLE)} ORDER BY kind, key, value`,
+  ],
+  ' ',
+);
 
 async function checkRuntimeDbPosture(
   client: RuntimeSqlClient,
@@ -2175,6 +2705,10 @@ async function checkRuntimeDbPostureTransaction(
   },
 ): Promise<KovoPostgresPostureReport> {
   const issues: KovoPostgresPostureIssue[] = [];
+  const authorizationPolicies: KovoPostgresPostureReport['authorizationPolicies'][number][] = [];
+  const protectedTables = postgresMapValues(
+    resolveProtectedPostgresTables(input.schemaTables, input.metadata),
+  );
   const runtimeLoginRole =
     input.config.driver === 'node-postgres'
       ? (input.runtimeLoginRole ?? (await currentPostgresLogin(client)))
@@ -2186,6 +2720,11 @@ async function checkRuntimeDbPostureTransaction(
     );
     if (identityIssue !== undefined) {
       return {
+        authorizationPolicies: postgresAuthorizationPolicyActivations(
+          protectedTables,
+          input.config,
+          'unverified',
+        ),
         driver: input.config.driver,
         issues: [identityIssue],
         ok: false,
@@ -2205,6 +2744,8 @@ async function checkRuntimeDbPostureTransaction(
       'Postgres persisted runtime-setting issues',
     );
   }
+  const freshnessIssue = await postgresPostureFreshnessIssue(client);
+  if (freshnessIssue !== undefined) appendPostgresDenseValue(issues, freshnessIssue);
   if (runtimeLoginRole !== undefined && input.runtimeLoginPostureWitnessed !== true) {
     appendPostgresDenseValues(
       issues,
@@ -2226,6 +2767,11 @@ async function checkRuntimeDbPostureTransaction(
     issues,
     await postgresReplayStorePostureIssues(client, input.config, runtimeLoginRole),
     'Postgres replay store posture issues',
+  );
+  appendPostgresDenseValues(
+    issues,
+    await postgresPrincipalEpochStorePostureIssues(client, input.config, runtimeLoginRole),
+    'Postgres principal epoch store posture issues',
   );
   if (input.config.driver === 'node-postgres') {
     appendPostgresDenseValues(
@@ -2251,9 +2797,6 @@ async function checkRuntimeDbPostureTransaction(
   // SPEC §10.3 (C10): policy posture is an exact catalog allowlist, not the
   // presence of a familiar name. A same-named allow-all/PUBLIC policy or an
   // additional permissive policy changes the effective OR-composed RLS boundary.
-  const protectedTables = postgresMapValues(
-    resolveProtectedPostgresTables(input.schemaTables, input.metadata),
-  );
   const protectedTableCount = postgresDenseArrayLength(
     protectedTables,
     'Protected Postgres tables',
@@ -2282,16 +2825,28 @@ async function checkRuntimeDbPostureTransaction(
       rls === undefined || postgresDenseArrayLength(rls.rows, 'Postgres RLS rows') === 0
         ? undefined
         : postgresDenseArrayValue(rls.rows, 0, 'Postgres RLS rows');
-    if (row?.relrowsecurity !== true || row.relforcerowsecurity !== true) {
+    const forceRlsVerified = row?.relrowsecurity === true && row.relforcerowsecurity === true;
+    if (!forceRlsVerified) {
       appendPostgresDenseValue(issues, {
         code: 'KV433_FORCE_RLS',
         detail: `${protectedTable.schemaName}.${protectedTable.tableName} must have row-level security enabled and forced`,
       });
     }
+    const expectedPolicies = expectedPostgresPolicies(protectedTable, input.config);
+    const policyIssues = await postgresProtectedPolicyPostureIssues(
+      client,
+      protectedTable,
+      expectedPolicies,
+    );
+    appendPostgresDenseValues(issues, policyIssues, 'Protected Postgres policy posture issues');
     appendPostgresDenseValues(
-      issues,
-      await postgresProtectedPolicyPostureIssues(client, protectedTable, input.config),
-      'Protected Postgres policy posture issues',
+      authorizationPolicies,
+      postgresAuthorizationPolicyActivationsForTable(
+        protectedTable,
+        expectedPolicies,
+        forceRlsVerified && policyIssues.length === 0 ? 'verified' : 'unverified',
+      ),
+      'Postgres authorization policy activations',
     );
   }
 
@@ -2363,7 +2918,9 @@ async function checkRuntimeDbPostureTransaction(
     'Postgres unexpected privilege issues',
   );
 
+  sortPostgresAuthorizationPolicyActivations(authorizationPolicies);
   return {
+    authorizationPolicies,
     driver: input.config.driver,
     issues,
     ok: issues.length === 0,
@@ -2374,10 +2931,184 @@ async function checkRuntimeDbPostureTransaction(
   };
 }
 
+async function postgresPostureFreshnessIssue(
+  client: RuntimeTransactionClient,
+): Promise<KovoPostgresPostureIssue | undefined> {
+  const result = await safeQuery<{ migration_table: string | null; posture_epoch: string | null }>(
+    client,
+    postgresJoin(
+      [
+        `SELECT (SELECT value FROM public.${quoteIdent(SCHEMA_STATE_TABLE)} WHERE key = $1)`,
+        'AS posture_epoch,',
+        `pg_catalog.to_regclass('public.${MIGRATIONS_TABLE}')::text AS migration_table`,
+      ],
+      ' ',
+    ),
+    [POSTGRES_POSTURE_EPOCH_KEY],
+  );
+  if (result === undefined || result.rows.length !== 1) {
+    return {
+      code: 'KV433_POSTURE_FRESHNESS',
+      detail:
+        'could not read the monotone posture epoch and migration ledger; run `kovo db migrate`',
+    };
+  }
+  const row = postgresDenseValue(result.rows, 0, 'Postgres posture freshness rows');
+  if (
+    row.migration_table === null ||
+    row.posture_epoch === null ||
+    !securityRegExpTest(POSTGRES_POSTURE_EPOCH_PATTERN, row.posture_epoch)
+  ) {
+    return {
+      code: 'KV433_POSTURE_FRESHNESS',
+      detail:
+        'the migration ledger or canonical monotone posture epoch is missing; run `kovo db migrate`',
+    };
+  }
+  return undefined;
+}
+
+function expectedPostgresPolicies(
+  table: ProtectedPostgresTable,
+  config: ResolvedPostgresRuntimeConfig,
+): ExpectedPostgresPolicy[] {
+  const primaryPolicyName = table.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope';
+  const primaryIssueCode =
+    table.kind === 'authzPolicy'
+      ? 'KV433_AUTHZ_POLICY'
+      : table.kind === 'ownerVia'
+        ? 'KV433_OWNER_VIA_POLICY'
+        : 'KV433_OWNER_POLICY';
+  const expected: ExpectedPostgresPolicy[] = [
+    {
+      cmd: 'ALL',
+      emissionSite: table.kind,
+      issueCode: primaryIssueCode,
+      name: primaryPolicyName,
+      permissive: 'PERMISSIVE',
+      qual: table.predicate,
+      roles: [config.readerRole, config.writerRole],
+      withCheck: table.predicate,
+    },
+    {
+      cmd: 'ALL',
+      emissionSite: 'system',
+      issueCode: 'KV433_SYSTEM_POLICY',
+      name: 'kovo_system_scope',
+      permissive: 'PERMISSIVE',
+      qual: 'true',
+      roles: [config.systemRole],
+      withCheck: 'true',
+    },
+  ];
+  if (witnessSetHas(config.crossOwnerReadTables, table.tableName)) {
+    appendPostgresDenseValue(expected, {
+      cmd: 'SELECT',
+      emissionSite: 'admin',
+      issueCode: 'KV433_ADMIN_POLICY',
+      name: 'kovo_admin_scope',
+      permissive: 'PERMISSIVE',
+      qual: 'true',
+      roles: [config.adminRole],
+      withCheck: null,
+    });
+  }
+  return expected;
+}
+
+function unverifiedPostgresAuthorizationPolicyActivations(
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+  config: ResolvedPostgresRuntimeConfig,
+): KovoPostgresPostureReport['authorizationPolicies'][number][] {
+  return postgresAuthorizationPolicyActivations(
+    postgresMapValues(resolveProtectedPostgresTables(tables, metadata)),
+    config,
+    'unverified',
+  );
+}
+
+function postgresAuthorizationPolicyActivations(
+  tables: readonly ProtectedPostgresTable[],
+  config: ResolvedPostgresRuntimeConfig,
+  status: KovoPostgresPostureReport['authorizationPolicies'][number]['status'],
+): KovoPostgresPostureReport['authorizationPolicies'][number][] {
+  const activations: KovoPostgresPostureReport['authorizationPolicies'][number][] = [];
+  const tableCount = postgresDenseArrayLength(tables, 'Postgres authorization policy tables');
+  for (let index = 0; index < tableCount; index += 1) {
+    const table = postgresDenseArrayValue(tables, index, 'Postgres authorization policy tables');
+    appendPostgresDenseValues(
+      activations,
+      postgresAuthorizationPolicyActivationsForTable(
+        table,
+        expectedPostgresPolicies(table, config),
+        status,
+      ),
+      'Postgres authorization policy activations',
+    );
+  }
+  sortPostgresAuthorizationPolicyActivations(activations);
+  return activations;
+}
+
+function postgresAuthorizationPolicyActivationsForTable(
+  table: ProtectedPostgresTable,
+  policies: readonly ExpectedPostgresPolicy[],
+  status: KovoPostgresPostureReport['authorizationPolicies'][number]['status'],
+): KovoPostgresPostureReport['authorizationPolicies'][number][] {
+  const activations: KovoPostgresPostureReport['authorizationPolicies'][number][] = [];
+  const policyCount = postgresDenseArrayLength(
+    policies,
+    'Expected Postgres authorization policies',
+  );
+  for (let index = 0; index < policyCount; index += 1) {
+    const policy = postgresDenseArrayValue(
+      policies,
+      index,
+      'Expected Postgres authorization policies',
+    );
+    appendPostgresDenseValue(activations, {
+      emissionSite: policy.emissionSite,
+      policyName: policy.name,
+      schemaName: table.schemaName,
+      status,
+      tableName: table.tableName,
+    });
+  }
+  return activations;
+}
+
+function sortPostgresAuthorizationPolicyActivations(
+  activations: KovoPostgresPostureReport['authorizationPolicies'][number][],
+): void {
+  securityArraySort(activations, (left, right) => {
+    const schemaOrder = postgresCompareStrings(left.schemaName, right.schemaName);
+    if (schemaOrder !== 0) return schemaOrder;
+    const tableOrder = postgresCompareStrings(left.tableName, right.tableName);
+    if (tableOrder !== 0) return tableOrder;
+    const siteOrder =
+      postgresAuthorizationPolicyEmissionRank(left.emissionSite) -
+      postgresAuthorizationPolicyEmissionRank(right.emissionSite);
+    return siteOrder === 0
+      ? postgresCompareStrings(left.emissionSite, right.emissionSite)
+      : siteOrder;
+  });
+}
+
+function postgresAuthorizationPolicyEmissionRank(site: PostgresRlsSqlEmissionSite): number {
+  if (site === 'system') return 1;
+  if (site === 'admin') return 2;
+  return 0;
+}
+
+function postgresCompareStrings(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
 async function postgresProtectedPolicyPostureIssues(
   client: RuntimeTransactionClient,
   table: ProtectedPostgresTable,
-  config: ResolvedPostgresRuntimeConfig,
+  expected: readonly ExpectedPostgresPolicy[],
 ): Promise<KovoPostgresPostureIssue[]> {
   const policies = await safeQuery<PostgresPolicyRow>(
     client,
@@ -2399,45 +3130,6 @@ async function postgresProtectedPolicyPostureIssues(
         detail: `could not enumerate the exact RLS policy set for ${table.schemaName}.${table.tableName}`,
       },
     ];
-  }
-
-  const primaryPolicyName = table.kind === 'authzPolicy' ? 'kovo_authz_policy' : 'kovo_owner_scope';
-  const primaryIssueCode =
-    table.kind === 'authzPolicy'
-      ? 'KV433_AUTHZ_POLICY'
-      : table.kind === 'ownerVia'
-        ? 'KV433_OWNER_VIA_POLICY'
-        : 'KV433_OWNER_POLICY';
-  const expected: ExpectedPostgresPolicy[] = [
-    {
-      cmd: 'ALL',
-      issueCode: primaryIssueCode,
-      name: primaryPolicyName,
-      permissive: 'PERMISSIVE',
-      qual: table.predicate,
-      roles: [config.readerRole, config.writerRole],
-      withCheck: table.predicate,
-    },
-    {
-      cmd: 'ALL',
-      issueCode: 'KV433_SYSTEM_POLICY',
-      name: 'kovo_system_scope',
-      permissive: 'PERMISSIVE',
-      qual: 'true',
-      roles: [config.systemRole],
-      withCheck: 'true',
-    },
-  ];
-  if (witnessSetHas(config.crossOwnerReadTables, table.tableName)) {
-    appendPostgresDenseValue(expected, {
-      cmd: 'SELECT',
-      issueCode: 'KV433_ADMIN_POLICY',
-      name: 'kovo_admin_scope',
-      permissive: 'PERMISSIVE',
-      qual: 'true',
-      roles: [config.adminRole],
-      withCheck: null,
-    });
   }
 
   const issues: KovoPostgresPostureIssue[] = [];
@@ -3121,10 +3813,31 @@ async function provisionPostgresFrameworkTaskStore(
   client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
+  const principalColumnExisted = await postgresFrameworkColumnExists(
+    client,
+    '_kovo_jobs',
+    'principal',
+    'Postgres durable-task principal-index preflight',
+  );
   const executor = createDurableTaskSqlExecutor(client);
   await ensureDurableTaskSchema(executor);
+  if (
+    !principalColumnExisted &&
+    (await postgresFrameworkCount(
+      client,
+      'SELECT COUNT(*)::text AS row_count FROM public._kovo_jobs',
+      'Postgres durable-task principal-index cutover',
+    )) !== '0'
+  ) {
+    throw new Error(
+      'KV433_TASK_ERASURE_CUTOVER: public._kovo_jobs contains legacy task args created before the principal erasure index; preserve or reconcile those rows, then perform an explicit operator cutover before enabling principal-erasure receipts.',
+    );
+  }
   await ensureRecurringTaskSchema(executor);
   await grantDurableTaskWriterRole(executor, config.writerRole);
+  // Framework-owned erasure and task maintenance run through the exact system capability, not an
+  // app request writer. The system role therefore needs the same narrow task-ledger DML grant.
+  await grantDurableTaskWriterRole(executor, config.systemRole);
 }
 
 /**
@@ -3137,6 +3850,12 @@ async function provisionPostgresFrameworkReplayStore(
   runtimeLoginRole: string | undefined,
 ): Promise<void> {
   const table = quoteQualified('public', POSTGRES_REPLAY_TABLE);
+  const principalIndexColumnExisted = await postgresFrameworkColumnExists(
+    client,
+    POSTGRES_REPLAY_TABLE,
+    'principal_index',
+    'Postgres replay principal-index preflight',
+  );
   await client.exec(
     postgresJoin(
       [
@@ -3153,6 +3872,7 @@ async function provisionPostgresFrameworkReplayStore(
         'admission_slot integer,',
         'expires_at bigint,',
         'occurred_at bigint,',
+        'principal_index text,',
         'created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,',
         'committed_at timestamptz,',
         'PRIMARY KEY (surface, scope, idem),',
@@ -3169,6 +3889,7 @@ async function provisionPostgresFrameworkReplayStore(
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS expires_at bigint`);
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS occurred_at bigint`);
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS admission_slot integer`);
+  await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS principal_index text`);
   // SPEC §10.3: pre-horizon mutation/webhook rows carry no authenticated expiry. Inferring one
   // from created_at, committed_at, or current time would either delete durable execution truth too
   // early or extend a replay key beyond the signed identity. Empty legacy tables migrate; non-empty
@@ -3186,6 +3907,18 @@ async function provisionPostgresFrameworkReplayStore(
   if (timelessCount !== '0') {
     throw new Error(
       'KV433_REPLAY_STORE_CUTOVER: public._kovo_replay contains legacy mutation/webhook truth without authenticated expires_at; preserve or reconcile those rows, then perform an explicit operator cutover before provisioning the replay horizon schema.',
+    );
+  }
+  if (
+    !principalIndexColumnExisted &&
+    (await postgresFrameworkCount(
+      client,
+      `SELECT COUNT(*)::text AS row_count FROM ${table} WHERE surface = 'mutation'`,
+      'Postgres replay principal-index cutover',
+    )) !== '0'
+  ) {
+    throw new Error(
+      'KV433_REPLAY_STORE_CUTOVER: public._kovo_replay contains legacy mutation response bodies created before the principal erasure index; preserve or reconcile those rows, then perform an explicit operator cutover before enabling principal-erasure receipts.',
     );
   }
   const identityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_pkey`);
@@ -3254,6 +3987,12 @@ async function provisionPostgresFrameworkReplayStore(
       `(response_body IS NULL OR octet_length(response_body) <= ${POSTGRES_REPLAY_MAX_RESPONSE_BODY_STORAGE_BYTES}) AND ` +
       `(response_headers IS NULL OR octet_length(response_headers) <= ${POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES}))`,
   );
+  const principalIndexConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_principal_index_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${principalIndexConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${principalIndexConstraint} CHECK (` +
+      "principal_index IS NULL OR (surface = 'mutation' AND char_length(principal_index) BETWEEN 40 AND 128))",
+  );
   await client.exec(
     `DROP INDEX IF EXISTS ${quoteQualified(
       'public',
@@ -3280,6 +4019,16 @@ async function provisionPostgresFrameworkReplayStore(
     `CREATE UNIQUE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_admission_slot_idx`)} ` +
       `ON ${table} (surface, admission_slot) ` +
       `WHERE surface IN ('mutation', 'webhook') AND state = 'pending'`,
+  );
+  await client.exec(
+    `DROP INDEX IF EXISTS ${quoteQualified(
+      'public',
+      `${POSTGRES_REPLAY_TABLE}_principal_index_idx`,
+    )}`,
+  );
+  await client.exec(
+    `CREATE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_principal_index_idx`)} ` +
+      `ON ${table} (principal_index) WHERE surface = 'mutation' AND principal_index IS NOT NULL`,
   );
   const watermarkTable = quoteQualified('public', POSTGRES_REPLAY_WATERMARK_TABLE);
   const watermarkIdentityConstraint = quoteIdent(`${POSTGRES_REPLAY_WATERMARK_TABLE}_pkey`);
@@ -3351,6 +4100,84 @@ async function provisionPostgresFrameworkReplayStore(
   await client.exec(`GRANT SELECT ON TABLE ${watermarkTable} TO ${quoteIdent(config.adminRole)}`);
 }
 
+async function postgresFrameworkColumnExists(
+  client: RuntimeTransactionClient,
+  relation: string,
+  column: string,
+  label: string,
+): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM pg_attribute AS column_row ' +
+      'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid ' +
+      'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace ' +
+      "WHERE namespace_row.nspname = 'public' AND relation_row.relname = $1 " +
+      'AND column_row.attname = $2 AND column_row.attnum > 0 AND NOT column_row.attisdropped) AS exists',
+    [relation, column],
+  );
+  if (postgresDenseArrayLength(result.rows, label) !== 1) {
+    throw new Error(`${label} returned invalid catalog truth.`);
+  }
+  const row = postgresDenseArrayValue(result.rows, 0, label);
+  const exists = postgresOwnDataValue(row, 'exists');
+  if (typeof exists !== 'boolean') throw new Error(`${label} returned invalid catalog truth.`);
+  return exists;
+}
+
+async function postgresFrameworkCount(
+  client: RuntimeTransactionClient,
+  query: string,
+  label: string,
+): Promise<string> {
+  const result = await client.query<{ row_count: string }>(query);
+  if (postgresDenseArrayLength(result.rows, label) !== 1) {
+    throw new Error(`${label} returned invalid count truth.`);
+  }
+  const row = postgresDenseArrayValue(result.rows, 0, label);
+  const count = postgresOwnDataValue(row, 'row_count');
+  if (typeof count !== 'string' || !/^(?:0|[1-9][0-9]*)$/u.test(count)) {
+    throw new Error(`${label} returned invalid count truth.`);
+  }
+  return count;
+}
+
+/** Provision persistent per-principal revocation truth outside ordinary app-role authority. */
+async function provisionPostgresPrincipalEpochStore(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<void> {
+  const table = quoteQualified('public', POSTGRES_PRINCIPAL_EPOCH_TABLE);
+  await client.exec(
+    postgresJoin(
+      [
+        `CREATE TABLE IF NOT EXISTS ${table} (`,
+        'principal_digest text PRIMARY KEY CHECK (char_length(principal_digest) BETWEEN 40 AND 128),',
+        'epoch bigint NOT NULL CHECK (epoch >= 1),',
+        'changed_at_ms bigint NOT NULL CHECK (changed_at_ms >= 0),',
+        "status text NOT NULL CHECK (status IN ('active', 'tombstoned')),",
+        'last_reason text NOT NULL CHECK (last_reason IN (',
+        "'principal-created', 'password-change', 'role-change', 'tenant-change',",
+        "'admin-change', 'provider-revocation', 'manual-security-invalidation',",
+        "'principal-deletion', 'provider-deletion')))",
+      ],
+      ' ',
+    ),
+  );
+  await client.exec(`REVOKE ALL ON TABLE ${table} FROM PUBLIC`);
+  const deniedRoles = [config.readerRole, config.writerRole, config.adminRole, config.systemRole];
+  if (runtimeLoginRole !== undefined) appendPostgresDenseValue(deniedRoles, runtimeLoginRole);
+  const seen = createWitnessSet<string>();
+  for (let index = 0; index < deniedRoles.length; index += 1) {
+    const role = postgresDenseValue(deniedRoles, index, 'Postgres principal epoch denied roles');
+    if (witnessSetHas(seen, role)) continue;
+    witnessSetAdd(seen, role);
+    await client.exec(`REVOKE ALL ON TABLE ${table} FROM ${quoteIdent(role)}`);
+  }
+  await client.exec(
+    `GRANT SELECT, INSERT, UPDATE ON TABLE ${table} TO ${quoteIdent(config.systemRole)}`,
+  );
+}
+
 interface PostgresReplayPrivilegeRow {
   can_any_column_insert: boolean;
   can_any_column_references: boolean;
@@ -3385,6 +4212,9 @@ interface PostgresReplayShapeRow {
   exact_expiry_column: boolean;
   exact_identity_constraint: boolean;
   exact_occurrence_column: boolean;
+  exact_principal_index_column: boolean;
+  exact_principal_index_constraint: boolean;
+  exact_principal_index: boolean;
   exact_response_constraint: boolean;
   exact_state_response_constraint: boolean;
   exact_surface_constraint: boolean;
@@ -3400,6 +4230,35 @@ interface PostgresReplayWatermarkShapeRow {
   exact_value_constraint: boolean;
 }
 
+interface PostgresPrincipalEpochShapeRow {
+  exact_changed_at_column: boolean;
+  exact_changed_at_constraint: boolean;
+  exact_column_count: boolean;
+  exact_epoch_column: boolean;
+  exact_epoch_constraint: boolean;
+  exact_identity_constraint: boolean;
+  exact_principal_column: boolean;
+  exact_principal_constraint: boolean;
+  exact_reason_column: boolean;
+  exact_reason_constraint: boolean;
+  exact_status_column: boolean;
+  exact_status_constraint: boolean;
+}
+
+interface PostgresPrincipalEpochPrivilegeRow {
+  can_any_column_insert: boolean;
+  can_any_column_references: boolean;
+  can_any_column_select: boolean;
+  can_any_column_update: boolean;
+  can_delete: boolean;
+  can_insert: boolean;
+  can_references: boolean;
+  can_select: boolean;
+  can_trigger: boolean;
+  can_truncate: boolean;
+  can_update: boolean;
+}
+
 const POSTGRES_REPLAY_SURFACE_CONSTRAINT =
   "CHECK ((surface = ANY (ARRAY['capability'::text, 'mutation'::text, 'webhook'::text])))";
 const POSTGRES_REPLAY_EXPIRY_CONSTRAINT = 'CHECK (((expires_at IS NULL) OR (expires_at > 0)))';
@@ -3410,10 +4269,22 @@ const POSTGRES_REPLAY_STATE_RESPONSE_CONSTRAINT =
   "CHECK ((((state = 'pending'::text) AND (response_body IS NULL) AND (response_headers IS NULL) AND (response_status IS NULL) AND (committed_at IS NULL)) OR ((state = 'committed'::text) AND (response_body IS NOT NULL) AND (response_headers IS NOT NULL) AND (response_status IS NOT NULL) AND (committed_at IS NOT NULL))))";
 const POSTGRES_REPLAY_RESPONSE_CONSTRAINT =
   'CHECK ((((response_body IS NULL) OR (octet_length(response_body) <= 1398104)) AND ((response_headers IS NULL) OR (octet_length(response_headers) <= 65536))))';
+const POSTGRES_REPLAY_PRINCIPAL_INDEX_CONSTRAINT =
+  "CHECK (((principal_index IS NULL) OR ((surface = 'mutation'::text) AND ((char_length(principal_index) >= 40) AND (char_length(principal_index) <= 128)))))";
 const POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE = "(state = 'committed'::text)";
 const POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE =
   "((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND (state = 'pending'::text))";
+const POSTGRES_REPLAY_PRINCIPAL_INDEX_PREDICATE =
+  "((surface = 'mutation'::text) AND (principal_index IS NOT NULL))";
 const POSTGRES_REPLAY_WATERMARK_VALUE_CONSTRAINT = 'CHECK ((reclaimed_through >= 0))';
+const POSTGRES_PRINCIPAL_EPOCH_PRINCIPAL_CONSTRAINT =
+  'CHECK (((char_length(principal_digest) >= 40) AND (char_length(principal_digest) <= 128)))';
+const POSTGRES_PRINCIPAL_EPOCH_VALUE_CONSTRAINT = 'CHECK ((epoch >= 1))';
+const POSTGRES_PRINCIPAL_EPOCH_CHANGED_AT_CONSTRAINT = 'CHECK ((changed_at_ms >= 0))';
+const POSTGRES_PRINCIPAL_EPOCH_STATUS_CONSTRAINT =
+  "CHECK ((status = ANY (ARRAY['active'::text, 'tombstoned'::text])))";
+const POSTGRES_PRINCIPAL_EPOCH_REASON_CONSTRAINT =
+  "CHECK ((last_reason = ANY (ARRAY['principal-created'::text, 'password-change'::text, 'role-change'::text, 'tenant-change'::text, 'admin-change'::text, 'provider-revocation'::text, 'manual-security-invalidation'::text, 'principal-deletion'::text, 'provider-deletion'::text])))";
 
 async function postgresReplayStorePostureIssues(
   client: RuntimeTransactionClient,
@@ -3497,6 +4368,13 @@ async function postgresReplayStorePostureIssues(
         "AND column_row.attname = 'admission_slot' AND column_row.attnum > 0",
         'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
         "AND format_type(column_row.atttypid, column_row.atttypmod) = 'integer') AS exact_admission_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND column_row.attname = 'principal_index' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_principal_index_column,",
         'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
         'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
         'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
@@ -3561,6 +4439,14 @@ async function postgresReplayStorePostureIssues(
         'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
         "AND constraint_row.conname = '_kovo_replay_response_size_check'",
         'AND pg_get_constraintdef(constraint_row.oid) = $6) AS exact_response_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_principal_index_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $9) AS exact_principal_index_constraint,',
         'EXISTS (SELECT 1 FROM pg_index AS index_row',
         'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
         'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
@@ -3594,7 +4480,21 @@ async function postgresReplayStorePostureIssues(
         'AND index_row.indnatts = 2 AND index_row.indnkeyatts = 2',
         'AND index_row.indexprs IS NULL AND index_row.indisunique',
         'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
-        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $8) AS exact_admission_index',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $8) AS exact_admission_index,',
+        'EXISTS (SELECT 1 FROM pg_index AS index_row',
+        'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
+        'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = table_relation.relnamespace',
+        'JOIN pg_am AS access_method ON access_method.oid = index_relation.relam',
+        'JOIN pg_attribute AS principal_column ON principal_column.attrelid = table_relation.oid',
+        'AND principal_column.attnum = index_row.indkey[0]',
+        "WHERE namespace_row.nspname = 'public' AND table_relation.relname = '_kovo_replay'",
+        "AND index_relation.relname = '_kovo_replay_principal_index_idx'",
+        "AND access_method.amname = 'btree' AND principal_column.attname = 'principal_index'",
+        'AND index_row.indnatts = 1 AND index_row.indnkeyatts = 1',
+        'AND index_row.indexprs IS NULL AND NOT index_row.indisunique',
+        'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $10) AS exact_principal_index',
       ],
       ' ',
     ),
@@ -3607,6 +4507,8 @@ async function postgresReplayStorePostureIssues(
       POSTGRES_REPLAY_RESPONSE_CONSTRAINT,
       POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE,
       POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE,
+      POSTGRES_REPLAY_PRINCIPAL_INDEX_CONSTRAINT,
+      POSTGRES_REPLAY_PRINCIPAL_INDEX_PREDICATE,
     ],
   );
   const shapeRow =
@@ -3622,6 +4524,9 @@ async function postgresReplayStorePostureIssues(
     shapeRow.exact_state_response_constraint !== true ||
     shapeRow.exact_expiry_column !== true ||
     shapeRow.exact_occurrence_column !== true ||
+    shapeRow.exact_principal_index_column !== true ||
+    shapeRow.exact_principal_index_constraint !== true ||
+    shapeRow.exact_principal_index !== true ||
     shapeRow.exact_surface_constraint !== true ||
     shapeRow.exact_expiry_constraint !== true ||
     shapeRow.exact_surface_state_constraint !== true ||
@@ -3630,7 +4535,7 @@ async function postgresReplayStorePostureIssues(
     appendPostgresDenseValue(issues, {
       code: 'KV433_REPLAY_STORE_SCHEMA',
       detail:
-        'public._kovo_replay must have the exact replay-identity primary key, expiry/admission columns, capability/mutation/webhook constraints, and bounded cleanup/admission indexes; run the current framework provisioner',
+        'public._kovo_replay must have the exact replay-identity primary key, expiry/admission/principal-index columns, capability/mutation/webhook constraints, and bounded cleanup/admission/erasure indexes; run the current framework provisioner',
     });
   }
   const watermarkShape = await safeQuery<PostgresReplayWatermarkShapeRow>(
@@ -3836,6 +4741,250 @@ async function postgresReplayStorePostureIssues(
           : expected.watermarkRead
             ? `${expected.role} must have no access to public._kovo_replay and exactly SELECT on public._kovo_replay_reclaimed`
             : `${expected.role} must not have effective access to the replay truth or reclamation-watermark relations`,
+      });
+    }
+  }
+  return issues;
+}
+
+async function postgresPrincipalEpochStorePostureIssues(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<KovoPostgresPostureIssue[]> {
+  const relation = await safeQuery<{ exists: boolean }>(
+    client,
+    "SELECT to_regclass('public._kovo_principal_epoch') IS NOT NULL AS exists",
+  );
+  const relationRow =
+    relation === undefined ||
+    postgresDenseArrayLength(relation.rows, 'Postgres principal epoch relation rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(relation.rows, 0, 'Postgres principal epoch relation rows');
+  if (relationRow?.exists !== true) {
+    return [
+      {
+        code: 'KV433_PRINCIPAL_EPOCH_SCHEMA',
+        detail:
+          'public._kovo_principal_epoch is missing; provision the persistent principal revocation authority before boot',
+      },
+    ];
+  }
+
+  const issues: KovoPostgresPostureIssue[] = [];
+  const shape = await safeQuery<PostgresPrincipalEpochShapeRow>(
+    client,
+    postgresJoin(
+      [
+        'SELECT (SELECT COUNT(*) = 5 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        'AND column_row.attnum > 0 AND NOT column_row.attisdropped) AS exact_column_count,',
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'principal_digest' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_principal_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'epoch' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_epoch_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'changed_at_ms' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_changed_at_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'status' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_status_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'last_reason' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_reason_column,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        'JOIN pg_attribute AS principal_column ON principal_column.attrelid = relation_row.oid',
+        'AND principal_column.attnum = constraint_row.conkey[1]',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'p' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_pkey'",
+        'AND cardinality(constraint_row.conkey) = 1',
+        "AND principal_column.attname = 'principal_digest') AS exact_identity_constraint,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_principal_digest_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $1) AS exact_principal_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_epoch_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $2) AS exact_epoch_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_changed_at_ms_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $3) AS exact_changed_at_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_status_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $4) AS exact_status_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_last_reason_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $5) AS exact_reason_constraint',
+      ],
+      ' ',
+    ),
+    [
+      POSTGRES_PRINCIPAL_EPOCH_PRINCIPAL_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_VALUE_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_CHANGED_AT_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_STATUS_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_REASON_CONSTRAINT,
+    ],
+  );
+  const shapeRow =
+    shape === undefined ||
+    postgresDenseArrayLength(shape.rows, 'Postgres principal epoch shape rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(shape.rows, 0, 'Postgres principal epoch shape rows');
+  if (
+    shapeRow?.exact_column_count !== true ||
+    shapeRow.exact_principal_column !== true ||
+    shapeRow.exact_epoch_column !== true ||
+    shapeRow.exact_changed_at_column !== true ||
+    shapeRow.exact_status_column !== true ||
+    shapeRow.exact_reason_column !== true ||
+    shapeRow.exact_identity_constraint !== true ||
+    shapeRow.exact_principal_constraint !== true ||
+    shapeRow.exact_epoch_constraint !== true ||
+    shapeRow.exact_changed_at_constraint !== true ||
+    shapeRow.exact_status_constraint !== true ||
+    shapeRow.exact_reason_constraint !== true
+  ) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_PRINCIPAL_EPOCH_SCHEMA',
+      detail:
+        'public._kovo_principal_epoch must have the exact digest identity, monotone epoch/timestamp bounds, and closed active/tombstoned reason alphabet',
+    });
+  }
+
+  const roles: { allow: boolean; role: string }[] = [
+    { allow: false, role: config.readerRole },
+    { allow: false, role: config.writerRole },
+    { allow: false, role: config.adminRole },
+    { allow: true, role: config.systemRole },
+  ];
+  if (runtimeLoginRole !== undefined) {
+    appendPostgresDenseValue(roles, { allow: false, role: runtimeLoginRole });
+  }
+  const seen = createWitnessSet<string>();
+  const roleCount = postgresDenseArrayLength(roles, 'Postgres principal epoch privilege roles');
+  for (let index = 0; index < roleCount; index += 1) {
+    const expected = postgresDenseArrayValue(
+      roles,
+      index,
+      'Postgres principal epoch privilege roles',
+    );
+    if (witnessSetHas(seen, expected.role)) continue;
+    witnessSetAdd(seen, expected.role);
+    const privileges = await safeQuery<PostgresPrincipalEpochPrivilegeRow>(
+      client,
+      postgresJoin(
+        [
+          "SELECT has_table_privilege($1, 'public._kovo_principal_epoch', 'SELECT') AS can_select,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'INSERT') AS can_insert,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'UPDATE') AS can_update,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'DELETE') AS can_delete,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'TRUNCATE') AS can_truncate,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'REFERENCES') AS can_references,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'TRIGGER') AS can_trigger,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'SELECT') AS can_any_column_select,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'INSERT') AS can_any_column_insert,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'UPDATE') AS can_any_column_update,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'REFERENCES') AS can_any_column_references",
+        ],
+        ' ',
+      ),
+      [expected.role],
+    );
+    const privilegeRow =
+      privileges === undefined ||
+      postgresDenseArrayLength(privileges.rows, 'Postgres principal epoch privilege rows') === 0
+        ? undefined
+        : postgresDenseArrayValue(privileges.rows, 0, 'Postgres principal epoch privilege rows');
+    if (privilegeRow === undefined) {
+      appendPostgresDenseValue(issues, {
+        code: 'KV433_PRINCIPAL_EPOCH_ACL',
+        detail: `could not verify principal-epoch privileges for ${expected.role}`,
+      });
+      continue;
+    }
+    const hasSystemPrivileges =
+      privilegeRow.can_select === true &&
+      privilegeRow.can_insert === true &&
+      privilegeRow.can_update === true &&
+      privilegeRow.can_delete === false &&
+      privilegeRow.can_truncate === false &&
+      privilegeRow.can_references === false &&
+      privilegeRow.can_trigger === false &&
+      privilegeRow.can_any_column_select === true &&
+      privilegeRow.can_any_column_insert === true &&
+      privilegeRow.can_any_column_update === true &&
+      privilegeRow.can_any_column_references === false;
+    const hasAnyPrivilege =
+      privilegeRow.can_select === true ||
+      privilegeRow.can_insert === true ||
+      privilegeRow.can_update === true ||
+      privilegeRow.can_delete === true ||
+      privilegeRow.can_truncate === true ||
+      privilegeRow.can_references === true ||
+      privilegeRow.can_trigger === true ||
+      privilegeRow.can_any_column_select === true ||
+      privilegeRow.can_any_column_insert === true ||
+      privilegeRow.can_any_column_update === true ||
+      privilegeRow.can_any_column_references === true;
+    if (expected.allow ? !hasSystemPrivileges : hasAnyPrivilege) {
+      appendPostgresDenseValue(issues, {
+        code: 'KV433_PRINCIPAL_EPOCH_ACL',
+        detail: expected.allow
+          ? `${expected.role} must have exactly SELECT, INSERT, UPDATE on public._kovo_principal_epoch`
+          : `${expected.role} must not have effective access to public._kovo_principal_epoch`,
       });
     }
   }
@@ -4461,6 +5610,7 @@ function createPgliteRuntimeClient(
   const client = pinPostgresPgliteInstance(new PGlite(config.dataDir));
   return {
     close: () => client.close(),
+    drainRuntimeConnections: async () => undefined,
     drizzleInternalDb: (capability) => {
       assertInternalPostgresRuntimeDbCapability(capability);
       return drizzlePglite({ client, relations });
@@ -4489,6 +5639,7 @@ function createPgliteRuntimeClient(
       ),
     postureSql: client,
     sql: client,
+    observeRuntimeSqlErrors: () => undefined,
   };
 }
 
@@ -4743,6 +5894,7 @@ function createNodePostgresRuntimeClient(
           unregisterSystemDatabaseEgressUrl,
         ],
       ),
+    drainRuntimeConnections: () => transactionalClient.drain(),
     drizzleInternalDb: (capability) => {
       assertInternalPostgresRuntimeDbCapability(capability);
       return drizzleNodePg({ client: pool, relations });
@@ -4783,6 +5935,7 @@ function createNodePostgresRuntimeClient(
       ),
     postureSql: postureTransactionalClient,
     sql: transactionalClient,
+    observeRuntimeSqlErrors: (observer) => transactionalClient.observeSqlErrors(observer),
   };
 }
 
@@ -4948,6 +6101,7 @@ function createRequestScopedReadonlyDb(
   request?: unknown,
 ): Reader<KovoPostgresRuntimeDb> {
   const readDb = client.drizzleReadonlyDb(scope.principal, config.readerRole, scope.roleSetting);
+  registerFrameworkPostgresOwnerGuardRequestDb(readDb, metadata, scope);
   const privilegedReadDb = client.drizzleReadonlyDb(scope.principal, false, scope.roleSetting);
   const readSql = client.readonlySql(scope.principal, config.readerRole, scope.roleSetting);
   const privilegedReadSql = client.readonlySql(scope.principal, false, scope.roleSetting);
@@ -4996,12 +6150,14 @@ function createRequestScopedReadonlyDb(
     ownerTables: postgresOwnerScopedTableNames(metadata),
   };
   const readOptions = crossOwnerRead === undefined ? { rawRead } : { crossOwnerRead, rawRead };
-  return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
+  const guardedReadDb = createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
     executeSql: async (statement) =>
       (await readSql.query(statement.text, postgresSecretReadParams(statement.params))).rows,
     privilegedDb: readonlyDb(privilegedReadDb, { rawRead: privilegedRawRead }),
     rawSecretTableRead: 'engine',
   });
+  registerFrameworkPostgresOwnerGuardRequestDb(guardedReadDb, metadata, scope, readDb);
+  return guardedReadDb;
 }
 
 function postgresSecretReadParams(values: readonly unknown[]): unknown[] {
@@ -5022,27 +6178,60 @@ function postgresSecretReadParams(values: readonly unknown[]): unknown[] {
 }
 
 class NodePostgresRuntimeClient implements RuntimeSqlClient {
-  constructor(private readonly pool: Pool) {}
+  #drainGeneration = 0;
+  #sqlErrorObserver: PostgresSqlErrorObserver | undefined;
+
+  constructor(
+    private readonly pool: Pool,
+    observer?: PostgresSqlErrorObserver,
+  ) {
+    this.#sqlErrorObserver = observer;
+  }
+
+  observeSqlErrors(observer: PostgresSqlErrorObserver): void {
+    this.#sqlErrorObserver = observer;
+  }
+
+  async drain(): Promise<void> {
+    this.#drainGeneration += 1;
+    await this.#destroyIdleSessions();
+  }
 
   async close(): Promise<void> {
     await this.pool.end();
   }
 
   async exec(statement: string): Promise<unknown> {
-    return this.pool.query(statement);
+    const generation = this.#drainGeneration;
+    try {
+      const result = await this.pool.query(statement);
+      if (generation !== this.#drainGeneration) await this.#destroyIdleSessions();
+      return result;
+    } catch (error) {
+      this.#observeSqlError(error);
+      throw error;
+    }
   }
 
   async query<Row extends QueryResultRow = QueryResultRow>(
     query: QueryConfig | string,
     params?: unknown[],
   ): Promise<{ rows: Row[] }> {
-    const result = await this.pool.query<Row>(query as QueryConfig, params);
-    return { rows: result.rows };
+    const generation = this.#drainGeneration;
+    try {
+      const result = await this.pool.query<Row>(query as QueryConfig, params);
+      if (generation !== this.#drainGeneration) await this.#destroyIdleSessions();
+      return { rows: result.rows };
+    } catch (error) {
+      this.#observeSqlError(error);
+      throw error;
+    }
   }
 
   async transaction<Result>(
     callback: (tx: RuntimeTransactionClient) => Promise<Result>,
   ): Promise<Result> {
+    const generation = this.#drainGeneration;
     const client = await this.pool.connect();
     if (witnessWeakMapGet(postgresNodeClientReleaseValues, client) === undefined) {
       snapshotNodePostgresPoolClientRelease(client);
@@ -5056,6 +6245,7 @@ class NodePostgresRuntimeClient implements RuntimeSqlClient {
       await client.query('COMMIT');
     } catch (error) {
       primaryError = error;
+      this.#observeSqlError(error);
       try {
         await client.query('ROLLBACK');
       } catch {
@@ -5063,11 +6253,40 @@ class NodePostgresRuntimeClient implements RuntimeSqlClient {
       }
     }
     const cleanupError = await discardNodePostgresSession(client);
-    releasePinnedNodePostgresPoolClient(client, cleanupError);
+    if (cleanupError !== undefined) this.#observeSqlError(cleanupError);
+    const drainError =
+      generation === this.#drainGeneration
+        ? undefined
+        : new Error('KV433: Postgres posture lease retired this pooled session (SPEC §10.3).');
+    releasePinnedNodePostgresPoolClient(client, cleanupError ?? drainError);
     if (primaryError !== undefined) throw primaryError;
     if (cleanupError !== undefined) throw cleanupError;
     return result as Result;
   }
+
+  async #destroyIdleSessions(): Promise<void> {
+    const idleCount = postgresPoolIdleCount(this.pool);
+    for (let index = 0; index < idleCount; index += 1) {
+      if (postgresPoolIdleCount(this.pool) < 1) break;
+      const client = await this.pool.connect();
+      if (witnessWeakMapGet(postgresNodeClientReleaseValues, client) === undefined) {
+        snapshotNodePostgresPoolClientRelease(client);
+      }
+      releasePinnedNodePostgresPoolClient(
+        client,
+        new Error('KV433: Postgres posture lease drained an idle pooled session (SPEC §10.3).'),
+      );
+    }
+  }
+
+  #observeSqlError(error: unknown): void {
+    this.#sqlErrorObserver?.(error);
+  }
+}
+
+function postgresPoolIdleCount(pool: Pool): number {
+  const value = (pool as unknown as { readonly idleCount?: unknown }).idleCount;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 async function discardNodePostgresSession(client: PoolClient): Promise<Error | undefined> {
@@ -5088,8 +6307,31 @@ export const __testPostgresRuntimeInternals = {
   createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
     return createRuntimeClient(config);
   },
-  createNodePostgresRuntimeClient(pool: Pool): RuntimeSqlClient {
-    return new NodePostgresRuntimeClient(pool instanceof Pool ? pinNodePostgresPool(pool) : pool);
+  createNodePostgresRuntimeClient(
+    pool: Pool,
+    observer?: PostgresSqlErrorObserver,
+  ): RuntimeSqlClient {
+    return new NodePostgresRuntimeClient(
+      pool instanceof Pool ? pinNodePostgresPool(pool) : pool,
+      observer,
+    );
+  },
+  derivePostgresPostureLeaseWitness(
+    runtimeClient: RuntimeSqlClient,
+    postureClient: RuntimeSqlClient,
+    input: PostgresPostureLeaseDeriveInput,
+  ): Promise<PostgresPostureLeaseWitness> {
+    return derivePostgresPostureLeaseWitness(runtimeClient, postureClient, input);
+  },
+  notePostgresPostureLeaseSqlError(runtime: object, error: unknown): void {
+    const lease = witnessWeakMapGet(postgresRuntimePostureLeases, runtime);
+    if (lease === undefined) throw new TypeError('Runtime has no Postgres posture lease.');
+    lease.noteSqlError(error);
+  },
+  postgresPostureLeaseSnapshot(runtime: object): Readonly<PostgresPostureLeaseSnapshot> {
+    const lease = witnessWeakMapGet(postgresRuntimePostureLeases, runtime);
+    if (lease === undefined) throw new TypeError('Runtime has no Postgres posture lease.');
+    return lease.snapshot();
   },
   pinNodePostgresPoolClient(client: PoolClient): PoolClient {
     return pinNodePostgresPoolClient(client);
@@ -5206,10 +6448,7 @@ function resolvePostgresRuntimeConfigSnapshot(
   });
   const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
   const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
-  const postureCheck = resolvePostgresPostureCheck(
-    options,
-    driver === 'node-postgres' && options.provisionOnBoot !== true,
-  );
+  const postureCheck = resolvePostgresPostureCheck(options, driver === 'node-postgres');
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole,
     ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),
@@ -6533,6 +7772,41 @@ async function ensurePostgresSchemaStateTable(client: RuntimeTransactionClient):
   );
 }
 
+async function reassertPostgresPostureEpoch(client: RuntimeTransactionClient): Promise<void> {
+  const current = await client.query<{ value: string }>(
+    `SELECT value FROM ${quoteIdent(SCHEMA_STATE_TABLE)} WHERE key = $1 FOR UPDATE`,
+    [POSTGRES_POSTURE_EPOCH_KEY],
+  );
+  const rows = snapshotPostgresQueryRows(current.rows, 'Postgres posture epoch rows');
+  if (rows.length === 0) {
+    await client.query(
+      `INSERT INTO ${quoteIdent(SCHEMA_STATE_TABLE)} (key, value) VALUES ($1, $2)`,
+      [POSTGRES_POSTURE_EPOCH_KEY, '1'],
+    );
+    return;
+  }
+  if (rows.length !== 1) {
+    throw new Error(
+      'KV433_POSTURE_FRESHNESS: kovo_schema_state must contain exactly one posture_epoch row (SPEC §10.3).',
+    );
+  }
+  const value = postgresLeaseRowString(
+    postgresDenseValue(rows, 0, 'Postgres posture epoch rows'),
+    'value',
+  );
+  if (!securityRegExpTest(POSTGRES_POSTURE_EPOCH_PATTERN, value)) {
+    throw new Error(
+      'KV433_POSTURE_FRESHNESS: posture_epoch must be a canonical bounded monotone integer (SPEC §10.3).',
+    );
+  }
+  await client.query(
+    `UPDATE ${quoteIdent(
+      SCHEMA_STATE_TABLE,
+    )} SET value = (value::numeric + 1)::text, updated_at = now() WHERE key = $1`,
+    [POSTGRES_POSTURE_EPOCH_KEY],
+  );
+}
+
 async function ensurePostgresDatabaseInstanceIdentity(
   client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
@@ -6563,7 +7837,9 @@ async function ensurePostgresDatabaseInstanceIdentity(
     if (witnessSetHas(seen, role)) continue;
     witnessSetAdd(seen, role);
     await client.exec(
-      `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(role)}`,
+      `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)}, ${quoteIdent(
+        MIGRATIONS_TABLE,
+      )} TO ${quoteIdent(role)}`,
     );
   }
 }
@@ -6584,7 +7860,9 @@ async function grantPostgresRuntimeLoginRole(
       : postgresDenseValue(topology.membershipEdges, 0, 'Postgres membership edges').memberRole;
   if (runtimeLoginRole === undefined || runtimeLoginRole === '') return;
   await client.exec(
-    `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(runtimeLoginRole)}`,
+    `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)}, ${quoteIdent(
+      MIGRATIONS_TABLE,
+    )} TO ${quoteIdent(runtimeLoginRole)}`,
   );
   await client.exec(
     `GRANT EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) TO ${quoteIdent(
@@ -7158,13 +8436,12 @@ async function applyPostgresMigrations(
   const applied: string[] = [];
   const skipped: string[] = [];
   const migrationCount = postgresDenseArrayLength(normalized, 'Normalized Postgres migrations');
-  if (migrationCount === 0) return { applied, skipped };
-
   await client.exec(
     `CREATE TABLE IF NOT EXISTS ${quoteIdent(
       MIGRATIONS_TABLE,
     )} (id text PRIMARY KEY, checksum text NOT NULL, applied_at timestamp NOT NULL DEFAULT now())`,
   );
+  if (migrationCount === 0) return { applied, skipped };
 
   for (let index = 0; index < migrationCount; index += 1) {
     const migration = postgresDenseArrayValue(normalized, index, 'Normalized Postgres migrations');

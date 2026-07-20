@@ -45,7 +45,9 @@ describe('server audited text floor (SPEC §6.6)', () => {
       const forged = `reviewed${control}FORGED AUDIT ROW`;
 
       expect(() => unsafeRegex(/x/u, forged)).toThrow(/printable|control/u);
-      expect(() => trustedAssign('admin', forged)).toThrow(/printable|control/u);
+      expect(() => trustedAssign('admin', trustedAssignObligation(forged))).toThrow(
+        /machine-readable/u,
+      );
       expect(() => publicAccess(forged)).toThrow(/printable|control/u);
       expect(() => committedSecretWaiver('fixture', { justification: forged })).toThrow(
         /printable|control/u,
@@ -60,7 +62,9 @@ describe('server audited text floor (SPEC §6.6)', () => {
     const oversized = 'a'.repeat(4_097);
 
     expect(() => unsafeRegex(/x/u, oversized)).toThrow(/4096/u);
-    expect(() => trustedAssign('admin', oversized)).toThrow(/4096/u);
+    expect(() => trustedAssign('admin', trustedAssignObligation(oversized))).toThrow(
+      /machine-readable/u,
+    );
     expect(() => publicAccess(oversized)).toThrow(/4096/u);
     expect(() => committedSecretWaiver('fixture', { justification: oversized })).toThrow(/4096/u);
     expect(() => replayMutationWireBody('cached', { reason: oversized })).toThrow(/4096/u);
@@ -123,31 +127,62 @@ describe('server audited text floor (SPEC §6.6)', () => {
     expect(() => guard(forged, () => true)).toThrow(/control characters/u);
     expect(() => guards.role(forged)).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
-        { name: forged },
+        {} as never,
+      ),
+    ).toThrow(/requires justification/u);
+    expect(() =>
+      guards.unprovenOwns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { justification: forged },
+      ),
+    ).toThrow(/control characters/u);
+    let justificationReads = 0;
+    const accessorAudit = {} as { justification: string };
+    Object.defineProperty(accessorAudit, 'justification', {
+      get() {
+        justificationReads += 1;
+        return 'Forged getter justification.';
+      },
+    });
+    expect(() =>
+      guards.unprovenOwns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        accessorAudit,
+      ),
+    ).toThrow(/justification must be a stable own-data property/u);
+    expect(justificationReads).toBe(0);
+    expect(() =>
+      guards.unprovenOwns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { justification: 'Reviewed legacy ownership predicate.', name: forged },
       ),
     ).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
-        { principal: forged },
+        { justification: 'Reviewed legacy ownership predicate.', principal: forged },
       ),
     ).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
-        { resourceKey: forged },
+        { justification: 'Reviewed legacy ownership predicate.', resourceKey: forged },
       ),
     ).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
         {
+          justification: 'Reviewed legacy ownership predicate.',
           principal: { expression: 'session.user.id', path: forged, source: 'session' },
         },
       ),
@@ -158,3 +193,15 @@ describe('server audited text floor (SPEC §6.6)', () => {
     expect(() => guard('g'.repeat(4_097), () => true)).toThrow(/4096/u);
   });
 });
+
+function trustedAssignObligation(reference: string) {
+  return {
+    evidence: {
+      digest: `sha256:${'a'.repeat(64)}` as `sha256:${string}`,
+      kind: 'test' as const,
+      reference,
+    },
+    invariant: 'governed-write.authorized-principal' as const,
+    why: { guard: 'guards.role:admin', kind: 'guard-chain' as const },
+  };
+}

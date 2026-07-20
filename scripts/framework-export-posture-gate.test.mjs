@@ -11,6 +11,7 @@ import {
   productionPackedTreeSha256,
   productionSourceTreeSha256,
   readFrameworkExportPostureLedger,
+  renderFrameworkExportPostureGenerated,
   validateFrameworkExportPosture,
 } from './framework-export-posture-gate.mjs';
 
@@ -20,15 +21,20 @@ const actual = computeFrameworkRuntimeSurface();
 const securityRoleContracts = [
   ['@kovojs/better-auth', '.', 'authed', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthCsrfFromEnvironment', 'security-control'],
+  ['@kovojs/better-auth', '.', 'betterAuthPasswordResetMailDoor', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthPostgresSecret', 'secret-flow'],
   ['@kovojs/better-auth', '.', 'betterAuthSqliteSecret', 'secret-flow'],
   ['@kovojs/better-auth', '.', 'role', 'security-control'],
+  ['@kovojs/core', '.', 'DeclassifyPolicy', 'request-closed'],
   ['@kovojs/core', '.', 'hmacSignature', 'security-control'],
   ['@kovojs/core', '.', 'href', 'sink-adapter'],
   ['@kovojs/core', '.', 'isRedacted', 'secret-flow'],
   ['@kovojs/core', '.', 'isSecret', 'secret-flow'],
   ['@kovojs/core', '.', 'isUntrusted', 'secret-flow'],
+  ['@kovojs/core', '.', 'revealSecret', 'request-closed'],
+  ['@kovojs/core', '.', 'revealUntrusted', 'request-closed'],
   ['@kovojs/core', '.', 'standardWebhooks', 'security-control'],
+  ['@kovojs/core', '.', 'trustedReveal', 'request-closed'],
   ['@kovojs/drizzle', '.', 'kovoAnalyzerSummary', 'trust-escape'],
   ['@kovojs/drizzle', '.', 'sql', 'security-control'],
   ['@kovojs/drizzle', '.', 'staticSql', 'security-control'],
@@ -38,6 +44,7 @@ const securityRoleContracts = [
   ['@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry', 'security-control'],
   ['@kovojs/server', '.', 'createMemoryWebhookReplayStore', 'security-control'],
   ['@kovojs/server', '.', 'declarePublicRead', 'capability-escape'],
+  ['@kovojs/server', '.', 'erasePrincipal', 'framework-door'],
   ['@kovojs/server', '.', 'guard', 'security-control'],
   ['@kovojs/server', '.', 'guards', 'security-control'],
   ['@kovojs/server', '.', 'hmacSignature', 'security-control'],
@@ -49,12 +56,14 @@ const securityRoleContracts = [
   ['@kovojs/server', '.', 'parseComponentXml', 'sink-adapter'],
   ['@kovojs/server', '.', 'postgresAppRuntimeOptions', 'security-control'],
   ['@kovojs/server', '.', 'postgresSchemaModule', 'security-control'],
+  ['@kovojs/server', '.', 'PrincipalErasureIncompleteError', 'security-control'],
   ['@kovojs/server', '.', 'publicAccess', 'capability-escape'],
   ['@kovojs/server', '.', 'readonlyDb', 'security-control'],
   ['@kovojs/server', '.', 'replayMutationWireBody', 'security-control'],
   ['@kovojs/server', '.', 's', 'security-control'],
   ['@kovojs/server', '.', 'standardWebhooks', 'security-control'],
   ['@kovojs/server', '.', 'verifiedAccess', 'security-control'],
+  ['@kovojs/server', '.', 'verifyPrincipalErasureReceipt', 'security-control'],
   ['@kovojs/server', '.', 'webhookReplayIdentity', 'security-control'],
 ];
 
@@ -80,8 +89,8 @@ describe('framework public runtime export posture gate', () => {
   it('binds every manifest-public runtime value and module initializer to reviewed posture', () => {
     expect(validateFrameworkExportPosture({ actual, ledger })).toEqual([]);
     const rows = expandFrameworkExportPostureLedger(ledger);
-    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_318);
-    expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_838);
+    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_344);
+    expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_839);
     expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
     expect(rows.every((row) => row.rootKind !== undefined)).toBe(true);
     expect(rows.every((row) => row.securityRole !== undefined)).toBe(true);
@@ -412,6 +421,28 @@ describe('framework public runtime export posture gate', () => {
     expect(groupWithMember(ledger, '@kovojs/core', '.', 'publishToClient').securityRole).toBe(
       'capability-escape',
     );
+    for (const name of ['DeclassifyPolicy', 'revealSecret', 'revealUntrusted', 'trustedReveal']) {
+      expect(groupWithMember(ledger, '@kovojs/core', '.', name)).toMatchObject({
+        capabilities: [],
+        disposition: 'request-closed',
+        rootKind: 'none',
+        securityRole: 'request-closed',
+      });
+    }
+    expect(groupWithMember(ledger, '@kovojs/server', '.', 'erasePrincipal')).toMatchObject({
+      capabilities: ['crypto-acquisition', 'database-driver', 'digest', 'filesystem', 'network'],
+      disposition: 'framework-door',
+      rootKind: 'none',
+      securityRole: 'framework-door',
+    });
+    expect(
+      groupWithMember(ledger, '@kovojs/server', '.', 'verifyPrincipalErasureReceipt'),
+    ).toMatchObject({
+      capabilities: ['crypto-acquisition'],
+      disposition: 'framework-door',
+      rootKind: 'none',
+      securityRole: 'security-control',
+    });
     expect(
       groupWithMember(ledger, '@kovojs/drizzle', '.', 'kovoAnalyzerSummary').securityRole,
     ).toBe('trust-escape');
@@ -422,6 +453,36 @@ describe('framework public runtime export posture gate', () => {
     });
     expect(
       expandFrameworkExportPostureLedger(ledger).filter((row) => row.rootKind !== 'none'),
-    ).toHaveLength(13);
+    ).toHaveLength(14);
+  });
+
+  it('cuts exact implementation dependencies only for wholly request-closed packages', () => {
+    const generated = renderFrameworkExportPostureGenerated(ledger, actual);
+    const packageBlock = (packageName) => {
+      const start = generated.indexOf(`  [${JSON.stringify(packageName)},`);
+      const end = generated.indexOf('\n  ["@kovojs/', start + 1);
+      expect(start, `generated package row for ${packageName}`).toBeGreaterThanOrEqual(0);
+      return generated.slice(start, end < 0 ? generated.length : end);
+    };
+
+    const cli = packageBlock('@kovojs/cli');
+    expect(cli).toContain('"unconditional-request-closure"');
+    expect(cli).not.toContain('kovo-source-tree-sha256:');
+    expect(cli).not.toContain('kovo-packed-tree-sha256:');
+
+    const server = packageBlock('@kovojs/server');
+    expect(server).toContain('"exact-implementation"');
+    expect(server).toContain('kovo-source-tree-sha256:');
+
+    const widened = clone(ledger);
+    const cliGroup = packageRow(widened, '@kovojs/cli').postureGroups[0];
+    cliGroup.disposition = 'authority-free';
+    cliGroup.capabilities = [];
+    const widenedGenerated = renderFrameworkExportPostureGenerated(widened, actual);
+    const widenedStart = widenedGenerated.indexOf('  ["@kovojs/cli",');
+    const widenedEnd = widenedGenerated.indexOf('\n  ["@kovojs/', widenedStart + 1);
+    const widenedCli = widenedGenerated.slice(widenedStart, widenedEnd);
+    expect(widenedCli).toContain('"exact-implementation"');
+    expect(widenedCli).toContain('kovo-source-tree-sha256:');
   });
 });

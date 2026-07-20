@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { createServer as createNetServer } from 'node:net';
+import { request as nodeHttpRequest } from 'node:http';
+import { createConnection, createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -187,6 +188,140 @@ throw new Error('undeclared Vite config executed');
       server: { host: '127.0.0.1', port, strictPort: true },
     });
   }, 30_000);
+
+  // @kovo-security-classifier-corpus dev-host-door
+  // @kovo-security-certifies C13 dev-host-http-websocket-rebinding-closed
+  it('closes the real HTTP and HMR websocket dev-host door against DNS rebinding', async () => {
+    const root = devFixture('dev-host-door');
+    mkdirSync(join(root, 'public'), { recursive: true });
+    writeFileSync(join(root, 'public/source-secret'), 'extensionless source secret', 'utf8');
+    const defaultPosture = await runKovoDevWorker({
+      appModulePath: join(root, 'src/app.ts'),
+      mode: 'development',
+      port: 0,
+      root,
+      strictPort: true,
+    });
+    expect.soft(defaultPosture, workerFailure(defaultPosture)).toMatchObject({
+      ok: true,
+      server: { host: '127.0.0.1' },
+    });
+
+    const exposedPosture = await runKovoDevWorker({
+      appModulePath: join(root, 'src/app.ts'),
+      host: '0.0.0.0',
+      mode: 'development',
+      port: 0,
+      root,
+      strictPort: true,
+    });
+    expect.soft(exposedPosture).toMatchObject({
+      error: expect.stringMatching(/exact loopback host/u),
+      ok: false,
+    });
+
+    const port = await reservePort();
+    const child = spawnKovoDev(root, port);
+    const output = collectChildOutput(child);
+    const authority = `127.0.0.1:${port}`;
+    const origin = `http://${authority}`;
+    try {
+      const bootstrap = await fetchWhenReady(`${origin}/`, output, 30_000);
+      const setCookie = bootstrap.headers.get('set-cookie');
+      expect.soft(bootstrap.status, output.combined()).toBe(200);
+      expect.soft(setCookie).toEqual(expect.stringMatching(/^Kovo-Dev-Auth=[A-Za-z0-9_-]+;/u));
+      const cookie = setCookie?.split(';', 1)[0] ?? 'Kovo-Dev-Auth=missing';
+
+      const crossOriginDocument = await rawDevHttpRequest({
+        authority,
+        origin: 'http://attacker.example',
+        path: '/',
+        port,
+      });
+      expect.soft(crossOriginDocument).toMatchObject({ status: 403 });
+      expect.soft(crossOriginDocument.headers['set-cookie']).toBeUndefined();
+
+      const unauthenticatedSource = await rawDevHttpRequest({
+        authority,
+        origin,
+        path: '/src/app.ts',
+        port,
+      });
+      expect.soft(unauthenticatedSource).toMatchObject({ status: 401 });
+
+      const reboundSource = await rawDevHttpRequest({
+        authority,
+        cookie,
+        origin: 'http://attacker.example',
+        path: '/src/app.ts',
+        port,
+      });
+      expect.soft(reboundSource).toMatchObject({ status: 403 });
+
+      const authenticatedSource = await rawDevHttpRequest({
+        authority,
+        cookie,
+        origin,
+        path: '/src/app.ts',
+        port,
+      });
+      expect.soft(authenticatedSource.status).toBe(200);
+      expect.soft(authenticatedSource.body).toContain('createApp');
+
+      const unauthenticatedExtensionlessSource = await rawDevHttpRequest({
+        authority,
+        origin,
+        path: '/source-secret',
+        port,
+      });
+      expect.soft(unauthenticatedExtensionlessSource).toMatchObject({ status: 401 });
+      const authenticatedExtensionlessSource = await rawDevHttpRequest({
+        authority,
+        cookie,
+        origin,
+        path: '/source-secret',
+        port,
+      });
+      expect.soft(authenticatedExtensionlessSource).toMatchObject({
+        body: 'extensionless source secret',
+        status: 200,
+      });
+
+      const reboundHost = await rawDevHttpRequest({
+        authority: `attacker.example:${port}`,
+        cookie,
+        origin: `http://attacker.example:${port}`,
+        path: '/src/app.ts',
+        port,
+      });
+      expect.soft(reboundHost).toMatchObject({ status: 403 });
+
+      await expect(
+        rawDevWebSocketHandshake({
+          authority,
+          cookie,
+          origin: 'http://attacker.example',
+          port,
+        }),
+      ).resolves.toBe(403);
+      await expect(rawDevWebSocketHandshake({ authority, origin, port })).resolves.toBe(403);
+      await expect(rawDevWebSocketHandshake({ authority, cookie, origin, port })).resolves.toBe(
+        101,
+      );
+      await expect(
+        rawDevWebSocketHandshake({
+          authority,
+          cookie,
+          origin,
+          path: `/?token=${cookie.slice(cookie.indexOf('=') + 1)}`,
+          port,
+          protocol: 'vite-hmr',
+        }),
+      ).resolves.toBe(101);
+    } finally {
+      await stopChild(child);
+    }
+  }, 75_000);
 
   it('rejects authored app-level hooks that retain root-config or live-server authority', async () => {
     const hookNames = [
@@ -664,6 +799,100 @@ async function reservePort(): Promise<number> {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   return address.port;
+}
+
+interface RawDevRequestOptions {
+  authority: string;
+  cookie?: string;
+  origin?: string;
+  path: string;
+  port: number;
+}
+
+async function rawDevHttpRequest(options: RawDevRequestOptions): Promise<{
+  body: string;
+  headers: Record<string, string | string[] | undefined>;
+  status: number;
+}> {
+  return await new Promise((resolve, reject) => {
+    const request = nodeHttpRequest(
+      {
+        headers: {
+          Host: options.authority,
+          ...(options.cookie === undefined ? {} : { Cookie: options.cookie }),
+          ...(options.origin === undefined ? {} : { Origin: options.origin }),
+        },
+        host: '127.0.0.1',
+        method: 'GET',
+        path: options.path,
+        port: options.port,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        response.once('error', reject);
+        response.once('end', () => {
+          resolve({
+            body: Buffer.concat(chunks).toString('utf8'),
+            headers: response.headers,
+            status: response.statusCode ?? 0,
+          });
+        });
+      },
+    );
+    request.once('error', reject);
+    request.end();
+  });
+}
+
+async function rawDevWebSocketHandshake(
+  options: Omit<RawDevRequestOptions, 'path'> & {
+    path?: string;
+    protocol?: 'vite-hmr' | 'vite-ping';
+  },
+): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port: options.port });
+    let settled = false;
+    let response = '';
+    const finish = (error: Error | undefined, status?: number): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.destroy();
+      if (error) reject(error);
+      else resolve(status ?? 0);
+    };
+    const timer = setTimeout(() => {
+      finish(new Error(`Timed out waiting for the HMR websocket handshake.\n${response}`));
+    }, 5_000);
+    socket.once('error', (error) => finish(error));
+    socket.on('data', (chunk) => {
+      response += String(chunk);
+      if (!response.includes('\r\n\r\n')) return;
+      const match = /^HTTP\/1\.1 (\d{3})/u.exec(response);
+      finish(
+        match ? undefined : new Error(`Malformed websocket response.\n${response}`),
+        match === null ? undefined : Number.parseInt(match[1]!, 10),
+      );
+    });
+    socket.once('connect', () => {
+      const headers = [
+        `GET ${options.path ?? '/'} HTTP/1.1`,
+        `Host: ${options.authority}`,
+        'Connection: Upgrade',
+        'Upgrade: websocket',
+        'Sec-WebSocket-Version: 13',
+        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+        `Sec-WebSocket-Protocol: ${options.protocol ?? 'vite-ping'}`,
+        ...(options.origin === undefined ? [] : [`Origin: ${options.origin}`]),
+        ...(options.cookie === undefined ? [] : [`Cookie: ${options.cookie}`]),
+        '',
+        '',
+      ];
+      socket.write(headers.join('\r\n'));
+    });
+  });
 }
 
 async function fetchWhenReady(

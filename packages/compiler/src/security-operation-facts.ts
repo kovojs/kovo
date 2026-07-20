@@ -51,6 +51,7 @@ export function serverSecurityOperationFacts(model: ComponentModuleModel): Secur
   appendHandlerSecurityOperations(operations, seen, model.queryHandlers, 'Query security IR');
   appendHandlerSecurityOperations(operations, seen, model.webhookHandlers, 'Webhook security IR');
   appendHandlerSecurityOperations(operations, seen, model.taskRunHandlers, 'Task security IR');
+  appendHandlerSecurityOperations(operations, seen, model.agentHandlers, 'Agent security IR');
   return operations;
 }
 
@@ -65,6 +66,7 @@ export function componentSecuritySemanticGraphFacts(
   appendHandlerSemanticRoots(roots, seen, model.queryHandlers, 'Query semantic roots');
   appendHandlerSemanticRoots(roots, seen, model.webhookHandlers, 'Webhook semantic roots');
   appendHandlerSemanticRoots(roots, seen, model.taskRunHandlers, 'Task semantic roots');
+  appendHandlerSemanticRoots(roots, seen, model.agentHandlers, 'Agent semantic roots');
   if (roots.length === 0) return undefined;
   return {
     budgets: serverSecuritySemanticBudgets(),

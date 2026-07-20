@@ -42,7 +42,9 @@ describe('kovo db', () => {
     expect(provision.stdout).toContain('ROLE writerRole="kovo_writer" management=create\n');
     expect(provision.stdout).toContain('ROLE adminRole="kovo_admin" management=create\n');
     expect(provision.stdout).toContain('ROLE systemRole="kovo_system" management=create\n');
-    expect(provision.stdout).toContain('SUMMARY issues=0\n');
+    expect(provision.stdout).toContain(
+      'SUMMARY authorizationPoliciesVerified=2 authorizationPoliciesUnverified=0 issues=0\n',
+    );
 
     const check = await captureWrites(() =>
       mainAsync(['db', 'check', '--schema', schemaPath, '--data-dir', dataDir]),
@@ -56,7 +58,15 @@ describe('kovo db', () => {
     expect(check.stdout).toContain('ROLE writerRole="kovo_writer" management=create\n');
     expect(check.stdout).toContain('ROLE adminRole="kovo_admin" management=create\n');
     expect(check.stdout).toContain('ROLE systemRole="kovo_system" management=create\n');
-    expect(check.stdout).toContain('SUMMARY issues=0\n');
+    expect(check.stdout).toContain(
+      'AUTHORIZATION_POLICY schema="public" table="kovo_cli_db_notes" site=owner policy="kovo_owner_scope" status=verified\n',
+    );
+    expect(check.stdout).toContain(
+      'AUTHORIZATION_POLICY schema="public" table="kovo_cli_db_notes" site=system policy="kovo_system_scope" status=verified\n',
+    );
+    expect(check.stdout).toContain(
+      'SUMMARY authorizationPoliciesVerified=2 authorizationPoliciesUnverified=0 issues=0\n',
+    );
   });
 
   it('prefers scaffolded app runtime options without importing the eager runtime module', async () => {
@@ -265,7 +275,7 @@ describe('kovo db', () => {
     expect(migrate.stdout).toContain('MIGRATION status=applied id="001_create_notes.sql"\n');
     expect(migrate.stdout).toContain('STATUS ok\n');
     expect(migrate.stdout).toContain(
-      'MIGRATION status=applied id="001_create_notes.sql"\nSUMMARY migrationsApplied=1 migrationsSkipped=0 issues=0\n',
+      'MIGRATION status=applied id="001_create_notes.sql"\nSUMMARY migrationsApplied=1 migrationsSkipped=0 authorizationPoliciesVerified=2 authorizationPoliciesUnverified=0 issues=0\n',
     );
 
     const rerun = await captureWrites(() =>
@@ -286,7 +296,9 @@ describe('kovo db', () => {
     expect(rerun.result).toBe(0);
     expect(rerun.stderr).toBe('');
     expect(rerun.stdout).toContain('MIGRATION status=skipped id="001_create_notes.sql"\n');
-    expect(rerun.stdout).toContain('SUMMARY migrationsApplied=0 migrationsSkipped=1 issues=0\n');
+    expect(rerun.stdout).toContain(
+      'SUMMARY migrationsApplied=0 migrationsSkipped=1 authorizationPoliciesVerified=2 authorizationPoliciesUnverified=0 issues=0\n',
+    );
 
     writeFileSync(
       join(migrationsDir, '001_create_notes.sql'),
@@ -378,7 +390,9 @@ describe('kovo db', () => {
     expect(migrate.stderr).toBe('');
     expect(migrate.stdout).toContain(`MIGRATION status=applied id="${upFile}"\n`);
     expect(migrate.stdout).not.toContain(downFile ?? 'missing-down-file');
-    expect(migrate.stdout).toContain('SUMMARY migrationsApplied=1 migrationsSkipped=0 issues=0\n');
+    expect(migrate.stdout).toContain(
+      'SUMMARY migrationsApplied=1 migrationsSkipped=0 authorizationPoliciesVerified=2 authorizationPoliciesUnverified=0 issues=0\n',
+    );
 
     writeFileSync(
       schemaPath,

@@ -159,9 +159,33 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+  attest-advisory-feed:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Attest exact advisory feed
+        # This OIDC job reads one reviewed file from the authorized main commit. It performs no
+        # dependency installation, build, script execution, or long-lived key handling.
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: security/advisories/feed.json
+          subject-path: security/advisories/feed.json
+
   publish:
     if: ${{ !inputs.dry_run }}
-    needs: prepare
+    needs:
+      - prepare
+      - attest-advisory-feed
     runs-on: ubuntu-latest
     environment: release
     permissions:

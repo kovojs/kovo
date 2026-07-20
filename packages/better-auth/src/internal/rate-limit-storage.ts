@@ -1,4 +1,5 @@
 import type { BetterAuthRateLimitBucketConsumer } from '@kovojs/server/internal/better-auth';
+import { createBetterAuthRateLimitCryptoHandle } from '@kovojs/server/internal/keyring';
 import { frameworkScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import type { BetterAuthRateLimitOptions } from 'better-auth';
 
@@ -41,25 +42,14 @@ export function createBetterAuthBoundedRateLimitStorage(
     throw new TypeError('Better Auth bounded rate-limit bucket count must be 1..65536.');
   }
 
-  const encoder = new TextEncoder();
-  const signingKey = crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { hash: 'SHA-256', name: 'HMAC' },
-    false,
-    ['sign'],
-  );
+  const cryptoHandle = createBetterAuthRateLimitCryptoHandle(secret);
 
   async function bucketFor(rawKey: string): Promise<string> {
     assertCredentialRateLimitKey(rawKey);
     const sourceFrame = scopedKeyFactsFor(
       frameworkScopedKey('better-auth-rate-limit', rawKey),
     ).frame;
-    const digest = new Uint8Array(
-      await crypto.subtle.sign('HMAC', await signingKey, encoder.encode(sourceFrame)),
-    );
-    const bucket = (((digest[0] ?? 0) << 8) | (digest[1] ?? 0)) % bucketCount;
-    return bucket.toString(16).padStart(4, '0');
+    return cryptoHandle.bucket(sourceFrame, bucketCount);
   }
 
   const disabledFallback = async (): Promise<never> => {
@@ -75,6 +65,7 @@ export function createBetterAuthBoundedRateLimitStorage(
 
   return {
     customRules: {
+      '/request-password-reset': postCredentialRule,
       '/sign-in/email': postCredentialRule,
       '/sign-up/email': postCredentialRule,
       '/**': false,
@@ -121,7 +112,10 @@ function assertCredentialRateLimitKey(rawKey: string): void {
   }
   const separator = rawKey.lastIndexOf('|');
   const path = separator < 0 ? '' : rawKey.slice(separator + 1);
-  if (separator < 1 || (path !== '/sign-in/email' && path !== '/sign-up/email')) {
+  if (
+    separator < 1 ||
+    (path !== '/request-password-reset' && path !== '/sign-in/email' && path !== '/sign-up/email')
+  ) {
     throw new Error('KV414: Better Auth supplied an unreviewed credential rate-limit path.');
   }
 }

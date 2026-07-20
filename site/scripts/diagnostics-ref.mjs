@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import ts from 'typescript';
+
 /**
  * Generated diagnostics→fix catalog (plan: agent layer). One reference page
  * listing every framework diagnostic (KV###) with its severity, message, and
@@ -29,7 +31,7 @@ const SEVERITY_BLURB = {
 
 const CORE_DIAGNOSTICS_SOURCE = new URL('packages/core/src/diagnostics.ts', repoRoot);
 const PACKAGES_DIR = new URL('packages/', repoRoot);
-const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx']);
+const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const KV_CODE_PATTERN = /\bKV\d{3}\b/g;
 const DIAGNOSTICS_SPEC_RELATIVE_PATH = 'spec/11-diagnostics.md';
 const LEGACY_DIAGNOSTICS_HEADING = '### 11.3 Diagnostic codes (registry)';
@@ -39,6 +41,11 @@ const INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS = [
     pathPattern: /packages\/(?:core\/src\/graph|cli\/src\/index\.kovo-check)\.test\.ts$/u,
     reason:
       'unknown-diagnostic-code rejection fixtures use a fake code that the framework must not register',
+  },
+  {
+    code: 'KV999',
+    pathPattern: /packages\/core\/src\/diagnostic-registry\.test\.ts$/u,
+    reason: 'the runtime registry conformance test proves an unregistered code is rejected',
   },
 ];
 
@@ -89,6 +96,7 @@ async function* walkSourceFiles(dir) {
   for (const entry of entries) {
     const child = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (['dist', 'node_modules', 'templates', 'test'].includes(entry.name)) continue;
       yield* walkSourceFiles(child);
     } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
       yield child;
@@ -96,11 +104,41 @@ async function* walkSourceFiles(dir) {
   }
 }
 
-function collectKvCodes(text) {
-  return new Set(text.match(KV_CODE_PATTERN) ?? []);
+export function collectKvCodes(text, fileName = 'source.ts') {
+  const codes = new Set(text.match(KV_CODE_PATTERN) ?? []);
+  if (!/\\(?:[0-7]{1,3}|x[\da-fA-F]{2}|u(?:[\da-fA-F]{4}|\{[\da-fA-F]+\}))/u.test(text)) {
+    return codes;
+  }
+  const extension = path.extname(fileName);
+  const scriptKind =
+    extension === '.tsx'
+      ? ts.ScriptKind.TSX
+      : extension === '.jsx'
+        ? ts.ScriptKind.JSX
+        : extension === '.js' || extension === '.mjs' || extension === '.cjs'
+          ? ts.ScriptKind.JS
+          : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, scriptKind);
+  const visit = (node) => {
+    const decoded =
+      ts.isIdentifier(node) ||
+      ts.isStringLiteralLike(node) ||
+      ts.isJsxText(node) ||
+      node.kind === ts.SyntaxKind.TemplateHead ||
+      node.kind === ts.SyntaxKind.TemplateMiddle ||
+      node.kind === ts.SyntaxKind.TemplateTail
+        ? node.text
+        : undefined;
+    if (typeof decoded === 'string') {
+      for (const match of decoded.matchAll(KV_CODE_PATTERN)) codes.add(match[0]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return codes;
 }
 
-function hasJustifiedPlaceholder(text, code, sourceFile) {
+function hasJustifiedPlaceholder(_text, code, sourceFile) {
   const relativeSourceFile = path
     .relative(fileURLToPath(repoRoot), sourceFile)
     .replaceAll(path.sep, '/');
@@ -115,25 +153,22 @@ function hasJustifiedPlaceholder(text, code, sourceFile) {
     return true;
   }
 
-  const lines = text.split(/\r?\n/);
-  const ignorePattern = new RegExp(`diagnostics-ref-ignore\\s+${code}\\s*:\\s*\\S`, 'u');
-  return lines.some((line, index) => {
-    if (!line.includes(code)) return false;
-    return ignorePattern.test(line) || (index > 0 && ignorePattern.test(lines[index - 1]));
-  });
+  return false;
 }
 
-async function collectPackageSourceCodes() {
+export async function collectPackageSourceCodes({
+  packagesDir = fileURLToPath(PACKAGES_DIR),
+} = {}) {
   const codes = new Set();
-  const packageEntries = await readdir(PACKAGES_DIR, { withFileTypes: true });
+  const packageEntries = await readdir(packagesDir, { withFileTypes: true });
   packageEntries.sort((a, b) => a.name.localeCompare(b.name));
 
   for (const packageEntry of packageEntries) {
     if (!packageEntry.isDirectory()) continue;
-    const sourceDir = path.join(fileURLToPath(PACKAGES_DIR), packageEntry.name, 'src');
-    for await (const sourceFile of walkSourceFiles(sourceDir)) {
+    const packageDir = path.join(packagesDir, packageEntry.name);
+    for await (const sourceFile of walkSourceFiles(packageDir)) {
       const text = await readFile(sourceFile, 'utf8');
-      for (const code of collectKvCodes(text)) {
+      for (const code of collectKvCodes(text, sourceFile)) {
         if (hasJustifiedPlaceholder(text, code, sourceFile)) continue;
         codes.add(code);
       }
@@ -191,7 +226,7 @@ async function assertCatalogCoversFrameworkCodes(definitions, page) {
 
   const failures = [];
   const requiredCodeSources = [
-    { codes: packageSourceCodes, label: 'packages/*/src' },
+    { codes: packageSourceCodes, label: 'packages/* source modules' },
     { codes: specRegistry.codes, label: specRegistry.label },
   ];
   for (const source of requiredCodeSources) {
@@ -222,9 +257,9 @@ async function assertCatalogCoversFrameworkCodes(definitions, page) {
   if (failures.length > 0) {
     throw new Error(
       [
-        `diagnostics-ref: every framework KV### emitted in packages/*/src, listed in ${specRegistry.label}, or registered in diagnosticDefinitions must agree with the generated catalog.`,
+        `diagnostics-ref: every framework KV### emitted in package source modules, listed in ${specRegistry.label}, or registered in diagnosticDefinitions must agree with the generated catalog.`,
         ...failures.map((failure) => `- ${failure}`),
-        'Use a comment shaped like `diagnostics-ref-ignore KV000: reason` only for intentional non-framework placeholders.',
+        'Intentional non-framework placeholders require an exact reviewed test-file entry in diagnostics-ref.mjs.',
       ].join('\n'),
     );
   }

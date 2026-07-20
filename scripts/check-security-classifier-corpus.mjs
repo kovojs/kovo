@@ -5,12 +5,20 @@ import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import {
+  evaluateSecurityCarrierGrammar,
+  evaluateSecurityCoverageManifest,
+  extractSecurityCoverageVocabularyFromCoreSource,
+} from './security-coverage.mjs';
 
 export const repoRoot = findRepoRoot();
 
 const REQUEST_SAFE_RUNTIME_INVENTORY_FILE =
   'packages/core/src/internal/request-safe-runtime-inventory.ts';
 const REQUEST_PROCESS_CLASSIFIER_FILE = 'packages/drizzle/src/trust-escapes-static.ts';
+const SECURITY_OPERATION_IR_FILE = 'packages/core/src/internal/security-operation-ir.ts';
+const SECURITY_CARRIER_GRAMMAR_FILE = 'security/security-carrier-grammar.json';
+const SECURITY_COVERAGE_FILE = 'security/security-coverage.json';
 const REQUEST_SAFE_RUNTIME_RUNNER_FILES = {
   cliHandler: 'packages/cli/src/commands/build-export.ts',
   compiler: 'packages/compiler/src/security-bootstrap.ts',
@@ -528,8 +536,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/better-auth/src/internal.trusted-plaintext.test.ts',
       'packages/better-auth/src/index.schema-bridge.test.ts',
       'packages/better-auth/src/index.schema-materialize.test.ts',
+      'packages/better-auth/src/password-reset.security.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'password-reset-purpose-closed-mail-egress',
+        file: 'packages/better-auth/src/password-reset.security.test.ts',
+        snippets: [
+          'keeps password-reset token egress bound to the registered mail purpose',
+          'createBetterAuthPasswordResetMailBinding({} as never',
+          'rejects provider token, recipient, callback, and attempt mismatches before mail egress',
+          'redacts mail-provider failures and seals each attempt against replay',
+          'unregistered password-reset mail attempt',
+        ],
+      },
       {
         id: 'credential-runtime-gate-identity-and-replay',
         file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',
@@ -701,11 +721,48 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/managed-db.test.ts',
       'packages/server/src/postgres-authorization-correspondence.pglite.test.ts',
       'packages/server/src/postgres-authorization-correspondence.test.ts',
+      'packages/server/src/postgres-authorization-explain.test.ts',
       'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
       'packages/server/src/postgres-external-probe.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
+      'packages/server/src/delegation.test.ts',
+      'packages/drizzle/src/grant-graph-static.test.ts',
+      'packages/core/src/authorization-correspondence-graph.test.ts',
+      'packages/cli/src/authorization-explain.test.ts',
+      'packages/cli/src/index.kovo-explain-grants.test.ts',
+      'scripts/check-postgres-rls-emission-door.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'grant-graph-derivation-and-top-closure',
+        file: 'packages/drizzle/src/grant-graph-static.test.ts',
+        snippets: [
+          'derives principals, resources, right kinds, and delegation edges from schema annotations',
+          'decides exact deletion as attenuation and names widening transitions as budgeted escapes',
+          'fails closed to top when an authz-bearing write cannot be classified',
+          "verdict: 'top'",
+        ],
+      },
+      {
+        id: 'epoch-bound-attenuating-delegation',
+        file: 'packages/server/src/delegation.test.ts',
+        snippets: [
+          'yields only a typed and runtime-checked subset while carrying the principal epoch',
+          'rejects structural forgeries and propagates principal-epoch revocation',
+          "rights: ['read:other' as never]",
+          "'role-change'",
+        ],
+      },
+      {
+        id: 'grant-graph-explain-and-check-door',
+        file: 'packages/cli/src/index.kovo-explain-grants.test.ts',
+        snippets: [
+          'prints derived resources, decided transitions, and named budgeted escapes',
+          'makes a top transition fail kovo check with KV414',
+          'fail-closed-top',
+          'options: { grants: true }',
+        ],
+      },
       {
         id: 'grant-shape-closure-fuzzer',
         file: 'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
@@ -803,12 +860,22 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
       {
         id: 'finite-rls-emission-door-and-c13-byte-corpus',
-        file: 'packages/server/src/postgres-authorization-correspondence.test.ts',
+        file: 'scripts/check-postgres-rls-emission-door.test.mjs',
         snippets: [
-          'freezes the five and only five production RLS SQL emission sites',
-          "expect(runtimeSource).not.toContain('CREATE POLICY')",
-          'preserves the C13 byte corpus while rendering SQL from the two-constructor term',
-          'kovo_parent_order_items_2',
+          'accepts the exact production census at the checked-out revision',
+          'rejects a sixth raw CREATE POLICY emitter in any production package',
+          'kills the split-literal raw-emitter mutant',
+          'kills a sixth reviewed-emitter call even when it reuses a known site',
+          'kills Unicode filesystem case-fold aliases in runtime loaders',
+          'kills a Unicode filesystem case-fold alias in a static import',
+          'kills inode aliases through every literal POSIX CJS path interpretation',
+          './poſtgres-authorization-correspondence.js',
+          '../../../pacKages/server/src/postgres-authorization-correspondence.js',
+          './postgres-authorization-correspondence.jſ',
+          'opaque%ZZ.js',
+          'opaque-query.js?x',
+          'opaque-fragment.js#x',
+          'opaque\\alias.js',
         ],
       },
       {
@@ -829,6 +896,36 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "semantics: 'arbitrary-app-callback'",
           'no generated RLS predicate reads it',
           "status: 'unproven'",
+        ],
+      },
+      {
+        id: 'authorization-production-explain-output',
+        file: 'packages/server/src/postgres-authorization-explain.test.ts',
+        snippets: [
+          'pairs each exact surface guard with its table policy without aggregating unrelated guards',
+          "surface.kind === 'query'",
+          "surface.kind === 'mutation'",
+          "surface.kind === 'framework-policy'",
+          "status: 'environment-unchecked'",
+          "status: 'unproven'",
+        ],
+      },
+      {
+        id: 'authorization-graph-forgery-rejection',
+        file: 'packages/core/src/authorization-correspondence-graph.test.ts',
+        snippets: [
+          'rejects a forged live role GUC claim',
+          "status: 'live'",
+          'roleGuc.status must be "dead"',
+        ],
+      },
+      {
+        id: 'authorization-cli-terminal-injection-closure',
+        file: 'packages/cli/src/authorization-explain.test.ts',
+        snippets: [
+          'prints deterministic quoted non-correspondence records and one dead-role warning',
+          'predicate="organization_id = 1\\\\nFORGED"',
+          'options: { authorization: true }',
         ],
       },
       {
@@ -1059,7 +1156,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus kv424-request-process',
     testFiles: [
       'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
+      'packages/cli/src/phase3c-task-b-routing.test.ts',
       'packages/drizzle/src/capability-escapes-static.test.ts',
+      'packages/drizzle/src/jsx-pragma-static.test.ts',
       'packages/drizzle/src/trust-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
       'packages/drizzle/src/index.toctou-readonly.test.ts',
@@ -1089,6 +1188,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'a spread callback record',
           'a conditionally projected root factory',
           'expect(collectStaticBuildTrustFactsFromProject({ files })).toEqual(standalone)',
+        ],
+      },
+      {
+        id: 'task-b-layered-root-and-semantic-correspondence',
+        file: 'packages/cli/src/phase3c-task-b-routing.test.ts',
+        snippets: [
+          'routes the complete request-factory census through L1 and each compiler-owned handler through L2/L3',
+          'analyzeCapabilityClosure',
+          'compileComponentModule',
+          'sink=capability-closure',
+          'sink=finite-ir',
+          "schema: 'kovo-task-b-closure/v1'",
         ],
       },
       {
@@ -1291,12 +1402,22 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
           'admits only exact audited trustedAssign calls while retaining nested closed verdicts',
+          "invariant: 'governed-write.authorized-principal'",
+          "kind: 'guard-chain'",
+          "kind: 'policy-review'",
+          "trustedAssign(input.email, 'reviewed grant')",
+          "trustedAssign(input.email, { reason: 'reviewed grant' })",
           "trustedAssign(opaque(input.email), 'reviewed grant')",
           "trustedAssign(process.env.CONTACT_ID, 'reviewed grant')",
           "server.trustedAssign(input.email, 'reviewed grant')",
           'const grant = trustedAssign;',
           "trustedAssign(input.email, { ['reason']: 'reviewed grant' })",
           "trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })",
+          "digest: 'sha256:not-a-digest'",
+          "const reference = 'tests/authz/dynamic';",
+          'trustedAssign(input.email, obligation)',
+          '...obligation',
+          "invariant: 'request-input-is-safe'",
         ],
       },
       {
@@ -1319,6 +1440,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'return callback(value)',
           '[body].map((value) => String(value).trim())',
           'await request.text()',
+        ],
+      },
+      {
+        id: 'finite-ir-starter-door-reconciliation',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 finite-ir-starter-door-reconciliation',
+          'accepts exact finite-IR starter doors while keeping lookalike and aliased doors closed',
+          "s.file().accept(['image/png']).parse(file)",
+          "await storage.put(publicScopedKey('receipts/starter.txt')",
+          "key: publicScopedKey(\\`starter:${'${input.id}'}\\`)",
+          "key: publicScopedKey('receipts/starter.txt')",
+          "'foreign same-named key constructor'",
+          "'aliased framework key constructor'",
+          "server['publicScopedKey']('receipts/computed.txt')",
         ],
       },
       {
@@ -1956,10 +2092,220 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus capability-closure',
     testFiles: [
       'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/compiler/src/vite.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
+      'packages/cli/src/dependency-capability-loader.test.ts',
+      'scripts/capability-surface-census-gate.test.mjs',
+      'scripts/wire-input-boundary-gate.test.mjs',
       'scripts/framework-export-posture-gate.test.mjs',
+      'scripts/check-crypto-boundary.test.mjs',
+      'packages/server/src/escape-obligation-review.security.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'structured-escape-review-signature',
+        file: 'packages/server/src/escape-obligation-review.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 structured-escape-review-signature',
+          'composes with the runtime-attestation trust anchor and binds site, obligation, and artifact',
+          'rejects a replacement key, fingerprint, or signature',
+          "siteIdentity: 'src/mutations.ts:45:99'",
+          "reference: 'tests/authz/forged'",
+          'publicKeySpki: replacement.publicKeySpki',
+        ],
+      },
+      {
+        id: 'dependency-capability-loader-identity',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-capability-loader-identity',
+          'admits only the exact censused dependency import and installed identity',
+          'safe-parser/hidden',
+          'surprise-loader',
+          'identity drifted after capability census',
+        ],
+      },
+      {
+        id: 'dependency-capability-loader-closed-verdict',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-capability-loader-closed-verdict',
+          'never turns a raw or closed manifest row into loader authority',
+          "['network']",
+          "disposition: 'pure'",
+          'does not carry an open least-authority verdict',
+        ],
+      },
+      {
+        id: 'compiler-generated-wire-abi-provenance',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 compiler-generated-wire-abi-provenance',
+          'admits only exact compiler-generated wire ABI edges while authored and unknown variants stay closed',
+          "kind: 'generated-internal-abi'",
+          "capabilities: ['crypto-acquisition']",
+          "name: '<module>'",
+          "name: 'renderGeneratedMutationFormFields'",
+          'does not classify public subpath ./internal/wire',
+          'outside the exact compiler-generated @kovojs/server/internal/wire ABI vocabulary',
+        ],
+      },
+      {
+        id: 'dependency-transitive-bundle-closure',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-transitive-bundle-closure',
+          'rejects uncensused transitive packages even when a supported SSR artifact bundles them',
+          "for (const noExternal of [['safe-parser'] as const, true] as const)",
+          'uncensused transitive dependency helper-parser imported by reviewed package safe-parser',
+          'build(noExternal)',
+        ],
+      },
+      {
+        id: 'dependency-module-initializer-verdict',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-module-initializer-verdict',
+          'requires every named package import to consume an explicit module initializer verdict',
+          'does not classify export <module>',
+          "disposition: 'pure', name: '*'",
+          'export <module> exposes raw network authority',
+          "toEqual(['<module>', 'parse'])",
+        ],
+      },
+      {
+        id: 'dependency-transitive-reviewed-external',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-transitive-reviewed-external',
+          'rejects a reviewed package reaching a raw runtime external that skipped resolveId',
+          "external: (id) => id === 'pg'",
+          "allowRuntimeExternal: (id) => id === 'pg'",
+          'uncensused transitive dependency pg imported by reviewed package safe-parser',
+        ],
+      },
+      {
+        id: 'dependency-package-root-containment',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-package-root-containment',
+          'rejects relative and symlink escapes from an admitted third-party package root',
+          "['relative', 'symlink']",
+          "escapeKind === 'symlink'",
+          'import escapes its exact package root',
+        ],
+      },
+      {
+        id: 'static-export-diagnostic-origin-provenance',
+        file: 'packages/cli/src/index.kovo-export.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 static-export-diagnostic-origin-provenance',
+          'ignores app-exported structural diagnostic lookalikes without blocking static output',
+          "code: 'KV201'",
+          "expect(output).toContain('diagnostics=0')",
+          "expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain('<main>Home</main>')",
+        ],
+      },
+      {
+        id: 'dependency-inline-html-module-closure',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-inline-html-module-closure',
+          'rejects inline HTML module proxies outside the immutable approved-source snapshot',
+          '<script type="module">',
+          'inline HTML module is outside the immutable approved-source snapshot',
+          "readFileSync(join(root, 'dist', 'index.html')",
+        ],
+      },
+      {
+        id: 'dependency-browser-target-exactness',
+        file: 'packages/cli/src/capability-closure-packages.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-browser-target-exactness',
+          'does not admit an unrelated browser-map value as the root package target',
+          "browser: { './unrelated.js': './evil.js' }",
+          "join(packageRoot, 'index.js')",
+          "join(packageRoot, 'evil.js')",
+        ],
+      },
+      {
+        id: 'dependency-manifest-graph-fingerprint',
+        file: 'packages/cli/src/capability-closure-packages.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-manifest-graph-fingerprint',
+          'fingerprints security-relevant manifest fields canonically',
+          "dependencies: { helper: '2.0.0' }",
+          'dependencyGraphChanged',
+          'expect(dependencyGraphChanged).not.toBe(left)',
+        ],
+      },
+      {
+        id: 'capability-mint-symbol-identity-census',
+        file: 'scripts/capability-surface-census-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 capability-mint-symbol-identity-census',
+          'discovers witness registries and systemDb mints by TypeScript symbol identity',
+          "api: 'createWitnessWeakMap'",
+          "api: 'systemDb'",
+          'fails closed when a discovered mint is absent, stale, or lacks a reviewed reason',
+          'retains structural closed verdicts for raw exports, internal consumers, and SQL snapshots',
+        ],
+      },
+      {
+        id: 'wire-input-symbol-identity-census',
+        file: 'scripts/wire-input-boundary-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 wire-input-symbol-identity-census',
+          'discovers framework wire reads by TypeScript symbol identity and ignores lookalikes',
+          "api: 'requestHeader'",
+          "api: 'browserReadHeader'",
+          'rejects missing, stale, and name-incompatible registry bindings',
+          'missing wire-input boundary row consumer.ts#responseBuild',
+        ],
+      },
+      {
+        id: 'request-deadline-effect-door-census',
+        file: 'scripts/capability-surface-census-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 request-deadline-effect-door-census',
+          'requires every owned request effect door to consume the canonical deadline capability',
+          'composeCurrentRequestDeadlineSignal as consumeDeadline',
+          'frameworkEgressFetch does not consume composeCurrentRequestDeadlineSignal from request-deadline',
+        ],
+      },
+      {
+        id: 'principal-epoch-credential-door-census',
+        file: 'scripts/capability-surface-census-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 principal-epoch-credential-door-census',
+          'closes principal-epoch freshness over capability URL and mutation replay credential doors',
+          "credential: 'capability-url'",
+          "credential: 'mutation-replay-receipt'",
+          "phase: 'inapplicable'",
+          'does not consume currentPrincipalEpoch from principal-epoch',
+        ],
+      },
+      {
+        id: 'crypto-acquisition-and-purpose-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 crypto-acquisition-vs-digest-capability',
+          'classifies exact named non-keyed digests separately from secret crypto acquisition',
+          "capability: 'digest'",
+          "capability: 'crypto-acquisition'",
+          'does not turn type-only Node crypto imports into runtime authority',
+        ],
+      },
+      {
+        id: 'crypto-acquisition-repository-ratchet',
+        file: 'scripts/check-crypto-boundary.test.mjs',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 crypto-acquisition-ratchet',
+          'accepts only the exact reviewed path, class, and operation set',
+          'rejects unreviewed WebCrypto, namespace, and argon2 acquisition',
+          'forces stale high-authority rows to shrink and enforces the numeric ceiling',
+        ],
+      },
       {
         id: 'complete-root-census',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
@@ -2037,26 +2383,227 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'browser-posture',
+    marker: '@kovo-security-classifier-corpus browser-posture',
+    testFiles: [
+      'packages/compiler/src/browser-posture-manifest.security.test.ts',
+      'packages/server/src/browser-response-posture.security.test.ts',
+      'scripts/browser-posture-derivation-gate.test.mjs',
+    ],
+    verdictAnchors: [
+      {
+        id: 'browser-posture-source-and-runtime-closure',
+        file: 'packages/compiler/src/browser-posture-manifest.security.test.ts',
+        snippets: [
+          'compiler-derived browser response posture',
+          'fails closed for a computed asset URL unless the exact trustedUrl export is used',
+          'keeps raw dynamic browser fetches and workers outside an isolation-positive build',
+          'merges project manifests deterministically and closes a dynamic asset before boot',
+        ],
+      },
+      {
+        id: 'browser-posture-header-and-carrier-closure',
+        file: 'packages/server/src/browser-response-posture.security.test.ts',
+        snippets: [
+          'owns normal/reporting Permissions-Policy bytes through one operation switch',
+          'stamps exact isolation bytes on documents and rejects route-level weakening',
+          'rejects contradictory generated isolation evidence instead of trusting blocker omission',
+          're-witnesses generated manifest arrays and rejects mutable accessor entries',
+        ],
+      },
+      {
+        id: 'browser-posture-permissions-exhaustiveness',
+        file: 'scripts/browser-posture-derivation-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 browser-posture-permissions-exhaustiveness',
+          'Permissions-Policy switch is missing browser.dialog.open',
+          'a document response site duplicates the Permissions-Policy feature list',
+        ],
+      },
+      {
+        id: 'browser-posture-generated-wiring',
+        file: 'scripts/browser-posture-derivation-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 browser-posture-generated-wiring',
+          'registerGeneratedBrowserPostureManifest',
+          'browserResponsePostureHeaders',
+        ],
+      },
+    ],
+  },
+  {
     id: 'finite-security-operation-ir',
     marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
     testFiles: [
       'packages/browser/src/inline-loader-security.test.ts',
       'packages/browser/src/query-bindings.test.ts',
       'packages/browser/src/response-fragment-apply.browser.test.ts',
+      'packages/browser/src/security-operation-workflows.browser.test.ts',
       'packages/browser/src/security-output.test.ts',
       'packages/compiler/src/output-context-security.test.ts',
+      'packages/compiler/src/agent-tool-security.test.ts',
       'packages/compiler/src/route-pages.test.ts',
+      'packages/compiler/src/cache-influence.security.test.ts',
+      'packages/compiler/src/analyzable-fragment.security.test.ts',
+      'packages/compiler/src/derived-dataset-security.test.ts',
       'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
       'packages/compiler/src/executable-reference-attributes.test.ts',
       'packages/compiler/src/execution-triggers.test.ts',
       'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+      'packages/compiler/src/security-operation-ir.response-body-provenance.security.test.ts',
+      'packages/compiler/src/security-provenance-relation.test.ts',
       'packages/core/src/sink-policy.test.ts',
+      'packages/core/src/internal/cache-influence.test.ts',
+      'packages/core/src/internal/security-operation-ir.test.ts',
+      'packages/cli/src/graph-explain-format.security.test.ts',
+      'packages/cli/src/index.kovo-explain-agent.test.ts',
       'packages/cli/src/index.kovo-compile.test.ts',
       'packages/drizzle/src/index.phase2c-exact-tip-adversarial.test.ts',
       'packages/drizzle/src/index.mutation-private-scope-transfers.test.ts',
+      'packages/server/src/guard-args-receipt-security.test.ts',
+      'packages/server/src/agent.security.test.ts',
+      'packages/server/src/cache-generality-intermediary.security.test.ts',
+      'packages/verify/src/translation.test.ts',
+      'scripts/analyzable-fragment-gate.test.mjs',
+      'scripts/check-cache-generality.test.mjs',
+      'scripts/provenance-precision-register-c13.test.mjs',
+      'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'derived-dataset-persistent-sink-provenance',
+        file: 'packages/compiler/src/derived-dataset-security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 derived-dataset-persistent-sink-provenance',
+          'rejects %s outside the framework-owned derived door',
+          'admits writes only through an exact derived vector dataset and reuses the request scope',
+          'rejects a forged derived lookalike and a non-request scope carrier',
+          "code: 'KV452'",
+        ],
+      },
+      {
+        id: 'cache-influence-static-closure',
+        file: 'packages/compiler/src/cache-influence.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 cache-influence-static-closure',
+          'derives URL and named-header axes while closing identity and dynamic-header reads',
+          "kind: 'authorization'",
+          "kind: 'principal'",
+          "kind: 'session'",
+          "'unclassified-influence'",
+        ],
+      },
+      {
+        id: 'cache-influence-real-intermediary',
+        file: 'packages/server/src/cache-generality-intermediary.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 cache-influence-real-intermediary',
+          'proves prime/reuse across principals, cookies, Authorization, query variants, header variants, and branch changes',
+          "expect(enPrime.cache).toBe('MISS')",
+          "expect(enReuse).toMatchObject({ body: enPrime.body, cache: 'HIT' })",
+          "expect(response.cacheControl).toBe('private, no-store')",
+        ],
+      },
+      {
+        id: 'cache-generality-manifest-drift',
+        file: 'scripts/check-cache-generality.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 cache-generality-manifest-drift',
+          'diffs authored cache intent against the compiler manifest',
+          'public cache intent has no compiler-derived manifest entry',
+          'authored cache intent differs from compiler manifest',
+          'Vary token cookie is not a compiler-derived request-header axis',
+        ],
+      },
+      {
+        id: 'analyzable-fragment-emitted-kv449-closure',
+        file: 'packages/compiler/src/analyzable-fragment.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 analyzable-fragment-emitted-kv449-closure',
+          'proves every ledger witness by compiling it to its emitted KV449 closed reason',
+          "diagnostic.code === 'KV449'",
+          'verdict=closed:${row.closedReason}',
+          "trace.verdict === 'closed' && trace.reason === row.closedReason",
+        ],
+      },
+      {
+        id: 'analyzable-fragment-real-root-budget-binding',
+        file: 'packages/compiler/src/analyzable-fragment.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 analyzable-fragment-real-root-budget-binding',
+          'measures every named semantic budget against the checked real-root corpus',
+          'ledger.budgetBindingMeasurement.corpus.files',
+          'ledger.budgetBindingMeasurement.corpus.rootCount',
+          'budget.bindingRoots',
+        ],
+      },
+      {
+        id: 'analyzable-fragment-artifact-drift',
+        file: 'scripts/analyzable-fragment-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 analyzable-fragment-artifact-drift',
+          'binds nine prohibitions, eight closed reasons, four budgets, fixtures, and generated SPEC',
+          'kills omission, classification, closed-reason, fixture, budget, and SPEC-table drift',
+          'missingFixture.delete',
+          'widenedBudget.budgetBindingMeasurement.budgets[0].limit += 1',
+        ],
+      },
+      {
+        id: 'provenance-precision-grant-register',
+        file: 'scripts/provenance-precision-register-c13.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 provenance-precision-grant-register',
+          'routes every non-top extractor return through an exact reviewed grant identity',
+          'unregisteredPrecisionReturns(sourceFile, declaration)',
+          'toEqual([])',
+        ],
+      },
+      {
+        id: 'browser-operation-real-workflows',
+        file: 'packages/browser/src/security-operation-workflows.browser.test.ts',
+        snippets: [
+          'keeps finite-IR form, state, event, focus, and dialog workflows operational',
+          "kind: 'browser.dialog.open'",
+          "kind: 'browser.dialog.close'",
+          "kind: 'browser.dom.focus'",
+          "kind: 'browser.event.read'",
+          "kind: 'browser.form.submit'",
+          "kind: 'browser.form.reset'",
+          "kind: 'browser.state.read'",
+          "kind: 'browser.state.write'",
+        ],
+      },
+      {
+        id: 'exact-operation-door-and-closed-verdict-relation',
+        file: 'packages/compiler/src/security-provenance-relation.test.ts',
+        snippets: [
+          'keeps every finite operation paired with its authoritative C9 door owner',
+          'computes closure to enrolled doors or the exact closed verdict domain',
+          'reports a least-fixpoint counterexample path when a C9 owner disappears',
+          'securitySemanticClosedReasons',
+        ],
+      },
+      {
+        id: 'security-coverage-denominator-closure',
+        file: 'scripts/security-coverage.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 security-coverage-denominator-closure',
+          'derives one stable coverage cell per exact finite decision-surface member',
+          'browser-operation:browser.scratch',
+          'fails closed on missing, unknown, or unsubstantiated coverage cells',
+        ],
+      },
+      {
+        id: 'historical-classifier-anchor-carrier-grammar',
+        file: 'scripts/security-coverage.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 historical-classifier-anchor-carrier-grammar',
+          'maps every historical classifier anchor through one closed carrier production',
+          'missing historical witness mapping',
+          "schema: 'kovo-security-carrier-grammar/v1'",
+        ],
+      },
       {
         id: 'finite-analyzer-differential-soundness',
         file: 'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
@@ -2096,6 +2643,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'securityHandler([',
           '__kovoSecurityOperationManifest_v1',
           'kovo-security-operation-ir/v1',
+        ],
+      },
+      {
+        id: 'independently-reparsed-emitted-translation',
+        file: 'packages/verify/src/translation.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 independently-reparsed-emitted-translation',
+          'rejects an emitted binding absent from the KV437-reviewed import set',
+          'rejects exact secret field tokens in client or registry output without substring false positives',
+          'fails a synthetic emitted kind until the coverage policy classifies it',
+          'requires server and per-handler operation JSON to use the frozen vocabularies and decision facts',
+          'rejects JavaScript object syntax where the emission contract requires own-data JSON',
         ],
       },
       {
@@ -2184,6 +2743,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'nested primitive attrs',
           'dynamically targets compiler-generated control-plane attribute',
           'does not treat an attrs object inside a plain-element spread as a primitive merge',
+        ],
+      },
+      {
+        id: 'generated-query-plan-css-selector-escaping',
+        file: 'packages/compiler/src/output-context-payloads.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 generated-query-plan-css-selector-escaping',
+          'escapes generated data-bind attribute names for browser CSS selectors',
+          "attr: 'aria-label'",
+          "attr: 'data-state'",
+          "attr: 'hidden'",
         ],
       },
       {
@@ -2296,6 +2866,34 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'declassification-policy-and-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 finite-ir-reviewed-data-doors',
+          'accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations',
+          "door: 'trustedReveal'",
+          "ownerScope: 'application'",
+          "purpose: 'public-projection'",
+          '@kovo-security-classifier-corpus C13 declassification-robustness',
+          'rejects a declassification with an %s',
+          'attacker-controlled enabling condition',
+          'attacker-controlled released value',
+        ],
+      },
+      {
+        id: 'raw-response-body-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.response-body-provenance.security.test.ts',
+        snippets: [
+          'SPEC §9.2 response-body provenance',
+          'a catch-bound Error.message',
+          'a catch-bound Error.stack through an immutable alias',
+          'the raw request URL',
+          'a request-derived header through a template expression',
+          'a request-derived JSON field',
+          'keeps a fixed endpoint response body representable',
+        ],
+      },
+      {
         id: 'raw-response-alias-helper-and-global-provenance-closure',
         file: 'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
         snippets: [
@@ -2394,6 +2992,31 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'registered-diagnostic-verifier-snapshot-provenance',
+        file: 'packages/cli/src/graph-explain-format.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 registered-diagnostic-verifier-snapshot',
+          'preserves constructor-owned diagnostic provenance across the verifier snapshot',
+          "expect(result.output).toContain('ERROR KV414 src/queries/orders.ts:12')",
+          "expect(result.output).not.toContain('ERROR SECURITY')",
+        ],
+      },
+      {
+        id: 'guard-args-runtime-classify-and-pin-receipt',
+        file: 'packages/server/src/guard-args-receipt-security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 guard-args-receipt-proxy-drift',
+          '@kovo-security-certifies C13 guard-args-receipt-borrowed-date-mutator',
+          'pins the validated ownership key before an async query loader consumes it',
+          'pins the validated ownership key before an async mutation handler consumes it',
+          'prevents a borrowed Date mutator from changing the accepted query final consumer',
+          'prevents a borrowed Date mutator from changing the accepted mutation final consumer',
+          'Date.prototype.setTime.call(args.authorized, args.selected.getTime())',
+          "return reads === 1 ? 'owned' : 'victim'",
+          'expect(drift.reads()).toBe(0)',
+        ],
+      },
+      {
         id: 'server-authority-alias-helper-and-transfer-closure',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
@@ -2427,6 +3050,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'propagates query no-write posture through summarized helpers',
           'closes arguments-object recovery and deterministic call-depth exhaustion',
           'budget-call-depth',
+          'budget-node-count',
+          'budget-operation-count',
+          'budget-summary-count',
+          'unsupported-authority-use',
           'fails closed for %s in normalized server semantics',
           'operation-function member laundering',
           'nested callable authority capture',
@@ -2461,7 +3088,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'accepts the starter database chains and exact plain-data identities without widening the finite IR',
           'crypto.randomUUID()',
-          "trustedAssign(id, 'framework-generated opaque identifier')",
+          "invariant: 'governed-write.authorized-principal'",
+          "policy: 'contacts.generated-id/v1'",
           '.from(contacts).orderBy(contacts.id)',
           'does not grant reviewed data-helper identity through %s',
           'keeps randomUUID closed through %s',
@@ -2470,6 +3098,26 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'rejects imported executable database data through %s',
           'new Proxy({}, { get()',
           'request.db.select().dropEverything()',
+        ],
+      },
+      {
+        id: 'generated-readonly-app-db-finite-ir',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 generated-readonly-app-db-finite-ir',
+          'accepts only the exact generated readonlyAppDb read chain in the finite server IR',
+          "endpoint('/api/task-proof-count'",
+          '.where(eq(contacts.id',
+          'createPostgresAppRuntimeDb',
+          'appRuntimeReadonlyDb = appDatabase.readonlyDb',
+          "'local capability alias'",
+          "'computed read method'",
+          "'foreign same-named import'",
+          "'forged generated runtime export'",
+          "'aliased generated runtime factory'",
+          "'foreign same-named runtime factory'",
+          "'computed generated readonly projection'",
+          "'mutated generated re-export'",
         ],
       },
       {
@@ -2487,6 +3135,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'csrf-principal-binding',
     marker: '@kovo-security-classifier-corpus csrf-principal-binding',
     testFiles: [
+      'packages/cli/src/deployment-environment-contract.test.ts',
       'packages/server/src/csrf.test.ts',
       'packages/server/src/standalone-csrf-mint-security.test.ts',
       'packages/server/src/anonymous-csrf-cache-security.test.tsx',
@@ -2562,7 +3211,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'clears ambient response authority before a new-Request nested dispatch runs preflight',
           'isolates a successful nested endpoint dispatch that reuses the exact handler Request',
-          'preserves body bytes and abort propagation when rekeying a same-request nested dispatch',
+          'preserves body bytes while discarding a same-request nested result after ingress abort',
           'keeps same-request nested auth denial from sealing the outer lifecycle',
           'keeps same-request nested access denial from sealing the outer lifecycle',
           'keeps same-request nested CSRF denial from sealing the outer lifecycle',
@@ -2573,8 +3222,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'standalone-late-and-detached-rejection',
         file: 'packages/server/src/anonymous-csrf-cache-security.test.tsx',
         snippets: [
-          'fails closed when a route stream first mints anonymous authority after headers commit',
+          'rejects a reconstructed route-stream request after its owner settles',
           'rejects a detached reconstructed request in an external event after header commit',
+          'without a framework response lifecycle',
           'after response headers were committed',
         ],
       },
@@ -2790,6 +3440,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'method-source-authority-scheme-target-superset',
         file: 'packages/server/src/request-ingress-c13.test.ts',
         snippets: [
+          '@kovo-security-certifies C13 query-search-requires-args-schema',
+          'rejects query search input when the endpoint declares no args schema',
+          'Search input requires a declared query args schema.',
           'preserves the complete closed method-identity verdict before Fetch construction',
           "'PoSt'",
           "'CONNECT'",
@@ -2956,6 +3609,48 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'dev-host-door',
+    marker: '@kovo-security-classifier-corpus dev-host-door',
+    testFiles: ['packages/cli/src/index.kovo-dev.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'loopback-default-and-remote-bind-closed',
+        file: 'packages/cli/src/index.kovo-dev.test.ts',
+        snippets: [
+          'closes the real HTTP and HMR websocket dev-host door against DNS rebinding',
+          "server: { host: '127.0.0.1' }",
+          "host: '0.0.0.0'",
+          '/exact loopback host/u',
+        ],
+      },
+      {
+        id: 'real-http-source-auth-and-rebinding',
+        file: 'packages/cli/src/index.kovo-dev.test.ts',
+        snippets: [
+          'crossOriginDocument',
+          'unauthenticatedSource',
+          'reboundSource',
+          'authenticatedSource',
+          'unauthenticatedExtensionlessSource',
+          'authenticatedExtensionlessSource',
+          'status: 401',
+          'status: 403',
+        ],
+      },
+      {
+        id: 'real-hmr-websocket-origin-auth',
+        file: 'packages/cli/src/index.kovo-dev.test.ts',
+        snippets: [
+          'rawDevWebSocketHandshake',
+          "origin: 'http://attacker.example'",
+          "protocol: 'vite-hmr'",
+          ').resolves.toBe(403)',
+          '101',
+        ],
+      },
+    ],
+  },
+  {
     id: 'drizzle-analyzer-provenance',
     marker: '@kovo-security-classifier-corpus drizzle-analyzer-provenance',
     testFiles: [
@@ -3059,6 +3754,22 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
   if (options.enforceRuntimeInventory ?? options.corpora === undefined) {
     findings.push(...evaluateRequestSafeRuntimeInventoryAlignment(readText));
   }
+  if (options.enforceCoverage ?? options.corpora === undefined) {
+    const coverageInputs = options.coverageInputs ?? readSecurityCoverageInputs(readText, findings);
+    if (coverageInputs !== undefined) {
+      findings.push(
+        ...evaluateSecurityCoverageManifest({
+          corpora,
+          document: coverageInputs.coverage,
+          vocabulary: coverageInputs.vocabulary,
+        }).findings,
+        ...evaluateSecurityCarrierGrammar({
+          corpora,
+          document: coverageInputs.grammar,
+        }).findings,
+      );
+    }
+  }
 
   for (const corpus of corpora) {
     const markerFiles = [];
@@ -3122,6 +3833,25 @@ export function evaluateSecurityClassifierCorpus(options = {}) {
     ok: findings.length === 0,
     testFiles: uniqueTestFiles,
   };
+}
+
+function readSecurityCoverageInputs(readText, findings) {
+  try {
+    return {
+      coverage: JSON.parse(readText(SECURITY_COVERAGE_FILE)),
+      grammar: JSON.parse(readText(SECURITY_CARRIER_GRAMMAR_FILE)),
+      vocabulary: extractSecurityCoverageVocabularyFromCoreSource(
+        readText(SECURITY_OPERATION_IR_FILE),
+      ),
+    };
+  } catch (error) {
+    findings.push(
+      `security coverage inputs are missing or invalid: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return undefined;
+  }
 }
 
 function classifierCorpusTestBatches(testFiles, loadIsolatedTestConfigs) {

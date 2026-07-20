@@ -1,0 +1,74 @@
+{
+  "schema": "kovo-response-observation/v1",
+  "timingBudgets": [
+    {
+      "absoluteEffectThresholdMs": 5,
+      "counterexampleDirectory": ".kovo/security-failures/response-indistinguishability",
+      "id": "nightly-v1",
+      "madMultiplier": 4,
+      "noiseModel": "paired-alternating-median-mad",
+      "relativeEffectThreshold": 0.2,
+      "sampleSize": 64,
+      "warmupSamples": 8
+    }
+  ],
+  "futureDoors": [
+    {
+      "id": "better-auth.sign-up-email",
+      "normalizer": "normalizeBetterAuthAccountOperation",
+      "reachability": "structurally-unreachable",
+      "source": "packages/better-auth/src/response-observation.ts",
+      "upstreamApi": "signUpEmail"
+    }
+  ],
+  "surfaces": [
+    {
+      "class": "account-recovery",
+      "id": "better-auth.request-password-reset",
+      "source": "packages/better-auth/src/response-observation.ts",
+      "tuple": {
+        "body": "generic-accepted-equal-length",
+        "connection": "complete",
+        "cookiesAndTokens": "none",
+        "headers": ["cache-control", "content-type", "vary"],
+        "redirect": "equal",
+        "status": "equal",
+        "timingBudget": "nightly-v1",
+        "workFactor": "better-auth-account-recovery-v1"
+      },
+      "worlds": ["account-present", "account-absent"]
+    },
+    {
+      "class": "resource-concealment",
+      "id": "server.storage-download",
+      "source": "packages/server/src/capability-route.ts",
+      "tuple": {
+        "body": "equal-content-and-length",
+        "connection": "complete",
+        "cookiesAndTokens": "none",
+        "headers": ["cache-control", "content-type", "vary"],
+        "redirect": "equal",
+        "status": "equal",
+        "timingBudget": "nightly-v1",
+        "workFactor": "storage-capability-lookup-v1"
+      },
+      "worlds": ["exists-not-owned", "absent"]
+    },
+    {
+      "class": "unexpected-failure",
+      "id": "server.unexpected-failure",
+      "source": "packages/server/src/app-request.ts",
+      "tuple": {
+        "body": "equal-content-and-length",
+        "connection": "complete",
+        "cookiesAndTokens": "none",
+        "headers": ["cache-control", "content-type", "vary"],
+        "redirect": "equal",
+        "status": "equal",
+        "timingBudget": "nightly-v1",
+        "workFactor": "sanitized-error-finalization-v1"
+      },
+      "worlds": ["unexpected-cause-a", "unexpected-cause-b"]
+    }
+  ]
+}

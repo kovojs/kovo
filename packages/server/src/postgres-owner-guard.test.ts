@@ -1,0 +1,315 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { PGlite } from '@electric-sql/pglite';
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+import { sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
+import { describe, expect, it } from 'vitest';
+
+import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
+import { guards, resolveLifecycleRequest } from './guards.js';
+import { usePostgresSystemDb } from './internal/postgres-capability.js';
+import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
+
+const documents = pgTable(
+  'owner_guard_documents',
+  {
+    id: text('document_id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    title: text('title').notNull(),
+  },
+  kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
+);
+
+const manifest = {
+  tables: [
+    {
+      authorizationClassifications: ['owned'],
+      columns: [
+        { key: 'id', name: 'document_id' },
+        { key: 'ownerId', name: 'owner_id' },
+        { key: 'title', name: 'title' },
+      ],
+      dialect: 'postgres',
+      domain: 'document:tenant',
+      governedColumnKeys: ['id', 'ownerId'],
+      key: { columnKey: 'id', columnName: 'document_id', uniqueness: 'primary' },
+      name: 'owner_guard_documents',
+      owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+      secretColumnKeys: [],
+      secretDeclared: false,
+    },
+  ],
+} as const;
+
+type OwnerRequest = {
+  args: { id: string };
+  db?: unknown;
+  session?: { user?: { id?: string } } | null;
+};
+
+const ownerGuard = () =>
+  guards.owns<OwnerRequest, OwnerRequest, string>((request) => request.args.id, documents.id, {
+    resourceKey: 'args.id',
+  });
+
+describe('framework-derived Postgres owner guard', () => {
+  it('rejects missing manifests, nonunique keys, SQLite, and ownerVia at construction', () => {
+    expect(() => ownerGuard()).toThrow(/compiler-generated table-security manifest/u);
+
+    const nonunique = pgTable(
+      'nonunique_documents',
+      { id: text('id').notNull(), ownerId: text('owner_id').notNull() },
+      kovo({ domain: 'nonunique', key: 'id', owner: 'ownerId' }),
+    );
+    const local = sqliteTable(
+      'local_documents',
+      { id: sqliteText('id').primaryKey(), ownerId: sqliteText('owner_id').notNull() },
+      kovo({ domain: 'local', key: 'id', owner: 'ownerId' }),
+    );
+    const accounts = pgTable(
+      'owner_guard_accounts',
+      { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
+      kovo({ domain: 'account', key: 'id', owner: 'ownerId' }),
+    );
+    const entries = pgTable(
+      'owner_guard_entries',
+      { accountId: text('account_id').notNull(), id: text('id').primaryKey() },
+      kovo({
+        domain: 'entry',
+        key: 'id',
+        ownerVia: { fk: 'accountId', parent: accounts, parentKey: 'id' },
+      }),
+    );
+    const release = installGeneratedTableSecurityManifestForCommand({
+      tables: [
+        {
+          authorizationClassifications: ['owned'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          dialect: 'sqlite',
+          domain: 'local',
+          governedColumnKeys: ['id', 'ownerId'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
+          name: 'local_documents',
+          owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+        {
+          authorizationClassifications: ['owned'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          dialect: 'postgres',
+          domain: 'nonunique',
+          governedColumnKeys: ['id', 'ownerId'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'none' },
+          name: 'nonunique_documents',
+          owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+        {
+          authorizationClassifications: ['owned'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          dialect: 'postgres',
+          domain: 'account',
+          governedColumnKeys: ['id', 'ownerId'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
+          name: 'owner_guard_accounts',
+          owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+        {
+          authorizationClassifications: ['ownedVia'],
+          columns: [
+            { key: 'accountId', name: 'account_id' },
+            { key: 'id', name: 'id' },
+          ],
+          dialect: 'postgres',
+          domain: 'entry',
+          governedColumnKeys: ['id'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
+          name: 'owner_guard_entries',
+          ownerVia: {
+            fkColumnKey: 'accountId',
+            fkColumnName: 'account_id',
+            parentKeyColumnKey: 'id',
+            parentKeyColumnName: 'id',
+            parentTable: 'owner_guard_accounts',
+          },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    });
+    try {
+      for (const keyColumn of [nonunique.id, local.id as never, entries.id]) {
+        expect(() =>
+          guards.owns<OwnerRequest, OwnerRequest, string>((request) => request.args.id, keyColumn),
+        ).toThrow(/single-key direct-owner Postgres tables/u);
+      }
+    } finally {
+      release();
+    }
+  });
+
+  it('uses the exact managed write/read DB and rejects foreign, missing, mismatched, and system authority', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-owner-guard-'));
+    const release = installGeneratedTableSecurityManifestForCommand(manifest);
+    const guard = ownerGuard();
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { documents },
+      seedSql: [
+        `INSERT INTO owner_guard_documents (document_id, owner_id, title) VALUES ('owned', 'alice', 'Alice'), ('foreign', 'bob', 'Bob')`,
+      ],
+    });
+    try {
+      await runtime.ready;
+      const writeRequest = await requestFor(runtime, 'owned', 'alice', 'write');
+      const readRequest = await requestFor(runtime, 'owned', 'alice', 'read');
+      await expect(guard(writeRequest)).resolves.toBe(true);
+      await expect(guard(readRequest)).resolves.toBe(true);
+
+      const lookalikeDocuments = pgTable(
+        'owner_guard_documents',
+        {
+          id: text('document_id').primaryKey(),
+          ownerId: text('owner_id').notNull(),
+          title: text('title').notNull(),
+        },
+        kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
+      );
+      const lookalikeGuard = guards.owns<OwnerRequest, OwnerRequest, string>(
+        (request) => request.args.id,
+        lookalikeDocuments.id,
+      );
+      await expect(lookalikeGuard(writeRequest)).resolves.toEqual({
+        kind: 'forbidden',
+        payload: {},
+      });
+
+      for (const mode of ['write', 'read'] as const) {
+        await expect(guard(await requestFor(runtime, 'foreign', 'alice', mode))).resolves.toEqual({
+          kind: 'forbidden',
+          payload: {},
+        });
+        await expect(guard(await requestFor(runtime, 'missing', 'alice', mode))).resolves.toEqual({
+          kind: 'forbidden',
+          payload: {},
+        });
+      }
+
+      const stolenDbRequest: OwnerRequest = {
+        args: { id: 'owned' },
+        db: writeRequest.db,
+        session: { user: { id: 'bob' } },
+      };
+      await expect(guard(stolenDbRequest)).resolves.toEqual({
+        kind: 'forbidden',
+        payload: {},
+      });
+
+      const systemDb = usePostgresSystemDb(
+        runtime.systemDb({
+          operation: 'write',
+          reason: 'owner-guard negative authority test',
+          surface: 'postgres-owner-guard.test',
+        }),
+        (db) => db,
+      );
+      await expect(
+        guard({
+          args: { id: 'owned' },
+          db: systemDb,
+          session: { user: { id: 'alice' } },
+        }),
+      ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+    } finally {
+      await runtime.close();
+      release();
+      rmSync(dataDir, { force: true, recursive: true });
+    }
+  }, 30_000);
+
+  it('fails closed when the live single-column key constraint disappears', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-owner-guard-constraint-'));
+    const release = installGeneratedTableSecurityManifestForCommand(manifest);
+    const guard = ownerGuard();
+    let runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { documents },
+      seedSql: [
+        `INSERT INTO owner_guard_documents (document_id, owner_id, title) VALUES ('shared', 'alice', 'Alice')`,
+      ],
+    });
+    try {
+      await runtime.ready;
+      await expect(guard(await requestFor(runtime, 'shared', 'alice', 'write'))).resolves.toBe(
+        true,
+      );
+      await runtime.close();
+
+      const operator = new PGlite(dataDir);
+      try {
+        await operator.exec(
+          'ALTER TABLE owner_guard_documents DROP CONSTRAINT owner_guard_documents_pkey',
+        );
+        await operator.exec(
+          `INSERT INTO owner_guard_documents (document_id, owner_id, title) VALUES ('shared', 'bob', 'Bob')`,
+        );
+      } finally {
+        await operator.close();
+      }
+
+      runtime = createPostgresAppRuntimeDb({
+        dataDir,
+        driver: 'pglite',
+        postureCheck: {
+          justification: 'Exercise the per-evaluation live key-constraint denial.',
+          onBoot: false,
+        },
+        provisionOnBoot: false,
+        schema: { documents },
+      });
+      await runtime.ready;
+      await expect(guard(await requestFor(runtime, 'shared', 'alice', 'write'))).resolves.toEqual({
+        kind: 'forbidden',
+        payload: {},
+      });
+    } finally {
+      await runtime.close();
+      release();
+      rmSync(dataDir, { force: true, recursive: true });
+    }
+  }, 30_000);
+});
+
+async function requestFor(
+  runtime: ReturnType<typeof createPostgresAppRuntimeDb>,
+  id: string,
+  principal: string,
+  dbMode: 'read' | 'write',
+): Promise<OwnerRequest> {
+  return resolveLifecycleRequest(
+    { args: { id } },
+    {
+      db: runtime.db,
+      dbMode,
+      sessionProvider: () => ({ user: { id: principal } }),
+    },
+  );
+}

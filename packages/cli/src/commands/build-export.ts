@@ -17,7 +17,6 @@ import { tmpdir as builtinTmpdir } from 'node:os';
 import {
   basename as builtinBasename,
   dirname as builtinDirname,
-  extname as builtinExtname,
   isAbsolute as builtinIsAbsolute,
   join as builtinJoin,
   relative as builtinRelative,
@@ -31,8 +30,19 @@ import {
 import { promisify as builtinPromisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
+import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
+import {
+  snapshotCacheInfluenceManifest,
+  type CacheInfluenceManifestEntry,
+  type CacheInfluenceSurface,
+} from '@kovojs/core/internal/cache-influence';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
@@ -46,6 +56,7 @@ import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  compilerGeneratedCapabilityDependencies,
   cssRouteDeliveryGate,
   dedupeCss,
   lowerStandaloneSourceDerivedRegistryDeclarations,
@@ -53,6 +64,8 @@ import {
   mutationSessionAuthorityFacts,
   parseComponentModule,
   projectMutationRegistryFactsFromFiles,
+  type AppDependencyCapabilityManifest,
+  type CompilerGeneratedCapabilityDependency,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   type AnalyzeCapabilityClosureResult,
@@ -65,6 +78,7 @@ import {
 } from '@kovojs/drizzle/internal/static';
 import type {
   AccessDecision,
+  AppEgressOptions,
   Guard,
   KovoApp,
   StaticExportCompileDiagnostic,
@@ -77,7 +91,9 @@ import type {
   KovoBuildPresetContext,
   KovoBuildPresetDiagnostic,
 } from '@kovojs/server/internal/build-preset';
+import type { EscapeObligationReviewSubject } from '@kovojs/server/internal/execution';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
+import { assertDocumentCspConfigMatchesBrowserPosture } from '@kovojs/server/internal/csp';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import {
   buildCheckSourceGraphFiles,
@@ -90,6 +106,7 @@ import {
   type StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import {
+  runtimePostureFactsFromGraph,
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
@@ -108,10 +125,12 @@ import {
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
+import { kovoCertificateV1Json } from '../certificate.js';
 import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
 } from '../capability-closure-packages.js';
+import { dependencyCapabilityLoaderVitePlugin } from '../dependency-capability-loader.js';
 import {
   buildOutputVersion,
   type CliCommandResult,
@@ -145,6 +164,7 @@ import {
   buildMapSet,
   buildObjectKeys,
   buildObservePromise,
+  buildOwnDataProperty,
   buildOwnDataValue,
   buildPromiseAll,
   buildRegExpExec,
@@ -175,7 +195,6 @@ const createRequire = builtinCreateRequire;
 const tmpdir = builtinTmpdir;
 const basename = builtinBasename;
 const dirname = builtinDirname;
-const extname = builtinExtname;
 const isAbsolute = builtinIsAbsolute;
 const join = builtinJoin;
 const relative = builtinRelative;
@@ -203,6 +222,7 @@ const kovoFrameworkSourcePackages = [
   '@kovojs/server',
   '@kovojs/style',
   '@kovojs/ui',
+  '@kovojs/verify',
 ] as const;
 
 const KOVO_FRAMEWORK_SOURCE_MAX_CONTEXTS = 256;
@@ -231,6 +251,36 @@ function isKovoServerHandlerExternalDependency(id: string): boolean {
     id === 'pg' ||
     buildStringStartsWith(id, 'pg/')
   );
+}
+
+function dependencyCapabilityCompleteBundleNoExternal(): true {
+  // Every supported artifact and pre-evaluation SSR graph must traverse unknown package children;
+  // the loader's source-level edge census closes builtins before Vite can externalize them.
+  return true;
+}
+
+function dependencyCapabilityCompleteSsrOptions(): {
+  readonly external: string[];
+  readonly noExternal: true;
+} {
+  // Native/CommonJS framework dependencies cannot all execute correctly as Vite-inlined ESM
+  // namespaces. This exact list is trusted compiler/runtime host tooling, not app packages. A
+  // reviewed app dependency cannot exploit these externals because its own source is parsed first
+  // and every bare child edge closes before Vite's externalization decision (SPEC §6.6; C13).
+  return {
+    external: [
+      '@electric-sql/pglite',
+      '@material/material-color-utilities',
+      '@node-rs/argon2',
+      'es-module-lexer',
+      'pg',
+      'pgsql-ast-parser',
+      'ts-morph',
+      'typescript',
+      'undici',
+    ],
+    noExternal: true,
+  };
 }
 
 function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
@@ -411,7 +461,6 @@ interface KovoExportOptions {
   origin?: string;
   outDir: string;
   root?: string;
-  stylesheetEnv?: string;
   vite?: boolean;
 }
 
@@ -440,13 +489,23 @@ interface LoadedBuildAppModule {
 
 type BuildExecutionModule = Pick<
   typeof import('@kovojs/server/internal/execution'),
-  'accessDecisionFor' | 'accessFactsFromApp' | 'explainGuard' | 'guardAuditName'
+  | 'accessDecisionFor'
+  | 'accessFactsFromApp'
+  | 'appEgressPosture'
+  | 'authorizationCorrespondenceFactsFromApp'
+  | 'explainGuard'
+  | 'guardAuditName'
 >;
 
 interface LoadedExportAppModule {
   appModule: unknown;
   close?: () => Promise<void>;
   exportStaticApp: ExportStaticApp;
+  isStaticExportDiagnostic: (value: unknown) => boolean;
+  isStaticExportDiagnosticError: (value: unknown) => boolean;
+  staticExportCompileDiagnosticsFromModule: (
+    moduleValue: unknown,
+  ) => StaticExportCompileDiagnostic[];
 }
 
 export interface KovoExportCommandResult extends KovoCheckResult {
@@ -525,7 +584,6 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   const manifestFile = parsedStringOption(parsed.value, '--manifest');
   const origin = parsedStringOption(parsed.value, '--origin');
   const root = parsedStringOption(parsed.value, '--root');
-  const stylesheetEnv = parsedStringOption(parsed.value, '--stylesheet-env');
   const vite = parsedBooleanOption(parsed.value, '--vite');
   const onNonExportable = parsedBooleanOption(parsed.value, '--skip-non-exportable')
     ? ('skip' as const)
@@ -542,7 +600,6 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       ...(origin === undefined ? {} : { origin }),
       outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
       ...(root === undefined ? {} : { root }),
-      ...(stylesheetEnv === undefined ? {} : { stylesheetEnv }),
       ...(vite ? { vite } : {}),
     },
   };
@@ -656,6 +713,7 @@ export async function runBuildCommand(
       buildStylesheetCss,
       checkGraph,
       cloudflare,
+      dependencyCapabilities,
       deriveClosedKovoApp,
       node,
       queryShapeFacts,
@@ -663,6 +721,17 @@ export async function runBuildCommand(
       vercel,
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
+    const graphWithProvenance: CoreGraph.KovoCheckInput = {
+      ...checkGraph,
+      provenance: artifactProvenance,
+    };
+    const runtimePosture = runtimePostureManifestForBuild(graphWithProvenance);
+    const attestedCheckGraph: CoreGraph.KovoCheckInput = {
+      ...graphWithProvenance,
+      runtimePosture,
+    };
+    // Validate every trustedAssign review subject before any client/server artifact is emitted.
+    const escapeObligationManifest = escapeObligationManifestForBuild(attestedCheckGraph);
     const outDir = resolve(invocationRoot, options.outDir);
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
     const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
@@ -679,6 +748,12 @@ export async function runBuildCommand(
       appSourceDir: dirname(resolvedAppModulePath),
       root: invocationRoot,
     });
+    if (app.document.csp !== undefined) {
+      assertDocumentCspConfigMatchesBrowserPosture(
+        app.document.csp,
+        staticRuntimeRegistry.browserPosture,
+      );
+    }
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
       clientRoot,
@@ -686,6 +761,7 @@ export async function runBuildCommand(
       {
         approvedSourceFiles,
         cache: options.cache,
+        dependencyCapabilities,
         projectMutationFacts: clientProjectMutationFacts,
         queryShapeFacts,
       },
@@ -698,11 +774,15 @@ export async function runBuildCommand(
     const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
       approvedSourceFiles,
       buildRoot: invocationRoot,
+      dependencyCapabilities,
       projectMutationFacts: serverProjectMutationFacts,
       queryShapeFacts,
       runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
-        ...runtimeRegistryWireFactsFromGraph(checkGraph),
+        ...runtimeRegistryWireFactsFromGraph(attestedCheckGraph),
+        ...(staticRuntimeRegistry.browserPosture === undefined
+          ? {}
+          : { browserPosture: staticRuntimeRegistry.browserPosture }),
         ...(staticRuntimeRegistry.tableSecurity === undefined
           ? {}
           : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
@@ -722,7 +802,7 @@ export async function runBuildCommand(
       serverHandlerSource: serverHandlerBuild.source,
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
-    writeKovoBuildGraphArtifact(neutralBuild, checkGraph, artifactProvenance);
+    writeKovoBuildGraphArtifact(neutralBuild, attestedCheckGraph, escapeObligationManifest);
     const presetToken =
       selectedPreset.name === 'cloudflare'
         ? cloudflare()
@@ -810,7 +890,12 @@ async function loadAndCheckBuildApp(
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
   // race CSS discovery against the server/compiler/data-plane preload.
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
-    loadBuildAppModule(resolvedAppModulePath, invocationRoot),
+    loadBuildAppModule(
+      resolvedAppModulePath,
+      invocationRoot,
+      preEvaluationStaticTrust.files,
+      preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+    ),
   );
   const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
     kovoBuildStylesheetCss(resolvedAppModulePath),
@@ -835,6 +920,7 @@ async function loadAndCheckBuildApp(
     buildStylesheetCss,
     checkGraph: buildCheck.graph,
     cloudflare,
+    dependencyCapabilities: preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
     deriveClosedKovoApp,
     node,
     queryShapeFacts: buildCheck.queryShapeFacts,
@@ -902,16 +988,22 @@ function runPreEvaluationStaticTrustPreflight(
   // config Vite build can transform. A project-root census would incorrectly promote unrelated
   // authored tooling such as vite.config.ts into app runtime authority.
   const files = preEvaluationAppSourceFiles(appModulePath, root);
-  const packageRequests = collectCapabilityPackageRequests(files);
+  // Parse and lower this exact snapshot before deriving the loader manifest. Private ABI rows are
+  // admitted only when the reviewed compiler added their exact names; authored spellings remain
+  // ordinary closed package edges (SPEC §5.2 rule 10 / §6.6).
+  const sourceGraphFacts = sourceGraphFactsFromFiles(files);
+  const packageRequests = collectCapabilityPackageRequests(
+    files,
+    sourceGraphFacts.compilerDependencies,
+  );
   const capabilityClosure = analyzeCapabilityClosure({
+    compilerDependencies: sourceGraphFacts.compilerDependencies,
     files,
     packageSummaries: readCapabilityPackageSummaries(root),
     packages: resolveCapabilityPackages(packageRequests, appModulePath),
   });
-  // SPEC §5.2/§6.6: parse the exact immutable snapshot through the compiler-owned finite IR before
-  // any authored SSR module executes. These same typed component/semantic facts are retained for
-  // graph assembly below; neither the verdict nor framework identity is re-derived from disk.
-  const sourceGraphFacts = sourceGraphFactsFromFiles(files);
+  // The same typed component/semantic facts are retained for graph assembly below; neither the
+  // verdict nor framework identity is re-derived from disk.
   const compilerSecurityDiagnostics = buildMapDense(
     buildFilterDense(
       buildPreflightComponentDiagnostics(sourceGraphFacts.components),
@@ -931,10 +1023,17 @@ function runPreEvaluationStaticTrustPreflight(
           cookieDowngrades: [],
           diagnostics: [],
           revealed: [],
+          trustEscapes: [],
           unregisteredSinks: [],
         }
       : collectStaticBuildTrustFactsFromProject({
           compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
+          compilerTaskBClosure: {
+            capabilityFacts: capabilityClosure.facts,
+            dependencyManifest: capabilityClosure.dependencyManifest,
+            files,
+            schema: 'kovo-task-b-closure/v1',
+          },
           files,
         });
   const accessGuardDiagnostics = preEvaluationAccessGuardDiagnostics(files);
@@ -1153,6 +1252,7 @@ interface KovoBuildCheckArtifacts {
 
 type SourceComponentGraphFacts = Pick<
   CompileResult,
+  | 'agentGraphFacts'
   | 'componentGraphFacts'
   | 'diagnostics'
   | 'handlerWriteSinkFacts'
@@ -1166,16 +1266,72 @@ type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
 function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
   graph: CoreGraph.KovoCheckInput,
-  provenance: CoreGraph.KovoArtifactProvenance,
+  escapeObligations: ReturnType<typeof escapeObligationManifestForBuild>,
 ): void {
   // SPEC §5.2.3/§5.3: the build-derived graph is a review/debug artifact, not just an
   // in-memory preflight input. Persist it in the neutral build metadata directory
   // so `kovo explain ...` can discover it after an ordinary scaffold build. Provenance is
   // build-owned and overwrites any untrusted graph field with the boot-time identity snapshot.
+  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${stringifyBuildValue(graph, 2)}\n`);
+  // Plan 3 §2.1: the release-bound framework certificate is an independently-checkable sibling,
+  // not an app-authored graph field. Its committed canonical bytes are embedded in the CLI build.
+  writeFileSync(join(neutralBuild.outDir, 'certificate.json'), kovoCertificateV1Json);
+  // Plan 3 §4.2: this is deliberately unsigned build output. A second-party reviewer signs each
+  // subject outside the build/coding-agent environment with the already-pinned deployment
+  // attestation key; `kovo explain --attest --escape-reviews` verifies the detached envelopes.
   writeFileSync(
-    join(neutralBuild.outDir, 'graph.json'),
-    `${stringifyBuildValue({ ...graph, provenance }, 2)}\n`,
+    join(neutralBuild.outDir, 'escape-obligations.json'),
+    `${stringifyBuildValue(escapeObligations, 2)}\n`,
   );
+}
+
+/** @internal Derive detached review subjects without ever acquiring signing authority. */
+export function escapeObligationManifestForBuild(graph: CoreGraph.KovoCheckInput): {
+  artifactSubject: `sha256:${string}`;
+  schema: 'kovo.escape-obligations/v1';
+  subjects: readonly EscapeObligationReviewSubject[];
+} {
+  const artifactSubject = graph.runtimePosture?.artifactSubject;
+  if (artifactSubject === undefined) {
+    throw new TypeError('Escape-obligation emission requires the build-owned artifact subject.');
+  }
+  const subjects: EscapeObligationReviewSubject[] = [];
+  for (const capability of graph.capabilities ?? []) {
+    if (capability.target !== 'trustedAssign') continue;
+    if (capability.obligation === undefined) {
+      throw new TypeError(
+        `KV438: trustedAssign at ${capability.site} requires an analyzer-checked structured obligation before artifact emission.`,
+      );
+    }
+    if (capability.siteIdentity === undefined) {
+      throw new TypeError(
+        `KV438: trustedAssign at ${capability.site} requires an analyzer-owned call-site identity before artifact emission.`,
+      );
+    }
+    subjects.push({
+      artifactSubject,
+      obligation: capability.obligation,
+      schema: 'kovo.escape-obligation-review/v1',
+      siteIdentity: capability.siteIdentity,
+    });
+  }
+  return {
+    artifactSubject,
+    schema: 'kovo.escape-obligations/v1',
+    subjects,
+  };
+}
+
+function runtimePostureManifestForBuild(
+  graph: CoreGraph.KovoCheckInput,
+): CoreGraph.RuntimePostureManifest {
+  const facts = runtimePostureFactsFromGraph(graph);
+  return {
+    artifactSubject: `sha256:${hash('sha256', canonicalJsonStringify(graph), 'hex')}`,
+    facts,
+    postureDigest: `sha256:${hash('sha256', canonicalJsonStringify(facts), 'hex')}`,
+    schema: 'kovo-runtime-posture/v1',
+  };
 }
 
 function buildCheckFailureOutput(output: string): string {
@@ -1215,6 +1371,7 @@ async function buildCheckGraph(
     },
     ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
+  assertBuildCacheGenerality(app, result.graph);
   const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
   const existingDiagnostics = buildSnapshotDenseArray(
     graph.diagnostics ?? [],
@@ -1269,19 +1426,305 @@ async function buildCheckGraph(
   };
 }
 
+interface BuildCacheIntent {
+  readonly auditedEscape?: { readonly name: string; readonly retainedObligation: string };
+  readonly cacheControl?: string;
+  readonly externalDataVersions: readonly {
+    readonly key: { readonly axis: string; readonly name?: string };
+    readonly name: string;
+  }[];
+  readonly posture: 'non-public' | 'public';
+  readonly root: string;
+  readonly surface: CacheInfluenceSurface;
+}
+
+/**
+ * Fail the real build before artifact emission when evaluated app declarations disagree with the
+ * compiler-owned cache-influence manifest. Runtime inspection is an equality/rejection check only;
+ * it never supplies positive shared-cache evidence (SPEC §9.4).
+ *
+ * @internal Security regression seam for `check:cache-generality`.
+ */
+export function assertBuildCacheGenerality(
+  app: Pick<KovoApp, 'endpoints' | 'queries'>,
+  graph: CoreGraph.KovoCheckInput,
+): void {
+  const manifestValue = buildOwnDataValue(graph, 'cacheInfluence', 'Build cache graph');
+  const entriesByRoot = buildCreateMap<string, CacheInfluenceManifestEntry>();
+  if (manifestValue !== undefined) {
+    const manifest = snapshotCacheInfluenceManifest(manifestValue);
+    const entries = buildSnapshotDenseArray(manifest.entries, 'Build cache influence entries');
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index]!;
+      if (buildMapHas(entriesByRoot, entry.root)) {
+        throw new Error(`Kovo cache generality check failed: duplicate root ${entry.root}.`);
+      }
+      buildMapSet(entriesByRoot, entry.root, entry);
+    }
+  }
+
+  const queries = buildSnapshotDenseArray(app.queries, 'Build cache query declarations');
+  for (let index = 0; index < queries.length; index += 1) {
+    const query = queries[index]!;
+    const key = requiredBuildCacheText(
+      buildOwnDataValue(query, 'key', `Build cache query[${index}]`),
+      `query[${index}].key`,
+    );
+    const read = optionalBuildCacheRecord(
+      buildOwnDataValue(query, 'read', `Build cache query ${key}`),
+      `query:${key}.read`,
+    );
+    const cacheControl = optionalBuildCacheText(
+      read === undefined
+        ? undefined
+        : buildOwnDataValue(read, 'cacheControl', `Build cache query ${key} read`),
+      `query:${key}.read.cacheControl`,
+    );
+    assertBuildCacheIntent(
+      {
+        ...buildCacheDeclarationIntent(
+          read === undefined
+            ? undefined
+            : buildOwnDataValue(read, 'cacheInfluence', `Build cache query ${key} read`),
+          `query:${key}`,
+        ),
+        ...(cacheControl === undefined ? {} : { cacheControl }),
+        posture:
+          cacheControl !== undefined &&
+          buildRegExpExec(/(?:^|,)\s*public(?:\s|,|$)/iu, cacheControl) !== null
+            ? 'public'
+            : 'non-public',
+        root: `query:${key}`,
+        surface: 'query',
+      },
+      entriesByRoot,
+    );
+  }
+
+  const endpoints = buildSnapshotDenseArray(app.endpoints, 'Build cache endpoint declarations');
+  for (let index = 0; index < endpoints.length; index += 1) {
+    const endpoint = endpoints[index]!;
+    const path = requiredBuildCacheText(
+      buildOwnDataValue(endpoint, 'path', `Build cache endpoint[${index}]`),
+      `endpoint[${index}].path`,
+    );
+    const response = optionalBuildCacheRecord(
+      buildOwnDataValue(endpoint, 'response', `Build cache endpoint ${path}`),
+      `endpoint:${path}.response`,
+    );
+    if (response === undefined) {
+      throw new Error(
+        `Kovo cache generality check failed: endpoint:${path} has no response posture.`,
+      );
+    }
+    const cacheControl = requiredBuildCacheText(
+      buildOwnDataValue(response, 'cache', `Build cache endpoint ${path} response`),
+      `endpoint:${path}.response.cache`,
+    );
+    assertBuildCacheIntent(
+      {
+        ...buildCacheDeclarationIntent(
+          buildOwnDataValue(response, 'cacheInfluence', `Build cache endpoint ${path} response`),
+          `endpoint:${path}`,
+        ),
+        cacheControl,
+        posture: cacheControl === 'public' ? 'public' : 'non-public',
+        root: `endpoint:${path}`,
+        surface: 'endpoint',
+      },
+      entriesByRoot,
+    );
+  }
+}
+
+function assertBuildCacheIntent(
+  intent: BuildCacheIntent,
+  entriesByRoot: Map<string, CacheInfluenceManifestEntry>,
+): void {
+  const entry = buildMapGet(entriesByRoot, intent.root);
+  if (entry === undefined) {
+    if (intent.posture === 'public') {
+      throw new Error(
+        `Kovo cache generality check failed: ${intent.root} public intent has no compiler manifest entry.`,
+      );
+    }
+    return;
+  }
+  const sameAuthoredIntent =
+    entry.surface === intent.surface &&
+    entry.authored.posture === intent.posture &&
+    entry.authored.cacheControl === intent.cacheControl &&
+    cacheAuditEscapeKey(entry.authored.auditedEscape) ===
+      cacheAuditEscapeKey(intent.auditedEscape) &&
+    buildJsonStringify(cacheExternalVersionsFromEntry(entry)) ===
+      buildJsonStringify(intent.externalDataVersions);
+  if (!sameAuthoredIntent) {
+    throw new Error(
+      `Kovo cache generality check failed: ${intent.root} authored intent differs from the compiler manifest.`,
+    );
+  }
+  if (intent.posture === 'public' && entry.verdict === 'shared-cache-closed') {
+    throw new Error(
+      `Kovo cache generality check failed: ${intent.root} public intent is closed by compiler influence analysis.`,
+    );
+  }
+}
+
+function buildCacheDeclarationIntent(
+  value: unknown,
+  root: string,
+): Pick<BuildCacheIntent, 'auditedEscape' | 'externalDataVersions'> {
+  const declaration = optionalBuildCacheRecord(value, `${root}.cacheInfluence`);
+  if (declaration === undefined) return { externalDataVersions: [] };
+  const auditedValue = buildOwnDataValue(declaration, 'auditedEscape', `${root}.cacheInfluence`);
+  const audited = optionalBuildCacheRecord(auditedValue, `${root}.cacheInfluence.auditedEscape`);
+  const auditedEscape =
+    audited === undefined
+      ? undefined
+      : {
+          name: requiredBuildCacheText(
+            buildOwnDataValue(audited, 'name', `${root}.cacheInfluence.auditedEscape`),
+            `${root}.cacheInfluence.auditedEscape.name`,
+          ),
+          retainedObligation: requiredBuildCacheText(
+            buildOwnDataValue(
+              audited,
+              'retainedObligation',
+              `${root}.cacheInfluence.auditedEscape`,
+            ),
+            `${root}.cacheInfluence.auditedEscape.retainedObligation`,
+          ),
+        };
+  const externalValue = buildOwnDataValue(
+    declaration,
+    'externalDataVersions',
+    `${root}.cacheInfluence`,
+  );
+  const externalSource =
+    externalValue === undefined
+      ? []
+      : buildSnapshotDenseArray(
+          externalValue as readonly unknown[],
+          `${root}.cacheInfluence.externalDataVersions`,
+        );
+  const externalDataVersions: BuildCacheIntent['externalDataVersions'][number][] = [];
+  for (let index = 0; index < externalSource.length; index += 1) {
+    const version = optionalBuildCacheRecord(
+      externalSource[index],
+      `${root}.cacheInfluence.externalDataVersions[${index}]`,
+    );
+    if (version === undefined) {
+      throw new Error(
+        `Kovo cache generality check failed: ${root} has an invalid external version.`,
+      );
+    }
+    const key = optionalBuildCacheRecord(
+      buildOwnDataValue(version, 'key', `${root}.cacheInfluence.externalDataVersions[${index}]`),
+      `${root}.cacheInfluence.externalDataVersions[${index}].key`,
+    );
+    if (key === undefined) {
+      throw new Error(`Kovo cache generality check failed: ${root} external version has no key.`);
+    }
+    const axis = requiredBuildCacheText(
+      buildOwnDataValue(key, 'axis', `${root}.cacheInfluence external version key`),
+      `${root}.cacheInfluence external version key axis`,
+    );
+    const nameValue = buildOwnDataValue(key, 'name', `${root}.cacheInfluence external version key`);
+    const name = optionalBuildCacheText(
+      nameValue,
+      `${root}.cacheInfluence external version key name`,
+    );
+    buildSecurityArrayAppend(
+      externalDataVersions,
+      {
+        key: { axis, ...(name === undefined ? {} : { name }) },
+        name: requiredBuildCacheText(
+          buildOwnDataValue(
+            version,
+            'name',
+            `${root}.cacheInfluence.externalDataVersions[${index}]`,
+          ),
+          `${root}.cacheInfluence external version name`,
+        ),
+      },
+      'Build cache external data versions',
+    );
+  }
+  return {
+    ...(auditedEscape === undefined ? {} : { auditedEscape }),
+    externalDataVersions,
+  };
+}
+
+function cacheExternalVersionsFromEntry(
+  entry: CacheInfluenceManifestEntry,
+): BuildCacheIntent['externalDataVersions'] {
+  const result: BuildCacheIntent['externalDataVersions'][number][] = [];
+  const axes = buildSnapshotDenseArray(entry.axes, `Build cache axes for ${entry.root}`);
+  for (let index = 0; index < axes.length; index += 1) {
+    const axis = axes[index]!;
+    if (axis.kind !== 'external-data-version') continue;
+    if (axis.key === undefined) {
+      throw new Error(
+        `Kovo cache generality check failed: ${entry.root} external version has no key contribution.`,
+      );
+    }
+    buildSecurityArrayAppend(
+      result,
+      {
+        key: axis.key,
+        name: axis.name,
+      },
+      'Compiler cache external data versions',
+    );
+  }
+  return result;
+}
+
+function cacheAuditEscapeKey(
+  value: { readonly name: string; readonly retainedObligation: string } | undefined,
+): string {
+  return value === undefined ? '' : `${value.name}\u0000${value.retainedObligation}`;
+}
+
+function optionalBuildCacheRecord(value: unknown, label: string): object | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object' || buildArrayIsArray(value)) {
+    throw new Error(`Kovo cache generality check failed: ${label} must be an own-data record.`);
+  }
+  return value;
+}
+
+function optionalBuildCacheText(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  return requiredBuildCacheText(value, label);
+}
+
+function requiredBuildCacheText(value: unknown, label: string): string {
+  if (typeof value !== 'string' || buildStringTrim(value) === '') {
+    throw new Error(`Kovo cache generality check failed: ${label} must be non-empty text.`);
+  }
+  return buildStringTrim(value);
+}
+
 function buildPreflightComponentDiagnostics(
   components: NonNullable<KovoBuildCheckArtifacts['components']>,
 ): CompileResult['diagnostics'] {
-  return buildFlatMapDense(
+  const diagnostics = buildFlatMapDense(
     components,
     'Build preflight components',
     (component) => component.diagnostics,
   );
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Build component diagnostics[${index}]`);
+  }
+  return diagnostics;
 }
 
 function staticDiagnosticFact(
   diagnostic: CompileResult['diagnostics'][number],
 ): CoreGraph.StaticDiagnosticFact {
+  assertRegisteredDiagnostic(diagnostic, 'Build compiler diagnostic projection');
   return {
     code: diagnostic.code,
     message: diagnostic.message,
@@ -1323,6 +1766,7 @@ async function staticBuildCheckGraph(
     capabilities,
     cookieDowngrades,
     revealed: runtimeReveals,
+    trustEscapes: staticTrustEscapes,
     unregisteredSinks,
   } = options.preEvaluationStaticTrust.facts;
   const capabilityClosure = options.preEvaluationStaticTrust.capabilityClosure.facts;
@@ -1367,16 +1811,29 @@ async function staticBuildCheckGraph(
   const mutations = buildMapDense(app.mutations, 'Build app mutations', (mutation) =>
     mutationCheckFact(mutation, queryReadSets, options.execution),
   );
+  const trustEscapes = completeBuildTrustEscapes(staticTrustEscapes, mutations);
   const optimistic = buildFlatMapDense(
     app.mutations,
     'Build app mutations for optimistic coverage',
     mutationOptimisticCheckFacts,
   );
   const pages = buildMapDense(app.routes, 'Build app routes', routeCheckFact);
+  const authorizationCorrespondence =
+    drizzleFacts.runtimeTableSecurityManifest === undefined
+      ? []
+      : options.execution.authorizationCorrespondenceFactsFromApp({
+          app,
+          mutations,
+          pages,
+          queries: queryReadSets,
+          tableSecurity: drizzleFacts.runtimeTableSecurityManifest,
+        });
+  const egressPosture = buildEgressPosture(options.execution.appEgressPosture(app));
 
   return {
     components: sourceGraphFacts.components,
     graph: {
+      ...(drizzleFacts.grants.length === 0 ? {} : { grants: drizzleFacts.grants }),
       ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
       ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
         ? {}
@@ -1394,9 +1851,30 @@ async function staticBuildCheckGraph(
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(capabilityClosure.length === 0 ? {} : { capabilityClosure }),
+      // SPEC §6.6: retain the exact pre-evaluation package verdict as a reviewable artifact and
+      // as the single bound consumed by every supported app Vite loader below. An explicit empty
+      // manifest distinguishes a proved-zero dependency surface from a missing producer.
+      dependencyCapabilities: options.preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
+      egressPosture,
+      escapeCensus: {
+        doors: ESCAPE_CENSUS_DOORS,
+        schema: 'kovo.escape-census-coverage/v1',
+        sources: {
+          allowControlChars: 'trustEscapes',
+          'csrf:false': 'trustEscapes',
+          'ctx.fetch': 'securitySemanticGraph',
+          kovoAnalyzerSummary: 'trustEscapes',
+          trustedHtml: 'trustEscapes',
+          trustedSql: 'trustEscapes',
+        },
+      },
       ...(revealed.length === 0 ? {} : { revealed }),
+      // Keep the authoritative producer result explicit even when empty: the read-only census
+      // must distinguish a proved zero from a missing fact source (SPEC §2 / §5.3).
+      trustEscapes,
       ...(unregisteredSinks.length === 0 ? {} : { unregisteredSinks }),
+      ...(authorizationCorrespondence.length === 0 ? {} : { authorizationCorrespondence }),
       endpoints,
       mutations,
       optimistic,
@@ -1409,6 +1887,62 @@ async function staticBuildCheckGraph(
     routePages: sourceGraphFacts.routePages,
     sourceFiles: files,
   };
+}
+
+function buildEgressPosture(value: AppEgressOptions | undefined): CoreGraph.EgressPostureFact {
+  if (value === false) {
+    return { allowDestinations: [], allowInternal: [], disabled: true };
+  }
+  if (value !== undefined && 'enabled' in value) {
+    return { allowDestinations: [], allowInternal: [], disabled: true };
+  }
+  return {
+    allowDestinations: buildSnapshotDenseArray(
+      value?.allowDestinations ?? [],
+      'Build egress allowDestinations posture',
+    ),
+    allowInternal: buildSnapshotDenseArray(
+      value?.allowInternal ?? [],
+      'Build egress allowInternal posture',
+    ),
+    disabled: false,
+  };
+}
+
+function completeBuildTrustEscapes(
+  staticFacts: readonly CoreGraph.TrustEscapeExplain[],
+  mutations: readonly CoreGraph.MutationExplain[],
+): CoreGraph.TrustEscapeExplain[] {
+  const result = buildSnapshotDenseArray(staticFacts, 'Static build trust-escape facts');
+  const roots = buildCreateSet<string>();
+  for (let index = 0; index < result.length; index += 1) {
+    const root = result[index]?.root;
+    if (root !== undefined) buildSetAdd(roots, root);
+  }
+  const mutationSnapshot = buildSnapshotDenseArray(mutations, 'Build mutation escape facts');
+  for (let index = 0; index < mutationSnapshot.length; index += 1) {
+    const mutation = mutationSnapshot[index]!;
+    if (mutation.csrf !== 'exempt') continue;
+    const root = `mutation:${mutation.key}`;
+    if (buildSetHas(roots, root)) continue;
+    buildSetAdd(roots, root);
+    buildSecurityArrayAppend(
+      result,
+      {
+        kind: 'csrfFalse',
+        owner: 'ingress.mutation.csrf',
+        root,
+        safePath: 'mutation({csrf:false})',
+        site: `app-registry:${mutation.key}`,
+        source: mutation.key,
+        ...(mutation.csrfJustification === undefined
+          ? {}
+          : { justification: mutation.csrfJustification }),
+      },
+      'Build mutation escape facts',
+    );
+  }
+  return result;
 }
 
 /** @internal */ export function mergeBuildRevealFacts(
@@ -1469,6 +2003,7 @@ function compareBuildRevealFacts(
 }
 
 interface SourceGraphFacts {
+  compilerDependencies: CompilerGeneratedCapabilityDependency[];
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   components: SourceComponentGraphFacts[];
   routeOutcomes: Map<string, 'file' | 'stream'>;
@@ -1690,6 +2225,7 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
 }
 
 function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
+  const compilerDependencies: CompilerGeneratedCapabilityDependency[] = [];
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
@@ -1723,6 +2259,32 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       sourceProvenance: 'app',
     } as const;
     const component = compileComponentModule(componentOptions);
+    const standaloneRegistrySource = lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: file.fileName,
+      source: file.source,
+    });
+    const compilerLoweredSources = [component.loweredSource, standaloneRegistrySource] as const;
+    for (let loweredIndex = 0; loweredIndex < compilerLoweredSources.length; loweredIndex += 1) {
+      const generatedDependencies = buildSnapshotDenseArray(
+        compilerGeneratedCapabilityDependencies({
+          authoredSource: file.source,
+          fileName: file.fileName,
+          loweredSource: compilerLoweredSources[loweredIndex]!,
+        }),
+        `Compiler-generated dependencies for ${file.fileName}`,
+      );
+      for (
+        let dependencyIndex = 0;
+        dependencyIndex < generatedDependencies.length;
+        dependencyIndex += 1
+      ) {
+        buildSecurityArrayAppend(
+          compilerDependencies,
+          generatedDependencies[dependencyIndex]!,
+          'CLI compiler-generated dependency carriers',
+        );
+      }
+    }
     const semanticGraphs = buildFlatMapDense(
       component.componentGraphFacts,
       `Compiler semantic graph facts for ${file.fileName}`,
@@ -1739,6 +2301,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     );
     if (
       component.componentGraphFacts.length > 0 ||
+      component.agentGraphFacts.length > 0 ||
       component.diagnostics.length > 0 ||
       component.handlerWriteSinkFacts.length > 0 ||
       component.publishToClientFacts.length > 0 ||
@@ -1753,6 +2316,31 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     }
 
     const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    const routeFiles = buildSnapshotDenseArray(
+      routePage.files,
+      `Compiler-emitted route files for ${file.fileName}`,
+    );
+    for (let routeFileIndex = 0; routeFileIndex < routeFiles.length; routeFileIndex += 1) {
+      const generatedDependencies = buildSnapshotDenseArray(
+        compilerGeneratedCapabilityDependencies({
+          authoredSource: file.source,
+          fileName: file.fileName,
+          loweredSource: routeFiles[routeFileIndex]!.source,
+        }),
+        `Compiler-generated route dependencies for ${file.fileName}`,
+      );
+      for (
+        let dependencyIndex = 0;
+        dependencyIndex < generatedDependencies.length;
+        dependencyIndex += 1
+      ) {
+        buildSecurityArrayAppend(
+          compilerDependencies,
+          generatedDependencies[dependencyIndex]!,
+          'CLI compiler-generated route dependency carriers',
+        );
+      }
+    }
     if (routePage.routePageFacts.length > 0) {
       buildSecurityArrayAppend(
         routePages,
@@ -1772,11 +2360,18 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     }
   }
 
-  return { compilerSecuritySemanticSources, components, routeOutcomes, routePages };
+  return {
+    compilerDependencies,
+    compilerSecuritySemanticSources,
+    components,
+    routeOutcomes,
+    routePages,
+  };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
   return {
+    grants: [],
     massAssignmentFacts: [],
     ownerDomains: [],
     queries: [],
@@ -2174,6 +2769,12 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     cache: endpoint.response.cache,
     csrf,
     ...(csrf === 'exempt' ? { csrfJustification: endpoint.csrf?.justification ?? '' } : {}),
+    ...(endpoint.response.longLived === undefined
+      ? {}
+      : {
+          deadlineJustification: endpoint.response.longLived.justification,
+          deadlineMs: endpoint.response.longLived.deadlineMs,
+        }),
     ...(endpoint.response.reservedHeaders === undefined
       ? {}
       : { headers: endpoint.response.reservedHeaders }),
@@ -2474,6 +3075,8 @@ async function withBuildGraphDerivationContext<T>(fn: () => Promise<T>): Promise
 async function loadBuildAppModule(
   appModulePath: string,
   root: string,
+  approvedSourceFiles: readonly BuildCheckSourceFile[],
+  dependencyCapabilities: AppDependencyCapabilityManifest,
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
   const lifetime = await createBuildTimeViteServer({
@@ -2481,19 +3084,32 @@ async function loadBuildAppModule(
     configFile: false,
     logLevel: 'error',
     plugins: [
+      approvedBuildSourcesVitePlugin(appModulePath, root, approvedSourceFiles),
+      dependencyCapabilityLoaderVitePlugin(
+        appModulePath,
+        approvedSourceFiles,
+        dependencyCapabilities,
+        'build-app',
+      ),
       sourceDerivedRegistryVitePlugin(
         appModulePath,
         root,
         lowerStandaloneSourceDerivedRegistryDeclarations,
       ),
     ],
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server',
+        runtime: 'automatic',
+      },
+    },
     root,
     server: buildTimeViteServerOptions(),
     // The closed-app proof is intentionally module-local. Keep the app's Kovo imports inside this
     // SSR graph so createApp() and the internal derivation capability share one app-guards WeakSet,
     // including when the CLI runs from a packed install whose node_modules would otherwise be
     // externalized by Vite.
-    ssr: { noExternal: [/^@kovojs\//] },
+    ssr: dependencyCapabilityCompleteSsrOptions(),
   });
   const { server } = lifetime;
   let primaryError: unknown;
@@ -2511,20 +3127,13 @@ async function loadBuildAppModule(
     const serverExecutionModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/execution'), root),
     );
-    const serverBuildContextModule = (await server.ssrLoadModule(
-      viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build-context'), root),
-    )) as typeof import('@kovojs/server/internal/build-context');
     const serverInternalBuildModule = await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     );
     const trustedInternalBuild =
       serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'];
-    const appModule = await serverBuildContextModule.withKovoBuildContext(
-      { appEnvironment: 'unavailable', graphDerivation: true },
-      () =>
-        trustedInternalBuild.runWithGeneratedLiveTargetRegistry(() =>
-          server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
-        ),
+    const appModule = await trustedInternalBuild.runWithUnavailableBuildAppEnvironment(() =>
+      server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
     );
     return {
       appModule,
@@ -2690,6 +3299,7 @@ function assertKovoBuildAuthoredCompilerAuthority(fileName: string, source: stri
   const blocked: Array<CompileResult['diagnostics'][number]> = [];
   for (let index = 0; index < diagnostics.length; index += 1) {
     const diagnostic = diagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Build authored compiler diagnostics[${index}]`);
     if (diagnostic.code === 'KV235') {
       buildSecurityArrayAppend(
         blocked,
@@ -2853,6 +3463,7 @@ async function buildKovoClientManifest(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
+    dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
   },
@@ -2880,8 +3491,20 @@ async function buildKovoClientManifest(
     },
     configFile: false,
     logLevel: 'silent',
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server',
+        runtime: 'automatic',
+      },
+    },
     plugins: [
       approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+      dependencyCapabilityLoaderVitePlugin(
+        appModulePath,
+        options.approvedSourceFiles,
+        options.dependencyCapabilities,
+        'build-client',
+      ),
       viteAssetPlugin,
     ],
     root,
@@ -2941,6 +3564,7 @@ async function buildKovoComponentClientModules(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
+    dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
   },
@@ -2998,6 +3622,16 @@ async function buildKovoComponentClientModules(
       },
       plugins: [
         approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+        dependencyCapabilityLoaderVitePlugin(
+          appModulePath,
+          options.approvedSourceFiles,
+          options.dependencyCapabilities,
+          'build-client',
+          {
+            allowNodeBuiltins: true,
+            allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+          },
+        ),
         kovoBuildLoweringVitePlugin(kovoPlugin),
         bundledUndiciRuntimeVitePlugin(),
       ],
@@ -3020,7 +3654,10 @@ async function buildKovoComponentClientModules(
         ],
       },
       root,
-      ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
+      ssr: {
+        external: ['@node-rs/argon2'],
+        noExternal: dependencyCapabilityCompleteBundleNoExternal(),
+      },
     });
 
     return kovoPlugin;
@@ -4047,6 +4684,7 @@ async function bundleKovoServerHandler(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     buildRoot: string;
+    dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
     runtimeTarget: KovoBuildPresetName;
@@ -4126,6 +4764,16 @@ async function bundleKovoServerHandler(
           options.buildRoot,
           options.approvedSourceFiles,
         ),
+        dependencyCapabilityLoaderVitePlugin(
+          appModulePath,
+          options.approvedSourceFiles,
+          options.dependencyCapabilities,
+          'build-server',
+          {
+            allowNodeBuiltins: true,
+            allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+          },
+        ),
         kovoBuildLoweringVitePlugin(kovoPlugin),
         bundledUndiciRuntimeVitePlugin(),
       ],
@@ -4156,7 +4804,10 @@ async function bundleKovoServerHandler(
         ],
       },
       root: options.buildRoot,
-      ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
+      ssr: {
+        external: ['@node-rs/argon2'],
+        noExternal: dependencyCapabilityCompleteBundleNoExternal(),
+      },
     });
 
     const source = stableKovoServerHandlerSource(
@@ -4376,8 +5027,8 @@ export function kovoServerHandlerEntrySource(
 ): string {
   return buildJoinStrings(
     [
-      "import './runtime-registry.mjs';",
       "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+      "import './runtime-registry.mjs';",
       "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",
       `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`,
       'const app = appModule.default ?? appModule.app;',
@@ -4456,14 +5107,30 @@ export function kovoServerHandlerEntrySource(
 export function serializeBuildRuntimeRegistryWireModule(
   registry: RuntimeRegistryWireFacts,
 ): string {
+  if (registry.runtimePosture === undefined) {
+    throw new TypeError(
+      'Production runtime emission requires the generated runtime posture registration boundary.',
+    );
+  }
   return buildJoinStrings(
     [
-      `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedRuntimePostureManifest, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      ...(registry.browserPosture === undefined
+        ? []
+        : [
+            `registerGeneratedBrowserPostureManifest(${stringifyBuildValue(registry.browserPosture)});`,
+          ]),
+      ...(registry.cacheInfluence === undefined
+        ? []
+        : [
+            `registerGeneratedCacheInfluenceManifest(${stringifyBuildValue(registry.cacheInfluence)});`,
+          ]),
       ...(registry.tableSecurity === undefined
         ? []
         : [
             `registerGeneratedTableSecurityManifest(${stringifyBuildValue(registry.tableSecurity)});`,
           ]),
+      `registerGeneratedRuntimePostureManifest(${stringifyBuildValue(registry.runtimePosture)});`,
       `registerGeneratedQueryReadRegistry(${stringifyBuildValue(registry.queryReads)});`,
       `registerGeneratedMutationTouchRegistry(${stringifyBuildValue(registry.mutationTouches)});`,
       '',
@@ -4498,38 +5165,49 @@ export async function runExportCommandStructured(
   try {
     options = snapshotKovoExportOptions(options);
     const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
+    const exportRoot = resolvedOptions.root ?? dirname(resolvedOptions.appModulePath);
+    const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+      resolvedOptions.appModulePath,
+      exportRoot,
+      security.paranoidStaticAdvisory,
+    );
     const currentManifestPlan = await staticExportManifestPlan(resolvedOptions);
     manifestPlan = currentManifestPlan;
-    const staticExport = await withStylesheetEnvOverlay(
-      currentManifestPlan.stylesheetEnv,
-      async () => {
-        loadedExport = await loadExportAppModule(resolvedOptions, security.invocationCwd);
-        const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
-        return await loadedExport.exportStaticApp(app, {
-          ...(currentManifestPlan.assets.length === 0
-            ? {}
-            : { assets: currentManifestPlan.assets }),
-          ...(resolvedOptions.onNonExportable === undefined
-            ? {}
-            : { onNonExportable: resolvedOptions.onNonExportable }),
-          diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
-          ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
-          outDir: resolvedOptions.outDir,
-          ...(resolvedOptions.assetBase === undefined
-            ? {}
-            : { publicAssetBase: resolvedOptions.assetBase }),
-          ...(currentManifestPlan.publicAssetRoot === undefined
-            ? {}
-            : { publicAssetRoot: currentManifestPlan.publicAssetRoot }),
-        });
-      },
-    );
+    const staticExport = await (async () => {
+      loadedExport = await loadExportAppModule(
+        resolvedOptions,
+        preEvaluationStaticTrust.files,
+        preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+      );
+      const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
+      const realmResult = await loadedExport.exportStaticApp(app, {
+        ...(currentManifestPlan.assets.length === 0 ? {} : { assets: currentManifestPlan.assets }),
+        ...(resolvedOptions.onNonExportable === undefined
+          ? {}
+          : { onNonExportable: resolvedOptions.onNonExportable }),
+        diagnostics: loadedExport.staticExportCompileDiagnosticsFromModule(loadedExport.appModule),
+        ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
+        outDir: resolvedOptions.outDir,
+        ...(resolvedOptions.assetBase === undefined
+          ? {}
+          : { publicAssetBase: resolvedOptions.assetBase }),
+        ...(currentManifestPlan.publicAssetRoot === undefined
+          ? {}
+          : { publicAssetRoot: currentManifestPlan.publicAssetRoot }),
+      });
+      return transferStaticExportResult(realmResult, loadedExport.isStaticExportDiagnostic);
+    })();
 
     result = kovoExportResult(staticExport, resolvedOptions);
   } catch (error) {
     primaryError = error;
     hasPrimaryError = true;
-    result = exportErrorResult(error);
+    result = exportErrorResult(
+      error,
+      loadedExport === undefined
+        ? undefined
+        : transferStaticExportDiagnosticError(error, loadedExport),
+    );
   }
 
   let teardownError: unknown;
@@ -4589,14 +5267,7 @@ function snapshotKovoExportOptions(value: KovoExportOptions): KovoExportOptions 
   const snapshot = buildCreateNullRecord<unknown>();
   snapshot.appModulePath = requiredBuildOptionString(value, 'appModulePath', 'export');
   snapshot.outDir = requiredBuildOptionString(value, 'outDir', 'export');
-  const stringNames = [
-    'assetBase',
-    'distDir',
-    'manifestFile',
-    'origin',
-    'root',
-    'stylesheetEnv',
-  ] as const;
+  const stringNames = ['assetBase', 'distDir', 'manifestFile', 'origin', 'root'] as const;
   for (let index = 0; index < stringNames.length; index += 1) {
     const name = stringNames[index]!;
     const option = buildOwnDataValue(value, name, 'Kovo export options');
@@ -4658,50 +5329,42 @@ function resolveKovoExportOptions(
 
 async function loadExportAppModule(
   options: KovoExportOptions,
-  invocationRoot: string,
+  approvedSourceFiles: readonly BuildCheckSourceFile[],
+  dependencyCapabilities: AppDependencyCapabilityManifest,
 ): Promise<LoadedExportAppModule> {
-  const root = options.root ?? invocationRoot;
   const resolvedAppModulePath = options.appModulePath;
+  const root = options.root ?? dirname(resolvedAppModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
-  const appResolvedServerPath = requireFromApp.resolve('@kovojs/server');
-  if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
-    const requireFromServer = createRequire(pathToFileURL(appResolvedServerPath));
-    await import(
-      pathToFileURL(requireFromServer.resolve('@kovojs/compiler/internal/security-bootstrap')).href
-    );
-    await import(pathToFileURL(requireFromServer.resolve('@kovojs/compiler')).href);
-    await import(
-      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis'))
-        .href
-    );
-    const serverModule = await import(
-      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/static-export')).href
-    );
-    const serverInternalBuildModule = await import(
-      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/build')).href
-    );
-    return {
-      appModule: await serverInternalBuildModule.runWithGeneratedLiveTargetRegistry(
-        () => import(pathToFileURL(resolvedAppModulePath).href),
-      ),
-      exportStaticApp: exportStaticAppFromModule(serverModule),
-    };
-  }
 
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
+    plugins: [
+      approvedBuildSourcesVitePlugin(resolvedAppModulePath, root, approvedSourceFiles),
+      dependencyCapabilityLoaderVitePlugin(
+        resolvedAppModulePath,
+        approvedSourceFiles,
+        dependencyCapabilities,
+        'export',
+      ),
+    ],
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server',
+        runtime: 'automatic',
+      },
+    },
     root,
     server: buildTimeViteServerOptions(),
-    ssr: { noExternal: [/^@kovojs\//] },
+    ssr: dependencyCapabilityCompleteSsrOptions(),
   });
   const { server } = lifetime;
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
-    const serverModule = await server.ssrLoadModule(
+    const serverModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/static-export'), root),
-    );
+    )) as typeof import('@kovojs/server/internal/static-export');
     const serverInternalBuildModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     )) as typeof import('@kovojs/server/internal/build');
@@ -4712,6 +5375,10 @@ async function loadExportAppModule(
       appModule,
       close: () => lifetime.close(),
       exportStaticApp: exportStaticAppFromModule(serverModule),
+      isStaticExportDiagnostic: serverModule.isStaticExportDiagnostic,
+      isStaticExportDiagnosticError: serverModule.isStaticExportDiagnosticError,
+      staticExportCompileDiagnosticsFromModule:
+        serverModule.staticExportCompileDiagnosticsFromModule,
     };
   } catch (error) {
     await closeBuildTimeViteServerLifetime(lifetime, true, error);
@@ -4726,10 +5393,6 @@ function exportStaticAppFromModule(moduleValue: unknown): ExportStaticApp {
   throw new Error('@kovojs/server must export exportStaticApp for kovo export.');
 }
 
-function exportAppModuleNeedsVite(appModulePath: string): boolean {
-  return ['.ts', '.tsx', '.jsx'].includes(extname(appModulePath));
-}
-
 interface ExportManifestPlan {
   assets: readonly {
     path: string;
@@ -4738,10 +5401,6 @@ interface ExportManifestPlan {
   cleanup?: () => void;
   publicAssetRoot?: string;
   stylesheetHref?: string;
-  stylesheetEnv?: {
-    name: string;
-    value: string;
-  };
 }
 
 const exportPublicSnapshotMaxFiles = 10_000;
@@ -4845,21 +5504,10 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
       }
     }
 
-    if (options.stylesheetEnv !== undefined) {
-      if (stylesheetCount !== 1 || stylesheetHref === undefined) {
-        throw new Error(
-          `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
-        );
-      }
-    }
-
     return {
       assets: [...assets.values()],
       cleanup: () => rmSync(snapshotRoot, { force: true, recursive: true }),
       publicAssetRoot,
-      ...(options.stylesheetEnv === undefined || stylesheetHref === undefined
-        ? {}
-        : { stylesheetEnv: { name: options.stylesheetEnv, value: stylesheetHref } }),
       ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
     };
   } catch (error) {
@@ -4977,21 +5625,6 @@ function exportSnapshotPathIsExcluded(
   return false;
 }
 
-async function withStylesheetEnvOverlay<T>(
-  overlay: ExportManifestPlan['stylesheetEnv'],
-  fn: () => Promise<T>,
-): Promise<T> {
-  if (overlay === undefined) return await fn();
-  const previous = process.env[overlay.name];
-  process.env[overlay.name] = overlay.value;
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete process.env[overlay.name];
-    else process.env[overlay.name] = previous;
-  }
-}
-
 function staticExportDefaultPublicAssetRoot(options: KovoExportOptions): string {
   return resolve(options.root ?? dirname(resolve(options.appModulePath)));
 }
@@ -5098,27 +5731,93 @@ function isKovoApp(value: unknown): value is KovoApp {
   );
 }
 
-function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompileDiagnostic[] {
-  if (typeof module !== 'object' || module === null) return [];
-  const diagnostics = (module as { diagnostics?: unknown }).diagnostics;
-  if (!buildArrayIsArray(diagnostics)) return [];
-
-  return buildFilterDense(
-    diagnostics,
-    'Static-export compile diagnostics',
-    isStaticExportCompileDiagnostic,
-  );
+/**
+ * Cross the bundled SSR realm only through an origin-registry check and a receiving-registry
+ * reconstruction. Private WeakSet provenance is deliberately realm-local; structural copying or a
+ * shared symbol would turn app-authored lookalikes into framework diagnostics (SPEC §2/§11).
+ */
+function transferStaticExportResult(
+  result: StaticExportResult,
+  originIsRegistered: LoadedExportAppModule['isStaticExportDiagnostic'],
+): StaticExportResult {
+  return {
+    ...result,
+    diagnostics: transferStaticExportDiagnostics(result.diagnostics, originIsRegistered),
+  };
 }
 
-function isStaticExportCompileDiagnostic(value: unknown): value is StaticExportCompileDiagnostic {
-  if (typeof value !== 'object' || value === null) return false;
-  const diagnostic = value as Partial<StaticExportCompileDiagnostic>;
-
-  return (
-    isDiagnosticCode(diagnostic.code) &&
-    typeof diagnostic.fileName === 'string' &&
-    typeof diagnostic.message === 'string'
+function transferStaticExportDiagnosticError(
+  error: unknown,
+  origin: Pick<LoadedExportAppModule, 'isStaticExportDiagnostic' | 'isStaticExportDiagnosticError'>,
+): StaticExportResult['diagnostics'] | undefined {
+  if (!origin.isStaticExportDiagnosticError(error)) return undefined;
+  const diagnostics = buildOwnDataProperty(
+    error as object,
+    'diagnostics',
+    'Static-export cross-realm error diagnostics',
   );
+  if (!diagnostics.present || !buildArrayIsArray(diagnostics.value)) {
+    throw new TypeError('Static-export cross-realm diagnostic error has no dense diagnostics.');
+  }
+  return transferStaticExportDiagnostics(diagnostics.value, origin.isStaticExportDiagnostic);
+}
+
+function transferStaticExportDiagnostics(
+  diagnostics: readonly unknown[],
+  originIsRegistered: LoadedExportAppModule['isStaticExportDiagnostic'],
+): StaticExportResult['diagnostics'] {
+  const source = buildSnapshotDenseArray(diagnostics, 'Static-export cross-realm diagnostics');
+  const transferred: StaticExportResult['diagnostics'][number][] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = source[index];
+    if (!originIsRegistered(diagnostic)) {
+      throw new TypeError(
+        `Static-export cross-realm diagnostics[${index}] lacks originating registry provenance.`,
+      );
+    }
+    const label = `Static-export cross-realm diagnostics[${index}]`;
+    const code = buildOwnDataProperty(diagnostic as object, 'code', `${label}.code`);
+    const concretePath = buildOwnDataProperty(
+      diagnostic as object,
+      'concretePath',
+      `${label}.concretePath`,
+    );
+    const message = buildOwnDataProperty(diagnostic as object, 'message', `${label}.message`);
+    const routePath = buildOwnDataProperty(diagnostic as object, 'routePath', `${label}.routePath`);
+    const concretePathValue = concretePath.present ? concretePath.value : undefined;
+    if (
+      !code.present ||
+      !isDiagnosticCode(code.value) ||
+      !message.present ||
+      typeof message.value !== 'string' ||
+      !routePath.present ||
+      typeof routePath.value !== 'string' ||
+      (concretePath.present && typeof concretePathValue !== 'string')
+    ) {
+      throw new TypeError(`${label} has an invalid registered wire shape.`);
+    }
+    buildSecurityArrayAppend(
+      transferred,
+      rehydrateStaticExportDiagnostic(
+        code.value,
+        {
+          ...(typeof concretePathValue === 'string' ? { concretePath: concretePathValue } : {}),
+          routePath: routePath.value,
+        },
+        { message: message.value },
+      ),
+      'CLI packages/cli/src/commands/build-export.ts cross-realm diagnostic transfer',
+    );
+  }
+  return transferred;
+}
+
+function rehydrateStaticExportDiagnostic(
+  code: DiagnosticCode,
+  fields: { concretePath?: string; routePath: string },
+  options: { message: string },
+): StaticExportResult['diagnostics'][number] {
+  return createRegisteredDiagnostic(code, fields, options);
 }
 
 function kovoExportResult(
@@ -5126,6 +5825,7 @@ function kovoExportResult(
   options: KovoExportOptions,
 ): KovoExportCommandResult {
   const lines = ['kovo-export/v1'];
+  const diagnostics = registeredStaticExportResultDiagnostics(result.diagnostics);
 
   for (const artifact of result.artifacts) {
     lines.push(
@@ -5145,29 +5845,42 @@ function kovoExportResult(
     );
   }
 
-  for (const diagnostic of result.diagnostics) {
+  for (const diagnostic of diagnostics) {
     lines.push(
       `WARN ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
     );
   }
 
   lines.push(
-    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${result.diagnostics.length} outDir=${stringifyBuildValue(options.outDir)}`,
+    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} assets=${result.assets.length} diagnostics=${diagnostics.length} outDir=${stringifyBuildValue(options.outDir)}`,
   );
 
   return {
-    exitCode: exportResultExitCode(result, options),
+    exitCode: exportResultExitCode(diagnostics, options),
     output: `${lines.join('\n')}\n`,
     staticExport: result,
   };
 }
 
-function exportResultExitCode(result: StaticExportResult, options: KovoExportOptions): 0 | 1 {
-  if (result.diagnostics.length === 0) return 0;
+function registeredStaticExportResultDiagnostics(
+  diagnostics: StaticExportResult['diagnostics'],
+): StaticExportResult['diagnostics'][number][] {
+  const snapshot = buildSnapshotDenseArray(diagnostics, 'Static-export result diagnostics');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    assertRegisteredDiagnostic(snapshot[index], `Static-export result diagnostics[${index}]`);
+  }
+  return snapshot;
+}
+
+function exportResultExitCode(
+  diagnostics: StaticExportResult['diagnostics'],
+  options: KovoExportOptions,
+): 0 | 1 {
+  if (diagnostics.length === 0) return 0;
   if (
     options.onNonExportable === 'skip' &&
     buildEveryDense(
-      result.diagnostics,
+      diagnostics,
       'Static-export non-exportable diagnostics',
       (diagnostic) => diagnostic.code === 'KV229',
     )
@@ -5309,10 +6022,13 @@ function buildErrorResult(error: unknown): CliCommandResult {
   };
 }
 
-function exportErrorResult(error: unknown): CliCommandResult {
-  if (isStaticExportDiagnosticError(error)) {
+function exportErrorResult(
+  error: unknown,
+  transferredDiagnostics?: StaticExportResult['diagnostics'],
+): CliCommandResult {
+  if (transferredDiagnostics !== undefined) {
     const diagnosticLines = buildMapDense(
-      error.diagnostics,
+      transferredDiagnostics,
       'Static-export error diagnostics',
       (diagnostic) =>
         `ERROR ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
@@ -5331,14 +6047,4 @@ function exportErrorResult(error: unknown): CliCommandResult {
     error: `kovo: export failed: ${error instanceof Error ? error.message : String(error)}`,
     exitCode: 1,
   };
-}
-
-function isStaticExportDiagnosticError(error: unknown): error is {
-  diagnostics: readonly { code: DiagnosticCode; message: string; routePath: string }[];
-} {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    buildArrayIsArray((error as { diagnostics?: unknown }).diagnostics)
-  );
 }

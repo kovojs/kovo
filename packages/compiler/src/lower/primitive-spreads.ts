@@ -5,7 +5,11 @@ import {
   type JsxIrElement,
 } from '../jsx-ir.js';
 import { literalStringValue } from '../scan/object.js';
-import { parserFactHasFrameworkTrustedUrl, type ObjectLiteralEntry } from '../scan/parse.js';
+import {
+  parserFactFrameworkTrustedUrlReason,
+  parserFactHasFrameworkTrustedUrl,
+  type ObjectLiteralEntry,
+} from '../scan/parse.js';
 import {
   compilerArrayLength,
   compilerDefineOwnDataProperty,
@@ -56,7 +60,7 @@ export function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
         hasMutationSubmitterTransportEntry(source.objectEntries)
       )
         continue;
-      const attrs = spreadObjectAttributes(source.objectEntries);
+      const attrs = spreadObjectAttributes(source.objectEntries, spread.anchor);
       if (attrs === null) continue;
       const next: JsxIrAttribute[] = [];
       const currentLength = compilerArrayLength(element.attributes, 'Static spread IR attributes');
@@ -66,19 +70,22 @@ export function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
           currentIndex,
           'Static spread IR attributes',
         ) as JsxIrAttribute;
-        if (attribute !== spread) appendSpreadFact(next, attribute, 'Static spread IR attributes');
-      }
-      const attrLength = compilerArrayLength(attrs, 'Static spread lowered attributes');
-      for (let attrIndex = 0; attrIndex < attrLength; attrIndex += 1) {
-        appendSpreadFact(
-          next,
-          compilerOwnDataValue(
-            attrs,
-            attrIndex,
-            'Static spread lowered attributes',
-          ) as JsxIrAttribute,
-          'Static spread IR attributes',
-        );
+        if (attribute !== spread) {
+          appendSpreadFact(next, attribute, 'Static spread IR attributes');
+          continue;
+        }
+        const attrLength = compilerArrayLength(attrs, 'Static spread lowered attributes');
+        for (let attrIndex = 0; attrIndex < attrLength; attrIndex += 1) {
+          appendSpreadFact(
+            next,
+            compilerOwnDataValue(
+              attrs,
+              attrIndex,
+              'Static spread lowered attributes',
+            ) as JsxIrAttribute,
+            'Static spread IR attributes',
+          );
+        }
       }
       element.attributes = next;
       markJsxIrChanged(element);
@@ -112,7 +119,10 @@ function hasMutationSubmitterTransportEntry(entries: readonly { key: string }[])
   return false;
 }
 
-function spreadObjectAttributes(entries: readonly ObjectLiteralEntry[]): JsxIrAttribute[] | null {
+function spreadObjectAttributes(
+  entries: readonly ObjectLiteralEntry[],
+  anchor: JsxIrAttribute['anchor'],
+): JsxIrAttribute[] | null {
   const attributes: JsxIrAttribute[] = [];
   const length = compilerArrayLength(entries, 'Static spread object entries');
   for (let index = 0; index < length; index += 1) {
@@ -121,12 +131,17 @@ function spreadObjectAttributes(entries: readonly ObjectLiteralEntry[]): JsxIrAt
       index,
       'Static spread object entries',
     ) as (typeof entries)[number];
-    const value = spreadObjectAttributeValue(entry.value, parserFactHasFrameworkTrustedUrl(entry));
+    const value = spreadObjectAttributeValue(
+      entry.value,
+      parserFactHasFrameworkTrustedUrl(entry),
+      parserFactFrameworkTrustedUrlReason(entry),
+    );
     if (value === null) return null;
     if (!value) continue;
     appendSpreadFact(
       attributes,
       {
+        ...(anchor === undefined ? {} : { anchor }),
         name: entry.key,
         ownership: 'generated',
         provenance: {
@@ -145,6 +160,7 @@ function spreadObjectAttributes(entries: readonly ObjectLiteralEntry[]): JsxIrAt
 function spreadObjectAttributeValue(
   value: string | undefined,
   frameworkTrustedUrl = false,
+  trustedUrlReason?: string,
 ): JsxIrAttributeValue | null | undefined {
   if (value === undefined) return null;
   const trimmed = compilerStringTrim(value);
@@ -160,6 +176,7 @@ function spreadObjectAttributeValue(
     kind: 'expression',
     source: trimmed,
     ...(frameworkTrustedUrl ? { trustedUrl: true as const } : {}),
+    ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
   };
 }
 

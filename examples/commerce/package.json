@@ -29,7 +29,7 @@
     "axe-core": "^4.12.1",
     "playwright": "^1.60.0",
     "vite": "8.0.16",
-    "vite-plus": "^0.1.24",
+    "vite-plus": "0.1.24",
     "vitest": "4.1.8"
   }
 }

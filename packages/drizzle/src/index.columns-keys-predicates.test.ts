@@ -105,14 +105,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV435',
             message:
-              'Secret query value reaches the client wire. Query projection user.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+              'Secret query value reaches the client wire. Query projection user.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
             severity: 'error',
             site: 'user.queries.ts:12',
           },
           {
             code: 'KV435',
             message:
-              'Secret query value reaches the client wire. Query projection user.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+              'Secret query value reaches the client wire. Query projection user.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
             severity: 'error',
             site: 'user.queries.ts:15',
           },
@@ -198,7 +198,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.totpSecret reads a secret-classified column or unresolved projection from secret-classified table(s): user. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.totpSecret reads a secret-classified column or unresolved projection from secret-classified table(s): user. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'better-auth-user.queries.ts:13',
       },

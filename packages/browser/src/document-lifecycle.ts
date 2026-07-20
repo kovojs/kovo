@@ -13,6 +13,8 @@ export interface DocumentLifecycleRecoveryOptions {
   currentHref: () => string | undefined;
   document: Document;
   encodeAttribute: (value: string) => string;
+  /** Core-owned mutation-wire entry encoder (SPEC §9.1). */
+  encodeWireEntries: (values: readonly string[]) => string;
   fetchValue: (input: string, init: object) => Promise<unknown>;
   findTarget: (root: ParentNode, target: string) => Element | undefined;
   liveTargets: () => string[];
@@ -81,6 +83,9 @@ export function createDocumentLifecycleRecovery(
   const encodeAttribute = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['encodeAttribute']
   >(options, 'encodeAttribute');
+  const encodeWireEntries = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['encodeWireEntries']
+  >(options, 'encodeWireEntries');
   const fetchValue = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['fetchValue']>(
     options,
     'fetchValue',
@@ -194,8 +199,8 @@ export function createDocumentLifecycleRecovery(
           headers: {
             Accept: acceptHeader,
             'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': lifecycleJoin(live, '; '),
-            'Kovo-Targets': lifecycleJoin(targets, '; '),
+            'Kovo-Live-Targets': encodeWireEntries(live),
+            'Kovo-Targets': encodeWireEntries(targets),
           },
           method: 'GET',
         });
@@ -417,16 +422,6 @@ function lifecycleBeforeHash(value: string): string {
     target += value[index];
   }
   return target;
-}
-
-function lifecycleJoin(values: readonly string[], separator: string): string {
-  let result = '';
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
-    if (value === undefined) continue;
-    result += (result === '' ? '' : separator) + value;
-  }
-  return result;
 }
 
 function lifecycleMediaTypeEquals(value: unknown, expected: string): boolean {

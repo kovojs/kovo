@@ -1005,6 +1005,32 @@ export const save = mutation('cart/save', {
     `);
   });
 
+  it('prints the bounded audited long-lived endpoint deadline posture', () => {
+    const result = kovoExplain(
+      {
+        endpoints: [
+          {
+            auth: 'none',
+            body: 'text',
+            cache: 'no-store',
+            csrf: 'safe:read-only',
+            deadlineJustification: 'bounded event-stream connection for build notifications',
+            deadlineMs: 120_000,
+            method: 'GET',
+            name: 'build-events',
+            path: '/events/builds',
+          },
+        ],
+      },
+      { endpoints: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(
+      'deadline=long-lived:120000:"bounded event-stream connection for build notifications"',
+    );
+  });
+
   it('prints webhook mutation dispatch and derives webhook writes from the called mutation', () => {
     const result = kovoExplain(
       {
@@ -1163,9 +1189,9 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       TRUST
-      TRUST kind=staticExportPathOverride site=app/export.ts:4 source=EXPORT_ROOT owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
-      TRUST kind=trustedHtml site=app/promo.tsx:12 source=cms.promo.body owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
-      TRUST kind=webhookVerifyNone site=app/webhook.ts:8 source=stripe owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
+      TRUST kind=staticExportPathOverride root=app/export.ts:4 site=app/export.ts:4 source=EXPORT_ROOT owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
+      TRUST kind=trustedHtml root=app/promo.tsx:12 site=app/promo.tsx:12 source=cms.promo.body owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
+      TRUST kind=webhookVerifyNone root=app/webhook.ts:8 site=app/webhook.ts:8 source=stripe owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
       SUMMARY total=3
       "
     `);
@@ -1197,7 +1223,7 @@ export const save = mutation('cart/save', {
     );
 
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain('TRUST kind=trustedHtml site=promo.tsx');
+    expect(result.output).toContain('TRUST kind=trustedHtml root=promo.tsx');
   });
 
   // SPEC §6.6 (audit-only), threat-matrix-plan.md M3: the capability-escape producer rides through
@@ -1254,10 +1280,10 @@ export const save = mutation('cart/save', {
     );
   });
 
-  // SPEC §6.6 (audit-only): a boot-time app.env credential reveal uses the existing reveal-fact
-  // graph. `--capabilities` may fold the same fact for a combined audit, but there is no parallel
-  // capability producer for trustedReveal.
-  it('surfaces a config-secret credential-factory reveal end-to-end through --revealed', async () => {
+  // SPEC §6.6 (audit-only): a typed boot credential reveal uses the existing reveal-fact graph.
+  // `--capabilities` may fold the same fact for a combined audit, but there is no parallel
+  // capability producer for the declassification call.
+  it('surfaces a typed declassification policy end-to-end through --revealed', async () => {
     const { collectRuntimeRevealFactsFromProject } =
       await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
@@ -1267,9 +1293,9 @@ export const save = mutation('cart/save', {
         {
           fileName: 'payment.ts',
           source: [
-            `import { trustedReveal, type SecretValue } from '@kovojs/core';`,
+            `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core';`,
             `export function createPaymentClient(key: SecretValue<string>) {`,
-            `  const raw = trustedReveal(key, { justification: 'initialize payment SDK once at boot', method: 'arbitrary-fn', source: 'app.env.PAYMENT_API_KEY' });`,
+            `  const raw = revealSecret(key, DeclassifyPolicy.create({ door: 'revealSecret', ownerScope: 'application', purpose: 'credential-use' }));`,
             `  return new PaymentClient(raw);`,
             `}`,
           ].join('\n'),
@@ -1280,13 +1306,13 @@ export const save = mutation('cart/save', {
     expect(revealed).toMatchObject([
       {
         grade: 'audit',
-        justification: 'initialize payment SDK once at boot',
+        justification: 'credential-use:revealSecret:application',
         method: 'arbitrary-fn',
-        path: 'app.env.PAYMENT_API_KEY',
+        path: 'key',
         query: 'runtime',
         selectedSecret: true,
         site: 'payment.ts:3',
-        source: 'app.env.PAYMENT_API_KEY',
+        source: 'key',
       },
     ]);
 
@@ -1298,7 +1324,7 @@ export const save = mutation('cart/save', {
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(
-      'REVEAL grade=audit method=arbitrary-fn query=runtime path=app.env.PAYMENT_API_KEY site=payment.ts:3 source=app.env.PAYMENT_API_KEY selectedSecret=yes justification="initialize payment SDK once at boot"',
+      'REVEAL grade=audit method=arbitrary-fn query=runtime path=key site=payment.ts:3 source=key selectedSecret=yes justification="credential-use:revealSecret:application"',
     );
   });
 
@@ -1442,6 +1468,9 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
+      POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoff=exponential:1000..30000 maxFacts=2048 maxFieldBytes=4096 maxCanonicalBytes=262144
+      POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline
+      POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token
       CAPABILITY kind=authAdapterDb site=src/_kovo/app-runtime-db.ts:90 module=- target=src/auth.ts justification="Better Auth adapter owns session table writes before app session"
       CAPABILITY kind=crossOwnerRead site=app/admin.ts:12 module=- target=public.orders justification="admin support export across owners"
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
@@ -1509,6 +1538,9 @@ export const save = mutation('cart/save', {
       output: [
         'kovo-explain/v1',
         'CAPABILITIES',
+        'POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoff=exponential:1000..30000 maxFacts=2048 maxFieldBytes=4096 maxCanonicalBytes=262144',
+        'POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline',
+        'POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token',
         'CAPABILITY-CLOSURE',
         'CLOSED root=webhook:"billing" capability=network module=src/webhooks/billing.ts site=src/send.ts:3:1 path="webhook:billing -> src/send.ts -> package:raw-http" reason="package summary is absent"',
         'DOOR root=webhook:"billing" capability=database-driver module=src/webhooks/billing.ts site=src/db.ts:7:1 path="webhook:billing -> src/db.ts -> @kovojs/server/postgres" reason="framework-owned Postgres door"',
@@ -1519,6 +1551,28 @@ export const save = mutation('cart/save', {
         '',
       ].join('\n'),
     });
+  });
+
+  // SPEC §10.3: `kovo explain` reads a static graph, not a live server. It must expose the
+  // framework-owned external-Postgres lease contract without inventing a current lease verdict.
+  it('surfaces the Postgres posture-lease contract without claiming live state', async () => {
+    const runtimeContract = await import('../../server/src/postgres-posture-lease.js');
+    const result = kovoExplain({}, { capabilities: true });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain(
+      `ttlMs=${runtimeContract.POSTGRES_POSTURE_LEASE_TTL_MS} graceMs=0 renewBaseMs=${runtimeContract.POSTGRES_POSTURE_LEASE_RENEW_INTERVAL_MS}`,
+    );
+    expect(result.output).toContain(
+      `witnessTimeoutMs=${runtimeContract.POSTGRES_POSTURE_LEASE_WITNESS_TIMEOUT_MS} backoff=exponential:1000..30000 maxFacts=${runtimeContract.POSTGRES_POSTURE_LEASE_MAX_FACTS} maxFieldBytes=4096 maxCanonicalBytes=${runtimeContract.POSTGRES_POSTURE_LEASE_MAX_CANONICAL_BYTES}`,
+    );
+    expect(result.output).toContain(
+      'POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline',
+    );
+    expect(result.output).toContain(
+      'POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token',
+    );
+    expect(result.output).not.toMatch(/liveStatus=(?:fresh|renewing|shed)/);
   });
 
   it('prints the cookie downgrade audit table (--cookies)', () => {
@@ -1586,7 +1640,7 @@ export const save = mutation('cart/save', {
       'SINK source=app-document-TSX|inline-script-source|inline-style-source|font-preload-url|modulepreload-url|body-end-ui sink=document.shell.output',
     );
     expect(result.output).toContain(
-      'TRUST kind=trustedHtml site=app/document.tsx:12 source=cms.documentChrome owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
+      'TRUST kind=trustedHtml root=app/document.tsx:12 site=app/document.tsx:12 source=cms.documentChrome owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
     );
     expect(result.output).not.toContain('cms.page');
     expect(result.output).toContain('SUMMARY sinks=1 trustEscapes=1');
@@ -1713,7 +1767,7 @@ export const save = mutation('cart/save', {
       [
         'kovo-explain/v1',
         'TRUST',
-        'TRUST kind=trustedUrl site=app/link.tsx:3 source=partner.redirect owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
+        'TRUST kind=trustedUrl root=app/link.tsx:3 site=app/link.tsx:3 source=partner.redirect owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
         'SUMMARY total=1',
         '',
       ].join('\n'),

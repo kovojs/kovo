@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { accessLine, capabilityClosureLine, capabilityLine } from './graph-explain-format.js';
+import {
+  accessLine,
+  capabilityClosureLine,
+  capabilityLine,
+  diagnosticsForTouchGraph,
+} from './graph-explain-format.js';
 
 describe('graph explain formatters', () => {
   it('keeps access fact output stable', () => {
@@ -33,6 +38,28 @@ describe('graph explain formatters', () => {
     );
   });
 
+  it('prints the exact structured obligation and scanner-owned identity', () => {
+    expect(
+      capabilityLine({
+        kind: 'serverValue',
+        obligation: {
+          evidence: {
+            digest: `sha256:${'a'.repeat(64)}`,
+            kind: 'test',
+            reference: 'tests/authz/admin-role-grant',
+          },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'guards.role:admin', kind: 'guard-chain' },
+        },
+        site: 'app/admin.ts:8',
+        siteIdentity: 'app/admin.ts:120:420',
+        target: 'trustedAssign',
+      }),
+    ).toBe(
+      `CAPABILITY kind=serverValue site=app/admin.ts:8 module=- target=trustedAssign justification=- siteIdentity="app/admin.ts:120:420" obligation={"evidence":{"digest":"sha256:${'a'.repeat(64)}","kind":"test","reference":"tests/authz/admin-role-grant"},"invariant":"governed-write.authorized-principal","why":{"guard":"guards.role:admin","kind":"guard-chain"}}`,
+    );
+  });
+
   it('prints capability-closure provenance without hiding the failing edge', () => {
     expect(
       capabilityClosureLine({
@@ -49,5 +76,17 @@ describe('graph explain formatters', () => {
     ).toBe(
       'CLOSED root=webhook:"billing" capability=network module=src/routes/webhook.ts site=src/lib/send.ts:4:1 path="webhook:billing -> src/lib/send.ts -> package:raw-http" reason="package summary is absent"',
     );
+  });
+
+  it('fails closed when a tampered touch graph carries an unregistered diagnostic code', () => {
+    const unregisteredCode = `KV${999}`;
+    expect(() =>
+      diagnosticsForTouchGraph({
+        tampered: {
+          touches: [],
+          unresolved: [{ code: unregisteredCode, message: 'forged', site: 'forged.ts:1:1' }],
+        },
+      } as never),
+    ).toThrow(`Unregistered touch-graph diagnostic code: ${unregisteredCode}`);
   });
 });

@@ -18,10 +18,11 @@ import {
   securityWeakSetHas,
 } from './internal/security-witness-intrinsics.js';
 
-export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
+export type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from './diagnostics.js';
 export type { JsonValue } from './json.js';
 export {
   declareOffWire,
+  DeclassifyPolicy,
   drainSecretRevealAuditFacts,
   isRedacted,
   isSecret,
@@ -36,17 +37,19 @@ export {
   untrusted,
 } from './secret.js';
 export type {
+  DeclassifyDoorId,
+  DeclassifyOwnerScope,
+  DeclassifyPolicyOptions,
+  DeclassifyPurpose,
+  DeclassifyPurposeFor,
   DeclareOffWireOptions,
   PublishToClientOptions,
   Redacted,
   RedactedOptions,
   RedactedValue,
   Secret,
-  SecretRevealReason,
   SecretRevealAuditFact,
   SecretValue,
-  TrustedRevealMethod,
-  TrustedRevealOptions,
   TrustedRevealValue,
   Untrusted,
   UntrustedValue,
@@ -64,6 +67,9 @@ export type {
   S3CompatibleGetObjectInput,
   S3CompatibleGetObjectOutput,
   S3CompatibleHeadObjectInput,
+  S3CompatibleListedObject,
+  S3CompatibleListObjectsInput,
+  S3CompatibleListObjectsOutput,
   S3CompatibleObjectClient,
   S3CompatibleObjectMetadata,
   S3CompatiblePutObjectInput,
@@ -92,6 +98,7 @@ export type {
   HmacMultiSignature,
   HmacSecret,
   HmacSignatureEncoding,
+  HmacSignatureInspectionConfig,
   HmacSignatureOptions,
   HmacSignaturePayload,
   HmacSignaturePayloadContext,

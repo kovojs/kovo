@@ -227,6 +227,46 @@ facts side by side and name that status. They MUST also warn that the managed tr
 writes `kovo.role` while no generated RLS predicate reads it; session-role guard success is not SQL
 authorization. The engine's FORCE-RLS/effective-privilege closure remains the enforcement boundary.
 
+**Finite grant-transition model (normative).** Build MUST derive one grant graph from the same
+compiler-owned table-security manifest and mutation extraction that feed RLS and the touch graph; an
+app-authored second grant registry is forbidden. The modeled principal kind is the current
+request principal. Each `owner` table contributes an exact resource with
+`{delegate, owner, read, write}` rights, each `ownerVia` table contributes
+`{delegated-owner, read, write}` plus a `read`/`write` delegation edge from its parent resource, and
+each `authzPolicy` table contributes `{policy, read, write}`. `public` and `reference` tables do not
+become authorization resources. Every extracted mutation write, every exact `registry.tables`
+declaration, and every declared touch whose domain contains one of those resources MUST contribute
+a transition row; domain-level declarations conservatively select every authorization-bearing
+table in that domain.
+
+The decided fragment is deliberately small. An exact Drizzle `delete` from an `owner` or
+`ownerVia` resource, with no unresolved receiver/helper path for that mutation, has the successor
+right-set `∅`. The checker MUST enumerate the complete local powerset `P(R)` and verify
+`successor ⊆ predecessor` for every state. The bound is 64 states (`2^|R|`, currently at most 16),
+and exceeding it fails closed rather than sampling. Exact `insert` and `update` operations and an
+explicitly table-declared raw-SQL transition lie outside that proof and MUST appear as stable named
+escapes with `budget=1` and a retained review obligation. A custom `authzPolicy` does not establish
+positive-grant semantics, so even its exact deletion is not in the decided fragment. Any opaque
+helper/receiver flow, unresolved operation, authorization-bearing domain touch without an exact
+operation witness, or other unclassified write is `⊤`; `kovo check` MUST fail it with KV414 before
+production artifacts are emitted. `kovo explain --grants` MUST print the derived principals,
+resources, delegation edges, checked-state counts, `⊤` reasons, and named escape budget.
+
+**Attenuating delegation (normative).** `createDelegationAuthority` is only a bridge from rights an
+already-passed guard/RLS door established; it does not grant database authority and MUST NOT be
+accepted as a substitute for that door. It snapshots an exact nonempty finite `kind:resource` set,
+the acting identity, a revocation principal, and that principal's persistent epoch into a
+module-private framework receipt. `onBehalfOf` accepts only such a receipt, rechecks the authoritative
+epoch without a positive cache, and mints a child only when every requested right is a runtime member
+of the parent set. Structural casts and widened sets fail. The TypeScript subset relation is an
+authoring guardrail; the private receipt, runtime subset test, and epoch check own enforcement.
+
+The honest claim is only that, in the exact positive `owner`/`ownerVia` deletion fragment, the
+compiler-derived local right-set cannot grow, and that framework-receipted delegation cannot widen
+its parent set before the bound epoch changes. Kovo does not claim arbitrary `authzPolicy` meaning,
+audited escape safety, global HRU safety, or safety against an external schema writer. The live
+FORCE-RLS/effective-privilege closure remains the authorization enforcement boundary.
+
 **Engine-door completeness (normative).** Kovo may claim the storage engine is the sole authorization/confidentiality door only when the runtime itself holds no superuser/`BYPASSRLS` authority and cannot assume a privileged provision/admin role, and when a closure audit over the engine's actual grant graph proves that **every** object reachable by the app roles is one of: (i) a base table under `FORCE ROW LEVEL SECURITY` with a live `kovo` policy; (ii) a proven `security_invoker` view/function whose reachable base relations are themselves in that safe set; or (iii) a relation declared through the reviewed public escape, `declarePublicRelation(...)`, and surfaced as a `publicRelation` row in `kovo explain --capabilities`. The audit MUST ask the engine's finest-granularity effective-privilege oracle instead of lossy grant views or direct-grant rows: table and column reachability both count for relations, `PUBLIC` and role membership count for every privilege decision, sequence reachability is audited separately from relation reachability, and `SECURITY DEFINER` routines are scanned across all non-system schemas. Reachable objects that cannot enforce RLS, including materialized views, foreign tables, unsupported relation kinds, non-allowlisted sequences, and reachable `SECURITY DEFINER` routines, MUST fail closed. App roles MUST also hold no unexpected privilege on other ACL-bearing catalog objects or default privileges that would create future reachable objects outside the audited relation/routine/sequence set; such grants are refused rather than ignored. Build-time lints and source enumerations remain defense-in-depth only — never the thing the authorization/confidentiality guarantee rests on.
 
 **Production database driver floor (normative).** In-process PGlite is a dev/test-only,
@@ -303,6 +343,54 @@ Two corollaries are mandatory:
   a runtime box, a reconstructed carrier, or a framework-owned sink that is named in the proof
   inventory and hostile-value tests.
 
+#### Principal-indexed label lattice and bounded non-interference (normative)
+
+Kovo's data-plane obligations use one product label `L = Conf × Integ × Owner`. This is a statement
+about the statically analyzable fragment and the named framework runtime doors in this specification,
+not arbitrary JavaScript, termination, timing, resource use, or code behind an audited escape.
+
+- `Conf = public | secret`, ordered `public ⊑ secret`; join selects `secret` when either input is
+  secret.
+- `Integ = literal | server | input | unknown`, ordered from least to greatest uncertainty in that
+  sequence. Its join is the least upper bound. This is the normative kind-level meaning of
+  `joinSymbolProvenance`: `unknown` dominates, then `input`, then `server`, then `literal`. Equal
+  input/server paths remain precise; different paths join to the same kind with an unknown path.
+- `Owner = public | principal(p) | framework`. `public` is bottom, `framework` is top, equal
+  principal labels join to themselves, and labels for two different principals join to `framework`.
+  The product join is componentwise. `framework` means that no ordinary principal inherits
+  visibility or write authority merely because differently-owned values were combined.
+
+The following clause IDs are stable machine-readable obligations consumed by
+`check:label-clause-map`:
+
+- **NI-C1 — Confidentiality confinement.** A `secret` value cannot influence a public/client/log
+  observation except through an explicit framework-owned reveal or redaction door recorded as an
+  audited declassification.
+- **NI-I1 — Integrity confinement.** An `input` or `unknown` value cannot influence a governed,
+  credential, authorization, or other security-sensitive sink that admits only `literal`/`server`
+  provenance unless a framework-owned validator or guard reconstructs and re-witnesses a new fact.
+- **NI-I2 — Semantic integrity and freshness.** Opaque reads must declare enough source and shape
+  facts to preserve the query's freshness and wire contract; a source that cannot participate in
+  invalidation cannot silently enter a live query read set.
+- **NI-O1 — Principal isolation.** A value or effect labeled `principal(q)` is not observable by or
+  writable for principal `p` when `p ≠ q`; row selection and engine policy must preserve that owner
+  label at every supported authorization door.
+- **NI-E1 — Audited exception visibility.** Any deliberate exception to NI-C1, NI-I1, NI-I2, or
+  NI-O1 must pass a named escape with stable provenance, source span, and obligation text and remain
+  visible to `kovo explain`; missing or unrecordable escape evidence fails closed.
+
+**Termination-insensitive statement.** For any principal `p`, take two supported executions that
+start from equal `p`-observable state and differ only in values whose confidentiality/owner labels
+make them unobservable to `p`. If both executions terminate, their `p`-observable framework outputs
+and governed/authorization effects are equal. Likewise, changing only `input`/`unknown` values does
+not change a sink protected by NI-I1 unless a named validator, guard, or audited exception admits the
+change. This statement excludes termination, timing, allocation, arbitrary app effects, unanalyzed
+JavaScript, and the truth of author assertions; those are retained obligations, not implied claims.
+
+The diagnostic clause denominator is exactly KV410, KV411, KV414, KV426, KV435, KV438, and KV439.
+Their mapping is versioned in `security/label-clause-map.json`; a missing, duplicate, unknown, or
+class-relabelled row is a root-check failure.
+
 **C10 — security sets are closures or allowlists, never subsets or denylists (normative).** Any set
 used for an authorization, confidentiality, or privileged-execution decision MUST be computed from
 the boundary relation it represents: a reachability set is the complete closure over the relevant
@@ -345,9 +433,10 @@ therefore fails `pnpm run check`.
 
 Every C9 row MUST also classify `keyScoping` as exactly one of
 `database-principal-policy`, `runtime-opaque-scoped-key`, or `not-stateful-keyed`. The database driver
-row owns the first posture through its complete role/RLS privilege graph. Blob/file storage and
-durable-task coalescing own the second posture and MUST authenticate the §6.6 `ScopedKey` runtime
-witness before namespace use. All remaining current rows are explicitly `not-stateful-keyed`.
+row owns the first posture through its complete role/RLS privilege graph. Blob/file storage, derived
+vector/RAG persistence, and durable-task coalescing own the second posture and MUST authenticate or
+reconstruct from the §6.6 `ScopedKey` runtime witness before namespace use. All remaining current
+rows are explicitly `not-stateful-keyed`.
 Missing, unknown, or downgraded classifications fail `check:c9-sink-inventory`; adding a new
 app-addressable stateful sink therefore cannot omit an owner-provenance decision silently.
 
@@ -359,23 +448,30 @@ gate failure. This assignment ties terminal-effect evidence to the real sink own
 the root census and unresolved local-call summary edge visible; they do not assert a runtime effect.
 The generated operation manifest is never itself the runtime door.
 
-| Sink                                   | Owner                                  | Mechanism   | Key scoping                 | Sole door                                                                                                                   | Root proof gate                             | Hostile-value evidence                                                                                       |
-| -------------------------------------- | -------------------------------------- | ----------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| DB driver statement                    | `@kovojs/server/managed-db`            | reconstruct | `database-principal-policy` | Immutable managed-statement snapshot plus engine policy                                                                     | `pnpm run check:single-choke`               | `packages/server/src/managed-db.test.ts`                                                                     |
-| HTTP response body                     | `@kovojs/server/wire-output`           | reconstruct | `not-stateful-keyed`        | Typed wire/body envelope renderers                                                                                          | `pnpm run check:wire-output-boundary`       | `packages/server/src/wire-html.test.ts`                                                                      |
-| HTTP response headers                  | `@kovojs/server/response-finalization` | own         | `not-stateful-keyed`        | App-header classifiers plus final raw/structured adapter reconstruction                                                     | `pnpm run check:wire-output-boundary`       | `packages/server/src/response-posture.test.ts`                                                               |
-| Redirect URL                           | `@kovojs/server/response-posture`      | reconstruct | `not-stateful-keyed`        | Same-origin path normalization before `Location` finalization                                                               | `pnpm run check:wire-output-boundary`       | `packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts`                             |
-| `Set-Cookie`                           | `@kovojs/server/cookies`               | own         | `not-stateful-keyed`        | Typed cookie builder and serializer                                                                                         | `pnpm run check:wire-output-boundary`       | `packages/server/src/cookies.test.ts`                                                                        |
-| Blob/file write                        | `@kovojs/core/storage`                 | own         | `runtime-opaque-scoped-key` | ScopedKey witness/frame namespace plus static-export path containment                                                       | `pnpm run check:filesystem-boundary`        | `packages/core/src/scoped-key.test.ts`; `packages/core/src/storage.test.ts`; static-export containment       |
-| Durable-task payload                   | `@kovojs/server/task-runner`           | own         | `runtime-opaque-scoped-key` | ScopedKey frame plus queue envelope and redaction-aware observability views                                                 | `pnpm run check:security-test-builds`       | `packages/server/src/task-queue.test.ts`; `packages/server/src/task-observability.test.ts`                   |
-| Request method/authority/scheme/target | `@kovojs/server/request-ingress`       | reconstruct | `not-stateful-keyed`        | Explicit transport-source snapshot plus one finite classifier, immutable prepared verdict, and pre-filesystem platform gate | `pnpm run check:security-classifier-corpus` | `packages/server/src/request-ingress-policy.test.ts`; HTTP/1/H2/Vercel/Fetch and generated middleware parity |
-| Webhook payload                        | `@kovojs/server/webhook`               | own         | `not-stateful-keyed`        | Verifier-before-parse plus replay-scoped dispatch                                                                           | `pnpm run check:security-test-builds`       | `packages/server/src/webhook.test.ts`                                                                        |
-| HTML/document/style render output      | `@kovojs/compiler/output-context`      | reconstruct | `not-stateful-keyed`        | Contextual render pipeline or explicit trusted-output escape                                                                | `pnpm run check:sink-policy`                | `packages/browser/src/security-output.test.ts`                                                               |
-| Log/error output                       | `@kovojs/core/secret`                  | box         | `not-stateful-keyed`        | Non-coercible secret/redacted boxes plus normalized error emitters                                                          | `pnpm run check:tcb-boundary`               | `packages/core/src/secret.test.ts`; `packages/server/src/task-observability.test.ts`                         |
-| Outbound egress request                | `@kovojs/server/egress`                | own         | `not-stateful-keyed`        | Declared-origin, per-hop DNS/address classification and selected-address transport choke                                    | `pnpm run check:egress-boundary`            | `packages/server/src/egress.test.ts`; `packages/server/src/egress-redirect.test.ts`                          |
-| Authorization principal/data access    | `@kovojs/server/postgres-authz`        | own         | `not-stateful-keyed`        | Pinned principal plus least-privilege Postgres role/RLS/effective-privilege-graph closure                                   | `pnpm run test:authz-paranoid`              | `packages/server/src/postgres-authz.test.ts`; served paranoid production-artifact matrix                     |
-| Better Auth credential/non-egress      | `@kovojs/better-auth/credential-gate`  | own         | `not-stateful-keyed`        | Exact registered consumer, validated result, and same-consumer one-shot result opening                                      | `pnpm run check:security-classifier-corpus` | `packages/better-auth/src/internal.trusted-plaintext.test.ts`                                                |
-| Dynamic module/process execution       | `@kovojs/compiler/capability-closure`  | own         | `not-stateful-keyed`        | Compiler-owned immutable client-module registry plus reviewed build/runtime capability doors                                | `pnpm run check:sink-policy`                | `packages/browser/src/handlers.test.ts`; `packages/compiler/src/conformance-compat.test.ts`                  |
+| Sink                                   | Owner                                  | Mechanism   | Key scoping                 | Sole door                                                                                                                                         | Root proof gate                             | Hostile-value evidence                                                                                                                                                     |
+| -------------------------------------- | -------------------------------------- | ----------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DB driver statement                    | `@kovojs/server/managed-db`            | reconstruct | `database-principal-policy` | Immutable managed-statement snapshot plus engine policy                                                                                           | `pnpm run check:single-choke`               | `packages/server/src/managed-db.test.ts`                                                                                                                                   |
+| HTTP response body                     | `@kovojs/server/wire-output`           | reconstruct | `not-stateful-keyed`        | Typed wire/body envelope renderers                                                                                                                | `pnpm run check:wire-output-boundary`       | `packages/server/src/wire-html.test.ts`                                                                                                                                    |
+| HTTP response headers                  | `@kovojs/server/response-finalization` | own         | `not-stateful-keyed`        | App-header classifiers plus final raw/structured adapter reconstruction                                                                           | `pnpm run check:wire-output-boundary`       | `packages/server/src/response-posture.test.ts`                                                                                                                             |
+| Redirect URL                           | `@kovojs/server/response-posture`      | reconstruct | `not-stateful-keyed`        | Same-origin path normalization before `Location` finalization                                                                                     | `pnpm run check:wire-output-boundary`       | `packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts`                                                                                           |
+| `Set-Cookie`                           | `@kovojs/server/cookies`               | own         | `not-stateful-keyed`        | Typed cookie builder and serializer                                                                                                               | `pnpm run check:wire-output-boundary`       | `packages/server/src/cookies.test.ts`                                                                                                                                      |
+| Blob/file and derived-dataset write    | `@kovojs/core/storage`                 | own         | `runtime-opaque-scoped-key` | ScopedKey witness/frame namespace; exact `derived()` reconstructs and hashes the complete request-principal frame; static-export path containment | `pnpm run check:filesystem-boundary`        | `packages/core/src/scoped-key.test.ts`; `packages/compiler/src/derived-dataset-security.test.ts`; `packages/server/src/derived-dataset.test.ts`; static-export containment |
+| Durable-task payload                   | `@kovojs/server/task-runner`           | own         | `runtime-opaque-scoped-key` | ScopedKey frame plus queue envelope and redaction-aware observability views                                                                       | `pnpm run check:security-test-builds`       | `packages/server/src/task-queue.test.ts`; `packages/server/src/task-observability.test.ts`                                                                                 |
+| Request method/authority/scheme/target | `@kovojs/server/request-ingress`       | reconstruct | `not-stateful-keyed`        | Explicit transport-source snapshot plus one finite classifier, immutable prepared verdict, and pre-filesystem platform gate                       | `pnpm run check:security-classifier-corpus` | `packages/server/src/request-ingress-policy.test.ts`; HTTP/1/H2/Vercel/Fetch and generated middleware parity                                                               |
+| Webhook payload                        | `@kovojs/server/webhook`               | own         | `not-stateful-keyed`        | Verifier-before-parse plus replay-scoped dispatch                                                                                                 | `pnpm run check:security-test-builds`       | `packages/server/src/webhook.test.ts`                                                                                                                                      |
+| HTML/document/style render output      | `@kovojs/compiler/output-context`      | reconstruct | `not-stateful-keyed`        | Contextual render pipeline or explicit trusted-output escape                                                                                      | `pnpm run check:sink-policy`                | `packages/browser/src/security-output.test.ts`                                                                                                                             |
+| Log/error output                       | `@kovojs/core/secret`                  | box         | `not-stateful-keyed`        | Non-coercible secret/redacted boxes plus normalized error emitters                                                                                | `pnpm run check:tcb-boundary`               | `packages/core/src/secret.test.ts`; `packages/server/src/task-observability.test.ts`                                                                                       |
+| Outbound egress request                | `@kovojs/server/egress`                | own         | `not-stateful-keyed`        | Declared-origin, per-hop DNS/address classification and selected-address transport choke                                                          | `pnpm run check:egress-boundary`            | `packages/server/src/egress.test.ts`; `packages/server/src/egress-redirect.test.ts`                                                                                        |
+| Authorization principal/data access    | `@kovojs/server/postgres-authz`        | own         | `not-stateful-keyed`        | Pinned principal plus least-privilege Postgres role/RLS/effective-privilege-graph closure                                                         | `pnpm run test:authz-paranoid`              | `packages/server/src/postgres-authz.test.ts`; served paranoid production-artifact matrix                                                                                   |
+| Better Auth credential/non-egress      | `@kovojs/better-auth/credential-gate`  | own         | `not-stateful-keyed`        | Exact registered consumer, validated result, and same-consumer one-shot result opening                                                            | `pnpm run check:security-classifier-corpus` | `packages/better-auth/src/internal.trusted-plaintext.test.ts`                                                                                                              |
+| Dynamic module/process execution       | `@kovojs/compiler/capability-closure`  | own         | `not-stateful-keyed`        | Compiler-owned immutable client-module registry plus reviewed build/runtime capability doors                                                      | `pnpm run check:sink-policy`                | `packages/browser/src/handlers.test.ts`; `packages/compiler/src/conformance-compat.test.ts`                                                                                |
+
+The executable inventory retains the stable sink key `blob/file write` for this C9 row and maps
+both `file.storage.static-export` and `data.derived.persistence` census families to that one
+storage-operation owner. `server.storage.read` and `server.storage.write` therefore still have
+exactly one finite-operation owner. The derived family adds the KV452 compiler proof plus runtime
+request-principal namespace reconstruction described in §6.6; it does not create a duplicate
+operation vocabulary or claim that an external vector service faithfully enforces its namespace.
 
 **External Postgres role topology is a manifest, not environment inference.** The runtime config
 MUST resolve reader, writer, admin, and system roles into one topology that records whether Kovo
@@ -389,6 +485,48 @@ assume through the `MEMBER` closure MUST have only the classified minimal-safe r
 must be a member of only framework-owned roles plus an explicit benign don't-care set; unknown
 role-attribute columns and non-allowlisted `pg_*` predefined-role memberships (C10/C11) both fail
 closed until classified.
+
+**External Postgres posture lease (normative).** The least-privilege result above is not a
+boot-only fact. Before an external-Postgres runtime becomes ready, Kovo MUST establish an immutable
+boot baseline from a versioned, deterministic SHA-256 digest of a bounded authoritative witness.
+The witness MUST cover the runtime identity, classified role attributes, role memberships and the
+complete assumable-role closure, protected policy/grant facts, the migration-ledger head, and the
+monotone posture epoch. Canonical facts are sorted by kind, key, and value. One witness accepts at
+most 2,048 facts, 4 KiB per fact field, and 256 KiB of canonical evidence; a field or total exceeding
+its bound fails closed. The digest MUST be stable across unchanged boots and MUST change when one covered grant,
+membership, policy, identity, ledger head, or epoch changes. The random pooler probe and physical
+backend PID prove the connection property below but are deliberately excluded from the stable
+digest.
+
+The lease TTL is 120 seconds with zero serve-degraded grace. Kovo renews from the authoritative
+catalog on a 30-second base interval with one process-stable plus-or-minus 10% jitter and a
+10-second witness timeout. PostgreSQL SQLSTATE `42501` requests the same renewal. Scheduled,
+permission-triggered, and request-admission renewals MUST share one in-flight promise; a caller
+cannot create one catalog scan per error or request. A failed witness, timeout, expired lease, or
+digest different from the immutable boot baseline trips KV433 app load-shed immediately. Kovo MUST
+reject new database-capability admissions, invoke the pool/session drain exactly once for that
+outage transition, and await that drain before it may mark the lease fresh again. This drain retires
+pooled sessions; it is not a claim that JavaScript can cancel SQL already issued to PostgreSQL.
+Failed recovery attempts use exponential backoff starting at 1 second and capped at 30 seconds.
+Only a successful authoritative witness whose digest exactly matches the boot baseline restores
+service. An intentional posture change therefore requires the operator to finish migration or
+provisioning and restart the process to authorize a new baseline; transient failures may recover in
+place when the old baseline is restored.
+
+Every witness MUST mechanize the pooler assumption inside one transaction. Statement one writes a
+random transaction-local frame with `set_config(..., true)` and reads that frame plus
+`pg_backend_pid()`, `current_database()`, `current_user`, and `session_user`; statement two reads the
+same fields again. A changed backend PID, lost frame, database, current user, or session user fails
+closed. This admits direct pools and transaction-preserving poolers, not statement-mode poolers.
+
+Freshness binds both the checksum-validated migration-ledger head and a monotone posture epoch that
+`kovo db migrate` reasserts with the expected ledger state. An epoch may advance but MUST NOT be
+silently decreased or reused. This detects a restore that regresses relative to an already-running
+lease or a deployment that re-runs migration; it does not let a brand-new process distinguish a
+self-consistent stale backup without an external expected head/epoch. `kovo explain --capabilities`
+MUST print this static external-Postgres contract, including its bounds and recovery rules. Because
+that command reads a build graph rather than a live process, it MUST label current status, digest,
+and expiry `not-observed` and MUST NOT imply that external Postgres is the deployed driver.
 
 **Split Postgres authority is bound to one live writable database (normative).** A runtime identity
 witness and a privileged posture audit are one proof only when they address the same logical
@@ -449,18 +587,103 @@ write propagation through FK referential actions, partition/inheritance routing,
 redirects. Each such attached code path MUST resolve to the same safe object set above or fail
 closed.
 
+**Principal-epoch revocation and mutation completeness (normative).** The app's
+`principalEpochStore` is the §6.6 authoritative identity-lifecycle capability. Production apps that
+combine a `sessionProvider` with mutations MUST use the module-private durable provenance exposed by
+`createPostgresAppRuntimeDb().principalEpochStore`; a missing, memory, custom structural, or
+global-symbol lookalike fails boot. Postgres persists one SHA-256 principal commitment rather than a
+raw principal id, with strictly monotone epoch/change time, permanent tombstone status, a finite
+last-reason constraint, and no ordinary reader/writer/admin/runtime-login table privileges. The
+system role receives only `SELECT`, `INSERT`, and `UPDATE`. The SQLite/memory implementation is
+development/test-only and preserves the same state semantics for one process lifetime.
+
+An authenticated mutation captures an active authoritative epoch after parse and guards, then
+rechecks that exact epoch inside the transaction callback after handler work and before the callback
+may request commit. A concurrent password/role/tenant/admin/provider/deletion transition therefore
+throws through the rollback path. A mutation that itself changes privilege MUST declare one exact
+`principalEpoch` registry entry: `{ action: 'advance' | 'tombstone', principal(input, request),
+reason }`, where `reason` belongs to the matching finite union. Kovo executes that declared
+transition after handler success but before transaction-callback success. Only the exact current
+request receives a module-private old-to-new receipt permitting its response/replay settlement
+under the now-retired prior epoch; any different or later transition closes settlement. The
+mutation registry is a completeness ledger, not semantic inference from table or mutation names.
+An epoch transition may commit before a later app-transaction COMMIT failure; that conservative
+case over-revokes, while an epoch failure prevents app transaction commit. Kovo does not claim
+cross-database atomic commit.
+
+Provider and out-of-band paths use `initializePrincipalEpoch`, `advancePrincipalEpoch`, and
+`tombstonePrincipalEpoch`. Initialization atomically creates active epoch 1 or returns the existing
+row unchanged and cannot revive a tombstone. Better Auth's first-party binding invokes it before an
+authenticated provider identity reaches app code. Password changes, role/tenant changes,
+administrative actions, external-provider revocation, and deletion MUST advance or tombstone the
+same row even when no Kovo mutation initiated the event. Every current lookup is authoritative,
+uncached, and limited to 1,000 ms. Missing/malformed rows, provider errors, timeout, stale epoch, and
+tombstone all fail closed. This yields zero positive-cache staleness; only one bounded in-flight
+authoritative read/action race remains.
+
+**Principal erasure receipts (normative).** `erasePrincipal(principal, options)` is the public
+framework door for erasing Kovo-owned residue. It MUST accept only an exact
+`createPostgresAppRuntimeDb()` runtime, an exact framework `SigningKeyRing`, and a non-empty bounded
+list containing every storage adapter wired by the app. It MUST permanently tombstone the
+principal epoch before deletion; erase principal-indexed `_kovo_jobs` rows, mutation replay rows,
+and objects from every supplied storage adapter; then independently re-enumerate all three sink
+families. Any residue, malformed index carrier, incomplete pagination, unrecognized filesystem
+generation, or non-enumerable structural storage lookalike MUST fail without a receipt. A receipt
+is a signed point-in-time absence proof over precisely the supplied adapters and exact app runtime,
+not a promise to recall external egress, browser cookies, omitted/derived third-party adapters, or
+future writes by arbitrary app code. The receipt contains a one-way principal commitment, never the
+raw principal, and is signed only through the fixed `principal-erasure-receipt` crypto purpose.
+
+Every durable task scheduled from a proven request MUST persist that principal in a separately
+indexed `_kovo_jobs.principal` column and propagate it to child jobs. Every durable mutation replay
+row admitted from a proven request principal MUST persist a separately indexed, one-way
+`principal_index`; mutation rows without a proven principal plus webhook and capability rows MUST
+carry `NULL`. This replay column is non-authoritative and additive: it exists only for erasure and
+reconstructive row validation, MUST NOT enter `mutationReplayScope()`, the canonical replay
+`ScopedKey`, replay authorization, or uniqueness composition, and a row/index mismatch fails
+closed. A pre-index task ledger containing rows or a pre-index replay ledger containing mutation
+rows MUST require explicit operator reconciliation and fail provisioning rather than silently
+claiming that legacy residue is enumerable. Memory, filesystem, and S3-compatible storage
+constructors retain an internal enumerable authority without adding list methods to the app-facing
+`StorageCapability`. Filesystem sidecars and S3 object metadata MUST reconstruct an exact
+`ScopedKey` whose digest matches the physical object identity; S3 listing MUST be bounded, dense,
+duplicate-free, and completely paginated.
+
+The credential-door census is exact: principal-scoped capability URL mint/verify plus mutation
+replay-receipt reservation, response release, handler admission, in-transaction completion, and
+settlement are applicable, while the exactly-once adapter continuation is inapplicable because it
+cannot outlive its call frame. Capability v4 signs the epoch and checks it before replay burn/storage
+read (§9.1). Mutation reservation appends the captured epoch to the already principal-bound
+canonical scope. Every listed verifier rechecks authoritative freshness. A `Kovo-Idem` issued before the current
+`changedAtMs` is a conflict before handler work; equality is accepted only for epoch-1 identity
+initialization and is closed for every later revocation epoch because millisecond ordering is
+unknowable. Expiry remains defense-in-depth, never a substitute for freshness.
+
 **Request lifecycle (normative):**
 
 ```
-(pre-dispatch shell: max-body-size → 413 · coarse per-IP/global rate → 429 — §9.5)
-CSRF validation → replay reservation by (principal, CSRF rotation binding, derived mutation identity, idem-token) → parse+coerce input (schema)
-→ guard chain → BEGIN tx → handler (receives a transaction-scoped db whose public type hides raw transaction openers)
-→ COMMIT (settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
+(pre-dispatch shell: max-body-size → 413 · coarse per-IP/global rate → 429
+ · app occupancy → 503 · finite deadline capability — §9.5)
+CSRF validation → parse+coerce input (schema) → guard chain
+→ capture authoritative principal epoch and reserve by (principal, epoch, CSRF rotation binding, derived mutation identity, idem-token)
+→ bind handler admission to that exact reservation epoch → BEGIN tx → handler (receives a transaction-scoped db whose public type hides raw transaction openers)
+→ declared privilege transition, epoch freshness, and deadline checkpoints → COMMIT (recheck epoch, settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
 → render <kovo-query>/<kovo-fragment> → respond
-                    ⇘ on fail(): ROLLBACK → typed error fragment, 422
+                    ⇘ on fail() or pre-commit deadline: ROLLBACK → abort replay reservation
+                    ⇘ deadline after possible COMMIT: preserve replay truth → discard response only
 ```
 
-This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ CSRF session/rotation binding ∧ source-derived mutation identity ∧ idem-token), using canonical length framing for each identity component, so a replay can only ever return to the same principal that produced it even when an app supplies a shared rotation id. Session/rotation ids, independently resolved principals, anonymous-CSRF secrets, and mutation identities are each capped at 1,024 JavaScript code units before composition. A framework lifecycle binding embeds its pinned principal exactly once and replay rejects a later mismatch rather than appending duplicate identity. At those maxima, the canonical framework CSRF binding is 2,124 code units, the enhanced raw replay scope is 3,158, and the `nojs:` scope is 3,163 — all below the durable store's 4,096-code-unit raw-scope ceiling.
+The request deadline is a transaction-door capability, not a claim that JavaScript or a database
+driver can undo committed work. The framework checks it before opening transaction work and again
+inside the transaction callback after the mutation handler. Cooperative expiry at either checkpoint
+throws before callback success, drives the transaction's rollback path, and invokes the replay
+reservation `abort` hook because no successful callback requested commit. A timeout while an
+adapter is committing is outcome-ambiguous: Kovo MUST preserve the pending replay claim. Once commit
+is known to have succeeded, the durable settlement remains authoritative even if the request
+deadline then expires; Kovo may discard the late wire response, but MUST NOT call that a rollback,
+erase replay truth, or execute the mutation again on retry.
+
+This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ principal epoch ∧ CSRF session/rotation binding ∧ source-derived mutation identity ∧ idem-token), using canonical length framing for each identity component, so a replay can only ever return to the same principal and epoch that produced it even when an app supplies a shared rotation id. Session/rotation ids, independently resolved principals, anonymous-CSRF secrets, and mutation identities are each capped at 1,024 JavaScript code units before composition. A framework lifecycle binding embeds its pinned principal exactly once and replay rejects a later mismatch rather than appending duplicate identity. The bounded epoch suffix is appended only after the existing principal-bound scope is established; the complete raw scope MUST remain below the durable store's 4,096-code-unit ceiling.
 
 Every mutation replay-store call MUST carry the runtime-witnessed canonical §6.6 system
 `ScopedKey` under the finite `mutation-replay` posture. Its app-key is the exact injective length
@@ -470,8 +693,8 @@ The volatile store keys its map by the complete frame. The durable Postgres stor
 complete frame into its physical replay namespace before SQL; hashing the raw scope and token as
 independent authority is insufficient. Custom development/test stores receive the witnessed key
 as their first argument through the same validating snapshot door. This registered composite
-posture preserves the maximum 3,158-code-unit enhanced scope plus the canonical 49-code-unit idem
-token while keeping the outer frame within 4,096 code units. Public/principal keys and every other
+posture preserves the bounded enhanced scope plus the canonical 49-code-unit idem token and finite
+epoch suffix while keeping the outer frame within 4,096 code units. Public/principal keys and every other
 system posture retain the ordinary 1,024-code-unit app-key bound.
 
 The handler `request.db` type is a defense-in-depth authoring guardrail, not the security proof:
@@ -484,13 +707,48 @@ inside a mutation handler is not a mutation-specific type or KV-gate error; it i
 uniform outbound-egress floor (§6.6). Durable tasks (§9.6) are the framework primitive for
 retryable/idempotent after-commit effects, not the only syntactically legal place to call `fetch`.
 
-**Replay is an atomic reservation, not a lookup (normative).** The replay step MUST atomically claim its complete replay identity before executing a write — an `INSERT … ON CONFLICT` against the replay store (or an equivalent unique-key claim) inside the same serialization boundary that the commit settles. A request that wins the claim proceeds; a concurrent or sequential request carrying the same identity MUST block on the in-flight reservation and then replay the settled response, never re-execute the handler. For browser mutations, the identity is `(principal, CSRF session/rotation binding, source-derived mutation identity, idem-token)` under canonical length framing, and the claim occurs before the guard chain. The store is scoped to the current principal and validated CSRF binding (a different `req.session` identity or credential rotation never replays a prior principal's response) and to the specific mutation, so an idem-token reused across mutations cannot cross-replay. For `webhook()`, the identity is the source-derived webhook scope plus the canonical authenticated provider-event facts from §9.1; its claim occurs after verify, loose parse, and temporal validation but before the handler. The provider key is the unique lookup key, and a live row for that key whose stored `occurredAtMs` or `expiresAtMs` differs from the supplied canonical identity is an integrity conflict, not a replay hit and not a second admissible event. These rules cover the enhanced and no-JS `mutation()` lifecycle, `webhook()`, and the streaming path, so concurrency, not merely strictly sequential retries, is deduplicated.
+**Replay is an atomic reservation, not a lookup (normative).** The replay step MUST atomically claim its complete replay identity before executing a write — an `INSERT … ON CONFLICT` against the replay store (or an equivalent unique-key claim) inside the same serialization boundary that the commit settles. A request that wins the claim proceeds; a concurrent or sequential request carrying the same identity MUST block on the in-flight reservation and then replay the settled response, never re-execute the handler. For browser mutations, the identity is `(principal, principal epoch, CSRF session/rotation binding, source-derived mutation identity, idem-token)` under canonical length framing, and the claim occurs after parse/coerce and the current guard chain but before handler work. The store is scoped to the current principal epoch and validated CSRF binding (a different `req.session` identity, credential rotation, or revocation epoch never replays a prior response) and to the specific mutation, so an idem-token reused across mutations cannot cross-replay. For `webhook()`, the identity is the source-derived webhook scope plus the canonical authenticated provider-event facts from §9.1; its claim occurs after verify, loose parse, and temporal validation but before the handler. The provider key is the unique lookup key, and a live row for that key whose stored `occurredAtMs` or `expiresAtMs` differs from the supplied canonical identity is an integrity conflict, not a replay hit and not a second admissible event. These rules cover the enhanced and no-JS `mutation()` lifecycle, `webhook()`, and the streaming path, so concurrency, not merely strictly sequential retries, is deduplicated.
 
 **Durable replay storage is bounded and refuse-never-evict (normative).** The shipped Postgres store gives mutation and webhook pending truth separate, database-enforced admission pools of 1,000 claims each. Only a pending claim owns a unique numbered slot, so concurrent replicas cannot race above the in-flight ceiling; successful settlement atomically clears its slot while retaining the committed row. At pending capacity, an existing identity still joins its in-flight claim or replays committed truth, while unseen work is refused before its handler runs (the mutation 429 / webhook retry outcome). No pending claim is evicted merely to admit new work. Aborting a pre-commit reservation or the explicit generation-fenced operator reconciliation path releases its slot.
 
 Pending truth never expires or loses its slot automatically, because the application transaction may already have committed. Committed mutation truth has a canonical token-mint horizon of 24 hours; committed webhook truth has the authenticated event horizon from §9.1, `expiresAtMs = occurredAtMs + 30 days`. At either exact persisted expiry, committed truth becomes eligible for bounded batched deletion; expiry does not slide on lookup or replay. Fresh admission MUST perform eligible committed cleanup before applying its bounded-retention refusal and MUST compare the supplied expiry against the store's current clock atomically with reservation, so request latency cannot admit already-stale work. Once cleanup reclaims committed truth, the store MUST advance a monotonic `reclaimedThroughMs` high-water mark and reject fresh reserve or settlement with `expiresAtMs <= reclaimedThroughMs`, even if the wall clock later moves backward; durable storage persists this watermark, while a volatile development/test store guarantees it only for that store lifetime. Settlement performs the same current-clock and watermark checks; if the horizon elapsed after reservation, it leaves the reservation pending/fail-closed with its slot for reconciliation rather than publishing committed truth that the next cleanup could delete and re-execute. The same identity key may be admitted only after its prior committed row has actually been removed; while a pending or unexpired committed row exists, mismatched canonical facts conflict. The request path MUST NOT apply a receipt-time TTL, slide the deadline, evict the oldest row, or retire pending ambiguity. Volatile and durable stores implement the same temporal and conflict lifecycle, although a volatile store may additionally cap its total retained entries.
 
-One committed snapshot is additionally limited to 1,048,576 UTF-16LE body bytes and 65,536 UTF-8 header bytes. Oversized settlement stores no oversized bytes and leaves the already-claimed key pending/fail-closed, so a retry cannot repeat a write whose application transaction may have committed; operator reconciliation must first establish the application outcome. The schema posture audit proves the exact non-deferrable `(surface, scope, idem)` primary key, nullable pending-slot column, 1..1,000 slot constraint, unique per-surface pending-slot index, canonical mint/occurrence/expiry columns and constraints, persisted per-surface reclamation watermark, response-byte constraint, and exact replay-table ACL before production serves. Ordinary app/runtime roles MUST have neither table-level nor column-level replay privileges; only the isolated system role receives the exact `SELECT, INSERT, UPDATE, DELETE` set. Provisioning repairs missing canonical identity constraints, revokes stray table/column grants, and fails closed if duplicate or temporally ambiguous legacy truth prevents repair.
+One committed snapshot is additionally limited to 1,048,576 UTF-16LE body bytes and 65,536 UTF-8 header bytes. Oversized settlement stores no oversized bytes and leaves the already-claimed key pending/fail-closed, so a retry cannot repeat a write whose application transaction may have committed; operator reconciliation must first establish the application outcome. The schema posture audit proves the exact non-deferrable `(surface, scope, idem)` primary key, nullable pending-slot column, 1..1,000 slot constraint, unique per-surface pending-slot index, canonical mint/occurrence/expiry columns and constraints, the nullable mutation-only principal erasure index and partial index, persisted per-surface reclamation watermark, response-byte constraint, and exact replay-table ACL before production serves. Ordinary app/runtime roles MUST have neither table-level nor column-level replay privileges; only the isolated system role receives the exact `SELECT, INSERT, UPDATE, DELETE` set. Provisioning repairs missing canonical identity constraints, revokes stray table/column grants, and fails closed if duplicate or temporally ambiguous legacy truth prevents repair.
+
+<!-- kovo-model-boundary:replay-reservation/v1 -->
+
+**Bounded replay-model honesty boundary (normative disclosure).** The optional
+`ReplayReservation` state model explores exactly 2 replicas, 2 admission slots, 2 replay identities,
+one backward clock step, and one crash point. Its **Postgres-CTE atomicity axiom** treats each
+registered transition CTE as one atomic model action. The watermark row's `FOR UPDATE` lock is the
+reviewed justification for that abstraction. It remains a **human assumption** about Postgres
+transaction and row-lock behavior, not machine-verified evidence about the database implementation.
+`kovo explain --model-boundaries` MUST print that axiom, these bounds, every registered modeled
+action, and the exact action complement plus excluded phenomena below.
+
+The checked status is `bounded-model-checked`: TLC v1.7.4 under the exact-pinned
+`formal/replay/tlc-toolchain.json` exhausts the committed `formal/ReplayReservation.cfg` state space
+for type safety, no double execution, refuse-never-evict, monotonic reclamation, no resurrection,
+and bounded admission. The same gate MUST reproduce the committed evict-pending/double-execute and
+naive-watermark/backward-clock resurrection counterexamples. This bounded evidence validates the
+declared abstraction and its historical mutants; it **does not prove Postgres**, its CTE/row-lock
+implementation, unbounded cardinalities, or any excluded phenomenon below.
+
+The model explicitly does not cover:
+
+- <!-- kovo-not-modeled:durable-task-semantics --> durable-task queue transitions or scheduling;
+- <!-- kovo-not-modeled:driver-network-failures --> driver retries, network partitions, or outcomes
+  hidden by connection failure;
+- <!-- kovo-not-modeled:postgres-lock-implementation --> the implementation correctness of Postgres
+  transactions, CTEs, or row locks;
+- <!-- kovo-not-modeled:principal-erasure-interleavings --> principal erasure and absence-probe
+  interleavings with replay reservation;
+- <!-- kovo-not-modeled:response-serialization --> response serialization, byte limits, or
+  application response correctness;
+- <!-- kovo-not-modeled:schema-and-posture --> schema provisioning, migration, ACL posture, or
+  catalog-audit queries; and
+- <!-- kovo-not-modeled:unbounded-cardinality --> replicas, slots, identities, clock steps, or crash
+  points beyond the printed finite bounds.
 
 **Idem-token minting, horizon, and entropy (normative).** `Kovo-Idem` is a per-submit token, not a per-form constant. Its only accepted production grammar is `v1_<issued-at-ms>_<nonce>`, where `issued-at-ms` is exactly 13 decimal Unix-epoch-millisecond digits and `nonce` is exactly 32 lowercase hexadecimal digits produced from 16 cryptographically random bytes. UUID v4 version/variant bits do not count toward this ≥128-bit nonce floor, so browser minting requires `crypto.getRandomValues(new Uint8Array(16))`; there is no timeless UUID/base64url fallback. A server-rendered/no-JavaScript form stamps server time. Enhanced modular and inline submits preserve that stamped issued-at value while replacing only the nonce, so JavaScript enhancement cannot silently extend the document's retry/deploy horizon. A direct seedless browser API has no server stamp to preserve and uses its boot-captured client clock.
 
@@ -499,6 +757,18 @@ The nominal mutation retry horizon is 24 hours, aligned with the required deploy
 Because the replay step precedes input parsing, the token MUST NOT be derived from input. The fixed 49-character grammar is shared by volatile, custom, and durable replay paths so a client-controlled key cannot become a storage or memory amplifier. A re-submit that edits visible fields therefore produces a distinct token — eliminating the silent lost-update where an unchanged hidden field replayed the first commit. Token collision within `(principal, source-derived mutation identity)` is a server-detectable integrity fault answered as a 422 schema-class failure (§9.2), never a silent replay of an unrelated commit.
 
 **Guards (arg-aware, normative).** A guard is a refinement run before `page`/`load`/`handler`. Beyond `req.session`, every guard receives the query's or mutation's **validated args / resolved instance key** — the same `s.*`-coerced values the loader and handler see (§9.4, §10.2). A guard may therefore express ownership over a client-visible key, not only session-wide roles. Guards run after schema parse/coerce so the args they inspect are already validated (§10.3 lifecycle).
+
+Validated query and mutation args MUST be reconstructed before providers, guards, or final
+consumers can observe them. The accepted graph is bounded primitives, plain own-data records, dense
+arrays, and exact framework-witnessed capability/file leaves. A JavaScript `Date` is not an
+immutable leaf: `Object.freeze()` and shadowed instance methods do not prevent an unchanged native
+mutator such as `Date.prototype.setTime.call(value, replacement)` from changing its internal slot.
+The receipt boundary therefore MUST reject `Date` values and direct authors to an ISO timestamp
+string or epoch number until Kovo ships an immutable temporal value. A Proxy membrane is not a
+substitute for this reconstruct-or-reject rule (SPEC §6.6 and C15 above). A stored upload is
+reconstructed at its schema-owned door: its returned object metadata is pinned to own data and its
+`lastModified` field is exposed to guards/handlers as an ISO timestamp string, never as the storage
+adapter's mutable `Date` carrier.
 
 **`owns()` ownership combinator.** `owns((args) => args.id, table.ownerColumn)` is the sanctioned ownership guard: it passes only when the principal (`req.session`, the column declared by the table's `owner:` annotation, §10.1) owns the row the key selects. `owns()` is composable with the other combinators (`all(authed, owns(...))`) and discharges the KV414 IDOR obligation for the key it covers. The shipped runtime contract is `guards.owns(keyOf, ownsRow)` where `ownsRow(req, key)` is an app-provided ownership predicate (so `@kovojs/server` stays decoupled from the data layer); the `table.ownerColumn` column-form above is the planned compile-time sugar that lowers to it.
 
@@ -527,7 +797,11 @@ export const orderQuery = query({
 
 **KV433 — a read-surface that writes is a confused deputy.** A `query({ load })` loader is a read surface; reaching a Drizzle write (insert/update/delete/execute/run/batch) from it is a state change on an idempotent GET. A loader whose body directly reaches such a write is **KV433** (`error`) — the static no-write-reachable proof (Stage 2). There is no public GET-write query escape: move user-triggered state changes to `mutation()`/domain writes, and move explicitly side-effecting machine/API paths to `endpoint()`. **Current scope:** Stage 1 is shipped where Kovo owns the handle: the managed loader `db` is a read-only proxy whose write verbs throw at runtime, and its `Reader<Db>` type mirror makes those verbs a `tsc` error. That proxy is defense-in-depth, not the proof (§6.6). Stage 2's broader interprocedural case (a loader calling an imported `domain()` function that writes through some captured handle) still needs the bottom-up write-summaries that are not yet built and remains documented residue; today's direct static check covers writes directly reachable in the loader body and treats legacy/demoted query-write spellings as read-surface writes, never as escapes.
 
-**KV438 — mass-assignment is by-construction write-provenance.** Where KV414 governs _which row_ a write touches, KV438 governs _which value_ reaches a **governed column**. A column is governed when it is the table's primary `key:`, its principal `owner:` column (both AUTO-governed), or is named in the `kovo({ governed })` annotation (the declare-once fact for `role`/`balance`/`isAdmin`-class columns, Constitution #2 — no call-site allowlists). A write that lands **request input** on a governed column — directly, through an alias/destructure, or via a `.values(input)` / `{ ...input }` spread — is **KV438** (`error`). The gate is **fail-closed**: a value the static analyzer cannot prove server-derived, literal, or explicitly-asserted is rejected on a governed column (over the §11.1 AST symbol-identity provenance engine, never a branded type or runtime taint, §6.6). This is stronger than Rails `strong_parameters` / Django serializer denylists because it is schema-anchored and provenance-checked rather than an enumerated allowlist. Two author-assertion escapes (SPEC §6.6: audit-grade, not proofs) route the residue: `serverValue(value, reason)` discharges only a value the analyzer independently proves literal or private/server-derived (`serverValue(input.x,…)`, `serverValue(opaque(input.x),…)`, and a missing value all fail), while the louder `trustedAssign(input.x, reason)` is the audited path for a deliberate privileged write (a legit admin role grant), surfaced in `kovo explain --writes`. App-authored analyzer summaries cannot declare general server provenance or discharge KV438; opaque same-package and cross-module helpers fail closed. **Ceiling:** by-construction write-provenance for statically-analyzable Drizzle writes; the escapes are author assertions, and only `trustedAssign` deliberately accepts request input.
+**KV438 — mass-assignment is by-construction write-provenance.** Where KV414 governs _which row_ a write touches, KV438 governs _which value_ reaches a **governed column**. A column is governed when it is the table's primary `key:`, its principal `owner:` column (both AUTO-governed), or is named in the `kovo({ governed })` annotation (the declare-once fact for `role`/`balance`/`isAdmin`-class columns, Constitution #2 — no call-site allowlists). A write that lands **request input** on a governed column — directly, through an alias/destructure, or via a `.values(input)` / `{ ...input }` spread — is **KV438** (`error`). The gate is **fail-closed**: a value the static analyzer cannot prove server-derived, literal, or explicitly asserted is rejected on a governed column (over the §11.1 AST symbol-identity provenance engine, never a branded type or runtime taint, §6.6). This is stronger than Rails `strong_parameters` / Django serializer denylists because it is schema-anchored and provenance-checked rather than an enumerated allowlist.
+
+Two author-assertion escapes (SPEC §6.6: audit-grade, not proofs) route the residue. `serverValue(value, reason)` discharges only a value the analyzer independently proves literal or private/server-derived (`serverValue(input.x,…)`, `serverValue(opaque(input.x),…)`, and a missing value all fail). The louder `trustedAssign(input.x, obligation)` is the deliberate privileged-write path. Its second argument MUST be an inline, exact object literal with these three fields: `invariant: 'governed-write.authorized-principal'`; `why`, exactly `{ kind: 'guard-chain', guard: <machine reference> }` or `{ kind: 'policy', policy: <machine reference> }`; and `evidence`, exactly `{ kind: 'test' | 'policy-review', reference: <machine reference>, digest: 'sha256:<64 lowercase hex>' }`. Machine references are 1..256 characters from the closed `[A-Za-z0-9._:/#-]` alphabet and begin alphanumerically. Variables, spreads, shorthand/computed/accessor properties, substitutions, duplicate/surplus/missing fields, prose strings, and malformed references or digests do not discharge KV438. The runtime chokepoint independently validates stable own-data properties and reconstructs a frozen framework-owned snapshot; the type is ergonomics, not the proof. App-authored analyzer summaries cannot declare general server provenance or discharge KV438; opaque same-package and cross-module helpers fail closed. The exact structured fact and scanner-owned call-span identity are surfaced by `kovo explain --capabilities`.
+
+For every accepted `trustedAssign`, `kovo build` emits an **unsigned** `.kovo/escape-obligations.json` subject binding the exact call-span identity and structured obligation to the reviewed graph's SHA-256 artifact subject. The build and app-facing execution surfaces MUST NOT acquire or expose the signer. A reviewer outside the build/coding-agent environment may sign the canonical `kovo.escape-obligation-review/v1` subject with the existing runtime-posture Ed25519 authority; this is domain-separated but uses the same out-of-band trust-anchor fingerprint, never a second trust anchor. `kovo explain --attest <url> --artifact <graph.json> --trust-anchor <fingerprint> --escape-reviews <reviews.json>` requires exactly one matching valid envelope for every emitted subject and verifies it together with the live runtime attestation. This establishes only the process fact that the pinned key holder approved the exact site, obligation, and artifact. It does not prove the obligation true, identify a human reviewer, or extend the by-construction claim through the escape. **Ceiling:** by-construction write-provenance for statically analyzable Drizzle writes; the escapes remain author assertions, and only `trustedAssign` deliberately accepts request input.
 
 ### 10.4 Optimistic updates
 

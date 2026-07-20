@@ -1,6 +1,8 @@
 import type { DiagnosticCode } from '@kovojs/core';
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
   diagnosticDefinitionText,
 } from '@kovojs/core/internal/diagnostics';
 import type { Node } from 'ts-morph';
@@ -16,19 +18,34 @@ type DiagnosticSite =
       site: string;
     };
 
-type DrizzleDiagnosticInput = DiagnosticSite & {
-  code: DiagnosticCode;
-  detail?: string;
-  preferHelp?: boolean;
-};
+type DrizzleDiagnosticPresentation =
+  | {
+      code: 'KV406';
+      /** Finite contextual rendering for opaque query reads that are not write sites. */
+      messageVariant: 'raw-query-read';
+      preferHelp?: never;
+    }
+  | {
+      code: DiagnosticCode;
+      messageVariant?: never;
+      preferHelp?: boolean;
+    };
+
+type DrizzleDiagnosticInput = DiagnosticSite &
+  DrizzleDiagnosticPresentation & {
+    detail?: string;
+  };
 
 const NO_DIAGNOSTIC_SITE = '';
 
 /** @internal */
 export function drizzleDiagnostic(input: DrizzleDiagnosticInput): TouchGraphDiagnostic {
-  const message = input.preferHelp
-    ? diagnosticDefinitionText(input.code, { preferHelp: true })
-    : undefined;
+  const message =
+    input.messageVariant === 'raw-query-read'
+      ? 'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set.'
+      : input.preferHelp
+        ? diagnosticDefinitionText(input.code, { preferHelp: true })
+        : undefined;
   const site =
     'node' in input && input.node !== undefined
       ? sourceSiteForNode(input.node)
@@ -63,6 +80,19 @@ export function drizzleDiagnosticWithoutSite(input: {
         ? undefined
         : { detail: input.detail }
       : { message: input.detail ? `${message} ${input.detail}` : message },
+  );
+}
+
+/** @internal Re-mint a constructor-owned diagnostic at its final derived source site. */
+export function relocateDrizzleDiagnostic(
+  diagnostic: TouchGraphDiagnostic,
+  site: string,
+): TouchGraphDiagnostic {
+  assertRegisteredDiagnostic(diagnostic, 'Drizzle diagnostic relocation source');
+  return deriveRegisteredDiagnostic(
+    diagnostic,
+    { site: nonEmptyDiagnosticSite(site) },
+    { message: diagnostic.message },
   );
 }
 

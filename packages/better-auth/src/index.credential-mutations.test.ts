@@ -537,26 +537,23 @@ describe('credential mutation helpers', () => {
     });
     expect(signUp.registry?.touches?.map((touch) => touch.key)).toEqual(['user', 'auth']);
 
-    await expect(
-      runProtectedCredentialMutation(
-        signUp,
-        {
-          email: 'grace@example.com',
-          name: 'Grace Hopper',
-          password: 'correct',
-        },
-        { headers },
-      ),
-    ).resolves.toMatchObject({
-      ok: true,
-      responseHeaders: {
-        'Set-Cookie': ['kovo_session=session-2; Path=/; HttpOnly; SameSite=Lax'],
+    const result = await runProtectedCredentialMutation(
+      signUp,
+      {
+        email: 'grace@example.com',
+        name: 'Grace Hopper',
+        password: 'correct',
       },
+      { headers },
+    );
+    expect(result).toMatchObject({
+      ok: true,
       value: {
         redirectTo: '/welcome',
         status: 'signed-up',
       },
     });
+    expect(result).not.toHaveProperty('responseHeaders.Set-Cookie');
     expect(auth.lastSignUp).toMatchObject({
       asResponse: true,
       body: {
@@ -568,24 +565,20 @@ describe('credential mutation helpers', () => {
     expect(auth.lastSignUp?.headers).not.toBe(headers);
     expect(auth.lastSignUp?.headers.get('x-forwarded-for')).toBe('192.0.2.10');
 
-    await expect(
-      runProtectedCredentialMutation(
-        signUp,
-        {
-          email: 'taken@example.com',
-          name: 'Taken',
-          password: 'correct',
-        },
-        { headers: requestHeaders() },
-      ),
-    ).resolves.toEqual({
-      error: {
-        code: 'INVALID_CREDENTIALS',
-        payload: {},
+    const duplicate = await runProtectedCredentialMutation(
+      signUp,
+      {
+        email: 'taken@example.com',
+        name: 'Taken',
+        password: 'correct',
       },
-      ok: false,
-      status: 422,
+      { headers: requestHeaders() },
+    );
+    expect(duplicate).toMatchObject({
+      ok: true,
+      value: { redirectTo: '/welcome', status: 'signed-up' },
     });
+    expect(duplicate).not.toHaveProperty('responseHeaders.Set-Cookie');
   });
 
   it('wraps signOut and forwards clearing cookies', async () => {
@@ -810,7 +803,12 @@ describe('credential mutation helpers', () => {
     keyOverrides.signInEmail = 'custom/sign-in';
 
     const graph = createBetterAuthCredentialMutationTouchGraph(keyOverrides);
-    expect(Object.keys(graph).sort()).toEqual(['auth/sign-out', 'auth/sign-up', 'custom/sign-in']);
+    expect(Object.keys(graph).sort()).toEqual([
+      'auth/request-password-reset',
+      'auth/sign-out',
+      'auth/sign-up',
+      'custom/sign-in',
+    ]);
   });
 
   it('rejects touch-graph option accessors without invoking them', () => {
@@ -1663,7 +1661,7 @@ describe('credential success is positively classified', () => {
     }
   });
 
-  it('does NOT sign up on a 200 two-factor-pending body', async () => {
+  it('normalizes a two-factor-pending sign-up without promoting its session cookie', async () => {
     const auth = fakeRoutedCredentialAuth({
       signUpEmail: () => jsonResponse(200, { twoFactorRedirect: true }),
     });
@@ -1675,6 +1673,10 @@ describe('credential success is positively classified', () => {
       { headers: requestHeaders() },
     );
 
-    expect(result).toMatchObject({ ok: false, status: 422 });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { redirectTo: '/', status: 'signed-up' },
+    });
+    expect(result).not.toHaveProperty('responseHeaders.Set-Cookie');
   });
 });

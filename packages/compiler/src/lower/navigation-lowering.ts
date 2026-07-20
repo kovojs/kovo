@@ -9,7 +9,7 @@ import {
   type JsxIrAttribute,
   type JsxIrElement,
 } from '../jsx-ir.js';
-import type { ComponentModuleModel, JsxAttributeModel } from '../scan/parse.js';
+import type { ComponentModuleModel } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import { staticHrefAttributeValue } from './navigation.js';
 import type { StructuralJsxLoweringOptions } from './structural-jsx.js';

@@ -1,0 +1,7 @@
+{
+  "advisories": [],
+  "epoch": 1,
+  "issuedAt": "2026-07-20T12:00:00.000Z",
+  "maxFeedAgeSeconds": 7776000,
+  "schema": "kovo.security.advisory-feed/v1"
+}

@@ -63,7 +63,8 @@
   "dependencies": {
     "@kovojs/core": "workspace:*",
     "@kovojs/style": "workspace:*",
-    "typescript": "^6.0.3"
+    "@kovojs/verify": "workspace:*",
+    "typescript": "6.0.3"
   },
   "devDependencies": {
     "@kovojs/browser": "workspace:*",

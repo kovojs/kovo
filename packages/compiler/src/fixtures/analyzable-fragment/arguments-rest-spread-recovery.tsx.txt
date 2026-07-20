@@ -1,0 +1,16 @@
+import { endpoint } from '@kovojs/server';
+
+function throughArguments(database) {
+  return arguments[0].select();
+}
+
+function throughRest(...values) {
+  return values[0].select();
+}
+
+export const root = endpoint('/ledger/recovery', {
+  handler(_input, context) {
+    throughArguments(context.db);
+    return throughRest(...[context.db]);
+  },
+});

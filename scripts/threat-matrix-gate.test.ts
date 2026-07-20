@@ -72,11 +72,11 @@ function validationOptions(overrides: Record<string, unknown> = {}) {
 describe('threat-matrix liveness gate', () => {
   it('maps every authoritative sink, escape kind, and public security surface to live cells', () => {
     expect(validateThreatMatrixCoverage(validationOptions())).toEqual([]);
-    expect(frameworkSourceSinkInventory()).toHaveLength(13);
-    expect(AUDITED_TRUST_ESCAPE_KINDS).toHaveLength(7);
+    expect(frameworkSourceSinkInventory()).toHaveLength(14);
+    expect(AUDITED_TRUST_ESCAPE_KINDS).toHaveLength(10);
     expect(AUDITED_CAPABILITY_KINDS).toHaveLength(18);
     expect(publicSecuritySurfaceIds()).toHaveLength(11);
-    expect(frameworkExportPostures).toHaveLength(4_156);
+    expect(frameworkExportPostures).toHaveLength(4_183);
     expect(
       validateFrameworkExportPosture({
         actual: computeFrameworkRuntimeSurface(),

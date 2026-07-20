@@ -1,6 +1,8 @@
 export type BetterAuthRequestSecretCarrier =
+  | 'account-email'
   | 'adapter-signing-secret'
   | 'adapter-system-db-secret-column'
+  | 'password-reset-token'
   | 'request-cookie'
   | 'set-cookie'
   | 'submitted-password';
@@ -9,6 +11,7 @@ export type BetterAuthRequestSecretDisposition =
   | 'boxed'
   | 'confined-cookie-forwarding'
   | 'confined-third-party-adapter'
+  | 'purpose-closed-mail-egress'
   | 'reconstructed-non-secret-projection'
   | 'vetted-sign-or-hash'
   | 'vetted-compare-or-verify';
@@ -18,6 +21,7 @@ export interface BetterAuthRequestSecretPath {
   id: string;
   /** Request entrypoint that makes this path reachable. */
   entrypoint:
+    | 'credential-mutation:request-password-reset'
     | 'credential-mutation:sign-in-email'
     | 'credential-mutation:sign-out'
     | 'credential-mutation:sign-up-email'
@@ -50,6 +54,36 @@ const permittedAdapterCredentialDispositions =
 
 export const betterAuthRequestSecretPaths = betterAuthDeepFreeze(
   [
+    {
+      id: 'better-auth.password-reset.account-email-lookup',
+      entrypoint: 'credential-mutation:request-password-reset',
+      carrier: 'account-email',
+      source: 'packages/better-auth/src/internal/trusted-plaintext.ts',
+      disposition: 'confined-third-party-adapter',
+      readsCrossUserCredential: false,
+      reason:
+        'Submitted email reaches only the routed Better Auth account-recovery lookup and limiter.',
+    },
+    {
+      id: 'better-auth.password-reset.account-email-mail-egress',
+      entrypoint: 'credential-mutation:request-password-reset',
+      carrier: 'account-email',
+      source: 'packages/better-auth/src/password-reset-mail.ts',
+      disposition: 'purpose-closed-mail-egress',
+      readsCrossUserCredential: false,
+      reason:
+        'The validated submitted email reaches the registered mail sender only as the purpose-closed recipient.',
+    },
+    {
+      id: 'better-auth.password-reset.token-mail-egress',
+      entrypoint: 'credential-mutation:request-password-reset',
+      carrier: 'password-reset-token',
+      source: 'packages/better-auth/src/password-reset-mail.ts',
+      disposition: 'purpose-closed-mail-egress',
+      readsCrossUserCredential: false,
+      reason:
+        'The reset token reaches only the registered mail sender inside a same-origin reset URL; no user record, request, or standalone token crosses.',
+    },
     {
       id: 'better-auth.sign-in.submitted-password',
       entrypoint: 'credential-mutation:sign-in-email',
@@ -218,6 +252,7 @@ export const betterAuthPlaintextReadingApiMethods: readonly string[] = betterAut
     'forgetPassword',
     'getSession',
     'listSessions',
+    'requestPasswordReset',
     'resetPassword',
     'revokeSession',
     'revokeSessions',
@@ -477,6 +512,15 @@ function appendBetterAuthAdapterPathIssues(
     appendBetterAuthNonEgressIssue(
       issues,
       `KV439: ${path.id} claims credential projection for non-database auth secret carrier`,
+    );
+  }
+  const purposeClosedMailPath =
+    path.id === 'better-auth.password-reset.account-email-mail-egress' ||
+    path.id === 'better-auth.password-reset.token-mail-egress';
+  if (purposeClosedMailPath !== (path.disposition === 'purpose-closed-mail-egress')) {
+    appendBetterAuthNonEgressIssue(
+      issues,
+      `KV439: ${path.id} must bind password-reset mail carriers exclusively to purpose-closed mail egress`,
     );
   }
 }

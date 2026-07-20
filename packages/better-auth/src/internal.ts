@@ -7,6 +7,8 @@ import {
   betterAuthCredentialMutationErrors,
   betterAuthCredentialMutationApis,
   betterAuthMountOperationContract,
+  betterAuthPasswordResetMutationErrors,
+  betterAuthRequestPasswordResetInput,
   betterAuthOrganizationDomain,
   betterAuthRequiredCoreTables,
   betterAuthSchemaBridge,
@@ -132,6 +134,8 @@ export {
   betterAuthCredentialMutationApis,
   betterAuthCredentialMutationErrors,
   betterAuthMountOperationContract,
+  betterAuthPasswordResetMutationErrors,
+  betterAuthRequestPasswordResetInput,
   betterAuthOrganizationDomain,
   betterAuthRequiredCoreTables,
   betterAuthSchemaBridge,
@@ -170,6 +174,10 @@ export type {
   BetterAuthCredentialMutationInternalOptions,
   BetterAuthCredentialMutationOptions,
 } from './credential-options.js';
+export {
+  normalizeBetterAuthAccountOperation,
+  normalizeBetterAuthPasswordResetResponse,
+} from './response-observation.js';
 
 /** @internal Resolve the Kovo domain a Better Auth table is bridged into, or null when unbridged/exempt. */
 export function betterAuthTableDomain(
@@ -195,6 +203,15 @@ export function betterAuthTableDomain(
  */
 export const betterAuthCredentialOperationContracts = betterAuthDeepFreeze(
   {
+    requestPasswordReset: {
+      access: publicAccess('better-auth password-reset request form'),
+      api: 'requestPasswordReset',
+      csrf: 'checked',
+      defaultKey: 'auth/request-password-reset',
+      // The provider's verification-token bookkeeping is an explicitly exempt internal table;
+      // it is not an app-domain mutation touch in the P9 schema bridge (SPEC §11.2).
+      tableTouches: [],
+    },
     signInEmail: {
       access: publicAccess('better-auth email sign-in credential form'),
       api: 'signInEmail',

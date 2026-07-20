@@ -6,19 +6,31 @@ export { snapshotCompileComponentOptions } from './compile-options.js';
 export { compileComponentModuleForFramework } from './framework-compile.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export { appGraphContributionHash } from './app-graph.js';
+export {
+  deriveBrowserPostureManifestFromSourceFiles,
+  mergeBrowserPostureManifests,
+} from './browser-posture-project.js';
+export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
   analyzeCapabilityClosure,
+  appDependencyCapabilityManifestSchema,
   collectCapabilityPackageRequests,
+  compilerGeneratedCapabilityDependencies,
   isCompilerOwnedCapabilityPackage,
   packageCapabilitySummarySchema,
 } from './security/capability-closure.js';
 export type {
   AnalyzeCapabilityClosureOptions,
   AnalyzeCapabilityClosureResult,
+  AppDependencyCapability,
+  AppDependencyCapabilityEntry,
+  AppDependencyCapabilityImport,
+  AppDependencyCapabilityManifest,
   CapabilityClosureSourceFile,
   CapabilityPackageRequest,
   CapabilityRootKind,
+  CompilerGeneratedCapabilityDependency,
   PackageCapabilitySummary,
   PackageCapabilitySummaryEntry,
   PackageCapabilitySummaryExport,
@@ -62,6 +74,7 @@ export {
 export type { GeneratedOutputWriteFact, OutputContext } from './output-context-facts.js';
 export type {
   CompileArtifactFileNames,
+  AgentGraphFact,
   CompileComponentOptions,
   CompileDependencyFootprint,
   CompileResult,
@@ -126,7 +139,31 @@ export {
   outputSchemaQueryShapeFactsFromSource,
 } from './scan/query-shape-source.js';
 export { collectMinifierReservedNames } from './compile.js';
-export { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
+export {
+  analyzeSafeComponentFixes,
+  compileBehaviorFingerprint,
+  proveSafeComponentRewrite,
+} from './scan/safe-fixes.js';
+export type {
+  ProveSafeComponentRewriteInput,
+  ProveSafeComponentRewriteResult,
+  SafeComponentFixCode,
+  SafeComponentFixEdit,
+  SafeComponentFixResult,
+} from './scan/safe-fixes.js';
+export {
+  agentAuthoredCostToGreenCorpus,
+  measureAgentAuthoredCostToGreenCorpus,
+} from './security/cost-to-green-corpus.js';
+export type {
+  AgentAuthoredCostToGreenCase,
+  AgentAuthoredCostToGreenReport,
+  CostToGreenDiagnosticMeasurement,
+} from './security/cost-to-green-corpus.js';
+export {
+  lowerStandaloneServerSource,
+  lowerStandaloneSourceDerivedRegistryDeclarations,
+} from './source-derived-lowering.js';
 export { viteFrameworkIdentityFiles } from './vite.js';
 export type {
   KovoHmrEventName,

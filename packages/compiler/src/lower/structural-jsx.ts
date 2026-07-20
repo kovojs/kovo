@@ -16,7 +16,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { isHtmlWireValueStable } from '@kovojs/core/internal/semantic-attributes';
-import { diagnosticFor } from '../diagnostics.js';
+import { contextualizeCompilerDiagnostic, diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import {
@@ -40,6 +40,8 @@ import {
 } from '../jsx-ir.js';
 import {
   parseComponentModule,
+  parserFactFrameworkTrustedUrlReason,
+  parserFactFrameworkTrustedUrlValue,
   parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -131,6 +133,10 @@ import {
 import { lowerHrefAttributes, lowerNavigationLinks } from './navigation-lowering.js';
 import { lowerPrimitiveComposition } from './primitive-composition.js';
 import { lowerPrimitiveSpreads } from './primitive-spreads.js';
+import {
+  deriveBrowserPostureFacts,
+  type DerivedBrowserPostureFacts,
+} from '../browser-posture-manifest.js';
 
 export type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
@@ -181,6 +187,7 @@ interface MixedTextExpressionChild {
 }
 
 export interface StructuralJsxLowering {
+  browserPosture: DerivedBrowserPostureFacts;
   diagnostics: readonly CompilerDiagnostic[];
   outputContexts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
@@ -236,6 +243,12 @@ export function lowerStructuralJsx(
     diagnostics,
     lowerPrimitiveComposition(tree.elements, options),
     'Primitive composition diagnostics',
+  );
+  const browserPosture = deriveBrowserPostureFacts(tree.roots, options);
+  appendCompilerFacts(
+    diagnostics,
+    browserPosture.diagnostics,
+    'Browser posture derivation diagnostics',
   );
   const effectiveElementContexts = validateEffectiveElementContextSecurity(options, tree.roots);
   appendCompilerFacts(
@@ -369,6 +382,7 @@ export function lowerStructuralJsx(
   }
 
   return {
+    browserPosture,
     diagnostics,
     outputContexts,
     platformSubstitutions,
@@ -2766,10 +2780,12 @@ function mutationFormProvenanceDiagnostic(
   span: { end: number; start: number },
   detail: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(options.fileName, 'KV242', options.source, span.start, span.end - span.start),
-    message: `${diagnosticDefinitions.KV242.message} ${detail}`,
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(options.fileName, 'KV242', options.source, span.start, span.end - span.start),
+    {
+      message: `${diagnosticDefinitions.KV242.message} ${detail}`,
+    },
+  );
 }
 
 function hasCompilerEscapeImport(model: ComponentModuleModel, importedName: string): boolean {
@@ -3053,10 +3069,12 @@ function lowerAttributeDerive(
   effectiveElementContextDerives?: EffectiveElementContextDeriveFact[],
   forceQueryBinding = false,
 ): void {
+  const trustedUrlValue = parserFactFrameworkTrustedUrlValue(candidate.attribute);
   const expression = executableJavaScriptExpression(
-    candidate.source === 'state'
-      ? deriveExpression(candidate.attribute, candidate.expression)
-      : compilerStringTrim(candidate.expression),
+    trustedUrlValue ??
+      (candidate.source === 'state'
+        ? deriveExpression(candidate.attribute, candidate.expression)
+        : compilerStringTrim(candidate.expression)),
   );
   const deriveInputs = candidate.inputs ?? [candidate.query];
   const deriveParams = candidate.params ?? [deriveParam(candidate)];
@@ -3134,6 +3152,18 @@ function lowerAttributeDerive(
       ),
     );
   };
+
+  if (trustedUrlValue !== undefined) {
+    setJsxIrAttribute(
+      candidate.element,
+      generatedJsxIrAttribute(
+        trustedUrlMarkerAttributeName(candidate.targetAttr),
+        { kind: 'boolean', value: true },
+        'compiler-reviewed reactive trusted URL',
+        options,
+      ),
+    );
+  }
 
   removeJsxIrAttribute(candidate.element, candidate.attribute.name);
   if (candidate.source === 'state') {
@@ -4819,6 +4849,7 @@ function sourceAttributeToIr(
   attribute: JsxAttributeModel,
   options: StructuralJsxLoweringOptions,
 ): JsxIrAttribute {
+  const trustedUrlReason = parserFactFrameworkTrustedUrlReason(attribute);
   const value: JsxIrAttributeValue =
     attribute.value !== undefined
       ? { kind: 'string', value: attribute.value }
@@ -4827,6 +4858,7 @@ function sourceAttributeToIr(
             kind: 'expression',
             source: attribute.expression,
             ...(parserFactHasFrameworkTrustedUrl(attribute) ? { trustedUrl: true as const } : {}),
+            ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
           }
         : { kind: 'boolean', value: true };
   return generatedJsxIrAttribute(
@@ -4845,16 +4877,18 @@ function structuralWriterConflictDiagnostic(
   secondWriter: string,
 ): CompilerDiagnostic {
   const anchor = attribute.anchor;
-  return {
-    ...diagnosticFor(
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(
       options.fileName,
       'KV231',
       options.source,
       anchor?.start,
       anchor ? anchor.end - anchor.start : undefined,
     ),
-    message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
-  };
+    {
+      message: `${diagnosticDefinitions.KV231.message} ${detail} (writers: ${firstWriter}, ${secondWriter})`,
+    },
+  );
 }
 
 function attributeByName(element: JsxIrElement, name: string): JsxIrAttribute | undefined {
@@ -5105,6 +5139,10 @@ function nextExportName(baseName: string, nameCounts: Map<string, number>): stri
 
 function stateBindingAttributeName(name: string): string {
   return `data-bind:${name}`;
+}
+
+function trustedUrlMarkerAttributeName(name: string): string {
+  return `data-kovo-trusted-url:${compilerStringToLowerCase(name)}`;
 }
 
 function derivePrefixInsertionOffset(source: string): number {

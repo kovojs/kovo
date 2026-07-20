@@ -1,4 +1,7 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 
 import {
   compilerArrayAppend,
@@ -20,7 +23,12 @@ import {
   compilerStringSplit,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
 import { componentRegistryNamespace } from '../component-names.js';
 import { capturesUnserializableReferences } from '../lower/handlers.js';
@@ -113,7 +121,9 @@ export function validateServerFactsInLocalState(
         );
       }
       if (!compilerSetHas(queryRoots, queryRootFromPath(access.path))) continue;
-      return [diagnostics.at('KV301', { start: access.start, length: access.path.length })];
+      return [
+        diagnosticAt(diagnostics, 'KV301', { start: access.start, length: access.path.length }),
+      ];
     }
   }
   return [];
@@ -128,7 +138,7 @@ export function validateReservedQueryNames(
     'state',
     'Reserved query names',
   )
-    ? [diagnostics.at('KV304', undefined, 'state')]
+    ? [diagnosticAt(diagnostics, 'KV304', undefined, 'state')]
     : [];
 }
 
@@ -154,7 +164,10 @@ export function validateIsomorphicJustifications(
     }
     compilerArrayAppend(
       found,
-      diagnostics.at('KV318', { start: option.start, length: option.end - option.start }),
+      diagnosticAt(diagnostics, 'KV318', {
+        start: option.start,
+        length: option.end - option.start,
+      }),
       'Isomorphic justification diagnostics',
     );
   }
@@ -175,21 +188,26 @@ export function validateRemovedFragmentTargetOption(
       if (option.key !== 'fragmentTarget') continue;
       compilerArrayAppend(
         found,
-        {
-          ...diagnostics.at('KV223', { start: option.start, length: option.end - option.start }),
-          help: compilerArrayJoin(
-            [
-              'Would lower to: an inferred server-refresh target for a query-backed component.',
-              'Blocked reason: fragmentTarget is no longer an author-facing component option; query dependencies now derive refresh targets.',
-              'Fixes: remove fragmentTarget, declare queries for refreshable server data, or set disableServerRefresh: true to force the component off the enhanced server-refresh path.',
-              'SPEC §4.8 keeps runtime stamps compiler-derived and SPEC §4.9 classifies inferred query-backed refresh coverage.',
-              'Escape: emitted compiler artifacts may carry kovo-fragment-target hooks; app TSX should not force targets by option.',
-            ],
-            '\n',
-          ),
-          message:
-            'Redundant removed component option; query-backed components infer server refresh targets. fragmentTarget',
-        },
+        contextualizeCompilerDiagnostic(
+          diagnosticAt(diagnostics, 'KV223', {
+            start: option.start,
+            length: option.end - option.start,
+          }),
+          {
+            help: compilerArrayJoin(
+              [
+                'Would lower to: an inferred server-refresh target for a query-backed component.',
+                'Blocked reason: fragmentTarget is no longer an author-facing component option; query dependencies now derive refresh targets.',
+                'Fixes: remove fragmentTarget, declare queries for refreshable server data, or set disableServerRefresh: true to force the component off the enhanced server-refresh path.',
+                'SPEC §4.8 keeps runtime stamps compiler-derived and SPEC §4.9 classifies inferred query-backed refresh coverage.',
+                'Escape: emitted compiler artifacts may carry kovo-fragment-target hooks; app TSX should not force targets by option.',
+              ],
+              '\n',
+            ),
+            message:
+              'Redundant removed component option; query-backed components infer server refresh targets. fragmentTarget',
+          },
+        ),
         'Removed fragment-target diagnostics',
       );
     }
@@ -213,24 +231,26 @@ export function validateHandAuthoredFragmentTargetStamp(
 
     compilerArrayAppend(
       found,
-      {
-        ...diagnostics.at('KV223', {
+      contextualizeCompilerDiagnostic(
+        diagnosticAt(diagnostics, 'KV223', {
           start: attribute.start,
           length: attribute.end - attribute.start,
         }),
-        help: compilerArrayJoin(
-          [
-            'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
-            'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
-            'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
-            'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
-            'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
-          ],
-          '\n',
-        ),
-        message:
-          'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
-      },
+        {
+          help: compilerArrayJoin(
+            [
+              'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
+              'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
+              'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
+              'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
+              'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
+            ],
+            '\n',
+          ),
+          message:
+            'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
+        },
+      ),
       'Hand-authored fragment-stamp diagnostics',
     );
   }
@@ -356,8 +376,7 @@ function kv303RenderInputDiagnostic(
     input.sourceKey !== input.name &&
     compilerSetHas(allowedInputs, input.sourceKey)
   ) {
-    return {
-      ...diagnostics.at('KV303', span, input.name),
+    return contextualizeCompilerDiagnostic(diagnosticAt(diagnostics, 'KV303', span, input.name), {
       help: compilerArrayJoin(
         [
           'Would lower to: a fragment target that can be re-rendered from declared query data plus stamped props.',
@@ -367,11 +386,11 @@ function kv303RenderInputDiagnostic(
         ],
         '\n',
       ),
-      message: `${diagnostics.at('KV303').message} ${input.name} (render destructuring aliases declared key ${input.sourceKey}; use the declared key name in the render parameter)`,
-    };
+      message: `${diagnosticDefinitions.KV303.message} ${input.name} (render destructuring aliases declared key ${input.sourceKey}; use the declared key name in the render parameter)`,
+    });
   }
 
-  return diagnostics.at('KV303', span, input.name);
+  return diagnosticAt(diagnostics, 'KV303', span, input.name);
 }
 
 function isJsxEventAttributeExpression(
@@ -422,7 +441,8 @@ export function validateIsomorphicSlotComposition(
   if (!slots) return [];
 
   return [
-    diagnostics.at(
+    diagnosticAt(
+      diagnostics,
       'KV316',
       { start: slots.start, length: slots.end - slots.start },
       slots.names.length > 0 ? compilerArrayJoin(slots.names, ', ') : undefined,
@@ -504,7 +524,8 @@ export function validateNestedStatefulIslandInRefreshTarget(
 
       compilerArrayAppend(
         found,
-        diagnostics.at(
+        diagnosticAt(
+          diagnostics,
           'KV420',
           {
             start: childTag.openingTagNameStart,
@@ -650,7 +671,12 @@ export function validateEventPayloads(
     compilerSetAdd(seen, payload.path);
     compilerArrayAppend(
       result,
-      diagnostics.at('KV320', { start: payload.index, length: payload.length }, payload.path),
+      diagnosticAt(
+        diagnostics,
+        'KV320',
+        { start: payload.index, length: payload.length },
+        payload.path,
+      ),
       'Event payload diagnostics',
     );
   }
@@ -737,20 +763,22 @@ function webhookRecordChangeDiagnostic(
   }
   if (fact.domainKey === 'UNRESOLVED' || hasUnresolved) {
     return [
-      {
-        ...diagnostics.at('KV406', { start: fact.span.start, length }),
-        help: compilerArrayJoin(
-          [
-            'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
-            'Blocked reason: the compiler could not statically resolve the recordChange domain or every writes[] entry, so the webhook write surface could be under-reported.',
-            'Fixes: pass a module-level domain("...") binding to context.recordChange(...) and include that same binding in webhook writes[].',
-            'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
-          ],
-          '\n',
-        ),
-        message:
-          'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
-      },
+      contextualizeCompilerDiagnostic(
+        diagnosticAt(diagnostics, 'KV406', { start: fact.span.start, length }),
+        {
+          help: compilerArrayJoin(
+            [
+              'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
+              'Blocked reason: the compiler could not statically resolve the recordChange domain or every writes[] entry, so the webhook write surface could be under-reported.',
+              'Fixes: pass a module-level domain("...") binding to context.recordChange(...) and include that same binding in webhook writes[].',
+              'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
+            ],
+            '\n',
+          ),
+          message:
+            'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
+        },
+      ),
     ];
   }
 
@@ -760,22 +788,25 @@ function webhookRecordChangeDiagnostic(
 
   const declaredLabel = declared.length === 0 ? 'none' : joinDenseStrings(declared, ', ');
   return [
-    {
-      ...diagnostics.at(
+    contextualizeCompilerDiagnostic(
+      diagnosticAt(
+        diagnostics,
         'KV402',
         { start: fact.span.start, length },
         `webhook ${fact.owner.value} recordChange("${fact.domainKey}") is outside declared writes (${declaredLabel}).`,
       ),
-      help: compilerArrayJoin(
-        [
-          'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
-          'Blocked reason: context.recordChange(...) targets a domain absent from webhook writes[], so kovo explain/check could under-report machine-ingress writes.',
-          'Fixes: add the domain binding to writes[] or remove the recordChange call.',
-          'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
-        ],
-        '\n',
-      ),
-    },
+      {
+        help: compilerArrayJoin(
+          [
+            'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
+            'Blocked reason: context.recordChange(...) targets a domain absent from webhook writes[], so kovo explain/check could under-report machine-ingress writes.',
+            'Fixes: add the domain binding to writes[] or remove the recordChange call.',
+            'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
+          ],
+          '\n',
+        ),
+      },
+    ),
   ];
 }
 
@@ -786,79 +817,87 @@ function handlerWriteSinkDiagnostic(
   const rawLength = sink.span.end - sink.span.start;
   const length = rawLength > 1 ? rawLength : 1;
   if (handlerWriteSinkIsUnresolved(sink)) {
-    return {
-      ...diagnostics.at('KV406', { start: sink.span.start, length }),
-      help: compilerArrayJoin(
-        [
-          'Would lower to: a typed handler write-sink fact that records the audited mutation/domain write surface.',
-          'Blocked reason: the handler contains a write-shaped call whose target or owner could not be statically resolved, so treating the handler as write-safe would be a fail-open verifier result.',
-          'Fixes: route the write through a statically named mutation/domain write, or rewrite the handler so the compiler can see the write target and audited touch surface.',
-          'SPEC §11 requires statically un-analyzable write sites to fail closed; SPEC §10.3 makes mutation/domain writes the audited write surface.',
-        ],
-        '\n',
-      ),
-      message:
-        sink.surface === 'task'
-          ? 'Unresolved write sink in a task run body; route through ctx.runMutation.'
-          : sink.surface === 'mutation'
-            ? 'Unresolved write sink in a mutation handler; route through domain.'
-            : sink.surface === 'endpoint'
-              ? 'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.'
-              : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
-    };
+    return contextualizeCompilerDiagnostic(
+      diagnosticAt(diagnostics, 'KV406', { start: sink.span.start, length }),
+      {
+        help: compilerArrayJoin(
+          [
+            'Would lower to: a typed handler write-sink fact that records the audited mutation/domain write surface.',
+            'Blocked reason: the handler contains a write-shaped call whose target or owner could not be statically resolved, so treating the handler as write-safe would be a fail-open verifier result.',
+            'Fixes: route the write through a statically named mutation/domain write, or rewrite the handler so the compiler can see the write target and audited touch surface.',
+            'SPEC §11 requires statically un-analyzable write sites to fail closed; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+          ],
+          '\n',
+        ),
+        message:
+          sink.surface === 'task'
+            ? 'Unresolved write sink in a task run body; route through ctx.runMutation.'
+            : sink.surface === 'mutation'
+              ? 'Unresolved write sink in a mutation handler; route through domain.'
+              : sink.surface === 'endpoint'
+                ? 'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.'
+                : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
+      },
+    );
   }
 
   if (sink.surface === 'mutation') {
-    return diagnostics.at('KV330', { start: sink.span.start, length });
+    return diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length });
   }
 
   if (sink.surface === 'task') {
-    return {
-      ...diagnostics.at('KV330', { start: sink.span.start, length }),
-      help: compilerArrayJoin(
-        [
-          'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
-          'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
-          'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
-          'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
-        ],
-        '\n',
-      ),
-      message: 'Direct db access in a task run body; route through ctx.runMutation.',
-    };
+    return contextualizeCompilerDiagnostic(
+      diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length }),
+      {
+        help: compilerArrayJoin(
+          [
+            'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
+            'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
+            'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
+            'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+          ],
+          '\n',
+        ),
+        message: 'Direct db access in a task run body; route through ctx.runMutation.',
+      },
+    );
   }
 
   if (sink.surface === 'endpoint') {
-    return {
-      ...diagnostics.at('KV330', { start: sink.span.start, length }),
+    return contextualizeCompilerDiagnostic(
+      diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length }),
+      {
+        help: compilerArrayJoin(
+          [
+            'Would lower to: an endpoint whose database reads use a read-only app handle.',
+            'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
+            'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
+            'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+          ],
+          '\n',
+        ),
+        message:
+          'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
+      },
+    );
+  }
+
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV330', { start: sink.span.start, length }),
+    {
       help: compilerArrayJoin(
         [
-          'Would lower to: an endpoint whose database reads use a read-only app handle.',
-          'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
-          'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
+          'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
+          'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
+          'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
           'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
         ],
         '\n',
       ),
       message:
-        'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
-    };
-  }
-
-  return {
-    ...diagnostics.at('KV330', { start: sink.span.start, length }),
-    help: compilerArrayJoin(
-      [
-        'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
-        'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
-        'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
-        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
-      ],
-      '\n',
-    ),
-    message:
-      'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
-  };
+        'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+    },
+  );
 }
 
 function handlerWriteSinkIsUnresolved(sink: HandlerWriteSinkFact): boolean {
@@ -900,6 +939,7 @@ function appendCompilerDiagnostics(
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
     if (!value) compilerFailClosed(`${label}[${index}] must be own data.`);
+    assertRegisteredDiagnostic(value, `${label}[${index}]`);
     compilerArrayAppend(target, value, label);
   }
 }
@@ -1006,17 +1046,19 @@ function kv230Diagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV230;
   const labels = definition.detailLabels;
-  return {
-    ...diagnostics.at('KV230', { start: body.offset, length: body.source.length }, target),
-    help: compilerArrayJoin(
-      [
-        `${labels.slotHoist} ${target}$slot_children`,
-        `${labels.blockedChildren} ${body.source}`,
-        definition.help ?? '',
-      ],
-      '\n',
-    ),
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(diagnostics, 'KV230', { start: body.offset, length: body.source.length }, target),
+    {
+      help: compilerArrayJoin(
+        [
+          `${labels.slotHoist} ${target}$slot_children`,
+          `${labels.blockedChildren} ${body.source}`,
+          definition.help ?? '',
+        ],
+        '\n',
+      ),
+    },
+  );
 }
 
 function kv311Diagnostic(
@@ -1024,29 +1066,32 @@ function kv311Diagnostic(
   fact: QueryUpdateCoverageFact,
 ): CompilerDiagnostic {
   const span = fact.sourceSpan;
-  return {
-    ...diagnostics.at(
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(
+      diagnostics,
       'KV311',
       { start: span?.start, length: span?.length },
       `${fact.componentName} ${fact.query} ${fact.position}`,
     ),
-    help: compilerArrayJoin(
-      [
-        `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
-        `Blocked update: ${fact.detail}`,
-        compilerArrayJoin(
-          [
-            'Would lower to: a data-bind/update plan, inferred query-backed fragment target, isomorphic component, or renderOnce marker for the rendered position.',
-            'Blocked reason: the query/state expression is outside the current §4.8 update-plan grammar and is not inside an inferred server-refresh target.',
-            'Fixes: add a data-bind/query update plan, extract a derive/stamp, keep the component query-backed for inferred fragment refresh, mark it isomorphic, declare renderOnce, or set disableServerRefresh: true only when no enhanced refresh is intended.',
-            'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
-          ],
-          '\n',
-        ),
-      ],
-      '\n',
-    ),
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
+          `Blocked update: ${fact.detail}`,
+          compilerArrayJoin(
+            [
+              'Would lower to: a data-bind/update plan, inferred query-backed fragment target, isomorphic component, or renderOnce marker for the rendered position.',
+              'Blocked reason: the query/state expression is outside the current §4.8 update-plan grammar and is not inside an inferred server-refresh target.',
+              'Fixes: add a data-bind/query update plan, extract a derive/stamp, keep the component query-backed for inferred fragment refresh, mark it isomorphic, declare renderOnce, or set disableServerRefresh: true only when no enhanced refresh is intended.',
+              'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
+            ],
+            '\n',
+          ),
+        ],
+        '\n',
+      ),
+    },
+  );
 }
 
 function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {

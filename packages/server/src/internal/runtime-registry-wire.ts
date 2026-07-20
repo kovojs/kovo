@@ -1,4 +1,6 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type { BrowserPostureManifest } from '@kovojs/core/internal/security-operation-ir';
+import { snapshotCacheInfluenceManifest } from '@kovojs/core/internal/cache-influence';
 import {
   buildOwnDataProperty,
   buildSecuritySourceLiteral,
@@ -45,6 +47,13 @@ export interface RuntimeTableSecurityWireColumn {
   name: string;
 }
 
+/** @internal Compiler-derived declared row-key source. */
+export interface RuntimeTableSecurityWireKey {
+  columnKey: string;
+  columnName: string;
+  uniqueness: 'none' | 'primary' | 'unique';
+}
+
 /** @internal Compiler-derived direct owner source. */
 export interface RuntimeTableSecurityWireOwner {
   columnKey: string;
@@ -76,7 +85,10 @@ export interface RuntimeTableSecurityWireTable {
   authzPolicy?: RuntimeTableSecurityWireAuthzPolicy;
   authorizationClassifications: readonly RuntimeTableSecurityAuthorizationClassification[];
   columns: readonly RuntimeTableSecurityWireColumn[];
+  dialect?: 'postgres' | 'sqlite';
+  domain?: string;
   governedColumnKeys: readonly string[];
+  key?: RuntimeTableSecurityWireKey;
   name: string;
   owner?: RuntimeTableSecurityWireOwner;
   ownerVia?: RuntimeTableSecurityWireOwnerVia;
@@ -91,9 +103,124 @@ export interface RuntimeTableSecurityWireManifest {
 
 /** @internal Runtime registry wire schema shared by Vite dev and CLI build/export. */
 export interface RuntimeRegistryWireFacts {
+  browserPosture?: BrowserPostureManifest;
+  cacheInfluence?: NonNullable<CoreGraph.KovoCheckInput['cacheInfluence']>;
   mutationTouches: Readonly<Record<string, readonly RuntimeRegistryMutationTouchSite[]>>;
   queryReads: readonly RuntimeRegistryQueryReadFact[];
+  runtimePosture?: CoreGraph.RuntimePostureManifest;
   tableSecurity?: RuntimeTableSecurityWireManifest;
+}
+
+/** @internal Project the exact reviewed facts covered by the runtime posture digest. */
+export function runtimePostureFactsFromGraph(
+  graph: CoreGraph.KovoCheckInput,
+): CoreGraph.RuntimePostureFacts {
+  if (graph === null || typeof graph !== 'object') {
+    throw new TypeError('Runtime posture graph must be an object.');
+  }
+  const endpointAuth: CoreGraph.RuntimePostureRequestFact[] = [];
+  const authPostures = snapshotOptionalArray(
+    buildOwnDataProperty(graph, 'authPosture', 'runtime posture auth postures'),
+    'runtime posture auth postures',
+  );
+  const endpointsProperty = buildOwnDataProperty(graph, 'endpoints', 'runtime posture endpoints');
+  const endpoints = snapshotOptionalArray(endpointsProperty, 'runtime posture endpoints');
+  for (let index = 0; index < endpoints.length; index += 1) {
+    const endpoint = requireRecord(endpoints[index], `runtime posture endpoints[${index}]`);
+    const path = optionalString(endpoint, 'path') ?? '-';
+    const name = optionalString(endpoint, 'name') ?? path;
+    const method = optionalString(endpoint, 'method') ?? 'ANY';
+    const authKind = optionalString(endpoint, 'surface') === 'webhook' ? 'webhook' : 'endpoint';
+    commitBuildArrayValue(
+      endpointAuth,
+      freezeBuildSecurityValue({
+        auth: runtimePostureAuth(authPostures, authKind, name, optionalString(endpoint, 'auth')),
+        csrf: runtimePostureEndpointCsrf(method, optionalString(endpoint, 'csrf')),
+        method,
+        name,
+        path,
+        surface: 'endpoint' as const,
+      }),
+      'runtime posture endpoint auth fact',
+    );
+  }
+  const mutationsProperty = buildOwnDataProperty(graph, 'mutations', 'runtime posture mutations');
+  const mutations = snapshotOptionalArray(mutationsProperty, 'runtime posture mutations');
+  for (let index = 0; index < mutations.length; index += 1) {
+    const mutation = requireRecord(mutations[index], `runtime posture mutations[${index}]`);
+    const key = optionalString(mutation, 'key') ?? '-';
+    commitBuildArrayValue(
+      endpointAuth,
+      freezeBuildSecurityValue({
+        auth: runtimePostureAuth(authPostures, 'mutation', key, optionalString(mutation, 'auth')),
+        csrf: optionalString(mutation, 'csrf') ?? 'checked',
+        method: 'POST',
+        name: key,
+        path: `/_m/${key}`,
+        surface: 'mutation' as const,
+      }),
+      'runtime posture mutation auth fact',
+    );
+  }
+
+  const egressAllowlist: string[] = [];
+  const egressProperty = buildOwnDataProperty(graph, 'egressPosture', 'runtime posture egress');
+  if (egressProperty.present && egressProperty.value !== undefined) {
+    const egress = requireRecord(egressProperty.value, 'runtime posture egress');
+    appendStringArrayProperty(egressAllowlist, egress, 'allowDestinations', '');
+    appendStringArrayProperty(egressAllowlist, egress, 'allowInternal', 'internal:');
+    const disabled = buildOwnDataProperty(egress, 'disabled', 'runtime posture egress.disabled');
+    if (disabled.present && disabled.value === true) {
+      commitBuildArrayValue(egressAllowlist, 'DISABLED', 'runtime posture egress opt-out');
+    }
+  }
+
+  const trustEscapesProperty = buildOwnDataProperty(
+    graph,
+    'trustEscapes',
+    'runtime posture trust escapes',
+  );
+  const trustEscapes = snapshotOptionalArray(trustEscapesProperty, 'runtime posture trust escapes');
+  return freezeBuildSecurityValue({
+    endpointAuth: freezeBuildSecurityValue(endpointAuth),
+    egressAllowlist: freezeBuildSecurityValue(egressAllowlist),
+    irVersions: freezeBuildSecurityValue([
+      'kovo-check/v1',
+      'kovo-security-operation-ir/v1',
+      'kovo-runtime-posture/v1',
+    ]),
+    trustEscapes: freezeBuildSecurityValue(trustEscapes),
+  });
+}
+
+function runtimePostureAuth(
+  facts: readonly unknown[],
+  kind: 'endpoint' | 'mutation' | 'webhook',
+  name: string,
+  declared: string | undefined,
+): string {
+  if (declared !== undefined) return `declared:${declared}`;
+  for (let index = 0; index < facts.length; index += 1) {
+    const fact = requireRecord(facts[index], `runtime posture auth postures[${index}]`);
+    if (optionalString(fact, 'kind') !== kind || optionalString(fact, 'name') !== name) continue;
+    const guarded = buildOwnDataProperty(
+      fact,
+      'guarded',
+      `runtime posture auth postures[${index}].guarded`,
+    );
+    if (!guarded.present || typeof guarded.value !== 'boolean') {
+      throw new TypeError('Runtime posture auth fact guarded must be a boolean.');
+    }
+    return guarded.value ? 'guarded' : 'unguarded';
+  }
+  return 'unclassified';
+}
+
+function runtimePostureEndpointCsrf(method: string, declared: string | undefined): string {
+  if (declared !== undefined) return declared;
+  return method === 'GET' || method === 'HEAD' || method === 'OPTIONS'
+    ? 'safe:read-only'
+    : 'checked';
 }
 
 /** @internal Project static facts with enough shape to project runtime registry reads. */
@@ -346,14 +473,26 @@ function snapshotRuntimeTableSecurityTable(
   }
   const ownerValue = optionalRuntimeTableSecurityValue(value, 'owner', label);
   const ownerViaValue = optionalRuntimeTableSecurityValue(value, 'ownerVia', label);
+  const keyValue = optionalRuntimeTableSecurityValue(value, 'key', label);
+  const dialectValue = optionalRuntimeTableSecurityValue(value, 'dialect', label);
+  const domainValue = optionalRuntimeTableSecurityValue(value, 'domain', label);
+  if (dialectValue !== undefined && dialectValue !== 'postgres' && dialectValue !== 'sqlite') {
+    throw new TypeError(`Runtime table-security ${label}.dialect must be postgres or sqlite.`);
+  }
+  if (domainValue !== undefined && (typeof domainValue !== 'string' || domainValue.length === 0)) {
+    throw new TypeError(`Runtime table-security ${label}.domain must be a non-empty string.`);
+  }
   return freezeBuildSecurityValue({
     ...(authzPolicy === undefined ? {} : { authzPolicy }),
     authorizationClassifications: freezeBuildSecurityValue(authorizationClassifications),
     columns: freezeBuildSecurityValue(columns),
+    ...(dialectValue === undefined ? {} : { dialect: dialectValue }),
+    ...(domainValue === undefined ? {} : { domain: domainValue }),
     governedColumnKeys: snapshotRuntimeTableSecurityStrings(
       governedValue,
       `${label}.governedColumnKeys`,
     ),
+    ...(keyValue === undefined ? {} : { key: snapshotRuntimeTableSecurityKey(keyValue, label) }),
     name,
     ...(ownerValue === undefined
       ? {}
@@ -364,6 +503,26 @@ function snapshotRuntimeTableSecurityTable(
     secretColumnKeys: snapshotRuntimeTableSecurityStrings(secretValue, `${label}.secretColumnKeys`),
     secretDeclared,
   });
+}
+
+function snapshotRuntimeTableSecurityKey(
+  value: unknown,
+  label: string,
+): RuntimeTableSecurityWireKey {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`Runtime table-security ${label}.key must be an own-data record.`);
+  }
+  const columnKey = requiredRuntimeTableSecurityValue(value, 'columnKey', `${label}.key`);
+  const columnName = requiredRuntimeTableSecurityValue(value, 'columnName', `${label}.key`);
+  const uniqueness = requiredRuntimeTableSecurityValue(value, 'uniqueness', `${label}.key`);
+  if (
+    typeof columnKey !== 'string' ||
+    typeof columnName !== 'string' ||
+    (uniqueness !== 'none' && uniqueness !== 'primary' && uniqueness !== 'unique')
+  ) {
+    throw new TypeError(`Runtime table-security ${label}.key contains invalid facts.`);
+  }
+  return freezeBuildSecurityValue({ columnKey, columnName, uniqueness });
 }
 
 function snapshotRuntimeTableSecurityAuthzPolicy(
@@ -519,27 +678,176 @@ export function runtimeRegistryWireFactsFromGraph(
     throw new TypeError('Runtime registry graph must be an object.');
   }
   const queriesProperty = buildOwnDataProperty(graph, 'queries', 'runtime registry graph.queries');
+  const cacheInfluenceProperty = buildOwnDataProperty(
+    graph,
+    'cacheInfluence',
+    'runtime registry graph.cacheInfluence',
+  );
   const queries = queriesProperty.present ? queriesProperty.value : undefined;
   if (queries !== undefined && !witnessIsArray(queries)) {
     throw new TypeError('Runtime registry graph.queries must be an own data array.');
   }
+  const runtimePostureProperty = buildOwnDataProperty(
+    graph,
+    'runtimePosture',
+    'runtime registry graph.runtimePosture',
+  );
   return freezeBuildSecurityValue({
+    ...(!cacheInfluenceProperty.present || cacheInfluenceProperty.value === undefined
+      ? {}
+      : { cacheInfluence: snapshotCacheInfluenceManifest(cacheInfluenceProperty.value) }),
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(graph),
     queryReads: runtimeRegistryQueryReadsFromFacts(
       (queries ?? []) as readonly RuntimeRegistryQueryFactLike[],
     ),
+    ...(!runtimePostureProperty.present || runtimePostureProperty.value === undefined
+      ? {}
+      : {
+          runtimePosture: snapshotRuntimePostureManifest(runtimePostureProperty.value),
+        }),
   });
 }
 
 /** @internal Serialize the runtime registry virtual module consumed by dev and production. */
 export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWireFacts): string {
+  const browserPosture =
+    registry.browserPosture === undefined
+      ? ''
+      : `registerGeneratedBrowserPostureManifest(${buildSecuritySourceLiteral(registry.browserPosture)});\n`;
+  const cacheInfluence =
+    registry.cacheInfluence === undefined
+      ? ''
+      : `registerGeneratedCacheInfluenceManifest(${buildSecuritySourceLiteral(registry.cacheInfluence)});\n`;
   const queryReads = buildSecuritySourceLiteral(registry.queryReads);
   const mutationTouches = buildSecuritySourceLiteral(registry.mutationTouches);
   const tableSecurity =
     registry.tableSecurity === undefined
       ? ''
       : `registerGeneratedTableSecurityManifest(${buildSecuritySourceLiteral(registry.tableSecurity)});\n`;
-  return `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${tableSecurity}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
+  const runtimePosture =
+    registry.runtimePosture === undefined
+      ? ''
+      : `registerGeneratedRuntimePostureManifest(${buildSecuritySourceLiteral(registry.runtimePosture)});\n`;
+  return `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedRuntimePostureManifest, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${browserPosture}${cacheInfluence}${tableSecurity}${runtimePosture}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
+}
+
+function snapshotOptionalArray(
+  property: ReturnType<typeof buildOwnDataProperty>,
+  label: string,
+): readonly unknown[] {
+  if (!property.present || property.value === undefined) return [];
+  if (!witnessIsArray(property.value)) throw new TypeError(`${label} must be an own data array.`);
+  return snapshotBuildArray(property.value, label);
+}
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`${label} must be an own data record.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function optionalString(record: object, key: string): string | undefined {
+  const property = buildOwnDataProperty(record, key, `runtime posture ${key}`);
+  return !property.present || property.value === undefined
+    ? undefined
+    : typeof property.value === 'string'
+      ? property.value
+      : (() => {
+          throw new TypeError(`Runtime posture ${key} must be a string.`);
+        })();
+}
+
+function appendStringArrayProperty(
+  target: string[],
+  record: object,
+  key: string,
+  prefix: string,
+): void {
+  const property = buildOwnDataProperty(record, key, `runtime posture egress.${key}`);
+  const values = snapshotOptionalArray(property, `runtime posture egress.${key}`);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (typeof value !== 'string') {
+      throw new TypeError(`Runtime posture egress.${key}[${index}] must be a string.`);
+    }
+    commitBuildArrayValue(target, `${prefix}${value}`, `runtime posture egress.${key}`);
+  }
+}
+
+function snapshotRuntimePostureManifest(value: unknown): CoreGraph.RuntimePostureManifest {
+  const record = requireRecord(value, 'runtime posture manifest');
+  const schema = optionalString(record, 'schema');
+  const artifactSubject = optionalString(record, 'artifactSubject');
+  const postureDigest = optionalString(record, 'postureDigest');
+  const factsProperty = buildOwnDataProperty(record, 'facts', 'runtime posture manifest.facts');
+  if (
+    schema !== 'kovo-runtime-posture/v1' ||
+    artifactSubject === undefined ||
+    postureDigest === undefined ||
+    !factsProperty.present
+  ) {
+    throw new TypeError('Runtime posture manifest has an invalid shape.');
+  }
+  return freezeBuildSecurityValue({
+    artifactSubject: artifactSubject as `sha256:${string}`,
+    facts: snapshotRuntimePostureFacts(factsProperty.value),
+    postureDigest: postureDigest as `sha256:${string}`,
+    schema,
+  });
+}
+
+function snapshotRuntimePostureFacts(value: unknown): CoreGraph.RuntimePostureFacts {
+  const record = requireRecord(value, 'runtime posture facts');
+  const endpointProperty = buildOwnDataProperty(
+    record,
+    'endpointAuth',
+    'runtime posture facts.endpointAuth',
+  );
+  const endpointSource = snapshotOptionalArray(
+    endpointProperty,
+    'runtime posture facts.endpointAuth',
+  );
+  const endpointAuth: CoreGraph.RuntimePostureRequestFact[] = [];
+  for (let index = 0; index < endpointSource.length; index += 1) {
+    const fact = requireRecord(endpointSource[index], `runtime posture endpointAuth[${index}]`);
+    const surface = optionalString(fact, 'surface');
+    if (surface !== 'endpoint' && surface !== 'mutation') {
+      throw new TypeError('Runtime posture endpointAuth surface is invalid.');
+    }
+    commitBuildArrayValue(
+      endpointAuth,
+      freezeBuildSecurityValue({
+        auth: requiredString(fact, 'auth'),
+        csrf: requiredString(fact, 'csrf'),
+        method: requiredString(fact, 'method'),
+        name: requiredString(fact, 'name'),
+        path: requiredString(fact, 'path'),
+        surface,
+      }),
+      'runtime posture endpointAuth snapshot',
+    );
+  }
+  const egressAllowlist: string[] = [];
+  appendStringArrayProperty(egressAllowlist, record, 'egressAllowlist', '');
+  const irVersions: string[] = [];
+  appendStringArrayProperty(irVersions, record, 'irVersions', '');
+  const trustEscapes = snapshotOptionalArray(
+    buildOwnDataProperty(record, 'trustEscapes', 'runtime posture facts.trustEscapes'),
+    'runtime posture facts.trustEscapes',
+  );
+  return freezeBuildSecurityValue({
+    endpointAuth: freezeBuildSecurityValue(endpointAuth),
+    egressAllowlist: freezeBuildSecurityValue(egressAllowlist),
+    irVersions: freezeBuildSecurityValue(irVersions),
+    trustEscapes: freezeBuildSecurityValue(trustEscapes),
+  });
+}
+
+function requiredString(record: object, key: string): string {
+  const value = optionalString(record, key);
+  if (value === undefined) throw new TypeError(`Runtime posture ${key} is required.`);
+  return value;
 }
 
 function snapshotRuntimeTouch(

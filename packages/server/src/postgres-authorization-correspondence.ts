@@ -1,4 +1,5 @@
 import type { GuardAuditFact } from './guards.js';
+import { witnessFreeze, witnessGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 
 /**
  * The complete Postgres RLS SQL-emission vocabulary shipped by Kovo.
@@ -68,9 +69,18 @@ export interface PostgresOwnerPolicyParentLookup {
     | undefined;
 }
 
-/** A framework-derived ownership predicate. Its model semantics are branded module-privately. */
+/** A framework-derived row evaluator. Proof-bearing guards accept only the opaque binding below. */
 export interface FrameworkPostgresOwnsRow {
   (row: Readonly<Record<string, unknown>>, principal: string | undefined): Promise<boolean>;
+}
+
+export interface FrameworkPostgresOwnerPolicyAudit {
+  readonly columnName: string;
+  readonly domain: string;
+  readonly emissionSite: 'owner';
+  readonly keyColumnName: string;
+  readonly predicate: string;
+  readonly tableName: string;
 }
 
 export interface PostgresOwnerPolicyCounterexample {
@@ -97,7 +107,7 @@ export interface PostgresAuthorizationCorrespondenceExplainRecord {
   readonly decision?: PostgresOwnerPolicyCorrespondenceDecision;
   readonly guard: {
     readonly facts: readonly GuardAuditFact[];
-    readonly semantics: 'arbitrary-app-callback' | 'none';
+    readonly semantics: 'arbitrary-app-callback' | 'framework-derived-owner-column' | 'none';
   };
   readonly reason: string;
   readonly rls: {
@@ -112,7 +122,7 @@ export interface PostgresAuthorizationCorrespondenceExplainRecord {
     readonly writers: 1;
   };
   readonly schema: 'kovo.postgres.authorization-correspondence/v1';
-  readonly status: 'divergent' | 'unproven';
+  readonly status: 'divergent' | 'proved' | 'unproven';
 }
 
 type PrimaryPolicySqlInput = {
@@ -351,11 +361,7 @@ export function decidePostgresOwnerPolicyCorrespondence(
   });
 }
 
-/**
- * Put SQL and guard evidence in one honest explain record. Current public `guards.owns` callbacks
- * are arbitrary and therefore unproven. Even an abstract finite-model match remains unproven until
- * the separately reviewed migration binds the executable guard to the derived evaluator.
- */
+/** Put SQL and executable guard evidence in one honest correspondence record. */
 export function explainPostgresAuthorizationCorrespondence(input: {
   readonly guardModelVerdict?: (model: PostgresOwnerPolicyModel) => boolean;
   readonly guardFacts: readonly GuardAuditFact[];
@@ -364,14 +370,55 @@ export function explainPostgresAuthorizationCorrespondence(input: {
   const policy = input.policy;
   const guardFacts = Object.freeze([...input.guardFacts]);
   const ownerFragment = policy.emissionSite === 'owner' || policy.emissionSite === 'ownerVia';
-  const ownsFact = guardFacts.find((fact) => fact.kind === 'owns');
+  const frameworkOwnsFacts = guardFacts.filter(
+    (fact) => fact.kind === 'owns' && fact.staticProof === 'framework-derived-owner-column',
+  );
+  const frameworkOwnsFact = frameworkOwnsFacts[0];
+  const arbitraryOwnsFact = guardFacts.find(
+    (fact) => fact.kind === 'owns' && fact.staticProof === 'not-claimed',
+  );
   const roleFact = guardFacts.find((fact) => fact.kind === 'role');
-  const arbitraryOwns = ownsFact?.staticProof === 'not-claimed';
-  const decision =
+  const directPolicyTerm = policy.term?.kind === 'ownerColumn' ? policy.term : undefined;
+  const exactDerivedGuardShape =
+    frameworkOwnsFacts.length === 1 &&
+    guardFacts.every(
+      (fact) => fact.kind === 'authed' || fact.kind === 'named' || fact === frameworkOwnsFact,
+    );
+  const canonicalPolicyMatchesTerm =
+    directPolicyTerm !== undefined &&
+    policy.emissionSite === 'owner' &&
+    policy.predicate === renderPostgresOwnerPolicyPredicate(directPolicyTerm) &&
+    policy.tableName === directPolicyTerm.tableName;
+  const frameworkPolicyMatches =
+    ownerFragment &&
+    canonicalPolicyMatchesTerm &&
+    exactDerivedGuardShape &&
+    frameworkOwnsFact !== undefined &&
+    frameworkOwnsFact.ownerPolicy.emissionSite === policy.emissionSite &&
+    frameworkOwnsFact.ownerPolicy.columnName === directPolicyTerm?.columnName &&
+    frameworkOwnsFact.ownerPolicy.predicate === policy.predicate &&
+    frameworkOwnsFact.ownerPolicy.tableName === policy.tableName;
+  const suppliedDecision =
     ownerFragment && policy.term !== undefined && input.guardModelVerdict !== undefined
       ? decidePostgresOwnerPolicyCorrespondence(policy.term, input.guardModelVerdict)
       : undefined;
-  const status = decision?.status === 'divergent' ? 'divergent' : 'unproven';
+  const decision = frameworkPolicyMatches
+    ? decidePostgresOwnerPolicyCorrespondence(policy.term!, (model) =>
+        postgresOwnerPolicyModelAllows(policy.term!, model),
+      )
+    : suppliedDecision;
+  const frameworkPolicyMismatch =
+    ownerFragment &&
+    frameworkOwnsFact !== undefined &&
+    exactDerivedGuardShape &&
+    !frameworkPolicyMatches;
+  const additionalGuardSemantics = frameworkOwnsFact !== undefined && !exactDerivedGuardShape;
+  const status =
+    decision?.status === 'divergent' || frameworkPolicyMismatch
+      ? ('divergent' as const)
+      : frameworkPolicyMatches && arbitraryOwnsFact === undefined && roleFact === undefined
+        ? ('proved' as const)
+        : ('unproven' as const);
   const reason =
     decision?.status === 'divergent'
       ? 'The supplied guard semantics diverge from generated RLS; the decision record contains the first finite counterexample.'
@@ -379,17 +426,28 @@ export function explainPostgresAuthorizationCorrespondence(input: {
         ? `${policy.emissionSite} lies outside the two-constructor owner correspondence fragment.`
         : roleFact !== undefined
           ? 'Session-role guard facts have no generated RLS predicate counterpart.'
-          : arbitraryOwns
-            ? 'The public guards.owns callback is app-authored and has no claimed SQL correspondence.'
-            : decision?.status === 'proved'
-              ? 'The abstract guard model matches generated RLS, but no executable guard is yet bound to the framework-derived ownsRow evaluator.'
-              : 'No framework-derived ownsRow term is bound to this executable guard.';
+          : frameworkPolicyMismatch
+            ? 'The framework-derived owner guard is bound to a different generated Postgres owner policy.'
+            : additionalGuardSemantics
+              ? 'Additional executable guard semantics prevent an exact guard/RLS correspondence proof.'
+              : frameworkPolicyMatches && arbitraryOwnsFact === undefined
+                ? 'The executable guard is bound to the framework-derived evaluator for this exact generated Postgres owner policy.'
+                : arbitraryOwnsFact !== undefined
+                  ? 'The public guards.unprovenOwns callback is app-authored and has no claimed SQL correspondence.'
+                  : decision?.status === 'proved'
+                    ? 'The abstract guard model matches generated RLS, but no executable guard is bound to the framework-derived evaluator.'
+                    : 'No framework-derived owner-policy binding is attached to this executable guard.';
 
   return Object.freeze({
     ...(decision === undefined ? {} : { decision }),
     guard: Object.freeze({
       facts: guardFacts,
-      semantics: arbitraryOwns ? ('arbitrary-app-callback' as const) : ('none' as const),
+      semantics:
+        arbitraryOwnsFact !== undefined
+          ? ('arbitrary-app-callback' as const)
+          : frameworkOwnsFact !== undefined
+            ? ('framework-derived-owner-column' as const)
+            : ('none' as const),
     }),
     reason,
     rls: Object.freeze({
@@ -472,10 +530,10 @@ async function evaluateConcreteOwnerRow(
   lookupParent: PostgresOwnerPolicyParentLookup,
 ): Promise<boolean> {
   if (term.kind === 'ownerColumn') {
-    const owner = row[term.columnName];
+    const owner = concretePostgresRowValue(row, term.columnName);
     return owner !== null && owner !== undefined && owner === principal;
   }
-  const fkValue = row[term.fkColumnName];
+  const fkValue = concretePostgresRowValue(row, term.fkColumnName);
   if (fkValue === null || fkValue === undefined) return false;
   const parent = await lookupParent({
     keyColumnName: term.parentKeyColumnName,
@@ -484,6 +542,15 @@ async function evaluateConcreteOwnerRow(
   });
   if (parent === undefined) return false;
   return evaluateConcreteOwnerRow(term.parent, parent, principal, lookupParent);
+}
+
+function concretePostgresRowValue(
+  row: Readonly<Record<string, unknown>>,
+  columnName: string,
+): unknown {
+  if (typeof row !== 'object' || row === null) return undefined;
+  const descriptor = witnessGetOwnPropertyDescriptor(row, columnName);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
 }
 
 function assertPostgresOwnerPolicyTerm(term: PostgresOwnerPolicyTerm): void {

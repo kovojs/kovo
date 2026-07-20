@@ -32,9 +32,36 @@ Kovo-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1
 </kovo-fragment>
 ```
 
+**Framework wire-input registry (normative).** Every framework-owned header, cookie, or URL-search
+input belongs to one core-owned typed registry that declares its carrier, canonical name, and finite
+grammar. Kovo's browser encoder and server decoder for a structured wire value MUST be derived from
+the same exact codec; independent handwritten implementations of the grammar are not conforming.
+The codec is covered by a seeded `decode(encode(value)) ≡ value` oracle, including delimiter,
+escaping, Unicode, size, and malformed-input cases.
+
+Every framework-owned read of a registered carrier MUST pass through a named canonical reader and
+be present in the exact TypeScript-symbol census enforced by `check:wire-input-boundary`. A literal
+read binds the exact carrier and canonical name in the registry. Only an explicitly reviewed
+dynamic door may bind the registry's `*` name, and that door remains responsible for applying the
+selected entry's grammar before the value reaches framework behavior. Same-named lookalikes do not
+satisfy the census. App-owned reads and reviewed third-party adapters are outside this registry
+unless their value enters a named framework protocol door; at that point the normal registry and
+reject-by-default rules apply.
+
 - `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The wire format is `target=queryInstance queryInstance`; singleton targets use the derived leaf (`cart-badge=cart`), and repeated targets include their stable keyed suffix (`product-form:p2=product:p2`). The server holds **no session of what's on screen** — it answers a stateless question.
 - `Kovo-Live-Targets` is the structured reconstruction companion for server-refreshable component targets. Each entry names the live target, its generated component registry key, and the serialized props/key identity the compiler proved sufficient to reconstruct the component instance. Every entry MUST carry a server-minted attestation over that canonical descriptor, the canonical source-document URL (origin, path, and query; never the fragment), the exact §5.2.1 render-plan/build token, the CSRF session binding (including the framework-minted anonymous CSRF cookie when there is no app session), the independently resolved framework principal, and a separate app authority audience. A mutation or HMR sink MUST same-origin validate that source URL, match it to one canonical app route, rerun the route's complete layout/route guard chain, and use only the resulting authorized source-route request for response-side query and component rendering; the mutation or HMR endpoint request is never a substitute render context. A typed failure may select only the compiler-owned component renderer that both matches the submitted form target and declares the submitted mutation key. `createApp({ appId })` supplies the replica-stable app part of the audience; it MUST be a canonical UUIDv4 generated once per distinct app. A production app with live-target renderers MUST declare it, and distinct apps MUST use distinct UUIDs and signing secrets even across processes or isolates. A rendererless production app or development app that omits `appId` receives only a boot-local audience, never distributed authority. The render-plan/build token is deploy-skew identity and MUST NOT be treated as the app security principal merely because two apps can share the same render contract; both values are signed independently. Dev mode keeps the descriptor explicit and inspectable; prod may replace the JSON with a versioned token only when `kovo explain` can recover the same value. App authors never construct this header, import target constants, or route mutations to fragments by hand.
 - The synchronizer token, replay scope, and live-target attestation consume one exact CSRF binding. On a framework lifecycle request, `CsrfOptions.sessionId` MUST return an opaque non-empty string of at most 1,024 characters for a resolved session and `undefined` only for a genuinely anonymous request. A non-string, missing, empty, or oversized authenticated value, an unresolved framework session, or an anonymous framework posture paired with a defined id fails closed; it never falls back to the anonymous cookie. Standalone CSRF helper inputs without framework lifecycle posture continue to treat the callback as their declared session/anonymous authority. Session ids and anonymous-cookie secrets occupy separately labeled, canonical length-framed domains, and the framework-resolved authorization principal is independently framed into authenticated bindings, so shared or namespace-shaped rotation ids cannot validate or replay across principals. Every authorization principal and source-derived mutation identity entering that replay scope is non-empty and at most 1,024 JavaScript code units. An inbound anonymous-cookie secret is 32..1,024 base64url characters (framework minting produces 43); a present malformed or oversized cookie fails closed instead of being silently replaced.
+- Principal-derived durable authority carries the §6.6 persistent epoch without making it a
+  caller-selected wire knob. A capability URL payload uses version `v4` and includes signed `p`
+  (the positive integer epoch) whenever signed `s` (the principal scope) is present; a scoped token
+  missing either field, an unscoped token carrying `p`, and every older version are malformed. The
+  route checks signature, expiry, request-derived key/method/scope, and authoritative epoch before
+  burning one-time replay truth or reading storage, and exposes only the existing generic 404 on
+  failure. Mutation `Kovo-Idem` remains the canonical `v1` client token: the server-minted durable
+  replay receipt, not this untrusted header/field, appends the current epoch to its principal-bound
+  replay namespace. Response release, handler admission, in-transaction completion, and settlement
+  each recheck current epoch; stale receipts are never released or silently moved into the new
+  namespace.
 - The compiler's enhanced-form completeness check follows HTML successful-control semantics rather
   than treating every matching JSX element as one simultaneous value. A single checkbox is a
   supported scalar boolean: checked submits its string value (`on` when omitted), while absence
@@ -138,6 +165,14 @@ browser-state proof as an authored cookie on every safe-method or CSRF-exempt en
 
 Raw HTTP integrations use declared `endpoint()` entries, not ad-hoc server escape hatches. An endpoint is registry-visible, receives `Request -> Response`, requires an explicit HTTP `method` (there is no implicit any-method endpoint), requires an endpoint-level `reason`/`purpose`, and is enrolled in the endpoint and unguarded audits with the same auth metadata as routes, queries, and mutations. Prefix mounts require a `mountJustification` because they enlarge the routed surface beyond one path. Endpoint declarations also carry raw response posture metadata for the audit row: body class (`html`, `json`, `text`, `bytes`, `stream`, or `redirect`), cache posture, and whether app code owns body encoding plus response-header safety. That app-owned posture never transfers message-framing or hop-by-hop authority: the framework still reconstructs raw response headers and applies the adapter-owned-field KV415 floor above. The closed safe-method set is `GET`, `HEAD`, and `OPTIONS`; every other method, including an extension method unknown to Kovo, is unsafe and receives the default synchronizer-token check unless the endpoint explicitly opts out of CSRF with a named justification. A safe-method endpoint receives only a managed DB Reader from `ctx.actAs()` and MUST NOT emit `Set-Cookie` or `Clear-Site-Data`; an executable non-ambient verifier that actually succeeds for the exact request (or an equivalent private framework-owned self-verifying receipt) may authorize those browser-state effects. The runtime enforces both known capability boundaries even if application types are bypassed. App-owned side effects outside Kovo's capability and response sinks remain the application's responsibility, so authors MUST use an unsafe method for a state-changing operation. Endpoint handlers receive the raw `Request` before body parsing so signature verification can use wire bytes; exact and prefix mounts are declared; cookies are not interpreted and no ambient `req.session` is passed. A CSRF exemption is sound only because endpoint/webhook auth does not ride ambient browser authority. OAuth/SAML callbacks and adapter-owned mounts belong here; browser credential forms should still prefer typed `mutation()` flows so they keep schema validation, no-JS behavior, and the normal response vocabulary.
 
+An endpoint that legitimately streams or long-polls beyond the app deadline MAY declare
+`response.longLived: { deadlineMs, justification }`. This is the only request-deadline escape: it
+selects one endpoint-scoped finite deadline from 1 through 300,000 ms, requires a non-empty audited
+justification, and is printed as `deadline=long-lived:<milliseconds>:<justification>` by
+`kovo explain --endpoints`. It does not disable or enlarge the app's occupancy budget, does not
+apply to another endpoint or route, and does not exempt the response from adapter write-out
+cancellation. Omitting the declaration uses the app deadline.
+
 An endpoint `auth` declaration MAY carry an executable verifier from the webhook verifier kit. When present, the dispatcher MUST verify cloned raw wire bytes `{ headers, payload }` before CSRF validation and before the handler runs; verifier `false`, malformed input, or thrown verifier errors fail closed with `401 Unauthorized`, and the original request body remains readable by the handler after a successful check. Name-only endpoint auth declarations remain audit metadata. `webhook()` continues to emit name-only endpoint auth because it self-enforces raw-byte verification in its own lifecycle before parsing.
 
 `webhook()` is the shaped machine-endpoint primitive for third-party POSTs that write Kovo-owned data. Shape: `webhook('/provider/path', { verify, input, idempotency, handler })`, lowering to a registry-visible endpoint with a source-derived webhook identity (§4.1) and `auth=verifier:<resolved scheme>` unless an explicitly justified custom/none verifier is used. The first string is the public HTTP receiver path, not the webhook registry name. The lifecycle is fixed: capture one request clock and the raw bytes → verify → parse/coerce a loose input schema (unknown provider fields pass through) → construct and validate an authenticated provider-event replay identity → atomically reserve/replay under the source-derived webhook identity → optional framework transaction wrapper → handler receives a machine-ingress context with no ambient session and dispatches Kovo-owned writes through `context.runMutation(mutation, input)` → the called mutation owns the audited DB write, touch set, and static diagnostics → commit/store the response and emit the unified change record `{domain, keys, input}` derived from the called mutation's committed changes.
@@ -149,6 +184,46 @@ The replay store receives the canonical `{ key, occurredAtMs, expiresAtMs }` fac
 The verifier kit is part of the normative surface for `webhook()`: `hmacSignature({ header, payload, encoding, tolerance, multiSig })` is the generic form, and `standardWebhooks({ secret })` is the shared non-vendor preset that resolves to printed generic HMAC configuration. Provider-specific HMAC recipes live in app/example code on top of `hmacSignature`, not in framework package exports. Verification is over raw bytes, uses constant-time comparison, enforces timestamp tolerance, and supports rotated secrets/multiple signatures. Non-HMAC providers use a custom `verify(request)` escape that appears as custom auth in the audit; `verify: 'none'` requires a named justification and appears as unauthenticated machine ingress.
 
 ### 9.2 Errors
+
+#### Rejection equivalence and observation policy (normative)
+
+Every remotely reachable surface for which account existence, resource existence/ownership, a
+secret, or a governed value can change the response MUST have an explicit
+`kovo-response-observation/v1` policy. Schema `owner:`, `secret:`, and `governed` facts nominate
+surfaces for this review; they do not choose a product policy or prove equivalence. A nominated
+surface without a policy is a build refusal. A policy names the two worlds being compared and one
+of the canonical classes below. The only canonical world pairs are `exists-not-owned` versus
+`absent`, `account-present` versus `account-absent`, and `unexpected-cause-a` versus
+`unexpected-cause-b`; a product-specific pair requires a separately reviewed class rather than an
+alias to one of these names.
+
+An attacker observation is the tuple
+`(status, redirect, selected end-to-end headers, normalized cookies/tokens, body relation,
+connection behavior, work-factor class, timing distribution)`. Header names are compared
+case-insensitively and order-independently after adapter-owned framing fields are removed.
+`Set-Cookie` is compared by cookie name, security attributes, expiry class, and token
+presence/shape; fresh random token bytes are never required to be equal. The body relation names
+media type, encoding, length relation, and content relation. Connection behavior distinguishes a
+complete response, reset/abort, and timeout. Work factor names the finite operation class and count.
+Timing is a distribution checked against a versioned statistical budget; this is not a claim of
+constant-time execution. An oracle compares the declared tuple fields and relations, not raw
+response bytes. Provider delivery and other effects outside the framework-controlled HTTP boundary
+are excluded unless the policy explicitly includes and measures them.
+
+| Canonical class         | Required worlds                                                          | Required attacker-visible relation                                                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input-validation`      | validly parsed but rejected inputs selected by the declared error schema | HTTP 422; no redirect or credential token; declared typed body vocabulary. Error codes and field paths may differ, so this class does not conceal which submitted field failed.                                                                                                                           |
+| `authentication-needed` | enhanced versus no-JS transport for the same unauthenticated request     | The transport difference is intentional: enhanced HTTP 401 plus `Kovo-Reauth`; no-JS HTTP 303 to the same-origin login route with the same canonical `next`. Neither response establishes a session.                                                                                                      |
+| `authorization-denied`  | authenticated principals denied by the same guard                        | HTTP 403 and the declared `unauthorized` failure body. This class does not conceal resource existence; a surface that must do so selects `resource-concealment`.                                                                                                                                          |
+| `resource-concealment`  | `exists-not-owned` versus `absent`                                       | Identical 404 status, no redirect, `Cache-Control: private, no-store`, credential-varying headers, no cookie/token mutation, the same fixed body media type/bytes/length, complete connection behavior, equivalent storage/verification work class, and a timing distribution within the declared budget. |
+| `account-creation`      | `account-present` versus `account-absent`                                | The same generic accepted status/redirect/body relation; no account-dependent cookie or token. A surface claiming this class cannot auto-establish a session in only one world. Framework-controlled lookup/write/credential work is normalized and its timing stays within budget.                       |
+| `account-recovery`      | `account-present` versus `account-absent`                                | The same generic accepted status/redirect/body relation and no account-dependent cookie/token. Framework-controlled token-generation, lookup, queueing/decoy work, and timing are normalized; delivery by an external mail provider is outside the claim unless separately measured.                      |
+| `unexpected-failure`    | `unexpected-cause-a` versus `unexpected-cause-b`                         | The surface-specific stable sanitized HTTP 500 tuple defined below; no cause-derived header, cookie/token, body content/length, connection behavior, or work-class difference before the response is committed.                                                                                           |
+
+The table is a minimum floor. A surface may declare a stricter relation, but MUST NOT claim a class
+while omitting one of the tuple axes or silently treating a raw-byte mismatch as acceptable. The
+versioned policy and its dual-world oracle are release evidence; a passing unit fixture is not a
+timing guarantee for every deployment.
 
 Validation failures (schema, with field paths) and declared error codes return HTTP 422. The enhanced
 path infers the submitted form instance from the request's compiler-emitted form target and returns a
@@ -209,13 +284,26 @@ Content-Type: text/html; charset=utf-8
 <kovo-query name="product:p1">{ "name": "Mug", "stock": 4 }</kovo-query>
 ```
 
-Every `/_q/` response MUST carry the build's render-plan version token (§5.2.1) so a refetch into a stale tab is detected like a delta is: a client whose document token differs from the response token discards the in-place merge and performs §14 recovery rather than merging a foreign-shape value. Args arrive as search params through the query's `args` schema (§10.2) — the same `s.*` coercion machinery as forms. The query's `guard` (§10.2) is checked on **every** read, and reads are part of the unguarded audit. The instance key in the response (`product:p1`) is the §10.2 canonical encoding — the single currency shared across client store, wire, and optimism.
+Every `/_q/` response MUST carry the build's render-plan version token (§5.2.1) so a refetch into a stale tab is detected like a delta is: a client whose document token differs from the response token discards the in-place merge and performs §14 recovery rather than merging a foreign-shape value. Args arrive as search params through the query's `args` schema (§10.2) — the same `s.*` coercion machinery as forms. A query with no declared `args` schema MUST reject a non-empty search input with 422 before running lifecycle providers, guards, or its loader; an absent schema is not an unvalidated-input mode. The query's `guard` (§10.2) is checked on **every** admitted read, and reads are part of the unguarded audit. The instance key in the response (`product:p1`) is the §10.2 canonical encoding — the single currency shared across client store, wire, and optimism.
 
-**Caching contract (normative).** `/_q/<key>` is a credentialed GET whose body varies by identity, so a URL that differs only by args is a shared-cache key collision waiting to leak one principal's data to another. A `/_q/` response for a guarded or otherwise session-dependent query (a query with a `guard`, or whose instance key or `load` reads `req.session.*`) MUST carry `Cache-Control: private, no-store` and `Vary: Cookie`, so no shared (CDN/proxy) cache can store it and a browser cache cannot serve it across the guard. This holds for every transport that hits `/_q/` — loader fetch, refetch-on-focus (§9.3), GET-form fragment responses (§7), and async option/search reads. The directives may be relaxed (to a cacheable posture) only for a query the compiler proves session-independent — no guard and no `req.session` read in its key or `load` — mirroring the export session-dependence proof (§9.5/KV229); such a query may set an explicit `Cache-Control` through its declared read config. A guarded query may never be served from a shared cache: the guard-at-every-read invariant must not be bypassable by an intermediary.
+**Caching contract (normative).** `/_q/<key>` is a credentialed GET whose body may vary by identity, so a URL that differs only by args is a shared-cache collision waiting to disclose one principal's data to another. Every compiler-emitted app graph with query or raw-endpoint roots therefore carries one versioned `kovo-cache-influence/v1` manifest. Each query or raw-endpoint root records URL path and search as cache-key axes, each statically named request-header read as a possible `Vary` axis, and cookies, Authorization, principal/session facts, secrets, framework state, declared external-data versions, and unclassified influence as distinct axes. A declared external-data version is cacheable only when its version has a manifest-visible URL or named-request-header key contribution. Framework state without complete keyed external versions, a dynamic header name, an opaque call, or any influence outside the finite reviewed language closes shared caching. One observed execution is never positive evidence. A named audited escape may retain an explicit operator obligation, but it remains distinguishable from `public-proved` compiler evidence.
+
+The build MUST compare the evaluated cache declaration with the exact compiler manifest and fail closed on a missing public root or any intent, external-version, axis, `Vary`, or verdict drift. Runtime observations are rejection-only: a missing or closed compiler verdict cannot be widened by an anonymous-looking request. A typed query may emit its declared public `Cache-Control` only when the registered manifest has the exact root, surface, declaration, and a `public-proved` or named `audited-escape` verdict, and the current request has no Cookie, Authorization, resolved principal/session, or opaque request carrier. Otherwise it MUST emit `Cache-Control: private, no-store` and `Vary: Cookie`. Document execution applies the same current-response rejection floor for Cookie, Authorization, unresolved/resolved principal state, late executable bodies, and other existing personalization witnesses. These floors hold for every transport that hits `/_q/` — loader fetch, refetch-on-focus (§9.3), GET-form fragment responses (§7), and async option/search reads — and for document responses through every adapter.
+
+`Vary` MUST be derived only from normalized, statically named request-header axes in the manifest. URL path/search already participate in the cache key and MUST NOT be encoded as `Vary`; principal/session state, Cookie, Authorization, secrets, framework state, and unclassified influence close shared caching rather than becoming attacker-controlled `Vary` tokens. A guarded or otherwise principal-dependent query may never be served from a shared cache: the guard-at-every-read invariant must not be bypassable by an intermediary.
 
 ### 9.5 Request shell
 
 The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, unexpected-error shells, CSRF config, the `db` provider, the §6.5 `sessionProvider`, the frozen declared `app.env` projection from §6.6, and a replica-stable `appId` used to distinguish live-target authority between apps with identical render contracts (required when production apps own live-target renderers). Generated route IR and live-target registry artifacts are wired by the compiler/build integration, not by app-authored `createApp({ generated, refresh })` options. The loader MUST establish an app-owned registry scope before evaluating generated modules; concurrent or top-level-await app graphs may not share a process-global pending registry, unscoped late/HMR registration is not runtime authority, and mutation/HMR sinks may not fall back from their closed app inventory to a process registry. Vite/dev integration points at an authored app entry, for example `kovo({ app: '/src/app.tsx' })` from `@kovojs/server/vite`; the entry must default-export a `KovoApp` and must not point into `src/generated/*`. Compiler-owned plugins resolve route IR, live-target registries, and generated client modules internally. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
+
+The same bootstrap-first generated-registry channel carries the §6.6 browser response posture.
+Vite/dev and production build scan the project source snapshot, serialize the exact
+`kovo-browser-posture/v1` manifest into a framework-owned virtual/generated module, and execute its
+registration before the app entry. Document assembly re-witnesses that carrier and derives CSP,
+Permissions Policy, and optional COOP/COEP/CORP from it. App code cannot register, replace, or
+release this boot fact, and a second non-identical registration is a boot error. Direct library
+tests that omit the generated runner retain only the conservative non-isolated response posture;
+they cannot opt into cross-origin isolation without an explicit compiler manifest.
 
 Dispatch order is normative and printable: `/_m/<mutation-key>` mutations, `/_q/<query-key>` typed reads, `/c/__v/<version>/<module>` immutable client modules, declared `endpoint()` exact/prefix mounts, route table, then the 404 shell. There is no user middleware chain in v1. Extension points that can affect control flow are declared surfaces — `sessionProvider`, guards, `endpoint()`, `webhook()` — so audits can print them and no request behavior is registered from a distance.
 
@@ -230,6 +318,9 @@ snapshotted and validated before the authored handler graph is imported. Invalid
 ambiguous, or combined posture fails process boot. Authentication deployments MUST additionally
 satisfy §6.6's exact configured-origin binding, so a trusted forwarded scheme paired with the wrong
 host or port is rejected before auth state is read or changed.
+The deployment's proxy, TLS-edge, cache, cookie-domain, schema-writer, and bootstrap assumptions are
+reported through the door-derived `kovo check env` contract in §11.4; configuring this adapter does
+not by itself discharge facts the command cannot observe.
 
 **Shared request-ingress decision (normative).** Transport-source selection and hostile-value
 grammar are separate steps, and the supported source set is finite. An HTTP/1 Node source MUST
@@ -302,6 +393,38 @@ serialized URL authority delivered by its named platform bridge and reconstructs
 `Host` from that verdict; this is not evidence about a raw authority the platform already erased.
 
 **Pre-dispatch load shed (normative).** Because there is no user middleware chain, the request shell/adapter itself owns a coarse limiter that runs **ahead of** replay lookup, schema parse/coercion, and the guard chain (§10.3) — guard combinators such as `rateLimit({ per: 'session' })` shed load only after CSRF, replay, and parse have already paid out, and `per: 'session'` cannot distinguish a flood of null-session attackers, so they are insufficient as the only chokepoint. Before any `/_m/`, `/_q/`, `endpoint()`, or route dispatch the shell MUST enforce: (1) a maximum request/body size — a request exceeding it is rejected with **413** before the body is parsed; streamed bodies additionally have a hard 4,096-chunk budget and exceeding it is the same 413-class body-limit failure even when the byte count remains below the configured maximum, so adversarial transfer fragmentation cannot turn the byte limit into unbounded per-chunk work; (2) a serialized request-target ceiling of 65,536 JavaScript string code units and a 10,000-entry URL-query ceiling — Node/Vite/generated adapters MUST scan the raw target before constructing a Web `Request`, `URL`, or `URLSearchParams`, and a direct Web handler MUST scan `Request.url` before constructing `URL`/`URLSearchParams`; either target violation is rejected with **414**, including for static and not-found paths; (3) URL-encoded body segments and multipart parts share the same default KV430 breadth ceiling of 10,000 entries, counted before record reconstruction, split, or part adoption, so a compact separator-heavy carrier cannot amplify into an unbounded parser graph; and (4) a coarse per-IP and global request-rate budget — a request over budget is rejected with **429** carrying `Retry-After`, before replay+parse. `createApp({ requestLimits })`, its body-size gate, and every base or per-surface rate budget are mandatory finite postures and MUST NOT accept `false`; author-supplied maxima are bounded to 67,108,864 body bytes, 100,000 query/list result items, 1,000,000 requests per rate window, 100,000 retained rate keys, and an 86,400,000 ms rate window. These limits are normative defaults configured on `createApp()` (per-IP and global `/_m/` and `/_q/` request rates, max body size, and a bound on fragment-targets reconstructed per response, §9.1); the coarse limiter is identity-blind on purpose so it survives the anonymous flood the session-scoped limiter cannot. This pre-dispatch posture is enrolled in and printed by the `--endpoints` audit. The fine-grained `rateLimit` guard combinator still runs in the guard chain for per-principal policy. It admits a `per: 'ip'` (and global) dimension in addition to `per: 'session'`, so an anonymous or per-IP budget can also be expressed at the guard layer; the coarse shell limiter and the guard combinator compose rather than replace each other.
+
+The same pre-dispatch door MUST acquire one app-local occupancy slot and mint one framework-owned
+request deadline before any DB provider, request-body read, guard, transaction, or handler work.
+`requestLimits.deadlineMs` defaults to 30,000 ms and is a finite integer from 1 through 300,000;
+`requestLimits.maxInFlight` defaults to 256 and is a finite integer from 1 through 10,000. Neither
+posture accepts `false`. A request at the occupancy ceiling is rejected with **503 Service
+Unavailable** and `Retry-After: 1` before that work starts.
+
+The admitted request's framework-owned `AbortSignal` MUST be the signal visible to authored request
+code and consumed by every Kovo-owned request effect door: outbound fetch (including bounded DNS
+wait), DB admission/provider wait and transaction checkpoints, deferred-region selection, response
+stream flush, and an adapter-owned final transport where Kovo controls one. The response-mint door
+MUST discard a handler result that loses the deadline/disconnect race. An unfinished response body
+MUST error and cancel its source at expiry. The Node adapter MUST additionally destroy an unfinished
+response transport at expiry and retain the occupancy slot through actual `finish` or `close`; its
+backpressure-aware pipeline therefore cannot turn a slow reader into an unbounded write. A
+Fetch-native adapter can bound only the Web response stream Kovo owns; the platform's post-handoff
+client transport is outside Kovo's proof.
+
+Occupancy release is one-shot. It occurs immediately on deadline or ingress disconnect, on an
+exception before response mint, on direct-Web response-body completion/cancel/error, and for a
+bodyless direct-Web response at mint because no later transport receipt exists. When an adapter
+claims the final transport, body completion alone does not release the slot: actual transport
+`finish`/`close` does. Deadline/disconnect release does not assert that arbitrary authored work has
+stopped; it prevents that abandoned work from retaining admission forever and revokes the
+framework-owned capabilities it could otherwise continue to use.
+
+This is cooperative cancellation, not JavaScript preemption. Kovo does not claim to terminate an
+arbitrary Promise, a synchronous loop, native extension work, an uncooperative third-party API, SQL
+already issued to a driver without cancellation support, or a transaction already committed. Such
+work may continue after its result becomes ineligible for the response. A hard guarantee over those
+cases would require app execution in a terminable worker or process.
 
 **Trusted-proxy per-IP identity (normative).** When `trustedProxy` enables Kovo's built-in
 `X-Forwarded-For`, `X-Real-IP`, or RFC 7239 `Forwarded` source, the selected proxy-nearest hop MUST

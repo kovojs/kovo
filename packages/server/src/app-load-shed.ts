@@ -14,6 +14,7 @@ import {
 } from './request-carrier.js';
 import { securityUint8ArrayLength } from './response-security-intrinsics.js';
 import { requestDecodeUtf8, requestParseJson } from './request-body-intrinsics.js';
+import { securityEvent } from './security-event.js';
 import {
   requestStateHeaderGet,
   requestStateCanonicalClientIpValue,
@@ -49,6 +50,15 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import {
+  completeRequestDeadlineAdmission,
+  createRequestDeadlineAdmission,
+  readRequestBodyChunkWithCurrentDeadline,
+  requestDeadlineTransportManaged,
+  runRequestDeadlineTask,
+  wrapRequestDeadlineResponse,
+  type RequestDeadlineAdmission,
+} from './request-deadline.js';
 
 export type LoadShedSurface = AppSystemResponseSurface;
 
@@ -76,15 +86,38 @@ interface AppRateState {
   readonly stores: Map<string, RateBucketStore>;
 }
 
+interface AppOccupancyState {
+  inFlight: number;
+}
+
 interface RateLimitDecision {
   retryAfterSeconds: number;
+}
+
+interface FrameworkLoadShedFact {
+  readonly code: 'KV433';
+  readonly reason: string;
+  readonly retryAfterMs: number;
+}
+
+/** Framework-only input for a provenance-registered app admission failure. */
+export interface FrameworkLoadShedErrorInput {
+  readonly code: 'KV433';
+  readonly reason: string;
+  readonly retryAfterMs: number;
 }
 
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_RATE_KEYS = 10_000;
 const DEFAULT_MAX_BODY_BYTES = 1_048_576;
+const DEFAULT_REQUEST_DEADLINE_MS = 30_000;
+const DEFAULT_REQUEST_MAX_IN_FLIGHT = 256;
 /** @internal Hard body ceiling retained even when a file schema raises the app default. */
 export const MAX_APP_REQUEST_BODY_BYTES = 67_108_864;
+/** @internal */
+export const MAX_APP_REQUEST_DEADLINE_MS = 300_000;
+/** @internal */
+export const MAX_APP_REQUEST_IN_FLIGHT = 10_000;
 /** @internal */
 export const MAX_APP_REQUEST_QUERY_LIST_ITEMS = 100_000;
 /** @internal */
@@ -128,6 +161,65 @@ const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = witnessFreeze({
 const requestPeerAddressProperty = '__kovoPeerAddress';
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
+const frameworkLoadShedErrors = createWitnessWeakMap<Error, FrameworkLoadShedFact>();
+
+/** @internal Mint a fail-closed admission error that the outer app shell may render as 503. */
+export function mintFrameworkLoadShedError(input: FrameworkLoadShedErrorInput): Error {
+  if (input.code !== 'KV433') {
+    throw new TypeError('Framework load-shed errors require the KV433 database authority code.');
+  }
+  if (typeof input.reason !== 'string' || input.reason.length < 1 || input.reason.length > 1_024) {
+    throw new TypeError('Framework load-shed errors require a bounded non-empty reason.');
+  }
+  if (
+    !requestStateIsSafeInteger(input.retryAfterMs) ||
+    input.retryAfterMs < 1 ||
+    input.retryAfterMs > MAX_APP_REQUEST_RATE_WINDOW_MS
+  ) {
+    throw new TypeError(
+      `Framework load-shed retryAfterMs must be an integer from 1..${MAX_APP_REQUEST_RATE_WINDOW_MS}.`,
+    );
+  }
+  const error = new Error(`${input.code}: ${input.reason}`);
+  error.name = 'KovoFrameworkLoadShedError';
+  witnessWeakMapSet(
+    frameworkLoadShedErrors,
+    error,
+    witnessFreeze({
+      code: input.code,
+      reason: input.reason,
+      retryAfterMs: input.retryAfterMs,
+    }),
+  );
+  return error;
+}
+
+/** @internal Render only a framework-minted admission failure through the app load-shed shell. */
+export function frameworkLoadShedErrorResponse(
+  error: unknown,
+  options: {
+    buildToken?: string;
+    method: string;
+    surface: LoadShedSurface;
+  },
+): Response | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const fact = witnessWeakMapGet(frameworkLoadShedErrors, error);
+  if (fact === undefined) return undefined;
+  securityEvent({ reason: 'database-admission', type: 'budget-exhausted' });
+  // @kovo-security-denial budget-exhausted database-admission
+  return appSystemResponse('Service Unavailable', {
+    ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': requestStateString(requestStateRetryAfterSeconds(fact.retryAfterMs)),
+    },
+    method: options.method,
+    status: 503,
+    surface: options.surface,
+  });
+}
 const NativeUint8Array = globalThis.Uint8Array;
 const readNativeRequestBody = requestIntrinsicGetter<ReadableStream<Uint8Array> | null>('body');
 const readNativeRequestHeaders = requestIntrinsicGetter<Headers>('headers');
@@ -193,6 +285,8 @@ const nativeTypedArrayByteLength = inheritedAccessorGetter(
 const nativeTypedArrayBuffer = inheritedAccessorGetter(NativeUint8Array.prototype, 'buffer');
 
 const rateStates = createWitnessWeakMap<KovoApp, AppRateState>();
+const occupancyStates = createWitnessWeakMap<KovoApp, AppOccupancyState>();
+const requestDeadlineAdmissions = createWitnessWeakMap<Request, RequestDeadlineAdmission>();
 const verifiedBodyRequests = createWitnessWeakSet<Request>();
 const pinnedIngressRequests = createWitnessWeakSet<Request>();
 const pinnedIngressHeaders = createWitnessWeakSet<Headers>();
@@ -211,6 +305,7 @@ export function normalizeAppRequestLimits(
   const source =
     options === undefined ? undefined : requestLimitRecord(options, 'createApp requestLimits');
   const clientIp = requestLimitOwnDataValue(source, 'clientIp', 'requestLimits.clientIp');
+  const deadlineMs = requestLimitOwnDataValue(source, 'deadlineMs', 'requestLimits.deadlineMs');
   const global = requestLimitOwnDataValue(source, 'global', 'requestLimits.global') as
     | AppRateLimitOptions
     | undefined;
@@ -219,6 +314,7 @@ export function normalizeAppRequestLimits(
     'maxBodyBytes',
     'requestLimits.maxBodyBytes',
   );
+  const maxInFlight = requestLimitOwnDataValue(source, 'maxInFlight', 'requestLimits.maxInFlight');
   const maxQueryListItems = requestLimitOwnDataValue(
     source,
     'maxQueryListItems',
@@ -246,9 +342,13 @@ export function normalizeAppRequestLimits(
 
   return witnessFreeze({
     ...(clientIp === undefined ? {} : { clientIp: clientIp as (request: Request) => string }),
+    deadlineMs:
+      deadlineMs === undefined ? DEFAULT_REQUEST_DEADLINE_MS : normalizeDeadlineMs(deadlineMs),
     global: baseGlobal,
     maxBodyBytes:
       maxBodyBytes === undefined ? DEFAULT_MAX_BODY_BYTES : normalizeBodyLimit(maxBodyBytes),
+    maxInFlight:
+      maxInFlight === undefined ? DEFAULT_REQUEST_MAX_IN_FLIGHT : normalizeMaxInFlight(maxInFlight),
     maxQueryListItems:
       maxQueryListItems === undefined
         ? DEFAULT_MAX_QUERY_LIST_ITEMS
@@ -302,23 +402,155 @@ export function preDispatchLoadShedResponse(
   surface: LoadShedSurface,
   buildToken?: string,
   maxBodyBytes: number = app.requestLimits.maxBodyBytes,
+  admissionRequest?: Request,
+  deadlineMs: number = app.requestLimits.deadlineMs,
 ): Response | undefined {
   const bodyFailure = requestBodySizeFailure(maxBodyBytes, request, surface, buildToken);
   if (bodyFailure) return bodyFailure;
 
   const rateLimited = rateLimitFailure(app, request, surface, requestStateNow());
-  if (!rateLimited) return undefined;
+  if (rateLimited) {
+    securityEvent({ reason: 'request-rate', type: 'budget-exhausted' });
+    // @kovo-security-denial budget-exhausted request-rate
+    return appSystemResponse('Too Many Requests', {
+      buildToken,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Retry-After': requestStateString(rateLimited.retryAfterSeconds),
+      },
+      method: readNativeRequestMethod(request),
+      status: 429,
+      surface,
+    });
+  }
 
-  return appSystemResponse('Too Many Requests', {
-    buildToken,
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Retry-After': requestStateString(rateLimited.retryAfterSeconds),
-    },
+  if (admissionRequest === undefined) return undefined;
+  const occupancy = appOccupancyState(app);
+  if (occupancy.inFlight >= app.requestLimits.maxInFlight) {
+    return requestUnavailableResponse(readNativeRequestMethod(request), surface, buildToken);
+  }
+  occupancy.inFlight += 1;
+  let admission: RequestDeadlineAdmission;
+  try {
+    admission = createRequestDeadlineAdmission({
+      deadlineMs,
+      onRelease() {
+        occupancy.inFlight = occupancy.inFlight > 0 ? occupancy.inFlight - 1 : 0;
+      },
+      sourceSignal: readNativeRequestSignal(admissionRequest),
+      transportManaged: requestDeadlineTransportManaged(admissionRequest),
+      transportRequest: admissionRequest,
+    });
+  } catch (error) {
+    occupancy.inFlight = occupancy.inFlight > 0 ? occupancy.inFlight - 1 : 0;
+    throw error;
+  }
+  witnessWeakMapSet(requestDeadlineAdmissions, admissionRequest, admission);
+  return undefined;
+}
+
+function normalizeDeadlineMs(value: unknown): number {
+  if (!requestStateIsSafeInteger(value) || value < 1 || value > MAX_APP_REQUEST_DEADLINE_MS) {
+    throw new TypeError(
+      `createApp({ requestLimits.deadlineMs }) must be an integer between 1 and ${MAX_APP_REQUEST_DEADLINE_MS}.`,
+    );
+  }
+  return value;
+}
+
+function normalizeMaxInFlight(value: unknown): number {
+  if (!requestStateIsSafeInteger(value) || value < 1 || value > MAX_APP_REQUEST_IN_FLIGHT) {
+    throw new TypeError(
+      `createApp({ requestLimits.maxInFlight }) must be an integer between 1 and ${MAX_APP_REQUEST_IN_FLIGHT}.`,
+    );
+  }
+  return value;
+}
+
+/** @internal Reconstruct the dispatch carrier with the framework-owned deadline signal. */
+export function requestWithDeadlineCapability(request: Request): Request {
+  const admission = witnessWeakMapGet(requestDeadlineAdmissions, request);
+  if (admission === undefined) {
+    throw new TypeError('A dispatched request requires pre-dispatch deadline admission.');
+  }
+  // Construct from the exact ingress body rather than from the Request carrier. Node's Web
+  // Request constructor tees an input Request body, so cancellation of the reconstructed branch
+  // would no longer cancel the transport-owned source. The direct body handoff preserves that
+  // one-source cancellation contract while replacing only the signal capability.
+  const body = readNativeRequestBody(request);
+  const init = {
+    headers: readNativeRequestHeaders(request),
     method: readNativeRequestMethod(request),
-    status: 429,
+    signal: admission.signal,
+    ...(body === null ? {} : { body, duplex: 'half' as const }),
+  } as RequestInit & { duplex?: 'half' };
+  const deadlineRequest = createNativeRequest(readNativeRequestUrl(request), init);
+  copyRequestServerBindings(request, deadlineRequest);
+  witnessWeakMapSet(requestDeadlineAdmissions, deadlineRequest, admission);
+  return deadlineRequest;
+}
+
+/** @internal Race the post-admission path, discard late results, and bind stream occupancy. */
+export async function runWithAppRequestDeadline(
+  request: Request,
+  options: {
+    readonly buildToken?: string;
+    readonly method: string;
+    readonly surface: LoadShedSurface;
+  },
+  callback: () => Promise<Response> | Response,
+): Promise<Response> {
+  const admission = witnessWeakMapGet(requestDeadlineAdmissions, request);
+  if (admission === undefined) {
+    throw new TypeError('A dispatched request requires a framework deadline capability.');
+  }
+  const outcome = await runRequestDeadlineTask(admission, callback);
+  if (outcome.kind === 'interrupted') {
+    return requestUnavailableResponse(options.method, options.surface, options.buildToken);
+  }
+  try {
+    return wrapRequestDeadlineResponse(admission, outcome.value, options.method);
+  } catch (error) {
+    completeRequestDeadlineAdmission(admission);
+    throw error;
+  }
+}
+
+/** @internal Release a partially constructed or failed app request exactly once. */
+export function completeAppRequestDeadline(request: Request): void {
+  const admission = witnessWeakMapGet(requestDeadlineAdmissions, request);
+  if (admission !== undefined) completeRequestDeadlineAdmission(admission);
+}
+
+/** @internal Current app occupancy for availability tests and audit collection. */
+export function appRequestInFlightCount(app: KovoApp): number {
+  return appOccupancyState(app).inFlight;
+}
+
+function requestUnavailableResponse(
+  method: string,
+  surface: LoadShedSurface,
+  buildToken?: string,
+): Response {
+  return appSystemResponse('Service Unavailable', {
+    ...(buildToken === undefined ? {} : { buildToken }),
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': '1',
+    },
+    method,
+    status: 503,
     surface,
   });
+}
+
+function appOccupancyState(app: KovoApp): AppOccupancyState {
+  const existing = witnessWeakMapGet(occupancyStates, app);
+  if (existing !== undefined) return existing;
+  const next = { inFlight: 0 };
+  witnessWeakMapSet(occupancyStates, app, next);
+  return next;
 }
 
 function normalizeBodyLimit(maxBodyBytes: unknown): number {
@@ -417,6 +649,8 @@ function requestBodySizeFailure(
   const size = requestContentLength(request);
   if (size === undefined || size <= maxBodyBytes) return undefined;
 
+  securityEvent({ reason: 'request-body', type: 'budget-exhausted' });
+  // @kovo-security-denial budget-exhausted content-length
   return appSystemResponse('Payload Too Large', {
     buildToken,
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -755,11 +989,7 @@ async function readLimitedArrayBuffer(
 
   try {
     while (true) {
-      const result = await witnessReflectApply<Promise<ReadableStreamReadResult<Uint8Array>>>(
-        nativeStreamReaderRead,
-        reader,
-        [],
-      );
+      const result = await readRequestBodyChunkWithCurrentDeadline(reader);
       const done = ownDataProperty(result, 'done');
       if (done === true) break;
       const value = ownDataProperty(result, 'value');

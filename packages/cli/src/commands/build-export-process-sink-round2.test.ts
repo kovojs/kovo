@@ -529,6 +529,28 @@ export default createApp({
 
 // @kovo-security-certifies KV424 request-jsx-round2-build
 describe('kovo build KV424 strict JSX and component corpus', () => {
+  it('rejects a non-leading custom JSX factory before artifact emission', async () => {
+    const root = fixture('jsx-custom-factory');
+    const entry = writeApp(
+      root,
+      `'use strict';
+/** @jsx h */
+import { createApp, publicAccess, route } from '@kovojs/server';
+function h() { throw new Error('custom JSX factory evaluated'); }
+const page = route('/', {
+  access: publicAccess('custom JSX factory preflight'),
+  page() { return <div>safe</div>; },
+});
+export default createApp({ routes: [page] });
+`,
+      'app.tsx',
+    );
+
+    const result = await strictBuild(root, entry);
+    expectKv424(root, result, 'compiler.jsx-runtime-override');
+    expect(result.stderr).toContain('source=@jsx h');
+  }, 120_000);
+
   it('rejects Authorization rendered as an intrinsic JSX child', async () => {
     const root = fixture('jsx-intrinsic-wire');
     const entry = writeApp(

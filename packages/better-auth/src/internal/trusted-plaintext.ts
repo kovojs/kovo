@@ -4,6 +4,7 @@ import type {
   BetterAuthGetSessionWithHeadersResult,
   BetterAuthLike,
   BetterAuthBindingRequest,
+  BetterAuthRequestPasswordResetBody,
   BetterAuthResponseLike,
   BetterAuthSignInEmailBody,
   BetterAuthSignInEmailLike,
@@ -11,6 +12,12 @@ import type {
   BetterAuthSignUpEmailBody,
   BetterAuthSignUpEmailLike,
 } from './contracts.js';
+import {
+  beginBetterAuthPasswordResetMailAttempt,
+  cancelBetterAuthPasswordResetMailAttempt,
+  type BetterAuthPasswordResetMailAttempt,
+  type PinnedBetterAuthPasswordResetMailDoor,
+} from '../password-reset-mail.js';
 import {
   betterAuthArrayAppend,
   betterAuthArrayIsArray,
@@ -79,7 +86,7 @@ type BetterAuthBareSessionPayload<Session, User> = {
   user: User;
 };
 
-type BetterAuthCredentialOperation = 'signInEmail' | 'signUpEmail';
+type BetterAuthCredentialOperation = 'requestPasswordReset' | 'signInEmail' | 'signUpEmail';
 
 interface BetterAuthCredentialHandlerConfiguration {
   basePath: string;
@@ -111,7 +118,12 @@ export function pinBetterAuthCredentialHandler(
   auth: BetterAuthCredentialHandlerLike,
   operation: BetterAuthCredentialOperation,
 ): PinnedBetterAuthCredentialHandler {
-  const label = operation === 'signInEmail' ? 'Better Auth sign-in' : 'Better Auth sign-up';
+  const label =
+    operation === 'signInEmail'
+      ? 'Better Auth sign-in'
+      : operation === 'signUpEmail'
+        ? 'Better Auth sign-up'
+        : 'Better Auth password reset';
   const { method: handler, receiver } = betterAuthCaptureOwnMethod(auth, 'handler', label);
   const context = betterAuthGetOwnPropertyDescriptor(auth, '$context');
   if (
@@ -412,6 +424,11 @@ export async function callBetterAuthCredentialHandler(
   );
   const configuration = await auth.configuration;
   const routedHeaders = credentialHandlerHeaders(headers, request, configuration.ipHeaders);
+  if (auth.operation === 'requestPasswordReset') {
+    betterAuthCredentialRoutingFailure(
+      'Better Auth password reset requires the purpose-closed mail handler.',
+    );
+  }
   const endpointPath = auth.operation === 'signInEmail' ? '/sign-in/email' : '/sign-up/email';
   const routedRequest = new NativeRequest(
     credentialHandlerUrl(configuration, request.url, endpointPath),
@@ -433,6 +450,57 @@ export async function callBetterAuthCredentialHandler(
     [routedRequest],
   );
   return consumeBetterAuthCredentialResult(consumer, result);
+}
+
+/** @internal Route account recovery through Better Auth while retaining its one-shot mail attempt. */
+export async function callBetterAuthPasswordResetHandler(
+  auth: PinnedBetterAuthCredentialHandler,
+  body: BetterAuthRequestPasswordResetBody,
+  headers: Headers,
+  request: BetterAuthBindingRequest,
+  mail: PinnedBetterAuthPasswordResetMailDoor,
+): Promise<
+  Readonly<{
+    attempt: BetterAuthPasswordResetMailAttempt;
+    response: BetterAuthResponseLike;
+  }>
+> {
+  if (auth.operation !== 'requestPasswordReset') {
+    betterAuthCredentialRoutingFailure('Better Auth password-reset handler operation drifted.');
+  }
+  await assertBetterAuthCanonicalRequestOrigin(
+    auth.canonicalOrigin,
+    request,
+    'Better Auth password-reset mutation',
+  );
+  const configuration = await auth.configuration;
+  const routedHeaders = credentialHandlerHeaders(headers, request, configuration.ipHeaders);
+  const routedRequest = new NativeRequest(
+    credentialHandlerUrl(configuration, request.url, '/request-password-reset'),
+    {
+      body: betterAuthJsonStringify(body),
+      headers: routedHeaders,
+      method: 'POST',
+    },
+  );
+  const attempt = beginBetterAuthPasswordResetMailAttempt(mail, routedRequest, body.email);
+  try {
+    const consumer = betterAuthCredentialConsumers.passwordResetHandler;
+    const result = await runBetterAuthCredentialSourceCallableAsync<BetterAuthResponseLike>(
+      consumer,
+      'better-auth.callable',
+      auth.handler,
+      auth.receiver,
+      [routedRequest],
+    );
+    return betterAuthFreezeOwn(
+      { attempt, response: consumeBetterAuthCredentialResult(consumer, result) },
+      'Better Auth password-reset routed result',
+    );
+  } catch {
+    cancelBetterAuthPasswordResetMailAttempt(attempt);
+    betterAuthCredentialRoutingFailure('Better Auth password-reset handler failed.');
+  }
 }
 
 function credentialHandlerHeaders(
@@ -524,7 +592,7 @@ function canonicalCredentialClientIp(value: string): string | undefined {
 function credentialHandlerUrl(
   configuration: BetterAuthCredentialHandlerConfiguration,
   requestUrl: string | undefined,
-  endpointPath: '/sign-in/email' | '/sign-up/email',
+  endpointPath: '/request-password-reset' | '/sign-in/email' | '/sign-up/email',
 ): string {
   const source = configuration.baseURL ?? requestUrl;
   if (typeof source !== 'string' || source === '') {

@@ -10,6 +10,7 @@ import { gzipSync } from 'node:zlib';
 import ts from 'typescript';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from '@kovojs/core/internal/wire-input-grammar';
 import {
   GENERATED_ONLY_SEMANTIC_ATTRIBUTES,
   GENERATED_ONLY_SEMANTIC_ATTRIBUTE_PREFIXES,
@@ -56,6 +57,9 @@ if (!inlineBuildByteLengthRejectedForeignReceiver) {
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const coreSinkPolicySourcePath = fileURLToPath(
   new URL('../../core/src/internal/sink-policy.ts', import.meta.url),
+);
+const coreWireInputGrammarSourcePath = fileURLToPath(
+  new URL('../../core/src/internal/wire-input-grammar.ts', import.meta.url),
 );
 const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
 const fragmentTargetsSourcePath = fileURLToPath(new URL('./fragment-targets.ts', import.meta.url));
@@ -143,6 +147,15 @@ const inlineHelperSpecs = {
     sourcePath: trustedTypesSourcePath,
     sourcePaths: [trustedTypesSourcePath],
   },
+  wireInputCodec: {
+    label: 'wire-input codec',
+    readableParityLabel: 'canonical wire-input codec closure',
+    minifiedParityLabel: 'canonical minified wire-input codec closure',
+    rootFunctionNames: ['createFrameworkWireTargetCodec'],
+    sourceFileName: 'wire-input-grammar.ts',
+    sourcePath: coreWireInputGrammarSourcePath,
+    sourcePaths: [coreWireInputGrammarSourcePath],
+  },
 } as const;
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
@@ -160,6 +173,7 @@ export const inlineFragmentTargetEscapeReadableSource =
 export const inlineEnhancedNavigationReadableSource = readInlineEnhancedNavigationReadableSource();
 export const inlineDocumentLifecycleReadableSource = readInlineDocumentLifecycleReadableSource();
 export const inlineTrustedTypesReadableSource = readInlineTrustedTypesReadableSource();
+export const inlineWireInputCodecReadableSource = readInlineWireInputCodecReadableSource();
 export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 const inlineElementContextSecurityControlTuples = readElementContextSecurityControlTuples();
 const inlineSafeIframeSandboxTokens = readSinkPolicyStringArray('SAFE_IFRAME_SANDBOX_TOKENS');
@@ -188,6 +202,7 @@ export function buildInlineKovoLoaderInstallerReadableSource(
   enhancedNavigationReadableSource = inlineEnhancedNavigationReadableSource,
   documentLifecycleReadableSource = inlineDocumentLifecycleReadableSource,
   trustedTypesReadableSource = inlineTrustedTypesReadableSource,
+  wireInputCodecReadableSource = inlineWireInputCodecReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -202,6 +217,9 @@ function installInlineKovoLoader(im) {
   const tts = createKovoTrustedTypesSecurityControls();
   const bns = createBrowserNavigationSecurityControls();
   const mis = createMutationIdemSecurityControls();
+  const frameworkWireInputGrammar = ${JSON.stringify(FRAMEWORK_WIRE_INPUT_GRAMMAR)};
+  ${wireInputCodecReadableSource}
+  const frameworkWireTargetCodec = createFrameworkWireTargetCodec(frameworkWireInputGrammar);
   const intrinsicJson = JSON;
   const intrinsicJsonParse = intrinsicJson.parse;
   const intrinsicJsonStringify = intrinsicJson.stringify;
@@ -286,6 +304,9 @@ function installInlineKovoLoader(im) {
     }
     if (control.staticPolicy === 'meta-referrer-name') {
       return normalized === 'referrer' ? control.reason : undefined;
+    }
+    if (control.staticPolicy === 'meta-refresh-http-equiv') {
+      return normalized === 'refresh' ? control.reason : undefined;
     }
     if (control.staticPolicy === 'referrer-policy') {
       return normalized === 'no-referrer' || normalized === 'same-origin' ||
@@ -614,7 +635,7 @@ function installInlineKovoLoader(im) {
     if (sandbox !== null) bns.removeElementAttribute(el, 'sandbox');
     return true;
   };
-  const blockElementContextWrite = (el, name, val) => {
+  const blockElementContextWrite = (el, name, val, trustedUrlWrite) => {
     const tag = bns.lower(bns.readElementTagName(el) || '');
     if (tag === 'base') {
       const attributes = bns.snapshotElementAttributes(el);
@@ -645,6 +666,7 @@ function installInlineKovoLoader(im) {
       if (control.staticPolicy === 'disabled') {
         bns.removeElementAttribute(el, name);
       }
+      if (trustedUrlWrite && control.acceptsTrustedUrl) return false;
       // Preserve the compiler-reviewed live value. Removing iframe[sandbox] is privilege
       // elevation, so blocked context writes must never share the ordinary remove action.
       return true;
@@ -653,6 +675,8 @@ function installInlineKovoLoader(im) {
   };
   const wa = (el, name, val) => {
     const n = bns.lower(name);
+    const trustedUrlWrite =
+      bns.readAttribute(el, 'data-kovo-trusted-url:' + n) !== null;
     if (stripDeclarativeShadowControls(el) && isDeclarativeShadowControl(n, val)) return;
     if (inertBlockedActiveElement(el)) return;
     inertUnsafeLiveIframeSource(el);
@@ -660,7 +684,7 @@ function installInlineKovoLoader(im) {
       bns.removeElementAttribute(el, name);
       return;
     }
-    if (blockElementContextWrite(el, n, val)) return;
+    if (blockElementContextWrite(el, n, val, trustedUrlWrite)) return;
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every
@@ -705,7 +729,7 @@ function installInlineKovoLoader(im) {
           if (a) bns.setElementAttribute(el, name, a);
           else bns.removeElementAttribute(el, name);
         } else {
-          if (ia(name) && uu(r)) r = '#';
+          if (ia(name) && !trustedUrlWrite && uu(r)) r = '#';
           bns.setElementAttribute(el, name, r);
         }
       }
@@ -853,8 +877,9 @@ function installInlineKovoLoader(im) {
   const rd = (val) => tk(val ?? '', /[\s,]/u);
   ${fragmentTargetEscapeReadableSource}
   const sq = escapeCssString;
-  const hsaf = (value) => value && !bns.regExpTest(/[\x00-\x1f\x7f\s;,#=]/, value);
-  const hsc = (value) => hsaf(value) && bns.indexOf(value, ':') < 0;
+  const hsaf = frameworkWireTargetCodec.identityIsValid;
+  const hsa = frameworkWireTargetCodec.attestationIsValid;
+  const hsc = frameworkWireTargetCodec.componentIsValid;
   const targetIdentity = (el) =>
     ras(el, 'kovo-fragment-target') ?? ras(el, 'id') ?? ras(el, 'kovo-c') ?? '';
   const liveTargetIdentity = (el) =>
@@ -894,7 +919,7 @@ function installInlineKovoLoader(im) {
         safe = !!hsaf(deps[depIndex]);
       }
       if (!safe || !target) continue;
-      const value = deps.length ? target + '=' + sj(deps, ' ') : target;
+      const value = frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }]);
       if (!hasSnapshotValue(targets, value)) {
         bns.appendDenseSecurityValue(targets, value, 'Inline target header snapshot');
       }
@@ -911,12 +936,15 @@ function installInlineKovoLoader(im) {
       const target = targetIdentity(el);
       const component = liveTargetIdentity(el);
       const token = ras(el, 'kovo-live-token');
-      if (!hsaf(target) || !hsc(component) || !hsaf(token)) continue;
+      if (!hsaf(target) || !hsc(component) || !hsa(token)) continue;
       if (!target || hasSnapshotValue(seen, target)) continue;
       bns.appendDenseSecurityValue(seen, target, 'Inline live target identity snapshot');
       bns.appendDenseSecurityValue(
         targets,
-        target + '#' + component + '@' + token + ':' + js(liveProps(el)),
+        frameworkWireTargetCodec.encodeLiveTargetHeader(
+          [{ attestation: token, component, props: liveProps(el), target }],
+          js,
+        ),
         'Inline live target header snapshot',
       );
     }
@@ -1226,6 +1254,7 @@ function installInlineKovoLoader(im) {
     currentHref: () => bns.currentUrl()?.href,
     document: doc,
     encodeAttribute: ea,
+    encodeWireEntries: frameworkWireTargetCodec.encodeEntryList,
     fetchValue: (input, init) => bns.fetchValue(input, init),
     findTarget: ftd,
     liveTargets: rlt,
@@ -1707,9 +1736,9 @@ function installInlineKovoLoader(im) {
             'Kovo-Current-Url': transport.sourceUrl,
             'Kovo-Fragment': 'true',
             'Kovo-Idem': ss(idem),
-            'Kovo-Live-Targets': sj(rlt(), '; '),
+            'Kovo-Live-Targets': frameworkWireTargetCodec.encodeEntryList(rlt()),
             ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
-            'Kovo-Targets': sj(rt(), '; '),
+            'Kovo-Targets': frameworkWireTargetCodec.encodeEntryList(rt()),
           },
           keepalive: !streaming,
           method: transport.method,
@@ -2962,6 +2991,10 @@ function readInlineDocumentLifecycleReadableSource(): string {
 
 function readInlineTrustedTypesReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.trustedTypes);
+}
+
+function readInlineWireInputCodecReadableSource(): string {
+  return readInlineHelperReadableSource(inlineHelperSpecs.wireInputCodec);
 }
 
 function readModularDefaultDelegatedEvents(

@@ -1,4 +1,5 @@
 import {
+  assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
   diagnosticDefinitions,
 } from '@kovojs/core/internal/diagnostics';
@@ -33,15 +34,16 @@ export class AppDiagnosticError extends Error {
   readonly diagnostics: readonly AppDiagnostic[];
 
   constructor(diagnostics: readonly AppDiagnostic[]) {
-    const first = diagnostics[0];
+    const registered = registeredAppDiagnostics(diagnostics, 'App diagnostic error');
+    const first = registered[0];
     super(
-      diagnostics.length === 1 && first
+      registered.length === 1 && first
         ? `${first.code} ${first.message}`
-        : `Kovo app has ${diagnostics.length} blocking diagnostics.`,
+        : `Kovo app has ${registered.length} blocking diagnostics.`,
     );
     this.name = 'AppDiagnosticError';
     this.code = first?.code ?? 'KV228';
-    this.diagnostics = diagnostics;
+    this.diagnostics = witnessFreeze(registered);
   }
 }
 
@@ -159,11 +161,28 @@ export function blockingAppDiagnostics(
       throw new TypeError('App diagnostics must be a dense own-data array.');
     }
     const diagnostic = descriptor.value;
+    assertRegisteredDiagnostic(diagnostic, `App diagnostics[${index}]`);
     if (witnessSetHas(blockingAppDiagnosticCodes, diagnostic.code)) {
       witnessArrayAppend(blocking, diagnostic, 'Blocking app diagnostics');
     }
   }
   return witnessFreeze(blocking);
+}
+
+function registeredAppDiagnostics(
+  diagnostics: readonly AppDiagnostic[],
+  label: string,
+): AppDiagnostic[] {
+  const registered: AppDiagnostic[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(diagnostics, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError('App diagnostic errors require a dense own-data array.');
+    }
+    assertRegisteredDiagnostic(descriptor.value, `${label}[${index}]`);
+    witnessArrayAppend(registered, descriptor.value, label);
+  }
+  return registered;
 }
 
 function ownDiagnosticDataValue(source: object, property: PropertyKey, label: string): unknown {

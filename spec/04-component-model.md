@@ -345,7 +345,7 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 - `srcdoc`;
 - `<script>` element text and `<script type="application/json">` island bodies (§9.1 governs the byte-level encoding for the latter).
 - element-context execution, request, and isolation controls form one finite denominator of exactly
-  66 element/attribute tuples: `script` × (`src`, `href`, `xlink:href`, `type`, `nomodule`,
+  67 element/attribute tuples: `script` × (`src`, `href`, `xlink:href`, `type`, `nomodule`,
   `integrity`, `crossorigin`, `referrerpolicy`, `charset`, `nonce`, `language`, `attributionsrc`);
   `style` × (`type`, `media`, `nonce`); `link` × (`href`, `rel`, `type`, `media`, `disabled`,
   `integrity`, `crossorigin`, `referrerpolicy`, `as`, `nonce`); `iframe` × (`src`, `sandbox`,
@@ -357,8 +357,9 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
   `attributionsrc`); `form` × (`target`, `rel`); `button[formtarget]`; `input[formtarget]`; `img` ×
   (`referrerpolicy`, `crossorigin`, `attributionsrc`, `sharedstoragewritable`);
   `audio[crossorigin]`; `video[crossorigin]`; SVG `image[crossorigin]` and
-  `feImage[crossorigin]`; and `meta[name]`. Every listed control is static-only or disabled by the
-  stronger value rules below: a direct dynamic value, dynamic removal, or opaque spread is KV236.
+  `feImage[crossorigin]`; and `meta` × (`name`, `http-equiv`). Every listed control is static-only or
+  disabled by the stronger value rules below: a direct dynamic value, dynamic removal, or opaque
+  spread is KV236.
   The parser-request controls are included as tuples, not treated as independent strings: changing
   a script/link/style `type` or `media`, subresource `integrity` or credential mode, destination,
   or referrer policy after parsing/request selection cannot retroactively secure that action.
@@ -377,7 +378,8 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
   area `target` accepts only `_blank`, `_self`, `_parent`, or `_top` (never an opener-bearing named
   browsing context), and their `rel` token list must not contain `opener`. Anchor/area `ping` is
   disabled outright because its reporting headers can disclose the source URL. `meta[name=referrer]`
-  is disabled because it can override the response-header posture. Script/link `nonce` is
+  is disabled because it can override the response-header posture. `meta[http-equiv=refresh]` is
+  disabled because it can navigate before framework controls install. Script/link `nonce` is
   framework-owned and disabled in authored output under Kovo's hash-locked CSP, and obsolete
   `script[language]` is disabled. Attribution registration, browsing-topics disclosure,
   shared-storage writes, and legacy payment-request delegation controls are disabled pending named
@@ -413,6 +415,13 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 Every `data-bind:<attr>` write into a URL-scheme attribute MUST scheme-allowlist its resolved value at both render and loader update time; a value resolving to a denied scheme is dropped to the attribute's empty semantics (the attribute is removed, per the `?.` rule above), never written verbatim. A binding into an unsafe context with no escape hatch is **KV236** with the usual teaching menu: change the projection, extract a derive that returns a safe value, or — for genuinely author-trusted markup/URLs — opt in via the trusted-HTML escape hatch.
 
 The escape hatch is a typed, named, public Kovo API (`trustedHtml(value)` / `trustedUrl(value)`, importable only from a documented public entrypoint per §5.2 #8) that brands its argument as author-vouched. A binding may reach an unsafe context only when its lowered value is a `trustedHtml`/`trustedUrl` brand; the brand is the only thing that suppresses KV236, it is visible in source and in `kovo explain component`, and it is never derivable by the compiler (so the author always writes it explicitly — the inverse of the "TSX never requires a string the compiler can derive" rule, applied to trust). A trusted value carries no escaping obligation onto the framework; producing it from unvalidated query data is the documented hazard the brand makes auditable.
+
+For a reactive URL binding, the compiler MUST preserve that source provenance without emitting a
+runtime call to the author-facing constructor. It lowers the exact `trustedUrl(value,
+auditedReason)` argument as the derive value and emits a compiler-owned, generated-only sink marker
+plus a closed query-plan fact. The modular browser runtime and inline loader may mint the runtime
+brand only from that plan fact immediately before the reviewed URL sink. App-authored copies of the
+marker are KV235, and an unmarked query value remains subject to the ordinary URL-scheme floor.
 
 **Live-property bindings (`data-bind-prop:<prop>`) — the property-authoritative addendum.** A handful of attributes are _property-authoritative_: once the live DOM property is dirtied by user interaction (or script), the browser stops reflecting the attribute onto the property, so an attribute-only `data-bind:<attr>` write silently fails to update the observed state — `FormData` reads `input.checked`, not the `checked` attribute; `.indeterminate`/`.scrollTop`/`.scrollLeft` are not HTML attributes at all. For a **closed, security-reviewed allowlist** — `checked`, `indeterminate`, `value` (form controls), `scrollTop`, `scrollLeft`, `selected`, `open` — the compiler additionally emits a companion `data-bind-prop:<prop>` stamp alongside the SSR attribute and `data-bind:<attr>`, and the loader applies it by **assigning the live element property** (`el[prop] = coerce(prop, value)`: boolean for `checked`/`indeterminate`/`selected`/`open`, number for `scrollTop`/`scrollLeft`, string for `value`) on hydration and after every derive/morph re-render — the property write runs _after_ the attribute patch. The SSR attribute is unchanged, so first paint and no-JS stay correct and render-equivalence (§5.2 #3) treats `data-bind-prop:*` as a non-attribute output (byte-identical visible HTML; the property write is the extra output). This is not an author surface: a component still writes `checked={…}`/`scrollTop={…}` and the compiler derives both stamps from the one fact. **The allowlist is the security boundary** — `data-bind-prop:*` is never emitted or applied for any other property, and the unsafe sinks (`innerHTML`/`outerHTML`/`srcdoc`/`on*`) stay forbidden (KV236); the runtime ignores a non-allowlisted property defensively.
 

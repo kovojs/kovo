@@ -4,6 +4,35 @@ import { sealManagedSqlParserAuthorityRegistry } from './sql-write-allowlist.js'
 
 export { createApp } from './app.js';
 export { createRequestHandler } from './request-handler.js';
+// SPEC §6.6: the model sees only a finite descriptor set; every executable tool is an exact
+// compiler-witnessed mutation and runs under the invoking request's pinned guard/RLS authority.
+export { agent, agentContent, createAgentSession, runAgentTurn, tool } from './agent.js';
+export type {
+  AgentContent,
+  AgentDefinition,
+  AgentIntegrity,
+  AgentModelContext,
+  AgentModelDecision,
+  AgentOptions,
+  AgentSession,
+  AgentToolDefinition,
+  AgentToolDescriptor,
+  AgentToolFailure,
+  AgentToolMutation,
+  AgentToolOptions,
+  AgentToolOutcome,
+  AgentToolSuccess,
+  AgentTurnResult,
+  CreateAgentSessionOptions,
+} from './agent.js';
+export { createDelegationAuthority, onBehalfOf } from './delegation.js';
+export type {
+  CreateDelegationAuthorityOptions,
+  DelegationAuthority,
+  DelegationRight,
+  DelegationRightKind,
+  OnBehalfOfOptions,
+} from './delegation.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for
@@ -51,10 +80,27 @@ export { declareSecretReadCapability } from './secret-read-boundary.js';
 export type { DeclaredSecretReadCapability } from './secret-read-boundary.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
-export { trustedAssign, serverValue } from './write-governance.js';
-export type { TrustedAssignOptions } from './write-governance.js';
-export { encryptAtRest } from './confidential-at-rest.js';
-export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
+export {
+  trustedAssign,
+  serverValue,
+  type TrustedAssignEvidence,
+  type TrustedAssignInvariant,
+  type TrustedAssignObligation,
+  type TrustedAssignWhy,
+} from './write-governance.js';
+export {
+  createConfidentialAtRestCipher,
+  decryptAtRest,
+  encryptAtRest,
+  rewrapAtRest,
+} from './confidential-at-rest.js';
+export type {
+  ConfidentialAtRestCipher,
+  ConfidentialAtRestCipherOptions,
+  DecryptAtRestOptions,
+  EncryptedAtRest,
+  EncryptAtRestOptions,
+} from './confidential-at-rest.js';
 // SPEC §6.6 / KV424 and plans/most-secure-web-framework.md SINK-02: shell command
 // execution is exposed as a framework-owned `execFile` primitive. This is a
 // runtime-DiD floor plus a type-only Command surface; raw `child_process` remains
@@ -76,18 +122,26 @@ export { EgressBlockedError, EgressConfigError } from './egress.js';
 export type { EgressOptions, PrivateAddressClass } from './egress.js';
 export { createSigningKeyRing } from './keyring.js';
 export type {
+  ActiveSigningKey,
   FrameworkCsrfSigningSecret,
-  SigningInput,
+  PreviousSigningKey,
+  RevokedSigningKey,
   SigningKey,
   SigningKeyRing,
   SigningKeyRingOptions,
   SigningKeyState,
-  SigningRejectReason,
-  SigningResult,
   SigningSecret,
-  SigningVerifyInput,
-  SigningVerifyResult,
 } from './keyring.js';
+export {
+  erasePrincipal,
+  PrincipalErasureIncompleteError,
+  verifyPrincipalErasureReceipt,
+} from './principal-erasure.js';
+export type {
+  ErasePrincipalOptions,
+  PrincipalErasureReceipt,
+  PrincipalErasureStorageSet,
+} from './principal-erasure.js';
 // SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned storage
 // download ROUTE that hosts the capability verify sink. `createStorageDownloadEndpoint` builds a
 // prefix-mounted GET/HEAD endpoint whose handler verifies a per-object token BEFORE any storage
@@ -97,6 +151,21 @@ export {
   createStorageDownloadEndpoint,
 } from './capability-route.js';
 export type { CapabilityMethod, CapabilityReplayStore } from './capability-url.js';
+export {
+  advancePrincipalEpoch,
+  createMemoryPrincipalEpochStore,
+  initializePrincipalEpoch,
+  PrincipalEpochStaleError,
+  PrincipalEpochUnavailableError,
+  tombstonePrincipalEpoch,
+} from './principal-epoch.js';
+export type {
+  PrincipalEpochAdvanceReason,
+  PrincipalEpochLookupOptions,
+  PrincipalEpochState,
+  PrincipalEpochStore,
+  PrincipalEpochTombstoneReason,
+} from './principal-epoch.js';
 export type {
   SignUrlContext,
   SignUrlOptions,
@@ -126,6 +195,16 @@ export type {
   PasswordVerifyResult,
 } from './password.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from './access.js';
+// SPEC §6.6 / §10.3 C9: derived datasets inherit the exact request principal through a
+// runtime-witnessed ScopedKey namespace; the vector/RAG adapter cannot accept an app namespace.
+export { derived } from './derived-dataset.js';
+export type {
+  DerivedVectorDataset,
+  DerivedVectorDatasetOptions,
+  DerivedVectorQueryInput,
+  DerivedVectorStoreAdapter,
+  DerivedVectorUpsertInput,
+} from './derived-dataset.js';
 // SPEC §6.6 / §9.1: storage capability constructors are public app wiring surfaces for
 // upload/file schemas and the framework-owned capability download endpoint.
 export {
@@ -140,6 +219,9 @@ export type {
   S3CompatibleGetObjectInput,
   S3CompatibleGetObjectOutput,
   S3CompatibleHeadObjectInput,
+  S3CompatibleListedObject,
+  S3CompatibleListObjectsInput,
+  S3CompatibleListObjectsOutput,
   S3CompatibleObjectClient,
   S3CompatibleObjectMetadata,
   S3CompatiblePutObjectInput,
@@ -206,11 +288,13 @@ export type {
 // type without exposing its module-private mint/resolve controls (rules/api-surface.md; SPEC
 // §6.6/§10.3 C9).
 export type { FrameworkManagedDbProvider } from './guards.js';
-// CSP allowlist config named by `createApp({ document: { csp } })` (recursive publicness,
-// rules/api-surface.md): an app declares third-party analytics/Stripe origins through these.
-// SPEC §6.6: a cross-browser runtime DiD floor, not a by-construction proof.
+// Browser posture config named by `createApp({ document: { csp } })` (recursive publicness,
+// rules/api-surface.md). SPEC §6.6: compiler-censused origins are automatic; non-static origins
+// require a reviewed rationale, and explicit isolation remains a runtime defense-in-depth floor.
 export type {
   CspAllowlist,
+  CspAllowlistEntry,
+  CspAllowlistOrigin,
   CspInlineMetadata,
   CspReportingConfig,
   DocumentCspConfig,
@@ -294,6 +378,7 @@ export type {
   MutationFormAttributes,
   MutationFormDefinition,
   MutationHandlerRequest,
+  PrincipalEpochMutationDeclaration,
   MintedCsrfField,
   MintedCsrfToken,
   MutationQueue,
@@ -339,6 +424,9 @@ export type {
   ReplayMutationWireBodyOptions,
   Schema,
   Secret,
+  SharedCacheExternalDataVersion,
+  SharedCacheInfluenceDeclaration,
+  SharedCacheKeyContribution,
   // KV429 (SPEC §10.3/§11.1): the typed 409 stale-version conflict outcome.
   StaleVersionConflict,
   StoredFileSchema,
@@ -464,6 +552,7 @@ export type {
   EndpointDeclaration,
   EndpointDefinition,
   EndpointHandler,
+  EndpointLongLivedResponsePosture,
   EndpointMountDefinition,
   EndpointMethod,
   EndpointMount,
@@ -476,6 +565,7 @@ export type {
   ForbiddenContext,
   ForbiddenDenial,
   ForbiddenRenderer,
+  FrameworkPostgresOwnerKeyColumn,
   Guard,
   GuardArgsRequest,
   GuardDenial,

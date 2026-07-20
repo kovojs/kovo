@@ -124,6 +124,7 @@ export type {
   KovoRuntimeDbColumnSource,
   KovoRuntimeDbMetadata,
   KovoRuntimeDbTable,
+  KovoRuntimeKeySource,
   KovoRuntimeOwnerSource,
   KovoRuntimeOwnerViaSource,
 } from './runtime-metadata.js';

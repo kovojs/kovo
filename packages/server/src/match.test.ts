@@ -146,6 +146,7 @@ describe('server route matching', () => {
     ).toEqual([
       {
         code: 'KV228',
+        severity: 'error',
         message:
           "Ambiguous route table: '/products/:id' and '/products/new' can both match canonical request path '/products/new'.",
         paths: ['/products/:id', '/products/new'],
@@ -153,6 +154,7 @@ describe('server route matching', () => {
       },
       {
         code: 'KV228',
+        severity: 'error',
         message:
           "Ambiguous route table: '/products/:sku/reviews' and '/products/:id/reviews' can both match canonical request path '/products/:sku/reviews'.",
         paths: ['/products/:sku/reviews', '/products/:id/reviews'],

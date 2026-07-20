@@ -1,0 +1,7 @@
+import { endpoint } from '@kovojs/server';
+
+export const root = endpoint('/ledger/throw', {
+  handler(_input, context) {
+    throw context.db;
+  },
+});

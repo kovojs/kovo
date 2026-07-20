@@ -32,7 +32,12 @@ const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
   [
     'src/app.tsx',
-    new Set(['appRuntimeDbProvider', 'appRuntimeDbReady', 'appRuntimeMutationReplayStore']),
+    new Set([
+      'appRuntimeDbProvider',
+      'appRuntimeDbReady',
+      'appRuntimeMutationReplayStore',
+      'appRuntimePrincipalEpochStore',
+    ]),
   ],
   ['src/auth.ts', new Set(['appRuntimeDbReady', 'createAppAuthBindings'])],
   ['src/auth.sqlite.ts', new Set(['appRuntimeDbReady', 'createAppAuthBindings'])],

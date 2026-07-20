@@ -20,6 +20,7 @@ import {
   text,
 } from '../../server/node_modules/drizzle-orm/pg-core/index.js';
 import { mount } from './mount.js';
+import { betterAuthPasswordResetMailDoor } from './password-reset-mail.js';
 import {
   betterAuthPostgresSecret,
   createBetterAuthPostgresBindings,
@@ -58,7 +59,7 @@ const authMocks = vi.hoisted(() => {
   return {
     adapter: Object.freeze({ kind: 'postgres-adapter' }),
     auth,
-    betterAuth: vi.fn(() => auth),
+    betterAuth: vi.fn((_options?: unknown) => auth),
     drizzleAdapter: vi.fn(() => Object.freeze({ kind: 'postgres-adapter' })),
     getSession,
     handler,
@@ -220,6 +221,7 @@ describe('Better Auth Postgres bindings', () => {
         },
         rateLimit: expect.objectContaining({
           customRules: {
+            '/request-password-reset': expect.any(Function),
             '/**': false,
             '/sign-in/email': expect.any(Function),
             '/sign-up/email': expect.any(Function),
@@ -266,6 +268,33 @@ describe('Better Auth Postgres bindings', () => {
     expect(delegated?.headers.get('authorization')).toBe('Bearer provider-callback');
     expect(delegated?.headers.get('cookie')).toBe('better-auth.state=secret');
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=rotated');
+  });
+
+  it('wires the purpose-closed password-reset feature through Postgres bindings', async () => {
+    const systemDb = await createSystemDb();
+    const options = bindingOptions(systemDb, betterAuthPostgresSecret(strongSecretText));
+    options.passwordReset = {
+      access: { kind: 'public', reason: 'test account recovery' },
+      mail: betterAuthPasswordResetMailDoor(async () => {}),
+      resetPath: '/reset-password',
+    };
+
+    const bindings = createBetterAuthPostgresBindings(options);
+
+    expect(bindings.requestPasswordReset).toBeDefined();
+    expect(Object.keys(bindings).sort()).toEqual([
+      'mountAdapter',
+      'requestPasswordReset',
+      'seedDemoUser',
+      'sessionProvider',
+      'signIn',
+      'signOut',
+    ]);
+    expect(authMocks.betterAuth.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        emailAndPassword: expect.objectContaining({ sendResetPassword: expect.any(Function) }),
+      }),
+    );
   });
 
   it('rejects counterfeit capabilities, proxy schemas, and accessor-backed options before auth', () => {

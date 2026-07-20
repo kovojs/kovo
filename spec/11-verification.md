@@ -77,6 +77,35 @@ On the Postgres/PGlite managed path, the engine also enforces the dangerous writ
 
 Because instrumentation under-approximates (executed branches only), passing dev/test runs do **not** establish KV406 completeness; an unexercised raw-SQL arm is proven sound only by its statically-declared `tables:`/`touches`, which is why those declarations are KV406-`error` (not advisory) and an unexecuted such branch is KV405-`error` (§11.1). Read-side gets identical treatment (query loaders' SELECT/JOIN tables vs. derived read sets, **and observed result shapes vs. declared/inferred types — the runtime half of KV410**, so an opaque projection's schema claim is tested against what the database actually returns; an opaque projection that reads a table absent from its declared `reads:` set (§10.2) is a CI failure on the same `observed ⊆ static ∪ declared` invariant, but the static `reads:` declaration — not this dev/test-only observation — is what proves an unexercised branch sound). An observed read of an `exempt` table is the runtime half of **KV411** (§10.1) — the same CI failure whether the exempt read was statically visible or smuggled through raw SQL.
 
+**Security-decision event completeness (normative).** The generated production runtime has one
+closed, build-checked answerability denominator: the canonical `auth`, `authorization`,
+`declassification`, `egress`, `storage`, `task`, and `replay` decision chokes. Every enrolled choke
+MUST route both allow and deny outcomes through the single `securityEvent()` journal and emit
+exactly these no-payload facts: the door, an outcome, a build-stable decision-site identity, an
+honest principal scope including its epoch (or an explicit unresolved reason when the epoch or
+principal is unavailable), and an opaque resource scope consisting only of its registered kind and
+`global` or a framework-produced SHA-256 identity. Raw credentials, URLs, keys, rows, secret values,
+task arguments, replay tokens, and other payload data MUST NOT enter the record.
+
+The reviewed decision-site census and production markers are a closed emission-coverage recorder.
+The root gate MUST fail when a door lacks exactly one enrolled site, a marker or site exists without
+the other, an enrolled constructor disappears, a constructor bypasses `securityEvent()` (or the
+journal-free core-to-server transport that immediately feeds it), a required fact becomes optional,
+an allow/deny branch disappears, or an extra field is added. The core transport MUST NOT own a
+second journal, buffer, export surface, or verdict; generated registration installs it before
+authored app evaluation and the server journal remains the only event authority.
+
+This completeness claim begins when the compiler-generated runtime-posture registry evaluates.
+Production artifact emission MUST refuse a runtime entry that can evaluate the authored app before
+that registration. Direct low-level library calls and unit calls made before registration are
+explicitly outside the claim. Registration arms decision recording only after any configured
+deployment journal is installed; after arming, an enrolled decision with no journal MUST fail closed
+before proceeding. This is emission completeness for the seven named chokes, not a claim about
+arbitrary app or third-party decisions, host compromise, fleet-wide delivery, or infinite retention.
+The bounded journal's dropped count and every unresolved principal scope remain explicit
+`unanswerable` outcomes for retrospective tooling; absence of a matching retained event is only
+`not-observed`, never a no-impact proof.
+
 **C9 sink-proof inventory (normative).** The verification surface MUST keep a single reviewed
 inventory for the required boundary-crossing sinks named in §10.3 C9. Each row names: the sink, its
 mechanism (`reconstruct`, `box`, or framework-`own`), the sole door, at least one lint/check/build
@@ -93,14 +122,28 @@ missing, unknown, or duplicate kinds. Terminal-effect rows name their real sink 
 explicitly non-semantic until the latter receives a Phase 2C call summary. Component graph facts and `kovo explain component` render the
 compiler-derived operation rows in stable order so a review can connect authored handlers to those
 owners without reading generated files.
-For engine-door claims the inventory row points at the engine-closure audit; for wire/file/task/log
-surfaces it points at the single framework-owned choke or box, never at a proxy-only wrapper.
+For engine-door claims the inventory row points at the engine-closure audit; for
+wire/file/derived/task/log surfaces it points at the single framework-owned choke or box, never at a
+proxy-only wrapper. The `data.derived.persistence` family is discharged by the storage-operation row
+only when its proof evidence includes both KV452 provenance closure and runtime reconstruction of the
+complete request-principal `ScopedKey` namespace.
+
+Every source/sink census row MUST also declare one closed residency posture:
+`none`, `db-owner`, `ledger`, `adapter-enumerable`, or `unerasable:<reason>`. A family that combines
+multiple runtime sinks takes the least erasable posture of any covered sink; it cannot hide retained
+task, replay, client, adapter, or external-recipient state behind a transient member. The C9 inventory
+gate MUST fail on a missing or unknown posture, an empty or malformed `unerasable` reason, or an
+`unerasable` count of zero. `kovo explain --sources-sinks`, `kovo check sources-sinks`, and the
+versioned inventory artifact MUST publish each row's posture, and the text summaries MUST publish the
+current `unerasable` count. This count is an honesty metric and erasure-work denominator, not a claim
+that the enumerable postures already implement principal erasure.
 
 **Finite provenance relation (normative proof boundary).** The compiler MUST publish the current
 server/browser provenance vocabularies and the complete server member-projection relation as the
-versioned, diffable `security-provenance-relation/v1.json` artifact. The current denominator is 38
-server states (including the explicit `scoped-key-call` state), 20 browser states, and the quotient
-member alphabet recorded in that artifact. `check:provenance-closure` MUST fail when either operation
+versioned, diffable `security-provenance-relation/v1.json` artifact. The current denominator is 43
+server states (including explicit `derived-dataset`, derived query/upsert call, `governed-data`, and `scoped-key-call` states),
+20 browser states, and the quotient member alphabet recorded in that artifact.
+`check:provenance-closure` MUST fail when either operation
 vocabulary gains a state without a relation row, when any table cell differs from the scanner, or
 when least-fixpoint reachability finds an operation without its C9 door owner. Unknown future states
 default to authority-bearing; `unknown-authority` closes under exactly the declared
@@ -108,8 +151,9 @@ default to authority-bearing; `unknown-authority` closes under exactly the decla
 
 This decidability claim is deliberately narrow. Five `serverExpressionProvenance` arms are
 compositional over child provenance values; identifier lookup is an environment leaf, the implicit
-object-protocol check remains syntax-dependent, and the two fallthrough subtree searches are one
-named nondeterministic oracle edge with outcomes `local`, `foreign-executable`, and
+object-protocol check remains syntax-dependent, and the four fallthrough subtree searches (foreign
+executable, governed data, unsafe wire data, and authority) are one named nondeterministic oracle
+edge with outcomes `local`, `foreign-executable`, `governed-data`, `unsafe-wire-data`, and
 `unknown-authority`. The table does not decide general JavaScript, dynamic properties, Proxy
 behavior, imported executable semantics, or the browser classifier's syntax-dependent transfers.
 The artifact publishes those exclusions, the four semantic-analysis resource bounds, and the
@@ -162,6 +206,129 @@ For a Kovo app, the following are checkable **without executing a browser**:
 3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs, including each component's finite operation rows and the `--capabilities` root/door/package/closed provenance ledger from §6.6.
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
+
+**Safe cost-to-green rewrites (normative).** `kovo fix` accepts exactly one regular, non-symlink
+app-authored `.tsx`/`.jsx` file inside the invocation root, excluding `.kovo`, `dist`, `generated`,
+and `node_modules` trees. It MUST NOT synthesize a trust wrapper, justification, allowlist entry, or
+other escape. A rewrite is available only through this closed compiler-owned recipe set:
+
+- KV223 may remove one exact `data-bind` JSX attribute only when the genuine compiler reports that
+  the attribute is redundant with its typed child expression. Because hand-authored lowered IR is
+  already rejected by KV235 and can suppress compiler-owned escaping, this is a security-hardening
+  rewrite, not a claim that the invalid input had accepted behavior to preserve.
+- KV232 may remove one exact author-owned `role`, `aria-*`, or `data-state` override only when the
+  rewritten compiler output has the exact same semantic behavior fingerprint.
+
+The independent post-rewrite pass MUST prove that the candidate differs only by the approved typed
+AST nodes, that every target obligation is absent, and that the complete genuine compiler analysis
+is green before a write. Unknown diagnostics, mixed proof classes, overlapping edits, stale source,
+an analyzer residue, or a changed behavior fingerprint where equality is required MUST fail closed
+without returning candidate source. `--check` is read-only and non-zero when a safe rewrite is
+available.
+
+`kovo fix --cost-report` emits `kovo.cost-to-green/v1` over the versioned agent-authored corpus. Its
+per-diagnostic metric is `safe AST-node edit atoms − escape argv atoms`, where deleting one typed
+AST node costs one atom and `--allow-diagnostic CODE` costs two. A missing safe recipe has unbounded
+safe cost. Every row where escape is cheaper, including an unbounded safe cost, MUST be reported as
+a framework defect with a non-empty owner; the report exits non-zero while any such row exists. This
+is an ergonomics and routing measurement, not evidence that an escape is safe or should be chosen.
+
+**Deployment assume-guarantee contract (normative).** Every current `SECURITY.md` guarantee MUST
+carry a machine-readable `antecedents` list. That list is derived, never independently authored:
+the versioned `kovo.deployment-environment-doors/v1` registry binds each environment fact to the
+exact framework door that consumes it, the door's source anchors, and the affected published or
+normative conditional guarantee IDs. The security-guarantee gate MUST reject an unknown fact or
+guarantee, a missing consumer anchor, a current guarantee absent from the registry, or any
+`SECURITY.md` antecedent list that differs from the door-derived relation. A prose assumption or an
+operator-authored success verdict is not evidence.
+
+`kovo check env [deployment.json]` consumes `kovo.deployment-environment/v1`, probes only facts
+observable from its pinned command-entry environment, and prints every remaining fact as a
+`RETAINED` obligation with the exact guarantees it suspends. A canonical `KOVO_NODE_ORIGIN`
+discharges only the zero-forwarded-hop proxy-chain fact; it does not authenticate the TLS
+terminator. `KOVO_NODE_TRUSTED_PROXY=1` retains the edge-identity/hop obligation, a host preload
+cannot be disproved from an absent `NODE_OPTIONS`, and database writers, shared-cache behavior,
+registrable-domain occupancy, and TLS edge identity remain retained unless a future framework-owned
+probe owns corresponding evidence. Contradicted, retained, or posture-withheld antecedents produce
+a non-zero result. The command reports conditional status; it is not a deployment-integrity proof.
+
+The composition domain has exactly three input shapes. `single-kovo` retains external occupancy
+facts. `shared-registrable-domain` requires at least two unique canonical HTTPS Kovo origins under
+one explicitly declared DNS suffix and contradicts `sole-registrable-domain-occupant`; the command
+therefore withholds the CSRF principal-binding claim because another app can compete for browser
+cookie namespace. This declaration is not a Public Suffix List proof. `foreign-host` is accepted
+only with posture `mounted` and one canonical non-root mount path made of non-empty RFC 3986
+unreserved segments, excluding `.` and `..`. Mounted posture unconditionally
+withholds the host-owned CSRF, request-origin, and browser-state-cache claims; an author cannot turn
+them back on with a flag or asserted verdict. All other composition/posture pairings fail input
+validation.
+
+**Authenticated advisory contract (normative).** `kovo.security.advisory/v1` is an exact,
+closed record containing `id`, one of `low | moderate | high | critical`, one finite
+`affectedRange`, `fixedIn`, `retracts[]`, `tcbChokes[]`, and `graphSchemaVersion`. The only range
+grammar is `>=VERSION <VERSION` over strict SemVer, with an increasing exclusive upper bound and a
+`fixedIn` version at or above it. Applicability predicates, package-name selectors, executable
+expressions, host facts, and arbitrary extension fields are forbidden. `retracts[]` names exact
+guarantee IDs in the normative `SECURITY.md` register; `tcbChokes[]` names exact current TCB entry
+IDs. The canonical `kovo.security.advisory-feed/v1` record contains a positive monotone `epoch`, a
+canonical `issuedAt`, `maxFeedAgeSeconds`, and an ID-sorted advisory array. The repository gate MUST
+keep the feed schema exact, fresh within a maximum 90-day release window, and equal in advisory IDs
+and retraction sets to the public guarantee register; unknown guarantee or TCB IDs fail the gate.
+It MUST compare the checked-in feed to the first-parent feed: a lower epoch, or any canonical feed
+change without an epoch increase, fails before release signing.
+
+`kovo check advisories [graph.json]` MUST first read build-owned
+`kovo.artifact.provenance/v1` from the graph and obtain every exact `@kovojs/*` package version plus
+the graph schema version. When no graph path is explicit, exactly one conventional graph artifact
+MUST exist; multiple candidates produce UNKNOWN instead of a precedence-based choice. The command
+then fetches the feed over HTTPS (or reads an explicit in-root regular
+file for an offline drill), computes its SHA-256 digest, and obtains an attestation by that digest.
+The accepted bundle MUST pass Sigstore signature and Fulcio-chain verification, the GitHub Actions
+OIDC issuer, the exact `.github/workflows/release.yml@refs/heads/main` certificate identity, and at
+least one certificate-transparency and one transparency-log check. Kovo MUST independently parse
+the verified DSSE payload and require exactly one matching feed digest plus the exact Kovo main
+release-workflow repository, ref, and path. The release job producing this attestation has only
+checkout/read and attestation OIDC authority: it performs no dependency installation, repository
+script, build, or long-lived private-key operation. The Fulcio certificate identity is workflow-
+wide rather than job-ID evidence. Default remote verification therefore also depends on the
+digest-indexed Kovo repository attestation API, while the workflow grants `attestations: write` only
+to the exact two-action attestation job; the package-publish job's npm OIDC authority cannot attach
+repository attestations. An explicit local bundle is caller-supplied offline evidence and retains
+only the cryptographically checked workflow-level identity.
+
+After authentication, the command rejects a feed future-dated by more than five minutes, stale
+beyond its own bounded `maxFeedAgeSeconds`, below the highest locally accepted epoch, or different
+from a previously accepted digest at the same epoch. It persists only
+`kovo.security.advisory-state/v1` (`highestEpoch`, `feedDigest`) by an atomic regular-file write
+inside the invocation root. Concurrent processes MUST serialize on an exclusive sidecar lock,
+re-read and compare state while holding that lock, fsync the state file, atomically rename it, and
+fsync the parent directory where the platform exposes durable directory handles. A corrupt state
+file, busy lock, symlink target, symlinked parent component, or unwritable state is failure, not
+permission to forget rollback history. An advisory matches when
+its graph schema equals the artifact schema and at least one exact Kovo package version lies in its
+range. There are only three verdict classes:
+
+- `AFFECTED`: print every matching advisory; exit 1 when any match is at or above the configured
+  severity floor, otherwise exit 0 while retaining the AFFECTED label.
+- `NOT-AFFECTED`: exit 0 only after the complete authentication, freshness, rollback, and matching
+  sequence succeeds with no match.
+- `UNKNOWN`: exit 2 for every inability to read the artifact, fetch, parse, authenticate, freshness-
+  check, rollback-check, or persist state. UNKNOWN is never treated as an empty advisory set.
+
+Every verdict MUST print a non-claim: this command detects authenticated advisories Kovo has
+published for the artifact posture; even NOT-AFFECTED is not proof that the artifact has no
+vulnerability or no impact outside the feed's version-and-schema scope.
+
+`kovo explain --attest` is the deployment-review composition surface. It first recomputes the
+reviewed graph's artifact subject and posture digest. If the graph contains a `trustedAssign`
+capability, `--escape-reviews <reviews.json>` is mandatory. The detached file has schema
+`kovo.escape-obligation-reviews/v1` and contains one exact signed envelope per graph-derived
+`kovo.escape-obligation-review/v1` subject; missing, duplicate, surplus, malformed, stale-artifact,
+replacement-key, wrong-anchor, and invalid-signature rows all fail closed. The same out-of-band
+fingerprint MUST verify both the escape envelopes and the nonce-bound live deployment response.
+Success reports the number of verified reviews and explicitly states the non-claim: a signature
+does not prove an obligation true or executed-code/host integrity. `.kovo/escape-obligations.json`
+is the unsigned reviewer input emitted by build; it is not itself approval evidence.
 
 `kovo explain --endpoints` is the stable machine-ingress audit. Its diffable table lists every declared endpoint and webhook, every `mutation()`, plus every route that returns `respond.file()`/`respond.stream()`: source-derived registry identity where applicable, method, path, mount mode, auth scheme (`session+guard`, `verifier:<resolved scheme>`, `custom:<name>`, or `none:<justification>`), CSRF/effect posture, and for webhooks the write→domain chain. Endpoint posture is `safe:read-only` for the closed `GET`/`HEAD`/`OPTIONS` set from §9.1, `checked` when an unsafe method receives the default synchronizer-token check, or `exempt:<justification>` when an unsafe endpoint explicitly opts out. Mutation posture remains `checked` or `exempt:<justification>`; a `csrf: false` mutation appears here with the latter posture, and KV418 (§6.6) guarantees it references no ambient session. The pre-dispatch coarse limiter posture (§9.5) is enrolled and printed here too. The command is snapshot-locked with the rest of P8 output so security review can answer "what can reach this app, and what can it touch?" without executing a browser.
 

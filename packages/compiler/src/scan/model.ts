@@ -1,4 +1,5 @@
 import type * as ts from 'typescript';
+import type { CacheInfluenceDerivationInput } from '@kovojs/core/internal/cache-influence';
 import type {
   BrowserSecurityOperationKind,
   SecurityOperationDoor,
@@ -45,7 +46,23 @@ export interface StaticJsxWireAttributeEntry {
 }
 
 export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
-export type SecurityOperationSurface = HandlerWriteSinkSurface | 'query';
+export type SecurityOperationSurface = HandlerWriteSinkSurface | 'agent' | 'query';
+
+export interface AgentToolModel {
+  binding: string;
+  callSpan: SourceSpan;
+  mutationBinding?: string;
+  name?: string;
+  resultIntegrity: 'retrieved' | 'untrusted';
+  violations?: readonly SecurityOperationViolationModel[];
+}
+
+export interface AgentDefinitionModel {
+  binding?: string;
+  modelHandler: MutationHandlerModel;
+  name: string;
+  toolBindings: readonly string[];
+}
 
 export type HandlerWriteSinkOperationKind =
   | 'batch'
@@ -103,6 +120,8 @@ export interface MutationHandlerModel {
   webhookRecordChanges?: readonly WebhookRecordChangeFact[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
+  /** Compiler-owned request/cache-axis facts for one finite query or endpoint root. */
+  cacheInfluence?: CacheInfluenceDerivationInput;
   paramNames: readonly (string | undefined)[];
   params: readonly string[];
   paramSpans: readonly SourceSpan[];
@@ -131,6 +150,8 @@ export interface SecurityOperationViolationModel {
   detail: string;
   kind:
     | 'computed-security-operation'
+    | 'derived-dataset-scope'
+    | 'governed-data-persistence'
     | 'incomplete-mutation-form'
     | 'raw-capability-operation'
     | 'raw-dom-operation'
@@ -201,7 +222,7 @@ export interface CallExpressionModel {
   end: number;
   exportedConstName?: string;
   /** Parser-owned exact framework factory identity; a same-named local function never receives it. */
-  frameworkFactory?: 'endpoint' | 'mutation' | 'task' | 'webhook';
+  frameworkFactory?: 'agent' | 'endpoint' | 'mutation' | 'query' | 'task' | 'tool' | 'webhook';
   /** Exact framework identity for a security helper whose call shape participates in finite IR. */
   frameworkSecurityOperation?: 'csrf-field' | 'csrf-token';
   /** Exact compiler JSX-runtime constructor identity; app source may not call this emitted ABI. */
@@ -254,6 +275,14 @@ export interface JsxCommentModel {
   justifiedDiagnostics?: readonly string[];
   start: number;
   text: string;
+}
+
+/** Parser-owned JSX transform directive found inside an actual source comment. */
+export interface JsxPragmaModel {
+  end: number;
+  kind: 'jsx' | 'jsxFrag' | 'jsxImportSource' | 'jsxRuntime';
+  start: number;
+  value?: string;
 }
 
 export interface JsxAttributeModel {
@@ -449,6 +478,9 @@ export interface ModuleScopeBindingModel {
 }
 
 export interface ComponentModuleModel {
+  agentDefinitions: readonly AgentDefinitionModel[];
+  agentHandlers: readonly MutationHandlerModel[];
+  agentTools: readonly AgentToolModel[];
   calls: readonly CallExpressionModel[];
   compilerJsxRuntimeImports: readonly CompilerJsxRuntimeImportModel[];
   componentIdentityAssignments: readonly ComponentIdentityAssignmentModel[];
@@ -457,6 +489,8 @@ export interface ComponentModuleModel {
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
+  /** @internal Non-enumerable parser facts; security consumers must not rescan source comments. */
+  readonly jsxPragmas: readonly JsxPragmaModel[];
   moduleScopeBindings: readonly ModuleScopeBindingModel[];
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];

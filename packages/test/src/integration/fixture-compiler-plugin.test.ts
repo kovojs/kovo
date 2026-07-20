@@ -28,6 +28,181 @@ function compileResult(source: string): CompileResult {
 }
 
 describe('kovoFixtureCompilerPlugin', () => {
+  it('serves only compiler-owned client identities and aggregates their query plans', async () => {
+    const compile = vi.fn((options: { fileName: string }) => {
+      const componentName = options.fileName.includes('alpha') ? 'AlphaCard' : 'BetaCard';
+      const marker = componentName === 'AlphaCard' ? 'alpha' : 'beta';
+      return {
+        ...compileResult(`export const ${componentName} = true;`),
+        files: [
+          {
+            fileName: options.fileName.replace(/\.tsx$/u, '.client.js'),
+            kind: 'client' as const,
+            source: `export const ${componentName}$queryUpdatePlans = { card(_root, value) { value.push('${marker}'); }, undeclared() { throw new Error('undeclared plan ran'); } };`,
+          },
+        ],
+        queryUpdatePlans: [{ componentName, paths: [], query: 'card' }],
+      };
+    });
+    const plugin = kovoFixtureCompilerPlugin(compile as never);
+    const fixtureDir = fileURLToPath(
+      new URL('../../../../tests/integration/fixtures/binding-text-attr/', import.meta.url),
+    );
+    const alphaFile = fileURLToPath(
+      new URL(
+        '../../../../tests/integration/fixtures/binding-text-attr/alpha.tsx',
+        import.meta.url,
+      ),
+    );
+    const betaFile = fileURLToPath(
+      new URL('../../../../tests/integration/fixtures/binding-text-attr/beta.tsx', import.meta.url),
+    );
+    const vite = await createViteServer({
+      appType: 'custom',
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [plugin],
+      root: fixtureDir,
+      server: { hmr: false, middlewareMode: true, watch: null, ws: false },
+    });
+
+    try {
+      const transform = plugin.transform as (
+        source: string,
+        id: string,
+      ) => Promise<{ code: string }>;
+      await transform('component({})', alphaFile);
+      await transform('component({})', betaFile);
+
+      const generatedAlphaId = alphaFile.replace(/\.tsx$/u, '.client.js');
+      expect((plugin.resolveId as (id: string) => string | null)(generatedAlphaId)).toBe(
+        generatedAlphaId,
+      );
+      expect((plugin.load as (id: string) => string | null)(generatedAlphaId)).toContain(
+        'AlphaCard$queryUpdatePlans',
+      );
+      expect(
+        (plugin.resolveId as (id: string) => string | null)(
+          fileURLToPath(
+            new URL(
+              '../../../../tests/integration/fixtures/binding-text-attr/unregistered.client.js',
+              import.meta.url,
+            ),
+          ),
+        ),
+      ).toBeNull();
+
+      const aggregate = (await vite.ssrLoadModule(
+        'virtual:kovo-fixture-generated-query-plans',
+      )) as {
+        kovoFixtureQueryPlans: { card(root: unknown, value: string[]): void };
+      };
+      const applied: string[] = [];
+      aggregate.kovoFixtureQueryPlans.card(null, applied);
+      expect(applied).toEqual(['alpha', 'beta']);
+      expect(Object.hasOwn(aggregate.kovoFixtureQueryPlans, 'undeclared')).toBe(false);
+      expect(Object.isFrozen(aggregate.kovoFixtureQueryPlans)).toBe(true);
+      expect(Object.getPrototypeOf(aggregate.kovoFixtureQueryPlans)).toBeNull();
+    } finally {
+      await vite.close();
+    }
+  });
+
+  it('rejects generated client and query-plan identity mismatches', async () => {
+    const wrongFilePlugin = kovoFixtureCompilerPlugin(() => ({
+      ...compileResult('export const safe = true;'),
+      files: [
+        {
+          fileName: '../outside.client.js',
+          kind: 'client' as const,
+          source: 'export const Card$queryUpdatePlans = {};',
+        },
+      ],
+      queryUpdatePlans: [{ componentName: 'Card', paths: [], query: 'card' }],
+    }));
+    (wrongFilePlugin.configResolved as (config: unknown) => void)({ root: '/workspace/app' });
+    await expect(
+      (wrongFilePlugin.transform as (source: string, id: string) => Promise<unknown>)(
+        'component({})',
+        '/workspace/app/card.tsx',
+      ),
+    ).rejects.toThrow(/client module identity mismatch/u);
+
+    const mixedIdentityPlugin = kovoFixtureCompilerPlugin(() => ({
+      ...compileResult('export const safe = true;'),
+      files: [
+        {
+          fileName: 'card.client.js',
+          kind: 'client' as const,
+          source: 'export const Card$queryUpdatePlans = {};',
+        },
+      ],
+      queryUpdatePlans: [
+        { componentName: 'Card', paths: [], query: 'card' },
+        { componentName: 'OtherCard', paths: [], query: 'other' },
+      ],
+    }));
+    (mixedIdentityPlugin.configResolved as (config: unknown) => void)({ root: '/workspace/app' });
+    await expect(
+      (mixedIdentityPlugin.transform as (source: string, id: string) => Promise<unknown>)(
+        'component({})',
+        '/workspace/app/card.tsx',
+      ),
+    ).rejects.toThrow(/multiple query-plan component identities/u);
+
+    const duplicateQueryPlugin = kovoFixtureCompilerPlugin(() => ({
+      ...compileResult('export const safe = true;'),
+      files: [
+        {
+          fileName: 'card.client.js',
+          kind: 'client' as const,
+          source: 'export const Card$queryUpdatePlans = { card() {} };',
+        },
+      ],
+      queryUpdatePlans: [
+        { componentName: 'Card', paths: [], query: 'card' },
+        { componentName: 'Card', paths: [], query: 'card' },
+      ],
+    }));
+    (duplicateQueryPlugin.configResolved as (config: unknown) => void)({ root: '/workspace/app' });
+    await expect(
+      (duplicateQueryPlugin.transform as (source: string, id: string) => Promise<unknown>)(
+        'component({})',
+        '/workspace/app/card.tsx',
+      ),
+    ).rejects.toThrow(/duplicate query-plan identity card/u);
+  });
+
+  it('keeps generated-query-plan aggregate identities private to one plugin instance', async () => {
+    const first = kovoFixtureCompilerPlugin(() => ({
+      ...compileResult('export const safe = true;'),
+      files: [
+        {
+          fileName: 'card.client.js',
+          kind: 'client' as const,
+          source: 'export const Card$queryUpdatePlans = { card() {} };',
+        },
+      ],
+      queryUpdatePlans: [{ componentName: 'Card', paths: [], query: 'card' }],
+    }));
+    const second = kovoFixtureCompilerPlugin();
+    (first.configResolved as (config: unknown) => void)({ root: '/workspace/app' });
+    (second.configResolved as (config: unknown) => void)({ root: '/workspace/app' });
+    await (first.transform as (source: string, id: string) => Promise<unknown>)(
+      'component({})',
+      '/workspace/app/card.tsx',
+    );
+
+    const firstResolved = (first.resolveId as (id: string) => string | null)(
+      'virtual:kovo-fixture-generated-query-plans',
+    );
+    const secondResolved = (second.resolveId as (id: string) => string | null)(
+      'virtual:kovo-fixture-generated-query-plans',
+    );
+    expect(firstResolved).not.toBe(secondResolved);
+    expect((second.load as (id: string) => string | null)(firstResolved!)).toBeNull();
+  });
+
   it('pins classifier/cache intrinsics after authored replacement', async () => {
     const compile = vi.fn(() => compileResult('export const safe = true;'));
     const plugin = kovoFixtureCompilerPlugin(compile);

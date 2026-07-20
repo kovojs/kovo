@@ -61,13 +61,19 @@ import {
   createCapabilityMap,
 } from './capability-intrinsics.js';
 import { resolveBootMode } from './env.js';
-import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
+import { createCapabilityCryptoHandle } from './crypto-authority.js';
+import type { SigningSecret } from './keyring.js';
+import {
+  assertPrincipalEpochFresh,
+  currentPrincipalEpoch,
+  snapshotPrincipalEpochStore,
+  type PrincipalEpochStore,
+} from './principal-epoch.js';
 
-// SPEC §6.6: v3 is the first capability/replay domain backed by a durable reclamation watermark.
-// Pre-watermark v2 tokens are deliberately not accepted: old runtimes may already have deleted
-// their one-time replay row, and no migration can reconstruct that missing maximum expiry safely.
-const TOKEN_VERSION = 'v3';
-const CAPABILITY_SIGNING_PURPOSE = 'capability-url';
+// SPEC §6.6: v3 introduced the durable reclamation watermark. v4 adds the signed principal epoch.
+// Earlier tokens are deliberately not accepted: old runtimes may already have deleted their
+// one-time replay row, and no migration can reconstruct that missing maximum expiry safely.
+const TOKEN_VERSION = 'v4';
 const DEFAULT_CAPABILITY_AUDIENCE = 'storage-download';
 const DEFAULT_CAPABILITY_REPLAY_MAX_ENTRIES = 10_000;
 /** @internal Fixed allocation/retention ceilings for capability claims and wire tokens. */
@@ -96,6 +102,8 @@ export interface CapabilityClaims {
   expiry: number;
   /** Optional scope binding (e.g. a tenant or principal id) folded into the signature. */
   scope?: string;
+  /** Persistent principal epoch embedded in every principal-scoped credential. */
+  principalEpoch?: number;
 }
 
 /** Options for minting a capability token (`ctx.signUrl` shape). */
@@ -109,6 +117,8 @@ export interface SignCapabilityOptions {
   oneTime?: boolean;
   /** Verify-sink audience. Storage download routes bind this to their mount surface. */
   audience?: string;
+  /** Authoritative persistent epoch store. Required whenever `scope` is present. */
+  principalEpochStore?: PrincipalEpochStore;
 }
 
 /** Default token TTL: 5 minutes. Short by design — a leaked capability URL is a bearer secret. */
@@ -133,6 +143,7 @@ export type CapabilityRejectReason =
   | 'bad-signature'
   | 'expired'
   | 'claim-mismatch'
+  | 'principal-stale'
   | 'replayed';
 
 /** A replay store for one-time capability tokens: returns true iff this token id was unused. */
@@ -232,6 +243,7 @@ function canonicalizeWithNonce(
     claims.key,
     capabilityString(claims.expiry),
     claims.scope ?? '',
+    claims.principalEpoch === undefined ? '' : capabilityString(claims.principalEpoch),
     oneTime ? '1' : '0',
     nonce,
   ];
@@ -266,13 +278,13 @@ export const signCapability = wireEmitter(
       );
     }
     const now = configuredNow ?? capabilityNow();
-    const ring = signingKeyRingFromSecret(secret);
     const key = capabilityOwnDataValue(options, 'key');
     const configuredMethod = capabilityOwnDataValue(options, 'method');
     const scope = capabilityOwnDataValue(options, 'scope');
     const configuredExpiresIn = capabilityOwnDataValue(options, 'expiresIn');
     const configuredOneTime = capabilityOwnDataValue(options, 'oneTime');
     const configuredAudience = capabilityOwnDataValue(options, 'audience');
+    const configuredPrincipalEpochStore = capabilityOwnDataValue(options, 'principalEpochStore');
     const method = configuredMethod ?? 'GET';
     const expiresIn = configuredExpiresIn ?? DEFAULT_CAPABILITY_TTL_MS;
     const audience = configuredAudience ?? DEFAULT_CAPABILITY_AUDIENCE;
@@ -296,26 +308,40 @@ export const signCapability = wireEmitter(
     ) {
       throw capabilityTypeError('Capability signing options must contain valid, bounded claims.');
     }
+    let principalEpoch: number | undefined;
+    if (scope !== undefined) {
+      if (!isStableProvenPrincipal(scope) || configuredPrincipalEpochStore === undefined) {
+        throw capabilityTypeError(
+          'Principal-scoped capability signing requires a proven principal and principalEpochStore.',
+        );
+      }
+      const epochStore = snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
+      const state = await principalEpochAtCapabilityMint(epochStore, scope);
+      if (state.status !== 'active') {
+        throw capabilityTypeError('Cannot mint a capability for a tombstoned principal.');
+      }
+      principalEpoch = state.epoch;
+    } else if (configuredPrincipalEpochStore !== undefined) {
+      snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
+    }
+    const signer = createCapabilityCryptoHandle(secret, audience);
     const claims: CapabilityClaims = {
       key,
       method,
       expiry: now + expiresIn,
       ...(scope === undefined ? {} : { scope }),
+      ...(principalEpoch === undefined ? {} : { principalEpoch }),
     };
     const oneTime = configuredOneTime === true;
     // A per-token nonce gives one-time tokens a stable replay id even when claims are identical.
     const nonce = oneTime ? capabilityBase64Url(capabilityRandomBytes(12)) : '';
-    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce, ring.currentKeyId);
-    const signedResult = ring.sign({
-      audience,
-      payload: signedBytes,
-      purpose: CAPABILITY_SIGNING_PURPOSE,
-    });
+    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce, signer.currentKeyId);
+    const signedResult = signer.sign(signedBytes);
     const signedKeyId = capabilityOwnDataValue(signedResult, 'keyId');
     const signature = capabilityOwnDataValue(signedResult, 'signature');
     if (
       typeof signedKeyId !== 'string' ||
-      signedKeyId !== ring.currentKeyId ||
+      signedKeyId !== signer.currentKeyId ||
       !isSafeKeyIdText(signedKeyId) ||
       typeof signature !== 'string' ||
       !isCanonicalSignature(signature)
@@ -356,7 +382,12 @@ export const verifyCapability = securityClassifier(
     secret: SigningSecret,
     token: string,
     expected: { key: string; method: CapabilityMethod; scope?: string },
-    options: { audience?: string; now?: number; replayStore?: CapabilityReplayStore } = {},
+    options: {
+      audience?: string;
+      now?: number;
+      principalEpochStore?: PrincipalEpochStore;
+      replayStore?: CapabilityReplayStore;
+    } = {},
   ): Promise<CapabilityVerifyResult> {
     try {
       if (
@@ -372,6 +403,7 @@ export const verifyCapability = securityClassifier(
       const configuredNow = capabilityOwnDataValue(options, 'now');
       const configuredAudience = capabilityOwnDataValue(options, 'audience');
       const configuredReplayStore = capabilityOwnDataValue(options, 'replayStore');
+      const configuredPrincipalEpochStore = capabilityOwnDataValue(options, 'principalEpochStore');
       const now = configuredNow ?? capabilityNow();
       const audience = configuredAudience ?? DEFAULT_CAPABILITY_AUDIENCE;
       if (resolveBootMode() === 'production' && configuredNow !== undefined) {
@@ -416,17 +448,16 @@ export const verifyCapability = securityClassifier(
         method: payload.method,
         expiry: payload.expiry,
         ...(payload.scope === undefined ? {} : { scope: payload.scope }),
+        ...(payload.principalEpoch === undefined ? {} : { principalEpoch: payload.principalEpoch }),
       };
 
       // Recompute the signature over every received authority field, including key id and replay
       // posture. The keyring owns the constant-time signature comparison.
-      const verification = signingKeyRingFromSecret(secret).verify({
-        audience,
-        keyId: payload.keyId,
-        payload: canonicalizeWithNonce(claims, payload.oneTime, payload.nonce, payload.keyId),
-        purpose: CAPABILITY_SIGNING_PURPOSE,
+      const verification = createCapabilityCryptoHandle(secret, audience).verify(
+        canonicalizeWithNonce(claims, payload.oneTime, payload.nonce, payload.keyId),
         signature,
-      });
+        payload.keyId,
+      );
       if (!verification.ok) return { ok: false, reason: 'bad-signature' };
 
       if (now >= claims.expiry) return { ok: false, reason: 'expired' };
@@ -446,6 +477,23 @@ export const verifyCapability = securityClassifier(
         (claims.scope ?? '') !== (expectedScope ?? '')
       ) {
         return { ok: false, reason: 'claim-mismatch' };
+      }
+
+      if (claims.scope !== undefined) {
+        if (configuredPrincipalEpochStore === undefined || claims.principalEpoch === undefined) {
+          return { ok: false, reason: 'principal-stale' };
+        }
+        try {
+          await assertCapabilityPrincipalEpochFresh(
+            snapshotPrincipalEpochStore(configuredPrincipalEpochStore),
+            claims.scope,
+            claims.principalEpoch,
+          );
+        } catch {
+          return { ok: false, reason: 'principal-stale' };
+        }
+      } else if (claims.principalEpoch !== undefined) {
+        return { ok: false, reason: 'principal-stale' };
       }
 
       if (payload.oneTime) {
@@ -487,8 +535,21 @@ interface ParsedCapabilityPayload {
   readonly key: string;
   readonly expiry: number;
   readonly scope?: string;
+  readonly principalEpoch?: number;
   readonly oneTime: boolean;
   readonly nonce: string;
+}
+
+async function principalEpochAtCapabilityMint(store: PrincipalEpochStore, principal: string) {
+  return currentPrincipalEpoch(store, principal);
+}
+
+async function assertCapabilityPrincipalEpochFresh(
+  store: PrincipalEpochStore,
+  principal: string,
+  embeddedEpoch: number,
+) {
+  return assertPrincipalEpochFresh(store, principal, embeddedEpoch);
 }
 
 function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | undefined {
@@ -514,6 +575,7 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
   const key = capabilityOwnDataValue(parsed, 'k');
   const expiry = capabilityOwnDataValue(parsed, 'e');
   const scope = capabilityOwnDataValue(parsed, 's');
+  const principalEpoch = capabilityOwnDataValue(parsed, 'p');
   const oneTimeFlag = capabilityOwnDataValue(parsed, 'o');
   const nonceValue = capabilityOwnDataValue(parsed, 'n');
   if (
@@ -528,10 +590,16 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
     !isValidExpiry(expiry) ||
     (scope !== undefined &&
       (typeof scope !== 'string' || scope.length > MAX_CAPABILITY_SCOPE_LENGTH)) ||
+    (scope === undefined
+      ? principalEpoch !== undefined
+      : typeof principalEpoch !== 'number' ||
+        !capabilityIsSafeInteger(principalEpoch) ||
+        principalEpoch < 1) ||
     (oneTimeFlag !== undefined && oneTimeFlag !== 1)
   ) {
     return undefined;
   }
+  const validatedPrincipalEpoch = typeof principalEpoch === 'number' ? principalEpoch : undefined;
   const oneTime = oneTimeFlag === 1;
   let nonce = '';
   if (oneTime) {
@@ -545,6 +613,7 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
     method,
     expiry,
     ...(scope === undefined ? {} : { scope }),
+    ...(validatedPrincipalEpoch === undefined ? {} : { principalEpoch: validatedPrincipalEpoch }),
   };
   if (source !== serializeCapabilityPayload(keyId, claims, oneTime, nonce)) return undefined;
   return capabilityFreeze({
@@ -553,6 +622,7 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
     key,
     expiry,
     ...(scope === undefined ? {} : { scope }),
+    ...(validatedPrincipalEpoch === undefined ? {} : { principalEpoch: validatedPrincipalEpoch }),
     oneTime,
     nonce,
   });
@@ -571,6 +641,9 @@ function serializeCapabilityPayload(
     `"k":${capabilityJsonQuote(claims.key)},` +
     `"e":${capabilityString(claims.expiry)}`;
   if (claims.scope !== undefined) value += `,"s":${capabilityJsonQuote(claims.scope)}`;
+  if (claims.principalEpoch !== undefined) {
+    value += `,"p":${capabilityString(claims.principalEpoch)}`;
+  }
   if (oneTime) value += `,"o":1,"n":${capabilityJsonQuote(nonce)}`;
   return `${value}}`;
 }
@@ -583,6 +656,7 @@ function isCapabilityPayloadKey(value: string): boolean {
     value === 'k' ||
     value === 'e' ||
     value === 's' ||
+    value === 'p' ||
     value === 'o' ||
     value === 'n'
   );

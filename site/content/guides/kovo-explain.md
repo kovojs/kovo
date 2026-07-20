@@ -200,6 +200,7 @@ kovo explain --unscoped graph.json    # owner-annotated tables whose key predica
 kovo explain --endpoints graph.json   # machine ingress: endpoints, webhooks, file/stream routes + auth/CSRF posture
 kovo explain --revealed graph.json    # confidential fields intentionally revealed
 kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
+kovo explain --capabilities graph.json # held capabilities + static external-Postgres lease contract
 kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
 kovo explain --cookies graph.json     # cookie posture and downgrade findings
 kovo explain --sources-sinks          # source/sink inventory
@@ -223,17 +224,21 @@ can't land quietly.
 - `--endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for webhooks
   the write→domain chain — so "what can reach this app and what can it touch?" is answerable without
   executing anything.
-- `--revealed` lists confidential data reveals, including `trustedReveal(...)` rows that need human
-  review.
+- `--revealed` lists confidential data reveals, including exact typed declassification-policy rows
+  that need human review.
 - `--trust` lists trusted HTML, SQL, URL, and similar escape hatches with the evidence that made them
   reviewable.
+- `--capabilities` lists held dangerous capabilities and the static external-Postgres posture-lease
+  contract. It cannot see a running process, so current lease status, digest, and expiry remain
+  `not-observed`.
 - `--access` lists explicit public/authenticated/machine access decisions, including missing
   decisions that block under `kovo check`.
 - `--cookies` lists cookie posture and downgrade findings.
 - `--sources-sinks` emits the source/sink inventory used by the security gates.
 
 Capability-style review currently happens through the concrete shipped surfaces: `--revealed`,
-`--trust`, `--endpoints`, and `--sources-sinks`.
+`--trust`, `--endpoints`, `--sources-sinks`, and the audit-only `--capabilities` table. The static
+lease rows are a contract review, not live health telemetry.
 
 ## Debug from the Network panel
 

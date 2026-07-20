@@ -1,0 +1,55 @@
+{
+  "schema": "kovo-auth-lifecycle-boundary/v1",
+  "provider": "better-auth",
+  "providerVersion": "1.6.17",
+  "posture": "inherited-exact-pin",
+  "inheritedSession": {
+    "expiresIn": 604800,
+    "updateAge": 86400,
+    "freshAge": 86400,
+    "cookieCacheEnabled": false,
+    "cookieCacheMaxAge": 300,
+    "preexistingCookieSignIn": "rotates-id-and-token-retains-prior-session"
+  },
+  "kovoOwnedTransitions": [
+    {
+      "id": "signIn",
+      "upstreamApi": "signInEmail",
+      "surface": "auth/sign-in",
+      "devOnly": false
+    },
+    {
+      "id": "signOut",
+      "upstreamApi": "signOut",
+      "surface": "auth/sign-out",
+      "devOnly": false
+    },
+    {
+      "id": "seedSignUp",
+      "upstreamApi": "signUpEmail",
+      "surface": "developmentSeed",
+      "devOnly": true
+    },
+    {
+      "id": "requestPasswordReset",
+      "upstreamApi": "requestPasswordReset",
+      "surface": "auth/request-password-reset",
+      "devOnly": false,
+      "feature": "password-reset-mail"
+    }
+  ],
+  "structurallyUnreachable": [
+    {
+      "id": "unsafe-method-provider-lifecycle",
+      "reason": "the opaque provider mount accepts GET only and no other direct provider API is exposed"
+    }
+  ],
+  "delegatedReachable": [
+    {
+      "id": "get-provider-callback-lifecycle",
+      "status": "unsupported",
+      "reason": "the opaque GET redirect/callback mount can change identity state under Better Auth; Kovo does not guarantee those lifecycle semantics"
+    }
+  ],
+  "nonClaim": "Kovo guarantees only its four owned transitions, with requestPasswordReset present only when its purpose-closed mail feature is configured; reset completion and reachable Better Auth GET callback lifecycle remain delegated and unsupported."
+}

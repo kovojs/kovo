@@ -23,6 +23,7 @@ import {
 } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
+import { KOVO_RUNTIME_ATTESTATION_ENDPOINT } from './generated-runtime-posture-registry.js';
 import { guards, resolveLifecycleRequest } from './guards.js';
 import { mutation } from './mutation.js';
 import { assignDerivedQueryKey, query } from './query.js';
@@ -359,6 +360,87 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
     expect(response.status).toBe(405);
     expect(response.headers.get('allow')).toBe('POST');
     expect(await response.text()).toBe('');
+  });
+});
+
+describe('framework-owned runtime posture attestation endpoint', () => {
+  it('cannot be shadowed by an app endpoint and retains a bounded challenge body', async () => {
+    const appHandler = vi.fn(() => new Response('app endpoint should not win'));
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint(KOVO_RUNTIME_ATTESTATION_ENDPOINT, {
+            csrf: false,
+            csrfJustification: 'reserved-path collision fixture',
+            handler: appHandler,
+            method: 'POST',
+            reason: 'reserved runtime attestation path collision fixture',
+            response: rawTextResponse,
+          }),
+        ],
+      }),
+    );
+    const unavailable = await handler(
+      new Request(`https://example.test${KOVO_RUNTIME_ATTESTATION_ENDPOINT}`, {
+        body: JSON.stringify({ nonce: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+    const oversized = await handler(
+      new Request(`https://example.test${KOVO_RUNTIME_ATTESTATION_ENDPOINT}`, {
+        body: 'x'.repeat(4_097),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get('cache-control')).toBe('no-store');
+    expect(oversized.status).toBe(413);
+    expect(appHandler).not.toHaveBeenCalled();
+  });
+
+  // C13 red anchor: a colliding app endpoint must not lend its long-lived budget to the
+  // framework-owned attestation door (SPEC §9.5 and §9.2 reserved-surface ownership).
+  it('keeps the framework request deadline when a colliding endpoint is long-lived', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint(KOVO_RUNTIME_ATTESTATION_ENDPOINT, {
+            csrf: false,
+            csrfJustification: 'reserved-path deadline collision fixture',
+            handler: () => new Response('app endpoint should not win'),
+            method: 'POST',
+            reason: 'reserved runtime attestation deadline collision fixture',
+            response: {
+              ...rawTextResponse,
+              longLived: {
+                deadlineMs: 300,
+                justification: 'prove reserved attestation does not inherit app route posture',
+              },
+            },
+          }),
+        ],
+        requestLimits: { deadlineMs: 30 },
+      }),
+    );
+    const request = new Request(`https://example.test${KOVO_RUNTIME_ATTESTATION_ENDPOINT}`, {
+      body: new ReadableStream<Uint8Array>({ pull() {} }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+
+    const outcome = await Promise.race([
+      handler(request),
+      new Promise<'long-lived-budget-leaked'>((resolve) => {
+        setTimeout(() => resolve('long-lived-budget-leaked'), 120);
+      }),
+    ]);
+
+    expect(outcome).not.toBe('long-lived-budget-leaked');
+    expect((outcome as Response).status).toBe(503);
   });
 });
 
@@ -816,47 +898,28 @@ describe('server createApp request shell', () => {
     expect(mutationHandler).not.toHaveBeenCalled();
   });
 
-  it('pins retained opaque CSRF key-ring methods against a forged victim token', async () => {
-    const mutationHandler = vi.fn(() => ({ ok: true }));
-    const originalSignature = Buffer.alloc(32, 0x11).toString('base64url');
-    const attackerSignature = Buffer.alloc(32, 0x22).toString('base64url');
+  it('rejects forged structural CSRF key rings before consulting attacker methods', () => {
+    const sign = vi.fn(() => ({ keyId: 'attacker', signature: 'forged' }));
+    const verify = vi.fn(() => ({ keyId: 'attacker', ok: true }) as const);
     const ring = {
-      currentKeyId: 'original',
-      sign: () => ({ keyId: 'original', signature: originalSignature }),
-      verify: (input: { signature: string }) =>
-        input.signature === originalSignature
-          ? ({ keyId: 'original', ok: true } as const)
-          : ({ ok: false, reason: 'bad-signature' } as const),
+      currentKeyId: 'attacker',
+      sign,
+      verify,
     };
-    const csrf = { secret: ring, sessionId: () => 'victim' };
-    const handler = createRequestHandler(
+
+    expect(() =>
       createApp({
-        csrf,
+        csrf: { secret: ring as never, sessionId: () => 'victim' },
         mutations: [
           mutation('account/keyring-delete', {
             input: s.object({}),
-            handler: mutationHandler,
+            handler: () => ({ ok: true }),
           }),
         ],
       }),
-    );
-
-    ring.currentKeyId = 'attacker';
-    ring.sign = () => ({ keyId: 'attacker', signature: attackerSignature });
-    ring.verify = () => ({ keyId: 'attacker', ok: true }) as const;
-    const forged = csrfToken({}, csrf, { audience: 'account/keyring-delete' });
-    const form = new FormData();
-    form.set('kovo-csrf', forged);
-    const response = await handler(
-      new Request('https://example.test/_m/account/keyring-delete', {
-        body: form,
-        headers: { Origin: 'https://example.test' },
-        method: 'POST',
-      }),
-    );
-
-    expect(response.status).toBe(422);
-    expect(mutationHandler).not.toHaveBeenCalled();
+    ).toThrow(/only an exact framework-minted token is accepted/u);
+    expect(sign).not.toHaveBeenCalled();
+    expect(verify).not.toHaveBeenCalled();
   });
 
   it('pins a top-level custom mutation schema parse identity after createApp', async () => {
@@ -1474,6 +1537,7 @@ describe('server createApp request shell', () => {
     expect(app.diagnostics).toEqual([
       {
         code: 'KV228',
+        severity: 'error',
         fileName: '/products/:id <-> /products/new',
         help: expect.stringContaining('SPEC §9.5'),
         message:

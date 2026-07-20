@@ -654,6 +654,37 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('reports KV413 for a trigger operation without declared fan-out', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['delete(table: unknown): Promise<void>;']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "product", key: "id" }));',
+            'const triggerDdl = sql`CREATE TRIGGER product_delete_fanout AFTER DELETE ON products FOR EACH ROW EXECUTE FUNCTION purge_price_rules()`;',
+            '',
+            'export const deleteProduct = async (db: PgAsyncDatabase<any, any>) => {',
+            '  await db.delete(products);',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.deleteProduct?.unresolved).toEqual([
+      expect.objectContaining({
+        code: 'KV413',
+        domain: 'product',
+        message: 'Database engine side-effect needs a declared fan-out.',
+      }),
+    ]);
+  });
+
   it('recognizes project-mode pgTable initializers with kovo annotations as tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [

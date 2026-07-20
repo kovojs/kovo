@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
@@ -528,8 +529,10 @@ export function sqlSafetyInvariantFindings(filePath, text) {
   const findings = [];
 
   if (filePath.endsWith('packages/core/src/diagnostics.ts')) {
-    const kv422Definition = /\bKV422\s*:\s*\{([\s\S]*?)\n\s*\},/.exec(source)?.[1] ?? '';
-    if (!/\bseverity\s*:\s*['"]error['"]/.test(kv422Definition)) {
+    if (
+      !diagnosticRegistrySeverityIs(text, filePath, 'KV422', 'error') ||
+      !registeredDiagnosticConstructorPreservesSeverity(text, filePath)
+    ) {
       findings.push(`${filePath}: KV422 SQL-safety diagnostic severity must remain error`);
     }
   }
@@ -561,7 +564,7 @@ export function sqlSafetyInvariantFindings(filePath, text) {
   }
 
   if (filePath.endsWith('packages/drizzle/src/static/diagnostics.ts')) {
-    if (!/\bseverity\s*:\s*definition\s*\.\s*severity/.test(source)) {
+    if (!drizzleDiagnosticBuilderPreservesSeverity(text, filePath)) {
       findings.push(
         `${filePath}: Drizzle diagnostic builder must preserve registry severity for KV diagnostics`,
       );
@@ -625,6 +628,171 @@ export function sqlSafetyInvariantFindings(filePath, text) {
   }
 
   return findings;
+}
+
+function diagnosticRegistrySeverityIs(text, filePath, code, expectedSeverity) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let registry;
+  const visit = (node) => {
+    if (
+      registry === undefined &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'diagnosticDefinitions' &&
+      node.initializer !== undefined
+    ) {
+      const initializer = unwrapTypeScriptExpression(node.initializer);
+      if (ts.isObjectLiteralExpression(initializer)) registry = initializer;
+    }
+    if (registry === undefined) ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (registry === undefined) return false;
+  const definition = objectLiteralPropertyInitializer(registry, code);
+  if (definition === undefined || !ts.isObjectLiteralExpression(definition)) return false;
+  const severity = objectLiteralPropertyInitializer(definition, 'severity');
+  return (
+    severity !== undefined && ts.isStringLiteral(severity) && severity.text === expectedSeverity
+  );
+}
+
+function registeredDiagnosticConstructorPreservesSeverity(text, filePath) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const implementation = functionImplementation(sourceFile, 'createRegisteredDiagnostic');
+  if (implementation === undefined) return false;
+  let preservesSeverity = false;
+  const visit = (node) => {
+    if (
+      !preservesSeverity &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'diagnostic' &&
+      node.initializer !== undefined
+    ) {
+      const initializer = unwrapTypeScriptExpression(node.initializer);
+      if (ts.isObjectLiteralExpression(initializer)) {
+        const severity = objectLiteralPropertyInitializer(initializer, 'severity');
+        preservesSeverity = isExactPropertyAccess(severity, 'definition', 'severity');
+      }
+    }
+    if (!preservesSeverity) ts.forEachChild(node, visit);
+  };
+  visit(implementation.body);
+  return preservesSeverity;
+}
+
+function drizzleDiagnosticBuilderPreservesSeverity(text, filePath) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const importsRegisteredDoor = sourceFile.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === '@kovojs/core/internal/diagnostics' &&
+      statement.importClause?.namedBindings !== undefined &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.some(
+        (element) =>
+          element.propertyName === undefined && element.name.text === 'createRegisteredDiagnostic',
+      ),
+  );
+  const implementation = functionImplementation(sourceFile, 'drizzleDiagnostic');
+  if (implementation === undefined) return false;
+  let preservesSeverity = false;
+  const visit = (node) => {
+    if (!preservesSeverity && ts.isReturnStatement(node) && node.expression !== undefined) {
+      const expression = unwrapTypeScriptExpression(node.expression);
+      if (ts.isObjectLiteralExpression(expression)) {
+        const severity = objectLiteralPropertyInitializer(expression, 'severity');
+        preservesSeverity = isExactPropertyAccess(severity, 'definition', 'severity');
+      } else if (
+        importsRegisteredDoor &&
+        ts.isCallExpression(expression) &&
+        ts.isIdentifier(expression.expression) &&
+        expression.expression.text === 'createRegisteredDiagnostic'
+      ) {
+        preservesSeverity = isExactPropertyAccess(expression.arguments[0], 'input', 'code');
+      }
+    }
+    if (!preservesSeverity) ts.forEachChild(node, visit);
+  };
+  visit(implementation.body);
+  return preservesSeverity;
+}
+
+function functionImplementation(sourceFile, name) {
+  let implementation;
+  const visit = (node) => {
+    if (
+      implementation === undefined &&
+      ts.isFunctionDeclaration(node) &&
+      node.body !== undefined &&
+      node.name?.text === name
+    ) {
+      implementation = node;
+      return;
+    }
+    if (implementation === undefined) ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return implementation;
+}
+
+function objectLiteralPropertyInitializer(objectLiteral, name) {
+  for (const property of objectLiteral.properties) {
+    if (ts.isPropertyAssignment(property) && staticPropertyName(property.name) === name) {
+      return unwrapTypeScriptExpression(property.initializer);
+    }
+  }
+  return undefined;
+}
+
+function staticPropertyName(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return undefined;
+}
+
+function isExactPropertyAccess(expression, receiver, property) {
+  if (expression === undefined) return false;
+  const unwrapped = unwrapTypeScriptExpression(expression);
+  return (
+    ts.isPropertyAccessExpression(unwrapped) &&
+    ts.isIdentifier(unwrapped.expression) &&
+    unwrapped.expression.text === receiver &&
+    unwrapped.name.text === property
+  );
+}
+
+function unwrapTypeScriptExpression(expression) {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 export function responseFragmentApplyInvariantFindings(filePath, text) {

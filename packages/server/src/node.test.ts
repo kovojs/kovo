@@ -28,6 +28,7 @@ import { resolveRequestClientIp } from './app-load-shed.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
+import { endpoint } from './endpoint.js';
 import { mutation } from './mutation.js';
 import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 import { query } from './query.js';
@@ -1780,6 +1781,80 @@ describe('toNodeHandler mid-stream error handling (E1)', () => {
         // The socket was torn down — a transport-level error is the acceptable signal.
         expect(outcome.kind).toBe('error');
       }
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('toNodeHandler request deadline transport binding (SPEC §9.5)', () => {
+  it('destroys a stalled response transport at the deadline and releases its occupancy slot', async () => {
+    let handlerCalls = 0;
+    let handlerSignal: AbortSignal | undefined;
+    const streaming = endpoint('/slow-drain', {
+      auth: { justification: 'deadline transport test endpoint', kind: 'none' },
+      handler(request) {
+        handlerCalls += 1;
+        handlerSignal = request.signal;
+        let sent = false;
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              if (handlerCalls > 1) {
+                if (!sent) controller.enqueue(new TextEncoder().encode('reacquired'));
+                sent = true;
+                controller.close();
+                return;
+              }
+              await new Promise<void>((resolve) => setTimeout(resolve, 10));
+              controller.enqueue(new Uint8Array(64 * 1_024));
+            },
+          }),
+          { headers: { 'Cache-Control': 'no-store' } },
+        );
+      },
+      method: 'GET',
+      reason: 'bounded slow response write-out regression',
+      response: { appOwnedSafety: true, body: 'stream', cache: 'no-store' },
+    });
+    const app = createApp({
+      endpoints: [streaming],
+      requestLimits: { deadlineMs: 500, maxInFlight: 1 },
+    });
+    const nodeHandler = toNodeHandler(createRequestHandler(app));
+    let closeFirstResponse!: () => void;
+    const firstResponseClosed = new Promise<void>((resolve) => {
+      closeFirstResponse = resolve;
+    });
+    const server = await serveWithNode((request, response) => {
+      if (handlerCalls === 0) response.once('close', closeFirstResponse);
+      void nodeHandler(request, response);
+    });
+
+    try {
+      let stalledRequest!: ReturnType<typeof httpRequest>;
+      const responseStarted = new Promise<number>((resolve) => {
+        stalledRequest = httpRequest(`${server.origin}/slow-drain`, (response) => {
+          response.pause();
+          resolve(response.statusCode ?? 0);
+        });
+        stalledRequest.on('error', () => undefined);
+        stalledRequest.end();
+      });
+      await expect(responseStarted).resolves.toBe(200);
+      await expect(
+        Promise.race([
+          firstResponseClosed.then(() => true),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 4_000)),
+        ]),
+      ).resolves.toBe(true);
+      stalledRequest.destroy();
+      expect(handlerSignal?.aborted).toBe(true);
+      expect(handlerCalls).toBe(1);
+
+      const reacquired = await server.fetch('/slow-drain');
+      expect(reacquired).toMatchObject({ body: 'reacquired', status: 200 });
+      expect(handlerCalls).toBe(2);
     } finally {
       await server.close();
     }

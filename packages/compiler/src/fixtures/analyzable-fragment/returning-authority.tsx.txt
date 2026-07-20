@@ -1,0 +1,7 @@
+import { endpoint } from '@kovojs/server';
+
+export const root = endpoint('/ledger/return', {
+  handler(_input, context) {
+    return context.db;
+  },
+});

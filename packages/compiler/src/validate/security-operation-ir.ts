@@ -6,7 +6,7 @@ import {
 } from '@kovojs/core/internal/security-operation-ir';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 
-import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
+import { diagnosticAt, type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   kovoExecutableReferenceAttributeKind,
   type KovoExecutableReferenceAttributeKind,
@@ -14,14 +14,18 @@ import {
 import {
   compilerArrayAppend,
   compilerArrayLength,
+  compilerCreateSet,
   compilerFailClosed,
   compilerOwnDataValue,
+  compilerSetAdd,
   compilerSetHas,
   compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import type {
   BrowserSecurityOperationModel,
+  AgentDefinitionModel,
+  AgentToolModel,
   CallExpressionModel,
   JsxAttributeModel,
   JsxElementModel,
@@ -34,6 +38,7 @@ import type {
   StaticJsxWireAttributeEntry,
 } from '../scan/model.js';
 import { analyzeClientCaptures } from './client-capture.js';
+import { agentMutationBindings } from '../agent-tool-facts.js';
 
 /**
  * SPEC §4.3/§5.2 finite browser effect boundary. Authored handler source may compute ordinary
@@ -289,9 +294,156 @@ export const validateFiniteServerSecurityOperations = securityClassifier(
     validateHandlerCollection(found, diagnostics, model.queryHandlers, 'query');
     validateHandlerCollection(found, diagnostics, model.webhookHandlers, 'webhook');
     validateHandlerCollection(found, diagnostics, model.taskRunHandlers, 'task');
+    validateHandlerCollection(found, diagnostics, model.agentHandlers, 'agent');
+    validateAgentModelEffectDoor(found, diagnostics, model.agentHandlers);
+    const toolBindings = compilerCreateSet<string>();
+    const mutationBindings = agentMutationBindings(model);
+    const toolLength = compilerArrayLength(model.agentTools, 'Agent tool declarations');
+    for (let toolIndex = 0; toolIndex < toolLength; toolIndex += 1) {
+      const tool = compilerOwnDataValue(
+        model.agentTools,
+        toolIndex,
+        'Agent tool declarations',
+      ) as AgentToolModel;
+      compilerSetAdd(toolBindings, tool.binding);
+      appendViolations(found, diagnostics, tool.violations);
+      if (
+        tool.mutationBinding !== undefined &&
+        !compilerSetHas(mutationBindings, tool.mutationBinding)
+      ) {
+        appendFiniteIrDiagnostic(
+          found,
+          diagnostics,
+          tool.callSpan,
+          `agent tool mutation ${tool.mutationBinding} is not an exact exported same-file mutation.`,
+        );
+      }
+    }
+    const definitionLength = compilerArrayLength(model.agentDefinitions, 'Agent definitions');
+    const agentNames = compilerCreateSet<string>();
+    for (let definitionIndex = 0; definitionIndex < definitionLength; definitionIndex += 1) {
+      const definition = compilerOwnDataValue(
+        model.agentDefinitions,
+        definitionIndex,
+        'Agent definitions',
+      ) as AgentDefinitionModel;
+      if (compilerSetHas(agentNames, definition.name)) {
+        appendFiniteIrDiagnostic(
+          found,
+          diagnostics,
+          { end: definition.modelHandler.bodyEnd, start: definition.modelHandler.bodyStart },
+          `agent name ${definition.name} is duplicated; effect-closure identities must be unique.`,
+        );
+      }
+      compilerSetAdd(agentNames, definition.name);
+      const bindingLength = compilerArrayLength(definition.toolBindings, 'Agent tool bindings');
+      const agentToolBindings = compilerCreateSet<string>();
+      const agentToolNames = compilerCreateSet<string>();
+      for (let bindingIndex = 0; bindingIndex < bindingLength; bindingIndex += 1) {
+        const binding = compilerOwnDataValue(
+          definition.toolBindings,
+          bindingIndex,
+          'Agent tool bindings',
+        ) as string;
+        if (compilerSetHas(agentToolBindings, binding)) {
+          appendFiniteIrDiagnostic(
+            found,
+            diagnostics,
+            { end: definition.modelHandler.bodyEnd, start: definition.modelHandler.bodyStart },
+            `agent tool binding ${binding} is duplicated.`,
+          );
+        }
+        compilerSetAdd(agentToolBindings, binding);
+        if (!compilerSetHas(toolBindings, binding)) {
+          appendFiniteIrDiagnostic(
+            found,
+            diagnostics,
+            { end: definition.modelHandler.bodyEnd, start: definition.modelHandler.bodyStart },
+            `agent tool ${binding} is not an exact same-file tool declaration.`,
+          );
+          continue;
+        }
+        let toolName: string | undefined;
+        for (let toolIndex = 0; toolIndex < toolLength; toolIndex += 1) {
+          const tool = compilerOwnDataValue(
+            model.agentTools,
+            toolIndex,
+            'Agent tool declarations',
+          ) as AgentToolModel;
+          if (tool.binding === binding) {
+            toolName = tool.name;
+            break;
+          }
+        }
+        if (toolName !== undefined) {
+          if (compilerSetHas(agentToolNames, toolName)) {
+            appendFiniteIrDiagnostic(
+              found,
+              diagnostics,
+              { end: definition.modelHandler.bodyEnd, start: definition.modelHandler.bodyStart },
+              `agent tool name ${toolName} is duplicated inside ${definition.name}.`,
+            );
+          }
+          compilerSetAdd(agentToolNames, toolName);
+        }
+      }
+    }
     return found;
   },
 );
+
+function validateAgentModelEffectDoor(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  handlers: readonly MutationHandlerModel[],
+): void {
+  const handlerLength = compilerArrayLength(handlers, 'Agent model effect-door handlers');
+  for (let handlerIndex = 0; handlerIndex < handlerLength; handlerIndex += 1) {
+    const handler = compilerOwnDataValue(
+      handlers,
+      handlerIndex,
+      'Agent model effect-door handlers',
+    ) as MutationHandlerModel;
+    const operations = handler.securityOperations ?? [];
+    const operationLength = compilerArrayLength(operations, 'Agent model effect-door operations');
+    for (let operationIndex = 0; operationIndex < operationLength; operationIndex += 1) {
+      const operation = compilerOwnDataValue(
+        operations,
+        operationIndex,
+        'Agent model effect-door operations',
+      ) as ServerSecurityOperationModel;
+      if (
+        operation.kind !== 'server.handler.root' &&
+        operation.kind !== 'server.helper.call' &&
+        operation.kind !== 'server.egress.request'
+      ) {
+        appendFiniteIrDiagnostic(
+          found,
+          diagnostics,
+          operation.span,
+          `agent model effect ${operation.kind} is outside ctx.fetch; return a witnessed tool decision instead.`,
+        );
+      }
+    }
+    const traces = handler.securitySemanticRoot?.traces ?? [];
+    const traceLength = compilerArrayLength(traces, 'Agent model semantic traces');
+    for (let traceIndex = 0; traceIndex < traceLength; traceIndex += 1) {
+      const trace = compilerOwnDataValue(
+        traces,
+        traceIndex,
+        'Agent model semantic traces',
+      ) as (typeof traces)[number];
+      if (trace.verdict === 'proved' && trace.sink.kind !== 'server.egress.request') {
+        appendFiniteIrDiagnostic(
+          found,
+          diagnostics,
+          { end: handler.bodyEnd, start: handler.bodyStart },
+          `agent model helper reaches ${trace.sink.kind} outside ctx.fetch; return a witnessed tool decision instead.`,
+        );
+      }
+    }
+  }
+}
 
 /**
  * SPEC §9.1: a mutation form's CSRF and canonical idempotency controls are one compiler/server-
@@ -435,6 +587,11 @@ function appendViolations(
     }
     if (violation.kind === 'unscoped-state-key') {
       appendScopedKeyDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
+    } else if (
+      violation.kind === 'derived-dataset-scope' ||
+      violation.kind === 'governed-data-persistence'
+    ) {
+      appendDerivedDatasetDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
     } else {
       appendFiniteIrDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
     }
@@ -480,7 +637,8 @@ function appendFiniteIrDiagnostic(
   const measuredLength = span.end - span.start;
   compilerArrayAppend(
     found,
-    diagnostics.at(
+    diagnosticAt(
+      diagnostics,
       'KV449',
       { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
       detail,
@@ -498,12 +656,32 @@ function appendScopedKeyDiagnostic(
   const measuredLength = span.end - span.start;
   compilerArrayAppend(
     found,
-    diagnostics.at(
+    diagnosticAt(
+      diagnostics,
       'KV450',
       { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
       detail,
     ),
     'Scoped-key diagnostics',
+  );
+}
+
+function appendDerivedDatasetDiagnostic(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  span: SourceSpan,
+  detail: string,
+): void {
+  const measuredLength = span.end - span.start;
+  compilerArrayAppend(
+    found,
+    diagnosticAt(
+      diagnostics,
+      'KV452',
+      { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
+      detail,
+    ),
+    'Derived-dataset diagnostics',
   );
 }
 

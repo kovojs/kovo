@@ -23,10 +23,15 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
+  | KovoAuthLifecycleExplainOptions
+  | KovoAuthorizationExplainOptions
+  | KovoAgentExplainOptions
   | { capabilities: true }
   | { cookies: true }
   | KovoDocumentExplainOptions
   | KovoEndpointExplainOptions
+  | KovoGrantExplainOptions
+  | { modelBoundaries: true }
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
   | KovoTasksExplainOptions
@@ -42,6 +47,21 @@ export type KovoExplainOptions =
 export interface KovoAccessExplainOptions {
   access: true;
   failOnFindings?: boolean;
+}
+
+/** `kovo explain --auth-lifecycle`: print Better Auth ownership and explicit non-claims. */
+export interface KovoAuthLifecycleExplainOptions {
+  authLifecycle: true;
+}
+
+/** `kovo explain --authorization`: print honest guard/RLS non-correspondence records. */
+export interface KovoAuthorizationExplainOptions {
+  authorization: true;
+}
+
+/** `kovo explain --agent`: print compiler-derived model/tool effect closures by integrity. */
+export interface KovoAgentExplainOptions {
+  agent: true;
 }
 
 /**
@@ -60,6 +80,11 @@ export interface KovoDocumentExplainOptions {
  */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
+}
+
+/** `kovo explain --grants`: print the compiler-derived finite grant model (SPEC §10.3). */
+export interface KovoGrantExplainOptions {
+  grants: true;
 }
 
 /**
@@ -149,12 +174,20 @@ export function isExplainKind(value: string | undefined): value is ExplainKind {
 
 type CheckArgParseResult =
   | { family: KovoCheckFamily; inputPath: string | undefined; ok: true }
+  | { environment: true; inputPath: string | undefined; ok: true }
   | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false }
   | { message: string; ok: false };
 
 export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
   const parsed = parseCommandArgv(args, CHECK_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('check', parsed, `kovo: ${CHECK_USAGE}`);
+
+  if (parsed.value.positionals[0] === 'env') {
+    if (parsed.value.positionals.length > 2) {
+      return { family: 'env', kind: 'too-many-args', ok: false };
+    }
+    return { environment: true, inputPath: parsed.value.positionals[1], ok: true };
+  }
 
   const family = checkFamilyArg(parsed.value.positionals[0]);
   if (family !== 'all') {
@@ -176,7 +209,7 @@ export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: f
   }
   const message =
     error.kind === 'unsupported-family'
-      ? `kovo: unsupported check family ${stableArg(error.family)}. expected optimistic, coverage, endpoint-posture, or sources-sinks.\n`
+      ? `kovo: unsupported check family ${stableArg(error.family)}. expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n`
       : `kovo: ${CHECK_USAGE}\n`;
   process.stderr.write(message);
   return 1;
@@ -214,9 +247,14 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const positional = parsed.value.positionals;
   const modeFlags = [
     '--access',
+    '--agent',
+    '--auth-lifecycle',
+    '--authorization',
     '--capabilities',
     '--cookies',
     '--endpoints',
+    '--grants',
+    '--model-boundaries',
     '--revealed',
     '--sources-sinks',
     '--tasks',
@@ -225,6 +263,66 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--unscoped',
   ].filter((flag) => flags.has(flag));
   if (modeFlags.length > 1) return explainUsage();
+
+  if (flags.has('--auth-lifecycle')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 0
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: undefined, ok: true, options: { authLifecycle: true } };
+  }
+
+  if (flags.has('--agent')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { agent: true } };
+  }
+
+  if (flags.has('--authorization')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { authorization: true } };
+  }
+
+  if (flags.has('--grants')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { grants: true } };
+  }
+
+  if (flags.has('--model-boundaries')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 0
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: undefined, ok: true, options: { modelBoundaries: true } };
+  }
 
   if (flags.has('--access')) {
     if (flags.has('--layouts') || flags.has('--optimistic') || positional.length > 1) {

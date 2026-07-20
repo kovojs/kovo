@@ -17,6 +17,8 @@ import {
 } from '@kovojs/core/internal/storage';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
 
+import { testRevealSecretPolicy } from './declassification-policy.test-support.js';
+
 import { runMutation } from './mutation.js';
 import {
   type Schema,
@@ -190,7 +192,7 @@ describe('server schemas', () => {
     };
 
     expect(isSecret(parsed.passwordHash)).toBe(true);
-    expect(revealSecret(parsed.passwordHash, 'schema test credential consumer')).toBe('hash-1');
+    expect(revealSecret(parsed.passwordHash, testRevealSecretPolicy)).toBe('hash-1');
     expect(() => `${parsed.passwordHash}`).toThrow(/KV435/u);
     expect(() => JSON.stringify(parsed)).toThrow(/KV435/u);
     expect(() => structuredClone(parsed)).toThrow(/KV435/u);
@@ -213,7 +215,7 @@ describe('server schemas', () => {
     const asyncParsed = await parseSchemaAsync(s.secret(asyncInner), 'hash-2');
     expect(syncCalls).toBe(0);
     expect(isSecret(asyncParsed)).toBe(true);
-    expect(revealSecret(asyncParsed, 'async schema test credential consumer')).toBe('hash-2-async');
+    expect(revealSecret(asyncParsed, testRevealSecretPolicy)).toBe('hash-2-async');
   });
 
   it('coerces FormData once through the declared schema', async () => {
@@ -298,7 +300,8 @@ describe('server schemas', () => {
     expect(assertInferredTypes).toBeTypeOf('function');
   });
 
-  it('parses decimal/date/json form fields without lossy handler coercion', async () => {
+  it('rejects Date-valued mutation args after date/datetime coercion', async () => {
+    const handler = vi.fn(() => ({ unreachable: true }));
     const createInvoice = mutation('invoices/create', {
       input: s.object({
         amount: s.decimal({ scale: 2 }),
@@ -306,14 +309,7 @@ describe('server schemas', () => {
         issuedAt: s.datetime(),
         metadata: s.json<{ note: string; tags: string[] }>(),
       }),
-      handler(input) {
-        return {
-          amount: input.amount,
-          dueDate: input.dueDate.toISOString(),
-          issuedAt: input.issuedAt.toISOString(),
-          metadata: input.metadata,
-        };
-      },
+      handler,
     });
     const form = new FormData();
     form.set('amount', '9999999999999999.99');
@@ -321,14 +317,28 @@ describe('server schemas', () => {
     form.set('issuedAt', '2026-07-15T12:30:00.000Z');
     form.set('metadata', '{"note":"hello","tags":["paid"]}');
 
-    await expect(runMutation(createInvoice, form, {})).resolves.toEqual({
-      changes: [],
+    await expect(runMutation(createInvoice, form, {})).rejects.toThrow(
+      /Validated guard args cannot contain Date values/u,
+    );
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('parses decimal and JSON form fields without lossy handler coercion', async () => {
+    const createInvoice = mutation('invoices/create-immutable', {
+      input: s.object({
+        amount: s.decimal({ scale: 2 }),
+        metadata: s.json<{ note: string; tags: string[] }>(),
+      }),
+      handler: (input) => input,
+    });
+    const form = new FormData();
+    form.set('amount', '9999999999999999.99');
+    form.set('metadata', '{"note":"hello","tags":["paid"]}');
+
+    await expect(runMutation(createInvoice, form, {})).resolves.toMatchObject({
       ok: true,
-      rerunQueries: [],
       value: {
         amount: '9999999999999999.99',
-        dueDate: '2026-07-15T00:00:00.000Z',
-        issuedAt: '2026-07-15T12:30:00.000Z',
         metadata: { note: 'hello', tags: ['paid'] },
       },
     });
@@ -595,6 +605,7 @@ describe('server schemas', () => {
         return {
           contentType: input.avatar.storage.contentType,
           key: scopedKeyFactsFor(input.avatar.key).key,
+          lastModified: input.avatar.storage.lastModified,
           name: input.avatar.file.name,
         };
       },
@@ -604,9 +615,14 @@ describe('server schemas', () => {
 
     const result = await runMutation(uploadAvatar, form, {});
     expect(result).toMatchObject({ ok: true });
-    const value = (result as unknown as { value: { contentType: string; key: string } }).value;
+    const value = (
+      result as unknown as {
+        value: { contentType: string; key: string; lastModified: string };
+      }
+    ).value;
     // Server truth: sniffed PNG, not the client "image/jpeg" lie.
     expect(value.contentType).toBe('image/png');
+    expect(value.lastModified).toBe('2026-06-11T12:00:00.000Z');
     // Opaque server key under the namespace — the traversal filename never became the key.
     const keyFacts = scopedKeyFactsFor(storedKey);
     expect(keyFacts).toMatchObject({ posture: 'system', systemPosture: 'framework-upload' });

@@ -30,6 +30,7 @@ describe('source/sink inventory', () => {
       'auth.credential.non-egress',
       'auth.data-access',
       'css.style.output',
+      'data.derived.persistence',
       'document.shell.output',
       'dynamic.import.process',
       'file.storage.static-export',
@@ -301,6 +302,8 @@ describe('source/sink inventory', () => {
     expect(result.output).toContain(' consumers=');
     expect(result.output).toContain(' diagnostic=');
     expect(result.output).toContain(' escapeHatch=');
+    expect(result.output).toContain(' residency=');
+    expect(result.output).toContain('SUMMARY total=14 unerasable=3');
     expect(result.output).toContain('CORPUS family=html.dom.output');
     expect(result.output).toContain(' negative=');
     expect(result.output).toContain(' positive=');
@@ -344,6 +347,7 @@ describe('source/sink inventory', () => {
         escapeHatch: expect.any(String),
         firstParser: expect.any(String),
         guard: expect.any(String),
+        residency: expect.any(String),
         runtimeGuard: expect.any(String),
         schema: expect.any(String),
         sink: 'html.dom.output',
@@ -437,7 +441,7 @@ describe('source/sink inventory', () => {
   it('exposes the same inventory through kovo check', () => {
     expect(kovoCheck({}, { family: 'sources-sinks' })).toMatchObject({
       exitCode: 0,
-      output: expect.stringContaining('CHECK families=12 entries=13 drift-tokens=17'),
+      output: expect.stringContaining('CHECK families=13 entries=14 drift-tokens=17 unerasable=3'),
     });
   });
 

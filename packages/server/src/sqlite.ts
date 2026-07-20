@@ -26,6 +26,7 @@ import type {
   Reader,
 } from './managed-db.js';
 import { createMemoryMutationReplayStore, type MutationReplayStore } from './replay.js';
+import { createMemoryPrincipalEpochStore, type PrincipalEpochStore } from './principal-epoch.js';
 import {
   securityArrayJoin,
   securityNumberIsFinite,
@@ -160,6 +161,8 @@ export interface KovoSqliteAppRuntime {
   readonly db: KovoSqliteDbProvider;
   /** Volatile development-only mutation replay truth. Production rejects it. */
   readonly mutationReplayStore: MutationReplayStore;
+  /** Volatile development-only principal revocation authority. */
+  readonly principalEpochStore: PrincipalEpochStore;
   /** Read-only query/endpoint database with SQLite secret boxing applied. */
   readonly readonlyDb: Reader<BetterSQLite3Database>;
   /** SQLite setup is synchronous; this promise preserves the starter's uniform boot shape. */
@@ -453,6 +456,7 @@ export function createSqliteAppRuntime(
       () => runtime.providerDb,
     );
     const mutationReplayStore = createMemoryMutationReplayStore();
+    const principalEpochStore = createMemoryPrincipalEpochStore();
     const systemDb = createSqliteSystemDb(db);
     let closed = false;
 
@@ -468,6 +472,7 @@ export function createSqliteAppRuntime(
       },
       db: dbProvider,
       mutationReplayStore,
+      principalEpochStore,
       readonlyDb: runtime.readonlyDb,
       ready: securityPromiseResolve(undefined),
       systemDb(systemOptions): KovoSqliteSystemDb {

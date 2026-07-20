@@ -1,6 +1,14 @@
 export type { Secret } from '@kovojs/core';
 export { publicScopedKey } from '@kovojs/core';
 export type { ScopedKey } from '@kovojs/core';
+export { derived } from '../derived-dataset.js';
+export type {
+  DerivedVectorDataset,
+  DerivedVectorDatasetOptions,
+  DerivedVectorQueryInput,
+  DerivedVectorStoreAdapter,
+  DerivedVectorUpsertInput,
+} from '../derived-dataset.js';
 export { publicAccess, verifiedAccess } from '../access.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from '../access.js';
 import {
@@ -58,6 +66,11 @@ function assertRawCsrfMintContext(context: { audience?: string; mutation?: never
 
 export { domain } from '../domain.js';
 export type { Domain } from '../domain.js';
+export type {
+  SharedCacheExternalDataVersion,
+  SharedCacheInfluenceDeclaration,
+  SharedCacheKeyContribution,
+} from '../cache-influence.js';
 export { errorBoundary, queue, stream } from '../mutation.js';
 import { mutation as mutationImplementation } from '../mutation.js';
 import { query as queryImplementation } from '../query.js';
@@ -87,6 +100,7 @@ export type {
   MutationFail,
   MutationFormDefinition,
   MutationHandlerRequest,
+  PrincipalEpochMutationDeclaration,
   MutationQueue,
   MutationRequestDb,
   MutationResult,
@@ -165,6 +179,16 @@ export {
   postgresAppRuntimeOptions,
   provisionPostgresAppDb,
 } from '../postgres-runtime.js';
+export {
+  erasePrincipal,
+  PrincipalErasureIncompleteError,
+  verifyPrincipalErasureReceipt,
+} from '../principal-erasure.js';
+export type {
+  ErasePrincipalOptions,
+  PrincipalErasureReceipt,
+  PrincipalErasureStorageSet,
+} from '../principal-erasure.js';
 export type {
   CrossOwnerReadDeclaration,
   CrossOwnerReadPolicyOptions,

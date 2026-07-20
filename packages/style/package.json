@@ -31,7 +31,7 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
-    "@material/material-color-utilities": "^0.3.0"
+    "@material/material-color-utilities": "0.3.0"
   },
   "devDependencies": {
     "vitest": "4.1.8"

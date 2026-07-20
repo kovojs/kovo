@@ -176,6 +176,33 @@ describe('inline loader output security', () => {
       expect(element.getAttribute('xlink:href')).toBe('#');
     });
 
+    it(`${label}: applies only compiler-marked reactive trusted URL writes`, async () => {
+      for (const tagName of ['IMG', 'SCRIPT'] as const) {
+        const element = new BoundTriggerElement(
+          {
+            'data-bind:src': 'state.url',
+            'data-kovo-trusted-url:src': '',
+            'kovo-state': '{"url":"/safe.js"}',
+            'on:click': '/c/client.js#setReviewedUrl',
+          },
+          tagName,
+        );
+
+        await dispatchInlineDelegatedClick(
+          element,
+          async () => ({
+            setReviewedUrl(_event: unknown, context: { state: { url: string } }) {
+              context.state.url = 'javascript:reviewed()';
+            },
+          }),
+          installSource,
+          ['/c/client.js'],
+        );
+
+        expect(element.getAttribute('src'), tagName).toBe('javascript:reviewed()');
+      }
+    });
+
     // @kovo-security-certifies C13 inline-dynamic-control-plane-runtime-floor
     it(`${label}: removes state-selected compiler control-plane attributes`, async () => {
       const element = new BoundTriggerElement({
@@ -255,7 +282,7 @@ describe('inline loader output security', () => {
     });
 
     it(`${label}: enforces the exact finite browser-control denominator on live writes`, async () => {
-      expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(66);
+      expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(67);
 
       for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
         const [tagName, attribute, , staticPolicy] =
@@ -271,7 +298,9 @@ describe('inline loader output security', () => {
                   ? 'allow-forms'
                   : staticPolicy === 'meta-referrer-name'
                     ? 'description'
-                    : `reviewed-${index}`;
+                    : staticPolicy === 'meta-refresh-http-equiv'
+                      ? 'content-type'
+                      : `reviewed-${index}`;
         const element = new BoundTriggerElement(
           {
             ...(tagName === 'iframe' && attribute !== 'sandbox' ? { sandbox: 'allow-forms' } : {}),

@@ -27,10 +27,10 @@ export const Search = component({
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
     expect(serverSource).toMatch(
-      /on:idle="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$search-index_idle"/,
+      /on:idle="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$search_index_idle"/,
     );
     expect(serverSource).toMatch(
-      /on:visible="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$sales-chart_visible"/,
+      /on:visible="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/search\.client\.js#Search\$sales_chart_visible"/,
     );
     expect(serverSource).not.toContain('on:idle="/c/components/search.client.js');
     expect(serverSource).not.toContain('on:visible="/c/components/search.client.js');

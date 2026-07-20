@@ -70,7 +70,7 @@
       "replay": "idem-deduplicated",
       "proof": {
         "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
-        "anchor": "selects the private posture before a live route stream can mint from pull()"
+        "anchor": "keeps an exact retained route request usable in a live stream pull()"
       }
     },
     {
@@ -118,7 +118,7 @@
       "replay": "not-replayable",
       "proof": {
         "file": "packages/server/src/anonymous-csrf-cache-security.test.tsx",
-        "anchor": "fails closed when a route stream first mints anonymous authority after headers commit"
+        "anchor": "rejects a reconstructed route-stream request after its owner settles"
       }
     },
     {

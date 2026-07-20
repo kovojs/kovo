@@ -5,6 +5,9 @@ export type {
   S3CompatibleGetObjectInput,
   S3CompatibleGetObjectOutput,
   S3CompatibleHeadObjectInput,
+  S3CompatibleListedObject,
+  S3CompatibleListObjectsInput,
+  S3CompatibleListObjectsOutput,
   S3CompatibleObjectClient,
   S3CompatibleObjectMetadata,
   S3CompatiblePutObjectInput,
@@ -13,13 +16,16 @@ export type {
   StorageDeleteCapability,
   StoragePutCapability,
   StorageReadCapability,
+  PrincipalStorageErasureResult,
 } from '../storage.js';
 export type { FrameworkScopedKeyPosture, ScopedKey, ScopedKeyFacts } from '../scoped-key.js';
 export {
   createReadOnlyStorageCapability,
+  countPrincipalStorageObjects,
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
+  erasePrincipalStorageObjects,
   normalizeStorageKey,
   storageBodyToBytes,
 } from '../storage.js';
@@ -31,3 +37,8 @@ export {
   scopedKeyFactsFor,
   scopedKeysEqual,
 } from '../scoped-key.js';
+export {
+  installCoreSecurityDecisionBridge,
+  type CoreSecurityDecisionBridge,
+  type CoreSecurityDecisionEvent,
+} from './security-decision.js';

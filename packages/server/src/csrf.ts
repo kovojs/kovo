@@ -9,6 +9,8 @@ import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeWireAttribute, renderedHtml, type RenderedHtml } from './html.js';
 import { currentJsxFrameworkContext, type JsxAnonymousCsrfBinding } from './jsx-context.js';
+import { createCsrfCryptoHandle } from './crypto-authority.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import {
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
@@ -638,12 +640,11 @@ export function validateCsrfToken<Request>(
   if (!submittedMac) return false;
 
   return (
-    signingKeyRingFromSecret(options.secret).verify({
-      audience: csrfAudience(options, context.audience),
-      payload: binding.framed,
-      purpose: csrfPurpose(binding.kind),
-      signature: submittedMac,
-    }).ok === true
+    createCsrfCryptoHandle(
+      options.secret,
+      csrfPurpose(binding.kind),
+      csrfAudience(options, context.audience),
+    ).verify(binding.framed, submittedMac).ok === true
   );
 }
 
@@ -667,9 +668,7 @@ function readOwnCsrfInputField(rawInput: unknown, field: string): unknown {
 }
 
 function revealCsrfInput(input: unknown): unknown {
-  return isUntrusted(input)
-    ? revealUntrusted(input, 'validated request-derived CSRF token')
-    : input;
+  return isUntrusted(input) ? revealUntrusted(input, frameworkRevealUntrustedPolicy) : input;
 }
 
 export function mutationCsrfOptions<Request>(
@@ -1394,11 +1393,8 @@ const CSRF_MAC_BYTES = 32;
 
 function createCsrfToken(binding: CsrfBinding, secret: SigningSecret, audience: string): string {
   const mac = securityBufferFrom(
-    signingKeyRingFromSecret(secret).sign({
-      audience,
-      payload: binding.framed,
-      purpose: csrfPurpose(binding.kind),
-    }).signature,
+    createCsrfCryptoHandle(secret, csrfPurpose(binding.kind), audience).sign(binding.framed)
+      .signature,
     'base64url',
   );
   const mask = securityRandomBytes(CSRF_MAC_BYTES);
@@ -1483,12 +1479,16 @@ export function currentSigningSecret(secret: SigningSecret): string {
   }
   if (current === undefined)
     throw new Error('SigningSecret key ring options must include an active key');
-  return typeof current.secret === 'string'
-    ? current.secret
-    : securityBufferToString(securityBufferFrom(current.secret), 'base64url');
+  const activeSecret = current.secret;
+  if (activeSecret === undefined) {
+    throw new Error('SigningSecret active key must retain signing material');
+  }
+  return typeof activeSecret === 'string'
+    ? activeSecret
+    : securityBufferToString(securityBufferFrom(activeSecret), 'base64url');
 }
 
-function csrfPurpose(kind: CsrfBinding['kind']): string {
+function csrfPurpose(kind: CsrfBinding['kind']): 'anonymous-csrf' | 'csrf' {
   // The framework signing capability intentionally exposes only these two reviewed purposes.
   // Cross-kind/version separation lives in the exact length-framed payload.
   return kind === 'anonymous' ? 'anonymous-csrf' : 'csrf';

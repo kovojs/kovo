@@ -40,6 +40,7 @@ const TEMPLATE_FILES = [
   'index.html',
   '.github/workflows/ci.yml',
   'README.md',
+  'scripts/check-lifecycle-policy.mjs',
   'scripts/check-sound-subset.mjs',
   'scripts/check-parallel.mjs',
   'src/schema.ts',
@@ -163,7 +164,11 @@ describe('create-kovo starter (metadata)', () => {
         devDependencies?: Record<string, string>;
         name?: string;
         packageManager?: string;
-        pnpm?: { onlyBuiltDependencies?: string[] };
+        pnpm?: {
+          ignoredBuiltDependencies?: string[];
+          onlyBuiltDependencies?: string[];
+          overrides?: Record<string, string>;
+        };
         scripts?: Record<string, string>;
       };
 
@@ -191,7 +196,9 @@ describe('create-kovo starter (metadata)', () => {
         );
       }
       expect(packageJson.packageManager).toBe('pnpm@10.12.1');
+      expect(packageJson.pnpm?.ignoredBuiltDependencies).toEqual(['esbuild']);
       expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
+      expect(packageJson.pnpm?.overrides).toEqual({ '@node-rs/argon2': '2.0.2' });
       expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
       expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
       expect(packageJson.devDependencies).toMatchObject({
@@ -199,13 +206,21 @@ describe('create-kovo starter (metadata)', () => {
       });
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(readFileSync(join(root, '.npmrc'), 'utf8')).toBe(
-        'registry=https://registry.npmjs.org/\n@kovojs:registry=https://registry.npmjs.org/\n',
+        [
+          'registry=https://registry.npmjs.org/',
+          '@kovojs:registry=https://registry.npmjs.org/',
+          'strict-dep-builds=true',
+          'dangerously-allow-all-builds=false',
+          'package-manager-strict-version=true',
+          '',
+        ].join('\n'),
       );
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
         check: 'node scripts/check-parallel.mjs',
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
+        'check:lifecycle-policy': 'node scripts/check-lifecycle-policy.mjs',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
         dev: 'kovo dev ./src/app.tsx',
         serve: 'pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs',
@@ -254,14 +269,20 @@ describe('create-kovo starter (metadata)', () => {
     const files = new Map(project.files.map((file) => [file.path, file.source]));
     const packageJson = JSON.parse(files.get('package.json') ?? '{}') as {
       dependencies?: Record<string, string>;
-      pnpm?: { onlyBuiltDependencies?: string[] };
+      pnpm?: {
+        ignoredBuiltDependencies?: string[];
+        onlyBuiltDependencies?: string[];
+        overrides?: Record<string, string>;
+      };
     };
 
     expect(files.get('package.json')).toContain('"pg"');
     expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(packageJson.dependencies?.['@node-rs/argon2']).toBe('2.0.2');
+    expect(packageJson.pnpm?.ignoredBuiltDependencies).toEqual(['esbuild']);
     expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
+    expect(packageJson.pnpm?.overrides).toEqual({ '@node-rs/argon2': '2.0.2' });
     expect(files.get('src/db.ts')).toContain("import type { Reader } from '@kovojs/server'");
     expect(files.get('src/db.ts')).toContain(
       "import type { PgAsyncDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'",
@@ -360,7 +381,12 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.tsx')).toContain(
       'const mutationReplayStore = appRuntimeMutationReplayStore;',
     );
+    expect(files.get('src/app.tsx')).toContain('appRuntimePrincipalEpochStore');
+    expect(files.get('src/app.tsx')).toContain(
+      'const principalEpochStore = appRuntimePrincipalEpochStore;',
+    );
     expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
+    expect(files.get('src/app.tsx')).toContain('principalEpochStore,');
     expect(files.get('src/app.tsx')).toContain("} from './_kovo/app-runtime-db.js'");
     expect(files.get('src/app.tsx')).not.toContain("import { appDbReady } from './db.js'");
     expect(files.get('src/app.tsx')).not.toContain('appRuntimeDbReady');
@@ -990,7 +1016,11 @@ describe('create-kovo starter (metadata)', () => {
     const files = new Map(project.files.map((file) => [file.path, file.source]));
     const packageJson = JSON.parse(files.get('package.json') ?? '{}') as {
       dependencies?: Record<string, string>;
-      pnpm?: { onlyBuiltDependencies?: string[] };
+      pnpm?: {
+        ignoredBuiltDependencies?: string[];
+        onlyBuiltDependencies?: string[];
+        overrides?: Record<string, string>;
+      };
     };
 
     expect(files.get('package.json')).toContain('"better-sqlite3"');
@@ -1008,6 +1038,11 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
     expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2', 'better-sqlite3']);
+    expect(packageJson.pnpm?.ignoredBuiltDependencies).toEqual(['esbuild']);
+    expect(packageJson.pnpm?.overrides).toEqual({
+      '@node-rs/argon2': '2.0.2',
+      'better-sqlite3': '12.11.1',
+    });
     expect(files.get('src/db.ts')).toContain(
       "import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'",
     );

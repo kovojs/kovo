@@ -28,6 +28,7 @@ import * as packageInternalRouteApi from '@kovojs/server/internal/route';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
+import * as agentApi from '../agent.js';
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
 import * as writeGovernanceApi from '../write-governance.js';
@@ -45,9 +46,11 @@ import * as managedDbApi from '../managed-db.js';
 import * as sqlSafeHandleApi from '../sql-safe-handle.js';
 import * as passwordApi from '../password.js';
 import * as postgresRuntimeApi from '../postgres-runtime.js';
+import * as principalEpochApi from '../principal-epoch.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
+import * as delegationApi from '../delegation.js';
 import * as publicApi from '../index.js';
 import * as requestHandlerApi from '../request-handler.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
@@ -169,6 +172,20 @@ type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
 type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootEncryptedAtRest = import('../index.js').EncryptedAtRest;
+type RootSigningKeyRing = import('../index.js').SigningKeyRing;
+
+function assertOpaqueSigningRingSurface(opaqueSigningRing: RootSigningKeyRing): void {
+  // @ts-expect-error SPEC §6.6: public rings configure roots; they never expose generic signing.
+  opaqueSigningRing.sign({ audience: 'attacker', payload: 'payload', purpose: 'attacker' });
+  // @ts-expect-error SPEC §6.6: public rings never expose generic verification.
+  opaqueSigningRing.verify({
+    audience: 'attacker',
+    payload: 'payload',
+    purpose: 'attacker',
+    signature: 'forged',
+  });
+}
+void assertOpaqueSigningRingSurface;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootEncryptAtRestOptions = import('../index.js').EncryptAtRestOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
@@ -607,6 +624,13 @@ describe('server app-shell public API barrels', () => {
     const packageRootValues = packageRootApi as Record<string, unknown>;
     const renderingSubpathOnlyValues = new Set<string>(['meta']);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
+      agent: agentApi.agent,
+      agentContent: agentApi.agentContent,
+      createAgentSession: agentApi.createAgentSession,
+      runAgentTurn: agentApi.runAgentTurn,
+      tool: agentApi.tool,
+      createDelegationAuthority: delegationApi.createDelegationAuthority,
+      onBehalfOf: delegationApi.onBehalfOf,
       createApp: appApi.createApp,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
       // env/secret validation surface — the typed boot error, its guard, and the
@@ -646,6 +670,13 @@ describe('server app-shell public API barrels', () => {
       verifyPassword: passwordApi.verifyPassword,
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
+      // SPEC §6.6/§10.3: persistent principal revocation state is an app-facing lifecycle door.
+      advancePrincipalEpoch: principalEpochApi.advancePrincipalEpoch,
+      createMemoryPrincipalEpochStore: principalEpochApi.createMemoryPrincipalEpochStore,
+      initializePrincipalEpoch: principalEpochApi.initializePrincipalEpoch,
+      PrincipalEpochStaleError: principalEpochApi.PrincipalEpochStaleError,
+      PrincipalEpochUnavailableError: principalEpochApi.PrincipalEpochUnavailableError,
+      tombstonePrincipalEpoch: principalEpochApi.tombstonePrincipalEpoch,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
       createRequestHandler: requestHandlerApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
@@ -657,7 +688,10 @@ describe('server app-shell public API barrels', () => {
       serverValue: writeGovernanceApi.serverValue,
       // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
+      createConfidentialAtRestCipher: confidentialAtRestApi.createConfidentialAtRestCipher,
+      decryptAtRest: confidentialAtRestApi.decryptAtRest,
       encryptAtRest: confidentialAtRestApi.encryptAtRest,
+      rewrapAtRest: confidentialAtRestApi.rewrapAtRest,
       mintCsrfField: dataApi.mintCsrfField,
       mintCsrfToken: dataApi.mintCsrfToken,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
@@ -670,6 +704,11 @@ describe('server app-shell public API barrels', () => {
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
     expect(publicApi.createApp).toBe(appApi.createApp);
+    expect(publicApi.agent).toBe(agentApi.agent);
+    expect(publicApi.agentContent).toBe(agentApi.agentContent);
+    expect(publicApi.createAgentSession).toBe(agentApi.createAgentSession);
+    expect(publicApi.runAgentTurn).toBe(agentApi.runAgentTurn);
+    expect(publicApi.tool).toBe(agentApi.tool);
     expect(publicApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
     expect(publicApi.createRequestHandler).not.toBe(appApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
@@ -1076,23 +1115,34 @@ describe('server app-shell public API barrels', () => {
       // isolated on internal/managed-db so generated registry imports cannot retain Node VM.
       'accessDecisionFor',
       'accessFactsFromApp',
+      'appEgressPosture',
       'appendFrameworkRuntimeArrayValue',
+      'authorizationCorrespondenceFactsFromApp',
       'createMemoryMutationReplayStore',
+      'createRuntimeAttestationVerificationHandle',
       'endpointMatches',
+      'escapeObligationReviewPayload',
       'explainGuard',
+      'exportSecurityEvents',
       'extractCompilerBoundKovoRuntimeDbMetadata',
       'guardAuditName',
       'installGeneratedTableSecurityManifestForCommand',
       'invalidate',
+      'registerGeneratedBrowserPostureManifest',
+      'registerGeneratedCacheInfluenceManifest',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
+      'registerGeneratedRuntimePostureManifest',
       'registerGeneratedTableSecurityManifest',
       'registeredGeneratedTableSecurityManifest',
+      'registeredRuntimePostureManifest',
       'resolveLifecycleRequest',
       'runEndpoint',
       'runMutation',
       'runQuery',
       'runRoutePage',
+      'runtimeAttestationPayloadSource',
+      'verifyEscapeObligationReviewEnvelope',
     ]);
     expect(packageInternalExecutionApi).not.toHaveProperty('managedDb');
     expect(packageInternalExecutionApi).not.toHaveProperty(

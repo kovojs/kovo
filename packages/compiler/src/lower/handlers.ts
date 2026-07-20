@@ -6,7 +6,11 @@ import {
   clientModuleHrefForSourceFile,
 } from '@kovojs/core/internal/client-module-url';
 
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticFor,
+  type CompilerDiagnostic,
+} from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -39,7 +43,7 @@ import {
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import type { BrowserSecurityOperationModel } from '../scan/model.js';
-import { normalizeComponentFileName } from '../shared.js';
+import { normalizeComponentFileName, sanitizeIdentifier } from '../shared.js';
 import { analyzeClientCaptures, type ClientCaptureAnalysis } from '../validate/client-capture.js';
 import type {
   BrowserSecurityOperationFact,
@@ -295,18 +299,11 @@ export function versionHandlerLowering(
       : {}),
     ...(handler.diagnostic
       ? {
-          diagnostic: {
-            ...handler.diagnostic,
-            ...(handler.diagnostic.help
-              ? {
-                  help: compilerStringReplaceAll(
-                    handler.diagnostic.help,
-                    unversionedAttributeValue,
-                    versionedAttributeValue,
-                  ),
-                }
-              : {}),
-          },
+          diagnostic: versionHandlerDiagnostic(
+            handler.diagnostic,
+            unversionedAttributeValue,
+            versionedAttributeValue,
+          ),
         }
       : {}),
   };
@@ -323,20 +320,26 @@ function versionHandlerDiagnostics(
     const diagnostic = source[index]!;
     appendHandlerFact(
       result,
-      diagnostic.help
-        ? {
-            ...diagnostic,
-            help: compilerStringReplaceAll(
-              diagnostic.help,
-              unversionedAttributeValue,
-              versionedAttributeValue,
-            ),
-          }
-        : diagnostic,
+      versionHandlerDiagnostic(diagnostic, unversionedAttributeValue, versionedAttributeValue),
       'Handler lowering diagnostics',
     );
   }
   return result;
+}
+
+function versionHandlerDiagnostic(
+  diagnostic: CompilerDiagnostic,
+  unversionedAttributeValue: string,
+  versionedAttributeValue: string,
+): CompilerDiagnostic {
+  if (!diagnostic.help) return diagnostic;
+  return contextualizeCompilerDiagnostic(diagnostic, {
+    help: compilerStringReplaceAll(
+      diagnostic.help,
+      unversionedAttributeValue,
+      versionedAttributeValue,
+    ),
+  });
 }
 
 export function clientModuleUrl(fileName: string, version?: string): string {
@@ -561,7 +564,9 @@ function uniqueAnonymousHandlerName(
   eventName: string,
   counts: Map<string, number>,
 ): string {
-  const base = `${componentName}$${tag}_${eventName}`;
+  // SPEC §5.2: host tag grammar includes '-' and ':', while generated module exports must remain
+  // JavaScript identifiers. Normalize the compiler-owned spelling before collision allocation.
+  const base = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(tag)}_${sanitizeIdentifier(eventName)}`;
   const count = (compilerMapGet(counts, base) ?? 0) + 1;
   compilerMapSet(counts, base, count);
 
@@ -719,18 +724,20 @@ function kv201Diagnostic(
       'KV201 element-param attribute names',
     );
   }
-  return {
-    ...diagnosticFor(fileName, 'KV201', source, offset, lowering.attributeName.length),
-    help: compilerArrayJoin(
-      [
-        `${labels.handlerLowering} ${lowering.attributeName}="${handlerRef}"`,
-        `${labels.blockedExpression} ${lowering.expression}`,
-        `${labels.elementParams} ${compilerArrayJoin(elementParamNames, ', ') || '-'}`,
-        definition.help ?? '',
-      ],
-      '\n',
-    ),
-  };
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(fileName, 'KV201', source, offset, lowering.attributeName.length),
+    {
+      help: compilerArrayJoin(
+        [
+          `${labels.handlerLowering} ${lowering.attributeName}="${handlerRef}"`,
+          `${labels.blockedExpression} ${lowering.expression}`,
+          `${labels.elementParams} ${compilerArrayJoin(elementParamNames, ', ') || '-'}`,
+          definition.help ?? '',
+        ],
+        '\n',
+      ),
+    },
+  );
 }
 
 // SPEC §5.2: element-param eligibility is decided from typed per-argument kinds and the parsed

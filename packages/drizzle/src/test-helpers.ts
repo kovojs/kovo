@@ -1,4 +1,5 @@
 import { kovo } from '@kovojs/drizzle';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type { SourceFileInput, TouchGraphProjectOptions } from '@kovojs/drizzle/internal/static';
 
 export function annotatedTable(name: string, annotation: ReturnType<typeof kovo>) {
@@ -74,13 +75,14 @@ export function withPgDatabaseTypes(
 export function unresolvedQueryLoadFact(query: string, site: string) {
   return {
     diagnostics: [
-      {
-        code: 'KV406',
-        message:
-          'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-        severity: 'error',
-        site,
-      },
+      createRegisteredDiagnostic(
+        'KV406',
+        { site },
+        {
+          message:
+            'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+        },
+      ),
     ],
     query,
     reads: [],

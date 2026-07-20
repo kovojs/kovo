@@ -28,6 +28,7 @@ export interface SourceSinkInventoryEntry {
   finiteBrowserControlProof?: FiniteBrowserControlSinkProof;
   firstParser: string;
   guard: string;
+  residency: SourceSinkResidency;
   runtimeGuard: string;
   schema: string;
   sink: string;
@@ -36,6 +37,14 @@ export interface SourceSinkInventoryEntry {
   testEvidence: readonly string[];
   trust: string;
 }
+
+/** @internal Enumerability posture for data retained beyond one request. */
+export type SourceSinkResidency =
+  | 'none'
+  | 'db-owner'
+  | 'ledger'
+  | 'adapter-enumerable'
+  | `unerasable:${string}`;
 
 /** @internal */
 export interface DangerousSinkToken {
@@ -183,6 +192,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     },
     firstParser: 'tsx-lowered-output-context',
     guard: `contextual-encoding+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
+    residency: 'none',
     runtimeGuard:
       'server-renderer+browser-output-helpers-drop-unsafe-url-attrs+server-meta-refresh-first-attribute-pair+canonical-finite-browser-control-tuples+finite-iframe-sandbox-token-policy',
     schema: [
@@ -226,6 +236,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'InlineScript|InlineStyle|trustedHtml|trustedUrl',
     firstParser: 'structured-document-primitives',
     guard: `typed-document-primitives+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
+    residency: 'none',
     runtimeGuard: 'server-document-assembly-csp-enrollment',
     schema:
       'Document|Head|BodyStart|BodyEnd|HtmlAttrs|BodyAttrs|Meta|Link|StylesheetLink|FontPreload|ModulePreload|InlineScript|InlineStyle',
@@ -243,6 +254,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'trustedUrl|external-route-opt-out|compiler-owned-handler-ref',
     firstParser: 'route-registry+url-parser+fragment-target-registry',
     guard: 'route-registry+safeSameOrigin+normalizePathname+selector-escape',
+    residency: 'none',
     runtimeGuard: 'sanitizeNext+route-matcher+fragment-target-escape+versioned-client-modules',
     schema:
       'route().params|route().search|GET-form-url-state|URL-fragments-hashes|href|src|action|formaction|poster|ping|xlink:href|meta-url-content|redirect-Location|auth-next|route-normalization-redirects|enhanced-navigation-fetch-targets|dynamic-import-handler-refs|immutable-c-v-client-module-URLs|querySelector|hash-scrolling|static-export-reserved-refs|handler-ref-registry|safe-url-schemes',
@@ -260,6 +272,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'trustedCss-not-public|compiler-owned-stylex-output',
     firstParser: 'compiler-style-context+StyleX-extractor',
     guard: 'style-context-encoding+no-raw-style-escape-hatch',
+    residency: 'none',
     runtimeGuard: 'browser-style-property-writer+unsafe-url-attr-drop',
     schema:
       'style-attribute|style-text|raw-CSS|style-props|StyleX-extraction|CSS-custom-properties|url()-inside-CSS|view-transition-name|runtime-style-property-writers|theme-config|generated-keyframe-theme-output|keyframe-input',
@@ -287,6 +300,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'respond-builder+configured-error-shell-builder+cookie-serializer+app-response-header-classifier+response-transport-header-classifier',
     guard:
       'direct-app-header-allowlist+dedicated-field-options+typed-cookie-builder+transport-owned-header-deny-set',
+    residency: 'unerasable:client-state-outside-framework-erasure',
     runtimeGuard:
       'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+content-disposition-bidi-neutralization+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor+static-export-browser-state-rejection+adapter-browser-state-private-no-store-floor',
     schema:
@@ -314,14 +328,16 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'endpoint({csrf:false,reason})|webhook({verify:none,reason})',
     firstParser: 'endpoint-dispatcher-raw-request+webhook-verify-before-parse',
     guard: 'csrf-or-machine-verifier+raw-bytes-before-parse',
-    runtimeGuard: 'dispatcher-endpoint-auth+webhook-verify+replay-store',
+    residency: 'ledger',
+    runtimeGuard:
+      'dispatcher-endpoint-auth+webhook-verify+replay-store+mutation-replay-principal-index-delete-and-absence-probe',
     schema:
       'endpoint-raw-Response|webhook-responses|/_q-typed-reads|SSE-live-query-pushes|BroadcastChannel-rebroadcast|HMR-dev-refresh-endpoints|mutation-defer-streams|Kovo-Changes|fragment-target-selection|endpoint-method+path+body-posture|webhook-input+provider-headers-signatures+idempotency',
     sink: 'ingress.endpoint.webhook',
     source:
       'request.headers|cookies|raw-request-bodies|endpoint-webhook-bodies|webhook-provider-headers-signatures|FormData|mutation-form-input',
     specAnchor: 'SPEC.md#9.1;SPEC.md#11.4',
-    testEvidence: [existingEvidence.endpoint],
+    testEvidence: [existingEvidence.endpoint, 'packages/server/src/principal-erasure.test.ts'],
     trust: 'browser-authority-or-machine-authority',
   },
   {
@@ -331,14 +347,16 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'renderOnce|await-fragment|disableServerRefresh',
     firstParser: 'typed-query-read-endpoint+browser-live-envelope-parser',
     guard: 'guard-recheck+private-cache+principal-fingerprint+build-token',
-    runtimeGuard: 'typed-read-endpoint+BroadcastChannel-principal-discard+SSE-guard-recheck',
+    residency: 'ledger',
+    runtimeGuard:
+      'typed-read-endpoint+BroadcastChannel-principal-discard+SSE-guard-recheck+durable-task-principal-index-delete-and-absence-probe',
     schema:
       '/_q/search-args+query-shape+fragment-target-registry+Kovo-Targets+Kovo-Live-Targets+render-plan-token',
     sink: 'transport.query.live.broadcast',
     source:
       '/_q/search-args|Kovo-Targets|Kovo-Live-Targets|fragment-targets|data-stream-text|BroadcastChannel|SSE|req.session',
     specAnchor: 'SPEC.md#4.9;SPEC.md#9.3;SPEC.md#9.4',
-    testEvidence: [existingEvidence.query],
+    testEvidence: [existingEvidence.query, 'packages/server/src/principal-erasure.test.ts'],
     trust: 'session-scoped-private-data',
   },
   {
@@ -348,16 +366,47 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'respond.file|respond.stream|storage-adapter',
     firstParser: 'FileSchema+storage-key-parser+static-export-route-graph',
     guard: 'path-containment+attachment-nosniff+static-export-reference-check',
+    residency: 'adapter-enumerable',
     runtimeGuard:
-      'safe-content-disposition+upload-and-wire-bidi-filename-neutralization+reserved-dynamic-endpoint-refusal+storage-key-validation',
+      'safe-content-disposition+upload-and-wire-bidi-filename-neutralization+reserved-dynamic-endpoint-refusal+storage-key-validation+exact-adapter-enumeration-delete-and-absence-probe',
     schema:
       'FileSchema|StoredFile|upload-schema-storage|storage-keys-metadata|filesystem-S3-adapters|respond.file|respond.stream|static-export-output-paths|Vite-manifest-asset-copies|generated-graph-output-files|static-export-route-paths-assets-manifests|storage-key|content-disposition-filename',
     sink: 'file.storage.static-export',
     source:
       'file-upload-metadata|file-upload-bytes|static-export-route-paths-assets-manifests|route-paths|asset-manifest|storage-key|app-config-env-values',
     specAnchor: 'SPEC.md#9.5;SPEC.md#11.4',
-    testEvidence: [existingEvidence.storage, existingEvidence.staticExport],
+    testEvidence: [
+      existingEvidence.storage,
+      existingEvidence.staticExport,
+      'packages/server/src/principal-erasure.test.ts',
+    ],
     trust: 'filesystem-and-object-storage-boundary',
+  },
+  {
+    consumers: [
+      'compiler-governed-data-provenance',
+      'derived-vector-dataset',
+      'vector-store-adapter',
+    ],
+    context: 'owner-scoped.database-to-derived.vector-index',
+    diagnostic: 'KV452',
+    escapeHatch: 'derived(adapter,{key,kind:vector})',
+    firstParser: 'finite-security-ir-governed-data-provenance+derived-options-validator',
+    guard:
+      'exact-derived-constructor+exact-request-principal-binding+governed-data-persistent-sink-gate',
+    residency: 'unerasable:derived-adapter-has-no-enumeration-or-delete',
+    runtimeGuard:
+      'request-principal-ScopedKey-reconstruction+complete-frame-hash+adapter-callable-pin+dense-array-snapshot',
+    schema:
+      'DerivedVectorStoreAdapter|DerivedVectorDatasetOptions|DerivedVectorQueryInput|DerivedVectorUpsertInput',
+    sink: 'data.derived.persistence',
+    source: 'managed-database-read-results|owner-scoped-rows|governed-column-values',
+    specAnchor: 'spec/06-type-system.md §6.6;spec/10-data-plane.md §10.3 C9',
+    testEvidence: [
+      'packages/compiler/src/derived-dataset-security.test.ts',
+      'packages/server/src/derived-dataset.test.ts',
+    ],
+    trust: 'principal-scoped-derived-artifact-boundary',
   },
   {
     consumers: ['guard-chain', 'query-cache', 'session-provider', 'drizzle-observed-shapes'],
@@ -366,6 +415,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'public-read-justification',
     firstParser: 'request-shell-session-provider+guard-refinement',
     guard: 'authed+owns()+owner-table-scope',
+    residency: 'db-owner',
     runtimeGuard: 'guard-refinement+runtime-observed-read-write-cross-check',
     schema:
       'req.session|owner-annotated-table-reads-writes|guard-refinement-results|session-provider-cookies|unauthenticated-redirects|CSRF-exempt-mutations-endpoints|webhook-verify-none|replay-stores|rate-limit-keys|query-cacheability|owner:domain|guard-chain|scope-audit',
@@ -390,6 +440,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'none',
     firstParser: 'fixed-binding-option-validation+credential-consumer-contract-census',
     guard: 'exact-runtime-consumer-registry+complete-M2-path-census+same-consumer-one-shot-results',
+    residency: 'adapter-enumerable',
     runtimeGuard:
       'runBetterAuthCredentialConsumer{Async}+consumeBetterAuthCredentialResult+result-shape-validation+provider-error-redaction',
     schema:
@@ -412,6 +463,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'sql<T>+reads|raw-sql-tables+touches',
     firstParser: 'static-drizzle-extractor+runtime-statement-parser',
     guard: 'static-drizzle-analysis+runtime-statement-parser',
+    residency: 'none',
     runtimeGuard: 'observed-subset-static-or-declared',
     schema: 'projection-schema+reads-set+tables-allowlist',
     sink: 'sql.executable',
@@ -428,6 +480,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'compiler-owned-versioned-handler-import',
     firstParser: 'compiler-handler-registry+dev-server-module-resolver',
     guard: 'closed-handler-registry+request-path-deny-audit',
+    residency: 'none',
     runtimeGuard: 'loader-imports-only-declared-/c/__v-refs',
     schema:
       'import()|compiler-dev-HMR-module-loading|build-preset-runtime-API-compatibility|new Function|eval|vm|child_process|shell-commands-in-scripts|adapter-asset-fetch-fallbacks|HandlerModules+ComponentRegistry+build-preset-capabilities',
@@ -444,6 +497,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'redirect-following-transport',
       'durable-task-runtime',
       'webhook-agent-tool-runtime',
+      'security-event-exporter',
     ],
     context: 'network.egress.dns.dial.redirect',
     diagnostic: 'KV424',
@@ -451,13 +505,14 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     firstParser: 'declared-origin-parser+framework-egress-request-constructor',
     guard:
       'declared-origin-allowlist+per-hop-origin-check+dns-resolution+private-network-classification+selected-ip-pin',
+    residency: 'unerasable:external-recipient-outside-framework-erasure',
     runtimeGuard:
       'framework-egress-choke-rejects-undeclared-origin-before-dns-and-classifies-every-selected-dial-address',
     schema:
-      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress',
+      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress|kovo-security-event-export/v1',
     sink: 'network.egress',
     source:
-      'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values',
+      'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values|bounded-redacted-security-event-journal',
     specAnchor: 'spec/06-type-system.md#6.6;spec/10-data-plane.md#10.3',
     testEvidence: [
       'packages/server/src/egress-property-oracle.test.ts',
@@ -466,6 +521,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
       'packages/server/src/webhook.test.ts',
+      'packages/server/src/security-event-export.test.ts',
     ],
     trust: 'remote-and-configuration-derived-network-authority',
   },
@@ -515,7 +571,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'srcdoc',
       'event attributes',
       'ASCII-case duplicate meta refresh navigation',
-      'exact 66-tuple element-context browser-control denominator',
+      'exact 67-tuple element-context browser-control denominator',
       'disabled geolocation, attribution, browsing-topics, shared-storage, payment, and CSP nonce capabilities',
       'reviewed style activation, fullscreen, form browsing-context, and HTML/SVG credential-mode controls',
       'iframe source without a reviewed sandbox',
@@ -717,6 +773,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'packages/server/src/egress-redirect.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/security-event-export.test.ts',
     ],
     payloads: [
       'undeclared origin',
@@ -736,6 +793,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'packages/server/src/egress-redirect.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/security-event-export.test.ts',
       'packages/server/src/webhook.test.ts',
     ],
   },
@@ -1070,28 +1128,33 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {
-    censusFamilies: ['file.storage.static-export'],
+    censusFamilies: ['file.storage.static-export', 'data.derived.persistence'],
     hostileValueEvidence: [
       'packages/core/src/scoped-key.test.ts',
       'packages/core/src/storage.test.ts',
+      'packages/compiler/src/derived-dataset-security.test.ts',
+      'packages/server/src/derived-dataset.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
     keyScoping: 'runtime-opaque-scoped-key',
     mechanism: 'own',
     mechanismDetail:
-      'Storage object keys cross only as runtime-witnessed ScopedKey frames before adapters derive physical namespaces; file paths and static-export outputs additionally cross through framework-owned containment and reserved-reference gates.',
+      'Storage object keys cross only as runtime-witnessed ScopedKey frames before adapters derive physical namespaces; derived vector datasets reconstruct and hash the complete request-principal frame on every read/write; file paths and static-export outputs additionally cross through framework-owned containment and reserved-reference gates.',
     operationKinds: ['server.storage.read', 'server.storage.write'],
     owner: '@kovojs/core/storage',
     proofEvidence: [
       'packages/core/src/scoped-key.test.ts',
       'packages/core/src/storage.test.ts',
+      'packages/compiler/src/derived-dataset-security.test.ts',
+      'packages/server/src/derived-dataset.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
     proofGate: 'pnpm run check:filesystem-boundary',
     sink: 'blob/file write',
     soleDoor:
-      'ScopedKey runtime witness + storage adapter frame namespace + static export writer containment checks',
-    specAnchor: 'spec/11-verification.md §11.4; plans/sources-sinks.md Phase 2',
+      'ScopedKey runtime witness + storage/derived adapter frame namespace + static export writer containment checks',
+    specAnchor:
+      'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3 C9; spec/11-verification.md §11.4',
   },
   {
     censusFamilies: ['transport.query.live.broadcast'],
@@ -1220,8 +1283,8 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     keyScoping: 'not-stateful-keyed',
     mechanism: 'box',
     mechanismDetail:
-      'Secret and redacted runtime boxes refuse accidental coercion and are normalized to redacted or empty error payloads before logs, status views, or wire-visible error shells.',
-    operationKinds: [],
+      'Secret and redacted runtime boxes refuse accidental coercion; declassification additionally requires an exact-door policy from the closed purpose/owner registry before ordinary values can reach reviewed sinks.',
+    operationKinds: ['server.data.declassify'],
     owner: '@kovojs/core/secret',
     proofEvidence: [
       'packages/core/src/secret.test.ts',
@@ -1230,7 +1293,8 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     ],
     proofGate: 'pnpm run check:tcb-boundary',
     sink: 'log/error output',
-    soleDoor: 'Secret/redacted boxes plus normalized error shell emitters',
+    soleDoor:
+      'Secret/redacted boxes + nominal DeclassifyPolicy constructor/registry + normalized error shell emitters',
     specAnchor: 'spec/10-data-plane.md §10.3; spec/11-verification.md §11.2',
   },
   {
@@ -1239,12 +1303,13 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress-undici.test.ts',
+      'packages/server/src/security-event-export.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
     keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
-      'Task and verified-webhook code receives the exact non-replaceable ctx.fetch capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
+      'Task, verified-webhook, and security-event export code receives the exact non-replaceable framework egress capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
     operationKinds: ['server.egress.request'],
     owner: '@kovojs/server/egress',
     proofEvidence: [
@@ -1252,13 +1317,14 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/egress.test.ts',
+      'packages/server/src/security-event-export.test.ts',
       'packages/server/src/task-runner.test.ts',
       'packages/server/src/webhook.test.ts',
     ],
     proofGate: 'pnpm run check:egress-boundary',
     sink: 'outbound egress request',
     soleDoor:
-      'exact framework-owned ctx.fetch on task/webhook/future agent-tool contexts; exact module-private database socket witness for managed Postgres',
+      'exact framework-owned ctx.fetch on task/webhook/future agent-tool contexts and security-event export; exact module-private database socket witness for managed Postgres',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {

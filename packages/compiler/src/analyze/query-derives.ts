@@ -12,8 +12,10 @@ import {
   compilerMapSet,
   compilerOwnDataValue,
   compilerSnapshotDenseArray,
+  compilerStringReplaceAll,
   compilerStringSlice,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
 import {
   callExpressions,
@@ -22,6 +24,7 @@ import {
   type ComponentModuleModel,
 } from '../scan/parse.js';
 import { outputContextForAttribute } from '../output-context-facts.js';
+import { escapeCssString } from '../shared.js';
 import type { QueryDeriveFact, QueryStampFact } from '../types.js';
 
 export function exportedDerives(
@@ -144,6 +147,8 @@ export function dataDeriveStamps(
       if (inputSegment.name === 'state') continue;
 
       const attr = compilerStringSlice(attribute.name, 'data-bind:'.length);
+      const selector = queryBindingAttributeSelector(attribute.name, attribute.value);
+      const trustedUrl = hasTrustedUrlMarker(attributes, attr);
       compilerArrayAppend(
         stampFacts,
         withOutputContext(
@@ -151,9 +156,10 @@ export function dataDeriveStamps(
             attr,
             derive: {
               ...derive,
-              selector: `[${attribute.name}="${attribute.value}"]`,
+              selector,
             },
-            selector: `[${attribute.name}="${attribute.value}"]`,
+            selector,
+            ...(trustedUrl ? { trustedUrl: true as const } : {}),
           },
           {
             context: outputContextForAttribute(attr),
@@ -188,6 +194,7 @@ export function dataDeriveStamps(
     };
 
     if (attr) {
+      const trustedUrl = hasTrustedUrlMarker(attributes, attr);
       compilerArrayAppend(
         stampFacts,
         withOutputContext(
@@ -195,6 +202,7 @@ export function dataDeriveStamps(
             attr,
             derive: deriveFact,
             selector: deriveFact.selector,
+            ...(trustedUrl ? { trustedUrl: true as const } : {}),
           },
           {
             context: outputContextForAttribute(attr),
@@ -215,6 +223,28 @@ export function dataDeriveStamps(
     derives: deriveFacts,
     stamps: stampFacts,
   };
+}
+
+function hasTrustedUrlMarker(
+  attributes: readonly { readonly name: string }[],
+  attr: string,
+): boolean {
+  const expected = `data-kovo-trusted-url:${compilerStringToLowerCase(attr)}`;
+  const source = compilerSnapshotDenseArray(attributes, 'Compiler trusted URL marker lookup');
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index]!.name === expected) return true;
+  }
+  return false;
+}
+
+/**
+ * SPEC §5.2 rule 11: query stamps must use the browser's real CSS selector grammar. The
+ * compiler-owned `data-bind:*` attribute name contains a literal colon, which CSS otherwise parses
+ * as selector syntax and rejects before the reviewed attribute sink can run.
+ */
+function queryBindingAttributeSelector(name: string, value: string): string {
+  const escapedName = compilerStringReplaceAll(name, ':', '\\:');
+  return `[${escapedName}="${escapeCssString(value)}"]`;
 }
 
 function containsString(values: readonly string[], wanted: string): boolean {

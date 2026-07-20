@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createRegisteredDiagnostic, diagnosticDefinitions } from './diagnostics.js';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+  diagnosticDefinitions,
+  isRegisteredDiagnostic,
+} from './diagnostics.js';
 import {
   diagnosticConstructors,
   diagnosticRegistry,
@@ -15,9 +20,11 @@ describe('generated diagnostic registry and constructors (SPEC §2/§11)', () =>
     for (const code of definitionCodes) {
       const typedCode = code as keyof typeof diagnosticDefinitions;
       expect(diagnosticRegistry[typedCode]).toMatchObject(diagnosticDefinitions[typedCode]);
+      expect(diagnosticRegistry[typedCode].code).toBe(typedCode);
       expect(['compile-error', 'fail-closed-runtime', 'audited-escape']).toContain(
         diagnosticRegistry[typedCode].enforcementClass,
       );
+      expect(Object.isFrozen(diagnosticRegistry[typedCode])).toBe(true);
       expect(diagnosticConstructors[typedCode]().code).toBe(typedCode);
       expect(diagnosticConstructors[typedCode]().severity).toBe(
         diagnosticDefinitions[typedCode].severity,
@@ -71,10 +78,37 @@ describe('generated diagnostic registry and constructors (SPEC §2/§11)', () =>
     );
   });
 
+  it('records exact constructor identity and rejects structural or symbol-copied forgeries', () => {
+    const diagnostic = createRegisteredDiagnostic(
+      'KV415',
+      { fileName: '/app.ts' },
+      { includeHelp: true },
+    );
+    expect(isRegisteredDiagnostic(diagnostic)).toBe(true);
+    expect(() => assertRegisteredDiagnostic(diagnostic)).not.toThrow();
+
+    const structuralForgery = {
+      code: diagnostic.code,
+      fileName: diagnostic.fileName,
+      help: diagnostic.help,
+      message: diagnostic.message,
+      severity: diagnostic.severity,
+    };
+    expect(isRegisteredDiagnostic(structuralForgery)).toBe(false);
+    expect(() => assertRegisteredDiagnostic(structuralForgery, 'Compiler diagnostic')).toThrow(
+      'Compiler diagnostic must be created by createRegisteredDiagnostic.',
+    );
+
+    const copiedSymbols = Object.create(Object.getPrototypeOf(diagnostic));
+    Object.defineProperties(copiedSymbols, Object.getOwnPropertyDescriptors(diagnostic));
+    expect(Reflect.ownKeys(copiedSymbols)).toEqual(Reflect.ownKeys(diagnostic));
+    expect(isRegisteredDiagnostic(copiedSymbols)).toBe(false);
+    expect(() => assertRegisteredDiagnostic(copiedSymbols)).toThrow(/createRegisteredDiagnostic/u);
+  });
+
   it('freezes generated registry and constructor authority', () => {
     expect(Object.isFrozen(diagnosticRegistry)).toBe(true);
     expect(Object.isFrozen(diagnosticConstructors)).toBe(true);
-    expect(Object.isFrozen(diagnosticRegistry.KV415)).toBe(true);
     expect(Reflect.set(diagnosticRegistry.KV415, 'enforcementClass', 'audited-escape')).toBe(false);
     expect(Reflect.deleteProperty(diagnosticConstructors, 'KV415')).toBe(false);
   });

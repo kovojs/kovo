@@ -143,14 +143,34 @@ function sideEffectingConditionSource(condition: string): string {
     'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
     'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
     'import { query } from "@kovojs/server";',
-    'type Context = { request: { guard: { userId: string } }, db: PgAsyncDatabase<any, any> };',
+    'type Context = { request: { session: { userId: string } }, db: PgAsyncDatabase<any, any> };',
     'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
-    'function current(context: Context) { return context.request.guard.userId; }',
-    'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
-    'function poison(context: Context, replacement: string) { context.request.guard.userId = replacement; return true; }',
+    'function current(context: Context) { return context.request.session.userId; }',
+    'kovoAnalyzerSummary(current, { returns: { kind: "session", path: "userId" } });',
+    'function poison(context: Context, replacement: string) { context.request.session.userId = replacement; return true; }',
     'export const list = query("list", {',
     '  async load(input: { userId: string }, context: Context) {',
     `    const userId = ${condition} ? current(context) : current(context);`,
+    '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
+    '  },',
+    '});',
+  ].join('\n');
+}
+
+function unprovenSummaryCarrierSource(): string {
+  return [
+    'import { eq } from "drizzle-orm";',
+    'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+    'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+    'import { query } from "@kovojs/server";',
+    'type Input = { session: { userId: string } };',
+    'type Context = { request: { session: { userId: string } }, db: PgAsyncDatabase<any, any> };',
+    'export const docs = pgTable("docs", { userId: text("user_id").notNull(), id: text("id").notNull() }, kovo({ domain: "doc", key: "userId,id", owner: "userId" }));',
+    'function current(context: Context) { return context.request.session.userId; }',
+    'kovoAnalyzerSummary(current, { returns: { kind: "session", path: "userId" } });',
+    'export const list = query("list", {',
+    '  async load(input: Input, context: Context) {',
+    '    const userId = current(input as unknown as Context);',
     '    return { items: await context.db.select({ id: docs.id }).from(docs).where(eq(docs.userId, userId)) };',
     '  },',
     '});',
@@ -348,6 +368,12 @@ describe('analyzer-summary callable stability', () => {
     ['an inline assignment', '(context.request.guard.userId = input.userId)'],
   ])('fails closed when a private-value conditional condition contains %s', (_label, condition) => {
     const result = verdictForSource(sideEffectingConditionSource(condition));
+    expect(result.scope).toBe('unknown');
+    expect(result.check.exitCode).toBe(1);
+  });
+
+  it('fails closed when a summarized helper receives client input as its carrier', () => {
+    const result = verdictForSource(unprovenSummaryCarrierSource());
     expect(result.scope).toBe('unknown');
     expect(result.check.exitCode).toBe(1);
   });

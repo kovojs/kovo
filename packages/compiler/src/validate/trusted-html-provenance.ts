@@ -8,7 +8,12 @@ import {
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import * as ts from 'typescript';
 
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -2061,21 +2066,28 @@ function rawTrustProvenanceDiagnostic(
   const publicFix = sink.auditedReasonAllowed
     ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, "<justification>") so it is surfaced in kovo explain --trust.`
     : 'or route the value through a public trustedHtml()/safeRichHtml() boundary with an audited reason before it reaches the internal renderedHtml sink.';
-  return {
-    ...diagnostics.at('KV426', { start: value.getStart(), length: value.getWidth() }, detail),
-    help: compilerArrayJoin(
-      [
-        `Blocked reason: ${sink.label}() is a pure ${sink.rawSink} escape that performs NO sanitization ` +
-          '(SPEC §4.8); sending request/query-derived or unprovable data to it can emit ' +
-          'attacker-controlled bytes verbatim.',
-        'Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, ' +
-          `exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; ${publicFix}`,
-        `SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (${sink.label}); KV236/KV426 family. ` +
-          'Provenance is decided by AST symbol-identity over the request/query source set, modeled on ' +
-          'KV438 (SPEC §11.1).',
-        diagnosticDefinitions.KV426.help,
-      ],
-      '\n',
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(
+      diagnostics,
+      'KV426',
+      { start: value.getStart(), length: value.getWidth() },
+      detail,
     ),
-  };
+    {
+      help: compilerArrayJoin(
+        [
+          `Blocked reason: ${sink.label}() is a pure ${sink.rawSink} escape that performs NO sanitization ` +
+            '(SPEC §4.8); sending request/query-derived or unprovable data to it can emit ' +
+            'attacker-controlled bytes verbatim.',
+          'Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, ' +
+            `exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; ${publicFix}`,
+          `SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (${sink.label}); KV236/KV426 family. ` +
+            'Provenance is decided by AST symbol-identity over the request/query source set, modeled on ' +
+            'KV438 (SPEC §11.1).',
+          diagnosticDefinitions.KV426.help,
+        ],
+        '\n',
+      ),
+    },
+  );
 }

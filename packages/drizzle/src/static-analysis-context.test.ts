@@ -4,6 +4,7 @@ import {
   analyzeSqlSafetyFromProject,
   diagnosticsForQueryFacts,
   directSummaryForFunction,
+  extractGrantGraphFactsFromProject,
   extractMassAssignmentFromProject,
   extractOwnerAuditFromProject,
   extractQueryFactsFromProject,
@@ -63,6 +64,7 @@ describe('@kovojs/drizzle static analysis context', () => {
     const ownerAudit = extractOwnerAuditFromProject(project);
 
     expect(extractStaticBuildAnalysisFactsFromProject(project)).toEqual({
+      grants: extractGrantGraphFactsFromProject(project),
       massAssignmentFacts: extractMassAssignmentFromProject(project),
       ownerDomains: ownerAudit.ownerDomains,
       queries,
@@ -73,6 +75,8 @@ describe('@kovojs/drizzle static analysis context', () => {
           {
             authorizationClassifications: ['reference'],
             columns: [],
+            dialect: 'postgres',
+            domain: 'cart',
             governedColumnKeys: [],
             name: 'carts',
             secretColumnKeys: [],
@@ -130,7 +134,10 @@ describe('@kovojs/drizzle static analysis context', () => {
             { key: 'token', name: 'session_token' },
             { key: 'userId', name: 'user_id' },
           ],
+          dialect: 'postgres',
+          domain: 'session',
           governedColumnKeys: ['id', 'token'],
+          key: { columnKey: 'id', columnName: 'session_id', uniqueness: 'primary' },
           name: 'session',
           ownerVia: {
             fkColumnKey: 'userId',
@@ -148,7 +155,10 @@ describe('@kovojs/drizzle static analysis context', () => {
             { key: 'id', name: 'user_id' },
             { key: 'passwordHash', name: 'password_hash' },
           ],
+          dialect: 'postgres',
+          domain: 'user',
           governedColumnKeys: ['id', 'passwordHash'],
+          key: { columnKey: 'id', columnName: 'user_id', uniqueness: 'primary' },
           name: 'user',
           owner: { columnKey: 'id', columnName: 'user_id' },
           secretColumnKeys: ['passwordHash'],
@@ -193,11 +203,47 @@ describe('@kovojs/drizzle static analysis context', () => {
           { key: 'id', name: 'id' },
           { key: 'ownerId', name: 'owner_id' },
         ],
+        dialect: 'postgres',
+        domain: 'share',
         governedColumnKeys: ['id'],
+        key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
         name: 'shares',
         secretColumnKeys: [],
         secretDeclared: false,
       },
+    ]);
+  });
+
+  it('binds declared key uniqueness only from direct column-builder syntax', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/keys.ts',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const primaryRows = pgTable("primary_rows", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "primary", key: "id", public: true }));',
+            'export const uniqueRows = pgTable("unique_rows", {',
+            '  id: text("row_id").notNull().unique(),',
+            '}, kovo({ domain: "unique", key: "id", public: true }));',
+            'export const nonuniqueRows = pgTable("nonunique_rows", {',
+            '  id: text("id").notNull(),',
+            '}, kovo({ domain: "nonunique", key: "id", public: true }));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(
+      facts.runtimeTableSecurityManifest.tables.map((table) => [table.name, table.key]),
+    ).toEqual([
+      ['nonunique_rows', { columnKey: 'id', columnName: 'id', uniqueness: 'none' }],
+      ['primary_rows', { columnKey: 'id', columnName: 'id', uniqueness: 'primary' }],
+      ['unique_rows', { columnKey: 'id', columnName: 'row_id', uniqueness: 'unique' }],
     ]);
   });
 
@@ -345,6 +391,8 @@ describe('@kovojs/drizzle static analysis context', () => {
             { key: 'id', name: 'id' },
             { key: 'value', name: 'value' },
           ],
+          dialect: 'postgres',
+          domain: 'verification',
           governedColumnKeys: [],
           name: 'verification',
           secretColumnKeys: [],
@@ -524,7 +572,7 @@ describe('@kovojs/drizzle static analysis context', () => {
         {
           fileName: 'src/session.mutations.ts',
           source: [
-            'import { trustedReveal, type Secret } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal, type Secret } from "@kovojs/core";',
             '',
             'export const sessions = pgTable("sessions", {',
             '  id: text("id").primaryKey(),',
@@ -550,7 +598,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             '  async handler(_input, request) {',
             '    const rows = await request.db.select({',
             '      id: sessions.id,',
-            '      digest: trustedReveal(sessions.token as unknown as Secret<string>, { justification: "audited digest" }),',
+            '      digest: trustedReveal(sessions.token as unknown as Secret<string>, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
             '    }).from(sessions);',
             '    return { rows };',
             '  },',

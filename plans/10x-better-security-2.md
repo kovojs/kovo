@@ -1,11 +1,10 @@
 # 10x Better Security 2 — Derive-and-Re-Witness Roadmap
 
-Status: ACTIVE (created 2026-07-18). Successor frontier layered on `plans/10x-better-security.md`
-(the four-layer closure roadmap) and `plans/threat-matrix-plan.md` (the scoped coverage matrix).
-This plan opens the next set of architectural frontiers that plan-1's four layers do not own. It
-accepts work only when it removes an authored-declaration or per-shape treadmill, extends a
-declare-once fact to a surface that lacks it, or makes an already-proven fact re-witnessed where and
-when code actually runs. No item lands as a point fix.
+Status: ACTIVE (created 2026-07-18; premise-reconciled 2026-07-20 at integration candidate
+`b18aae90f`). Successor frontier layered on `plans/10x-better-security.md` (the four-layer closure
+roadmap) and `plans/threat-matrix-plan.md` (the scoped coverage matrix). The implementation phases
+have landed; the active ledger now owns the exact-tip drift, duration evidence, clean-candidate
+verification, and CI exits still listed below. No item lands as a point fix.
 
 ## Authority, scope, and honesty boundary
 
@@ -26,19 +25,20 @@ inexpressibility claims — they are honestly labeled as such and do not extend 
 Plan-1 converts enumerative classifiers into structural closure **at build time**: capability-closed
 module graph, finite compiler-owned security IR, narrow normalized abstract interpretation, runtime
 sink floors, plus forcing gates (`test:authz-paranoid`, `check:security-gate-mutations`, C13 corpus,
-C9 inventory). Every item here was checked against plan-1's full text and its own check-scripts;
-none re-treads a plan-1 checkbox. Several items deliberately reuse plan-1's own machinery (the KV414
-provenance engine, the C9 sink registry closure, the capability census, the fuzz-campaign and
-counterexample infrastructure) — they extend those mechanisms to surfaces plan-1 stops short of, in
-plan-1's native idiom.
+C9 inventory). The original taxonomy and the `b18aae90f` exact-tip reconciliation were both checked
+against plan-1's full text and check scripts; no Plan-2 section has since been subsumed and dropped.
+Plan-1's Layer-3 dependencies are now present as consumable data. Several items deliberately reuse
+plan-1's own machinery (the KV414 provenance engine, the C9 sink registry closure, the capability
+census, and the fuzz/counterexample infrastructure) at surfaces plan-1 does not own.
 
 ## Thesis
 
 Plan-1's target is to make its scoped unsafe states inexpressible or fail closed at build/runtime
-doors. The residual frontier is that **security facts are still authored, single-tier, and
-point-in-time**: a `cache=public` header, a CSP allowlist, a TCB membership row, an env secret's
-confidentiality, a boot-time DB posture, a corpus of known bypasses — each is a human declaration
-trusted forever, on one tier, never re-checked against reality. Plan-2's move is mechanical:
+doors. At Plan-2's original audit, the residual frontier was that security facts were authored,
+single-tier, and point-in-time. The implementation now reports `D=8/8 uncovered=0` and
+`W=9/9 uncovered=0`; the remaining work is to keep the derived gates current at the candidate tip,
+accumulate the required nightly-duration evidence, and pass the final clean release/CI matrix.
+Plan-2's move is mechanical:
 
 1. **Derive, don't author.** Every security-relevant fact is computed from one authoritative source
    (the app's own schema, the finite operation set, the module graph, the mint-site census) and the
@@ -89,9 +89,42 @@ or served artifact.
 
 ## Phase 0 — Reconcile against the current tip and rank
 
-- [ ] Rebase every §-item premise on the exact current `main` SHA (plan-1 has advanced through
-      Phase 2C/3C partials since this plan's audit). For each item, re-confirm the cited file:line
-      still holds or update it; drop any item plan-1 has since closed. Record the baseline SHA.
+- [x] Rebase every §-item premise on the exact integration candidate intended for `main`; re-confirm
+      stale file/line and red-state premises, classify later-plan drift separately from missing
+      implementation, and record the baseline SHA. Final acceptance still re-runs this audit after
+      the candidate is merged and frozen.
+  - Evidence: source and focused-gate audit at `b18aae90f` on 2026-07-20. Local `main` was
+    `19a8fb06e` and `origin/main` was `635fbea78`, so this is explicitly candidate-tip evidence, not
+    a claim that delivery or final CI has happened. No Plan-2 section was superseded by plan-1.
+
+  | Section | Exact-tip premise classification                                                         | Current authoritative evidence                                                                              |
+  | ------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+  | §1.1    | Implemented; bounded-language non-claim retained                                         | `analyzer-soundness-oracle.mjs`: lattice 44, transfers/productions 33/33, doors 9                           |
+  | §1.2    | Implementation present; exact evidence bindings drifted after later KV/source additions  | `check-spec-conformance-closure`: 92 codes, 72 error classes, 200 sites, currently red                      |
+  | §1.3    | Structural closure present; one TCB declaration drift remains                            | analysis closure green at 136 roots/381 subjects; `check:tcb-boundary` rejects stale `validateRevealReason` |
+  | §2.1    | Derived manifests present; new declassification cell is uncensused                       | capability census green at 116 sites; coverage gate rejects cell 48, `server.data.declassify`               |
+  | §2.2    | Implemented; original bare-cast premise is false at this tip                             | `schema.ts` returns `secret(...)`; `App.env` remains a readonly typed projection                            |
+  | §2.3    | Implemented and structurally current                                                     | `browser-posture-derivation-gate.mjs` green                                                                 |
+  | §2.4    | Implemented and structurally current                                                     | `check-cache-generality.mjs` green                                                                          |
+  | §2.5    | Implemented and structurally current                                                     | wire-input boundary green at 52 sites/5 dynamic doors; `/_q/` rejects search before lifecycle work          |
+  | §3.1    | Implemented; runtime/C9 ownership current                                                | C9 sink inventory 33/33 green; `ScopedKey` remains runtime-witnessed                                        |
+  | §3.2    | Authority implementation present; later consumers exceed the reviewed door set           | `check-crypto-boundary` currently rejects five acquisition/ratchet/ceiling drifts                           |
+  | §3.3    | Implemented and mint/verifier denominator current                                        | capability census green with 8 epoch doors                                                                  |
+  | §3.4    | Implemented and census current                                                           | async-context confinement green at 8 runtime + 1 reviewed non-runtime cell                                  |
+  | §4.1    | Lease/digest/pooler implementation present; final real-engine rerun remains an exit gate | `createPostgresPostureDigest` and `createPostgresPostureLease` remain the production owners                 |
+  | §4.2    | Implemented and effect-door denominator current                                          | request limits retain finite `deadlineMs`/`maxInFlight`; capability census has 6 deadline doors             |
+  | §4.3    | Implemented and extended without a second event API                                      | verdict routing green over 522 files; event-answerability green for 7 doors/6 required facts                |
+  | §4.4    | Implemented and policy denominator current                                               | response-observation gate green for 3 remotely reachable surfaces                                           |
+  | §4.5    | Implemented and tier mapping current                                                     | runtime-tier parity green for 1 production and 5 development doors                                          |
+
+- [x] Repair the four exact-tip Plan-2 forcing-gate drifts exposed by this reconciliation before
+      final acceptance: diagnostic conformance bindings (including KV452), the stale TCB
+      `validateRevealReason` row, the missing `server.data.declassify` coverage cell/summary, and the
+      five crypto-boundary acquisition/ratchet/ceiling findings. This premise-only checkpoint does
+      not rewrite their generated or reviewed ledgers.
+  - Evidence: the merged coverage gate reports 48/47/1 with 277 anchors; crypto reports 58 reviewed
+    rows with a high-authority ceiling of 30; conformance reports 92 codes, 72 errors, 200 sites, and
+    37 evidence files / 108 witnesses / six mandatory executions.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
   - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
@@ -112,8 +145,8 @@ or served artifact.
       single-context-envelope vs shared ALS contract, cooperative vs hard deadlines, explicit
       cross-origin isolation, and the deployed-attestation trust anchor.
   - Evidence: `plans/security-architecture-decisions-phase-0-2026-07-19.md` freezes all seven
-    enforcement shapes and non-claims at baseline `635fbea78`; each shipping phase still owes its
-    normative SPEC delta and forcing/real-behavior proof.
+    enforcement shapes and non-claims at baseline `635fbea78`; the exact-tip audit confirms the
+    shipping phases and normative deltas are present, with forcing-gate drift isolated above.
 - [x] Materialize frozen, stable-ID D and W denominator inventories. Each row names its owner,
       authoritative source, applicability, proof/re-witness, and reviewed exemption; deletion or an
       `inapplicable` change requires an explicit reviewed-raise marker and a killing mutant.
@@ -121,8 +154,8 @@ or served artifact.
     and 9 W stable IDs, rejecting deletion, unreviewed exemption, and unsupported covered claims.
 - [x] Add D and W uncovered-obligation counts—not only percentages—to the baseline collector so
       progress remains comparable when the implementation grows.
-  - Evidence: the focused convergence-collector test reports D `uncovered=6/8` and W
-    `uncovered=6/9` from the validated inventories.
+  - Evidence: the collector preserved the initial D `uncovered=6/8` and W `uncovered=6/9` baseline;
+    the exact-tip inventory gate now reports D `8/8` and W `9/9`, both with zero uncovered rows.
 
 ---
 
@@ -142,21 +175,21 @@ semantic-graph rule table as data (schema is `kovo-security-semantic-graph/v2`,
 supported-language grammar, independent concrete semantics, minimized counterexamples, and nightly
 falsification results. **Blocks:** the §1.1 exit claim only; absence of findings is evidence, not proof.
 
-Today the analyzer "deliberately does not execute or model general JavaScript"
-(`packages/compiler/src/scan/security-operation-ir.ts`); its soundness is an untested assumption. No
-declared transfer registry exists to read (transfer identities are computed as inline strings, e.g.
-`local:${callable.name}`), so step 1 is to _build_ that registry and refactor the analyzer to consume it.
+The exact-tip analyzer still deliberately does not execute or model general JavaScript; that is the
+published honesty boundary, not an unresolved implementation premise. The former missing-registry
+gap is closed by `security-abstract-interpreter-census.v1.json`, whose current 44 lattice values and
+33 transfers feed the bounded falsification oracle below.
 
 - [x] Extract the lattice elements + transfer functions into a versioned JSON census; gate fails if a
       transfer is added without a census entry (plant one, watch it fail). Define the exact generated
       language, excluded JavaScript semantics, and resource bounds beside the census.
-  - Evidence: `pnpm run check:analyzer-soundness-oracle` validates the 38-element/33-transfer census,
+  - Evidence: `node scripts/analyzer-soundness-oracle.mjs` validates the 44-element/33-transfer census,
     declared language bounds/exclusions, and uncensused/deleted-transfer mutants.
 - [x] Seeded program generator whose productions derive 1:1 from that census (every element/transfer,
       including alias/helper-call/budget-edge shapes); assert productions ⊇ transfers in the generator's
       own test — the load-bearing anti-corpus safeguard.
   - Evidence: the oracle compiles one canonical program per 33/33 transfer rows, proves each intended
-    production marker actually ran, and behavior-checks all 38 lattice values against independent
+    production marker actually ran, and behavior-checks all 44 lattice values against independent
     alias/binary/conditional/default expectations.
 - [x] Implement an independent concrete interpreter for the finite generated language. Cross-check it
       against compiled emitted modules through instrumented framework effect doors, not arbitrary Proxy
@@ -175,16 +208,17 @@ declared transfer registry exists to read (transfer identities are computed as i
       seed, running in `test:security-fuzz-nightly` (the campaign already runs cross-implementation
       differential families for redos/headers; none targets the interpreter — that is the gap).
   - Evidence: the campaign check reports 7 families/21 cases, and the fixed-seed nightly-profile oracle
-    passes all 96 generated programs.
+    passes 110 compiler programs: 96 census-derived programs plus the exact 14-row precision-grant
+    register from plan-3 §4.5.
 
 ### 1.2 Spec↔implementation conformance closure
 
 **Class:** silent bidirectional drift — SPEC says fail-closed while code stopped enforcing, or code
 enforces what SPEC no longer promises. **Leverage:** medium (process closure, not a new attacker
-class) · **Effort:** L · generalizes the proven `check:security-guarantee` tri-binding from 3/89
-guarantees to the full KV surface. Coverage exists (46/61 fixture-missing codes do assert
-`code:'KV###'` in per-package suites) but is _unbound_ to the spec registry — deleting a test or an
-enforcement site does not fail CI against SPEC.
+class) · **Effort:** L · generalizes the proven `check:security-guarantee` tri-binding to the full KV
+surface. The original unbound-coverage premise is closed by the constructor/site/witness binding
+below. At `b18aae90f`, later KV and source additions have drifted its reviewed evidence manifests;
+Phase 0 tracks that forcing-gate repair separately from the landed implementation.
 
 **Depends on:** the exact diagnostics registry and Phase 0 baseline. **Produces:** generated
 diagnostic constructors and a registry↔enforcement↔test binding. **Blocks:** spec-conformance exit,
@@ -192,22 +226,39 @@ not live-channel remediation.
 
 - [x] Add a machine-readable enforcement-class column (`compile-error | fail-closed-runtime |
 audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV table.
-  - Evidence: `check:spec-conformance-closure` parses all 90 normative rows from
-    `spec/11-diagnostics.md` and matches every generated runtime enforcement class.
+  - Landing evidence: the gate parsed all then-current normative rows and matched every generated
+    runtime enforcement class. It now derives 92 rows; the exact-tip binding drift is open above.
 - [x] Generate typed KV constructors from the registry and route production emission through the
       validating diagnostics door; stage removal of ad hoc `{ code: 'KV###' }` production literals
       under the classifier-refactor rule without banning test fixtures that consume generated IDs.
-  - Evidence: the generated constructor registry is current and the AST gate derives 191 production
-    sites while rejecting ad hoc production diagnostic literals.
+  - Landing evidence: the generated constructor registry and AST gate derived 197 production sites
+    while rejecting ad hoc literals. Exact-tip source derives 200 sites pending reviewed-summary refresh.
 - [x] `check:spec-conformance-closure` requires, per error-class KV, a registry row, derived production
       enforcement site, red fixture, green counterpart, and own-layer evidence. Runtime emission
       coverage is supporting evidence only; a platform-specific zero-emission row needs a reviewed
       applicability reason rather than a synthetic test call.
-  - Evidence: `pnpm run check:spec-conformance-closure` passes 20/20 with 90 codes, 70 error-class
-    evidence rows, and 191 derived enforcement sites.
+  - Landing evidence: 90 codes, 70 error-class rows, 197 sites, 105 bound witnesses, and 6 controls
+    passed. Exact-tip derives 92/72/200 and intentionally fails on stale reviewed bindings.
 - [x] Promote `diagnostics-ref`'s registry equality out of the site pipeline into the root check chain.
   - Evidence: the root `check` chain invokes `check:spec-conformance-closure`, which calls the
     write-free `checkDiagnosticsRegistryEquality` comparison.
+- [x] Inventory and bind every raw KV guard-error channel (`Error`/throw/rejection/log text) to
+      registry-derived identity, or migrate it through a dedicated raw guard-error door; gate code
+      swaps and new channels. Structured diagnostic evidence does not cover these raw strings.
+  - Evidence: `check:raw-diagnostic-channels` derives and registry-binds 437 production channels
+    across analysis, generated-runtime, runtime, and verifier layers; its 7/7 tests reject new sites,
+    expression/code drift, and enforcement-class relabeling.
+- [x] Close `RegisteredDiagnostic` runtime provenance: record constructor outputs behind a
+      module-private sentinel/registry and make every collection and rendering sink reject
+      structurally forged records. Add cross-package negative controls; TypeScript shape alone is
+      author-time ergonomics, not the enforcement proof.
+  - Landing evidence: the constructor-owned registry passed forged-record and cross-package controls;
+    the exact-tip failure is evidence-manifest drift, not a return to structural provenance.
+- [x] Bind each derived emission site and evidence witness to its actual compile/runtime/audited
+      layer, then gate that posture against the registry `enforcementClass`. Kill class-relabeling
+      mutants (for example compile-error ↔ fail-closed-runtime), not only code/site swaps.
+  - Landing evidence: 197 exact production sites, 140 witness bodies, and 58/58 class-relabelling
+    mutants passed; Phase 0 records the required exact-tip rebind to 200 production sites.
 
 ### 1.3 Analysis-time TCB closure + reproducible rebuild
 
@@ -221,21 +272,30 @@ fitting for a framework whose product is proof.
 analysis-time dependency closure and deterministic package subjects. **Blocks:** artifact identity
 used by §4.3; it does not establish runtime host integrity.
 
-- [ ] Enroll the analyzer toolchain (`typescript`, `vp`, `vitest`, `esbuild`, `ts-morph`) in
+- [x] Enroll the analyzer toolchain (`typescript`, `vp`, `vitest`, `esbuild`, `ts-morph`) in
       `security/TCB.md` with exact pins; the `typescript ^6.0.3` caret in
       `packages/compiler/package.json` should FAIL `check:tcb-boundary` first, proving the gate sees it.
-- [ ] Replace `lockfileHasResolvedVersion`'s regex presence test
-      (`scripts/check-tcb-boundary.mjs:498`) with structural `pnpm-lock.yaml` parsing that pins each
-      surface's `resolution.integrity` sha512 — closes the same-version lockfile-integrity swap that
-      currently passes on human review alone.
-- [ ] `check:analysis-time-closure`: walk the import graph of every gate entrypoint + the compile
+  - Landing evidence: exact toolchain declarations fit the 1,992-line TCB budget and rejected the
+    caret mutation; the current stale declaration row is tracked in Phase 0.
+- [x] Replace the former `lockfileHasResolvedVersion` regex presence test with structural
+      `pnpm-lock.yaml` parsing that pins each surface's `resolution.integrity` sha512, closing the
+      same-version lockfile-integrity swap that previously passed on human review alone.
+  - Evidence: the structural parser and integrity-pin implementation remain present; the exact-tip
+    `check:tcb-boundary` failure is the separately tracked stale `validateRevealReason` manifest row.
+- [x] `check:analysis-time-closure`: walk the import graph of every gate entrypoint + the compile
       path, derive the loaded third-party set, fail on any package absent from the TCB manifest.
-- [ ] Monotone shrink ratchet on `totalTcbMaxLines`/entry count/closure size (explicit reviewed-raise
+  - Evidence: the exact-tip closure gate is green with 136 roots closing over 381
+    optional-inclusive integrity-pinned package subjects.
+- [x] Monotone shrink ratchet on `totalTcbMaxLines`/entry count/closure size (explicit reviewed-raise
       marker; mutation-killed).
-- [ ] Define deterministic package inputs first (normalized mtimes, ownership, ordering, modes,
+  - Evidence: the same 25/25 gate suite kills unreviewed raises of the TCB, entry, and closure
+    denominators.
+- [x] Define deterministic package inputs first (normalized mtimes, ownership, ordering, modes,
       locale/timezone, and `SOURCE_DATE_EPOCH`), then run a reproducible-pack job in a second clean
       checkout and compare each public tarball's sha512 subject. The attestation records both build
       environments and honestly excludes runtime-host integrity.
+  - Evidence: two clean frozen-install checkouts produced matching sha512 subjects for all 13 public
+    tarballs through `scripts/reproducible-pack.mjs`.
 
 ---
 
@@ -252,23 +312,33 @@ ownership to _coverage obligations_.
 a stable-ID decision-surface manifest and D denominator. **Blocks:** §1.1 generator completeness,
 §4.5 door comparison, and D exit.
 
-The two hand-maintained artifacts still grow by observation: `check-security-classifier-corpus.mjs`
-(3,616 lines of pinned snippet anchors) and `capability-surface-census-gate.mjs` (11 hand rows + ~30
-regex pins over 12 files, silently missing new mints among 46 witness-registry files).
+The original gap was two observation-grown artifacts: a pinned-snippet classifier corpus and a
+regex-based capability census. Both now derive from closed vocabularies. The current coverage gate
+correctly detects the newly added 48th `server.data.declassify` cell as missing rather than silently
+accepting denominator growth; Phase 0 keeps that exact-tip repair open.
 
-- [ ] Emit `kovo-security-coverage/v1`, a decision-surface manifest generated from
+- [x] Emit `kovo-security-coverage/v1`, a decision-surface manifest generated from
       `browserSecurityOperationKinds`/`serverSecurityOperationKinds` + posture `rootKinds` + the
       closed verdict set; independently verify the cell count and that appending a scratch kind adds
       exactly its cells.
-- [ ] Flip `check:security-classifier-corpus` to require each cell to carry a witness or a reviewed
+  - Landing evidence: 47 independently counted cells (46 witnessed, one reviewed inapplicable), and
+    the scratch-kind test proved exact denominator growth. Exact tip now derives 48 and correctly
+    fails until `server.data.declassify` gains its witness.
+- [x] Flip `check:security-classifier-corpus` to require each cell to carry a witness or a reviewed
       `inapplicable` row with reason (fail-closed on unclassified); a new IR operation/root kind
       without coverage becomes a build error.
-- [ ] Replace the capability-census regex pins with a TS-symbol-identity walk over every
+  - Evidence: `scripts/check-security-classifier-corpus.test.mjs` passes operation/root/closed-verdict
+    mutation cases before the corpus runner can execute.
+- [x] Replace the capability-census regex pins with a TS-symbol-identity walk over every
       `createWitnessWeakMap`/`systemDb` mint site, fail-closed classifying each as mint vs internal
-      registry with reason (46 sites today); missing census row → fail.
-- [ ] Sequence the encoding/carrier grammar generator LAST as a versioned closed grammar (weakest
+      registry with reason; missing census row → fail.
+  - Evidence: the exact-tip capability census is green for 116 resolved sites (4 mints and 112
+    internal registries), including the retained structural C13 rejects.
+- [x] Sequence the encoding/carrier grammar generator LAST as a versioned closed grammar (weakest
       component; must not become a denylist). Keep all historical anchors as mapped witnesses so C13
       is never weakened during cutover.
+  - Evidence: the current gate derives 275 historical anchors; its stale 47-cell summary and missing
+    declassification witness are the exact-tip repair tracked in Phase 0.
 
 ### 2.2 Config-secret env door
 
@@ -282,9 +352,9 @@ the unowned, high-leverage piece is the **runtime** door.
 **Produces:** runtime `SecretValue` boxes plus a frozen, typed env snapshot. **Blocks:** the config-
 secret live-channel exit and any credential-factory migration.
 
-`s.secret(schema).parse` is a bare `as Secret<Value>` cast (`packages/server/src/schema.ts:438`), so
-`isSecret()` is false at runtime and the KV435 wire choke, log scrub, and `structuredClone` guard
-never engage for config secrets. `validateAppEnv` returns void; `createApp` exposes no `app.env`.
+The original red state was a bare type cast whose value failed `isSecret()` and no retained
+`app.env`. At this tip, the sync and async secret-schema paths return `secret(...)` and `App.env` is
+a readonly typed projection; the historical exploit description is retained only by the red tests.
 
 - [x] Make `s.secret(schema).parse` return `secret(parsed)` (a runtime non-coercible `SecretValue`
       box), mirroring `secret-read-boundary.ts` for DB columns; assert `isSecret(...) === true` and
@@ -318,51 +388,67 @@ posture manifest.
 decision. **Produces:** a compiler-derived CSP/Permissions-Policy intent manifest. **Blocks:** the
 browser portion of D, §4.5 door comparison, and optional isolation posture.
 
-`renderDefaultDocumentCsp` ships a strict default CSP, but `CspAllowlist` origins are free-form and
-verified against nothing; Permissions-Policy is a hand-list duplicated in two sites
-(`response.ts:596` + `document-core.ts:744`); COEP is deliberately absent.
+The original gap was a free-form CSP allowlist, duplicated Permissions-Policy ownership, and no
+explicit isolation posture. The exact-tip compiler manifest, shared response-posture owner, and
+cross-origin-isolation decision now own those facts; the focused structural gate is green.
 
-- [ ] Compiler emits an external-origin census (static asset-position URLs keyed by CSP directive,
+- [x] Compiler emits an external-origin census (static asset-position URLs keyed by CSP directive,
       with spans) alongside the existing inline hashes; a dynamic/computed external URL in an asset
       position fails closed with a named audited escape, not a silent fallback to the hand allowlist.
-- [ ] Generalize `renderDefaultDocumentCsp` into an assembler consuming only the manifest: census
+  - Evidence: `pnpm run check:browser-posture-derivation` passes 27/27 and binds the compiler census,
+    generated registry, and dynamic-asset rejection fixtures.
+- [x] Generalize `renderDefaultDocumentCsp` into an assembler consuming only the manifest: census
       origins auto-admitted; every authored `CspAllowlist` entry must match a census origin or carry a
       declared rationale; unused entries throw at check time.
-- [ ] Pin Permissions-Policy to the `BrowserSecurityOperationKind` enum via one exhaustive switch
+  - Evidence: `check:browser-posture-derivation` proves exact census-to-CSP assembly and rejects
+    unmatched, unused, inherited, and accessor-backed allowlist entries.
+- [x] Pin Permissions-Policy to the `BrowserSecurityOperationKind` enum via one exhaustive switch
       (owning both render sites), so a new operation kind fails typecheck until its feature grant is decided.
-- [ ] Keep the conservative default COOP posture. Add an explicit `crossOriginIsolation` posture only
+  - Evidence: `check:browser-posture-derivation` proves the generated exhaustive operation-to-feature
+    switch owns both header render paths.
+- [x] Keep the conservative default COOP posture. Add an explicit `crossOriginIsolation` posture only
       when the manifest closes static assets, dynamic fetches, workers, frames, popups, and CORP/CORS
       requirements; prove it in Chromium, Firefox, and WebKit with OAuth/embed negative fixtures.
       `check:browser-posture-derivation` asserts rendered headers match the selected posture byte-for-byte.
+  - Evidence: the focused Playwright posture pair passes 6/6 across Chromium, Firefox, and WebKit;
+    `check:browser-posture-derivation` passes 27/27 for exact headers and fail-closed blockers.
 
 ### 2.4 HTTP shared-cache generality proof
 
-**Class:** web cache poisoning + cache deception via CDN. `Cache-Control`/`Vary` are among the only
-headers apps write directly; `response-posture.ts` checks the emitted header matches the _declared_
-posture but never proves a `cache=public` response is principal-invariant or that `Vary` covers every
-input the handler read. One authored declaration leaks a user's rendered page to everyone behind a
-shared cache. **Leverage:** high (attacker-facing, unowned by plan-1 or §3.1's internal ScopedKey) ·
-**Effort:** M-L.
+**Class:** web cache poisoning + cache deception via CDN. The original posture checked emitted
+headers against authored intent without proving public-cache generality or complete `Vary`
+influence. The exact-tip compiler/runtime manifest and intermediary oracle now own that proof.
+**Leverage:** high · **Effort:** M-L.
 
 **Depends on:** plan-1 Layer 3 and the Phase 0 cache-key/influence decision. **Produces:** a finite
 `kovo-cache-influence/v1` manifest plus a per-response rejection floor. **Blocks:** public-cache D
 coverage and the cache dimensions of §4.4.
 
-- [ ] Define `kovo-cache-influence/v1` with distinct axes: URL path/search (already part of the cache
+- [x] Define `kovo-cache-influence/v1` with distinct axes: URL path/search (already part of the cache
       key), named request headers (`Vary` candidates), cookies/Authorization (public-cache closed by
       default), principal/session facts, framework runtime state, and declared external data versions.
-- [ ] Derive the complete influence set statically for handlers inside the finite security IR. A
+  - Evidence: `packages/core/src/internal/cache-influence.test.ts` proves the versioned axis and
+    verdict algebra, including keyed and unkeyed external versions.
+- [x] Derive the complete influence set statically for handlers inside the finite security IR. A
       handler with opaque calls or an influence outside the supported public set cannot emit `public`
       without a named audited escape; a single observed execution never establishes positive safety.
-- [ ] Extend runtime provenance to query/document execution only as a rejection floor for the current
+  - Evidence: `packages/compiler/src/cache-influence.security.test.ts` proves query/endpoint axes and
+    closes guards, module captures, request aliases, ambient secrets, opaque calls, and carrier escapes.
+- [x] Extend runtime provenance to query/document execution only as a rejection floor for the current
       response. Principal, cookie, Authorization, secret, or unclassified influence strips/rejects
       `public`; it cannot widen a compile-time closed verdict.
-- [ ] Derive `Vary` only from request-header axes. Never encode principal or URL/search state as a
+  - Evidence: `packages/server/src/cache-generality-intermediary.security.test.ts` proves query
+    credential narrowing and fail-closed document headers through real HTTP response paths.
+- [x] Derive `Vary` only from request-header axes. Never encode principal or URL/search state as a
       `Vary` token; the manifest records how each non-header axis participates in the cache key or
       closes shared caching.
-- [ ] `check:cache-generality` diffs authored intent against the manifest, and a real intermediary
+  - Evidence: `packages/core/src/internal/cache-influence.test.ts` and the intermediary oracle prove
+    only normalized named-header axes become `Vary`.
+- [x] `check:cache-generality` diffs authored intent against the manifest, and a real intermediary
       oracle proves prime/reuse behavior across principals, cookies, Authorization, query variants,
       header variants, and branch changes.
+  - Evidence: `pnpm run check:cache-generality` passes all nine manifest, compiler, runtime, and real
+    intermediary tests.
 
 ### 2.5 Wire-ingress grammar registry + reject-by-default /\_q/
 
@@ -375,18 +461,24 @@ and K2 budgets bound DoS — this is anti-drift + posture, not an open exploitab
 registry, derived encoder/decoder, and the `/_q/` reject default. **Blocks:** the wire portion of D;
 it is not a prerequisite for live Train A fixes.
 
-Today the server hand-parses `Kovo-Targets`/`Kovo-Live-Targets` (a quote/depth-aware mini-tokenizer)
-while three independent browser encoders hand-write the same grammar; an argsless `/_q/` query casts
-the raw tagged search record straight into `load` (`query.ts:807`, `rawInput as Input`).
+The original gap was a hand-parsed target grammar with three independent browser encoders and an
+argsless `/_q/` search record reaching `load`. The exact-tip shared grammar owns 52 read sites, and
+the query endpoint rejects non-empty argsless search before lifecycle providers, guards, or loaders.
 
-- [ ] Core-owned grammar declared once as typed data; derive BOTH the browser encoder and server
+- [x] Core-owned grammar declared once as typed data; derive BOTH the browser encoder and server
       decoder from it (kills the two-implementations drift class structurally). Seeded round-trip
       oracle `decode(encode(v)) ≡ v` enrolled in C13.
-- [ ] `check:wire-input-boundary` (patterned on `check:c9-sink-inventory`): symbol-identity census of
+  - Evidence: `pnpm run check:inline-loader` proves the shared exact codec, browser/server consumers,
+    generated loader, and seeded malformed/round-trip corpus.
+- [x] `check:wire-input-boundary` (patterned on `check:c9-sink-inventory`): symbol-identity census of
       framework protocol header/cookie/search-param reads vs the registry. App-owned reads and reviewed
       third-party adapters are outside this grammar unless they enter through a named framework door.
-- [ ] Make `/_q/` reject-by-default: 422 when no `args` schema is declared and search input is
+  - Evidence: the exact-tip wire-input boundary closes 52 exact symbol-identity sites, including
+    five reviewed dynamic doors, and enrolls the C13 census witness.
+- [x] Make `/_q/` reject-by-default: 422 when no `args` schema is declared and search input is
       non-empty; update SPEC §9.4 + conformance sweep.
+  - Evidence: the 47/47 query-ingress/endpoint suite returns 422 before lifecycle providers, guards,
+    or loaders run; the `query-search-requires-args-schema` C13 anchor is structurally enrolled.
 
 ---
 
@@ -394,19 +486,17 @@ the raw tagged search record straight into `load` (`query.ts:807`, `rawInput as 
 
 ### 3.1 ScopedKey — owner provenance for every non-DB stateful sink
 
-**Class:** cross-tenant blob IDOR/overwrite AND durable-job coalescing collision — both expressible
-today with zero diagnostics. **Leverage:** high (not transformational: reads sit behind the
-capability-URL verify door; exploits need app-derived keys) · **Effort:** L · reuses the KV414
-provenance engine + C9 registry + tasks' DEC-G posture grammar, and retires three bespoke schemes.
+**Class:** cross-tenant blob IDOR/overwrite and durable-job coalescing collision. These were the two
+Phase-0 live red channels; exact-tip storage and queue doors now require the shared runtime-witnessed
+scope frame. **Leverage:** high · **Effort:** L.
 
 **Depends on:** the two distinct Phase 0 red channels, C9 stateful-sink ownership, and the Phase 0
 representation decision. **Produces:** a runtime-opaque scoped-key algebra and physical namespace
 frame. **Blocks:** storage/task live-channel exit and stateful-sink D coverage.
 
-Storage keys are bare strings with no principal dimension (`storage.ts`); `ctx.signUrl({key})` mints
-for any app key; the durable-job unique index is `(task_key, logical_key)` with no principal
-(`task-queue.ts:236`), so a client-influenced `schedule(…,{key})` can debounce-replace or
-throttle-suppress another tenant's pending job. Only the DB owner fact + RLS provide isolation today.
+The original physical keys lacked a principal dimension. Exact-tip storage, signed-file, replay,
+rate-limit, and durable-job consumers reconstruct the validated `ScopedKey` frame before namespace
+use; C9's 33/33 current inventory keeps that obligation closed for future stateful sinks.
 
 - [x] Repro both channels as failing conformance tests (memory + Postgres queues).
   - Evidence: `packages/core/src/scoped-key.test.ts`, `packages/server/src/state-key.test.ts`, and the
@@ -438,65 +528,80 @@ throttle-suppress another tenant's pending job. Only the DB owner fact + RLS pro
 
 ### 3.2 One crypto authority door + purpose registry + rotation lifecycle
 
-**Class:** four standing defects — divergent/absent intrinsic pinning (better-auth already shipped
-bare unpinned `crypto.subtle` on a raw secret), two coexisting constant-time compares, raw-secret key
-reuse across purposes, and unrotatable/never-zeroized keys. **Leverage:** high · **Effort:** L ·
-enforcement is plan-1's own module-graph closure applied to `node:crypto`. Plan-1's Layer-1 authority
-list (network/fs/process/worker/vm/db-driver) omits crypto entirely.
+**Class:** divergent intrinsic pinning, duplicate compare implementations, cross-purpose raw-key
+reuse, and unrotatable keys. The purpose-bound authority and rotation envelope are present; later
+consumers currently exceed the reviewed crypto door set and remain an exact-tip forcing-gate repair.
+**Leverage:** high · **Effort:** L.
 
 **Depends on:** plan-1 capability closure and a purpose/algorithm compatibility decision. **Produces:**
 purpose-bound opaque crypto handles and a rotation envelope. **Blocks:** §4.3 signing and the crypto
 portion of D; it must not become one generic signer available to every caller.
 
-~27 non-test modules import `node:crypto`/`crypto.subtle`/argon2 directly, each with its own (or no)
-boot-pinning ritual; zero production zeroization anywhere; no gate polices raw crypto acquisition.
+The original audit found roughly 27 direct crypto consumers and no acquisition gate. The current gate
+derives 32 high-authority files against a ceiling of 31 and rejects the specific new consumers listed
+in Phase 0; this is detected drift, not an absent authority implementation.
 
-- [ ] Add a `crypto-acquisition` capability to the module-graph closure: importing the primitives
-      outside a declared door fails the build (seed the door list with today's ~27 modules; the list
-      must monotonically shrink or it degenerates into a census manifest). Classify build-time
+- [x] Add a `crypto-acquisition` capability to the module-graph closure: importing the primitives
+      outside a declared door fails the build (seed the door list with the original ~27 modules; the
+      list must monotonically shrink or it degenerates into a census manifest). Classify build-time
       non-secret hashing as a separate low-privilege `digest` capability.
-- [ ] `crypto-authority.ts`: one boot pinning + known-answer self-test, but distribute only
+  - Landing evidence: 56 exact rows closed under a 31-file high-authority ceiling with `digest`
+    separate. Exact tip derives 32 high-authority files and rejects five reviewed-door/ratchet drifts.
+- [x] `crypto-authority.ts`: one boot pinning + known-answer self-test, but distribute only
       purpose-bound opaque handles exposing the minimum operation for that purpose—not a generic
       signer/sealer or raw key. Retire `verifier.ts`'s hand XOR compare in favor of fixed-length
       digest comparison through the authority door.
-- [ ] Closed purpose registry: every derivation is `HKDF(root, purpose, audience)` where `purpose` is
+  - Evidence: the 12-file, 243-test crypto integration suite proves boot KATs, opaque minimal
+    handles, and the Core verifier's authority-backed fixed-length comparison.
+- [x] Closed purpose registry: every derivation is `HKDF(root, purpose, audience)` where `purpose` is
       a checked-in literal; an unregistered purpose cannot derive a key (cross-purpose reuse in
       `html.ts` and rate-limit becomes inexpressible).
-- [ ] Extend the active/previous/revoked ring to at-rest AEAD (`confidential-at-rest.ts` already
+  - Evidence: `crypto-authority.test.ts`, `csrf.test.ts`, `capability-url.test.ts`, and
+    `rate-limit-storage.test.ts` reject unknown purposes and cross-purpose/audience reuse.
+- [x] Extend the active/previous/revoked ring to at-rest AEAD (`confidential-at-rest.ts` already
       stores `keyId` — wire it to a ring with overlap-window decrypt); spec the envelope-contract
       change in SPEC §6.6 first. Treat Buffer overwrite on revocation as best-effort memory hygiene,
       not a JavaScript zeroization guarantee, and record unavoidable copies in the threat model.
+  - Evidence: SPEC §6.6 plus `confidential-at-rest-rotation.test.ts` prove authenticated v2
+    envelopes, active/expiring/revoked rings, rewrap, nonce replay rejection, and the zeroization
+    non-claim.
 
 ### 3.3 Principal-epoch revocation propagation
 
-**Class:** stale privilege / session fixation — capability URLs, replay receipts, and continuations
-minted under a principal outlive password changes, role downgrades, and session revocation (they
-carry signature + expiry but no freshness input). **Leverage:** high · **Effort:** M-L · the auth
-TCB door routes verification through one runtime but does not own identity _lifecycle_.
+**Class:** stale privilege / session fixation. In the original state, capability URLs, replay
+receipts, and continuations carried expiry but no principal freshness input. Exact-tip mint/verifier
+closure now derives all eight epoch doors. **Leverage:** high · **Effort:** M-L.
 
 **Depends on:** an identity-provider/auth-store freshness contract and the credential mint-site
 census. **Produces:** a persistent monotone revocation version and bounded-staleness verifier door.
 **Blocks:** principal-freshness W coverage.
 
-- [ ] The authoritative identity provider or auth store exposes a persistent per-principal epoch
+- [x] The authoritative identity provider or auth store exposes a persistent per-principal epoch
       independent of any one session. Password changes, role/tenant changes, administrative actions,
       external-provider revocation, and account deletion update or tombstone it monotonically.
-- [ ] Every credential-derived mint door (capability URLs, replay receipts, continuations — enumerable
+  - Evidence: the 11-file, 252-test principal-epoch integration suite proves durable Postgres
+    persistence/tombstones, Better Auth initialization, finite lifecycle transitions, and
+    out-of-band/provider revocation across the framework bindings.
+- [x] Every credential-derived mint door (capability URLs, replay receipts, continuations — enumerable
       from the existing mint-site census) embeds the epoch at mint; every verifier compares embedded vs
       current, fail-closed. Specify lookup caching, maximum revocation staleness, outage behavior, and
       the latency/availability budget; expiry remains defense-in-depth.
-- [ ] Privilege-changing Kovo mutations route through the epoch door, with the mutation registry used
+  - Evidence: `pnpm run check:capability-surface-census` closes all eight credential doors, while
+    `principal-epoch.test.ts` proves capability/replay release, handler, transaction, settlement,
+    outage, and stale-epoch failures under the uncached 1,000 ms SPEC §6.6 contract.
+- [x] Privilege-changing Kovo mutations route through the epoch door, with the mutation registry used
       as a completeness check—not as the authority that infers semantic privilege changes from table
       names. Prove out-of-band/provider changes invalidate existing artifacts too.
+  - Evidence: `principal-epoch.test.ts` proves explicit finite mutation declarations, rollback on a
+    racing provider transition, and invalidation of old durable replay receipts after an out-of-band
+    epoch advance.
 
 ### 3.4 Async-context authority confinement + non-interference oracle
 
-**Class:** cross-request principal/credential/lifecycle bleed and TOCTOU over pinned facts — the
-classic framework catastrophe. The runtime has eight logical lifecycle/cell doors spanning response,
-request-input provenance, JSX, egress, build, credential, and module-load state; the test verifier has
-one separately classified non-deployable observer. `race-repeat.yml` only re-runs flaky tests, it is
-not a bleed oracle. **Leverage:** high ·
-**Effort:** L-M.
+**Class:** cross-request principal/credential/lifecycle bleed and TOCTOU over pinned facts. The
+exact-tip census closes eight runtime lifecycle/cell doors plus one separately reviewed non-runtime
+observer, and the concurrency oracle is distinct from generic race-repeat evidence. **Leverage:**
+high · **Effort:** L-M.
 
 **Depends on:** the Phase 0 choice between one request-authority envelope and a shared carrier
 contract, plus the runtime door census. **Produces:** context lifecycle identity and a real concurrency
@@ -528,132 +633,177 @@ oracle. **Blocks:** §4.2 deadline propagation and async-context W coverage.
 
 ### 4.1 Database posture lease
 
-**Class:** silent decay of the boot-time least-privilege proof the entire engine-door guarantee rests
-on (SPEC §10.3) — an out-of-band `GRANT pg_read_all_data`, a dropped RLS policy, a provider change,
-or a restored stale backup voids every floor while a long-lived process trusts the boot proof forever.
-**Leverage:** high · **Effort:** L · the spatial door is already complete (one connection factory,
-witnessed role topology, transaction-local identity frames); this extends it along the time axis.
+**Class:** silent decay of the least-privilege proof supporting SPEC §10.3. The exact-tip production
+owner now renews a bounded posture digest/lease and fails closed on divergence; the final candidate
+still owes the plan-wide real-Postgres rerun. **Leverage:** high · **Effort:** L.
 
 **Depends on:** the real-Postgres posture suite and sole connection/transaction doors. **Produces:**
 a bounded-cost posture digest, lease state, and recovery protocol. **Blocks:** DB-posture W coverage.
 
-- [ ] Deterministic posture digest from the existing `checkRuntimeDbPosture` catalog queries (role
+- [x] Deterministic posture digest from the existing `checkRuntimeDbPosture` catalog queries (role
       attributes/memberships/assumable-role closure/policies/grants); stable across boots, changes on
       a single added grant. Use a budgeted subset — the full reachability audit is too heavy per interval.
-- [ ] Renewable lease: re-derive on a fixed interval and on 42501-class permission errors; any
+  - Evidence: `postgres-posture-lease.test.ts` proves canonical stability, one-grant sensitivity, and
+    the 2,048-fact/256-KiB bounds; `postgres-runtime.test.ts` binds the digest to bounded catalog queries.
+- [x] Renewable lease: re-derive on a fixed interval and on 42501-class permission errors; any
       divergence or renewal failure trips `app-load-shed` (KV433) fail-closed, never serve-degraded.
       Define TTL, zero-grace expiry, connection draining, operator recovery, jitter/backoff, and
       availability budget. Test: mid-run `GRANT pg_read_all_data` → requests shed until a successful
       authoritative re-witness, without an attacker-triggerable busy-loop.
-- [ ] Mechanize the pooler witness (today docs-only, `cli.md:241`): inside one transaction, round-trip
+  - Evidence: `pnpm exec vitest run packages/server/src/postgres-external-probe.test.ts` passes 10/10,
+    including real mid-run grant → shed → exact-baseline recovery; the focused lease suite proves
+    zero-grace expiry, single-flight 42501 renewal, one drain per outage, jitter, and bounded backoff.
+- [x] Mechanize the formerly docs-only pooler witness: inside one transaction, round-trip
       a `set_config` frame probe across two statements + `pg_backend_pid()` stability; fail closed on
       a shuffling pooler.
-- [ ] Restore-staleness (correction: the existing `database_instance_id` nonce is minted-once and
+  - Evidence: `postgres-runtime.test.ts` proves two-statement same-transaction framing and rejects a
+    shuffled backend; the real-Postgres probe exercises the witness under least-privilege roles.
+- [x] Restore-staleness (correction: the existing `database_instance_id` nonce is minted-once and
       survives a same-DB restore): digest a monotone freshness fact instead — the migration-ledger head
       / a posture epoch reasserted by `kovo db migrate`. Surface lease state in `kovo explain --capabilities`.
+  - Evidence: `postgres-runtime.test.ts` proves every migrate path advances the epoch and binds it to
+    the checksum-validated ledger; `index.kovo-explain.test.ts` proves static output reports the lease
+    contract while honestly labeling live status, digest, and expiry `not-observed` (SPEC §10.3).
 
 ### 4.2 Mandatory request deadline + occupancy budget
 
-**Class:** availability — handler-hang accumulation (the ~identity-blind rate window admits unbounded
-forever-hanging requests with no in-flight cap), hung-upstream propagation (no default egress
-timeout), slow-read response draining. **Leverage:** high · **Effort:** L · extends the §9.5
-mandatory-finite `MUST NOT accept false` posture (already governing bytes/chunks/entries/rate) to the
-time+occupancy dimension through the one existing pre-dispatch admission door. Ride plan-1's egress/DB
-door migrations, don't race them.
+**Class:** availability across handler occupancy, hung owned effects, and response draining. The
+exact-tip request shell extends §9.5's mandatory finite posture to time and occupancy through the
+pre-dispatch admission door; arbitrary synchronous app JavaScript remains explicitly outside the
+hard bound. **Leverage:** high · **Effort:** L.
 
 **Depends on:** §3.4 context lifetime, the framework effect-door census, and the Phase 0 cooperative
 vs hard-deadline decision. **Produces:** bounded admission and cooperative cancellation for owned
 effects. **Blocks:** availability W coverage; it cannot bound arbitrary synchronous app JavaScript.
 
-- [ ] `normalizeAppRequestLimits` gains `deadlineMs` + `maxInFlight` with finite defaults, hard
+- [x] `normalizeAppRequestLimits` gains `deadlineMs` + `maxInFlight` with finite defaults, hard
       ceilings, and the same cannot-be-`false` TypeError posture as `maxBodyBytes`.
-- [ ] `preDispatchLoadShedResponse` mints a framework-owned per-request deadline `AbortSignal` and
+  - Evidence: `request-deadline.test.ts` proves finite defaults/ceilings and rejects disabled or
+    unbounded limits (SPEC §9.5).
+- [x] `preDispatchLoadShedResponse` mints a framework-owned per-request deadline `AbortSignal` and
       acquires an occupancy slot; over-occupancy sheds 503+Retry-After before any handler work. Specify
       exact slot release on response completion, disconnect, exception, deadline, and streaming escape.
-- [ ] The deadline becomes a required capability parameter of the effect-door contract (egress fetch,
+  - Evidence: `request-deadline.test.ts` and `node.test.ts` prove pre-handler shedding and slot release
+    across completion, disconnect, exception, deadline, and stream cancellation.
+- [x] The deadline becomes a required capability parameter of the effect-door contract (egress fetch,
       DB/transaction, deferred-region, streaming flush); the capability census fails an owned door that
       does not consume it. Explicitly exclude arbitrary Promises and synchronous loops from the hard
       guarantee unless Kovo later isolates app execution in a terminable worker/process.
-- [ ] Post-deadline discard at the response mint door + bounded response write-out; abort propagates
+  - Evidence: `check:capability-surface-census` enumerates deadline-consuming owned effect doors;
+    SPEC §9.5 explicitly excludes arbitrary promises and synchronous loops.
+- [x] Post-deadline discard at the response mint door + bounded response write-out; abort propagates
       into the transaction door (`mutation-wire.ts` `abort` hook) with explicit pre-commit vs
       post-commit semantics—never claim cancellation can roll back an already committed transaction.
       Named audited escape for legitimate streaming/long-poll surfaces, visible in `kovo explain`.
+  - Evidence: `request-deadline.test.ts`, `node.test.ts`, and `index.kovo-explain.test.ts` prove
+    transport destruction, post-deadline discard, commit-boundary semantics, bounded escapes, and
+    explain visibility.
 
 ### 4.3 Security-event door + signed runtime posture attestation
 
-**Class:** unknowable-in-prod — is the deployed binary the reviewed posture, and are the floors
-actually firing? Today denials are `console.warn` strings and the CSP snapshot is `@internal`/test-only.
-**Leverage:** high (detection/integrity, NOT inexpressibility — complements, doesn't extend, the
-prime guarantee) · **Effort:** L.
+**Class:** deployed posture and floor observability. The exact-tip single `securityEvent()` journal,
+signed posture report, and seven-door no-payload decision coverage now own this detection/integrity
+surface; they do not extend the inexpressibility claim. **Leverage:** high · **Effort:** L.
 
 **Depends on:** §1.3 deterministic artifact subjects, §3.2 purpose-bound signing, and the Phase 0
 trust-anchor decision. **Produces:** structured denial telemetry plus a nonce-bound signed posture
 self-report from one responding instance. **Blocks:** deployed-evidence exit, but cannot establish
 host integrity or fleet-wide identity without a separate remote-attestation/deployment trust anchor.
 
-- [ ] Single `securityEvent()` door (witness-intrinsic style). Its taxonomy must be _built_ as a
+- [x] Single `securityEvent()` door (witness-intrinsic style). Its taxonomy must be _built_ as a
       projection of the Layer-2 security-operation IR / a gate-emitted denial-site census (correction:
       no verdict inventory exists to read yet); then extend `check:classifier-verdict-routing` with an
       emits-event obligation so a floor that doesn't route its denial fails the gate.
-- [ ] Route egress-deny, CSRF-reject, closure-audit refusal, budget-exhaustion, capability-closed
+  - Evidence: the exact-tip verdict-routing gate scans 522 source files and validates the
+    generated denial-site taxonomy plus the event-before-close obligation.
+- [x] Route egress-deny, CSRF-reject, closure-audit refusal, budget-exhaustion, capability-closed
       through it; stable `kovo-security-event/v1` schema, `reporting.ts` redaction discipline,
       keyring-HMAC hash-chain (defends exported/at-rest tampering only), bounded ring, export only via
       the declared-egress door. Enroll the sink in C9 + sink-policy.
-- [ ] Build embeds a canonical posture digest of the security facts `kovo explain` already computes
+  - Evidence: the focused runtime-attestation and event-export suite passes 4/4, including bounded
+    HMAC-chain tamper detection, redacted records, and declared-egress-only export.
+- [x] Build embeds a canonical posture digest of the security facts `kovo explain` already computes
       (endpoint auth/CSRF posture, egress allowlist, audited escapes, IR version tokens) into the
       server artifact. A challenge endpoint signs a caller nonce, artifact subject, instance identity,
       boot-witness results, posture digest, issuance/expiry times, and event-chain head with a key bound
       to the reviewed deployment identity; stale or replayed evidence fails verification.
-- [ ] `kovo explain --attest <url>` verifies the challenge and diffs the reported digest against the
+  - Evidence: `runtime-attestation.security.test.ts` and `generated-runtime-posture-registry.test.ts`
+    pass nonce replay, expiry, artifact-subject, posture-digest, boot-witness, and signature cases.
+- [x] `kovo explain --attest <url>` verifies the challenge and diffs the reported digest against the
       reviewed artifact. Its output says exactly what is established: one key-holding responding
       instance reported the reviewed posture at that time. It must not claim executed-code identity,
       uncompromised host state, complete event delivery, or fleet-wide equality without external proof.
+  - Evidence: `packages/cli/src/commands/attest.test.ts` passes trust-anchor, artifact, nonce,
+    stale-response, failed-boot-witness, response-cap, and explicit non-claim cases.
 
 ### 4.4 Response indistinguishability contract
 
-**Class:** error/stack/secret disclosure regressions, account/resource enumeration via differential
-responses and timing (three doors — `password.ts` decoy, `capability-route.ts` 404, `app-request.ts`
-constant bodies — each independently rediscovered the pattern; Better Auth signup/reset remains an
-open email-enumeration oracle). **Leverage:** high · **Effort:** L · sequence the body-content rule
-after Layer-3 lands (else it's a second raw-AST analyzer).
+**Class:** error/stack/secret disclosure and account/resource enumeration via response or timing
+differentials. The former independent doors and Better Auth signup/reset gaps now map to one
+three-surface observation registry; external mail-provider delivery remains outside the HTTP
+equivalence claim. **Leverage:** high · **Effort:** L.
 
 **Depends on:** plan-1 Layer 3 and an explicit policy mapping from surface to equivalence class.
 **Produces:** a versioned observation model, uniform-work combinators, and dual-world oracles.
 **Blocks:** response-observation exit; schema confidentiality labels are inputs, not policy by themselves.
 
-- [ ] SPEC §9.2 canonical rejection table + defined indistinguishability classes. Each class names its
+- [x] SPEC §9.2 canonical rejection table + defined indistinguishability classes. Each class names its
       attacker-visible tuple: status, redirect, selected headers, cookies/tokens after normalization,
       body type/length/content relation, connection behavior, work factor, and timing distribution.
-- [ ] Extend `check:wire-output-boundary` with a fail-closed body-content rule over the Layer-3
+  - Evidence: `pnpm run check:response-observation` passes 14/14 and classifies all three remotely
+    reachable response-observation surfaces against the versioned tuple registry.
+- [x] Extend `check:wire-output-boundary` with a fail-closed body-content rule over the Layer-3
       provenance IR: no catch-bound error value / `Error` property / request-derived string into a wire
       body outside the audited render door — error redaction becomes inexpressible, not per-handler care.
-- [ ] Explicit surface policy selects the world pairs that must be equivalent (exists-not-owned vs
+  - Evidence: `pnpm run check:wire-output-boundary` proves framework response constructors route
+    through DEC5 and Layer-3 body provenance closes.
+- [x] Explicit surface policy selects the world pairs that must be equivalent (exists-not-owned vs
       absent; account present vs absent). Schema `owner:`/`secret:`/`governed` facts may propose
       candidates but cannot infer product policy; an unclassified remotely reachable surface fails
       closed. The oracle compares the declared observation tuple rather than blindly requiring raw
       byte equality.
-- [ ] Promote the password decoy into a reusable uniform-work combinator, normalize Better Auth
-      signup/forgot-password at the mount door, and run a versioned nightly statistical timing budget
-      with sample size, noise model, effect threshold, and persisted counterexamples.
+  - Evidence: `check:response-observation` fails closed on unclassified surface markers and validates
+    the exact world-pair/tuple policy for each enrolled surface.
+- [x] Promote the password decoy into a reusable uniform-work combinator and route the Kovo-owned
+      Better Auth sign-up mutation through a generic accepted result without forwarding provider
+      body, status, or session-cookie differences.
+  - Evidence: the focused password/Better Auth response-observation suite passes 27/27.
+- [x] Add a supported forgot-password mutation only with a purpose-closed email-egress contract and
+      route it through `normalizeBetterAuthPasswordResetResponse`. The opaque mail door admits only
+      the submitted recipient and a fixed-origin/fixed-callback reset URL; present and absent worlds
+      each dispatch exactly one provider-shaped message. External mail-provider delivery is outside
+      Kovo's HTTP equivalence claim, while rate-limit/provider failures fail before or are redacted at
+      the door.
+  - Evidence: `password-reset.security.test.ts` passes 5/5 over a real Better Auth router, account
+    present/absent equality, rate-limit cancellation, mail-door forgery/replay, and failure redaction;
+    `pnpm run check:response-observation` passes 14/14 with reset promoted from future door to a
+    classified surface.
+- [x] Run a versioned nightly statistical timing budget with sample size, noise model, effect
+      threshold, and persisted counterexamples.
+  - Evidence: the explicitly enabled nightly timing oracle passes 3/3 and the response-observation
+    gate verifies its workflow enrollment and stable budget identity.
 
 ### 4.5 Dev-tier door parity + single dev-host door
 
-**Class:** the dev-server CVE class (DNS-rebinding to localhost, HMR websocket abuse, source/env
-exfiltration) — dev is a first-class attack surface where authors run untrusted input all day, yet
-dev hardening is scattered point checks (`dev.ts` allowlist, one HMR origin snapshot in `vite-dev.ts`,
-reactive fixes) and no check gates the dev tier or proves its doors match prod. **Leverage:** high ·
+**Class:** the dev-server CVE class: localhost DNS rebinding, HMR websocket abuse, and source/env
+exfiltration. The exact-tip dev-host door and tier manifest replace the former scattered point
+checks and classify five development doors against one production posture. **Leverage:** high ·
 **Effort:** L-M.
 
 **Depends on:** §2.1's stable door identities and the prod/dev authority mapping. **Produces:** one
 dev-host door and a tier-aware manifest comparison. **Blocks:** dev-tier W and deployed-evidence exit.
 
-- [ ] One dev-host boot door owning loopback-default binding, an Origin/Host allowlist for both HTTP
+- [x] One dev-host boot door owning loopback-default binding, an Origin/Host allowlist for both HTTP
       and the HMR upgrade (DNS-rebinding fail-closed), and authentication for any dev endpoint that can
       read source or env. Prove real HTTP and websocket rebinding attacks, not only request mocks.
-- [ ] Emit a versioned door manifest for prod boot and dev boot (reuse the capability/door census) and
+  - Evidence: `packages/cli/src/index.kovo-dev.test.ts` passes 12/12, including real HTTP source/env
+    and raw HMR WebSocket Host/Origin/authentication rebinding attacks.
+- [x] Emit a versioned door manifest for prod boot and dev boot (reuse the capability/door census) and
       gate a tier-aware mapping: every prod obligation must be equivalent, stronger, or have a named
       audited dev exception; dev-only HMR/source/module-graph doors carry their own authentication and
       exposure obligations. Do not require byte-identical manifests for intentionally different tiers.
+  - Evidence: `pnpm run check:runtime-tier-door-parity` passes 8/8 over one production and five
+    development doors, including exact obligation relations and authenticated dev-only exposures.
 
 ---
 
@@ -677,26 +827,39 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
       `observed ⊄ predicted` counterexamples over its versioned finite language; publish grammar,
       semantic-coverage, canary-recall, mutation, seed, and budget evidence without claiming proof of
       general JavaScript soundness.
-- [ ] D inventory has zero uncovered stable-ID obligations; every authored declaration is derived,
+- [x] D inventory has zero uncovered stable-ID obligations; every authored declaration is derived,
       mechanically checked intent, or a reviewed explicit exemption, and drift fails the build.
-- [ ] W inventory has zero uncovered stable-ID obligations; every runtime-load-bearing fact is
+  - Evidence: `node scripts/derivation-rewitness-inventory.mjs` reports `D=8/8 uncovered=0`, and
+    `derivation-rewitness-inventory.test.mjs` passes 5/5 denominator drift/mutation tests.
+- [x] W inventory has zero uncovered stable-ID obligations; every runtime-load-bearing fact is
       re-witnessed within its declared freshness/failure budget or is explicitly signed off.
-- [ ] All three reproduced live channels—storage key isolation, durable-job coalescing, and config-
+  - Evidence: the same inventory gate reports `W=9/9 uncovered=0`; every row records its source,
+    renewal/TTL, fail-closed posture, cost budget, and current evidence.
+- [x] All three reproduced live channels—storage key isolation, durable-job coalescing, and config-
       secret runtime egress—are closed by runtime-owned doors with their exact red tests green.
-- [ ] `kovo explain --attest` verifies the bounded single-instance posture statement defined in §4.3;
+  - Evidence: the seven-file, 177-test live-channel suite proves cross-owner isolation in memory,
+    filesystem, S3-compatible, memory-queue, and Postgres/PGlite paths plus boxed config-secret
+    wire/clone/render/log rejection and client-artifact exclusion.
+- [x] `kovo explain --attest` verifies the bounded single-instance posture statement defined in §4.3;
       the tier-aware dev/prod obligation mapping is green without overclaiming host or fleet identity.
-- [ ] New SPEC text (ScopedKey algebra, posture lease, request deadline, config-env door, cache
+  - Evidence: the five-file, 17-test attestation/parity suite verifies nonce, expiry, signature,
+    artifact, posture, boot-witness, response-cap, and explicit host/fleet non-claims; the parity gate
+    closes one production and five development doors.
+- [x] New SPEC text (ScopedKey algebra, posture lease, request deadline, config-env door, cache
       generality, indistinguishability classes, crypto envelope) landed and cited from code, with each
       residual/out-of-scope cell explicit in the threat matrix.
+  - Evidence: `check:spec-index`, `check:framework-export-posture`, and `check:threat-matrix` pass;
+    the exact seven contracts live in SPEC §§6.6/9.2/9.4/9.5/10.3 and the liveness projection now
+    maps all 14 C9 sinks, including derived-data persistence.
 - [ ] Every changed public API/export passes `check:api-surface`; full classifier, compiler, browser,
       integration, package, real-Postgres, performance, memory, and availability gates pass from a
       clean checkout with zero required skips at the intended SHA, followed by required CI jobs.
 
 ## Notes on sequencing and honesty
 
-- **Layer-3 dependency.** §1.1, §2.4, §2.5, §3.4, §4.4 depend on plan-1's Layer-3 normalized semantic
-  graph landing as consumable data (schema `kovo-security-semantic-graph/v2`). Building any of their
-  provenance rules before that exists would re-create the raw-AST treadmill plan-1 is retiring.
+- **Layer-3 baseline.** Plan-1's normalized graph is present as
+  `kovo-security-semantic-graph/v2`, so the §1.1, §2.4, §2.5, §3.4, and §4.4 entry gate is satisfied.
+  Future extensions must keep consuming that data rather than re-create a raw-AST treadmill.
 - **Release-train discipline.** The dependency table, not section numbering, controls execution.
   Train A live defects preempt meta work; decision-record entry gates prevent uncertain cache,
   deadline, epoch, isolation, context, or attestation designs from ossifying in production code.

@@ -84,6 +84,11 @@ import {
 } from './capability-url.js';
 import { resolveBootMode } from './env.js';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
+import {
+  isDurablePrincipalEpochStore,
+  snapshotPrincipalEpochStore,
+  type PrincipalEpochStore,
+} from './principal-epoch.js';
 import { respond, serverResponseToWebResponse, type RouteStoredFileOptions } from './response.js';
 
 /** The query-parameter name the token rides in on a capability download URL. */
@@ -153,6 +158,7 @@ export interface StorageDownloadEndpointInfo {
   readonly oneTimeReplayStore: boolean;
   readonly secret: SigningSecret;
   readonly scope?: (request: Request) => string | undefined;
+  readonly principalEpochStore?: PrincipalEpochStore;
 }
 
 type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
@@ -195,12 +201,14 @@ export function createSignUrl(options: {
   basePath?: string;
   defaultScope?: string;
   oneTimeReplayStore?: boolean;
+  principalEpochStore?: PrincipalEpochStore;
   now?: () => number;
 }): SignUrlContext {
   const configuredSecret = capabilityOwnDataValue(options, 'secret');
   const configuredBasePath = capabilityOwnDataValue(options, 'basePath');
   const defaultScope = capabilityOwnDataValue(options, 'defaultScope');
   const oneTimeReplayStore = capabilityOwnDataValue(options, 'oneTimeReplayStore');
+  const configuredPrincipalEpochStore = capabilityOwnDataValue(options, 'principalEpochStore');
   const now = capabilityOwnDataValue(options, 'now');
   if (
     (configuredBasePath !== undefined &&
@@ -219,6 +227,10 @@ export function createSignUrl(options: {
     );
   }
   const secret = signingKeyRingFromSecret(configuredSecret as SigningSecret);
+  const principalEpochStore =
+    configuredPrincipalEpochStore === undefined
+      ? undefined
+      : snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
   const basePath = normalizeCapabilityBasePath(
     configuredBasePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
@@ -266,6 +278,11 @@ export function createSignUrl(options: {
             'endpoint, or configure replayStore on createStorageDownloadEndpoint().',
         );
       }
+      if (scope !== undefined && principalEpochStore === undefined) {
+        throw capabilityError(
+          'ctx.signUrl() requires principalEpochStore for every principal-scoped capability URL (SPEC §6.6/§10.3).',
+        );
+      }
       let currentTime: number | undefined;
       if (now !== undefined) {
         const configuredTime = capabilityReflectApply<unknown>(now, undefined, []);
@@ -280,6 +297,7 @@ export function createSignUrl(options: {
           key,
           method,
           ...(scope === undefined ? {} : { scope }),
+          ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
           audience: capabilityRouteAudience(basePath),
           expiresIn,
           oneTime,
@@ -324,6 +342,8 @@ export interface StorageDownloadEndpointOptions {
    * accepts only createPostgresAppRuntimeDb().capabilityReplayStore.
    */
   replayStore?: CapabilityReplayStore;
+  /** Persistent revocation authority. Required whenever `scope` derives a principal. */
+  principalEpochStore?: PrincipalEpochStore;
   /** Development/test-only injectable clock (epoch ms); production refuses it. */
   now?: () => number;
   /** Disposition/filename forwarded to `respond.storedFile` AFTER verification (server-sniffed type). */
@@ -379,6 +399,8 @@ function snapshotStoredFileOptions(source: unknown): RouteStoredFileOptions {
  * MUST NOT leak WHY it failed (malformed vs bad-signature vs expired vs claim-mismatch vs replayed)
  * — every rejection is an indistinguishable 404 so the route is not an oracle. The 404 (not 403)
  * also hides whether the object exists at all.
+ *
+ * @kovo-response-observation-candidate server.storage-download
  */
 function downloadRejected(method = 'GET'): Response {
   return serverResponseToWebResponse(
@@ -451,6 +473,7 @@ export function createStorageDownloadEndpoint(
   const configuredBasePath = capabilityOwnDataValue(options, 'basePath');
   const configuredScopeForRequest = capabilityOwnDataValue(options, 'scope');
   const configuredReplayStore = capabilityOwnDataValue(options, 'replayStore');
+  const configuredPrincipalEpochStore = capabilityOwnDataValue(options, 'principalEpochStore');
   const now = capabilityOwnDataValue(options, 'now');
   const configuredStoredFile = capabilityOwnDataValue(options, 'storedFile');
   if (
@@ -471,6 +494,24 @@ export function createStorageDownloadEndpoint(
     | ((request: Request) => string | undefined)
     | undefined;
   const secret = signingKeyRingFromSecret(configuredSecret as SigningSecret);
+  const principalEpochStore =
+    configuredPrincipalEpochStore === undefined
+      ? undefined
+      : snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
+  if (scopeForRequest !== undefined && principalEpochStore === undefined) {
+    throw capabilityError(
+      'createStorageDownloadEndpoint({ scope }) requires principalEpochStore so revocation is current at verify (SPEC §6.6/§10.3).',
+    );
+  }
+  if (
+    resolveBootMode() === 'production' &&
+    principalEpochStore !== undefined &&
+    !isDurablePrincipalEpochStore(principalEpochStore)
+  ) {
+    throw capabilityError(
+      'KV436: createStorageDownloadEndpoint() requires createPostgresAppRuntimeDb().principalEpochStore for principal-scoped production capability URLs (SPEC §6.6/§10.3).',
+    );
+  }
   const basePath = normalizeCapabilityBasePath(
     configuredBasePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
@@ -535,6 +576,7 @@ export function createStorageDownloadEndpoint(
           ...(currentTime === undefined ? {} : { now: currentTime }),
           audience: capabilityRouteAudience(basePath),
           ...(replayStore === undefined ? {} : { replayStore }),
+          ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
         },
       );
       // Fail closed on ANY rejection. The reason stays server-side (never leaked to the client).
@@ -606,6 +648,7 @@ export function createStorageDownloadEndpoint(
           oneTimeReplayStore: replayStore !== undefined,
           secret,
           ...(scopeForRequest === undefined ? {} : { scope: scopeForRequest }),
+          ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
         } satisfies StorageDownloadEndpointInfo),
         writable: false,
       });

@@ -1,6 +1,12 @@
 import { snapshotSqliteSchemaRecord } from '@kovojs/server/internal/sqlite';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
-import type { AccessDecision, CsrfOptions, SessionProvider } from '@kovojs/server';
+import {
+  initializePrincipalEpoch,
+  type AccessDecision,
+  type CsrfOptions,
+  type PrincipalEpochStore,
+  type SessionProvider,
+} from '@kovojs/server';
 import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -26,8 +32,16 @@ import {
   callBetterAuthSignUpEmail,
   pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
-import { betterAuthSignInEmailMutation, betterAuthSignOutMutation } from './mutations.js';
+import {
+  betterAuthRequestPasswordResetMutation,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+} from './mutations.js';
 import { createBetterAuthMountAdapter, type BetterAuthMountAdapter } from './mount-adapter.js';
+import {
+  optionalBetterAuthPasswordResetFeature,
+  type BetterAuthPasswordResetOptions,
+} from './password-reset-mail.js';
 import { betterAuthSession, type BetterAuthSessionMapper } from './session.js';
 
 const NativeHeaders = globalThis.Headers;
@@ -74,6 +88,10 @@ export interface BetterAuthSqliteBindingsOptions<
   developmentSeed?: BetterAuthSqliteDevelopmentSeed;
   /** Sanitized projection from Better Auth's credential-free session/user records. */
   mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
+  /** Persistent revocation authority initialized from each authenticated provider identity. */
+  principalEpochStore?: PrincipalEpochStore;
+  /** Optional account-recovery mutation plus its purpose-closed mail capability. */
+  passwordReset?: BetterAuthPasswordResetOptions;
   /** Exact Better Auth Drizzle table record from the app's SQLite schema. */
   schema: Record<string, unknown>;
   /** Better Auth signing secret. */
@@ -107,6 +125,10 @@ export interface BetterAuthSqliteBindings<
   seedDemoUser(): Promise<void>;
   /** Runtime-sanitized Better Auth session provider. */
   sessionProvider: SessionProvider<BetterAuthBindingRequest, SessionValue>;
+  /** Present only when `passwordReset` configured the purpose-closed mail feature. */
+  requestPasswordReset?: ReturnType<
+    typeof betterAuthRequestPasswordResetMutation<'auth/request-password-reset', Request, Request>
+  >;
   /** CSRF-protected email/password sign-in mutation. */
   signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
   /** CSRF-protected sign-out mutation. */
@@ -128,6 +150,16 @@ export function createBetterAuthSqliteBindingsFromEnvironment<
     throw new NativeTypeError('Better Auth SQLite environment binding options must be an object.');
   }
   const environment = resolveBetterAuthEnvironment();
+  const principalEpochStore = betterAuthOwnDataOption<PrincipalEpochStore>(
+    options,
+    'principalEpochStore',
+    'Better Auth SQLite binding option principalEpochStore',
+  );
+  const passwordReset = betterAuthOwnDataOption<BetterAuthPasswordResetOptions>(
+    options,
+    'passwordReset',
+    'Better Auth SQLite environment binding option passwordReset',
+  );
   return createBetterAuthSqliteBindings<Request, SessionValue, AuthenticatedRequest>({
     baseURL: environment.baseURL,
     csrf: requiredOption<CsrfOptions<Request>>(options, 'csrf'),
@@ -138,6 +170,8 @@ export function createBetterAuthSqliteBindingsFromEnvironment<
       options,
       'mapSession',
     ),
+    ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
+    ...(passwordReset === undefined ? {} : { passwordReset }),
     schema: requiredOption<Record<string, unknown>>(options, 'schema'),
     secret: betterAuthSqliteSecret(environment.secret),
     signInAccess: requiredOption<AccessDecision>(options, 'signInAccess'),
@@ -177,6 +211,19 @@ export function createBetterAuthSqliteBindings<
   if (typeof mapSession !== 'function') {
     throw new NativeTypeError('Better Auth SQLite binding mapSession must be a function.');
   }
+  const principalEpochStore = betterAuthOwnDataOption<PrincipalEpochStore>(
+    options,
+    'principalEpochStore',
+    'Better Auth SQLite binding option principalEpochStore',
+  );
+  if (
+    principalEpochStore !== undefined &&
+    (typeof principalEpochStore !== 'object' || principalEpochStore === null)
+  ) {
+    throw new NativeTypeError(
+      'Better Auth SQLite binding principalEpochStore must be a stable object.',
+    );
+  }
   const schema = requiredOption<Record<string, unknown>>(options, 'schema');
   if (typeof schema !== 'object' || schema === null) {
     throw new NativeTypeError('Better Auth SQLite binding schema must be an object.');
@@ -184,6 +231,14 @@ export function createBetterAuthSqliteBindings<
   const pinnedSchema = snapshotSqliteSchemaRecord(schema);
   const rateLimitTable = requireBetterAuthRateLimitSchema(pinnedSchema);
   const secret = betterAuthSqliteSecret(requiredTextOption(options, 'secret'));
+  const passwordReset = optionalBetterAuthPasswordResetFeature(
+    betterAuthOwnDataOption<BetterAuthPasswordResetOptions>(
+      options,
+      'passwordReset',
+      'Better Auth SQLite binding option passwordReset',
+    ),
+    baseURL,
+  );
   const signInAccess = requiredOption<AccessDecision>(options, 'signInAccess');
   const signOutAccess = requiredOption<AccessDecision>(options, 'signOutAccess');
   const systemDb = requiredOption<KovoSqliteSystemDb>(options, 'systemDb');
@@ -234,6 +289,7 @@ export function createBetterAuthSqliteBindings<
           autoSignIn: false,
           enabled: true,
           password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
+          ...(passwordReset === undefined ? {} : { sendResetPassword: passwordReset.mail.capture }),
         },
         rateLimit,
         secret,
@@ -246,7 +302,31 @@ export function createBetterAuthSqliteBindings<
   const auth = consumeBetterAuthCredentialResult(adapterConsumer, sealedAuth);
   registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'Better Auth SQLite binding');
   const mountAdapter = createBetterAuthMountAdapter(auth, baseURL);
-  const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
+  const sessionProvider = betterAuthSession<Session, User, SessionValue>(
+    auth,
+    mapSession,
+    principalEpochStore === undefined
+      ? undefined
+      : async (payload) => {
+          const principal = betterAuthOwnDataOption<unknown>(
+            payload.user,
+            'id',
+            'Better Auth sanitized user.id',
+          );
+          if (typeof principal !== 'string') {
+            throw new NativeTypeError('Better Auth sanitized user.id must be a principal string.');
+          }
+          await initializePrincipalEpoch(principalEpochStore, principal);
+        },
+  );
+  const requestPasswordReset =
+    passwordReset === undefined
+      ? undefined
+      : betterAuthRequestPasswordResetMutation<'auth/request-password-reset', Request>(auth, {
+          access: passwordReset.access,
+          csrf,
+          mail: passwordReset.mail,
+        });
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,
     csrf,
@@ -283,7 +363,14 @@ export function createBetterAuthSqliteBindings<
   }
 
   return betterAuthFreezeOwn(
-    { mountAdapter, seedDemoUser, sessionProvider, signIn, signOut },
+    {
+      mountAdapter,
+      ...(requestPasswordReset === undefined ? {} : { requestPasswordReset }),
+      seedDemoUser,
+      sessionProvider,
+      signIn,
+      signOut,
+    },
     'Better Auth SQLite bindings',
   );
 }

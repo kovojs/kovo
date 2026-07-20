@@ -249,14 +249,13 @@ Measurements are versioned and reproducible:
     files, with the retired imperative-DOM name lexicon at zero; `pnpm run check:green-corpus`
     passes 18/18. The higher total honestly includes newly enrolled closure logic rather than
     presenting the eight deleted callback-name rows as a global P reduction.
-- [ ] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
+- [x] Apply the substrate to OPP-28 only where principal-to-predicate correspondence is structurally
       provable. Re-scope the remainder to an explicit audit/engine responsibility instead of
       overclaiming full JavaScript predicate correctness.
-  - Blocking review finding: app-authored `kovoAnalyzerSummary` declarations currently promote an
-    unverified helper return to private-principal provenance. The focused OPP-28 suite passes
-    151/151, but does not yet prove the helper body/accepted-principal correspondence required by
-    SPEC §6.6; keep this item open until declaration laundering closes and the reject corpus kills
-    its reintroduction.
+  - Evidence: the independent `c8b638178` re-review accepts only the exact body-proved
+    principal/predicate subset plus reconstructed query/mutation receipts, rejects mutable `Date`
+    leaves, and keeps route params and arbitrary predicate correctness outside the proof; 138 focused
+    tests pass and all five selected producer/consumer/receipt mutants are killed.
 
 ### 2D. Runtime floor integration
 
@@ -321,8 +320,11 @@ Measurements are versioned and reproducible:
 
 ### 3C. Reachability: retire per-shape TASK B logic
 
-- [ ] Route TASK B roots through capability closure, finite IR, and normalized provenance; unknown
+- [x] Route TASK B roots through capability closure, finite IR, and normalized provenance; unknown
       roots, package summaries, transfers, or sinks fail closed with actionable traces.
+  - Evidence: the focused TASK B routing/Drizzle suite passes 379/379, and the five-mutant harness
+    kills deletion of capability-root, package-summary, semantic-root, raw-registration, and
+    authoritative-pass enforcement on the production carrier.
   - [x] Route exact authored request-handler snapshots through the compiler-owned semantic graph
         before evaluation, bind helper summaries to exact source bytes, callable span/name, root
         family, authority categories, terminal-operation inventory, and all-path proved verdict,
@@ -364,7 +366,7 @@ Measurements are versioned and reproducible:
   - Current survivor: specialized Drizzle KV406/OPP correspondence in
     `static/session-provenance.ts`, `static/summaries.ts`, and the write analyzer. Exact carrier,
     principal projection, predicate, operation, and target mapping cover query/mutation/write roots
-    and owner/predicate terminals. C13 anchor `drizzle-analyzer-provenance` and all 28 executable
+    and owner/predicate terminals. C13 anchor `drizzle-analyzer-provenance` and all 32 executable
     `drizzle-analyzer-summary/*` mutants kill declaration, carrier, alias, and predicate laundering.
     Delete this survivor only when the normalized graph proves the same correspondence; arbitrary
     JavaScript predicate correctness remains an engine/audit responsibility.
@@ -414,9 +416,10 @@ Measurements are versioned and reproducible:
 - [x] Run deterministic seeded fuzzers in nightly CI with minimized repro persistence, execution
       and coverage budgets, mutation score, and an exact release-time command. Cross-implementation
       disagreement is triaged; only the normative property decides safe versus unsafe.
-  - Evidence: `pnpm run check:security-fuzz-campaign` validates the six-family, 17-case manifest,
-    nightly/release budgets, 249-mutant denominator, scheduled workflow, replay artifacts, and exact
-    release command; `pnpm exec vitest run scripts/security-fuzz-campaign.test.mjs` passes 15/15.
+  - Evidence: `pnpm run check:security-fuzz-campaign` validates the seven-family, 21-case manifest,
+    nightly/release budgets, 289-mutant denominator, scheduled workflow, replay artifacts, and exact
+    release command; `pnpm run test:security-fuzz-release` passes all 21 cases and kills 289/289
+    mutants.
 - [x] Define a fixed weekly internal adversarial charter and seeded canaries, then record R without
       changing the scope, prompt family, investigator count, or elapsed budget between rounds.
   - Evidence: `security/security-convergence-audit-charter.json` freezes the scope, three-prompt
@@ -429,8 +432,10 @@ Measurements are versioned and reproducible:
 
 ## Phase 6 — Scoped v1 security signoff
 
-- [ ] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
+- [x] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
       specifically owned and signed-off out-of-scope disposition.
+  - Evidence: `pnpm run check:framework-export-posture` closes 12 packages / 1,839 subpaths / 2,344
+    runtime exports, and `pnpm run check:threat-matrix` passes its 8/8 exact-denominator suite.
 - [ ] `pnpm run acceptance`, including required real-Postgres 16.9 cases, passes from a clean
       checkout at the intended SHA with zero required skips.
 - [ ] Capability closure, finite IR, normalized provenance, runtime sink floors, and the complete

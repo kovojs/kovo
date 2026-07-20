@@ -63,15 +63,16 @@ failure paths.
    actions, `guards.all(...)` to compose.
 4. **Annotate `owner:`** on every per-user table and scope predicates to `req.session`, never to
    client input.
-5. **Classify confidential columns** with `secret`; reveal only reviewed fields with
-   `trustedReveal(...)`, then inspect `kovo explain --revealed`.
+5. **Classify confidential columns** with `secret`; project only provably public fields. Keep
+   declassification out of every request-reachable module and inspect `kovo explain --revealed`.
 6. **Govern server-owned columns** with `governed`; write them through `serverValue(...)` or
    `trustedAssign(...)`, never from request input.
 7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain --endpoints`.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
    `createStorageDownloadEndpoint`, and review the download endpoint in `kovo explain --endpoints`.
 9. **Run the security review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
-   `--endpoints`, `--revealed`, `--trust`, `--access`, `--cookies`, and `--sources-sinks`.
+   `--endpoints`, `--revealed`, `--trust`, `--capabilities`, `--access`, `--cookies`, and
+   `--sources-sinks`. Verify detached escape reviews with `--attest` before deployment.
 10. **Review every escape hatch** in the source/sink table before merging raw protocol code.
 
 ## Type your session
@@ -282,8 +283,9 @@ the rest of the explain output, so a new endpoint or a `csrf: false` opt-out can
 ### `--revealed` — confidential data crossing the boundary
 
 Lists every reviewed confidentiality reveal. A proof-grade row comes from a statically analyzed
-projection that excludes secret columns. An audit-grade row comes from an explicit
-`trustedReveal(value, { justification })` call and must be reviewed like any other escape hatch.
+projection that excludes secret columns. An audit-grade row comes from an explicit typed
+declassification policy outside the request-closed module graph and must be reviewed like any
+other escape hatch.
 
 ### `--access` — default-deny access decisions
 
@@ -294,7 +296,7 @@ machine auth rather than relying on default reachability.
 ### Capability-style powers
 
 Review capability-style powers through the concrete surfaces that create them today:
-`--revealed` for audit-grade `trustedReveal(...)`, `--trust` for trusted sink escapes,
+`--revealed` for audit-grade typed declassification, `--trust` for trusted sink escapes,
 `--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs.
 
 ## Read across owners in an admin tool
@@ -362,19 +364,11 @@ export const supportUser = query({
 });
 ```
 
-If a reviewed admin or support tool must reveal something the analyzer cannot prove safe, make that
-decision visible:
-
-```ts
-import { trustedReveal } from '@kovojs/core';
-
-trustedReveal(maskedEmail, { justification: 'support staff can see masked email on open tickets' });
-```
-
 An unresolved projection from a table with secret columns is reported as a confidential-data
-diagnostic. Remove the secret field,
-rewrite the projection so it is statically visible, or use `trustedReveal(...)` with a concrete
-justification and review `kovo explain --revealed`.
+diagnostic. Remove the secret field, or rewrite the projection so the analyzer can prove that only
+public columns cross the wire. Request-reachable modules cannot import `DeclassifyPolicy` or any
+reveal door, even through a helper or re-export; capability closure rejects that graph instead of treating human
+review as authorization to release request-selected data.
 
 ## Prevent mass assignment
 
@@ -414,13 +408,25 @@ await db.update(accounts).set({
 });
 
 await db.update(accounts).set({
-  role: trustedAssign(input.role, { reason: 'admin role editor' }),
+  role: trustedAssign(input.role, {
+    invariant: 'governed-write.authorized-principal',
+    why: { kind: 'guard-chain', guard: 'guards.role:admin' },
+    evidence: {
+      kind: 'test',
+      reference: 'tests/authz/admin-role-editor',
+      digest: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    },
+  }),
 });
 ```
 
 `serverValue(...)` documents a literal or private value that Kovo already proves is not request
 input. It does not accept an opaque helper result. Use `trustedAssign(...)` for an intentionally
-reviewed opaque computation or an authorized admin write; it leaves an audit row.
+reviewed opaque computation or an authorized admin write. Keep the obligation inline: prose,
+variables, spreads, computed fields, and malformed evidence fail `kovo check`. The build writes the
+unsigned subject to `.kovo/escape-obligations.json`; your out-of-band reviewer signs it for
+`kovo explain --attest ... --escape-reviews reviews.json`. That signature records review of these
+exact bytes. It does not prove the policy is correct.
 
 ## Serve file downloads with capability URLs
 
@@ -508,8 +514,9 @@ against `examples/commerce/src/domain.ts` and `@kovojs/server`'s `guards`). Type
 reservation: SPEC §10.3. The typed read endpoint and per-read guard checks: SPEC §9.4. Live-push
 guard re-checks (fragments must not become a privilege-escalation channel): SPEC §9.3. The `owner:`
 annotation and `exempt`: SPEC §10.1. The verification surface and `--endpoints` machine-ingress
-audit: SPEC §11.4. Confidential data and `trustedReveal`: SPEC §6.6, KV435. Governed write
-provenance and mass-assignment: SPEC §10.3, KV438. Capability URLs for storage downloads:
+audit: SPEC §11.4. Confidential data and typed declassification: SPEC §6.6, KV435/KV448. Governed write
+provenance, structured obligations, and detached review signatures: SPEC §6.6, §10.3, §11.4,
+KV438. Capability URLs for storage downloads:
 SPEC §6.6. Typed mutation error path: SPEC §9.2.
 
 API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).

@@ -24,7 +24,7 @@ vi.mock('@kovojs/better-auth/internal/server-mount-adapter', () => ({
 import { actAsNonRequestPrincipal } from './auth-principal.js';
 import { createDatabaseEgressSocket, EGRESS_BLOCKED_ERROR_NAME } from './egress.js';
 import { installEgressFloorSync, registerEgressDatabaseUrl } from './egress-bootstrap.js';
-import { guards } from './guards.js';
+import { guards, resolveDbProvider } from './guards.js';
 import { createBetterAuthPostgresRateLimitBucketConsumer } from './internal/better-auth.js';
 import { createPostgresSystemDb, usePostgresAppRuntimeDb } from './internal/postgres-capability.js';
 import {
@@ -38,6 +38,7 @@ import {
   createPostgresAppRuntimeDb,
   migratePostgresAppDb,
   provisionPostgresAppDb,
+  __testPostgresRuntimeInternals,
   type KovoPostgresAppRuntimeOptions,
 } from './postgres-runtime.js';
 
@@ -417,6 +418,73 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       assumedAdminRuntimeUrl,
       adminDatabaseUrl,
     );
+  }, 30_000);
+
+  it('sheds after a mid-run predefined-role grant and recovers only after exact re-witness', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-posture-lease-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const database = `${probeRun}_lease`;
+    const adminRole = `${probeRun}_lease_admin`;
+    const runtimeRole = `${probeRun}_lease_runtime`;
+    await withPool(cluster.url('postgres', 'postgres'), async (pool) => {
+      await pool.query(`CREATE ROLE ${quoteIdent(adminRole)} LOGIN CREATEROLE NOBYPASSRLS`);
+      await pool.query(
+        `CREATE ROLE ${quoteIdent(runtimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await pool.query(`CREATE DATABASE ${quoteIdent(database)} OWNER ${quoteIdent(adminRole)}`);
+    });
+    const adminDatabaseUrl = cluster.url(database, adminRole);
+    const runtimeDatabaseUrl = cluster.url(database, runtimeRole);
+    const migrated = await migratePostgresAppDb({
+      databaseUrl: adminDatabaseUrl,
+      migrations: [createNotesMigration],
+      runtimeDatabaseUrl,
+      schema,
+    });
+    expect(migrated.posture.ok, JSON.stringify(migrated.posture.issues)).toBe(true);
+
+    const runtime = createPostgresAppRuntimeDb({
+      adminDatabaseUrl,
+      databaseUrl: runtimeDatabaseUrl,
+      schema,
+    });
+    try {
+      await runtime.ready;
+      await withPool(cluster.url(database, 'postgres'), async (pool) => {
+        await pool.query(`GRANT pg_read_all_data TO ${quoteIdent(runtimeRole)}`);
+      });
+
+      __testPostgresRuntimeInternals.notePostgresPostureLeaseSqlError(
+        runtime,
+        Object.assign(new Error('permission signal'), { code: '42501' }),
+      );
+      await expect(
+        resolveDbProvider(runtime.db, new Request('https://app.example/lease-probe')),
+      ).rejects.toThrow(/KV433.*posture lease.*digest diverged/isu);
+      expect(__testPostgresRuntimeInternals.postgresPostureLeaseSnapshot(runtime)).toMatchObject({
+        reason: 'digest-diverged',
+        status: 'shed',
+      });
+
+      await withPool(cluster.url(database, 'postgres'), async (pool) => {
+        await pool.query(`REVOKE pg_read_all_data FROM ${quoteIdent(runtimeRole)}`);
+      });
+      await delay(1_100);
+      await expect(
+        resolveDbProvider(runtime.db, new Request('https://app.example/lease-recovered')),
+      ).resolves.toBeDefined();
+      expect(__testPostgresRuntimeInternals.postgresPostureLeaseSnapshot(runtime)).toMatchObject({
+        failureCount: 0,
+        status: 'fresh',
+      });
+    } finally {
+      await withPool(cluster.url(database, 'postgres'), async (pool) => {
+        await pool.query(`REVOKE pg_read_all_data FROM ${quoteIdent(runtimeRole)}`);
+      });
+      await runtime.close();
+    }
   }, 30_000);
 
   it('races declared-version read-decide-write handlers under real Postgres READ COMMITTED', async () => {
@@ -1336,9 +1404,11 @@ async function expectRuntimeIdentityClosure(
         rolbypassrls: false,
         rolsuper: false,
       });
-      await expect(client.query('SELECT key FROM kovo_schema_state')).resolves.toMatchObject({
-        rows: [{ key: 'database_instance_id' }],
-      });
+      const schemaState = await client.query<{ key: string }>('SELECT key FROM kovo_schema_state');
+      expect(schemaState.rows).toHaveLength(2);
+      expect(schemaState.rows).toEqual(
+        expect.arrayContaining([{ key: 'database_instance_id' }, { key: 'posture_epoch' }]),
+      );
 
       for (const role of options.allowedRoles) {
         await client.query('RESET ROLE');

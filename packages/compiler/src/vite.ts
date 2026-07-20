@@ -13,7 +13,11 @@ import {
   parseVersionedClientModuleTarget,
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  deriveRegisteredDiagnostic,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 
 import { snapshotCompileComponentOptions } from './compile-options.js';
 import { canonicalJson } from './canonical-json.js';
@@ -51,7 +55,7 @@ import {
   compilerWeakMapGet,
   compilerWeakMapSet,
 } from './compiler-security-intrinsics.js';
-import type { CompilerDiagnostic } from './diagnostics.js';
+import { contextualizeCompilerDiagnostic, type CompilerDiagnostic } from './diagnostics.js';
 import { compileComponentModuleForFramework } from './framework-compile.js';
 import {
   collectCssAssetManifest,
@@ -98,6 +102,14 @@ const URL = BuiltinURL;
  * wires into its `vite.config` (SPEC.md §5.2).
  */
 export interface KovoVitePlugin {
+  config?: () => {
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server';
+        runtime: 'automatic';
+      };
+    };
+  };
   configResolved?: (config: KovoViteResolvedConfig) => void;
   configureServer?: (server: KovoViteDevServer) => void;
   enforce?: 'pre';
@@ -334,6 +346,7 @@ const KOVO_DEV_CLIENT_MODULE_FILE_LIMIT = 1024;
 const KOVO_DEV_CLIENT_MODULE_SOURCE_UNIT_LIMIT = 16 * 1024 * 1024;
 
 const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
+  'config',
   'configResolved',
   'configureServer',
   'getClientModules',
@@ -464,6 +477,16 @@ function createBoundKovoVitePlugin(
   let clientSourceFileSystems = viteClientSourceFileSystems(root);
 
   return {
+    config() {
+      return {
+        oxc: {
+          jsx: {
+            importSource: '@kovojs/server',
+            runtime: 'automatic',
+          },
+        },
+      };
+    },
     get enforce(): 'pre' {
       return 'pre';
     },
@@ -646,6 +669,11 @@ function createBoundKovoVitePlugin(
           finish();
           return null;
         }
+        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
+        if (!isCurrent()) {
+          finish();
+          return null;
+        }
         const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
         if (!isCurrent()) {
           finish();
@@ -744,6 +772,8 @@ function createBoundKovoVitePlugin(
         const source = await context.read();
         if (!isCurrent()) return [];
         const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
+        if (!isCurrent()) return [];
+        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
         if (!isCurrent()) return [];
         const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
         if (!isCurrent()) return [];
@@ -901,9 +931,56 @@ function transformViteCompileResult(
       break;
     }
   }
-  const code = executableViteServerSource(serverSource) ?? source;
+  const code = bindViteEmittedJsxRuntime(
+    fileName,
+    executableViteServerSource(serverSource) ?? source,
+  );
   if (!shouldRetainResult()) return null;
   return { code, map: null };
+}
+
+const kovoJsxImportSourcePragma = '/** @jsxImportSource @kovojs/server */';
+
+function assertKovoViteJsxPragmas(fileName: string, source: string): void {
+  if (!compilerRegExpTest(/\.[cm]?[jt]sx$/u, fileName)) return;
+  assertKovoViteJsxPragmaModels(parseComponentModule(fileName, source));
+}
+
+function assertKovoViteJsxPragmaModels(model: ReturnType<typeof parseComponentModule>): void {
+  const length = compilerArrayLength(model.jsxPragmas, 'Vite authored JSX pragma facts');
+  for (let index = 0; index < length; index += 1) {
+    const pragma = compilerOwnDataValue(
+      model.jsxPragmas,
+      index,
+      'Vite authored JSX pragma facts',
+    ) as (typeof model.jsxPragmas)[number] | undefined;
+    if (!pragma) throw new TypeError(`Vite authored JSX pragma facts[${index}] must be own data.`);
+    if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    const rendered = `@${pragma.kind}${pragma.value === undefined ? '' : ` ${pragma.value}`}`;
+    const importSourceHelp =
+      pragma.kind === 'jsxImportSource' ? ' JSX import source must be @kovojs/server.' : '';
+    throw new TypeError(
+      `Kovo Vite JSX pragma ${rendered} cannot override the compiler-owned automatic runtime.${importSourceHelp} SPEC.md §5.2/§6.6 requires authored JSX to use the framework runtime.`,
+    );
+  }
+}
+
+function bindViteEmittedJsxRuntime(fileName: string, source: string): string {
+  if (!compilerRegExpTest(/\.[cm]?[jt]sx$/u, fileName)) return source;
+  const model = parseComponentModule(fileName, source);
+  assertKovoViteJsxPragmaModels(model);
+  const containsJsx =
+    compilerArrayLength(model.jsxElements, 'Vite emitted JSX elements') > 0 ||
+    compilerArrayLength(model.jsxExpressions, 'Vite emitted JSX expressions') > 0 ||
+    compilerRegExpTest(/<>[\s\S]*?<\/>/u, source);
+  if (!containsJsx) return source;
+
+  if (
+    compilerRegExpTest(/^\s*\/\*\*?\s*@jsxImportSource[ \t]+@kovojs\/server(?:\s|\*\/)/u, source)
+  ) {
+    return source;
+  }
+  return `${kovoJsxImportSourcePragma}\n${source}`;
 }
 
 function createViteDevStateStore(buildMode: boolean): ViteDevStateStore {
@@ -1076,11 +1153,31 @@ function snapshotViteCompileResultForSettlement(value: unknown): ViteCompileResu
     'files',
     compilerSnapshotJsonValue(files, 'Vite compile result.files'),
   );
+  const diagnostics = compilerOwnDataValue(value, 'diagnostics', 'Vite compile result');
+  if (diagnostics !== undefined) {
+    if (!compilerArrayIsArray(diagnostics)) {
+      throw new TypeError('Vite compile result.diagnostics must be an array.');
+    }
+    const diagnosticLength = compilerArrayLength(diagnostics, 'Vite compile result diagnostics');
+    const diagnosticSnapshot: CompilerDiagnostic[] = [];
+    for (let index = 0; index < diagnosticLength; index += 1) {
+      const diagnostic = compilerOwnDataValue(
+        diagnostics,
+        index,
+        'Vite compile result diagnostics',
+      );
+      compilerArrayAppend(
+        diagnosticSnapshot,
+        snapshotViteCompilerDiagnostic(diagnostic, index),
+        'Vite compile result diagnostics',
+      );
+    }
+    compilerDefineOwnDataProperty(snapshot, 'diagnostics', compilerFreeze(diagnosticSnapshot));
+  }
   const optionalProperties = [
     'clientExports',
     'cssAssets',
     'dependencyFootprint',
-    'diagnostics',
     'handlerExports',
     'hmrImpact',
     'renderPlanFingerprint',
@@ -1703,10 +1800,8 @@ function reportViteDiagnostics(
 }
 
 function snapshotViteCompilerDiagnostic(value: unknown, index: number): CompilerDiagnostic {
-  if (!value || typeof value !== 'object') {
-    throw new TypeError(`Kovo Vite compile diagnostics[${index}] must be an object.`);
-  }
   const label = `Vite compile diagnostics[${index}]`;
+  assertRegisteredDiagnostic(value, label);
   const code = compilerOwnDataValue(value, 'code', label);
   const fileName = compilerOwnDataValue(value, 'fileName', label);
   const help = compilerOwnDataValue(value, 'help', label);
@@ -1742,15 +1837,15 @@ function snapshotViteCompilerDiagnostic(value: unknown, index: number): Compiler
     }
     start = { column, line };
   }
-  return {
-    code,
-    fileName,
-    ...(help === undefined ? {} : { help }),
-    ...(length === undefined ? {} : { length }),
-    message,
-    severity,
-    ...(start === undefined ? {} : { start }),
-  };
+  return deriveRegisteredDiagnostic(
+    value,
+    {
+      fileName,
+      ...(length === undefined ? {} : { length }),
+      ...(start === undefined ? {} : { start }),
+    },
+    { ...(help === undefined ? {} : { help }), message },
+  );
 }
 
 function cloneViteCompilerDiagnostics(
@@ -1768,10 +1863,7 @@ function cloneViteCompilerDiagnostics(
 }
 
 function cloneViteCompilerDiagnostic(diagnostic: CompilerDiagnostic): CompilerDiagnostic {
-  return {
-    ...diagnostic,
-    ...(diagnostic.start === undefined ? {} : { start: { ...diagnostic.start } }),
-  };
+  return contextualizeCompilerDiagnostic(diagnostic, {});
 }
 
 function snapshotViteEmittedFiles(result: ViteCompileResult): { kind: string; source: string }[] {

@@ -1,0 +1,8 @@
+import { endpoint } from '@kovojs/server';
+
+export const root = endpoint('/ledger/join', {
+  handler(input, context) {
+    const database = input.useManaged ? context.db : input.database;
+    return database.select();
+  },
+});

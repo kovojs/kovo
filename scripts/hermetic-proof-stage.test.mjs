@@ -9,10 +9,11 @@ import {
 describe('hermetic proof stage', () => {
   it('pins the three-stage isolation contract', () => {
     const manifest = readHermeticProofManifest();
+    expect(manifest.toolingBinding).toBe('kovo-certificate-v1-signed');
     const packageJson = {
       scripts: { 'check:hermetic-proof-stage': 'node scripts/hermetic-proof-stage.mjs' },
     };
-    const workflow = `name: Hermetic proof sandbox self-test\n${manifest.linuxRunner.image}\nvp exec node scripts/hermetic-proof-stage.mjs`;
+    const workflow = `hermetic-proof:\n    needs: publish-readiness\nname: Hermetic certificate proof stage\nvp install --frozen-lockfile --ignore-scripts\nname: kovo-package-dist\nkovo-package-dist.tgz\n${manifest.linuxRunner.image}\nvp exec node scripts/hermetic-proof-stage.mjs\n      - hermetic-proof`;
     expect(
       validateHermeticProofContract({
         manifest,
@@ -26,6 +27,26 @@ describe('hermetic proof stage', () => {
     expect(validateHermeticProofContract({ manifest: widened, packageJson, workflow })).toContain(
       'analysis does not match the exact reviewed stage contract',
     );
+
+    const unbound = structuredClone(manifest);
+    unbound.toolingBinding = 'sandbox-self-test-unbound';
+    expect(validateHermeticProofContract({ manifest: unbound, packageJson, workflow })).toContain(
+      'hermetic proof tooling must be bound to kovo.certificate/v1 analysis, generation, and signing',
+    );
+
+    expect(
+      validateHermeticProofContract({
+        manifest,
+        packageJson,
+        workflow: workflow.replace(' --ignore-scripts', ''),
+      }),
+    ).toContain('CI must install the proof toolchain without lifecycle scripts');
+
+    const substitutedTool = structuredClone(manifest);
+    substitutedTool.tooling.signing.sourceTreeSha256 = '0'.repeat(64);
+    expect(
+      validateHermeticProofContract({ manifest: substitutedTool, packageJson, workflow }),
+    ).toContain('hermetic proof tooling identities differ from the exact sealed source closures');
   });
 
   it('kills network, lifecycle, mount-source, mount-destination, and mount-mode weakenings', () => {
@@ -49,37 +70,41 @@ describe('hermetic proof stage', () => {
     ];
     const analysis = [
       ...common,
-      `--mount=type=bind,src=${root}/sealed,dst=/sealed,readonly`,
+      `--mount=type=bind,src=${root}/sealed-analysis,dst=/sealed,readonly`,
       `--mount=type=bind,src=${root}/subject,dst=/subject,readonly`,
       `--mount=type=bind,src=${root}/analysis,dst=/analysis`,
       image,
+      '--preserve-symlinks',
+      '--preserve-symlinks-main',
       '--permission',
       '--allow-fs-read=/sealed',
       '--allow-fs-read=/subject',
       '--allow-fs-write=/analysis',
-      '/sealed/worker.mjs',
+      '/sealed/scripts/hermetic-proof-stage-worker.mjs',
       'analyze',
       '/subject/subject.json',
       '/analysis/analysis.json',
-      '/key/key.bin',
+      '/key/key.pkcs8',
       '/app/node_modules/untrusted-app/canary',
     ];
     const signing = [
       ...common,
-      `--mount=type=bind,src=${root}/sealed,dst=/sealed,readonly`,
+      `--mount=type=bind,src=${root}/sealed-signing,dst=/sealed,readonly`,
       `--mount=type=bind,src=${root}/unsigned,dst=/unsigned,readonly`,
       `--mount=type=bind,src=${root}/signing,dst=/key,readonly`,
       `--mount=type=bind,src=${root}/signature,dst=/signature`,
       image,
+      '--preserve-symlinks',
+      '--preserve-symlinks-main',
       '--permission',
       '--allow-fs-read=/sealed',
       '--allow-fs-read=/unsigned',
       '--allow-fs-read=/key',
       '--allow-fs-write=/signature',
-      '/sealed/worker.mjs',
+      '/sealed/scripts/hermetic-proof-stage-worker.mjs',
       'sign',
       '/unsigned/certificate.json',
-      '/key/key.bin',
+      '/key/key.pkcs8',
       '/signature/signature.json',
       '/repo/package.json',
       '/app/node_modules/untrusted-app/canary',

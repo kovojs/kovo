@@ -5,7 +5,10 @@ import {
   encodeRenderPlanFrame,
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
-import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 import {
   callExpressionAtSpan,
   expressionResolvesToFrameworkExport,
@@ -14,6 +17,14 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
+import {
+  browserPostureManifestSchema,
+  browserSecurityOperationKinds,
+  isBrowserSecurityOperationKind,
+  type BrowserPostureManifest,
+  type BrowserSecurityOperationKind,
+} from '@kovojs/core/internal/security-operation-ir';
+import { verifyEmittedTranslation } from '@kovojs/verify/internal/translation';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import { canonicalJson } from './canonical-json.js';
@@ -102,13 +113,17 @@ import {
 } from './package-prefixes.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { analyzeClientCaptures } from './validate/client-capture.js';
+import { secretQueryWireDecisionFacts } from './validate/confidentiality.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
+import { componentCacheInfluenceFacts } from './cache-influence-facts.js';
+import { agentGraphFactsFromModel } from './agent-tool-facts.js';
 import {
   componentSecurityOperationFacts,
   componentSecuritySemanticGraphFacts,
+  serverSecurityOperationFacts,
 } from './security-operation-facts.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
 import { ensureTypescriptRuntime } from './ts-api.js';
@@ -349,6 +364,7 @@ interface EmitClientPhaseResult {
 
 interface EmitRegistryCssPhaseResult {
   readonly componentGraphFacts: readonly ComponentGraphFact[];
+  readonly confidentialityClosed: boolean;
   readonly cssAssets: readonly ComponentCssAsset[];
   readonly cssSource: string;
   readonly fileNames: ReturnType<typeof compileArtifactFileNames>;
@@ -357,6 +373,7 @@ interface EmitRegistryCssPhaseResult {
   readonly liveTargetFacts: ReturnType<typeof findLiveTargetFacts>;
   readonly mutationForms: MutationFormFacts;
   readonly registrySource: string;
+  readonly secretFieldNames: readonly string[];
 }
 
 interface EmitServerPhaseResult {
@@ -590,6 +607,7 @@ function emitRegistryCssPhase(
   client: EmitClientPhaseResult,
 ): EmitRegistryCssPhaseResult {
   const fileNames = compileArtifactFileNames(parsed.options.fileName);
+  const secretWireDecision = secretQueryWireDecisionFacts(lowered.model, parsed.compileOptions);
   const componentNameFacts = componentNameFactsForModel(parsed.options.fileName, lowered.model);
   const primaryComponentNames = componentNameFacts[0]?.names ?? parsed.componentNames;
   const componentCssSource = emitCssModule(primaryComponentNames.domName, lowered.model);
@@ -645,6 +663,7 @@ function emitRegistryCssPhase(
         index === 0 ? mutationForms : [],
         fact.component,
         parsed.options.fileName,
+        index === 0 ? componentCacheInfluenceFacts(parsed.originalModel) : [],
         index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
         index === 0 ? componentSecuritySemanticGraphFacts(parsed.originalModel) : undefined,
       ),
@@ -668,6 +687,7 @@ function emitRegistryCssPhase(
 
   return {
     componentGraphFacts,
+    confidentialityClosed: secretWireDecision.refusedQueryNames.length > 0,
     cssAssets,
     cssSource,
     fileNames,
@@ -693,10 +713,12 @@ function emitRegistryCssPhase(
         ? { queryShapeFacts: parsed.options.queryShapeFacts }
         : {}),
       queryUpdatePlans: validated.queryUpdatePlans,
+      refusedQueryNames: secretWireDecision.refusedQueryNames,
       ...(parsed.options.registryFacts ? { registryFacts: parsed.options.registryFacts } : {}),
       registryComponentName: primaryComponentNames.registryKey,
       viewTransitions: lowered.lowering.structuralLowering.viewTransitionStamps,
     }),
+    secretFieldNames: secretWireDecision.fieldNames,
   };
 }
 
@@ -899,6 +921,7 @@ function appendCompilerDiagnostics(
   for (let index = 0; index < length; index += 1) {
     const value = compilerOwnDataValue(values, index, label) as CompilerDiagnostic | undefined;
     if (!value) compilerFailClosed(`${label}[${index}] must be dense own data.`);
+    assertRegisteredDiagnostic(value, `${label}[${index}]`);
     appendCompileValue(output, value, label);
   }
 }
@@ -935,8 +958,38 @@ function assembleCompileResult(
     server,
     parsed.originalModel,
   );
+  const confidentialityClosed = registryCss.confidentialityClosed;
+  const files: CompileResult['files'] = [
+    {
+      fileName: registryCss.fileNames.server,
+      kind: 'server',
+      source: server.serverModule.source,
+    },
+    {
+      fileName: registryCss.fileNames.client,
+      kind: 'client',
+      source: confidentialityClosed ? '' : client.clientSource,
+    },
+    ...(registryCss.cssSource
+      ? [
+          {
+            fileName: registryCss.fileNames.css,
+            kind: 'css' as const,
+            source: registryCss.cssSource,
+          },
+        ]
+      : []),
+    {
+      fileName: registryCss.fileNames.registry,
+      kind: 'registry',
+      source: confidentialityClosed ? '' : registryCss.registrySource,
+    },
+  ];
+  assertEmittedTranslation(lowered, client, registryCss, files, confidentialityClosed);
 
   return {
+    agentGraphFacts: agentGraphFactsFromModel(parsed.originalModel),
+    browserPostureManifest: compileBrowserPostureManifest(lowered, validated.handlers),
     clientModuleImportManifest: client.clientModuleImportManifest,
     componentGraphFacts: facts.componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
@@ -957,28 +1010,7 @@ function assembleCompileResult(
     }),
     diagnostics: verified.diagnostics,
     endpointGraphFacts: facts.endpointGraphFacts,
-    files: [
-      {
-        fileName: registryCss.fileNames.server,
-        kind: 'server',
-        source: server.serverModule.source,
-      },
-      { fileName: registryCss.fileNames.client, kind: 'client', source: client.clientSource },
-      ...(registryCss.cssSource
-        ? [
-            {
-              fileName: registryCss.fileNames.css,
-              kind: 'css' as const,
-              source: registryCss.cssSource,
-            },
-          ]
-        : []),
-      {
-        fileName: registryCss.fileNames.registry,
-        kind: 'registry',
-        source: registryCss.registrySource,
-      },
-    ],
+    files,
     clientExports: compilerAppendDense(
       compilerMapDense(
         client.versionedHandlers,
@@ -1027,6 +1059,126 @@ function assembleCompileResult(
     updateCoverage: facts.queryUpdateCoverage,
     viewTransitions: facts.viewTransitions,
   };
+}
+
+function compileBrowserPostureManifest(
+  lowered: LowerComponentPhaseResult,
+  handlers: readonly HandlerLowering[],
+): BrowserPostureManifest {
+  const seen = compilerCreateSet<BrowserSecurityOperationKind>();
+  let hasUnclosedBrowserAuthority = false;
+  const handlerLength = compilerArrayLength(handlers, 'Browser posture handlers');
+  for (let handlerIndex = 0; handlerIndex < handlerLength; handlerIndex += 1) {
+    const handler = compilerOwnDataValue(
+      handlers,
+      handlerIndex,
+      'Browser posture handlers',
+    ) as HandlerLowering;
+    const operations = handler.securityOperations;
+    const operationLength = compilerArrayLength(operations, 'Browser posture operation facts');
+    for (let operationIndex = 0; operationIndex < operationLength; operationIndex += 1) {
+      const operation = compilerOwnDataValue(
+        operations,
+        operationIndex,
+        'Browser posture operation facts',
+      ) as (typeof operations)[number];
+      if (isBrowserSecurityOperationKind(operation.kind)) compilerSetAdd(seen, operation.kind);
+    }
+    const diagnostics =
+      handler.diagnostics ?? (handler.diagnostic === undefined ? [] : [handler.diagnostic]);
+    const diagnosticLength = compilerArrayLength(
+      diagnostics,
+      'Browser posture handler diagnostics',
+    );
+    for (let diagnosticIndex = 0; diagnosticIndex < diagnosticLength; diagnosticIndex += 1) {
+      const diagnostic = compilerOwnDataValue(
+        diagnostics,
+        diagnosticIndex,
+        'Browser posture handler diagnostics',
+      ) as CompilerDiagnostic;
+      if (diagnostic.code === 'KV201') hasUnclosedBrowserAuthority = true;
+    }
+  }
+  const operations: BrowserSecurityOperationKind[] = [];
+  const operationKindLength = compilerArrayLength(
+    browserSecurityOperationKinds,
+    'Browser security operation kinds',
+  );
+  for (let index = 0; index < operationKindLength; index += 1) {
+    const kind = compilerOwnDataValue(
+      browserSecurityOperationKinds,
+      index,
+      'Browser security operation kinds',
+    ) as BrowserSecurityOperationKind;
+    if (compilerSetHas(seen, kind)) {
+      compilerArrayAppend(operations, kind, 'Browser posture operations');
+    }
+  }
+  const posture = lowered.lowering.structuralLowering.browserPosture;
+  const isolationBlockers = compilerSnapshotDenseArray(
+    posture.isolationBlockers,
+    'Browser posture isolation blockers',
+  );
+  if (compilerSetHas(seen, 'browser.framework.call') || hasUnclosedBrowserAuthority) {
+    compilerArrayAppend(
+      isolationBlockers,
+      {
+        fileName: lowered.lowering.terminalState.fileName,
+        kind: 'dynamic-fetch-or-worker',
+        site: 'browser.framework.call',
+      },
+      'Browser posture isolation blockers',
+    );
+  }
+  return {
+    externalOrigins: compilerSnapshotDenseArray(
+      posture.externalOrigins,
+      'Browser posture external origins',
+    ),
+    isolationBlockers,
+    opaqueExternalUrls: compilerSnapshotDenseArray(
+      posture.opaqueExternalUrls,
+      'Browser posture opaque URLs',
+    ),
+    operations,
+    schema: browserPostureManifestSchema,
+  };
+}
+
+function assertEmittedTranslation(
+  lowered: LowerComponentPhaseResult,
+  client: EmitClientPhaseResult,
+  registryCss: EmitRegistryCssPhaseResult,
+  files: CompileResult['files'],
+  confidentialityClosed: boolean,
+): void {
+  const result = verifyEmittedTranslation({
+    artifacts: files,
+    decision: {
+      clientHandlers: confidentialityClosed
+        ? []
+        : compilerMapDense(
+            client.versionedHandlers,
+            'Translation-validation client handlers',
+            (handler) => ({
+              exportName: handler.exportName,
+              operations: handler.securityOperations,
+            }),
+          ),
+      clientImports: client.clientModuleImportManifest,
+      secretFieldNames: registryCss.secretFieldNames,
+      serverOperations: serverSecurityOperationFacts(lowered.model),
+    },
+  });
+  if (result.ok) return;
+  const findings = compilerMapDense(
+    result.findings,
+    'Emitted translation findings',
+    (finding) => `${finding.relation}:${finding.code}:${finding.message}`,
+  );
+  compilerFailClosed(
+    `Emitted translation validation failed: ${compilerArrayJoin(findings, ' | ')}`,
+  );
 }
 
 function componentCompileFactSnapshot(
@@ -1844,10 +1996,15 @@ export class CompilerDiagnosticError extends Error {
   readonly diagnostic: ReturnType<typeof kv416Diagnostic>;
 
   constructor(diagnostic: ReturnType<typeof kv416Diagnostic>) {
-    super(`${diagnostic.code}: ${diagnostic.message}`);
+    super(compilerDiagnosticErrorMessage(diagnostic));
     this.name = 'CompilerDiagnosticError';
     this.diagnostic = diagnostic;
   }
+}
+
+function compilerDiagnosticErrorMessage(diagnostic: ReturnType<typeof kv416Diagnostic>): string {
+  assertRegisteredDiagnostic(diagnostic, 'Compiler diagnostic error');
+  return `${diagnostic.code}: ${diagnostic.message}`;
 }
 
 function sortedRecord(record: Record<string, string>): [string, string][] {

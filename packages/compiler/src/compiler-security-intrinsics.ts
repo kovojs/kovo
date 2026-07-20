@@ -31,6 +31,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
 const NativeTypeError = globalThis.TypeError;
+const NativeURL = globalThis.URL;
 const NativeWeakMap = globalThis.WeakMap;
 const nativeArrayFrom = NativeArray.from;
 const nativeArrayIsArray = NativeArray.isArray;
@@ -80,6 +81,8 @@ const nativeStringTrim = NativeString.prototype.trim;
 const nativeStringTrimEnd = NativeString.prototype.trimEnd;
 const nativeWeakMapGet = NativeWeakMap.prototype.get;
 const nativeWeakMapSet = NativeWeakMap.prototype.set;
+const nativeUrlOriginGetter = getOwnPropertyDescriptor(NativeURL.prototype, 'origin')?.get;
+const nativeUrlProtocolGetter = getOwnPropertyDescriptor(NativeURL.prototype, 'protocol')?.get;
 const nativeStatsIsDirectory = BuiltinStats.prototype.isDirectory;
 const nativeStatsIsFile = BuiltinStats.prototype.isFile;
 const nativeStatsIsSymbolicLink = BuiltinStats.prototype.isSymbolicLink;
@@ -149,7 +152,9 @@ function compilerBootstrapSelfCheckPasses(): boolean {
       typeof nativeArrayFrom !== 'function' ||
       typeof nativeRegExpGlobalGetter !== 'function' ||
       typeof nativeMapSizeGetter !== 'function' ||
-      typeof nativeSetSizeGetter !== 'function'
+      typeof nativeSetSizeGetter !== 'function' ||
+      typeof nativeUrlOriginGetter !== 'function' ||
+      typeof nativeUrlProtocolGetter !== 'function'
     ) {
       return false;
     }
@@ -248,6 +253,25 @@ export function compilerUtf8Text(bytes: Uint8Array): string {
 export function compilerUtf8ByteLength(value: string): number {
   assertCompilerSecurityIntrinsics();
   return apply(nativeBufferByteLength, BuiltinBuffer, [value, 'utf8']);
+}
+
+/** @internal Canonical origin for one absolute HTTP(S) URL, or undefined for non-absolute input. */
+export function compilerAbsoluteHttpUrlOrigin(value: string): string | undefined {
+  assertCompilerSecurityIntrinsics();
+  if (
+    typeof nativeUrlOriginGetter !== 'function' ||
+    typeof nativeUrlProtocolGetter !== 'function'
+  ) {
+    throw new NativeTypeError('Compiler URL controls are unavailable.');
+  }
+  try {
+    const parsed = new NativeURL(value);
+    const protocol = apply<string>(nativeUrlProtocolGetter, parsed, []);
+    if (protocol !== 'http:' && protocol !== 'https:') return undefined;
+    return apply<string>(nativeUrlOriginGetter, parsed, []);
+  } catch {
+    return undefined;
+  }
 }
 
 export function compilerArrayIsArray(value: unknown): value is unknown[] {

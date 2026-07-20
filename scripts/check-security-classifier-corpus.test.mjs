@@ -5,6 +5,11 @@ import {
   evaluateRequestSafeRuntimeInventoryAlignment,
   evaluateSecurityClassifierCorpus,
 } from './check-security-classifier-corpus.mjs';
+import {
+  buildSecurityCoverageCells,
+  generatedCarrierGrammarDocument,
+  securityCarrierProductions,
+} from './security-coverage.mjs';
 
 describe('check-security-classifier-corpus gate', () => {
   it('rejects request and Vite runners that load dependencies before compiler/server lockdown', () => {
@@ -276,6 +281,73 @@ describe('check-security-classifier-corpus gate', () => {
       findings: ['redos: missing verdict anchor "round-18-nested-quantifier" in redos.test.ts'],
     });
   });
+
+  it.each([
+    ['browser operation', 'browserOperationKinds', 'browser.scratch', 'browser-operation'],
+    ['root', 'rootKinds', 'scratch-root', 'root'],
+    ['closed verdict', 'closedVerdicts', 'scratch-closed', 'closed-verdict'],
+  ])(
+    'blocks a newly added uncovered %s before running the corpus',
+    (_label, field, value, surface) => {
+      const corpus = {
+        id: 'finite-security-operation-ir',
+        marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
+        testFiles: ['finite.test.ts'],
+        verdictAnchors: [
+          {
+            file: 'finite.test.ts',
+            id: 'reviewed-anchor',
+            snippets: ['reviewed closed decision'],
+          },
+        ],
+      };
+      const vocabulary = {
+        browserOperationKinds: ['browser.state.read'],
+        closedVerdicts: ['unknown-operation'],
+        rootKinds: ['route'],
+        serverOperationKinds: ['server.database.read'],
+      };
+      const coverage = {
+        cells: buildSecurityCoverageCells(vocabulary).map((cell) => ({
+          ...cell,
+          disposition: 'witness',
+          reason: null,
+          review: null,
+          witnesses: [{ anchor: 'reviewed-anchor', corpus: corpus.id }],
+        })),
+        schema: 'kovo-security-coverage/v1',
+        summary: { cells: 4, inapplicable: 0, witnessed: 4 },
+      };
+      const grammar = generatedCarrierGrammarDocument({
+        corpora: [corpus],
+        existing: undefined,
+        productions: securityCarrierProductions,
+      });
+      grammar.mappings[0] = {
+        ...grammar.mappings[0],
+        production: 'exact-operation',
+        reason: 'This direct finite operation reaches its reviewed closed decision.',
+      };
+      let ran = false;
+      const result = evaluateSecurityClassifierCorpus({
+        corpora: [corpus],
+        coverageInputs: {
+          coverage,
+          grammar,
+          vocabulary: { ...vocabulary, [field]: [...vocabulary[field], value] },
+        },
+        enforceCoverage: true,
+        readText: () => `${corpus.marker}\nreviewed closed decision\n`,
+        run: () => {
+          ran = true;
+          return { ok: true, output: '' };
+        },
+      });
+
+      expect(ran).toBe(false);
+      expect(result.findings).toContain(`missing coverage cell ${surface}:${value}`);
+    },
+  );
 
   it('returns red when known regression anchors are conceptually mutated away', () => {
     const cases = [

@@ -5,6 +5,7 @@ import {
   clientModuleContentVersion,
   clientModuleHrefForSourceFile,
 } from '@kovojs/core/internal/client-module-url';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
 import type { CssAssetManifest } from './css.js';
@@ -602,13 +603,11 @@ export const Shell = component({ render: () => <section>Shell</section> });
             },
           ],
           diagnostics: [
-            {
-              code: 'KV311',
-              fileName: 'src/card.tsx',
-              help: 'warning',
-              message: 'warning',
-              severity: 'warn',
-            },
+            createRegisteredDiagnostic(
+              'KV311',
+              { fileName: 'src/card.tsx' },
+              { help: 'warning', message: 'warning' },
+            ),
           ],
           files: [{ kind: 'server', source: 'export {};' }],
         }),

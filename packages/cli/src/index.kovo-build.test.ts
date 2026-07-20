@@ -25,6 +25,8 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, route } from '@kovojs/server';
+import type { AppDependencyCapabilityManifest } from '@kovojs/core/internal/graph';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
@@ -102,6 +104,18 @@ describe('kovo build', () => {
       expect(handlerSource).not.toContain('readFileSync');
       expect(handlerSource).not.toContain('pgsql-ast-parser');
       expect(handlerSource).not.toContain('kovo-managed-sql-parser');
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        dependencyCapabilities?: AppDependencyCapabilityManifest;
+      };
+      expect(graph.dependencyCapabilities?.schema).toBe('kovo-app-dependency-capabilities/v1');
+      expect(
+        graph.dependencyCapabilities?.dependencies.flatMap((dependency) => dependency.entries),
+      ).toEqual(expect.arrayContaining([expect.objectContaining({ specifier: '@kovojs/server' })]));
+      expect(
+        graph.dependencyCapabilities?.dependencies.every(
+          (dependency) => dependency.verdict === 'open',
+        ),
+      ).toBe(true);
 
       const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
@@ -200,6 +214,13 @@ describe('kovo build', () => {
       };
 
       const first = await build();
+      const firstCertificate = readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8');
+      expect(JSON.parse(firstCertificate)).toMatchObject({
+        schema: 'kovo.certificate/v1',
+      });
+      expect(firstCertificate).toBe(
+        readFileSync(join(repoRoot, 'security/kovo-certificate-v1.json'), 'utf8'),
+      );
       const graph = JSON.parse(first) as {
         provenance?: {
           frameworkPackages: readonly { name: string; version: string }[];
@@ -207,6 +228,12 @@ describe('kovo build', () => {
           pnpmLock: { contentHash: string };
           schema: string;
           securityGuarantees: { canonicalHash: string; schema: string };
+        };
+        runtimePosture?: {
+          artifactSubject: string;
+          facts: unknown;
+          postureDigest: string;
+          schema: string;
         };
       };
       expect(graph.provenance).toMatchObject({
@@ -221,12 +248,25 @@ describe('kovo build', () => {
         },
         schema: 'kovo.artifact.provenance/v1',
         securityGuarantees: {
-          canonicalHash: 'sha256:5520ba2631adaa1b36f077f5f3ce7fc52b16b49f748856f586c0a5e445f9b7db',
+          canonicalHash: 'sha256:3d01b8455b5a772930b63b89c5b5713e71ac7e3961d9d65329ea3b581e562547',
           schema: 'kovo.security.guarantees/v1',
         },
       });
       expect(JSON.stringify(graph.provenance)).not.toContain(root);
+      expect(graph.runtimePosture).toMatchObject({
+        artifactSubject: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        postureDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        schema: 'kovo-runtime-posture/v1',
+      });
+      const { runtimePosture, ...subjectGraph } = graph;
+      expect(runtimePosture?.artifactSubject).toBe(
+        `sha256:${createHash('sha256').update(canonicalJsonStringify(subjectGraph)).digest('hex')}`,
+      );
+      expect(runtimePosture?.postureDigest).toBe(
+        `sha256:${createHash('sha256').update(canonicalJsonStringify(runtimePosture.facts)).digest('hex')}`,
+      );
       expect(await build()).toBe(first);
+      expect(readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8')).toBe(firstCertificate);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -451,7 +491,6 @@ export function ContactCard(props: { name: string }) {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
-      writeReactJsxRuntimeStub(root);
       writeFileSync(
         appPath,
         `
@@ -1498,7 +1537,7 @@ const adminMutation = mutation('admin/update', {
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,
-  input: s.object({ id: s.string() }),
+  input: s.object({ id: s.string().allowControlChars() }),
   handler() {
     return { ok: true };
   },
@@ -1524,14 +1563,51 @@ export default createApp({
       expect(errorOutput).not.toContain('UNGUARDED');
       expect(existsSync(outDir)).toBe(true);
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        escapeCensus?: Record<string, unknown>;
         mutations?: readonly Record<string, unknown>[];
+        trustEscapes?: readonly Record<string, unknown>[];
       };
+      expect(graph.escapeCensus).toEqual({
+        doors: [
+          'allowControlChars',
+          'csrf:false',
+          'ctx.fetch',
+          'kovoAnalyzerSummary',
+          'trustedHtml',
+          'trustedSql',
+        ],
+        schema: 'kovo.escape-census-coverage/v1',
+        sources: {
+          allowControlChars: 'trustEscapes',
+          'csrf:false': 'trustEscapes',
+          'ctx.fetch': 'securitySemanticGraph',
+          kovoAnalyzerSummary: 'trustEscapes',
+          trustedHtml: 'trustEscapes',
+          trustedSql: 'trustEscapes',
+        },
+      });
       expect(graph.mutations).toContainEqual(
         expect.objectContaining({
           csrf: 'exempt',
           csrfJustification: 'non-browser regression fixture',
           key: 'admin/update',
         }),
+      );
+      expect(graph.trustEscapes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'allowControlChars',
+            root: 'app.mjs:18',
+          }),
+          expect.objectContaining({
+            kind: 'csrfFalse',
+            root: 'mutation:admin/update',
+          }),
+          expect.objectContaining({
+            kind: 'trustedHtml',
+            root: 'app.mjs:30',
+          }),
+        ]),
       );
     } finally {
       stdout.mockRestore();
@@ -1540,7 +1616,7 @@ export default createApp({
     }
   });
 
-  it('persists trustedReveal audit facts through a normal build and both explain views', async () => {
+  it('request-closes a declassification door imported by the application root', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1556,11 +1632,11 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { secret, trustedReveal } from '@kovojs/core';",
+          "import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core';",
           "import { createApp } from '@kovojs/server';",
           '',
           "const configSecret = secret('build-only-payment-key');",
-          "const credential = trustedReveal(configSecret, { justification: 'initialize payment SDK once at boot', method: 'arbitrary-fn', source: 'app.env.PAYMENT_API_KEY' });",
+          "const credential = revealSecret(configSecret, DeclassifyPolicy.create({ door: 'revealSecret', ownerScope: 'application', purpose: 'credential-use' }));",
           'void credential;',
           '',
           'export default createApp({ routes: [] });',
@@ -1571,39 +1647,107 @@ export default createApp({
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(errorOutput).toContain('ERROR KV448 app.mjs:1');
+      expect(errorOutput).toContain(
+        'declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+      );
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits exact unsigned trustedAssign review subjects and rejects prose before emission', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-escape-obligation-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const invalidOutDir = join(root, 'invalid-dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        [
+          "import { createApp, trustedAssign } from '@kovojs/server';",
+          '',
+          'export function reviewedGrant(input) {',
+          '  return trustedAssign(input.role, {',
+          `    evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/admin-role-grant' },`,
+          "    invariant: 'governed-write.authorized-principal',",
+          "    why: { guard: 'guards.role:admin', kind: 'guard-chain' },",
+          '  });',
+          '}',
+          'export default createApp({ routes: [] });',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir, '--no-cache']);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
-      expect(stderr).not.toHaveBeenCalled();
-
-      const graphPath = join(outDir, '.kovo/graph.json');
-      const graph = JSON.parse(readFileSync(graphPath, 'utf8')) as {
-        revealed?: readonly Record<string, unknown>[];
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        capabilities: readonly {
+          obligation: unknown;
+          site: string;
+          siteIdentity: string;
+          target: string;
+        }[];
+        runtimePosture: { artifactSubject: string };
       };
-      expect(graph.revealed).toEqual([
-        {
-          grade: 'audit',
-          justification: 'initialize payment SDK once at boot',
-          method: 'arbitrary-fn',
-          path: 'app.env.PAYMENT_API_KEY',
-          query: 'runtime',
-          selectedSecret: true,
-          site: 'app.mjs:5',
-          source: 'app.env.PAYMENT_API_KEY',
-        },
-      ]);
+      const manifest = JSON.parse(
+        readFileSync(join(outDir, '.kovo/escape-obligations.json'), 'utf8'),
+      ) as {
+        artifactSubject: string;
+        schema: string;
+        subjects: readonly Record<string, unknown>[];
+      };
+      const capability = graph.capabilities.find((fact) => fact.target === 'trustedAssign');
+      expect(capability).toBeDefined();
+      expect(capability?.siteIdentity).toMatch(/^app\.mjs:\d+:\d+$/u);
+      expect(manifest).toEqual({
+        artifactSubject: graph.runtimePosture.artifactSubject,
+        schema: 'kovo.escape-obligations/v1',
+        subjects: [
+          {
+            artifactSubject: graph.runtimePosture.artifactSubject,
+            obligation: capability?.obligation,
+            schema: 'kovo.escape-obligation-review/v1',
+            siteIdentity: capability?.siteIdentity,
+          },
+        ],
+      });
+      const manifestSource = JSON.stringify(manifest);
+      expect(manifestSource).not.toMatch(/private|publicKey|signature|keyId/u);
 
-      stdout.mockClear();
-      expect(main(['explain', '--revealed', graphPath])).toBe(0);
-      const revealedOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(revealedOutput).toContain(
-        'REVEAL grade=audit method=arbitrary-fn query=runtime path=app.env.PAYMENT_API_KEY site=app.mjs:5',
+      writeFileSync(
+        appPath,
+        [
+          "import { createApp, trustedAssign } from '@kovojs/server';",
+          "export function unreviewedGrant(input) { return trustedAssign(input.role, 'make check green'); }",
+          'export default createApp({ routes: [] });',
+          '',
+        ].join('\n'),
+        'utf8',
       );
-
-      stdout.mockClear();
-      expect(main(['explain', '--capabilities', graphPath])).toBe(0);
-      const capabilityOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(capabilityOutput).toContain(
-        'CAPABILITY kind=trustedReveal site=app.mjs:5 module=- target=runtime.app.env.PAYMENT_API_KEY justification="initialize payment SDK once at boot"',
+      stderr.mockClear();
+      await expect(
+        mainAsync(['build', appPath, '--out', invalidOutDir, '--no-cache']),
+      ).resolves.toBe(1);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(
+        /KV438.*structured obligation/u,
       );
+      expect(existsSync(join(invalidOutDir, '.kovo'))).toBe(false);
+      expect(existsSync(join(invalidOutDir, '.kovo/escape-obligations.json'))).toBe(false);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -2314,6 +2458,69 @@ export default createApp({
     }
   }, 90_000);
 
+  it('serializes the compiler-derived grant model into an ordinary build graph', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-grant-graph-'));
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/drizzle'), join(root, 'node_modules/@kovojs/drizzle'));
+      symlinkSync(
+        join(repoRoot, 'packages/drizzle/node_modules/drizzle-orm'),
+        join(root, 'node_modules/drizzle-orm'),
+      );
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'app.ts'),
+        `
+import { createApp } from '@kovojs/server';
+export default createApp({});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'schema.ts'),
+        `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+import { kovo } from '@kovojs/drizzle';
+
+export const memberships = pgTable('memberships', {
+  id: text('id').primaryKey(),
+  principalId: text('principal_id').notNull(),
+}, kovo({ domain: 'membership', key: 'id', owner: 'principalId' }));
+`,
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        grants?: readonly Record<string, unknown>[];
+      };
+      expect(graph.grants).toEqual(
+        expect.arrayContaining([
+          {
+            domain: 'membership',
+            kind: 'resource',
+            rightKinds: ['delegate', 'owner', 'read', 'write'],
+            table: 'memberships',
+          },
+        ]),
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('fails closed on opaque Drizzle query protocols before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');
@@ -2875,7 +3082,8 @@ export async function resetFixture() {
     }
   });
 
-  it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
+  // @kovo-security-certifies C13 build-app-jsx-runtime-provenance
+  it('auto-collects compiled component CSS without acquiring a foreign JSX runtime', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
     const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
@@ -2888,7 +3096,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, staticStylesheetRouteComponentAppModuleSource(), 'utf8');
       writeStyledComponentClientEntry(root);
 
@@ -2931,7 +3138,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
 
@@ -3015,7 +3221,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeSplitStyleCreateComponentClientEntry(root);
       writeFileSync(appPath, splitSrcStylesheetRouteAppModuleSource(), 'utf8');
 
@@ -3071,7 +3276,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, documentShellRouteSplitAppModuleSource(), 'utf8');
       writeDocumentShellTemplate(root);
       writeSplitStyleCreateComponentClientEntry(root);
@@ -3117,7 +3321,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
       writeFileSync(
@@ -4329,24 +4532,26 @@ const carts = {};
 
 const saveCart = mutation('cart/save', {
   input: s.object({ id: s.string() }),
-  handler(input) {
-    appDb.insert(carts).values({ id: input.id });
+  handler(input, request: { db: typeof appDb }) {
+    request.db.insert(carts).values({ id: input.id });
     return { ok: true };
   },
 });
 
 const sendReceipt = task('tasks/send-receipt', {
   input: s.object({ id: s.string() }),
-  run(input) {
-    appDb.insert(receipts).values({ id: input.id });
+  run(input, context) {
+    // @ts-expect-error security regression fixture deliberately exercises forbidden task DB access
+    context.db.insert(receipts).values({ id: input.id });
     return { ok: true };
   },
 });
 
 const paymentWebhook = webhook('/webhooks/payment', {
   access: { kind: 'public', reason: 'build preflight regression fixture' },
-  handler(input) {
-    appDb.insert(payments).values({ id: input.id });
+  handler(input, context) {
+    // @ts-expect-error security regression fixture deliberately exercises forbidden webhook DB access
+    context.tx.insert(payments).values({ id: input.id });
     return { ok: true };
   },
   idempotency: (input) => webhookReplayIdentity(input.id, input.occurredAtMs),
@@ -4621,19 +4826,13 @@ function writeKv414PreflightStaticSources(root: string): void {
       'import { query, s, type QueryLoadContext, type Reader } from "@kovojs/server";',
       'import { accounts } from "./schema.js";',
       '',
-      'type AppDb = PgAsyncDatabase<unknown, unknown>;',
+      'type AppDb = PgAsyncDatabase<any, any>;',
       'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
-      '',
-      'function requireDb(context?: AppQueryLoadContext): Reader<AppDb> {',
-      '  const db = context?.db;',
-      '  if (!db) throw new Error("KV414 build proof requires context.db");',
-      '  return db;',
-      '}',
-      '',
       'export const accountById = query({',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
-      '    const db = requireDb(context);',
+      '    const db: Reader<AppDb> | undefined = context?.db;',
+      '    if (!db) throw new Error("KV414 build proof requires context.db");',
       '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
       '  },',
       '});',
@@ -4839,32 +5038,6 @@ export const ${name} = component({
   render: () => <${host} {...style.attrs(styles.root)}>${name}</${host}>,
 });
 `;
-}
-
-function writeReactJsxRuntimeStub(root: string): void {
-  const reactDir = join(root, 'node_modules/react');
-  mkdirSync(reactDir, { recursive: true });
-  writeFileSync(
-    join(reactDir, 'package.json'),
-    JSON.stringify({
-      exports: {
-        './jsx-dev-runtime': './jsx-dev-runtime.js',
-        './jsx-runtime': './jsx-runtime.js',
-      },
-      name: 'react',
-      type: 'module',
-    }),
-    'utf8',
-  );
-  const runtime = [
-    'export function jsx() { return null; }',
-    'export function jsxs() { return null; }',
-    'export function jsxDEV() { return null; }',
-    'export const Fragment = Symbol.for("react.fragment");',
-    '',
-  ].join('\n');
-  writeFileSync(join(reactDir, 'jsx-dev-runtime.js'), runtime, 'utf8');
-  writeFileSync(join(reactDir, 'jsx-runtime.js'), runtime, 'utf8');
 }
 
 function builtAssetPath(outDir: string, predicate: (path: string) => boolean): string {

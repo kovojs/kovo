@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 
 import { clientModulePath } from '@kovojs/core/internal/client-module-url';
+import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   createFrameworkOutputFileSystemBoundary,
   type ConfinedFileSystemEntry,
@@ -540,6 +541,7 @@ async function writeNeutralStaticOutput({
     }
 
     const diagnostics = snapshotBuildArray(result.diagnostics, 'neutral static export diagnostics');
+    assertNeutralStaticExportDiagnostics(diagnostics, 'neutral static export diagnostics');
     const targets = snapshotBuildArray(routePlan.targets, 'neutral static export route targets');
     const routeDocuments: StaticExportRouteTarget[] = [];
     for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
@@ -599,6 +601,7 @@ function neutralBuildRouteEntries(
     staticOutput?.diagnostics ?? [],
     'neutral build route diagnostics',
   );
+  assertNeutralStaticExportDiagnostics(allDiagnostics, 'neutral build route diagnostics');
   const routeDocuments = snapshotBuildArray(
     staticOutput?.routeDocuments ?? [],
     'neutral build route documents',
@@ -641,6 +644,15 @@ function neutralBuildRouteEntries(
     );
   }
   return entries;
+}
+
+function assertNeutralStaticExportDiagnostics(
+  diagnostics: readonly StaticExportDiagnostic[],
+  label: string,
+): void {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `${label}[${index}]`);
+  }
 }
 
 function neutralStaticExportAssets(

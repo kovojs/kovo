@@ -39,6 +39,8 @@ const expectedServerExpressionArmOrder = [
   'conditional-expression',
   'static-member',
   'foreign-executable-containment',
+  'governed-data-containment',
+  'unsafe-wire-data-containment',
   'authority-containment',
 ];
 
@@ -130,8 +132,9 @@ export function extractServerExpressionProvenanceArms(source) {
       continue;
     }
     if (ts.isReturnStatement(statement) && statement.expression) {
-      const calls = calledNames(statement.expression);
-      if (exactCalledNames(calls, ['expressionContainsServerAuthority'])) {
+      const payload = precisionGrantPayload(statement.expression, 'fallthrough-contained-local');
+      const calls = payload === undefined ? new Set() : calledNames(payload);
+      if (payload !== undefined && exactCalledNames(calls, ['expressionContainsServerAuthority'])) {
         arms.push('authority-containment');
       } else {
         arms.push(`unclassified-return:${ts.SyntaxKind[statement.expression.kind]}`);
@@ -144,6 +147,20 @@ export function extractServerExpressionProvenanceArms(source) {
     arms.push(`unclassified-statement:${ts.SyntaxKind[statement.kind]}`);
   }
   return arms;
+}
+
+function precisionGrantPayload(expression, expectedId) {
+  if (
+    !ts.isCallExpression(expression) ||
+    !ts.isIdentifier(expression.expression) ||
+    expression.expression.text !== 'serverPrecisionGrant' ||
+    expression.arguments.length !== 2 ||
+    !ts.isStringLiteralLike(expression.arguments[0]) ||
+    expression.arguments[0].text !== expectedId
+  ) {
+    return undefined;
+  }
+  return expression.arguments[1];
 }
 
 function appendIfChainArms(statement, arms, sourceFile) {
@@ -173,6 +190,12 @@ function classifyIfArm(expression, sourceFile) {
   if (exactCalledNames(calls, ['isConditionalExpression'])) return 'conditional-expression';
   if (exactCalledNames(calls, ['expressionContainsServerForeignExecutable'])) {
     return 'foreign-executable-containment';
+  }
+  if (exactCalledNames(calls, ['expressionContainsServerGovernedData'])) {
+    return 'governed-data-containment';
+  }
+  if (exactCalledNames(calls, ['expressionContainsServerUnsafeWireData'])) {
+    return 'unsafe-wire-data-containment';
   }
   if (ts.isIdentifier(expression) && expression.text === 'member') return 'static-member';
   const callSignature = [...calls].sort((left, right) => left.localeCompare(right)).join('+');

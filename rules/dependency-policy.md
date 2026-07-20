@@ -16,8 +16,9 @@ security guarantees rest on today: `pg` (node-postgres query parameterization an
 SET ROLE / RLS statement delivery), `drizzle-orm` (SQL-generation parameterization),
 `@electric-sql/pglite` (SET LOCAL ROLE / RLS in the embedded engine), `pgsql-ast-parser`
 (runtime SQL target/closure classification), `undici` (the process-wide outbound transport
-dispatcher used by the egress floor), `better-auth` (password hashing and session/cookie
-integrity), and `@node-rs/argon2` (argon2id password hashing).
+dispatcher used by the egress floor), `parse5` (standards-compatible raw-HTML execution
+classification), `better-auth` (password hashing and session/cookie integrity), and
+`@node-rs/argon2` (argon2id password hashing).
 
 - Pin to the version already resolved in `pnpm-lock.yaml`; do not invent versions.
 - After changing a specifier, run `pnpm install --lockfile-only` (or `pnpm install`)

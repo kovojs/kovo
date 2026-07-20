@@ -8,7 +8,10 @@ import {
 } from '@kovojs/compiler/internal';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -127,6 +130,9 @@ export async function compileComponentV1(
   input: CompileComponentV1Input,
 ): Promise<CompileComponentV1Result> {
   const result = await compileFrameworkComponentModule(compileComponentOptions(input));
+  for (let index = 0; index < result.diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(result.diagnostics[index], `MCP compiler diagnostics[${index}]`);
+  }
 
   return {
     componentGraphFacts: [...result.componentGraphFacts],
@@ -638,6 +644,7 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
 function assertKovoExplainOptions(value: unknown): KovoExplainOptions {
   if (!isRecord(value)) throw new Error('kovo_explain options must be an object');
 
+  if (value.agent === true) return { agent: true };
   if (value.access === true) {
     return {
       ...(value.failOnFindings === true ? { failOnFindings: true } : {}),

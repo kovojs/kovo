@@ -37,7 +37,15 @@ import {
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
 import { mintMutationIdemToken } from './mutation-idem.js';
+import { createPostgresPostureDigest } from './postgres-posture-lease.js';
 import { isDurableMutationReplayStore, mutationReplayScopedKey } from './replay.js';
+import {
+  advancePrincipalEpoch,
+  currentPrincipalEpoch,
+  initializePrincipalEpoch,
+  isDurablePrincipalEpochStore,
+  tombstonePrincipalEpoch,
+} from './principal-epoch.js';
 import { replayMutationWireBody } from './response.js';
 import { isDurableWebhookReplayStore } from './webhook.js';
 
@@ -277,6 +285,32 @@ const orphanedContainerItems = pgTable(
 
 const unresolvableOwnerViaSchema = { orphanedContainerItems, sharedContainers };
 
+const ownedContainers = pgTable(
+  'kovo_runtime_owned_containers',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+  },
+  kovo({ domain: 'runtime-owned-containers', key: 'id', owner: 'ownerId' }),
+);
+
+const ownedContainerItems = pgTable(
+  'kovo_runtime_owned_container_items',
+  {
+    containerId: text('container_id')
+      .notNull()
+      .references(() => ownedContainers.id),
+    id: text('id').primaryKey(),
+  },
+  kovo({
+    domain: 'runtime-owned-container-items',
+    key: 'id',
+    ownerVia: { fk: 'containerId', parent: ownedContainers, parentKey: 'id' },
+  }),
+);
+
+const ownerViaSchema = { ownedContainerItems, ownedContainers };
+
 describe('createPostgresAppRuntimeDb', () => {
   const roots: string[] = [];
 
@@ -332,6 +366,65 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('persists strictly monotone principal epochs and tombstones across PGlite restart', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-principal-epoch-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    expect(isDurablePrincipalEpochStore(initial.principalEpochStore)).toBe(true);
+    await initial.ready;
+    const created = await initializePrincipalEpoch(initial.principalEpochStore, 'user-epoch-test');
+    await expect(
+      initializePrincipalEpoch(initial.principalEpochStore, 'user-epoch-test'),
+    ).resolves.toEqual(created);
+    await initial.close();
+
+    const restarted = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await restarted.ready;
+    expect(await currentPrincipalEpoch(restarted.principalEpochStore, 'user-epoch-test')).toEqual(
+      created,
+    );
+    const changed = await advancePrincipalEpoch(
+      restarted.principalEpochStore,
+      'user-epoch-test',
+      'role-change',
+    );
+    expect(changed.epoch).toBe(created.epoch + 1);
+    expect(changed.changedAtMs).toBeGreaterThan(created.changedAtMs);
+    const deleted = await tombstonePrincipalEpoch(
+      restarted.principalEpochStore,
+      'user-epoch-test',
+      'principal-deletion',
+    );
+    expect(deleted.status).toBe('tombstoned');
+    await restarted.close();
+  });
+
+  it('fails posture on a weakened principal epoch alphabet or non-system grant', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-principal-epoch-posture-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_principal_epoch DROP CONSTRAINT _kovo_principal_epoch_status_check;',
+        "ALTER TABLE _kovo_principal_epoch ADD CONSTRAINT _kovo_principal_epoch_status_check CHECK (status IN ('active', 'tombstoned', 'attacker'));",
+        'GRANT DELETE ON _kovo_principal_epoch TO kovo_writer;',
+      ].join(' '),
+    );
+    await weakened.close();
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_PRINCIPAL_EPOCH_SCHEMA' }),
+        expect.objectContaining({ code: 'KV433_PRINCIPAL_EPOCH_ACL' }),
+      ]),
+    );
   });
 
   it('fails posture on weakened temporal replay constraints, column type, and cleanup index', async () => {
@@ -444,6 +537,75 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('rejects retained mutation bodies when a legacy replay schema lacks the erasure index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-erasure-cutover-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    const idem = mintMutationIdemToken();
+    await initial.mutationReplayStore.set(
+      mutationReplayScopedKey('legacy-erasure', idem),
+      'legacy-erasure',
+      idem,
+      {
+        body: replayMutationWireBody('private', {
+          reason: 'Postgres legacy erasure-index cutover fixture',
+        }),
+        headers: {},
+        status: 200,
+      },
+      'fingerprint',
+      'victim',
+    );
+    await initial.close();
+
+    const legacy = new PGlite(dataDir);
+    await legacy.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_principal_index_check;',
+        'DROP INDEX _kovo_replay_principal_index_idx;',
+        'ALTER TABLE _kovo_replay DROP COLUMN principal_index',
+      ].join(' '),
+    );
+    await legacy.close();
+
+    const rejected = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    try {
+      await expect(rejected.ready).rejects.toThrow(
+        /KV433_REPLAY_STORE_CUTOVER[\s\S]*principal erasure index[\s\S]*operator cutover/u,
+      );
+    } finally {
+      await rejected.close();
+    }
+  });
+
+  it('rejects retained task args when a legacy task schema lacks the erasure index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-task-erasure-cutover-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const legacy = new PGlite(dataDir);
+    await legacy.exec(
+      [
+        "INSERT INTO _kovo_jobs (id, task_key, args, status, principal, run_at) VALUES ('legacy', 'private.task', '{\"private\":true}'::jsonb, 'ready', 'victim', CURRENT_TIMESTAMP);",
+        'DROP INDEX _kovo_jobs_principal;',
+        'ALTER TABLE _kovo_jobs DROP COLUMN principal',
+      ].join(' '),
+    );
+    await legacy.close();
+
+    const rejected = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    try {
+      await expect(rejected.ready).rejects.toThrow(
+        /KV433_TASK_ERASURE_CUTOVER[\s\S]*principal erasure index[\s\S]*operator cutover/u,
+      );
+    } finally {
+      await rejected.close();
+    }
+  });
+
   it('fails posture and repairs a weakened or incomplete replay rollback watermark', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-watermark-'));
     roots.push(dataDir);
@@ -457,6 +619,41 @@ describe('createPostgresAppRuntimeDb', () => {
         'ALTER TABLE _kovo_replay_reclaimed DROP CONSTRAINT _kovo_replay_reclaimed_value_check;',
         'ALTER TABLE _kovo_replay_reclaimed ADD CONSTRAINT _kovo_replay_reclaimed_value_check CHECK (reclaimed_through >= -1);',
         "DELETE FROM _kovo_replay_reclaimed WHERE surface = 'webhook'",
+      ].join(' '),
+    );
+    await weakened.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' }),
+      ]),
+    });
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    await repaired.close();
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+  });
+
+  it('fails posture and repairs a weakened replay principal-erasure index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-principal-index-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_principal_index_check;',
+        'DROP INDEX _kovo_replay_principal_index_idx;',
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_principal_index_check CHECK (principal_index IS NULL OR char_length(principal_index) > 0);',
+        'CREATE INDEX _kovo_replay_principal_index_idx ON _kovo_replay (principal_index)',
       ].join(' '),
     );
     await weakened.close();
@@ -1685,6 +1882,79 @@ describe('createPostgresAppRuntimeDb', () => {
         detail: expect.stringContaining('attacker_open'),
       }),
     );
+  });
+
+  it.each([
+    {
+      code: 'KV433_POLICY_SET',
+      label: 'an extra policy',
+      sql: [
+        'CREATE POLICY attacker_open ON public.kovo_runtime_notes',
+        'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+      ].join(' '),
+    },
+    {
+      code: 'KV433_OWNER_POLICY',
+      label: 'an ALTER POLICY weakening',
+      sql: [
+        'ALTER POLICY kovo_owner_scope ON public.kovo_runtime_notes',
+        'USING (true) WITH CHECK (true)',
+      ].join(' '),
+    },
+  ])('fails the boot posture check after $label', async ({ code, sql }) => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-boot-'));
+    roots.push(dataDir);
+    const baseline = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await baseline.ready;
+    } finally {
+      await baseline.close();
+    }
+
+    await execPglite(dataDir, sql);
+    const drifted = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheck: { onBoot: true },
+      provisionOnBoot: false,
+      schema,
+    });
+    try {
+      await expect(drifted.ready).rejects.toThrow(code);
+    } finally {
+      await drifted.close();
+    }
+  });
+
+  it('checks the exact policy posture after provisioning rather than trusting policy reset names', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-policy-reprovision-'));
+    roots.push(dataDir);
+    const baseline = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await baseline.ready;
+    } finally {
+      await baseline.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE POLICY attacker_open ON public.kovo_runtime_notes',
+        'FOR ALL TO PUBLIC USING (true) WITH CHECK (true)',
+      ].join(' '),
+    );
+    const reprovisioned = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheck: { onBoot: true },
+      provisionOnBoot: true,
+      schema,
+    });
+    try {
+      await expect(reprovisioned.ready).rejects.toThrow('KV433_POLICY_SET');
+    } finally {
+      await reprovisioned.close();
+    }
   });
 
   it('refuses expected policy names with substituted role, command, or permissiveness', async () => {
@@ -4479,6 +4749,86 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+    // SPEC §10.3: live environment activation is a server-owned policy-set/shape witness,
+    // not a build-time inference or a guard≡RLS correspondence claim.
+    expect(report.authorizationPolicies).toEqual([
+      {
+        emissionSite: 'owner',
+        policyName: 'kovo_owner_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_notes',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_notes',
+      },
+      {
+        emissionSite: 'admin',
+        policyName: 'kovo_admin_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_notes',
+      },
+    ]);
+
+    const withoutAdminActivation = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema,
+    });
+    expect(withoutAdminActivation.ok).toBe(false);
+    expect(withoutAdminActivation.issues).toContainEqual(
+      expect.objectContaining({ code: 'KV433_POLICY_SET' }),
+    );
+    expect(withoutAdminActivation.authorizationPolicies).toEqual([
+      {
+        emissionSite: 'owner',
+        policyName: 'kovo_owner_scope',
+        schemaName: 'public',
+        status: 'unverified',
+        tableName: 'kovo_runtime_notes',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'unverified',
+        tableName: 'kovo_runtime_notes',
+      },
+    ]);
+  });
+
+  it('reports ownerVia as its exact live primary-policy emission site', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-owner-via-activation-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: ownerViaSchema,
+    });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    const report = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema: ownerViaSchema,
+    });
+    expect(report.ok).toBe(true);
+    expect(report.authorizationPolicies).toContainEqual({
+      emissionSite: 'ownerVia',
+      policyName: 'kovo_owner_scope',
+      schemaName: 'public',
+      status: 'verified',
+      tableName: 'kovo_runtime_owned_container_items',
+    });
   });
 
   it('keeps audited crossOwnerRead parameters bound under a one-shot array iterator poison', async () => {
@@ -4576,6 +4926,11 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(false);
     expect(report.issues).toContainEqual(expect.objectContaining({ code: 'KV433_ADMIN_POLICY' }));
+    expect(report.authorizationPolicies).toEqual([
+      expect.objectContaining({ emissionSite: 'owner', status: 'unverified' }),
+      expect.objectContaining({ emissionSite: 'system', status: 'unverified' }),
+      expect.objectContaining({ emissionSite: 'admin', status: 'unverified' }),
+    ]);
   });
 
   it('uses engine roles, not kovo.role GUCs, for admin and system RLS scope', async () => {
@@ -5055,6 +5410,17 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('defaults the external Postgres posture audit on even when boot provisioning is enabled', () => {
+    const config = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+      databaseUrl: 'postgres://app-runtime@127.0.0.1:5432/kovo',
+      driver: 'node-postgres',
+      provisionOnBoot: true,
+      schema,
+    });
+
+    expect(config).toMatchObject({ postureCheckOnBoot: true, provisionOnBoot: true });
+  });
+
   it('does not dispatch a late Promise.all replacement while closing external role pools', async () => {
     const config = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
       adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1:5432/kovo',
@@ -5160,6 +5526,36 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+    expect(report.authorizationPolicies).toEqual([
+      {
+        emissionSite: 'authzPolicy',
+        policyName: 'kovo_authz_policy',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_documents',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_documents',
+      },
+      {
+        emissionSite: 'owner',
+        policyName: 'kovo_owner_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_memberships',
+      },
+      {
+        emissionSite: 'system',
+        policyName: 'kovo_system_scope',
+        schemaName: 'public',
+        status: 'verified',
+        tableName: 'kovo_runtime_team_memberships',
+      },
+    ]);
   });
 
   it('reports missing FORCE RLS and policy posture for custom authzPolicy tables', async () => {
@@ -5221,6 +5617,253 @@ describe('createPostgresAppRuntimeDb', () => {
         schema: { guardAssertionNotes },
       }),
     ).toThrow(/KV433_AUTHZ_POLICY_UNSUPPORTED.*string guard assertion.*RLS/u);
+  });
+
+  it('reasserts a monotone posture epoch and an empty migration-ledger head on every migrate path', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-posture-epoch-'));
+    roots.push(dataDir);
+    const first = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: { notes } });
+    await first.ready;
+    await first.close();
+
+    const firstEpoch = await queryPglite<{ value: string }>(
+      dataDir,
+      "SELECT value FROM kovo_schema_state WHERE key = 'posture_epoch'",
+    );
+    expect(firstEpoch.rows).toEqual([{ value: '1' }]);
+    const emptyLedger = await queryPglite<{ id: string }>(
+      dataDir,
+      'SELECT id FROM kovo_migrations ORDER BY id',
+    );
+    expect(emptyLedger.rows).toEqual([]);
+
+    const migrated = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [],
+      schema: { notes },
+    });
+    expect(migrated.posture.ok).toBe(true);
+    const secondEpoch = await queryPglite<{ value: string }>(
+      dataDir,
+      "SELECT value FROM kovo_schema_state WHERE key = 'posture_epoch'",
+    );
+    expect(secondEpoch.rows).toEqual([{ value: '2' }]);
+  });
+
+  it('derives the bounded posture-lease digest from two pooler statements and catalog subsets', async () => {
+    let poolerQuery = 0;
+    const runtimeClient = {
+      async exec() {},
+      async query() {
+        return { rows: [] };
+      },
+      async transaction<Result>(
+        callback: (tx: {
+          exec(statement: string): Promise<void>;
+          query<Row>(statement: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(statement: string, params?: unknown[]) {
+            poolerQuery += 1;
+            const probe = String(params?.[0] ?? '');
+            return {
+              rows: [
+                {
+                  backend_pid: '41',
+                  current_database: 'app',
+                  current_user: 'app_login',
+                  probe_value: poolerQuery === 1 ? probe : 'lease-probe',
+                  session_user: 'app_login',
+                } as Row,
+              ],
+            };
+          },
+        });
+      },
+    };
+    const postureClient = {
+      async exec() {},
+      async query() {
+        return { rows: [] };
+      },
+      async transaction<Result>(
+        callback: (tx: {
+          exec(statement: string): Promise<void>;
+          query<Row>(statement: string): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(statement: string) {
+            if (statement.includes('kovo-posture-lease:roles')) {
+              return {
+                rows: [
+                  {
+                    key: 'app_login',
+                    kind: 'role',
+                    value: 'login=true;super=false;bypassrls=false',
+                  } as Row,
+                ],
+              };
+            }
+            if (statement.includes('kovo-posture-lease:relations')) {
+              return {
+                rows: [
+                  {
+                    key: 'public.notes',
+                    kind: 'relation',
+                    value: 'rls=true;force=true',
+                  } as Row,
+                ],
+              };
+            }
+            if (statement.includes('kovo-posture-lease:grants')) {
+              return {
+                rows: [
+                  {
+                    key: 'public.notes:app_login',
+                    kind: 'table-grant',
+                    value: 'SELECT:false',
+                  } as Row,
+                ],
+              };
+            }
+            if (statement.includes('kovo-posture-lease:freshness')) {
+              return {
+                rows: [
+                  { key: '001-initial', kind: 'migration', value: 'sha256:aaa' } as Row,
+                  { key: 'posture_epoch', kind: 'posture-epoch', value: '7' } as Row,
+                ],
+              };
+            }
+            throw new Error(`unexpected posture lease query: ${statement}`);
+          },
+        });
+      },
+    };
+
+    const witness = await __testPostgresRuntimeInternals.derivePostgresPostureLeaseWitness(
+      runtimeClient as never,
+      postureClient as never,
+      {
+        probeValue: 'lease-probe',
+        relations: [{ schemaName: 'public', tableName: 'notes' }],
+        roles: ['app_login', 'kovo_reader'],
+      },
+    );
+
+    expect(witness.freshness).toEqual({
+      migrationHead: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      postureEpoch: '7',
+    });
+    expect(witness.facts).toEqual(
+      expect.arrayContaining([
+        { key: 'app_login', kind: 'role', value: 'login=true;super=false;bypassrls=false' },
+        { key: 'public.notes', kind: 'relation', value: 'rls=true;force=true' },
+      ]),
+    );
+    expect(createPostgresPostureDigest(witness)).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(poolerQuery).toBe(2);
+  });
+
+  it('fails the mechanized pooler witness when one transaction moves backend sessions', async () => {
+    let poolerQuery = 0;
+    const runtimeClient = {
+      async transaction<Result>(
+        callback: (tx: {
+          exec(statement: string): Promise<void>;
+          query<Row>(statement: string, params?: unknown[]): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(_statement: string, params?: unknown[]) {
+            poolerQuery += 1;
+            return {
+              rows: [
+                {
+                  backend_pid: String(40 + poolerQuery),
+                  current_database: 'app',
+                  current_user: 'app_login',
+                  probe_value: String(params?.[0] ?? 'lease-probe'),
+                  session_user: 'app_login',
+                } as Row,
+              ],
+            };
+          },
+        });
+      },
+    };
+    const postureClient = {
+      async transaction<Result>(
+        callback: (tx: {
+          exec(): Promise<void>;
+          query<Row>(statement: string): Promise<{ rows: Row[] }>;
+        }) => Promise<Result>,
+      ) {
+        return callback({
+          async exec() {},
+          async query<Row>(statement: string) {
+            return {
+              rows: statement.includes('kovo-posture-lease:freshness')
+                ? ([{ key: 'posture_epoch', kind: 'posture-epoch', value: '7' }] as Row[])
+                : [],
+            };
+          },
+        });
+      },
+    };
+
+    await expect(
+      __testPostgresRuntimeInternals.derivePostgresPostureLeaseWitness(
+        runtimeClient as never,
+        postureClient as never,
+        { probeValue: 'lease-probe', relations: [], roles: ['app_login'] },
+      ),
+    ).rejects.toThrow(/KV433.*pooler.*backend/isu);
+  });
+
+  it('observes 42501 once and destroys idle node-postgres sessions during lease drain', async () => {
+    const permissionError = Object.assign(new Error('permission denied'), { code: '42501' });
+    const observed: unknown[] = [];
+    let idleCount = 1;
+    let destroyed = 0;
+    const client = {
+      async query() {
+        return { rows: [] };
+      },
+      release(error?: Error | boolean) {
+        if (error !== undefined) destroyed += 1;
+      },
+    };
+    const pool = {
+      async connect() {
+        idleCount = 0;
+        return client;
+      },
+      async end() {},
+      get idleCount() {
+        return idleCount;
+      },
+      async query() {
+        throw permissionError;
+      },
+    };
+    const runtimeClient = __testPostgresRuntimeInternals.createNodePostgresRuntimeClient(
+      pool as never,
+      (error) => observed.push(error),
+    ) as unknown as {
+      drain(): Promise<void>;
+      query(statement: string): Promise<unknown>;
+    };
+
+    await expect(runtimeClient.query('SELECT 1')).rejects.toBe(permissionError);
+    expect(observed).toEqual([permissionError]);
+    await runtimeClient.drain();
+    expect(destroyed).toBe(1);
   });
 });
 

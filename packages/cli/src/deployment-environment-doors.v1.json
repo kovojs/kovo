@@ -1,0 +1,126 @@
+{
+  "schema": "kovo.deployment-environment-doors/v1",
+  "antecedents": [
+    {
+      "id": "bootstrap-order",
+      "obligation": "The supported Kovo bootstrap executes before authored modules, host preloads, loader hooks, or embedding code in the deployed realm.",
+      "probeability": "partial"
+    },
+    {
+      "id": "no-non-kovo-schema-writer",
+      "obligation": "No authority outside the checked Kovo role topology can change protected schema, policy, grant, role, or posture-epoch facts between authoritative witnesses.",
+      "probeability": "retained"
+    },
+    {
+      "id": "no-shared-cache",
+      "obligation": "Every intermediary obeys Kovo's private/no-store and Vary response posture and does not replay browser-credential or principal-varying bytes across clients.",
+      "probeability": "retained"
+    },
+    {
+      "id": "sole-registrable-domain-occupant",
+      "obligation": "No sibling or co-hosted application can plant a competing cookie namespace on the browser-visible registrable domain.",
+      "probeability": "retained"
+    },
+    {
+      "id": "tls-terminator-identity",
+      "obligation": "The deployed TLS terminator presenting the public origin is the operator-pinned edge and preserves the exact canonical origin Kovo binds.",
+      "probeability": "retained"
+    },
+    {
+      "id": "trusted-proxy-chain",
+      "obligation": "The request reaches Kovo through exactly the configured trusted-proxy hop count and the immediate pinned edge replaces X-Forwarded-Proto while preserving external Host authority.",
+      "probeability": "local-config"
+    }
+  ],
+  "guarantees": [
+    {
+      "authority": "SECURITY.md",
+      "id": "explicit-secret-query-wire-egress",
+      "kind": "published"
+    },
+    {
+      "authority": "SECURITY.md",
+      "id": "pglite-secret-column-reader-role-test-floor",
+      "kind": "published"
+    },
+    {
+      "authority": "SECURITY.md",
+      "id": "pglite-secret-view-reader-role-test-floor",
+      "kind": "published"
+    },
+    {
+      "authority": "spec/09-wire-protocol.md §9.4",
+      "id": "browser-state-cache-isolation",
+      "kind": "normative-conditional"
+    },
+    {
+      "authority": "spec/06-type-system.md §6.6 and spec/09-wire-protocol.md §9.1",
+      "id": "csrf-principal-binding",
+      "kind": "normative-conditional"
+    },
+    {
+      "authority": "spec/10-data-plane.md §10.3",
+      "id": "postgres-authorization-posture",
+      "kind": "normative-conditional"
+    },
+    {
+      "authority": "spec/09-wire-protocol.md §9.5",
+      "id": "request-origin-binding",
+      "kind": "normative-conditional"
+    }
+  ],
+  "doors": [
+    {
+      "antecedents": ["bootstrap-order"],
+      "guarantees": ["*"],
+      "id": "server.runtime-bootstrap",
+      "source": "packages/server/src/runtime-bootstrap.ts",
+      "sourceNeedles": [
+        "import { lockServerRequestSafeRuntimeRealm } from './security-bootstrap.ts';",
+        "lockServerRequestSafeRuntimeRealm();"
+      ]
+    },
+    {
+      "antecedents": ["sole-registrable-domain-occupant"],
+      "guarantees": ["csrf-principal-binding"],
+      "id": "server.csrf.anonymous-cookie-read",
+      "source": "packages/server/src/csrf.ts",
+      "sourceNeedles": [
+        "function readAnonymousCsrfCookie",
+        "readCookieValue(request, `__Host-${name}`)"
+      ]
+    },
+    {
+      "antecedents": ["tls-terminator-identity", "trusted-proxy-chain"],
+      "guarantees": ["csrf-principal-binding", "request-origin-binding"],
+      "id": "server.generated-node.public-authority",
+      "source": "packages/server/src/build.ts",
+      "sourceNeedles": [
+        "function generatedNodeServerOptionsFromEnvironment()",
+        "process.env.KOVO_NODE_ORIGIN",
+        "process.env.KOVO_NODE_TRUSTED_PROXY"
+      ]
+    },
+    {
+      "antecedents": ["no-non-kovo-schema-writer"],
+      "guarantees": [
+        "pglite-secret-column-reader-role-test-floor",
+        "pglite-secret-view-reader-role-test-floor",
+        "postgres-authorization-posture"
+      ],
+      "id": "server.postgres-runtime.capability-closure-audit",
+      "source": "packages/server/src/postgres-runtime.ts",
+      "sourceNeedles": ["async function auditPostgresReachableClosure", "postureEpoch"]
+    },
+    {
+      "antecedents": ["no-shared-cache"],
+      "guarantees": ["browser-state-cache-isolation", "csrf-principal-binding"],
+      "id": "server.response-posture.browser-state-cache-floor",
+      "source": "packages/server/src/response-posture.ts",
+      "sourceNeedles": [
+        "function stampBrowserStateResponseCacheFloor",
+        "nativeHeaderSet(headers, 'Cache-Control', 'private, no-store')"
+      ]
+    }
+  ]
+}

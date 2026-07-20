@@ -9,14 +9,47 @@ import {
   MAX_CAPABILITY_SCOPE_LENGTH,
   MAX_CAPABILITY_TOKEN_LENGTH,
   MAX_CAPABILITY_TTL_MS,
-  signCapability,
-  verifyCapability,
+  signCapability as signCapabilityPrimitive,
+  verifyCapability as verifyCapabilityPrimitive,
 } from './capability-url.js';
+import { createCapabilityCryptoHandle } from './crypto-authority.js';
 import { createSigningKeyRing } from './keyring.js';
 
 const SECRET = 'capability-url-test-secret-at-least-32-characters-long';
 const OLD_SECRET = 'old-capability-secret-at-least-32-bytes';
 const NEW_SECRET = 'new-capability-secret-at-least-32-bytes';
+const TEST_PRINCIPAL_EPOCH_STORE = Object.freeze({
+  advance: () => ({ changedAtMs: 0, epoch: 1, status: 'active' as const }),
+  current: () => ({ changedAtMs: 0, epoch: 1, status: 'active' as const }),
+  initialize: () => ({ changedAtMs: 0, epoch: 1, status: 'active' as const }),
+  tombstone: () => ({ changedAtMs: 1, epoch: 2, status: 'tombstoned' as const }),
+});
+
+function signCapability(
+  secret: Parameters<typeof signCapabilityPrimitive>[0],
+  options: Parameters<typeof signCapabilityPrimitive>[1],
+  now?: Parameters<typeof signCapabilityPrimitive>[2],
+) {
+  const closed = {
+    ...options,
+    ...(options.scope === undefined ? {} : { principalEpochStore: TEST_PRINCIPAL_EPOCH_STORE }),
+  };
+  return now === undefined
+    ? signCapabilityPrimitive(secret, closed)
+    : signCapabilityPrimitive(secret, closed, now);
+}
+
+function verifyCapability(
+  secret: Parameters<typeof verifyCapabilityPrimitive>[0],
+  token: Parameters<typeof verifyCapabilityPrimitive>[1],
+  expected: Parameters<typeof verifyCapabilityPrimitive>[2],
+  options: Parameters<typeof verifyCapabilityPrimitive>[3] = {},
+) {
+  return verifyCapabilityPrimitive(secret, token, expected, {
+    ...options,
+    ...(expected.scope === undefined ? {} : { principalEpochStore: TEST_PRINCIPAL_EPOCH_STORE }),
+  });
+}
 
 function legacyV2OneTimeCapabilityToken(key: string, expiry: number): string {
   const version = 'v2';
@@ -30,11 +63,9 @@ function legacyV2OneTimeCapabilityToken(key: string, expiry: number): string {
   const ring = createSigningKeyRing({
     keys: [{ id: keyId, secret: SECRET, state: 'active' }],
   });
-  const signed = ring.sign({
-    audience: 'storage-download',
-    payload: Buffer.from(canonical, 'utf8'),
-    purpose: 'capability-url',
-  });
+  const signed = createCapabilityCryptoHandle(ring, 'storage-download').sign(
+    Buffer.from(canonical, 'utf8'),
+  );
   const payload = `{"v":"${version}","i":"${keyId}","m":"${method}","k":"${key}","e":${String(expiry)},"o":1,"n":"${nonce}"}`;
   return `${Buffer.from(payload, 'utf8').toString('base64url')}.${signed.signature}`;
 }
@@ -49,7 +80,7 @@ function rewritePayload(token: string, update: (payload: Record<string, unknown>
 }
 
 describe('capability-url: sign + constant-time verify before any storage read', () => {
-  it('mints v3 and rejects a valid pre-watermark v2 token before replay-store access', async () => {
+  it('mints v4 and rejects a valid pre-watermark v2 token before replay-store access', async () => {
     const now = 1_000;
     const expiry = now + 60_000;
     const legacyToken = legacyV2OneTimeCapabilityToken('legacy.pdf', expiry);
@@ -102,7 +133,7 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const payload = JSON.parse(
       Buffer.from(current.token.slice(0, current.token.indexOf('.')), 'base64url').toString('utf8'),
     ) as Record<string, unknown>;
-    expect(payload.v).toBe('v3');
+    expect(payload.v).toBe('v4');
     const consumed: Array<{ expiresAt: number; id: string }> = [];
     await expect(
       verifyCapability(
@@ -121,7 +152,7 @@ describe('capability-url: sign + constant-time verify before any storage read', 
       ),
     ).resolves.toMatchObject({ ok: true });
     expect(consumed).toEqual([
-      { expiresAt: current.claims.expiry, id: expect.stringMatching(/^v3:current\.pdf:/u) },
+      { expiresAt: current.claims.expiry, id: expect.stringMatching(/^v4:current\.pdf:/u) },
     ]);
   });
 
@@ -278,16 +309,11 @@ describe('capability-url: sign + constant-time verify before any storage read', 
   });
 
   it.each(['unknown', 'unresolved', 'anonymous', ''])(
-    'REJECTS unresolved principal scope %j even when the signature matches',
+    'REJECTS unresolved principal scope %j before mint',
     async (scope) => {
-      const { token } = await signCapability(SECRET, { key: 'a.pdf', scope }, 0);
-      const result = await verifyCapability(
-        SECRET,
-        token,
-        { key: 'a.pdf', method: 'GET', scope },
-        { now: 1 },
+      await expect(signCapability(SECRET, { key: 'a.pdf', scope }, 0)).rejects.toThrow(
+        /proven principal/u,
       );
-      expect(result).toEqual({ ok: false, reason: 'claim-mismatch' });
     },
   );
 
@@ -333,7 +359,12 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const rotated = createSigningKeyRing({
       keys: [
         { id: 'new', secret: NEW_SECRET, state: 'active' },
-        { id: 'old', secret: OLD_SECRET, state: 'previous' },
+        {
+          acceptUntil: Date.now() + 60_000,
+          id: 'old',
+          secret: OLD_SECRET,
+          state: 'previous',
+        },
       ],
     });
 
@@ -362,7 +393,7 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     const revoked = createSigningKeyRing({
       keys: [
         { id: 'new', secret: NEW_SECRET, state: 'active' },
-        { id: 'old', secret: OLD_SECRET, state: 'revoked' },
+        { id: 'old', state: 'revoked' },
       ],
     });
 

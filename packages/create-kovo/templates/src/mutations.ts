@@ -30,11 +30,18 @@ async function writeContact(
   db: AppRequest['db'],
   row: { company: string; email: string; name: string },
 ): Promise<void> {
-  const id = crypto.randomUUID();
   await db.insert(contacts).values({
     company: row.company,
     email: row.email,
-    id: trustedAssign(id, 'opaque server-generated contact id'),
+    id: trustedAssign(row.email, {
+      evidence: {
+        digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e',
+        kind: 'test',
+        reference: 'starter-tests/contact-email-primary-key',
+      },
+      invariant: 'governed-write.authorized-principal',
+      why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },
+    }),
     name: row.name,
   });
 }

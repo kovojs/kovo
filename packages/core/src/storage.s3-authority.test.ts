@@ -19,6 +19,9 @@ describe('S3 storage authority snapshot', () => {
       async headObject() {
         return undefined;
       },
+      async listObjects() {
+        return { objects: [] };
+      },
       async putObject() {
         return {};
       },
@@ -47,6 +50,9 @@ describe('S3 storage authority snapshot', () => {
       },
       async headObject() {
         return undefined;
+      },
+      async listObjects() {
+        return { objects: [] };
       },
       async putObject() {
         return {};

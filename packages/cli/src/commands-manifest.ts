@@ -19,7 +19,11 @@
 
 /** @internal Usage line emitted for `kovo check` (see `writeCheckUsageError`). */
 export const CHECK_USAGE =
-  'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json]';
+  'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]';
+
+/** @internal Usage line emitted for the asynchronous advisory verifier. */
+export const ADVISORY_USAGE =
+  'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]';
 
 /** @internal Usage line emitted for `kovo audit` (see `parseAuditArgs`). */
 export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]';
@@ -30,14 +34,20 @@ export const EXPLAIN_USAGE = [
   '       kovo explain document [graph.json]',
   '       kovo explain --sources-sinks',
   '       kovo explain --tasks [graph.json]',
+  '       kovo explain --agent [graph.json]',
+  '       kovo explain --grants [graph.json]',
   '       kovo explain --endpoints [graph.json]',
   '       kovo explain --revealed [graph.json]',
   '       kovo explain --trust [graph.json]',
   '       kovo explain --capabilities [graph.json]',
   '       kovo explain --cookies [graph.json]',
+  '       kovo explain --auth-lifecycle',
+  '       kovo explain --model-boundaries',
+  '       kovo explain --authorization [graph.json]',
   '       kovo explain --access [--fail-on-findings] [graph.json]',
   '       kovo explain --unguarded [--fail-on-findings] [graph.json]',
   '       kovo explain --unscoped [--fail-on-findings] [graph.json]',
+  '       kovo explain --attest <url> --artifact <graph.json> --trust-anchor <sha256:fingerprint> [--escape-reviews <reviews.json>]',
 ] as const;
 
 /**
@@ -46,7 +56,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
+  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --agent [graph.json] | kovo explain --grants [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --auth-lifecycle | kovo explain --model-boundaries | kovo explain --authorization [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json] | kovo explain --attest <url> --artifact <graph.json> --trust-anchor <sha256:fingerprint> [--escape-reviews <reviews.json>]';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
@@ -78,15 +88,23 @@ export const COMPILE_USAGE = [
 export const COMPILE_USAGE_LINE =
   'kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>] | kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check] | kovo compile graph <input.json> --out <graph.json> [--check] | kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check] | kovo compile drizzle-static <input.json> --out <facts.json> [--check] | kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check] | kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]';
 
+/** @internal Usage forms emitted for `kovo fix`. */
+export const FIX_USAGE =
+  'usage: kovo fix <source.tsx|source.jsx> [--check] | kovo fix --cost-report';
+
 /** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
 export const EXPORT_USAGE =
-  'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]';
+  'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]';
 
 /** @internal Usage line emitted for `kovo mcp` (see `mcpUsage`). */
 export const MCP_USAGE = 'usage: kovo mcp';
 
 /** @internal Usage line emitted for `kovo update-docs`. */
 export const UPDATE_DOCS_USAGE = 'usage: kovo update-docs';
+
+/** @internal Usage line emitted for `kovo incident`. */
+export const INCIDENT_USAGE =
+  'usage: kovo incident scope <advisory.json> --events <security-events.json>';
 
 /** @internal A single command-line flag and its human description. */
 export interface CommandFlag {
@@ -135,6 +153,32 @@ export const CHECK_ARGV_SPEC = {
   options: [],
 } as const satisfies CommandArgvSpec;
 
+/** @internal Advisory-check flags consumed by `parseAdvisoryArgs`. */
+export const ADVISORY_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--attestation',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --attestation requires a URL or file.\n',
+    },
+    {
+      flag: '--feed',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --feed requires a URL or file.\n',
+    },
+    {
+      flag: '--severity-floor',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --severity-floor requires a severity.\n',
+    },
+    {
+      flag: '--state',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --state requires a file.\n',
+    },
+  ],
+} as const satisfies CommandArgvSpec;
+
 /** @internal Audit command flags consumed by `parseAuditArgs`. */
 export const AUDIT_ARGV_SPEC = {
   options: [{ flag: '--fail-on-findings', kind: 'boolean' }],
@@ -144,18 +188,54 @@ export const AUDIT_ARGV_SPEC = {
 export const EXPLAIN_ARGV_SPEC = {
   options: [
     { flag: '--access', kind: 'boolean' },
+    { flag: '--agent', kind: 'boolean' },
+    {
+      flag: '--artifact',
+      kind: 'value',
+      requiresValueMessage: 'kovo: explain --artifact requires a graph path.\n',
+    },
+    {
+      flag: '--attest',
+      kind: 'value',
+      requiresValueMessage: 'kovo: explain --attest requires a deployment URL.\n',
+    },
+    { flag: '--auth-lifecycle', kind: 'boolean' },
+    { flag: '--authorization', kind: 'boolean' },
     { flag: '--capabilities', kind: 'boolean' },
     { flag: '--cookies', kind: 'boolean' },
     { flag: '--endpoints', kind: 'boolean' },
+    { flag: '--grants', kind: 'boolean' },
+    {
+      flag: '--escape-reviews',
+      kind: 'value',
+      requiresValueMessage: 'kovo: explain --escape-reviews requires a review file.\n',
+    },
     { flag: '--fail-on-findings', kind: 'boolean' },
     { flag: '--layouts', kind: 'boolean' },
+    { flag: '--model-boundaries', kind: 'boolean' },
     { flag: '--optimistic', kind: 'boolean' },
     { flag: '--revealed', kind: 'boolean' },
     { flag: '--sources-sinks', kind: 'boolean' },
     { flag: '--tasks', kind: 'boolean' },
     { flag: '--trust', kind: 'boolean' },
+    {
+      flag: '--trust-anchor',
+      kind: 'value',
+      requiresValueMessage: 'kovo: explain --trust-anchor requires a sha256 fingerprint.\n',
+    },
     { flag: '--unguarded', kind: 'boolean' },
     { flag: '--unscoped', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Incident command flags consumed by the retrospective scope verifier. */
+export const INCIDENT_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--events',
+      kind: 'value',
+      requiresValueMessage: 'kovo: incident --events requires a security-event export path.\n',
+    },
   ],
 } as const satisfies CommandArgvSpec;
 
@@ -185,6 +265,14 @@ export const BUILD_ARGV_SPEC = {
     },
     { flag: '--check', kind: 'boolean' },
     { flag: '--no-cache', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Safe source rewrite and cost-report flags consumed by `parseFixArgs`. */
+export const FIX_ARGV_SPEC = {
+  options: [
+    { flag: '--check', kind: 'boolean' },
+    { flag: '--cost-report', kind: 'boolean' },
   ],
 } as const satisfies CommandArgvSpec;
 
@@ -304,11 +392,6 @@ export const EXPORT_ARGV_SPEC = {
       flag: '--asset-base',
       kind: 'value',
       requiresValueMessage: 'kovo: export --asset-base requires a URL path.\n',
-    },
-    {
-      flag: '--stylesheet-env',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --stylesheet-env requires a name.\n',
     },
     { flag: '--skip-non-exportable', kind: 'boolean' },
   ],
@@ -505,12 +588,41 @@ export const COMMANDS_MANIFEST = [
         flag: 'sources-sinks',
         description: 'Emit the Phase 1 source/sink inventory and write .kovo/sources-sinks.json.',
       },
+      {
+        flag: 'env',
+        description:
+          'Probe the deployment assume-guarantee contract and print exact retained obligations and suspended guarantees.',
+      },
+      {
+        flag: 'advisories',
+        description:
+          'Authenticate the signed Kovo advisory feed and match it against exact package and graph-schema provenance.',
+      },
+      {
+        flag: '--severity-floor <severity>',
+        description:
+          'Fail on matching advisories at or above low, moderate, high (default), or critical.',
+      },
+      {
+        flag: '--feed <url|file>',
+        description: 'Override the default HTTPS advisory feed, primarily for an offline drill.',
+      },
+      {
+        flag: '--attestation <url|file>',
+        description: 'Override the digest-addressed GitHub attestation response.',
+      },
+      {
+        flag: '--state <file>',
+        description: 'Override the local epoch/equivocation state file.',
+      },
     ],
     examples: [
       'kovo check',
       'kovo check coverage graph.json',
       'kovo check endpoint-posture .kovo/endpoint-posture.json',
       'kovo check sources-sinks',
+      'kovo check env deployment.json',
+      'kovo check advisories .kovo/graph.json',
     ],
   },
   {
@@ -535,6 +647,15 @@ export const COMMANDS_MANIFEST = [
         description: 'List durable task registry facts and static composition edges.',
       },
       {
+        flag: '--agent',
+        description: 'Print exact model/tool effects and retained tools at every integrity level.',
+      },
+      {
+        flag: '--grants',
+        description:
+          'Print compiler-derived grant resources, attenuation decisions, and named budgeted escapes.',
+      },
+      {
         flag: '--revealed',
         description:
           'List confidentiality reveals, distinguishing proof-grade projections from audit-grade arbitrary functions.',
@@ -546,7 +667,7 @@ export const COMMANDS_MANIFEST = [
       {
         flag: '--capabilities',
         description:
-          'List held dangerous capabilities, including agent tools, audit-grade reveals, and signed URL mints.',
+          'List held dangerous capabilities and the static external-Postgres posture-lease contract.',
       },
       {
         flag: '--cookies',
@@ -555,6 +676,21 @@ export const COMMANDS_MANIFEST = [
       {
         flag: '--access',
         description: 'Review explicit access decisions and missing-access facts.',
+      },
+      {
+        flag: '--authorization',
+        description:
+          'Pair exact app guard facts with generated Postgres policies without claiming equivalence or live activation.',
+      },
+      {
+        flag: '--auth-lifecycle',
+        description:
+          'Print inherited Better Auth session defaults, Kovo-owned identity transitions, and unsupported lifecycle classes.',
+      },
+      {
+        flag: '--model-boundaries',
+        description:
+          'Print bounded-model assumptions, finite bounds, modeled actions, and the explicit complement.',
       },
       { flag: '--unguarded', description: 'Audit handlers reachable without a guard.' },
       { flag: '--unscoped', description: 'Audit storage access that is not tenant-scoped.' },
@@ -568,14 +704,39 @@ export const COMMANDS_MANIFEST = [
       'kovo explain document',
       'kovo explain --sources-sinks',
       'kovo explain --tasks',
+      'kovo explain --agent',
+      'kovo explain --grants',
       'kovo explain --endpoints',
       'kovo explain --revealed',
       'kovo explain --trust',
       'kovo explain --capabilities',
       'kovo explain --cookies',
+      'kovo explain --authorization',
+      'kovo explain --auth-lifecycle',
+      'kovo explain --model-boundaries',
       'kovo explain --access --fail-on-findings',
       'kovo explain --unguarded --fail-on-findings',
     ],
+  },
+  {
+    name: 'incident',
+    noArgsOrder: 7.5,
+    summary:
+      'Replay a finite advisory decision-site predicate against a tamper-evident security-event export.',
+    unknownOrder: 7,
+    usage: INCIDENT_USAGE,
+    flags: [
+      {
+        flag: 'scope <advisory.json>',
+        description:
+          'Return the affected principal and tenant set, or an explicit unanswerable verdict.',
+      },
+      {
+        flag: '--events <security-events.json>',
+        description: 'Read the bounded append-only event export to scope.',
+      },
+    ],
+    examples: ['kovo incident scope advisory.json --events security-events.json'],
   },
   {
     name: 'add',
@@ -773,6 +934,26 @@ export const COMMANDS_MANIFEST = [
     ],
   },
   {
+    name: 'fix',
+    noArgsOrder: 6.5,
+    summary: 'Apply only compiler-proven safe TSX/JSX rewrites and re-analyze the result.',
+    unknownOrder: 4.5,
+    usage: FIX_USAGE,
+    async: true,
+    flags: [
+      {
+        flag: '--check',
+        description: 'Report available safe rewrites without changing the source file.',
+      },
+      {
+        flag: '--cost-report',
+        description:
+          'Measure safe-vs-escape structural edit cost over the versioned agent-authored corpus.',
+      },
+    ],
+    examples: ['kovo fix src/components/cart.tsx', 'kovo fix --cost-report'],
+  },
+  {
     name: 'audit',
     noArgsOrder: 2,
     summary: 'Run the security/access audits over an extracted app graph.',
@@ -812,11 +993,6 @@ export const COMMANDS_MANIFEST = [
       {
         flag: '--asset-base <path>',
         description: 'URL path prefix for manifest asset hrefs; defaults to /.',
-      },
-      {
-        flag: '--stylesheet-env <name>',
-        description:
-          'Set an environment variable to the manifest stylesheet href before loading the app.',
       },
       {
         flag: '--skip-non-exportable',

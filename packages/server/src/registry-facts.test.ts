@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  createCacheInfluenceManifest,
+  deriveCacheInfluenceManifestEntry,
+} from '@kovojs/core/internal/cache-influence';
+import { browserPostureManifestSchema } from '@kovojs/core/internal/security-operation-ir';
+
 import { domain } from './domain.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
@@ -10,6 +16,7 @@ import {
   runtimeRegistryFacts,
 } from './registry-facts.js';
 import {
+  runtimePostureFactsFromGraph,
   runtimeRegistryWireFactsFromGraph,
   serializeRuntimeRegistryWireModule,
 } from './internal/runtime-registry-wire.js';
@@ -292,7 +299,16 @@ describe('runtimeRegistryFacts', () => {
   });
 
   it('serializes dev/prod runtime registry facts through one wire projection', () => {
+    const cacheInfluence = createCacheInfluenceManifest([
+      deriveCacheInfluenceManifestEntry({
+        authored: { cacheControl: 'public, max-age=60', posture: 'public' },
+        influences: { requestHeaders: ['accept-language'], urlPath: true, urlSearch: true },
+        root: 'query:queries/contact-detail-query',
+        surface: 'query',
+      }),
+    ]);
     const graph = {
+      cacheInfluence,
       queries: [
         { domains: ['contact', 'account'], query: 'queries/contact-detail-query' },
         { domains: [], query: 'queries/empty-query' },
@@ -311,6 +327,7 @@ describe('runtimeRegistryFacts', () => {
     const facts = runtimeRegistryWireFactsFromGraph(graph);
 
     expect(facts).toEqual({
+      cacheInfluence,
       mutationTouches: {
         'mutations/update-contact': [
           { crossTable: true, domain: 'account', keys: null },
@@ -322,6 +339,29 @@ describe('runtimeRegistryFacts', () => {
     expect(serializeRuntimeRegistryWireModule(facts)).toContain(
       'registerGeneratedQueryReadRegistry([{"domains":["account","contact"],"query":"queries/contact-detail-query"}]);',
     );
+    expect(serializeRuntimeRegistryWireModule(facts)).toContain(
+      'registerGeneratedCacheInfluenceManifest({"entries":[',
+    );
+    const combinedPostureWire = serializeRuntimeRegistryWireModule({
+      ...facts,
+      browserPosture: {
+        externalOrigins: [],
+        isolationBlockers: [],
+        opaqueExternalUrls: [],
+        operations: ['browser.form.submit'],
+        schema: browserPostureManifestSchema,
+      },
+      runtimePosture: {
+        artifactSubject: `sha256:${'a'.repeat(64)}`,
+        facts: { endpointAuth: [], egressAllowlist: [], irVersions: [], trustEscapes: [] },
+        postureDigest: `sha256:${'b'.repeat(64)}`,
+        schema: 'kovo-runtime-posture/v1',
+      },
+    });
+    expect(combinedPostureWire).toContain(
+      'registerGeneratedBrowserPostureManifest({"externalOrigins":[],"isolationBlockers":[],"opaqueExternalUrls":[],"operations":["browser.form.submit"],"schema":"kovo-browser-posture/v1"});',
+    );
+    expect(combinedPostureWire).toContain('registerGeneratedRuntimePostureManifest({');
   });
 
   it('projects runtime registry authority despite late build-realm intrinsic poison', () => {
@@ -376,6 +416,58 @@ describe('runtimeRegistryFacts', () => {
         'mutations/update-account': [{ crossTable: true, domain: 'account', keys: 'arg:id' }],
       },
       queryReads: [{ domains: ['account', 'inventory'], query: 'queries/private-account' }],
+    });
+  });
+
+  it('projects effective auth, CSRF, egress, escape, and IR posture facts', () => {
+    expect(
+      runtimePostureFactsFromGraph({
+        authPosture: [
+          { guarded: true, kind: 'endpoint', name: '/account', source: 'access-posture' },
+          { guarded: false, kind: 'mutation', name: 'account/update', source: 'access-posture' },
+        ],
+        egressPosture: {
+          allowDestinations: ['https://api.example.test'],
+          allowInternal: ['otel:4318'],
+          disabled: false,
+        },
+        endpoints: [
+          { method: 'GET', path: '/account' },
+          { auth: 'machine', csrf: 'exempt', method: 'POST', path: '/hook' },
+        ],
+        mutations: [{ key: 'account/update' }],
+        trustEscapes: [{ kind: 'csrf:false', name: 'hook' }],
+      }),
+    ).toEqual({
+      endpointAuth: [
+        {
+          auth: 'guarded',
+          csrf: 'safe:read-only',
+          method: 'GET',
+          name: '/account',
+          path: '/account',
+          surface: 'endpoint',
+        },
+        {
+          auth: 'declared:machine',
+          csrf: 'exempt',
+          method: 'POST',
+          name: '/hook',
+          path: '/hook',
+          surface: 'endpoint',
+        },
+        {
+          auth: 'unguarded',
+          csrf: 'checked',
+          method: 'POST',
+          name: 'account/update',
+          path: '/_m/account/update',
+          surface: 'mutation',
+        },
+      ],
+      egressAllowlist: ['https://api.example.test', 'internal:otel:4318'],
+      irVersions: ['kovo-check/v1', 'kovo-security-operation-ir/v1', 'kovo-runtime-posture/v1'],
+      trustEscapes: [{ kind: 'csrf:false', name: 'hook' }],
     });
   });
 });

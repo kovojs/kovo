@@ -68,6 +68,7 @@ const compilerDiagnosticCoverageOrder = [
   'KV426',
   'KV437',
   'KV449',
+  'KV452',
 ] as const satisfies readonly DiagnosticCode[];
 
 const compilerDiagnosticCoverageRows = [

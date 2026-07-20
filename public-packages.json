@@ -11,10 +11,12 @@
         "generated": ["./generated"],
         "internal": [
           "./internal/agent-docs",
+          "./internal/cache-influence",
           "./internal/classifier-verdict",
           "./internal/derivation",
           "./internal/client-module-url",
           "./internal/diagnostics",
+          "./internal/emission",
           "./internal/document-protocol",
           "./internal/filesystem",
           "./internal/fragment-target",
@@ -38,6 +40,7 @@
           "./internal/event",
           "./internal/storage",
           "./internal/verifier",
+          "./internal/wire-input-grammar",
           "./internal/wire-json"
         ]
       },
@@ -2132,6 +2135,17 @@
         "order": 9,
         "slug": "cli",
         "description": "Programmatic verifiers behind the kovo CLI: kovoCheck and kovoExplain over the compiler's app graph."
+      }
+    },
+    {
+      "name": "@kovojs/verify",
+      "dir": "verify",
+      "visibility": "public",
+      "kind": "cli",
+      "apiBoundary": {
+        "public": ["."],
+        "generated": [],
+        "internal": ["./internal/translation"]
       }
     },
     {

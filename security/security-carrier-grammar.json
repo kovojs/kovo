@@ -1,0 +1,1723 @@
+{
+  "authority": "none",
+  "purpose": "coverage-metadata-only",
+  "schema": "kovo-security-carrier-grammar/v1",
+  "summary": {
+    "historicalWitnesses": 277,
+    "productions": 12
+  },
+  "productions": [
+    {
+      "id": "alias-or-binding",
+      "meaning": "Authority or input moved through a local alias or binding."
+    },
+    {
+      "id": "budget-edge",
+      "meaning": "A finite resource ceiling reaches its named closed verdict."
+    },
+    {
+      "id": "carrier-container",
+      "meaning": "A value moves through an object, array, iterable, or parameter carrier."
+    },
+    {
+      "id": "encoding-variant",
+      "meaning": "Equivalent bytes, casing, separators, escaping, or URL syntax exercise one parser boundary."
+    },
+    {
+      "id": "exact-operation",
+      "meaning": "A direct finite operation reaches its reviewed owner or closed decision."
+    },
+    {
+      "id": "helper-transfer",
+      "meaning": "Authority or input crosses a reviewed helper-call transfer."
+    },
+    {
+      "id": "module-boundary",
+      "meaning": "Imports, exports, packages, generated modules, or realm boundaries preserve the decision."
+    },
+    {
+      "id": "platform-differential",
+      "meaning": "Independent implementations or real platforms agree on the same decision."
+    },
+    {
+      "id": "positive-control",
+      "meaning": "A reviewed safe construction remains accepted without widening the classifier."
+    },
+    {
+      "id": "root-registration",
+      "meaning": "A security root is registered exactly or fails closed before execution."
+    },
+    {
+      "id": "runtime-floor",
+      "meaning": "A runtime-owned door reconstructs, boxes, rejects, or bounds hostile data."
+    },
+    {
+      "id": "structural-closure",
+      "meaning": "A finite registry, AST, graph, or symbol-identity relation closes the vocabulary."
+    }
+  ],
+  "mappings": [
+    {
+      "anchor": "nested-quantifier-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "overlapping-alternatives-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "nested-overlapping-alternatives-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "followup-17-b1-dollar-line-terminator-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "followup-17-b3-in-class-legacy-numeric-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "followup-17-p2-case-gap-range-regression",
+      "corpus": "redos",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "compiler-overlapping-alternatives-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "compiler-nested-overlapping-alternatives-regression",
+      "corpus": "redos",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "versioned-deterministic-work-bound-oracle",
+      "corpus": "redos",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "destination-origin-boot-canonicalization",
+      "corpus": "egress-ip",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "undeclared-origin-before-dns-dial",
+      "corpus": "egress-ip",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "redirect-hop-before-dns-dial",
+      "corpus": "egress-ip",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "declared-origin-dns-rotation",
+      "corpus": "egress-ip",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "database-endpoint-dns-rotation",
+      "corpus": "egress-ip",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "application-proxy-dispatcher-closed",
+      "corpus": "egress-ip",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "proxy-config-refuses-boot",
+      "corpus": "egress-ip",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "task-context-fetch-nonreplaceable",
+      "corpus": "egress-ip",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "webhook-context-fetch-nonreplaceable",
+      "corpus": "egress-ip",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "octal-ip-regression",
+      "corpus": "egress-ip",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "metadata-bypass-regression",
+      "corpus": "egress-ip",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "iana-ipv6-special-purpose-regression",
+      "corpus": "egress-ip",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "iana-special-purpose-registry-completeness-regression",
+      "corpus": "egress-ip",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "rfc6052-network-specific-pref64-regression",
+      "corpus": "egress-ip",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "azure-identity-endpoint-provider-separation",
+      "corpus": "egress-ip",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "database-endpoint-socket-provenance",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-effective-query-endpoint-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-duplicate-last-tls-posture-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-ip-literal-certificate-identity-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-pinned-parser-query-endpoint-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-resolver-locality-differential-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-ambient-port-and-permissive-port-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-unix-socket-authority-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-unix-socket-carrier-provenance",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-raw-url-envelope-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-malformed-percent-parser-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "database-disabled-node-tls-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "windows-operator-environment-casefold-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "windows-cli-operator-environment-casefold-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "windows-cli-database-carrier-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "cli-invalid-database-driver-closed-regression",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "password-reset-purpose-closed-mail-egress",
+      "corpus": "better-auth-credentials",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "credential-runtime-gate-identity-and-replay",
+      "corpus": "better-auth-credentials",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "credential-runtime-gate-complete-consumer-denominator",
+      "corpus": "better-auth-credentials",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "credential-runtime-gate-source-ownership",
+      "corpus": "better-auth-credentials",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "credential-runtime-gate-result-and-error",
+      "corpus": "better-auth-credentials",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "apikey-secret-classification",
+      "corpus": "better-auth-credentials",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "schema-intrinsic-poisoning-regression",
+      "corpus": "better-auth-credentials",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "svg-smil-temporal-sink-regression",
+      "corpus": "sink-registry",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "active-embed-element-regression",
+      "corpus": "sink-registry",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "declarative-shadow-dom-control-regression",
+      "corpus": "sink-registry",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "redirect-url-mechanism",
+      "corpus": "sink-registry",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "meta-refresh-first-attribute-pair",
+      "corpus": "sink-registry",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "outbound-egress-mechanism",
+      "corpus": "sink-registry",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "stateful-key-scoping-regression",
+      "corpus": "sink-registry",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "raw-filesystem-reject-corpus",
+      "corpus": "sink-registry",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "generated-static-fd-identity-corpus",
+      "corpus": "sink-registry",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "generated-static-encoded-separator-regression",
+      "corpus": "sink-registry",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "vercel-private-static-metadata-regression",
+      "corpus": "sink-registry",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "grant-graph-derivation-and-top-closure",
+      "corpus": "postgres-identity-posture",
+      "production": "structural-closure",
+      "reason": "This witness derives the complete grant graph and closes unclassifiable authority-bearing transitions to top."
+    },
+    {
+      "anchor": "epoch-bound-attenuating-delegation",
+      "corpus": "postgres-identity-posture",
+      "production": "runtime-floor",
+      "reason": "This witness enforces subset-only delegated rights and principal-epoch revocation at the runtime capability boundary."
+    },
+    {
+      "anchor": "grant-graph-explain-and-check-door",
+      "corpus": "postgres-identity-posture",
+      "production": "root-registration",
+      "reason": "This witness exposes the derived grant root and makes a top transition fail the authoritative check path."
+    },
+    {
+      "anchor": "grant-shape-closure-fuzzer",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "identity-attribute-axis",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "live-current-user-session-user-skew",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "runtime-startup-setting-baseline",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "runtime-pre-reset-namespace-witness",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "split-posture-database-binding",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "cross-schema-base-name-authz-collision",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "app-transaction-search-path-normalization",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "app-transaction-search-path-data-path",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "postgres-setting-source-closure",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "finite-rls-emission-door-and-c13-byte-corpus",
+      "corpus": "postgres-identity-posture",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "finite-kleene-null-unset-negative-control",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "authorization-non-correspondence-explain-record",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "authorization-production-explain-output",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "authorization-graph-forgery-rejection",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "authorization-cli-terminal-injection-closure",
+      "corpus": "postgres-identity-posture",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "exhaustive-force-rls-pglite-correspondence",
+      "corpus": "postgres-identity-posture",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "pinned-table-same-name-scope",
+      "corpus": "runtime-secret-provenance",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "unknown-relation-closed",
+      "corpus": "runtime-secret-provenance",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "qualified-relation-scope",
+      "corpus": "runtime-secret-provenance",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "nested-and-opaque-closed-controls",
+      "corpus": "runtime-secret-provenance",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "exact-runtime-and-type-set",
+      "corpus": "response-transport-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "structured-and-raw-response-corpus",
+      "corpus": "response-transport-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "pipelined-wire-regression",
+      "corpus": "response-transport-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "generated-node-vercel-parity",
+      "corpus": "response-transport-headers",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "static-export-transport-policy",
+      "corpus": "response-transport-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "real-http-header-reconstruction-oracle",
+      "corpus": "response-transport-headers",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "exact-runtime-and-public-type-set",
+      "corpus": "structured-app-response-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "remote-derived-route-outcomes",
+      "corpus": "structured-app-response-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "configured-error-shell-boundary",
+      "corpus": "structured-app-response-headers",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "public-api-allowlist",
+      "corpus": "structured-app-response-headers",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "direct-alias-dynamic-enumeration",
+      "corpus": "kv418-request-authority",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "wrapped-rest-arguments-and-mutable-names",
+      "corpus": "kv418-request-authority",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "uninspectable-handlers-and-unresolved-keys",
+      "corpus": "kv418-request-authority",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "compiler-semantic-context-raw-read-consistency",
+      "corpus": "kv424-request-process",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "static-build-task-b-authoritative-consistency",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "task-b-layered-root-and-semantic-correspondence",
+      "corpus": "kv424-request-process",
+      "production": "structural-closure",
+      "reason": "The same-snapshot capability, package-root, finite-IR, and semantic facts form one closed structural correspondence proof."
+    },
+    {
+      "anchor": "existing-dangerous-sink-closed-verdicts",
+      "corpus": "kv424-request-process",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "compiler-semantic-helper-proof-is-source-bound-and-fail-closed",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "process-import-and-request-surface-superset",
+      "corpus": "kv424-request-process",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "dynamic-code-server-root-superset",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "aliased-code-timer-and-module-resolution-superset",
+      "corpus": "kv424-request-process",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "filesystem-path-and-reference-escape-superset",
+      "corpus": "kv424-request-process",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "filesystem-and-node-builtin-census-superset",
+      "corpus": "kv424-request-process",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "adjacent-process-runtime-superset",
+      "corpus": "kv424-request-process",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "environment-and-request-credential-wire-superset",
+      "corpus": "kv424-request-process",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "reviewed-context-fetch-response-provenance",
+      "corpus": "kv424-request-process",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "framework-owned-file-storage-controls",
+      "corpus": "kv424-request-process",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "stored-file-retained-authority-exact-grammar",
+      "corpus": "kv424-request-process",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "memory-storage-direct-method-exact-grammar",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "memory-storage-direct-method-query-write-denial",
+      "corpus": "kv424-request-process",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "request-minted-framework-authority-superset",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "trusted-assign-audited-escape-closed-grammar",
+      "corpus": "kv424-request-process",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "module-scope-authority-controls",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "closed-call-graph-and-safe-call-controls",
+      "corpus": "kv424-request-process",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "finite-ir-starter-door-reconciliation",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "generated-auth-environment-exact-grammar",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "complete-generated-runtime-auth-query-closure",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "named-query-context-owned-raw-read-closure",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "generated-runtime-constructor-and-pristine-data-closure",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "drizzle-authz-policy-and-generated-auth-schema-provenance",
+      "corpus": "kv424-request-process",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "generated-retained-key-unary-and-jsx-helper-closure",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "internal-postgres-capability-remains-opaque",
+      "corpus": "kv424-request-process",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "reusable-posture-scope-closed-grammar",
+      "corpus": "kv424-request-process",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "composition-deferred-class-boundary",
+      "corpus": "kv424-request-process",
+      "production": "exact-operation",
+      "reason": "This witness reaches a direct classifier decision in the finite reviewed vocabulary."
+    },
+    {
+      "anchor": "exact-root-allowlist-deferred-class-boundary",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "root-authority-deferred-class-boundary",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "class-value-assimilation-boundary",
+      "corpus": "kv424-request-process",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "local-map-assimilation-carrier-boundary",
+      "corpus": "kv424-request-process",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "trusted-input-mutation-and-authored-result-boundary",
+      "corpus": "kv424-request-process",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "temporal-prototype-and-local-target-boundary",
+      "corpus": "kv424-request-process",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "authored-session-provider-class-boundary",
+      "corpus": "kv424-request-process",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "exact-global-member-replacement-superset",
+      "corpus": "kv424-request-global-member-lockdown",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "temporal-class-and-root-provenance-superset",
+      "corpus": "kv424-request-global-member-lockdown",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "class-static-exact-global-carrier-superset",
+      "corpus": "kv424-request-global-member-lockdown",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "exact-stock-project-provenance-positive-control",
+      "corpus": "mutation-form-project-provenance",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "alias-namespace-computed-lookalike-closed",
+      "corpus": "mutation-form-project-provenance",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "missing-cycle-mutation-wrapper-and-collision-closed",
+      "corpus": "mutation-form-project-provenance",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "path-scoped-structural-lookalike-closed",
+      "corpus": "mutation-form-project-provenance",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "typed-form-subtree-scope-and-reviewed-button-control",
+      "corpus": "mutation-form-project-provenance",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "published-data-never-grants-import-authority",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "client-handler-dynamic-code-closed",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "jsx-intrinsic-component-lexical-boundary",
+      "corpus": "client-handler-import",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "node-and-loader-authority-closed",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "node-fetch-method-identity-closed",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "node-fetch-authority-identity-closed",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "alias-wrapper-and-host-spread-closed",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "reviewed-function-dynamic-authority-closed",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "canonical-and-audited-positive-controls",
+      "corpus": "client-handler-import",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "lexical-and-registry-integrity",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "component-event-boundary-closed",
+      "corpus": "client-handler-import",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "component-registry-exact-and-immutable",
+      "corpus": "client-handler-import",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "structured-escape-review-signature",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "The verifier reconstructs the exact site, obligation, and artifact subject, then rejects replacement keys, anchors, and signatures at the detached review boundary."
+    },
+    {
+      "anchor": "dependency-capability-loader-identity",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "This witness re-resolves an exact censused package import and rejects absent specifiers or installed-identity drift at the supported loader boundary."
+    },
+    {
+      "anchor": "dependency-capability-loader-closed-verdict",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "This witness prevents closed, raw, or request-closed dependency rows from becoming loader authority."
+    },
+    {
+      "anchor": "compiler-generated-wire-abi-provenance",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness distinguishes exact private ABI imports added by reviewed compiler lowering from identical authored spellings and unknown generated names."
+    },
+    {
+      "anchor": "dependency-transitive-bundle-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness rejects uncensused transitive package code before it can enter a supported loader graph, even when a bundler would otherwise inline it."
+    },
+    {
+      "anchor": "dependency-module-initializer-verdict",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires every package import to consume the explicit initializer verdict as well as each requested export verdict."
+    },
+    {
+      "anchor": "dependency-transitive-reviewed-external",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness attributes a Rollup-externalized raw dependency edge to the reviewed third-party package that imported it even when resolveId was skipped."
+    },
+    {
+      "anchor": "dependency-package-root-containment",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness keeps every relative, absolute, or symlinked child of a reviewed third-party entry inside the exact installed package root."
+    },
+    {
+      "anchor": "static-export-diagnostic-origin-provenance",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness prevents app-authored structural diagnostic lookalikes from being reminted as framework diagnostics across the SSR realm boundary."
+    },
+    {
+      "anchor": "dependency-inline-html-module-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness rejects a Vite inline HTML module proxy because its JavaScript bytes are absent from the immutable approved-source snapshot."
+    },
+    {
+      "anchor": "dependency-browser-target-exactness",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness binds a package root to only the browser mapping that actually applies to its selected target."
+    },
+    {
+      "anchor": "dependency-manifest-graph-fingerprint",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness makes a reviewed package summary stale when the installed package dependency graph changes."
+    },
+    {
+      "anchor": "capability-mint-symbol-identity-census",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "wire-input-symbol-identity-census",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "This witness closes framework input reads over exact reader symbols and a finite carrier grammar."
+    },
+    {
+      "anchor": "request-deadline-effect-door-census",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires exact imports from the framework deadline module at every reviewed request effect door; a same-named local function cannot certify the boundary."
+    },
+    {
+      "anchor": "principal-epoch-credential-door-census",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires every enumerated durable credential mint and verifier to consume the exact principal-epoch authority while recording the reviewed in-frame continuation exclusion."
+    },
+    {
+      "anchor": "crypto-acquisition-and-purpose-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness separates digest-only imports from secret or random crypto authority and routes the latter through purpose-minimal framework doors."
+    },
+    {
+      "anchor": "crypto-acquisition-repository-ratchet",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "This witness closes crypto acquisition over an exact path, class, operation, and non-increasing-count registry."
+    },
+    {
+      "anchor": "complete-root-census",
+      "corpus": "capability-closure",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "application-and-custom-adapter-roots",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "transitive-module-and-callback-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "global-and-package-authority-closed",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "reviewed-positive-controls",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "first-party-runtime-export-posture",
+      "corpus": "capability-closure",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "exact-package-identity-and-export-arms",
+      "corpus": "capability-closure",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "browser-posture-source-and-runtime-closure",
+      "corpus": "browser-posture",
+      "production": "module-boundary",
+      "reason": "This witness carries exact compiler facts through generated runtime registration and closes opaque browser authority."
+    },
+    {
+      "anchor": "browser-posture-header-and-carrier-closure",
+      "corpus": "browser-posture",
+      "production": "runtime-floor",
+      "reason": "This witness reconstructs generated carriers and rejects weaker or contradictory response posture at the runtime door."
+    },
+    {
+      "anchor": "browser-posture-permissions-exhaustiveness",
+      "corpus": "browser-posture",
+      "production": "structural-closure",
+      "reason": "This witness closes the finite browser-operation vocabulary against one exhaustive Permissions-Policy decision table."
+    },
+    {
+      "anchor": "browser-posture-generated-wiring",
+      "corpus": "browser-posture",
+      "production": "module-boundary",
+      "reason": "This witness binds compiler production, generated registry transport, and document response consumption across package boundaries."
+    },
+    {
+      "anchor": "derived-dataset-persistent-sink-provenance",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "This witness closes owner-scoped and governed data at persistent sinks unless the exact framework-owned derived-dataset door carries the request scope."
+    },
+    {
+      "anchor": "cache-influence-static-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes the finite cache-influence axes, roles, and verdict relation."
+    },
+    {
+      "anchor": "cache-influence-real-intermediary",
+      "corpus": "finite-security-operation-ir",
+      "production": "platform-differential",
+      "reason": "This witness compares framework cache posture with a real HTTP intermediary's reuse behavior."
+    },
+    {
+      "anchor": "cache-generality-manifest-drift",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness rejects authored intent, manifest, and Vary derivation drift."
+    },
+    {
+      "anchor": "analyzable-fragment-emitted-kv449-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "Each authored prohibition fixture reaches its exact emitted KV449 closed decision and retained semantic trace."
+    },
+    {
+      "anchor": "analyzable-fragment-real-root-budget-binding",
+      "corpus": "finite-security-operation-ir",
+      "production": "budget-edge",
+      "reason": "The checked real-root corpus records the binding set for every named finite semantic resource ceiling."
+    },
+    {
+      "anchor": "analyzable-fragment-artifact-drift",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "The generated ledger closes the prohibition, verdict, budget, fixture, and normative SPEC vocabularies against drift."
+    },
+    {
+      "anchor": "provenance-precision-grant-register",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes every below-top provenance-extractor return against an owned semantics register and exact generator obligation."
+    },
+    {
+      "anchor": "browser-operation-real-workflows",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "exact-operation-door-and-closed-verdict-relation",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "security-coverage-denominator-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "historical-classifier-anchor-carrier-grammar",
+      "corpus": "finite-security-operation-ir",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "finite-analyzer-differential-soundness",
+      "corpus": "finite-security-operation-ir",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "finite-scoped-key-sink-provenance",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "route-scoped-key-sink-provenance",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "exact-emitted-browser-and-server-operation-manifests",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "independently-reparsed-emitted-translation",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness independently reparses emitted module text and compares it with compiler decision facts."
+    },
+    {
+      "anchor": "realistic-reviewed-browser-operations",
+      "corpus": "finite-security-operation-ir",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "runtime-selected-executable-reference-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "runtime-executable-selector-spread-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "authored-executable-reference-provenance-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "typed-event-runtime-vocabulary-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "dynamic-generated-control-target-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "generated-query-plan-css-selector-escaping",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "dynamic-binding-control-plane-runtime-floor",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "modular-dynamic-control-plane-runtime-floor",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "inline-dynamic-control-plane-runtime-floor",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "compiler-wire-control-plane-preserved",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "executable-reference-selector-denominator",
+      "corpus": "finite-security-operation-ir",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "string-timer-and-unknown-browser-receiver-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "unknown-and-raw-browser-operations-close",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "browser-authority-alias-and-container-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "structured-server-and-exception-doors",
+      "corpus": "finite-security-operation-ir",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "declassification-policy-and-provenance-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "The exact policy-bound declassification operation is admitted while attacker-controlled values and enabling conditions close."
+    },
+    {
+      "anchor": "raw-response-body-provenance-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "helper-transfer",
+      "reason": "Request and catch-bound data cross aliases, templates, and response helpers before the audited wire sink closes them."
+    },
+    {
+      "anchor": "raw-response-alias-helper-and-global-provenance-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "cross-file-zero-authority-response-helper-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "nested-input-helper-cannot-hide-owner-read",
+      "corpus": "finite-security-operation-ir",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "private-summary-finite-call-grammar",
+      "corpus": "finite-security-operation-ir",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "exact-mutation-private-scope-transfer-and-write-effects",
+      "corpus": "finite-security-operation-ir",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "registered-diagnostic-verifier-snapshot-provenance",
+      "corpus": "finite-security-operation-ir",
+      "production": "structural-closure",
+      "reason": "This witness closes a finite registry, graph, AST, or symbol-identity relation."
+    },
+    {
+      "anchor": "guard-args-runtime-classify-and-pin-receipt",
+      "corpus": "finite-security-operation-ir",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "server-authority-alias-helper-and-transfer-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "normalized-helper-summary-provenance",
+      "corpus": "finite-security-operation-ir",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "normalized-helper-cycle-budget-and-posture-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "server-root-census-and-query-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "root-registration",
+      "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "server-framework-identity-and-principal-scope-operations",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "starter-exact-data-identities-and-database-continuations",
+      "corpus": "finite-security-operation-ir",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "generated-readonly-app-db-finite-ir",
+      "corpus": "finite-security-operation-ir",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "complete-mutation-form-security-fields",
+      "corpus": "finite-security-operation-ir",
+      "production": "module-boundary",
+      "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "csrf-mint-delivery-matrix",
+      "corpus": "csrf-principal-binding",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "csrf-lifecycle-state-model-oracle",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "packed-node-vercel-csrf-delivery-parity",
+      "corpus": "csrf-principal-binding",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "standalone-response-lifecycle-receipt-and-sharing",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "standalone-pending-cookie-delivery-and-conflict",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "same-exact-request-nested-dispatch-isolation",
+      "corpus": "csrf-principal-binding",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "standalone-late-and-detached-rejection",
+      "corpus": "csrf-principal-binding",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "standalone-raw-browser-state-proof-gates",
+      "corpus": "csrf-principal-binding",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "direct-endpoint-response-lifecycle-closes",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "direct-route-has-no-cookie-delivery-receipt",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "framework-form-requires-cookie-sink",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "raw-response-posture-header-snapshot",
+      "corpus": "csrf-principal-binding",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "bounded-generic-session-id-and-framework-posture",
+      "corpus": "csrf-principal-binding",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "session-anonymous-domain-separation",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "replay-scope-length-framing",
+      "corpus": "csrf-principal-binding",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "bounded-replay-scope-budget",
+      "corpus": "csrf-principal-binding",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "bounded-nojs-replay-scope-budget",
+      "corpus": "csrf-principal-binding",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "bounded-csrf-principal-and-anonymous-secret",
+      "corpus": "csrf-principal-binding",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "bounded-source-derived-mutation-identity",
+      "corpus": "csrf-principal-binding",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "cross-principal-csrf-and-replay-isolation",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "oversized-principal-fails-before-effects",
+      "corpus": "csrf-principal-binding",
+      "production": "alias-or-binding",
+      "reason": "This witness moves a reviewed value through an alias or binding boundary."
+    },
+    {
+      "anchor": "better-auth-session-id-floor",
+      "corpus": "csrf-principal-binding",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "canonical-address-only-and-malformed-node-corpus",
+      "corpus": "trusted-client-ip",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "shell-guard-global-and-custom-authority-corpus",
+      "corpus": "trusted-client-ip",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "real-front-proxy-reconnect-regression",
+      "corpus": "trusted-client-ip",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "generated-node-six-carrier-parity",
+      "corpus": "trusted-client-ip",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "method-source-authority-scheme-target-superset",
+      "corpus": "request-ingress",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "finite-classifier-source-selection",
+      "corpus": "request-ingress",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "real-http2-method-authority-closure",
+      "corpus": "request-ingress",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "generated-node-vercel-worker-parity",
+      "corpus": "request-ingress",
+      "production": "platform-differential",
+      "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "bounded-time-scoped-wire-token",
+      "corpus": "mutation-idem",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "bounded-webhook-event-id",
+      "corpus": "mutation-idem",
+      "production": "budget-edge",
+      "reason": "This witness reaches a named finite resource ceiling and its closed verdict."
+    },
+    {
+      "anchor": "shared-html-and-form-canonicalization-corpus",
+      "corpus": "html-wire-identity",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "runtime-and-raw-html-closed-verdicts",
+      "corpus": "html-wire-identity",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "runtime-meta-refresh-first-attribute-verdict",
+      "corpus": "html-wire-identity",
+      "production": "encoding-variant",
+      "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "direct-wire-emitter-closed-verdicts",
+      "corpus": "html-wire-identity",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
+    },
+    {
+      "anchor": "compiler-static-and-spread-closed-verdicts",
+      "corpus": "html-wire-identity",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "loopback-default-and-remote-bind-closed",
+      "corpus": "dev-host-door",
+      "production": "runtime-floor",
+      "reason": "The supported dev runner rejects remote listen authority and owns one exact loopback default."
+    },
+    {
+      "anchor": "real-http-source-auth-and-rebinding",
+      "corpus": "dev-host-door",
+      "production": "platform-differential",
+      "reason": "A real HTTP server proves exact Host and Origin binding plus boot-session authentication at source reads."
+    },
+    {
+      "anchor": "real-hmr-websocket-origin-auth",
+      "corpus": "dev-host-door",
+      "production": "platform-differential",
+      "reason": "A real websocket handshake proves the same exact authority and boot-session authentication wrap Vite's HMR upgrade."
+    },
+    {
+      "anchor": "private-summary-structural-proof-boundary",
+      "corpus": "drizzle-analyzer-provenance",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "private-summary-direct-callable-stability",
+      "corpus": "drizzle-analyzer-provenance",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "server-summary-cannot-launder-attacker-input",
+      "corpus": "drizzle-analyzer-provenance",
+      "production": "helper-transfer",
+      "reason": "This witness crosses a reviewed helper or callback transfer boundary."
+    },
+    {
+      "anchor": "server-value-requires-positive-non-input-proof",
+      "corpus": "drizzle-analyzer-provenance",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "exact-private-helper-positive-control",
+      "corpus": "drizzle-analyzer-provenance",
+      "production": "positive-control",
+      "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    }
+  ]
+}

@@ -19,7 +19,8 @@ import {
   sealAnonymousCsrfResponseRequestAndSnapshotSetCookies,
   type CsrfOptions,
 } from './csrf.js';
-import { signSessionFingerprintWithSecret, type SigningSecret } from './keyring.js';
+import { createSessionFingerprintCryptoHandle } from './crypto-authority.js';
+import type { SigningSecret } from './keyring.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -37,6 +38,7 @@ import {
 import {
   appendResponseHeader,
   cloneResponseHeaders,
+  readHeader,
   routeResponseToDocumentResponse,
   type ResponseHeaders,
   type RoutePageResponse,
@@ -57,6 +59,7 @@ import {
   type RouteRequestInput,
 } from './route.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
+import { registeredCacheInfluenceForRoot } from './generated-cache-influence-registry.js';
 import type { KovoApp } from './app-types.js';
 import { appLiveTargetAttestationAuthority } from './live-target-app-identity.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
@@ -64,13 +67,19 @@ import { isNativeRequest, requestForAuthorityNeutralMetadata } from './request-c
 import type { JsxAnonymousCsrfBinding } from './jsx-context.js';
 import {
   requestCreateUrl,
+  requestHeader,
   requestUrl,
   requestUrlSearchParams,
   requestUrlSearchParamsEntries,
   requestUrlSnapshot,
 } from './request-body-intrinsics.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
-import { createSecurityMap, securityIsReadableStream } from './response-security-intrinsics.js';
+import {
+  createSecurityMap,
+  securityArrayJoin,
+  securityIsReadableStream,
+  securityRegExpTest,
+} from './response-security-intrinsics.js';
 import {
   createWitnessSet,
   witnessCreateNullRecord,
@@ -134,6 +143,9 @@ export async function renderAppRouteDocumentResponse({
               ? {}
               : { defaultScope: storageDownloadSigner.defaultScope }),
             oneTimeReplayStore: storageDownloadSigner.oneTimeReplayStore,
+            ...(storageDownloadSigner.principalEpochStore === undefined
+              ? {}
+              : { principalEpochStore: storageDownloadSigner.principalEpochStore }),
           })
         : createUnavailableSignUrl(storageDownloadSigner.message);
   const signUrlDescriptor =
@@ -351,7 +363,12 @@ export async function renderAppRouteDocumentResponse({
       anonymousCsrfSensitive ||
       hasLateExecutableBody ||
       sessionFingerprint !== undefined ||
-      principalPosture.kind === 'unresolved';
+      principalPosture.kind === 'unresolved' ||
+      // SPEC §9.4 cache-influence runtime rejection floor: a cookie or Authorization-bearing
+      // document request is never generalized from this execution into a public representation.
+      // These signals only narrow; the compiler manifest remains the positive proof owner.
+      requestHeader(request, 'cookie') !== null ||
+      requestHeader(request, 'authorization') !== null;
     const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
       request.headers.get('accept'),
     );
@@ -419,6 +436,7 @@ export async function renderAppRouteDocumentResponse({
     if (enhancedNavigationDocument && documentResponse.status === 200) {
       documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
     }
+    documentResponse = narrowDocumentPublicCacheFromManifest(route, documentResponse);
     const queryWarningHeader = queryRuntimeWarningHeaderValue(
       queryRuntimeWarningsFromRequest(routeResponse.lifecycleRequest),
     );
@@ -430,6 +448,36 @@ export async function renderAppRouteDocumentResponse({
   } finally {
     captureRouteResponseLifecycleCookies();
   }
+}
+
+function narrowDocumentPublicCacheFromManifest<Response extends RoutePageResponse>(
+  route: RouteDeclaration<string>,
+  response: Response,
+): Response {
+  const cacheControl = readHeader(response.headers, 'cache-control');
+  if (
+    cacheControl === undefined ||
+    !securityRegExpTest(/(?:^|,)\s*public(?:\s|,|$)/iu, cacheControl)
+  ) {
+    return response;
+  }
+  const manifest = registeredCacheInfluenceForRoot(`document:${route.path}`);
+  const expectedVary = manifest === undefined ? '' : securityArrayJoin(manifest.vary, ', ');
+  const actualVary = readHeader(response.headers, 'vary') ?? '';
+  if (
+    manifest !== undefined &&
+    manifest.surface === 'document' &&
+    manifest.authored.posture === 'public' &&
+    manifest.authored.cacheControl === cacheControl &&
+    manifest.verdict !== 'shared-cache-closed' &&
+    actualVary === expectedVary
+  ) {
+    return response;
+  }
+  // A document's actual response headers are runtime observations. They can reject compiler proof,
+  // but a public-looking header cannot manufacture a missing document manifest or widen a closed
+  // verdict. Until the finite document language emits such a root, public documents stay private.
+  return stampCredentialBearingResponseCacheFloor(response);
 }
 
 interface RefreshSetCookie {
@@ -556,6 +604,7 @@ type AppStorageDownloadSigner =
       basePath: string;
       defaultScope?: string;
       oneTimeReplayStore: boolean;
+      principalEpochStore?: StorageDownloadEndpointInfo['principalEpochStore'];
       secret: StorageDownloadEndpointInfo['secret'];
     }
   | { kind: 'absent' }
@@ -592,6 +641,9 @@ function appStorageDownloadSigner(app: KovoApp, request: Request): AppStorageDow
       basePath: selected.basePath,
       ...(defaultScope === undefined ? {} : { defaultScope }),
       oneTimeReplayStore: selected.oneTimeReplayStore,
+      ...(selected.principalEpochStore === undefined
+        ? {}
+        : { principalEpochStore: selected.principalEpochStore }),
       secret: selected.secret,
     };
   }
@@ -624,7 +676,9 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
 function hmacSessionFingerprint(input: string, secret: SigningSecret | undefined): string {
-  return signSessionFingerprintWithSecret(secret ?? fallbackBroadcastFingerprintSecret, input);
+  return createSessionFingerprintCryptoHandle(secret ?? fallbackBroadcastFingerprintSecret).sign(
+    input,
+  ).signature;
 }
 
 export async function renderAppErrorDocumentResponse(

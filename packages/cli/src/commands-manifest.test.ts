@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ADD_USAGE,
+  ADVISORY_ARGV_SPEC,
+  ADVISORY_USAGE,
   AUDIT_USAGE,
   BUILD_USAGE,
   CHECK_USAGE,
@@ -17,6 +19,8 @@ import {
   EXPLAIN_USAGE,
   EXPLAIN_USAGE_LINE,
   EXPORT_USAGE,
+  FIX_USAGE,
+  INCIDENT_USAGE,
   MCP_USAGE,
   UPDATE_DOCS_USAGE,
   BUILD_ARGV_SPEC,
@@ -48,6 +52,9 @@ describe('commands manifest', () => {
     './commands/dev.ts',
     './commands/compile.ts',
     './commands/db.ts',
+    './commands/fix.ts',
+    './commands/incident-scope.ts',
+    './commands/advisories.ts',
     './commands/mcp.ts',
     './graph-output.ts',
   ]
@@ -78,6 +85,8 @@ describe('commands manifest', () => {
         'dev',
         'explain',
         'export',
+        'fix',
+        'incident',
         'mcp',
         'update-docs',
       ].sort(),
@@ -86,10 +95,10 @@ describe('commands manifest', () => {
 
   it('drives no-args and unknown-command diagnostics from the registry', () => {
     expect(formatNoArgsMessage()).toBe(
-      'kovo: add, audit, build, dev, check, db, compile, explain, export, mcp, update-docs\n',
+      'kovo: add, audit, build, dev, check, db, compile, fix, explain, incident, export, mcp, update-docs\n',
     );
     expect(formatUnknownCommandMessage('nope')).toBe(
-      'kovo: unknown command "nope". expected add, build, dev, db, compile, explain, check, audit, export, mcp, or update-docs.\n',
+      'kovo: unknown command "nope". expected add, build, dev, db, compile, fix, explain, check, audit, incident, export, mcp, or update-docs.\n',
     );
 
     const noArgs = captureWrites(() => main([]));
@@ -101,12 +110,19 @@ describe('commands manifest', () => {
     expect(unknown.result).toBe(1);
     expect(unknown.stdout).toBe('');
     expect(unknown.stderr).toBe(formatUnknownCommandMessage('nope'));
+
+    const advisorySync = captureWrites(() => main(['check', 'advisories']));
+    expect(advisorySync.result).toBe(1);
+    expect(advisorySync.stdout).toBe('');
+    expect(advisorySync.stderr).toBe(
+      'kovo: check advisories is asynchronous; call mainAsync() instead.\n',
+    );
   });
 
-  it('marks the async-dispatched commands (add, build, dev, db, compile, export, mcp, update-docs) as async', () => {
+  it('marks the async-dispatched commands (add, build, dev, db, compile, fix, export, mcp, update-docs) as async', () => {
     const asyncNames = COMMANDS_MANIFEST.filter(isAsyncManifestEntry).map((entry) => entry.name);
     expect(asyncNames.sort()).toEqual(
-      ['add', 'build', 'compile', 'db', 'dev', 'export', 'mcp', 'update-docs'].sort(),
+      ['add', 'build', 'compile', 'db', 'dev', 'export', 'fix', 'mcp', 'update-docs'].sort(),
     );
   });
 
@@ -114,7 +130,10 @@ describe('commands manifest', () => {
     // The bin imports these usage constants from the manifest; assert the literal
     // text matches what the CLI emits in its usage/error paths.
     expect(CHECK_USAGE).toBe(
-      'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json]',
+      'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]',
+    );
+    expect(ADVISORY_USAGE).toBe(
+      'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]',
     );
     expect(AUDIT_USAGE).toBe('usage: kovo audit [--fail-on-findings] [graph.json]');
     expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
@@ -140,10 +159,16 @@ describe('commands manifest', () => {
       '       kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check]',
     );
     expect(COMPILE_USAGE_LINE).toContain('kovo compile component <source.tsx>');
+    expect(FIX_USAGE).toBe(
+      'usage: kovo fix <source.tsx|source.jsx> [--check] | kovo fix --cost-report',
+    );
     expect(EXPORT_USAGE).toBe(
-      'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]',
+      'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]',
     );
     expect(MCP_USAGE).toBe('usage: kovo mcp');
+    expect(INCIDENT_USAGE).toBe(
+      'usage: kovo incident scope <advisory.json> --events <security-events.json>',
+    );
     expect(UPDATE_DOCS_USAGE).toBe('usage: kovo update-docs');
     expect(EXPLAIN_USAGE_LINE).toContain(
       'kovo explain component|mutation|query|page|context|task <target>',
@@ -165,7 +190,9 @@ describe('commands manifest', () => {
     expect(byName.dev?.usage).toBe(DEV_USAGE);
     expect(byName.db?.usage).toBe(DB_USAGE);
     expect(byName.compile?.usage).toBe(COMPILE_USAGE);
+    expect(byName.fix?.usage).toBe(FIX_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
+    expect(byName.incident?.usage).toBe(INCIDENT_USAGE);
     expect(byName.mcp?.usage).toBe(MCP_USAGE);
     expect(byName['update-docs']?.usage).toBe(UPDATE_DOCS_USAGE);
     expect(byName.explain?.usage).toBe(EXPLAIN_USAGE);
@@ -177,11 +204,14 @@ describe('commands manifest', () => {
     expect(cliCommandSource).toMatch(/from '\.\.?\/commands-manifest\.js'/);
     for (const constant of [
       'ADD_USAGE',
+      'ADVISORY_USAGE',
       'BUILD_USAGE',
       'COMPILE_USAGE',
       'DB_USAGE',
       'DEV_USAGE',
       'EXPORT_USAGE',
+      'FIX_USAGE',
+      'INCIDENT_USAGE',
       'MCP_USAGE',
       'UPDATE_DOCS_USAGE',
     ]) {
@@ -224,6 +254,26 @@ describe('commands manifest', () => {
         'Shell=./shell.js',
       ]);
       expect(parsedStringOption(route.value, '--out')).toBe('dist/route.tsx');
+    }
+
+    const advisories = parseCommandArgv(
+      [
+        'advisories',
+        '.kovo/graph.json',
+        '--feed=https://example.test/feed.json',
+        '--attestation',
+        'bundle.json',
+        '--state',
+        '.kovo/advisory-state.json',
+        '--severity-floor=critical',
+      ],
+      ADVISORY_ARGV_SPEC,
+    );
+    expect(advisories).toEqual(expect.objectContaining({ ok: true }));
+    if (advisories.ok) {
+      expect(advisories.value.positionals).toEqual(['advisories', '.kovo/graph.json']);
+      expect(parsedStringOption(advisories.value, '--feed')).toBe('https://example.test/feed.json');
+      expect(parsedStringOption(advisories.value, '--severity-floor')).toBe('critical');
     }
 
     expect(parseCommandArgv(['--out='], BUILD_ARGV_SPEC)).toEqual({

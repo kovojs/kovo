@@ -1,2 +1,5 @@
 registry=https://registry.npmjs.org/
 @kovojs:registry=https://registry.npmjs.org/
+strict-dep-builds=true
+dangerously-allow-all-builds=false
+package-manager-strict-version=true

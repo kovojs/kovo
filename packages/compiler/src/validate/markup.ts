@@ -24,7 +24,12 @@ import {
   compilerStringStartsWith,
   compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import {
   componentOptionObjectKeys,
   jsxElements,
@@ -149,22 +154,25 @@ export function validateHandAuthoredNavigationSegmentStamps(
       if (!compilerSetHas(navigationSegmentStampAttributes, attribute.name)) continue;
       compilerArrayAppend(
         found,
-        {
-          ...diagnostics.at(
+        contextualizeCompilerDiagnostic(
+          diagnosticAt(
+            diagnostics,
             'KV235',
             { start: attribute.start, length: attribute.end - attribute.start },
             `hand-authored navigation segment stamp ${attribute.name}.`,
           ),
-          help: compilerArrayJoin(
-            [
-              diagnosticDefinitions.KV235.help,
-              'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-              'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
-              'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
-            ],
-            '\n',
-          ),
-        },
+          {
+            help: compilerArrayJoin(
+              [
+                diagnosticDefinitions.KV235.help,
+                'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
+                'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
+                'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
+              ],
+              '\n',
+            ),
+          },
+        ),
         'Markup idref values',
       );
     }
@@ -490,7 +498,7 @@ function kv224Diagnostic(
   detail: string,
   id: LiteralIdValue,
 ): CompilerDiagnostic {
-  return diagnostics.at('KV224', { start: id.index, length: id.length }, detail);
+  return diagnosticAt(diagnostics, 'KV224', { start: id.index, length: id.length }, detail);
 }
 
 function htmlContentModelDiagnostic(
@@ -498,7 +506,8 @@ function htmlContentModelDiagnostic(
   element: JsxElementModel,
   detail: string,
 ): CompilerDiagnostic {
-  return diagnostics.at(
+  return diagnosticAt(
+    diagnostics,
     'KV225',
     { start: element.start, length: element.openingEnd - element.start },
     detail,
@@ -548,7 +557,8 @@ function attributeMergeDiagnostic(
   detail: string,
   attribute: JsxAttributeModel,
 ): CompilerDiagnostic {
-  return diagnostics.at(
+  return diagnosticAt(
+    diagnostics,
     code,
     { start: attribute.start, length: attribute.end - attribute.start },
     detail,
@@ -561,7 +571,7 @@ function kv226Diagnostic(
   index: number,
   length: number,
 ): CompilerDiagnostic {
-  return diagnostics.at('KV226', { start: index, length }, detail);
+  return diagnosticAt(diagnostics, 'KV226', { start: index, length }, detail);
 }
 
 function diagnosticKey(diagnostic: CompilerDiagnostic): string {
@@ -569,7 +579,12 @@ function diagnosticKey(diagnostic: CompilerDiagnostic): string {
 }
 
 function kv221Diagnostic(diagnostics: DiagnosticFactory, value: IdrefValue): CompilerDiagnostic {
-  return diagnostics.at('KV221', { start: value.index, length: value.length }, value.value);
+  return diagnosticAt(
+    diagnostics,
+    'KV221',
+    { start: value.index, length: value.length },
+    value.value,
+  );
 }
 
 function idrefValuesForElements(

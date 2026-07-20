@@ -9,6 +9,10 @@ import {
 
 import { deriveComponentNames } from './component-names.js';
 import {
+  agentModelOperationsForBinding,
+  agentToolOperationsForBinding,
+} from './agent-tool-facts.js';
+import {
   compilerArrayAppend,
   compilerArrayJoin,
   compilerArrayLength,
@@ -20,24 +24,28 @@ import {
   compilerStringSlice,
 } from './compiler-security-intrinsics.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
-import { parseSourceFile } from './scan/parse.js';
+import { parseComponentModule, parseSourceFile } from './scan/parse.js';
 import { applySourceReplacements, type SourceReplacement } from './shared.js';
 
 const helperModule = '@kovojs/server/internal/wire';
 const COMPONENT_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const AGENT_IDENTITY = frameworkExport('@kovojs/server', 'agent');
 const DOMAIN_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const TAG_IDENTITY = frameworkExport('@kovojs/server', 'tag');
 const TASK_IDENTITY = frameworkExport('@kovojs/server', 'task');
+const TOOL_IDENTITY = frameworkExport('@kovojs/server', 'tool');
 const WEBHOOK_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 const LEGACY_IDENTITIES = [
   COMPONENT_IDENTITY,
+  AGENT_IDENTITY,
   DOMAIN_IDENTITY,
   MUTATION_IDENTITY,
   QUERY_IDENTITY,
   TAG_IDENTITY,
   TASK_IDENTITY,
+  TOOL_IDENTITY,
   WEBHOOK_IDENTITY,
 ] as const;
 
@@ -141,8 +149,10 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
 }): string | null {
   const sourceFile = parseSourceFile(options.fileName, options.source);
   const assignments = exportedRegistryAssignments(sourceFile);
+  const agentAssignments = agentWitnessAssignments(sourceFile, options.source);
   const assignmentCount = compilerArrayLength(assignments, 'Source-derived assignments');
-  if (assignmentCount === 0) return null;
+  const agentAssignmentCount = compilerArrayLength(agentAssignments, 'Agent witness assignments');
+  if (assignmentCount === 0 && agentAssignmentCount === 0) return null;
 
   const replacements: SourceReplacement[] = [];
   for (let index = 0; index < assignmentCount; index += 1) {
@@ -170,9 +180,123 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
       'Source-derived replacements',
     );
   }
+  for (let index = 0; index < agentAssignmentCount; index += 1) {
+    const assignment = compilerOwnDataValue(
+      agentAssignments,
+      index,
+      'Agent witness assignments',
+    ) as AgentWitnessAssignment;
+    const encodedOperations = compilerJsonStringify(assignment.operations);
+    if (encodedOperations === undefined) {
+      throw new TypeError('Agent operation closure could not be encoded.');
+    }
+    const start = assignment.call.getStart(sourceFile);
+    compilerArrayAppend(
+      replacements,
+      {
+        end: assignment.call.end,
+        replacement: `${assignment.helper}(${compilerStringSlice(
+          options.source,
+          start,
+          assignment.call.end,
+        )}, ${encodedOperations})`,
+        start,
+      },
+      'Agent witness replacements',
+    );
+  }
 
   const transformed = applySourceReplacements(options.source, replacements);
-  return insertHelperImport(transformed, sourceFile, requiredPrimitives(assignments));
+  return insertHelperImport(
+    transformed,
+    sourceFile,
+    requiredPrimitives(assignments),
+    agentAssignmentCount === 0
+      ? []
+      : ['assignDerivedAgentModelOperations', 'assignDerivedAgentToolOperations'],
+  );
+}
+
+/** @internal Compatibility name for the complete standalone server lowering pass. */
+export function lowerStandaloneServerSource(source: string, fileName: string): string {
+  return lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source }) ?? source;
+}
+
+interface AgentWitnessAssignment {
+  call: ts.CallExpression;
+  helper: '__kovoAssignDerivedAgentModelOperations' | '__kovoAssignDerivedAgentToolOperations';
+  operations: readonly unknown[];
+}
+
+function agentWitnessAssignments(
+  sourceFile: ts.SourceFile,
+  source: string,
+): readonly AgentWitnessAssignment[] {
+  const model = parseComponentModule(sourceFile.fileName, source);
+  const assignments: AgentWitnessAssignment[] = [];
+  const statements = compilerSnapshotStatements(sourceFile);
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex]!;
+    if (!ts.isVariableStatement(statement)) continue;
+    const declarations = statement.declarationList.declarations;
+    const declarationCount = compilerArrayLength(declarations, 'Agent witness declarations');
+    for (let declarationIndex = 0; declarationIndex < declarationCount; declarationIndex += 1) {
+      const declaration = compilerOwnDataValue(
+        declarations,
+        declarationIndex,
+        'Agent witness declarations',
+      ) as ts.VariableDeclaration;
+      if (!ts.isIdentifier(declaration.name)) continue;
+      const call = declaration.initializer;
+      if (!call || !ts.isCallExpression(call)) continue;
+      if (resolvesTo(sourceFile, call.expression, AGENT_IDENTITY)) {
+        const operations = agentModelOperationsForBinding(model, declaration.name.text);
+        if (operations !== undefined) {
+          compilerArrayAppend(
+            assignments,
+            {
+              call,
+              helper: '__kovoAssignDerivedAgentModelOperations',
+              operations,
+            },
+            'Agent witness assignments',
+          );
+        }
+      }
+      if (resolvesTo(sourceFile, call.expression, TOOL_IDENTITY)) {
+        const operations = agentToolOperationsForBinding(model, declaration.name.text);
+        if (operations !== undefined) {
+          compilerArrayAppend(
+            assignments,
+            {
+              call,
+              helper: '__kovoAssignDerivedAgentToolOperations',
+              operations,
+            },
+            'Agent witness assignments',
+          );
+        }
+      }
+    }
+  }
+  return assignments;
+}
+
+function compilerSnapshotStatements(sourceFile: ts.SourceFile): readonly ts.Statement[] {
+  const result: ts.Statement[] = [];
+  const length = compilerArrayLength(sourceFile.statements, 'Agent witness statements');
+  for (let index = 0; index < length; index += 1) {
+    compilerArrayAppend(
+      result,
+      compilerOwnDataValue(
+        sourceFile.statements,
+        index,
+        'Agent witness statements',
+      ) as ts.Statement,
+      'Agent witness statements',
+    );
+  }
+  return result;
 }
 
 function exportedRegistryAssignments(
@@ -286,6 +410,7 @@ function insertHelperImport(
   source: string,
   originalSourceFile: ts.SourceFile,
   primitives: ReadonlySet<SourceDerivedPrimitive>,
+  extraImports: readonly string[] = [],
 ): string {
   const imported: string[] = [];
   compilerSetForEach(primitives, (primitive) => {
@@ -296,6 +421,18 @@ function insertHelperImport(
       'Source-derived helper imports',
     );
   });
+  for (let index = 0; index < extraImports.length; index += 1) {
+    const importedName = extraImports[index]!;
+    const localName =
+      importedName === 'assignDerivedAgentModelOperations'
+        ? '__kovoAssignDerivedAgentModelOperations'
+        : '__kovoAssignDerivedAgentToolOperations';
+    compilerArrayAppend(
+      imported,
+      `${importedName} as ${localName}`,
+      'Source-derived helper imports',
+    );
+  }
   const importLine = `import { ${compilerArrayJoin(imported, ', ')} } from '${helperModule}';\n`;
   const statements = originalSourceFile.statements;
   const statementCount = compilerArrayLength(statements, 'Source-derived source statements');

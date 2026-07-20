@@ -1175,7 +1175,7 @@ describe('server jsx runtime', () => {
       title: 'kept',
     };
 
-    expect(html(jsx('meta', spread))).toBe('<meta href="#" httpEquiv="refresh" title="kept">');
+    expect(html(jsx('meta', spread))).toBe('<meta href="#" title="kept">');
     expect(
       html(
         jsx('iframe', {
@@ -1204,7 +1204,7 @@ describe('server jsx runtime', () => {
           content: '0; url=/login',
         }),
       ),
-    ).toBe('<meta http-equiv="refresh">');
+    ).toBe('<meta>');
     expect(
       html(
         jsx('meta', {
@@ -1212,7 +1212,7 @@ describe('server jsx runtime', () => {
           content: '0; url=https://example.test/',
         }),
       ),
-    ).toBe('<meta httpEquiv="ReFrEsH">');
+    ).toBe('<meta>');
   });
 
   it('enforces static browser-control values at the direct and opaque-spread JSX floor', () => {
@@ -1436,7 +1436,7 @@ describe('server jsx runtime', () => {
           content: target,
         }),
       ),
-    ).toBe('<meta HTTP-EQUIV="refresh" http-equiv="not-refresh">');
+    ).toBe('<meta http-equiv="not-refresh">');
     expect(
       html(
         jsx('meta', {
@@ -1445,9 +1445,7 @@ describe('server jsx runtime', () => {
           content: target,
         }),
       ),
-    ).toBe(
-      '<meta http-equiv="not-refresh" HTTP-EQUIV="refresh" content="0; url=https://attacker.example/phish">',
-    );
+    ).toBe('<meta http-equiv="not-refresh" content="0; url=https://attacker.example/phish">');
     expect(
       html(
         jsx('meta', {
@@ -1456,7 +1454,7 @@ describe('server jsx runtime', () => {
           content: target,
         }),
       ),
-    ).toBe('<meta http-equiv="refresh">');
+    ).toBe('<meta>');
     expect(
       html(
         jsx('meta', {
@@ -1465,7 +1463,7 @@ describe('server jsx runtime', () => {
           content: target,
         }),
       ),
-    ).toBe('<meta http-equiv="refresh">');
+    ).toBe('<meta>');
     expect(
       html(
         jsx('meta', {
@@ -1474,10 +1472,8 @@ describe('server jsx runtime', () => {
           content: 'ordinary',
         }),
       ),
-    ).toBe('<meta HTTP-EQUIV http-equiv="refresh" content="ordinary">');
-    expect(html(jsx('meta', { 'HtTp-EqUiV': 'ReFrEsH', CONTENT: target }))).toBe(
-      '<meta HtTp-EqUiV="ReFrEsH">',
-    );
+    ).toBe('<meta HTTP-EQUIV content="ordinary">');
+    expect(html(jsx('meta', { 'HtTp-EqUiV': 'ReFrEsH', CONTENT: target }))).toBe('<meta>');
     expect(
       html(
         jsx('meta', {
@@ -1488,7 +1484,7 @@ describe('server jsx runtime', () => {
           }),
         }),
       ),
-    ).toBe('<meta HTTP-EQUIV="refresh" http-equiv="not-refresh">');
+    ).toBe('<meta http-equiv="not-refresh">');
   });
 
   it('escapes synthetic future attributes by default', () => {
@@ -1539,7 +1535,7 @@ describe('server jsx runtime', () => {
         expect(process.env.KOVO_PARANOID).toBe('1');
         expect(rendered).toEqual([
           '<iframe title="safe"></iframe>',
-          '<meta http-equiv="refresh">',
+          '<meta>',
           '<script></script>',
           '<img srcset="/ok.png 1x">',
           '<div future-nav-target="&lt;script&gt;alert(1)&lt;/script&gt;">safe</div>',
@@ -1552,6 +1548,7 @@ describe('server jsx runtime', () => {
         { action: 'remove', family: 'event-handler', sink: 'onclick' },
         { action: 'remove', family: 'srcdoc', sink: 'srcdoc' },
         { action: 'remove', family: 'css-text', sink: 'style' },
+        { action: 'remove', family: 'attribute', sink: 'http-equiv' },
         { action: 'remove', family: 'url', sink: 'meta[http-equiv=refresh] content' },
         { action: 'remove', family: 'raw-html', sink: 'script' },
         { action: 'neutralize', family: 'srcset', sink: 'srcset' },

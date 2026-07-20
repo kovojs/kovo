@@ -1,0 +1,31 @@
+{
+  "schema": "kovo-runtime-door-manifest/v1",
+  "tier": "production",
+  "capabilityCensus": {
+    "file": "scripts/capability-surface-census.manifest.json",
+    "schema": "kovo-capability-surface-census/v2"
+  },
+  "auditedExceptions": [],
+  "doors": [
+    {
+      "id": "prod.http.request-shell",
+      "kind": "request-shell",
+      "owner": "createRequestHandler",
+      "source": "packages/server/src/app.ts",
+      "obligations": [
+        "access-policy-enforced",
+        "request-authority-canonical",
+        "request-target-bounded",
+        "response-posture-enforced",
+        "stateful-origin-bound"
+      ],
+      "capabilityCensusDoorRefs": ["server.node-response-transport"],
+      "authentication": {
+        "required": false,
+        "mechanisms": [],
+        "reason": "Production routes select their declared public, guarded, or verified access posture at the request shell."
+      },
+      "exposure": ["deployment-listener-policy"]
+    }
+  ]
+}

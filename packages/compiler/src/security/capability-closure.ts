@@ -1,21 +1,30 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
+} from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import { scanCapabilityClosureModules } from '../scan/capability-closure.js';
 import type {
+  AppDependencyCapability,
+  AppDependencyCapabilityImport,
+  AppDependencyCapabilityManifest,
   CapabilityClosureSourceFile,
   CapabilityPackageRequest,
   CapabilityRootKind,
+  CompilerGeneratedCapabilityDependency,
   PackageCapabilitySummary,
   PackageCapabilitySummaryExport,
   RawCapabilityKind,
   ResolvedCapabilityPackage,
   ScannedCapabilityModule,
+  ScannedCompilerDependencyFact,
   ScannedExportBindingFact,
   ScannedImportFact,
 } from './capability-closure-model.js';
 import {
+  appDependencyCapabilityManifestSchema,
   classifyRawCapabilityModuleSpecifier,
   packageCapabilitySummarySchema,
 } from './capability-closure-model.js';
@@ -31,19 +40,29 @@ import {
 } from './framework-implementation-digest.js';
 
 export type {
+  AppDependencyCapability,
+  AppDependencyCapabilityEntry,
+  AppDependencyCapabilityImport,
+  AppDependencyCapabilityManifest,
   CapabilityClosureSourceFile,
   CapabilityPackageRequest,
   CapabilityRootKind,
+  CompilerGeneratedCapabilityDependency,
   PackageCapabilitySummary,
   PackageCapabilitySummaryEntry,
   PackageCapabilitySummaryExport,
   RawCapabilityKind,
   ResolvedCapabilityPackage,
 } from './capability-closure-model.js';
-export { packageCapabilitySummarySchema } from './capability-closure-model.js';
+export {
+  appDependencyCapabilityManifestSchema,
+  packageCapabilitySummarySchema,
+} from './capability-closure-model.js';
+export { compilerGeneratedCapabilityDependencies } from '../scan/capability-closure.js';
 
 /** @internal */
 export interface AnalyzeCapabilityClosureOptions {
+  readonly compilerDependencies?: readonly CompilerGeneratedCapabilityDependency[];
   readonly files: readonly CapabilityClosureSourceFile[];
   readonly packages?: readonly ResolvedCapabilityPackage[];
   readonly packageSummaries?: readonly PackageCapabilitySummary[];
@@ -51,6 +70,7 @@ export interface AnalyzeCapabilityClosureOptions {
 
 /** @internal */
 export interface AnalyzeCapabilityClosureResult {
+  readonly dependencyManifest: AppDependencyCapabilityManifest;
   readonly diagnostics: readonly CompilerDiagnostic[];
   readonly facts: readonly CoreGraph.CapabilityClosureExplainFact[];
   readonly packageRequests: readonly CapabilityPackageRequest[];
@@ -78,6 +98,7 @@ type BindingOrigin =
   | { readonly kind: 'unknown'; readonly reason: string };
 
 interface ReachablePackageUse {
+  readonly compilerDerived?: ScannedCompilerDependencyFact['kind'];
   readonly separatedCustomAdapterEntry: boolean;
   readonly importedNames: readonly string[];
   readonly importFact: ScannedImportFact;
@@ -91,11 +112,113 @@ interface TraversalNode {
 
 interface PackageVerdict {
   readonly closed: readonly { capability?: RawCapabilityKind; reason: string }[];
+  readonly dependency: {
+    readonly imports: readonly AppDependencyCapabilityImport[];
+    readonly metadata?: ResolvedCapabilityPackage;
+    readonly summaryVersion?: string;
+    readonly verdict: 'closed' | 'open';
+  };
   readonly doors: readonly { capability: RawCapabilityKind; reason: string }[];
   readonly summaryFact: CoreGraph.CapabilityClosureExplainFact;
 }
 
+interface DependencyManifestUse {
+  readonly dependency: PackageVerdict['dependency'];
+  readonly importer: string;
+  readonly rootKind?: CapabilityRootKind;
+  readonly site: string;
+  readonly specifier: string;
+}
+
 const sourceExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'] as const;
+interface CompilerGeneratedAbiPosture {
+  readonly initializer: FrameworkPermission;
+  readonly members: ReadonlyMap<string, FrameworkPermission>;
+}
+
+const generatedAuthorityFree: FrameworkPermission = {
+  capabilities: [],
+  disposition: 'authority-free',
+};
+const generatedCryptoDoor: FrameworkPermission = {
+  capabilities: ['crypto-acquisition'],
+  disposition: 'framework-door',
+};
+
+// Exact compiler-emitted private ABI posture. The enclosing first-party verdict binds this table to
+// the installed package fingerprint and implementation digest before it is consulted (SPEC §6.6).
+const compilerGeneratedInternalAbi = new Map<string, CompilerGeneratedAbiPosture>([
+  [
+    '@kovojs/browser/internal/output',
+    {
+      initializer: generatedAuthorityFree,
+      members: new Map([
+        ['derive', generatedAuthorityFree],
+        ['kovoStyleProperty', generatedAuthorityFree],
+      ]),
+    },
+  ],
+  [
+    '@kovojs/server/internal/csrf',
+    {
+      initializer: generatedAuthorityFree,
+      members: new Map([['renderGeneratedMutationFormFields', generatedCryptoDoor]]),
+    },
+  ],
+  [
+    '@kovojs/server/internal/escape',
+    {
+      initializer: generatedAuthorityFree,
+      members: new Map([
+        ['escapeText', generatedAuthorityFree],
+        ['kovoSafeJsxSpread', generatedAuthorityFree],
+      ]),
+    },
+  ],
+  [
+    '@kovojs/server/internal/route',
+    {
+      initializer: generatedAuthorityFree,
+      members: new Map([['defineCompiledRoutePage', generatedAuthorityFree]]),
+    },
+  ],
+  [
+    '@kovojs/server/internal/wire',
+    {
+      // mutation-wire.ts acquires the development attestation secret at module initialization.
+      initializer: generatedCryptoDoor,
+      members: new Map(
+        [
+          'assignDerivedComponentName',
+          'assignDerivedDomainKey',
+          'assignDerivedMutationKey',
+          'assignDerivedQueryKey',
+          'assignDerivedTaskKey',
+          'assignDerivedWebhookName',
+          'componentLiveTargetRenderer',
+          'registerGeneratedLiveTargetRenderer',
+        ].map((name) => [name, generatedAuthorityFree]),
+      ),
+    },
+  ],
+]);
+
+const compilerDerivedJsxRuntimeAbi = new Map<string, CompilerGeneratedAbiPosture>([
+  [
+    './jsx-runtime',
+    {
+      initializer: generatedAuthorityFree,
+      members: new Map(['Fragment', 'jsx', 'jsxs'].map((name) => [name, generatedAuthorityFree])),
+    },
+  ],
+  [
+    './jsx-dev-runtime',
+    {
+      initializer: generatedAuthorityFree,
+      members: new Map(['Fragment', 'jsxDEV'].map((name) => [name, generatedAuthorityFree])),
+    },
+  ],
+]);
 
 const drizzleSummaryVersion = 'kovo-reviewed-drizzle/1.0.0-rc.4.1';
 
@@ -105,9 +228,12 @@ interface FrameworkPackageVariantPosture {
 }
 
 interface FrameworkPackagePosture {
+  readonly implementationBinding: FrameworkImplementationBinding;
   readonly variantsByFingerprint: ReadonlyMap<string, FrameworkPackageVariantPosture>;
   readonly packageVersion: string;
 }
+
+type FrameworkImplementationBinding = 'exact-implementation' | 'unconditional-request-closure';
 
 interface FrameworkPermission {
   readonly capabilities: readonly RawCapabilityKind[];
@@ -127,8 +253,15 @@ const frameworkDispositions = new Set<FrameworkExportPostureDisposition>([
   'framework-door',
   'request-closed',
 ]);
+const frameworkImplementationBindings = new Set<FrameworkImplementationBinding>([
+  'exact-implementation',
+  'unconditional-request-closure',
+]);
 const frameworkRawCapabilities = new Set<RawCapabilityKind>([
+  'crypto-acquisition',
   'database-driver',
+  'declassification',
+  'digest',
   'dynamic-loader',
   'filesystem',
   'network',
@@ -136,6 +269,19 @@ const frameworkRawCapabilities = new Set<RawCapabilityKind>([
   'vm',
   'worker',
 ]);
+
+const requestClosedDeclassificationExports = new Set([
+  'DeclassifyPolicy',
+  'revealSecret',
+  'revealUntrusted',
+  'trustedReveal',
+]);
+const requestClosedDeclassificationPermission: FrameworkPermission = {
+  capabilities: ['declassification'],
+  disposition: 'request-closed',
+  reason:
+    '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+};
 const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
   'agent-tool-callback',
   'application',
@@ -163,10 +309,20 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   const permissions = new Map<string, FrameworkPermission>();
   const rootFactories = new Map<string, CapabilityRootKind>();
 
-  for (const [packageName, packageVersion, variants] of frameworkExportPosturePackages) {
+  for (const [
+    packageName,
+    packageVersion,
+    variants,
+    implementationBinding,
+  ] of frameworkExportPosturePackages) {
     if (packages.has(packageName)) {
       invalidReasons.push(`duplicate package ${packageName}`);
       continue;
+    }
+    if (!frameworkImplementationBindings.has(implementationBinding)) {
+      invalidReasons.push(
+        `${packageName} has unknown implementation binding ${String(implementationBinding)}`,
+      );
     }
     const variantsByFingerprint = new Map<string, FrameworkPackageVariantPosture>();
     for (const [fingerprint, subpaths, implementationDigests] of variants) {
@@ -195,12 +351,21 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         }
         return [canonical];
       });
+      if (new Set(canonicalImplementationDigests).size !== canonicalImplementationDigests.length) {
+        invalidReasons.push(`${packageName}/${fingerprint} has duplicate implementation digests`);
+      }
       if (
-        canonicalImplementationDigests.length === 0 ||
-        new Set(canonicalImplementationDigests).size !== canonicalImplementationDigests.length
+        implementationBinding === 'exact-implementation' &&
+        canonicalImplementationDigests.length === 0
+      ) {
+        invalidReasons.push(`${packageName}/${fingerprint} has no exact implementation digest`);
+      }
+      if (
+        implementationBinding === 'unconditional-request-closure' &&
+        canonicalImplementationDigests.length !== 0
       ) {
         invalidReasons.push(
-          `${packageName}/${fingerprint} has empty or duplicate implementation digests`,
+          `${packageName}/${fingerprint} unconditional request closure carries implementation digests`,
         );
       }
       variantsByFingerprint.set(fingerprint, {
@@ -211,6 +376,7 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
     if (variantsByFingerprint.size === 0)
       invalidReasons.push(`${packageName} has no manifest variant`);
     packages.set(packageName, {
+      implementationBinding,
       packageVersion,
       variantsByFingerprint,
     });
@@ -265,6 +431,9 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         if (disposition === 'request-closed' && (reason === null || reason.trim() === '')) {
           invalidReasons.push(`request-closed permission has no reason ${id}`);
         }
+        if (disposition === 'request-closed' && rootKind !== 'none') {
+          invalidReasons.push(`request-closed permission is a root factory ${id}`);
+        }
         permissions.set(id, {
           capabilities,
           disposition,
@@ -281,6 +450,18 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   }
 
   for (const [packageName, pkg] of packages) {
+    const packagePermissions = [...permissions.entries()].filter(([id]) =>
+      id.startsWith(`${packageName}\0`),
+    );
+    if (
+      pkg.implementationBinding === 'unconditional-request-closure' &&
+      (packagePermissions.length === 0 ||
+        packagePermissions.some(([, permission]) => permission.disposition !== 'request-closed'))
+    ) {
+      invalidReasons.push(
+        `${packageName} unconditional request closure does not cover an entirely request-closed public runtime surface`,
+      );
+    }
     const subpaths = new Set(
       [...pkg.variantsByFingerprint.values()].flatMap((variant) => [
         ...variant.conditionsBySubpath.keys(),
@@ -306,7 +487,10 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
 export function analyzeCapabilityClosure(
   options: AnalyzeCapabilityClosureOptions,
 ): AnalyzeCapabilityClosureResult {
-  const modules = scanCapabilityClosureModules(options.files);
+  const modules = mergeCompilerGeneratedDependencies(
+    scanCapabilityClosureModules(options.files),
+    options.compilerDependencies ?? [],
+  );
   const modulesByName = new Map(
     modules.map((module) => [normalizeModuleName(module.fileName), module]),
   );
@@ -330,6 +514,7 @@ export function analyzeCapabilityClosure(
     ...rootFrameworkDoorFacts(root),
   ]);
   const diagnostics: CompilerDiagnostic[] = [];
+  const dependencyUses: DependencyManifestUse[] = [];
   const factKeys = new Set(facts.map(capabilityFactKey));
 
   for (const root of roots) {
@@ -400,8 +585,30 @@ export function analyzeCapabilityClosure(
         );
       }
 
-      for (const use of packageUsesByModule.get(current.module) ?? []) {
+      const reachablePackageUses: ReachablePackageUse[] = [
+        ...(packageUsesByModule.get(current.module) ?? []),
+        ...module.compilerDependencies.map((dependency) => ({
+          compilerDerived: dependency.kind,
+          importedNames: dependency.importedNames,
+          importFact: {
+            importedNames: dependency.importedNames,
+            kind: 'import' as const,
+            site: dependency.site,
+            specifier: dependency.specifier,
+          },
+          module: module.fileName,
+          separatedCustomAdapterEntry: false,
+        })),
+      ];
+      for (const use of reachablePackageUses) {
         const verdict = packageVerdict(use, packageMetadata, packageSummaries);
+        dependencyUses.push({
+          dependency: verdict.dependency,
+          importer: use.module,
+          rootKind: root.kind,
+          site: use.importFact.site,
+          specifier: use.importFact.specifier!,
+        });
         appendFact(facts, factKeys, verdict.summaryFact);
         const packagePath = [
           ...current.path,
@@ -479,26 +686,209 @@ export function analyzeCapabilityClosure(
     }
   }
 
+  // The supported loader must account for every package edge before evaluating the app, including
+  // modules that turn out not to be reachable from a valid framework root. Root reachability owns
+  // the security diagnostics and explain facts above; this census-only pass owns the exact loader
+  // admission set. A malformed aggregate or currently unreachable helper therefore cannot create an
+  // allow-by-omission edge during module initialization (SPEC §6.6; C13).
+  for (const module of normalizedModules) {
+    const modulePackageUses: ReachablePackageUse[] = [
+      ...(packageUsesByModule.get(module.fileName) ?? []),
+      ...module.compilerDependencies.map((dependency) => ({
+        compilerDerived: dependency.kind,
+        importedNames: dependency.importedNames,
+        importFact: {
+          importedNames: dependency.importedNames,
+          kind: 'import' as const,
+          site: dependency.site,
+          specifier: dependency.specifier,
+        },
+        module: module.fileName,
+        separatedCustomAdapterEntry: false,
+      })),
+    ];
+    for (const use of modulePackageUses) {
+      const verdict = packageVerdict(use, packageMetadata, packageSummaries);
+      dependencyUses.push({
+        dependency: verdict.dependency,
+        importer: use.module,
+        site: use.importFact.site,
+        specifier: use.importFact.specifier!,
+      });
+    }
+  }
+
   return {
+    dependencyManifest: dependencyCapabilityManifest(dependencyUses),
     diagnostics: stableDiagnostics(diagnostics),
     facts: stableFacts(facts),
     packageRequests,
   };
 }
 
+function dependencyCapabilityManifest(
+  uses: readonly DependencyManifestUse[],
+): AppDependencyCapabilityManifest {
+  interface MutableEntry {
+    conditions: readonly string[];
+    importers: Set<string>;
+    imports: Map<string, AppDependencyCapabilityImport>;
+    rootKinds: Set<CapabilityRootKind>;
+    sites: Set<string>;
+    specifier: string;
+  }
+  interface MutableDependency {
+    entries: Map<string, MutableEntry>;
+    implementationDigest?: string;
+    manifestFingerprint?: string;
+    packageName: string;
+    packageVersion: string;
+    summaryVersion?: string;
+    verdict: 'closed' | 'open';
+  }
+
+  const byIdentity = new Map<string, MutableDependency>();
+  for (const use of uses) {
+    const metadata = use.dependency.metadata;
+    const packageName = metadata?.packageName ?? packageNameForSpecifier(use.specifier);
+    const packageVersion = metadata?.packageVersion ?? '<unresolved>';
+    const manifestFingerprint = metadata?.manifestFingerprint;
+    const implementationDigest = metadata?.implementationDigest;
+    const identity = [
+      packageName,
+      packageVersion,
+      manifestFingerprint ?? '',
+      implementationDigest ?? '',
+      use.dependency.summaryVersion ?? '',
+    ].join('\0');
+    let dependency = byIdentity.get(identity);
+    if (dependency === undefined) {
+      dependency = {
+        entries: new Map(),
+        ...(implementationDigest === undefined ? {} : { implementationDigest }),
+        ...(manifestFingerprint === undefined ? {} : { manifestFingerprint }),
+        packageName,
+        packageVersion,
+        ...(use.dependency.summaryVersion === undefined
+          ? {}
+          : { summaryVersion: use.dependency.summaryVersion }),
+        verdict: use.dependency.verdict,
+      };
+      byIdentity.set(identity, dependency);
+    } else if (use.dependency.verdict === 'closed') {
+      dependency.verdict = 'closed';
+    }
+
+    const conditions = metadata?.conditions ?? [];
+    const entryKey = `${use.specifier}\0${conditions.join('\0')}`;
+    let entry = dependency.entries.get(entryKey);
+    if (entry === undefined) {
+      entry = {
+        conditions,
+        importers: new Set(),
+        imports: new Map(),
+        rootKinds: new Set(),
+        sites: new Set(),
+        specifier: use.specifier,
+      };
+      dependency.entries.set(entryKey, entry);
+    }
+    entry.importers.add(use.importer);
+    if (use.rootKind !== undefined) entry.rootKinds.add(use.rootKind);
+    entry.sites.add(use.site);
+    for (const imported of use.dependency.imports) {
+      const importKey = `${imported.name}\0${imported.disposition}\0${imported.capabilities.join('\0')}`;
+      entry.imports.set(importKey, imported);
+    }
+  }
+
+  const dependencies: AppDependencyCapability[] = [...byIdentity.values()]
+    .map((dependency) => ({
+      entries: [...dependency.entries.values()]
+        .map((entry) => ({
+          conditions: entry.conditions,
+          importers: [...entry.importers].sort(),
+          imports: [...entry.imports.values()].sort(
+            (left, right) =>
+              left.name.localeCompare(right.name) ||
+              left.disposition.localeCompare(right.disposition),
+          ),
+          rootKinds: [...entry.rootKinds].sort(),
+          sites: [...entry.sites].sort(),
+          specifier: entry.specifier,
+        }))
+        .sort((left, right) => left.specifier.localeCompare(right.specifier)),
+      ...(dependency.implementationDigest === undefined
+        ? {}
+        : { implementationDigest: dependency.implementationDigest }),
+      ...(dependency.manifestFingerprint === undefined
+        ? {}
+        : { manifestFingerprint: dependency.manifestFingerprint }),
+      packageName: dependency.packageName,
+      packageVersion: dependency.packageVersion,
+      ...(dependency.summaryVersion === undefined
+        ? {}
+        : { summaryVersion: dependency.summaryVersion }),
+      verdict: dependency.verdict,
+    }))
+    .sort(
+      (left, right) =>
+        left.packageName.localeCompare(right.packageName) ||
+        left.packageVersion.localeCompare(right.packageVersion),
+    );
+  return { dependencies, schema: appDependencyCapabilityManifestSchema };
+}
+
 /** Parse once to tell the pre-evaluation resolver exactly which installed package facts are needed. */
 export function collectCapabilityPackageRequests(
   files: readonly CapabilityClosureSourceFile[],
+  compilerDependencies: readonly CompilerGeneratedCapabilityDependency[] = [],
 ): CapabilityPackageRequest[] {
-  return collectCapabilityPackageRequestsFromModules(scanCapabilityClosureModules(files));
+  return collectCapabilityPackageRequestsFromModules(
+    mergeCompilerGeneratedDependencies(scanCapabilityClosureModules(files), compilerDependencies),
+  );
+}
+
+function mergeCompilerGeneratedDependencies(
+  modules: readonly ScannedCapabilityModule[],
+  dependencies: readonly CompilerGeneratedCapabilityDependency[],
+): ScannedCapabilityModule[] {
+  const byImporter = new Map<string, ScannedCompilerDependencyFact[]>();
+  const moduleNames = new Set(modules.map((module) => normalizeModuleName(module.fileName)));
+  for (const dependency of dependencies) {
+    const importer = normalizeModuleName(dependency.importer);
+    if (!moduleNames.has(importer)) {
+      throw new TypeError(
+        `Compiler-generated dependency importer ${dependency.importer} is absent from the authored source snapshot.`,
+      );
+    }
+    const values = byImporter.get(importer) ?? [];
+    values.push({
+      importedNames: [...dependency.importedNames],
+      kind: dependency.kind,
+      site: dependency.site,
+      specifier: dependency.specifier,
+    });
+    byImporter.set(importer, values);
+  }
+  return modules.map((module) => ({
+    ...module,
+    compilerDependencies: [
+      ...module.compilerDependencies,
+      ...(byImporter.get(normalizeModuleName(module.fileName)) ?? []),
+    ],
+  }));
 }
 
 function collectCapabilityPackageRequestsFromModules(
   modules: readonly ScannedCapabilityModule[],
 ): CapabilityPackageRequest[] {
-  const names = new Map<string, Set<string>>();
+  const requests = new Map<
+    string,
+    { importedNames: Set<string>; importer: string; specifier: string }
+  >();
   for (const module of modules) {
-    for (const imported of module.imports) {
+    for (const imported of [...module.imports, ...module.compilerDependencies]) {
       const specifier = imported.specifier;
       if (
         specifier === undefined ||
@@ -507,17 +897,27 @@ function collectCapabilityPackageRequestsFromModules(
       ) {
         continue;
       }
-      const importedNames = names.get(specifier) ?? new Set<string>();
-      for (const name of imported.importedNames) importedNames.add(name);
-      names.set(specifier, importedNames);
+      const key = `${module.fileName}\0${specifier}`;
+      const request = requests.get(key) ?? {
+        importedNames: new Set<string>(),
+        importer: module.fileName,
+        specifier,
+      };
+      for (const name of imported.importedNames) request.importedNames.add(name);
+      requests.set(key, request);
     }
   }
-  return [...names.entries()]
-    .map(([specifier, importedNames]) => ({
+  return [...requests.values()]
+    .map(({ importedNames, importer, specifier }) => ({
+      importer,
       importedNames: [...importedNames].sort(),
       specifier,
     }))
-    .sort((left, right) => left.specifier.localeCompare(right.specifier));
+    .sort(
+      (left, right) =>
+        left.importer.localeCompare(right.importer) ||
+        left.specifier.localeCompare(right.specifier),
+    );
 }
 
 function discoverRoots(
@@ -680,7 +1080,10 @@ function packageVerdict(
   summariesByPackage: ReadonlyMap<string, readonly PackageCapabilitySummary[]>,
 ): PackageVerdict {
   const specifier = use.importFact.specifier!;
-  const metadataCandidates = metadataBySpecifier.get(specifier) ?? [];
+  const metadataCandidates =
+    metadataBySpecifier.get(packageMetadataKey(use.module, specifier)) ??
+    metadataBySpecifier.get(packageMetadataKey(undefined, specifier)) ??
+    [];
   if (metadataCandidates.length !== 1) {
     const status = metadataCandidates.length === 0 ? 'unresolved' : 'contradictory';
     return closedPackageVerdict(
@@ -721,6 +1124,15 @@ function packageVerdict(
         frameworkExportPostureSummaryVersion,
       );
     }
+    if (frameworkPosture.implementationBinding === 'unconditional-request-closure') {
+      return closedPackageVerdict(
+        use,
+        'contradictory',
+        `compiler-owned ${packageName} is unconditionally request-closed; its reviewed public runtime surface cannot contribute request-handler authority`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
     if (metadata.packageVersion !== frameworkPosture.packageVersion) {
       return closedPackageVerdict(
         use,
@@ -757,6 +1169,20 @@ function packageVerdict(
         metadata,
         frameworkExportPostureSummaryVersion,
       );
+    }
+    // Automatic JSX runtime edges are compiler-emitted, not authored public API. The reviewed
+    // package fingerprint and implementation digest above bind the complete export map/bytes;
+    // only this exact compiler-owned vocabulary may bypass public-subpath membership.
+    if (use.compilerDerived === 'jsx-runtime') {
+      return compilerDerivedJsxRuntimeVerdict(
+        use,
+        metadata,
+        packageName,
+        packageSubpath(specifier),
+      );
+    }
+    if (use.compilerDerived === 'generated-internal-abi') {
+      return compilerGeneratedInternalAbiVerdict(use, metadata);
     }
     const subpath = packageSubpath(specifier);
     const conditions = installedVariant.conditionsBySubpath.get(subpath);
@@ -805,12 +1231,29 @@ function frameworkPackageVerdict(
 ): PackageVerdict {
   const packageName = metadata.packageName;
   const subpath = packageSubpath(use.importFact.specifier!);
+  if (use.compilerDerived === 'jsx-runtime') {
+    return compilerDerivedJsxRuntimeVerdict(use, metadata, packageName, subpath);
+  }
+  if (use.compilerDerived === 'generated-internal-abi') {
+    return compilerGeneratedInternalAbiVerdict(use, metadata);
+  }
   const permissions = new Map<string, FrameworkPermission>();
   const closed: { capability?: RawCapabilityKind; reason: string }[] = [];
   const doors = new Map<RawCapabilityKind, string>();
 
   const appendPermission = (name: string): void => {
     const id = frameworkMemberId(packageName, subpath, name);
+    if (
+      packageName === '@kovojs/core' &&
+      subpath === '.' &&
+      requestClosedDeclassificationExports.has(name)
+    ) {
+      // SPEC §6.6: construction and use of a declassification door are both transitively closed
+      // from request-reachable code. This compiler-owned rule is independent of generated API
+      // posture so a newly exported constructor cannot briefly become authority-free.
+      permissions.set(id, requestClosedDeclassificationPermission);
+      return;
+    }
     const permission = frameworkPostureRegistry.permissions.get(id);
     if (permission === undefined) {
       closed.push({
@@ -835,6 +1278,9 @@ function frameworkPackageVerdict(
         continue;
       }
       for (const [id, permission] of namespaceMembers) permissions.set(id, permission);
+      if (packageName === '@kovojs/core' && subpath === '.') {
+        for (const name of requestClosedDeclassificationExports) appendPermission(name);
+      }
       continue;
     }
     appendPermission(importedName);
@@ -873,7 +1319,137 @@ function frameworkPackageVerdict(
   }
   return {
     closed,
+    dependency: {
+      imports: [...permissions.entries()]
+        .map(([id, permission]) => ({
+          capabilities: permission.capabilities,
+          disposition: permission.disposition,
+          name: id.slice(id.lastIndexOf('\0') + 1),
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+      metadata,
+      summaryVersion: frameworkExportPostureSummaryVersion,
+      verdict: closed.length === 0 ? 'open' : 'closed',
+    },
     doors: [...doors.entries()].map(([capability, reason]) => ({ capability, reason })),
+    summaryFact: summaryFact(
+      metadata,
+      frameworkExportPostureSummaryVersion,
+      closed.length === 0 ? 'valid' : 'contradictory',
+      use.importFact.site,
+    ),
+  };
+}
+
+function compilerDerivedJsxRuntimeVerdict(
+  use: ReachablePackageUse,
+  metadata: ResolvedCapabilityPackage,
+  packageName: string,
+  subpath: string,
+): PackageVerdict {
+  const posture = compilerDerivedJsxRuntimeAbi.get(subpath);
+  const expectedNames = posture === undefined ? undefined : [...posture.members.keys()];
+  if (
+    packageName !== '@kovojs/server' ||
+    posture === undefined ||
+    expectedNames === undefined ||
+    !sameStrings(use.importedNames, expectedNames)
+  ) {
+    return closedPackageVerdict(
+      use,
+      'contradictory',
+      'compiler-derived JSX dependency is outside the exact @kovojs/server automatic-runtime vocabulary',
+      metadata,
+      frameworkExportPostureSummaryVersion,
+    );
+  }
+  return compilerGeneratedAbiPostureVerdict(use, metadata, posture);
+}
+
+function compilerGeneratedInternalAbiVerdict(
+  use: ReachablePackageUse,
+  metadata: ResolvedCapabilityPackage,
+): PackageVerdict {
+  const specifier = use.importFact.specifier!;
+  const posture = compilerGeneratedInternalAbi.get(specifier);
+  const names = [...use.importedNames].sort((left, right) => left.localeCompare(right));
+  const seen = new Set<string>();
+  const exactVocabulary =
+    posture !== undefined &&
+    names.length > 0 &&
+    names.every((name) => {
+      if (!posture.members.has(name) || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  if (!exactVocabulary) {
+    return closedPackageVerdict(
+      use,
+      'contradictory',
+      `compiler-derived internal dependency is outside the exact compiler-generated ${specifier} ABI vocabulary`,
+      metadata,
+      frameworkExportPostureSummaryVersion,
+    );
+  }
+  return compilerGeneratedAbiPostureVerdict(use, metadata, posture!);
+}
+
+function compilerGeneratedAbiPostureVerdict(
+  use: ReachablePackageUse,
+  metadata: ResolvedCapabilityPackage,
+  posture: CompilerGeneratedAbiPosture,
+): PackageVerdict {
+  const specifier = use.importFact.specifier!;
+  const permissions: Array<{ name: string; permission: FrameworkPermission }> = [
+    { name: '<module>', permission: posture.initializer },
+  ];
+  for (const name of use.importedNames) {
+    if (name === '<module>') continue;
+    const permission = posture.members.get(name);
+    if (permission === undefined) {
+      return closedPackageVerdict(
+        use,
+        'contradictory',
+        `compiler-derived internal dependency is outside the exact compiler-generated ${specifier} ABI posture`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    permissions.push({ name, permission });
+  }
+
+  const closed: { capability?: RawCapabilityKind; reason: string }[] = [];
+  const doors = new Map<RawCapabilityKind, string>();
+  for (const { name, permission } of permissions) {
+    if (permission.disposition === 'request-closed') {
+      const reason =
+        permission.reason ?? `${specifier} compiler-generated ABI member ${name} is request-closed`;
+      if (permission.capabilities.length === 0) closed.push({ reason });
+      for (const capability of permission.capabilities) closed.push({ capability, reason });
+      continue;
+    }
+    if (permission.disposition !== 'framework-door') continue;
+    for (const capability of permission.capabilities) {
+      doors.set(
+        capability,
+        `${specifier} compiler-generated ABI member ${name} supplies reviewed ${capability} operations`,
+      );
+    }
+  }
+
+  return {
+    closed,
+    dependency: {
+      imports: permissions.map(({ name, permission }) => ({
+        capabilities: permission.capabilities,
+        disposition: permission.disposition,
+        name,
+      })),
+      metadata,
+      summaryVersion: frameworkExportPostureSummaryVersion,
+      verdict: closed.length === 0 ? 'open' : 'closed',
+    },
+    doors: [...doors].map(([capability, reason]) => ({ capability, reason })),
     summaryFact: summaryFact(
       metadata,
       frameworkExportPostureSummaryVersion,
@@ -907,6 +1483,18 @@ function drizzlePackageVerdict(
   }
   return {
     closed: [],
+    dependency: {
+      imports: ['<module>', ...use.importedNames.filter((name) => name !== '<module>')].map(
+        (name) => ({
+          capabilities: [],
+          disposition: 'pure' as const,
+          name,
+        }),
+      ),
+      metadata,
+      summaryVersion: drizzleSummaryVersion,
+      verdict: 'open',
+    },
     doors: [],
     summaryFact: summaryFact(metadata, drizzleSummaryVersion, 'valid', use.importFact.site),
   };
@@ -946,9 +1534,11 @@ function reviewedPackageVerdict(
   }
 
   const permissions: PackageCapabilitySummaryExport[] = [];
-  for (const importedName of use.importedNames) {
+  const importedNames = ['<module>', ...use.importedNames.filter((name) => name !== '<module>')];
+  for (const importedName of importedNames) {
     const matches = entry.exports.filter(
-      (candidate) => candidate.name === importedName || candidate.name === '*',
+      (candidate) =>
+        candidate.name === importedName || (importedName !== '<module>' && candidate.name === '*'),
     );
     if (matches.length !== 1) {
       return closedPackageVerdict(
@@ -985,6 +1575,16 @@ function reviewedPackageVerdict(
   }
   return {
     closed,
+    dependency: {
+      imports: permissions.map((permission) => ({
+        capabilities: permission.capabilities,
+        disposition: permission.disposition,
+        name: permission.name,
+      })),
+      metadata,
+      summaryVersion: summary.summaryVersion,
+      verdict: closed.length === 0 ? 'open' : 'closed',
+    },
     doors: [],
     summaryFact: summaryFact(
       metadata,
@@ -1026,6 +1626,12 @@ function closedPackageVerdict(
   const specifier = use.importFact.specifier!;
   return {
     closed: [{ reason }],
+    dependency: {
+      imports: [],
+      ...(metadata === undefined ? {} : { metadata }),
+      ...(summaryVersion === undefined ? {} : { summaryVersion }),
+      verdict: 'closed',
+    },
     doors: [],
     summaryFact: {
       conditions: metadata?.conditions ?? [],
@@ -1157,11 +1763,16 @@ function indexPackageMetadata(
 ): Map<string, readonly ResolvedCapabilityPackage[]> {
   const indexed = new Map<string, ResolvedCapabilityPackage[]>();
   for (const packageFact of packages) {
-    const values = indexed.get(packageFact.specifier) ?? [];
+    const key = packageMetadataKey(packageFact.importer, packageFact.specifier);
+    const values = indexed.get(key) ?? [];
     values.push(packageFact);
-    indexed.set(packageFact.specifier, values);
+    indexed.set(key, values);
   }
   return indexed;
+}
+
+function packageMetadataKey(importer: string | undefined, specifier: string): string {
+  return `${importer ?? ''}\0${specifier}`;
 }
 
 function indexPackageSummaries(
@@ -1427,6 +2038,9 @@ function stableFacts(
 }
 
 function stableDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Capability diagnostics[${index}]`);
+  }
   return [...diagnostics].sort(
     (left, right) =>
       left.fileName.localeCompare(right.fileName) ||

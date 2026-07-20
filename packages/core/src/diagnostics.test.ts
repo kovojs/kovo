@@ -152,6 +152,8 @@ describe('diagnostic registry', () => {
       'KV448',
       'KV449',
       'KV450',
+      'KV451',
+      'KV452',
     ]);
   });
 
@@ -866,7 +868,7 @@ describe('diagnostic registry', () => {
           "code": "KV438",
           "help": "Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.
       Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).
-      Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes). App analyzer summaries cannot declare server provenance.
+      Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, { invariant: 'governed-write.authorized-principal', why: ..., evidence: ... }) with the exact inline structured obligation (surfaced in kovo explain --capabilities and emitted for detached review). App analyzer summaries cannot declare server provenance.
       SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/trustedAssign are author-assertion escapes (audit-grade).",
           "message": "Request input reaches a governed column (mass assignment).",
           "severity": "error",
@@ -934,6 +936,24 @@ describe('diagnostic registry', () => {
           "message": "Stateful sink key lacks framework-witnessed owner scope.",
           "severity": "error",
         },
+        "KV451": {
+          "code": "KV451",
+          "help": "Would lower to: one grammar-validated JavaScript/TypeScript leaf produced by the shared structural emission constructor for the exact source role.
+      Blocked reason: the value is not valid for that grammar role, so direct interpolation could create executable sibling syntax or an ambiguous generated artifact.
+      Fixes: derive a valid source identifier/specifier, keep data in a jsStringLiteral/tsPropertyKey leaf, or repair the typed fact producer before emission.
+      SPEC §5.2 requires generated artifacts to remain valid, auditable Kovo source and security-sensitive emission to fail closed.",
+          "message": "Compiler-derived value is outside the structural source-emission grammar.",
+          "severity": "error",
+        },
+        "KV452": {
+          "code": "KV452",
+          "help": "Would lower to: a framework-owned derived vector dataset operation whose physical namespace is reconstructed from the complete request-principal ScopedKey frame.
+      Blocked reason: owner-scoped or governed data reaches a persistent non-engine sink directly, or a derived dataset operation lacks the exact framework request principal binding.
+      Fixes: wrap the vector/RAG adapter with derived(adapter, { key, kind: 'vector' }) and pass the exact handler request to every query/upsert; keep ordinary storage, egress, and durable-task payloads free of owner-scoped database rows.
+      SPEC §6.6 and §10.3 C9 require derived artifacts to inherit owner scope through the existing provenance engine and runtime-opaque ScopedKey namespace.",
+          "message": "Owner-scoped or governed data reaches a persistent non-engine sink.",
+          "severity": "error",
+        },
       }
     `);
   });
@@ -942,7 +962,11 @@ describe('diagnostic registry', () => {
     type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
       (code): code is CompilerTeachingCode =>
-        code === 'KV201' || code === 'KV449' || (code !== 'KV313' && /^KV[23]\d\d$/.test(code)),
+        code === 'KV201' ||
+        code === 'KV449' ||
+        code === 'KV451' ||
+        code === 'KV452' ||
+        (code !== 'KV313' && /^KV[23]\d\d$/.test(code)),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);

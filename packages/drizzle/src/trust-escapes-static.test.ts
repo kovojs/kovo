@@ -12,6 +12,7 @@ import {
   collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
 import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
+import type { CompilerTaskBClosureProof } from '@kovojs/drizzle/internal/static';
 
 function trustEscapesFor(source: string, fileName = 'app.tsx') {
   return collectTrustEscapesFromProject({ files: [{ fileName, source }] });
@@ -27,6 +28,49 @@ function sinksFor(source: string, fileName = 'app.tsx') {
 
 function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
+}
+
+function taskBClosureProof(
+  files: readonly TrustEscapeSourceFileInput[],
+  options: {
+    facts?: CompilerTaskBClosureProof['capabilityFacts'];
+    rootKinds?: readonly ('application' | 'mutation')[];
+  } = {},
+): CompilerTaskBClosureProof {
+  return {
+    capabilityFacts: [
+      ...(options.facts ?? []),
+      {
+        kind: 'summary',
+        packageName: '@kovojs/server',
+        packageVersion: '0.2.0',
+        site: `${files[0]?.fileName ?? 'app.ts'}:1:1`,
+        status: 'valid',
+      },
+    ],
+    dependencyManifest: {
+      dependencies: [
+        {
+          entries: [
+            {
+              conditions: ['default', 'import'],
+              importers: files.map((file) => file.fileName),
+              imports: [{ capabilities: [], disposition: 'authority-free', name: '<module>' }],
+              rootKinds: options.rootKinds ?? [],
+              sites: files.map((file) => `${file.fileName}:1:1`),
+              specifier: '@kovojs/server',
+            },
+          ],
+          packageName: '@kovojs/server',
+          packageVersion: '0.2.0',
+          verdict: 'open',
+        },
+      ],
+      schema: 'kovo-app-dependency-capabilities/v1',
+    },
+    files,
+    schema: 'kovo-task-b-closure/v1',
+  };
 }
 
 function starterTemplateSource(relativePath: string): string {
@@ -292,6 +336,163 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 
 // @kovo-security-classifier-corpus kv424-request-process
 describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () => {
+  // @kovo-security-certifies KV424 task-b-layered-closure-routing
+  it('binds every TASK B root to the same-snapshot capability and package-root census', () => {
+    const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+    const files = [{ fileName: 'app.ts', source }] as const;
+    const parsed = ts.createSourceFile(
+      'app.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let call: import('typescript').CallExpression | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'createApp'
+      ) {
+        call = node;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(call).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(call!.getStart(parsed));
+    const rootFact = {
+      kind: 'root' as const,
+      module: 'app.ts',
+      name: 'app',
+      rootKind: 'application' as const,
+      site: `app.ts:${position.line + 1}:${position.character + 1}`,
+    };
+    const semanticSources = [{ fileName: 'app.ts', graphs: [], source }] as const;
+
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
+        compilerTaskBClosure: taskBClosureProof(files, {
+          facts: [rootFact],
+          rootKinds: ['application'],
+        }),
+        files,
+      }),
+    ).toEqual([]);
+
+    const missingRoot = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: semanticSources,
+      compilerTaskBClosure: taskBClosureProof(files, { rootKinds: ['application'] }),
+      files,
+    });
+    expect(missingRoot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=capability-closure'),
+        }),
+      ]),
+    );
+
+    const missingPackageRoot = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: semanticSources,
+      compilerTaskBClosure: taskBClosureProof(files, { facts: [rootFact] }),
+      files,
+    });
+    expect(missingPackageRoot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=package-summary'),
+        }),
+      ]),
+    );
+  });
+
+  it('requires an exact finite-IR semantic root for every compiler-owned TASK B handler', () => {
+    const source =
+      "import { mutation } from '@kovojs/server';\nexport const save = mutation('save', { handler() { return { ok: true }; } });";
+    const files = [{ fileName: 'app.ts', source }] as const;
+    const parsed = ts.createSourceFile(
+      'app.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let call: import('typescript').CallExpression | undefined;
+    let handler: import('typescript').MethodDeclaration | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'mutation'
+      ) {
+        call = node;
+      }
+      if (ts.isMethodDeclaration(node) && node.name.getText(parsed) === 'handler') handler = node;
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(call).toBeDefined();
+    expect(handler).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(call!.getStart(parsed));
+    const proof = taskBClosureProof(files, {
+      facts: [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'save',
+          rootKind: 'mutation',
+          site: `app.ts:${position.line + 1}:${position.character + 1}`,
+        },
+      ],
+      rootKinds: ['mutation'],
+    });
+    const missingSemanticRoot = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+      compilerTaskBClosure: proof,
+      files,
+    });
+    expect(missingSemanticRoot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=finite-ir'),
+        }),
+      ]),
+    );
+
+    const root = 'mutation:save';
+    const graph: SecuritySemanticGraph = {
+      budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
+      roots: [
+        {
+          binding: {
+            callback: 'handler',
+            callableSpan: { end: handler!.getEnd(), start: handler!.getStart(parsed) },
+            factory: 'mutation',
+            factoryCallSpan: { end: call!.getEnd(), start: call!.getStart(parsed) },
+            root,
+          },
+          helperInvocations: [],
+          root,
+          summaries: [],
+          traces: [],
+        },
+      ],
+      schema: 'kovo-security-semantic-graph/v2',
+    };
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [graph], source }],
+        compilerTaskBClosure: proof,
+        files,
+      }),
+    ).toEqual([]);
+  });
+
   it('does not duplicate compiler-owned JSX innerHTML closure in TASK B', () => {
     const facts = sinksFor(`
       export function Widget(userInput: string) {
@@ -2305,9 +2506,120 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(facts).toEqual([]);
   });
 
+  // @kovo-security-certifies C13 finite-ir-starter-door-reconciliation
+  it('accepts exact finite-IR starter doors while keeping lookalike and aliased doors closed', () => {
+    const safe = sinksFor(`
+      import {
+        createApp,
+        createMemoryStorage,
+        createSigningKeyRing,
+        createStorageDownloadEndpoint,
+        mutation,
+        publicAccess,
+        publicScopedKey,
+        query,
+        route,
+        s,
+        task,
+      } from '@kovojs/server';
+
+      const signingKeys = createSigningKeyRing({
+        keys: [{
+          id: 'starter-2026',
+          secret: 'starter-test-signing-material-2026',
+          state: 'active',
+        }],
+      });
+      const storage = createMemoryStorage();
+      await storage.put(publicScopedKey('receipts/starter.txt'), 'starter proof', {
+        contentType: 'text/plain',
+      });
+      const download = createStorageDownloadEndpoint({
+        basePath: '/download',
+        secret: signingKeys,
+        storage,
+      });
+
+      export const parseStaticFile = query({
+        access: publicAccess('static file parser proof'),
+        load() {
+          const file = {
+            name: 'avatar.png',
+            size: 11,
+            type: 'image/png',
+            async arrayBuffer() { return new Uint8Array([0x89, 0x50]).buffer; },
+          };
+          try {
+            s.file().accept(['image/png']).parse(file);
+          } catch {}
+          return { ok: true };
+        },
+      });
+
+      export const follow = task('starter/follow', {
+        input: s.object({ id: s.string() }),
+        async run(_input) {},
+      });
+      export const enqueue = mutation({
+        input: s.object({ id: s.string() }),
+        async handler(input, request) {
+          await request.schedule(follow, { id: input.id }, {
+            key: publicScopedKey(\`starter:${'${input.id}'}\`),
+          });
+          return { ok: true };
+        },
+      });
+      export const capability = route('/capability', {
+        access: publicAccess('capability URL proof'),
+        async page(context) {
+          const signed = await context.signUrl({
+            expiresIn: 60_000,
+            key: publicScopedKey('receipts/starter.txt'),
+          });
+          return <a href={signed.url}>Download</a>;
+        },
+      });
+
+      export default createApp({
+        endpoints: [download],
+        mutations: [enqueue],
+        queries: [parseStaticFile],
+        routes: [capability],
+        tasks: [follow],
+      });
+    `);
+    expect(safe).toEqual([]);
+
+    for (const [label, declaration, key] of [
+      [
+        'foreign same-named key constructor',
+        "import { publicScopedKey } from './lookalike.js';",
+        "publicScopedKey('receipts/foreign.txt')",
+      ],
+      [
+        'aliased framework key constructor',
+        "import { publicScopedKey } from '@kovojs/server'; const mintKey = publicScopedKey;",
+        "mintKey('receipts/aliased.txt')",
+      ],
+      [
+        'computed framework key constructor',
+        "import * as server from '@kovojs/server';",
+        "server['publicScopedKey']('receipts/computed.txt')",
+      ],
+    ] as const) {
+      const facts = sinksFor(`
+        import { createMemoryStorage } from '@kovojs/server';
+        ${declaration}
+        const storage = createMemoryStorage();
+        await storage.put(${key}, 'unsafe');
+      `);
+      expect(facts.length, `${label}: ${JSON.stringify(facts)}`).toBeGreaterThan(0);
+    }
+  });
+
   it('accepts only an exact mutation request scheduling a pristine local task with plain input', () => {
     const safe = sinksFor(`
-      import { mutation, s, task } from '@kovojs/server';
+      import { mutation, publicScopedKey, s, task } from '@kovojs/server';
 
       export const reconcile = task('orders/reconcile', {
         input: s.object({ id: s.string() }),
@@ -2320,7 +2632,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           await request.schedule(reconcile, { id: input.id }, {
             afterMs: 10,
             coalesce: 'debounce',
-            key: \`reconcile:${'${input.id}'}\`,
+            key: publicScopedKey(\`reconcile:${'${input.id}'}\`),
           });
           const handle = await request.schedule(reconcile, { id: input.id }, { afterMs: 20 });
           return { cancelled: await request.cancel(handle) };
@@ -5132,6 +5444,12 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         },
         set() { execFileSync('replay-set'); },
       };
+      const principalEpochStore = {
+        advance() { execFileSync('epoch-advance'); return { changedAtMs: 2, epoch: 2, status: 'active' }; },
+        current() { execFileSync('epoch-current'); return { changedAtMs: 1, epoch: 1, status: 'active' }; },
+        initialize() { execFileSync('epoch-initialize'); return { changedAtMs: 1, epoch: 1, status: 'active' }; },
+        tombstone() { execFileSync('epoch-tombstone'); return { changedAtMs: 2, epoch: 2, status: 'tombstoned' }; },
+      };
       const clientModules = {
         buildToken() { execFileSync('registry-build-token'); return 'build'; },
         entries() { return []; },
@@ -5201,6 +5519,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         endpoints: [machine, hook],
         mutationReplayStore: replayStore,
         onError() { execFileSync('on-error'); },
+        principalEpochStore,
         requestLimits: {
           clientIp() { execFileSync('client-ip'); return '127.0.0.1'; },
         },
@@ -5221,6 +5540,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         "'csrf-session-id'",
         "'db-provider'",
         "'endpoint-access'",
+        "'epoch-advance'",
+        "'epoch-current'",
+        "'epoch-initialize'",
+        "'epoch-tombstone'",
         "'layout-access'",
         "'layout-query'",
         "'on-error'",
@@ -6870,6 +7193,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           const authSystemDb = appDatabase.systemDb({
             operation: 'write', reason: 'auth', surface: 'fixture',
           });
+          export const appRuntimePrincipalEpochStore = appDatabase.principalEpochStore;
           export const appRuntimeDbReady = appDatabase.ready;
           export function createAppAuthBindings(options) {
             return createBetterAuthSqliteBindingsFromEnvironment({
@@ -6878,6 +7202,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
                 id: authSession.id,
                 user: { email: user.email, id: user.id, name: user.name },
               }),
+              principalEpochStore: appRuntimePrincipalEpochStore,
               schema: authSchema,
               signInAccess: options.signInAccess,
               signOutAccess: options.signOutAccess,
@@ -7087,6 +7412,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           const authSystemDb = appDatabase.systemDb({
             operation: 'write', reason: 'auth', surface: 'fixture',
           });
+          export const appRuntimePrincipalEpochStore = appDatabase.principalEpochStore;
           export const appRuntimeDbReady = appDatabase.ready;
           export function createAppAuthBindings(options) {
             return createBetterAuthPostgresBindingsFromEnvironment({
@@ -7095,6 +7421,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
                 id: authSession.id,
                 user: { email: user.email, id: user.id, name: user.name },
               }),
+              principalEpochStore: appRuntimePrincipalEpochStore,
               schema: appRuntimeSchema.authSchema,
               signInAccess: options.signInAccess,
               signOutAccess: options.signOutAccess,
@@ -7566,6 +7893,11 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       ['schema', `schema: authSchema,`, `schema: {},`],
       ['signInAccess', `signInAccess: options.signInAccess,`, `signInAccess: {},`],
       ['signOutAccess', `signOutAccess: options.signOutAccess,`, `signOutAccess: [],`],
+      [
+        'principalEpochStore',
+        `principalEpochStore: appRuntimePrincipalEpochStore,`,
+        `principalEpochStore: {},`,
+      ],
       ['systemDb', `systemDb: authSystemDb,`, `systemDb: {},`],
     ] as const) {
       const files = exactEnvironmentBindingFiles.map((file) =>
@@ -7719,12 +8051,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       import {
         appRuntimeDbProvider,
         appRuntimeMutationReplayStore,
+        appRuntimePrincipalEpochStore,
       } from './_kovo/app-runtime-db.js';
       import { contactsQuery } from './queries.js';
       const app = createApp({
         csrf: appCsrf,
         db: appRuntimeDbProvider,
         mutationReplayStore: appRuntimeMutationReplayStore,
+        principalEpochStore: appRuntimePrincipalEpochStore,
         mutations: [appSignIn, appSignOut],
         queries: [contactsQuery],
         routes: [],
@@ -7802,6 +8136,36 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       );
       expect(sinksForFiles(hostile), label).not.toEqual([]);
     }
+
+    const forgedPrincipalEpochStore = postgresFiles.map((file) =>
+      file.fileName === '_kovo/app-runtime-db.ts'
+        ? {
+            ...file,
+            source: file.source.replace(
+              'appDatabase.principalEpochStore;',
+              `{
+                advance() { return eval('forged-principal-epoch-store'); },
+                current() { return undefined; },
+                initialize() { return { changedAtMs: 1, epoch: 1, status: 'active' }; },
+                tombstone() { return { changedAtMs: 2, epoch: 2, status: 'tombstoned' }; },
+              };`,
+            ),
+          }
+        : file,
+    );
+    expect(sinksForFiles(forgedPrincipalEpochStore)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'eval' })]),
+    );
+
+    const mutatedPrincipalEpochStore = postgresFiles.map((file) =>
+      file.fileName === 'app.tsx'
+        ? {
+            ...file,
+            source: `${file.source}\nappRuntimePrincipalEpochStore.advance = () => eval('mutated-principal-epoch-store');`,
+          }
+        : file,
+    );
+    expect(sinksForFiles(mutatedPrincipalEpochStore)).not.toEqual([]);
   });
 
   it('accepts a source-derived query returning an exact context-owned rawRead result', () => {
@@ -8105,6 +8469,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
             runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
             export const appRuntimeDbProvider = runtime.db;
             export const appRuntimeMutationReplayStore = runtime.mutationReplayStore;
+            export const appRuntimePrincipalEpochStore = runtime.principalEpochStore;
           `,
       },
       {
@@ -8114,6 +8479,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
             import {
               appRuntimeDbProvider,
               appRuntimeMutationReplayStore,
+              appRuntimePrincipalEpochStore,
             } from './_kovo/app-runtime-db.js';
             const clientModules = createMemoryVersionedClientModuleRegistry();
             const mutationReplayStore = appRuntimeMutationReplayStore;
@@ -8121,6 +8487,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
               clientModules,
               db: appRuntimeDbProvider,
               mutationReplayStore,
+              principalEpochStore: appRuntimePrincipalEpochStore,
               routes: [],
             });
           `,
@@ -9602,14 +9969,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
   it('keeps exact trustedReveal audited without laundering its input authority', () => {
     const safe = sinksFor(`
-      import { secret, trustedReveal } from '@kovojs/core';
+      import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
       import { query } from '@kovojs/server';
       export const revealed = query({ load() {
-        const value = trustedReveal(secret('classified'), {
-          justification: 'publish the reviewed fixture value',
-          method: 'arbitrary-fn',
-          source: 'fixture.classified',
-        });
+        const value = trustedReveal(secret('classified'), DeclassifyPolicy.create({
+          door: 'trustedReveal',
+          ownerScope: 'application',
+          purpose: 'public-projection',
+        }));
         return { value: \`${'${value}'}:reviewed\` };
       } });
     `);
@@ -9619,10 +9986,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       [
         'aliased import',
         `
-          import { trustedReveal as reveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal as reveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return reveal(input.value, { justification: 'reviewed' });
+            return reveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));
           } });
         `,
       ],
@@ -9632,47 +9999,48 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           import * as core from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return core.trustedReveal(input.value, { justification: 'reviewed' });
+            return core.trustedReveal(input.value, core.DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));
           } });
         `,
       ],
       [
-        'dynamic justification',
+        'dynamic policy',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
+          const policy = DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' });
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { justification: input.reason });
+            return trustedReveal(input.value, policy);
           } });
         `,
       ],
       [
         'spread options',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { ...{ justification: 'reviewed' } });
+            return trustedReveal(input.value, DeclassifyPolicy.create({ ...{ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' } }));
           } });
         `,
       ],
       [
-        'invalid method',
+        'invalid purpose',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { justification: 'reviewed', method: 'identity' });
+            return trustedReveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'server-computation' }));
           } });
         `,
       ],
       [
         'extra option',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { justification: 'reviewed', reason: 'forged' });
+            return trustedReveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection', reason: 'forged' }));
           } });
         `,
       ],
@@ -9695,13 +10063,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       ['secret-wrapped context authority', 'secret(context)'],
     ] as const) {
       const facts = sinksFor(`
-        import { secret, trustedReveal, type Secret } from '@kovojs/core';
+        import { DeclassifyPolicy, secret, trustedReveal, type Secret } from '@kovojs/core';
         import { query } from '@kovojs/server';
         export const exposed = query({ load(_input, context) {
-          return trustedReveal(${value} as unknown as Secret<unknown>, {
-            justification: 'attempted authority laundering proof',
-            method: 'arbitrary-fn',
-          });
+          return trustedReveal(${value} as unknown as Secret<unknown>, DeclassifyPolicy.create({
+            door: 'trustedReveal',
+            ownerScope: 'application',
+            purpose: 'public-projection',
+          }));
         } });
       `);
       expect(
@@ -9714,14 +10083,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
 
     const hostileProtocol = sinksFor(`
-      import { trustedReveal, type Secret } from '@kovojs/core';
+      import { DeclassifyPolicy, trustedReveal, type Secret } from '@kovojs/core';
       import { query } from '@kovojs/server';
       export const exposed = query({ load() {
         const hostile = {
           [Symbol.toPrimitive]() { eval('owned'); return 'value'; },
           then() { eval('assimilated'); },
         };
-        return \`${"${trustedReveal(hostile as unknown as Secret<string>, { justification: 'reviewed' })}"}\`;
+        return \`${"${trustedReveal(hostile as unknown as Secret<string>, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }))}"}\`;
       } });
     `);
     expect(hostileProtocol).toEqual(
@@ -11091,19 +11460,33 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(
       facts(
         mutationSource({
-          assignment: `trustedAssign(crypto.randomUUID(), 'opaque server-generated id')`,
+          assignment: `trustedAssign(crypto.randomUUID(), {
+            evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/generated-id' },
+            invariant: 'governed-write.authorized-principal',
+            why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+          })`,
         }),
       ),
     ).toEqual([]);
     expect(
       facts(
         mutationSource({
-          assignment: `trustedAssign(input.email, { columns: ['id'], reason: 'reviewed grant' })`,
+          assignment: `trustedAssign(input.email, {
+            evidence: { digest: 'sha256:${'b'.repeat(64)}', kind: 'policy-review', reference: 'SEC-1234' },
+            invariant: 'governed-write.authorized-principal',
+            why: { kind: 'policy', policy: 'iam.admin-role-grant/v1' }
+          })`,
         }),
       ),
     ).toEqual([]);
 
     const closedVariants = [
+      mutationSource({
+        assignment: `trustedAssign(input.email, 'reviewed grant')`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, { reason: 'reviewed grant' })`,
+      }),
       mutationSource({
         assignment: `trustedAssign(opaque(input.email), 'reviewed grant')`,
         extra: `import { opaque } from './opaque.js';`,
@@ -11132,6 +11515,46 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       }),
       mutationSource({
         assignment: `trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        })`,
+        extra: `const reference = 'tests/authz/dynamic';`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, obligation)`,
+        extra: `const obligation = {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/dynamic-obligation' },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        };`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          ...obligation,
+          invariant: 'governed-write.authorized-principal'
+        })`,
+        extra: `const obligation = {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/spread' },
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        };`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/wrong-invariant' },
+          invariant: 'request-input-is-safe',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        })`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          evidence: { digest: 'sha256:not-a-digest', kind: 'test', reference: 'tests/authz/bad-digest' },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        })`,
       }),
     ];
     for (const source of closedVariants) {
@@ -12913,13 +13336,13 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
   it('accepts only an exact pristine route-page context.signUrl capability result', () => {
     const safe = sinksFor(`
-      import { publicAccess, route } from '@kovojs/server';
+      import { publicAccess, publicScopedKey, route } from '@kovojs/server';
       export const capabilityPage = route('/capability', {
         access: publicAccess('capability proof'),
         async page(context) {
           const signed = await context.signUrl({
             expiresIn: 60_000,
-            key: 'receipts/proof.txt',
+            key: publicScopedKey('receipts/proof.txt'),
             method: 'GET',
             oneTime: false,
             scope: 'tenant-1',

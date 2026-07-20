@@ -8,6 +8,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
 import { alias, pgSchema, pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { testRevealSecretPolicy } from './declassification-policy.test-support.js';
 import {
   createSecretBoxingReadDb,
   declareSecretReadCapability,
@@ -225,7 +226,7 @@ describe('secret read boundary', () => {
     }
 
     expect(isSecret(rows[0]!.classified)).toBe(true);
-    expect(revealSecret(rows[0]!.classified, 'test')).toBe('victim-secret');
+    expect(revealSecret(rows[0]!.classified, testRevealSecretPolicy)).toBe('victim-secret');
   });
 
   it('boxes values whose concrete SQLite origin is a secret column', async () => {
@@ -244,7 +245,7 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(isSecret(row.alias)).toBe(true);
-    expect(revealSecret(row.alias, 'test')).toBe('runtime-secret-value');
+    expect(revealSecret(row.alias, testRevealSecretPolicy)).toBe('runtime-secret-value');
   });
 
   it('serves proven non-secret projections from a secret table', async () => {
@@ -424,7 +425,7 @@ describe('secret read boundary', () => {
     }
 
     expect(isSecret(row?.leaked)).toBe(true);
-    expect(revealSecret(row?.leaked, 'test')).toBe('victim-secret');
+    expect(revealSecret(row?.leaked, testRevealSecretPolicy)).toBe('victim-secret');
   });
 
   it('keeps SQL word classification closed under inherited array index setters', async () => {
@@ -458,7 +459,7 @@ describe('secret read boundary', () => {
     }
 
     expect(isSecret(row?.leaked)).toBe(true);
-    expect(revealSecret(row?.leaked, 'test')).toBe('victim-secret');
+    expect(revealSecret(row?.leaked, testRevealSecretPolicy)).toBe('victim-secret');
   });
 
   it('boxes compound selects before trusting a benign left-arm SQLite origin', async () => {
@@ -478,7 +479,7 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(isSecret(row.value)).toBe(true);
-    expect(revealSecret(row.value, 'test')).toBe('runtime-secret-value');
+    expect(revealSecret(row.value, testRevealSecretPolicy)).toBe('runtime-secret-value');
   });
 
   it('serves aggregates over non-secret tables when SQLite origin is opaque', async () => {
@@ -517,7 +518,7 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(isSecret(row.topSecret)).toBe(true);
-    expect(revealSecret(row.topSecret, 'test')).toBe('z');
+    expect(revealSecret(row.topSecret, testRevealSecretPolicy)).toBe('z');
   });
 
   it('executes the exact SQL carrier classified for an async builder', async () => {
@@ -572,7 +573,7 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(isSecret(row.leaked)).toBe(true);
-    expect(revealSecret(row.leaked, 'test')).toBe('victim-secret');
+    expect(revealSecret(row.leaked, testRevealSecretPolicy)).toBe('victim-secret');
   });
 
   it('boxes every derived value when no exact builder execution path exists', async () => {
@@ -586,7 +587,7 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(isSecret(row)).toBe(true);
-    expect(revealSecret(row, 'test')).toEqual({ leaked: 'victim-secret' });
+    expect(revealSecret(row, testRevealSecretPolicy)).toEqual({ leaked: 'victim-secret' });
   });
 
   it('classifies and boxes a real synchronous SQLite all terminal', () => {
@@ -603,7 +604,7 @@ describe('secret read boundary', () => {
       const [row] = db.select({ alias: secrets.classified }).from(secrets).all();
 
       expect(isSecret(row.alias)).toBe(true);
-      expect(revealSecret(row.alias, 'test')).toBe('victim-secret');
+      expect(revealSecret(row.alias, testRevealSecretPolicy)).toBe('victim-secret');
     } finally {
       client.close();
     }
@@ -1068,7 +1069,7 @@ describe('secret read boundary', () => {
     const [row] = db.all('select leaked from unregistered_secret_view');
 
     expect(isSecret(row)).toBe(true);
-    expect(revealSecret(row, 'test')).toEqual({ leaked: 'victim-secret' });
+    expect(revealSecret(row, testRevealSecretPolicy)).toEqual({ leaked: 'victim-secret' });
   });
 
   it('does not let late RegExp replacement hide a direct secret-table read', () => {
@@ -1187,7 +1188,9 @@ describe('secret read boundary', () => {
     const [row] = db.all(statement);
 
     expect(isSecret(row)).toBe(true);
-    expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
+    expect(revealSecret(row, testRevealSecretPolicy)).toEqual({
+      classified: 'runtime-secret-value',
+    });
   });
 
   it('keeps declared secret-read authority out of attacker carrier property traps', () => {
@@ -1245,7 +1248,9 @@ describe('secret read boundary', () => {
     const [row] = db.rawRead(statement, { reads: ['secrets'] });
 
     expect(isSecret(row)).toBe(true);
-    expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
+    expect(revealSecret(row, testRevealSecretPolicy)).toEqual({
+      classified: 'runtime-secret-value',
+    });
   });
 
   it('lets engine-backed readers reject raw secret table reads before boxing', () => {
@@ -1311,7 +1316,9 @@ describe('secret read boundary', () => {
 
     expect(calls).toEqual(['privileged']);
     expect(isSecret(row)).toBe(true);
-    expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
+    expect(revealSecret(row, testRevealSecretPolicy)).toEqual({
+      classified: 'runtime-secret-value',
+    });
   });
 
   it('boxes async privileged system-role secret reads before adapter serialization', async () => {
@@ -1345,6 +1352,8 @@ describe('secret read boundary', () => {
     const [row] = await db.query(statement);
 
     expect(isSecret(row)).toBe(true);
-    expect(revealSecret(row, 'test')).toEqual({ classified: 'async-runtime-secret-value' });
+    expect(revealSecret(row, testRevealSecretPolicy)).toEqual({
+      classified: 'async-runtime-secret-value',
+    });
   });
 });

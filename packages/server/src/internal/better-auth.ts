@@ -33,12 +33,30 @@ import {
   type MutationFormDefinition,
 } from '../mutation/definition.js';
 import type { Schema } from '../schema.js';
+export {
+  compareResponseObservations,
+  defineResponseObservationPolicy,
+  requireResponseObservationPolicy,
+  RESPONSE_OBSERVATION_SCHEMA,
+  runUniformWork,
+} from '../response-observation.js';
+export type {
+  ResponseObservation,
+  ResponseObservationPolicy,
+  ResponseObservationPolicyOptions,
+  ResponseObservationVerdict,
+  UniformWorkOptions,
+} from '../response-observation.js';
 import { usePostgresSystemDb, type KovoPostgresSystemDb } from './postgres-capability.js';
 import { useSqliteSystemDb, type KovoSqliteSystemDb } from './sqlite-capability.js';
 
 const BETTER_AUTH_RATE_LIMIT_MAX = 3;
 const BETTER_AUTH_RATE_LIMIT_WINDOW_MS = 10_000;
 const BETTER_AUTH_RATE_LIMIT_BUCKET_PATTERN = /^[0-9a-f]{4}$/u;
+const BETTER_AUTH_RATE_LIMIT_INPUT_ERROR =
+  'KV414: invalid Better Auth rate-limit bucket input; use the first-party bounded storage adapter (SPEC §6.6).';
+const BETTER_AUTH_RATE_LIMIT_SCOPE_ERROR =
+  'KV450: Better Auth rate-limit buckets require the registered better-auth-rate-limit ScopedKey posture (SPEC §6.6).';
 
 // These functions are never called. Their return types give the reviewed dynamic-schema boundary
 // an exact Drizzle shape after the runtime table/column census below has succeeded.
@@ -231,9 +249,7 @@ function assertBetterAuthRateLimitBucketInput(input: BetterAuthRateLimitBucketIn
     input.max !== BETTER_AUTH_RATE_LIMIT_MAX ||
     input.windowMs !== BETTER_AUTH_RATE_LIMIT_WINDOW_MS
   ) {
-    throw new TypeError(
-      'KV414: invalid Better Auth rate-limit bucket input; use the first-party bounded storage adapter (SPEC §6.6).',
-    );
+    throw new TypeError(BETTER_AUTH_RATE_LIMIT_INPUT_ERROR);
   }
   const facts = scopedKeyFactsFor(input.bucketKey);
   if (
@@ -241,9 +257,7 @@ function assertBetterAuthRateLimitBucketInput(input: BetterAuthRateLimitBucketIn
     facts.systemPosture !== 'better-auth-rate-limit' ||
     !BETTER_AUTH_RATE_LIMIT_BUCKET_PATTERN.test(facts.key)
   ) {
-    throw new TypeError(
-      'KV450: Better Auth rate-limit buckets require the registered better-auth-rate-limit ScopedKey posture (SPEC §6.6).',
-    );
+    throw new TypeError(BETTER_AUTH_RATE_LIMIT_SCOPE_ERROR);
   }
   return facts.frame;
 }

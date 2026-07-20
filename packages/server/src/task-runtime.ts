@@ -21,6 +21,7 @@ import type { KovoApp } from './app-types.js';
 import { resolveDbProvider } from './guards.js';
 import type { DurableTaskRunnerErrorContext } from './task-runner.js';
 import { scrubConsoleArgs } from './logging.js';
+import { provenPrincipalFromRequest } from './auth-principal.js';
 import {
   taskCreateWeakMap,
   taskInternalRequest,
@@ -81,7 +82,13 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     this.scheduler = {
       registeredTasks: this.tasks,
       cancel: async (request, handle) => this.queueForRequest(request).cancel(handle),
-      schedule: async (request, input) => this.queueForRequest(request).enqueue(input),
+      schedule: async (request, input) => {
+        const principal = provenPrincipalFromRequest(request);
+        return this.queueForRequest(request).enqueue({
+          ...input,
+          ...(principal === undefined ? {} : { principal }),
+        });
+      },
     };
   }
 

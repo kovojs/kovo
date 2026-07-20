@@ -11,6 +11,7 @@ import {
   deriveOwnershipPostureFacts,
   deriveSessionAuthorityFacts,
 } from '@kovojs/core/internal/graph';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import type { KovoTargetExplainOptions } from './graph-args.js';
@@ -38,6 +39,59 @@ export interface UnguardedAccessFact {
   name: string;
 }
 
+export function compareAuthorizationCorrespondenceFact(
+  left: CoreGraph.AuthorizationCorrespondenceExplainFact,
+  right: CoreGraph.AuthorizationCorrespondenceExplainFact,
+): number {
+  return (
+    compareAuthorizationText(left.table.name, right.table.name) ||
+    compareAuthorizationText(left.surface.kind, right.surface.kind) ||
+    compareAuthorizationText(left.surface.name, right.surface.name) ||
+    compareAuthorizationText(left.surface.viaQuery ?? '', right.surface.viaQuery ?? '') ||
+    compareAuthorizationText(
+      left.correspondence.rls.emissionSite,
+      right.correspondence.rls.emissionSite,
+    )
+  );
+}
+
+export function authorizationCorrespondenceLine(
+  fact: CoreGraph.AuthorizationCorrespondenceExplainFact,
+): string {
+  return [
+    'CORRESPONDENCE',
+    `surface=${fact.surface.kind}`,
+    `name=${stableValue(fact.surface.name)}`,
+    `viaQuery=${stableValue(fact.surface.viaQuery)}`,
+    `table=${stableValue(fact.table.name)}`,
+    `domain=${stableValue(fact.table.domain)}`,
+    `policy=${fact.correspondence.rls.emissionSite}`,
+    `activation=${fact.activation.status}`,
+    `status=${fact.correspondence.status}`,
+    `guardSemantics=${fact.correspondence.guard.semantics}`,
+    `guardFacts=${JSON.stringify(fact.correspondence.guard.facts)}`,
+    `predicate=${stableValue(fact.correspondence.rls.predicate)}`,
+    `reason=${stableValue(fact.correspondence.reason)}`,
+  ].join(' ');
+}
+
+export function authorizationRoleGucWarningLine(
+  fact: CoreGraph.AuthorizationCorrespondenceExplainFact,
+): string {
+  const roleGuc = fact.correspondence.roleGuc;
+  return [
+    'WARNING role-guc',
+    `status=${roleGuc.status}`,
+    `readers=${roleGuc.readers}`,
+    `writers=${roleGuc.writers}`,
+    `message=${stableValue(roleGuc.warning)}`,
+  ].join(' ');
+}
+
+function compareAuthorizationText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function diagnosticSeverity(
   diagnostic: Pick<CoreGraph.StaticDiagnosticFact, 'code' | 'severity'>,
 ): DiagnosticSeverity {
@@ -46,13 +100,7 @@ export function diagnosticSeverity(
 
 export function diagnosticsForTouchGraph(graph: CoreGraph.TouchGraph): TouchGraphDiagnosticFact[] {
   return Object.values(graph).flatMap((entry) => [
-    ...entry.unresolved.map((unresolved) =>
-      createRegisteredDiagnostic(
-        unresolved.code,
-        { site: unresolved.site },
-        { message: unresolved.message },
-      ),
-    ),
+    ...entry.unresolved.map(touchGraphUnresolvedDiagnostic),
     ...entry.touches
       .filter((touch) => touch.predicate === 'non-eq')
       .map((touch) => createRegisteredDiagnostic('KV409', { site: touch.site })),
@@ -60,6 +108,27 @@ export function diagnosticsForTouchGraph(graph: CoreGraph.TouchGraph): TouchGrap
       .filter((read) => read.predicate === 'non-eq')
       .map((read) => createRegisteredDiagnostic('KV409', { site: read.site })),
   ]);
+}
+
+function touchGraphUnresolvedDiagnostic(
+  unresolved: CoreGraph.TouchGraphEntry['unresolved'][number],
+): TouchGraphDiagnosticFact {
+  const fields = { site: unresolved.site };
+  const options = { message: unresolved.message };
+  switch (unresolved.code) {
+    case 'KV404':
+      return createRegisteredDiagnostic('KV404', fields, options);
+    case 'KV406':
+      return createRegisteredDiagnostic('KV406', fields, options);
+    case 'KV413':
+      return createRegisteredDiagnostic('KV413', fields, options);
+    default:
+      return unreachableTouchGraphDiagnosticCode(unresolved.code);
+  }
+}
+
+function unreachableTouchGraphDiagnosticCode(code: never): never {
+  throw new TypeError(`Unregistered touch-graph diagnostic code: ${String(code)}`);
 }
 
 export function verificationDiagnosticLine(
@@ -732,6 +801,11 @@ export function endpointExplainLine(
     `dynamic=${list(endpoint.dynamicExports)}`,
     `writes=${list(endpointWrites(endpoint, graph))}`,
   ];
+  if (endpoint.deadlineMs !== undefined) {
+    fields.push(
+      `deadline=long-lived:${endpoint.deadlineMs}:${stableValue(endpoint.deadlineJustification)}`,
+    );
+  }
   if (runMutations.length > 0) fields.push(`runMutations=${list(runMutations)}`);
   return fields.join(' ');
 }
@@ -752,6 +826,7 @@ export function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
   return [
     'TRUST',
     `kind=${escape.kind}`,
+    `root=${escape.root ?? escape.site}`,
     `site=${escape.site}`,
     `source=${escape.source ?? '-'}`,
     `owner=${escape.owner ?? '-'}`,
@@ -799,14 +874,34 @@ export function compareCapability(
 }
 
 export function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
-  return [
+  const fields = [
     'CAPABILITY',
     `kind=${capability.kind}`,
     `site=${capability.site}`,
     `module=${capability.moduleSpecifier ?? '-'}`,
     `target=${capability.target ?? '-'}`,
     `justification=${stableValue(capability.justification)}`,
-  ].join(' ');
+  ];
+  if (capability.siteIdentity !== undefined) {
+    fields.push(`siteIdentity=${stableValue(capability.siteIdentity)}`);
+  }
+  if (capability.obligation !== undefined) {
+    fields.push(`obligation=${canonicalJsonStringify(capability.obligation)}`);
+  }
+  return fields.join(' ');
+}
+
+/**
+ * Stable static contract rows for the framework-owned external-Postgres posture lease (SPEC
+ * §10.3). `kovo explain` consumes a build graph rather than a live server, so these rows
+ * deliberately say that deployed-driver selection and current lease telemetry are not observed.
+ */
+export function postgresPostureLeaseContractLines(): readonly string[] {
+  return [
+    'POSTGRES-POSTURE-LEASE CONTRACT applies=external-postgres-if-configured source=static-framework-contract liveStatus=not-observed liveDigest=not-observed liveExpiry=not-observed ttlMs=120000 graceMs=0 renewBaseMs=30000 jitter=process-stable:+/-10% witnessTimeoutMs=10000 backoff=exponential:1000..30000 maxFacts=2048 maxFieldBytes=4096 maxCanonicalBytes=262144',
+    'POSTGRES-POSTURE-LEASE RENEW triggers=fixed-interval,sqlstate-42501 coalescing=single-flight drain=once-per-outage recovery=authoritative-exact-boot-baseline',
+    'POSTGRES-POSTURE-LEASE WITNESS pooler=same-transaction-two-statements+stable-backend-pid+stable-frame+stable-database+stable-current-user+stable-session-user freshness=migration-ledger-head+posture-epoch digestExcludes=backend-pid,probe-token',
+  ];
 }
 
 /** Stable root-to-authority proof rows for `kovo explain --capabilities` (SPEC §6.6). */

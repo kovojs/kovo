@@ -918,7 +918,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
     }
   });
 
-  it('writes trusted reveal facts through the Drizzle static CLI facade', async () => {
+  it('writes typed declassification facts through the Drizzle static CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-revealed-'));
     const inputPath = join(root, 'static.json');
     const outPath = join(root, 'static-facts.json');
@@ -948,7 +948,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
                 fileName: 'user.queries.ts',
                 source: [
                   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-                  'import { trustedReveal } from "@kovojs/core";',
+                  'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core";',
                   '',
                   'export const users = pgTable("users", {',
                   '  id: text("id").primaryKey(),',
@@ -958,10 +958,11 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
                   'export const userDetail = query("user", {',
                   '  load(_input, db: PgAsyncDatabase<any, any>) {',
                   '    return db.select({',
-                  '      passwordDigest: trustedReveal(users.passwordHash, {',
-                  '        justification: "one-way digest shown to admins",',
-                  '        source: "users.passwordHash",',
-                  '      }),',
+                  '      publicId: trustedReveal(users.id, DeclassifyPolicy.create({',
+                  '        door: "trustedReveal",',
+                  '        ownerScope: "application",',
+                  '        purpose: "public-projection",',
+                  '      })),',
                   '    }).from(users);',
                   '  },',
                   '});',
@@ -970,9 +971,9 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
               {
                 fileName: 'payment.ts',
                 source: [
-                  'import { trustedReveal as reveal, type SecretValue } from "@kovojs/core";',
+                  'import { DeclassifyPolicy as Policy, revealSecret as reveal, type SecretValue } from "@kovojs/core";',
                   'export function createPaymentClient(key: SecretValue<string>) {',
-                  '  const raw = reveal(key, { source: "app.env.PAYMENT_API_KEY", method: "arbitrary-fn", justification: "initialize payment SDK once at boot" });',
+                  '  const raw = reveal(key, Policy.create({ door: "revealSecret", ownerScope: "application", purpose: "credential-use" }));',
                   '  return new PaymentClient(raw);',
                   '}',
                 ].join('\n'),
@@ -993,23 +994,23 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
       expect(JSON.parse(readFileSync(outPath, 'utf8')).revealed).toEqual([
         {
           grade: 'audit',
-          justification: 'initialize payment SDK once at boot',
+          justification: 'credential-use:revealSecret:application',
           method: 'arbitrary-fn',
-          path: 'app.env.PAYMENT_API_KEY',
+          path: 'key',
           query: 'runtime',
           selectedSecret: true,
           site: 'payment.ts:3',
-          source: 'app.env.PAYMENT_API_KEY',
+          source: 'key',
         },
         {
-          grade: 'audit',
-          justification: 'one-way digest shown to admins',
-          method: 'arbitrary-fn',
-          path: 'passwordDigest',
+          grade: 'proof',
+          justification: 'public-projection:trustedReveal:application',
+          method: 'server-projection',
+          path: 'publicId',
           query: 'user',
-          selectedSecret: true,
+          selectedSecret: false,
           site: 'user.queries.ts:12',
-          source: 'users.passwordHash',
+          source: 'users.id',
         },
       ]);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
@@ -1022,7 +1023,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
     }
   });
 
-  it('fails the reveal audit explicitly when trustedReveal options are dynamic', async () => {
+  it('fails the reveal audit explicitly when a declassification policy is hidden behind a binding', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-reveal-dynamic-'));
     const inputPath = join(root, 'static.json');
     const outPath = join(root, 'static-facts.json');
@@ -1038,9 +1039,9 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
             {
               fileName: 'payment.ts',
               source: [
-                'import { trustedReveal as reveal } from "@kovojs/core";',
-                'const options = { justification: "hidden behind a binding" };',
-                'reveal(app.env.PAYMENT_API_KEY, options);',
+                'import { DeclassifyPolicy, trustedReveal as reveal } from "@kovojs/core";',
+                'const policy = DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" });',
+                'reveal(app.env.PAYMENT_API_KEY, policy);',
               ].join('\n'),
             },
           ],
@@ -1341,7 +1342,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
       expect(source).toContain('cart: (draft, $input) => {');
       expect(source).not.toContain('productGrid:');
       expect(source).toContain(
-        'Overridden in the mutation module (derivation suppressed): productGrid.',
+        "Overridden in the mutation module (derivation suppressed): 'productGrid'.",
       );
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
         {
@@ -1458,7 +1459,7 @@ export const addToCart = mutation({
       expect(stderr).not.toHaveBeenCalled();
       expect(source).not.toContain('features/cart/queries/cart-summary:');
       expect(source).toContain(
-        'Overridden in the mutation module (derivation suppressed): features/cart/queries/cart-summary.',
+        "Overridden in the mutation module (derivation suppressed): 'features/cart/queries/cart-summary'.",
       );
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
         { query: 'features/cart/queries/cart-summary', status: 'hand-written' },

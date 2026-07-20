@@ -6,7 +6,10 @@ import {
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -21,6 +24,8 @@ import type {
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
 import type {
+  GrantExplainFact,
+  GrantRightKind,
   MassAssignmentFact,
   OwnerDomainFact,
   QueryProjectedColumn,
@@ -133,7 +138,7 @@ import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
 } from './static/framework-identity.js';
-import { drizzleDiagnostic } from './static/diagnostics.js';
+import { drizzleDiagnostic, relocateDrizzleDiagnostic } from './static/diagnostics.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = drizzleStaticReadonlySet([
   'eq',
@@ -1443,7 +1448,7 @@ function mutationSecretReturnDiagnostic(
 ): TouchGraphDiagnostic {
   return drizzleDiagnostic({
     code: 'KV435',
-    detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+    detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire or select explicit non-secret columns; declassification doors are request-closed.`,
     site: site ?? `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
   });
 }
@@ -4156,6 +4161,7 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
 }
 
 /** @internal */ export interface StaticBuildAnalysisFacts {
+  grants: readonly GrantExplainFact[];
   massAssignmentFacts: readonly MassAssignmentFact[];
   ownerDomains: readonly OwnerDomainFact[];
   queries: readonly QueryFact[];
@@ -4174,6 +4180,13 @@ type AuthzCensusClassification = 'authzPolicy' | 'owned' | 'ownedVia' | 'public'
 export interface RuntimeTableSecurityManifestColumn {
   key: string;
   name: string;
+}
+
+/** @internal Compiler-owned declared row-key fact for one physical Drizzle table. */
+export interface RuntimeTableSecurityManifestKey {
+  columnKey: string;
+  columnName: string;
+  uniqueness: 'none' | 'primary' | 'unique';
 }
 
 /** @internal Compiler-owned direct-owner fact for one physical Drizzle table. */
@@ -4207,7 +4220,10 @@ export interface RuntimeTableSecurityManifestTable {
   authzPolicy?: RuntimeTableSecurityManifestAuthzPolicy;
   authorizationClassifications: readonly AuthzCensusClassification[];
   columns: readonly RuntimeTableSecurityManifestColumn[];
+  dialect: 'postgres' | 'sqlite';
+  domain?: string;
   governedColumnKeys: readonly string[];
+  key?: RuntimeTableSecurityManifestKey;
   name: string;
   owner?: RuntimeTableSecurityManifestOwner;
   ownerVia?: RuntimeTableSecurityManifestOwnerVia;
@@ -4294,6 +4310,18 @@ function runtimeTableSecurityManifestFromProjectExtraction(
         : { columnKey: ownerColumn.key, columnName: ownerColumn.name };
     const ownerVia = runtimeManifestOwnerVia(draft, drafts, extraction.tableNamesBySymbol);
     const authzPolicy = runtimeManifestAuthzPolicy(draft);
+    const tableFactory = runtimeManifestTableFactoryName(draft.initializer);
+    const dialect =
+      tableFactory === 'pgTable'
+        ? ('postgres' as const)
+        : tableFactory === 'sqliteTable'
+          ? ('sqlite' as const)
+          : undefined;
+    if (dialect === undefined) {
+      throw new TypeError(
+        `KV414: compiler-bound table ${draft.name} has no supported Postgres/SQLite dialect identity (SPEC §10.3).`,
+      );
+    }
     const secretDeclared = domainAnnotation?.secret !== undefined;
     const secretColumnKeys = runtimeManifestAnnotatedColumnKeys(
       draft.columns,
@@ -4301,6 +4329,14 @@ function runtimeTableSecurityManifestFromProjectExtraction(
     );
     const governedColumnKeys = new Set<string>();
     const keyColumn = runtimeManifestColumnForRef(draft.columns, domainAnnotation?.key);
+    const key =
+      keyColumn === undefined
+        ? undefined
+        : {
+            columnKey: keyColumn.key,
+            columnName: keyColumn.name,
+            uniqueness: runtimeManifestDeclaredKeyUniqueness(draft.initializer, keyColumn.key),
+          };
     if (keyColumn !== undefined) governedColumnKeys.add(keyColumn.key);
     if (ownerColumn !== undefined) governedColumnKeys.add(ownerColumn.key);
     for (const column of draft.columns) {
@@ -4325,7 +4361,12 @@ function runtimeTableSecurityManifestFromProjectExtraction(
       ...(authzPolicy === undefined ? {} : { authzPolicy }),
       authorizationClassifications: classifications,
       columns: draft.columns,
+      dialect,
+      ...(domainAnnotation === undefined
+        ? {}
+        : { domain: extractedDomainKey(domainAnnotation.domain) }),
       governedColumnKeys: [...governedColumnKeys].sort(compareRuntimeManifestStrings),
+      ...(key === undefined ? {} : { key }),
       name: draft.name,
       ...(owner === undefined ? {} : { owner }),
       ...(ownerVia === undefined ? {} : { ownerVia }),
@@ -4493,6 +4534,36 @@ function runtimeManifestColumns(initializer: CallExpression): RuntimeTableSecuri
   return columns;
 }
 
+/**
+ * Record only constraint syntax attached directly to the declared key column. Table-level Drizzle
+ * extra-config callbacks are executable app code and may be stateful, so they cannot become
+ * compiler authority for a proof-bearing ownership guard (SPEC §6.6 C9/C15, §10.3).
+ */
+function runtimeManifestDeclaredKeyUniqueness(
+  initializer: CallExpression,
+  columnKey: string,
+): RuntimeTableSecurityManifestKey['uniqueness'] {
+  const object = initializer.getArguments()[1];
+  if (!object || !Node.isObjectLiteralExpression(object)) return 'none';
+  for (const property of object.getProperties()) {
+    if (
+      !Node.isPropertyAssignment(property) ||
+      propertyNameText(property.getNameNode()) !== columnKey
+    ) {
+      continue;
+    }
+    const value = property.getInitializer();
+    if (value === undefined) return 'none';
+    const methods = columnBuilderChainMethods(
+      unwrappedTsExpression(value.compilerNode as ts.Expression),
+    );
+    if (methods.includes('primaryKey')) return 'primary';
+    if (methods.includes('unique')) return 'unique';
+    return 'none';
+  }
+  return 'none';
+}
+
 function runtimeManifestAnnotatedColumnKeys(
   columns: readonly RuntimeTableSecurityManifestColumn[],
   annotation: KovoDomainTableAnnotation['secret'] | KovoDomainTableAnnotation['governed'],
@@ -4570,6 +4641,179 @@ function compareRuntimeManifestStrings(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+const MAX_GRANT_MODEL_STATES = 64;
+
+type GrantResourceFact = Extract<GrantExplainFact, { kind: 'resource' }>;
+
+interface DeclaredGrantTouch {
+  domain: string;
+  site: string;
+}
+
+interface DeclaredGrantInputs {
+  mutationNames: ReadonlySet<string>;
+  touchesByMutation: ReadonlyMap<string, readonly DeclaredGrantTouch[]>;
+}
+
+function declaredGrantInputsFromProject(extraction: ProjectExtraction): DeclaredGrantInputs {
+  const mutationNames = new Set<string>();
+  const touchesByMutation = new Map<string, DeclaredGrantTouch[]>();
+  for (let fileIndex = 0; fileIndex < extraction.sourceFiles.length; fileIndex += 1) {
+    const sourceFile = extraction.sourceFiles[fileIndex];
+    const file = extraction.files[fileIndex];
+    if (sourceFile === undefined || file === undefined) continue;
+    forEachMutationConfig(sourceFile, (mutation, config) => {
+      mutationNames.add(mutation);
+      const registry = objectPropertyInitializer(config, 'registry');
+      const registryObject = registry ? unwrappedStaticExpressionNode(registry) : undefined;
+      if (!registryObject || !Node.isObjectLiteralExpression(registryObject)) return;
+      const touches = objectPropertyInitializer(registryObject, 'touches');
+      const touchArray = touches ? unwrappedStaticExpressionNode(touches) : undefined;
+      if (!touchArray || !Node.isArrayLiteralExpression(touchArray)) return;
+      for (const element of touchArray.getElements()) {
+        const domain = declaredDomainValueKey(unwrappedStaticExpressionNode(element));
+        if (domain === undefined) continue;
+        const existing = touchesByMutation.get(mutation) ?? [];
+        if (existing.some((touch) => touch.domain === domain)) continue;
+        touchesByMutation.set(mutation, [
+          ...existing,
+          {
+            domain,
+            site: `${file.fileName}:${lineForIndex(file.source, element.getStart())}`,
+          },
+        ]);
+      }
+    });
+  }
+  return { mutationNames, touchesByMutation };
+}
+
+function grantResourcesFromManifest(manifest: RuntimeTableSecurityManifest): GrantResourceFact[] {
+  const resources: GrantResourceFact[] = [];
+  for (const table of manifest.tables) {
+    const classifications = new Set(table.authorizationClassifications);
+    let rightKinds: readonly GrantRightKind[] | undefined;
+    if (classifications.has('owned')) {
+      rightKinds = ['delegate', 'owner', 'read', 'write'];
+    } else if (classifications.has('ownedVia')) {
+      rightKinds = ['delegated-owner', 'read', 'write'];
+    } else if (classifications.has('authzPolicy')) {
+      rightKinds = ['policy', 'read', 'write'];
+    }
+    if (rightKinds === undefined) continue;
+    resources.push({
+      domain: table.domain ?? table.name,
+      kind: 'resource',
+      rightKinds,
+      table: table.name,
+    });
+  }
+  return resources.sort((left, right) => left.table.localeCompare(right.table));
+}
+
+function grantDelegationsFromManifest(
+  manifest: RuntimeTableSecurityManifest,
+  resources: ReadonlyMap<string, GrantResourceFact>,
+): Extract<GrantExplainFact, { kind: 'delegation' }>[] {
+  const facts: Extract<GrantExplainFact, { kind: 'delegation' }>[] = [];
+  for (const table of manifest.tables) {
+    if (
+      table.ownerVia === undefined ||
+      !resources.has(table.name) ||
+      !resources.has(table.ownerVia.parentTable)
+    ) {
+      continue;
+    }
+    facts.push({
+      child: table.name,
+      kind: 'delegation',
+      parent: table.ownerVia.parentTable,
+      rightKinds: ['read', 'write'],
+    });
+  }
+  return facts.sort(
+    (left, right) =>
+      left.parent.localeCompare(right.parent) || left.child.localeCompare(right.child),
+  );
+}
+
+function decideAttenuatingGrantDeletion(rightKinds: readonly GrantRightKind[]): number {
+  const states = 2 ** rightKinds.length;
+  if (states > MAX_GRANT_MODEL_STATES) {
+    throw new TypeError(
+      `KV414: grant deletion model exceeds the ${MAX_GRANT_MODEL_STATES}-state bound (SPEC §10.3).`,
+    );
+  }
+  // Deleting a grant row removes every represented right. Enumerating the complete local
+  // right-set lattice makes the successor-subset check decidable rather than sampled.
+  for (let state = 0; state < states; state += 1) {
+    const successor = 0;
+    if ((successor & ~state) !== 0) {
+      throw new TypeError('KV414: grant deletion widened the modeled right-set.');
+    }
+  }
+  return states;
+}
+
+function grantEscapeFact(
+  mutation: string,
+  operation: string,
+  resource: string,
+  site: string,
+): Extract<GrantExplainFact, { kind: 'escape' }> {
+  return {
+    budget: 1,
+    kind: 'escape',
+    mutation,
+    name: `${mutation}:${operation}:${resource}`,
+    operation,
+    resource,
+    retainedObligation: 'review that the new right-set is authorized by current policy',
+    site,
+  };
+}
+
+function grantTransitionKey(mutation: string, resource: string): string {
+  return `${mutation}\u0000${resource}`;
+}
+
+function appendGrantMutationFact(
+  facts: Map<string, GrantExplainFact[]>,
+  key: string,
+  fact: GrantExplainFact,
+): void {
+  facts.set(key, [...(facts.get(key) ?? []), fact]);
+}
+
+function compareGrantExplainFacts(left: GrantExplainFact, right: GrantExplainFact): number {
+  const order: Readonly<Record<GrantExplainFact['kind'], number>> = {
+    principal: 0,
+    resource: 1,
+    delegation: 2,
+    transition: 3,
+    escape: 4,
+  };
+  return (
+    order[left.kind] - order[right.kind] ||
+    grantExplainFactKey(left).localeCompare(grantExplainFactKey(right))
+  );
+}
+
+function grantExplainFactKey(fact: GrantExplainFact): string {
+  switch (fact.kind) {
+    case 'principal':
+      return fact.principal;
+    case 'resource':
+      return fact.table;
+    case 'delegation':
+      return `${fact.parent}\u0000${fact.child}`;
+    case 'transition':
+      return `${fact.mutation}\u0000${fact.resource}\u0000${fact.operation}\u0000${fact.site}`;
+    case 'escape':
+      return fact.name;
+  }
+}
+
 /** @internal */ export interface DrizzleAnalysisContext {
   extraction: ProjectExtraction;
   facts: DrizzleFactStore;
@@ -4578,6 +4822,7 @@ function compareRuntimeManifestStrings(left: string, right: string): number {
 /** @internal */ export interface DrizzleFactStore {
   contextFiles(): readonly SourceFileInput[];
   functionExtractionsByFileName(): ReturnType<typeof projectFunctionExtractionsByFileName>;
+  grantGraphFacts(): readonly GrantExplainFact[];
   massAssignmentFacts(): readonly MassAssignmentFact[];
   materializedViewRefreshFacts(): readonly MaterializedViewRefreshFact[];
   ownerAudit(): {
@@ -4602,6 +4847,7 @@ function compareRuntimeManifestStrings(left: string, right: string): number {
 
 class LazyDrizzleFactStore implements DrizzleFactStore {
   private readonly extraction: ProjectExtraction;
+  private cachedGrantGraphFacts: readonly GrantExplainFact[] | undefined;
   private cachedMassAssignmentFacts: readonly MassAssignmentFact[] | undefined;
   private cachedMaterializedViewRefreshFacts: readonly MaterializedViewRefreshFact[] | undefined;
   private cachedOwnerAudit:
@@ -4725,6 +4971,186 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
       (left, right) => left.name.localeCompare(right.name) || left.site.localeCompare(right.site),
     );
     return this.cachedWriteScopeFacts;
+  }
+
+  grantGraphFacts(): readonly GrantExplainFact[] {
+    if (this.cachedGrantGraphFacts) return this.cachedGrantGraphFacts;
+    const manifest = runtimeTableSecurityManifestFromProjectExtraction(this.extraction);
+    const resources = grantResourcesFromManifest(manifest);
+    if (resources.length === 0) {
+      this.cachedGrantGraphFacts = [];
+      return this.cachedGrantGraphFacts;
+    }
+
+    const resourceByTable = new Map(
+      resources.map((resource) => [resource.table, resource] as const),
+    );
+    const resourcesByDomain = new Map<string, GrantResourceFact[]>();
+    for (const resource of resources) {
+      resourcesByDomain.set(resource.domain, [
+        ...(resourcesByDomain.get(resource.domain) ?? []),
+        resource,
+      ]);
+    }
+    const facts: GrantExplainFact[] = [
+      { kind: 'principal', principal: 'request-principal' },
+      ...resources,
+      ...grantDelegationsFromManifest(manifest, resourceByTable),
+    ];
+    const exactTransitionKeys = new Set<string>();
+    const mutationFacts = new Map<string, GrantExplainFact[]>();
+    const declaredInputs = declaredGrantInputsFromProject(this.extraction);
+    const declaredTouchesByMutation = declaredInputs.touchesByMutation;
+    const touchGraph = this.touchGraph();
+    const functions = this.functionExtractionsByFileName();
+    for (const file of this.contextFiles()) {
+      const fileTables = this.tablesForFile(file);
+      for (const fn of projectFunctionsForFile(file, functions)) {
+        // The shared extraction also contains ordinary helpers and domain callbacks. Grant
+        // transitions are public mutation rules, so never let a same-named helper manufacture a
+        // decision for an undeclared surface.
+        if (fn.summaryOnly || !declaredInputs.mutationNames.has(fn.name)) continue;
+        for (const call of fn.writeCalls) {
+          const tables = fileTables.get(call.tableExpression) ?? [];
+          for (const table of tables) {
+            const resource = resourceByTable.get(table.annotation.name);
+            if (resource === undefined) continue;
+            const site = call.site ?? `${file.fileName}:${lineForIndex(file.source, call.index)}`;
+            const key = grantTransitionKey(fn.name, resource.table);
+            exactTransitionKeys.add(key);
+            if (call.operation === 'delete') {
+              if (resource.rightKinds.includes('policy')) {
+                appendGrantMutationFact(mutationFacts, key, {
+                  kind: 'transition',
+                  mutation: fn.name,
+                  operation: call.operation,
+                  reason: 'custom authzPolicy does not establish positive-grant deletion semantics',
+                  resource: resource.table,
+                  site,
+                  verdict: 'top',
+                });
+              } else {
+                appendGrantMutationFact(mutationFacts, key, {
+                  checkedStates: decideAttenuatingGrantDeletion(resource.rightKinds),
+                  kind: 'transition',
+                  mutation: fn.name,
+                  operation: call.operation,
+                  resource: resource.table,
+                  site,
+                  verdict: 'attenuating',
+                });
+              }
+              continue;
+            }
+            if (call.operation === 'insert' || call.operation === 'update') {
+              appendGrantMutationFact(
+                mutationFacts,
+                key,
+                grantEscapeFact(fn.name, call.operation, resource.table, site),
+              );
+              continue;
+            }
+            appendGrantMutationFact(mutationFacts, key, {
+              kind: 'transition',
+              mutation: fn.name,
+              operation: call.operation || 'UNCLASSIFIED',
+              reason: 'authz-bearing write operation is outside the decided attenuation fragment',
+              resource: resource.table,
+              site,
+              verdict: 'top',
+            });
+          }
+        }
+      }
+    }
+
+    for (const [mutation, entry] of Object.entries(touchGraph)) {
+      if (!declaredInputs.mutationNames.has(mutation)) continue;
+      const resourcesForEntry = new Set<string>();
+      for (const touch of entry.touches) {
+        if (resourceByTable.has(touch.via)) resourcesForEntry.add(touch.via);
+        for (const resource of resourcesByDomain.get(touch.domain) ?? []) {
+          resourcesForEntry.add(resource.table);
+        }
+      }
+      for (const table of entry.tables ?? []) {
+        if (resourceByTable.has(table)) resourcesForEntry.add(table);
+      }
+      for (const declared of declaredTouchesByMutation.get(mutation) ?? []) {
+        for (const resource of resourcesByDomain.get(declared.domain) ?? []) {
+          resourcesForEntry.add(resource.table);
+        }
+      }
+      if (resourcesForEntry.size === 0) continue;
+      for (const resource of resourcesForEntry) {
+        const key = grantTransitionKey(mutation, resource);
+        const resourceFact = resourceByTable.get(resource);
+        const matchingTouch = entry.touches.find(
+          (touch) => touch.via === resource || touch.domain === resourceFact?.domain,
+        );
+        if (entry.unresolved.length > 0) {
+          mutationFacts.set(key, [
+            {
+              kind: 'transition',
+              mutation,
+              operation: 'UNCLASSIFIED',
+              reason: 'authz-bearing write escaped exact operation extraction',
+              resource,
+              site: entry.unresolved[0]?.site ?? matchingTouch?.site ?? resource,
+              verdict: 'top',
+            },
+          ]);
+          continue;
+        }
+        if (exactTransitionKeys.has(key)) continue;
+        if (entry.tables?.includes(resource)) {
+          appendGrantMutationFact(
+            mutationFacts,
+            key,
+            grantEscapeFact(mutation, 'raw-sql', resource, matchingTouch?.site ?? resource),
+          );
+          continue;
+        }
+        appendGrantMutationFact(mutationFacts, key, {
+          kind: 'transition',
+          mutation,
+          operation: 'UNCLASSIFIED',
+          reason: 'authz-bearing touch has no exact mutation-operation witness',
+          resource,
+          site: matchingTouch?.site ?? resource,
+          verdict: 'top',
+        });
+      }
+    }
+
+    for (const [mutation, declaredTouches] of declaredTouchesByMutation) {
+      const entry = touchGraph[mutation];
+      for (const declared of declaredTouches) {
+        for (const resource of resourcesByDomain.get(declared.domain) ?? []) {
+          const key = grantTransitionKey(mutation, resource.table);
+          if (exactTransitionKeys.has(key) || mutationFacts.has(key)) continue;
+          mutationFacts.set(key, [
+            {
+              kind: 'transition',
+              mutation,
+              operation: 'UNCLASSIFIED',
+              reason:
+                entry && entry.unresolved.length > 0
+                  ? 'authz-bearing write escaped exact operation extraction'
+                  : 'authz-bearing declared touch has no exact mutation-operation witness',
+              resource: resource.table,
+              site: entry?.unresolved[0]?.site ?? declared.site,
+              verdict: 'top',
+            },
+          ]);
+        }
+      }
+    }
+
+    for (const transitionFacts of mutationFacts.values()) facts.push(...transitionFacts);
+
+    this.cachedGrantGraphFacts = facts.sort(compareGrantExplainFacts);
+    return this.cachedGrantGraphFacts;
   }
 
   ownerDomains(): readonly OwnerDomainFact[] {
@@ -4864,6 +5290,7 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
     const queries = this.queryFacts();
     const ownerAudit = this.ownerAudit();
     this.cachedStaticBuildAnalysisFacts = {
+      grants: this.grantGraphFacts(),
       massAssignmentFacts: this.massAssignmentFacts(),
       ownerDomains: ownerAudit.ownerDomains,
       queries,
@@ -4975,6 +5402,25 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
   context: DrizzleAnalysisContext,
 ): StaticBuildAnalysisFacts {
   return context.facts.staticBuildAnalysisFacts();
+}
+
+/**
+ * Derive one grant model and transition relation from the same schema and mutation extraction
+ * consumed by build/check, avoiding a second app-authored grant registry (SPEC §10.3).
+ *
+ * @internal
+ */
+export function extractGrantGraphFactsFromProject(
+  options: TouchGraphProjectOptions,
+): GrantExplainFact[] {
+  return runWithSourceFileParseCache(() => {
+    const extraction = createProjectExtraction(options);
+    try {
+      return [...createDrizzleAnalysisContext(extraction).facts.grantGraphFacts()];
+    } finally {
+      extraction.dispose();
+    }
+  });
 }
 
 // SPEC.md §11.1 (v1 scope): query-fact extraction requires project-mode ts-morph type
@@ -5118,7 +5564,9 @@ function extractQueryFactsFromPreparedFiles(
         .concat(secretProjectionBackstopDiagnostics(query.query, readProvenance, query.shape))
         .concat(tableRowProjectionDiagnostics(query.query, query.shape, site))
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
-        .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
+        .concat(
+          query.diagnostics?.map((diagnostic) => relocateDrizzleDiagnostic(diagnostic, site)) ?? [],
+        )
         .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(exemptReadDiagnostics)
         // SPEC §10.2/§11.1: an opaque/raw read that takes the declared-opaque-read escape but whose
@@ -5197,18 +5645,16 @@ function secretProjectionBackstopDiagnostics(
   readProvenance: readonly QueryReadProvenance[],
   shape: QueryShape,
 ): TouchGraphDiagnostic[] {
-  const revealedPaths = revealedQueryShapePaths(shape);
   const diagnostics: TouchGraphDiagnostic[] = [];
 
   for (const read of readProvenance) {
     for (const column of read.columns) {
-      if (revealedPaths.has(column.path)) continue;
       if (column.classification !== 'secret' && column.classification !== 'unresolved') continue;
 
       diagnostics.push(
         drizzleDiagnostic({
           code: 'KV435',
-          detail: `Query projection ${query}.${column.path} reads a secret-classified column or unresolved projection from secret-classified table(s): ${column.table}. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+          detail: `Query projection ${query}.${column.path} reads a secret-classified column or unresolved projection from secret-classified table(s): ${column.table}. Prove that only public columns cross the query wire; declassification doors are request-closed.`,
           site: column.site || read.site,
         }),
       );
@@ -5495,6 +5941,9 @@ function projectedColumnKey(column: QueryProjectedColumn): string {
 }
 
 function dedupeDiagnostics(diagnostics: readonly TouchGraphDiagnostic[]): TouchGraphDiagnostic[] {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Drizzle diagnostics[${index}]`);
+  }
   return [
     ...new Map(diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic])).values(),
   ];
@@ -6836,6 +7285,7 @@ import {
 /** @internal */
 export { projectTablesBySyntheticName } from './static/tables.js';
 import {
+  forEachMutationConfig,
   functionReceiverParametersByKey,
   mergedRawTables,
   mergedRawWriteSqlTrust,
@@ -6986,7 +7436,6 @@ import {
   revealFactsFromQueryShape,
   receiverMethodAliasQueryDiagnostics,
   referencedQueryCallbackFunction,
-  revealedQueryShapePaths,
   relationalQueryDiagnostics,
   relationalShapeFromQueryBody,
   scalarProjectionTable,

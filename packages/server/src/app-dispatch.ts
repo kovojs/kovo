@@ -43,6 +43,7 @@ import {
 import { appTaskScheduler } from './task-runtime.js';
 import { readCsrfCarrierFromRequest } from './untrusted-request-body.js';
 import { runWebhook, type WebhookDeclaration } from './webhook.js';
+import { securityEvent } from './security-event.js';
 import { canonicalRequestMethod, isSafeEndpointMethod } from './request-method.js';
 import {
   requestDecodeURIComponent,
@@ -278,13 +279,14 @@ async function validateEndpointCsrf(
   // SPEC §9.1 / §6.6: endpoint() is default-CSRF for unsafe browser verbs.
   // Exempt endpoints keep raw-body access; protected endpoints validate a cloned
   // body before the raw handler can run.
-  if (csrf === undefined) return endpointCsrfFailureResponse(request);
+  if (csrf === undefined) {
+    return endpointCsrfFailureResponse(request);
+  }
 
   const rawInput = await readCsrfCarrierFromRequest(request);
 
-  return validateCsrfToken(rawInput, request, csrf)
-    ? undefined
-    : endpointCsrfFailureResponse(request);
+  if (validateCsrfToken(rawInput, request, csrf)) return undefined;
+  return endpointCsrfFailureResponse(request);
 }
 
 function requiresCsrf(method: string): boolean {
@@ -294,6 +296,8 @@ function requiresCsrf(method: string): boolean {
 }
 
 function endpointCsrfFailureResponse(request: Pick<Request, 'method'>): Response {
+  securityEvent({ reason: 'invalid-token', type: 'csrf-rejected' });
+  // @kovo-security-denial csrf-rejected endpoint-csrf
   return serverResponseToWebResponse(
     {
       body: 'CSRF',

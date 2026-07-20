@@ -5,6 +5,9 @@ import {
   securityHasOwn,
   securityObjectKeys,
   securityOwnArrayEntry,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
 } from '#security-witness-intrinsics';
 
 /** Severity tier of a diagnostic, from blocking `error` down to advisory `notice`. */
@@ -101,7 +104,9 @@ export type DiagnosticCode =
   | 'KV447'
   | 'KV448'
   | 'KV449'
-  | 'KV450';
+  | 'KV450'
+  | 'KV451'
+  | 'KV452';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -120,8 +125,19 @@ export interface RegisteredDiagnosticDefinition extends DiagnosticDefinition {
   enforcementClass: DiagnosticEnforcementClass;
 }
 
-/** @internal Reserved fields whose authority always comes from the diagnostic registry. */
+const registeredDiagnosticBrand: unique symbol = Symbol('kovo.registered-diagnostic');
+const registeredDiagnosticRegistry = securityWeakSet<object>();
+
+/**
+ * Constructor-authenticated Kovo diagnostic identity.
+ *
+ * The nominal property is an author-time guardrail. Runtime consumers still verify exact object
+ * identity through the framework-owned diagnostic registry before trusting or rendering a record
+ * (SPEC §2/§11).
+ */
 export interface RegisteredDiagnostic<Code extends DiagnosticCode = DiagnosticCode> {
+  /** Module-private nominal witness; runtime authority lives in registeredDiagnosticRegistry. */
+  readonly [registeredDiagnosticBrand]: true;
   code: Code;
   help?: string;
   message: string;
@@ -267,6 +283,30 @@ export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
   return typeof value === 'string' && securityHasOwn(diagnosticDefinitions, value);
 }
 
+/**
+ * @internal Runtime provenance guard for structured diagnostics crossing collection/rendering
+ * boundaries. Structural equality, a cast, a clone, and a copied private-symbol property cannot
+ * enroll a value: only createRegisteredDiagnostic records exact object identity in the private
+ * registry (SPEC §2/§11).
+ */
+export function isRegisteredDiagnostic(value: unknown): value is RegisteredDiagnostic {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    securityWeakSetHas(registeredDiagnosticRegistry, value)
+  );
+}
+
+/** @internal Fail closed unless a value carries constructor-owned diagnostic provenance. */
+export function assertRegisteredDiagnostic(
+  value: unknown,
+  label = 'Kovo structured diagnostic',
+): asserts value is RegisteredDiagnostic {
+  if (!isRegisteredDiagnostic(value)) {
+    throw new TypeError(`${label} must be created by createRegisteredDiagnostic.`);
+  }
+}
+
 /** Compiler-owned diagnostics whose help must satisfy SPEC §5.2 teaching-error shape. */
 export const compilerDiagnosticTeachingSchemas = {
   KV201: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
@@ -316,6 +356,8 @@ export const compilerDiagnosticTeachingSchemas = {
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV449: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
+  KV451: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
+  KV452: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
 
 /** The frozen registry of every `KV###` diagnostic: code → definition (message, severity, help). */
@@ -1180,7 +1222,7 @@ export const diagnosticDefinitions = {
     help: [
       'Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.',
       'Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).',
-      'Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes). App analyzer summaries cannot declare server provenance.',
+      "Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, { invariant: 'governed-write.authorized-principal', why: ..., evidence: ... }) with the exact inline structured obligation (surfaced in kovo explain --capabilities and emitted for detached review). App analyzer summaries cannot declare server provenance.",
       'SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/trustedAssign are author-assertion escapes (audit-grade).',
     ].join('\n'),
     severity: 'error',
@@ -1263,6 +1305,28 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message: 'Stateful sink key lacks framework-witnessed owner scope.',
   },
+  KV451: {
+    code: 'KV451',
+    help: [
+      'Would lower to: one grammar-validated JavaScript/TypeScript leaf produced by the shared structural emission constructor for the exact source role.',
+      'Blocked reason: the value is not valid for that grammar role, so direct interpolation could create executable sibling syntax or an ambiguous generated artifact.',
+      'Fixes: derive a valid source identifier/specifier, keep data in a jsStringLiteral/tsPropertyKey leaf, or repair the typed fact producer before emission.',
+      'SPEC §5.2 requires generated artifacts to remain valid, auditable Kovo source and security-sensitive emission to fail closed.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Compiler-derived value is outside the structural source-emission grammar.',
+  },
+  KV452: {
+    code: 'KV452',
+    help: [
+      'Would lower to: a framework-owned derived vector dataset operation whose physical namespace is reconstructed from the complete request-principal ScopedKey frame.',
+      'Blocked reason: owner-scoped or governed data reaches a persistent non-engine sink directly, or a derived dataset operation lacks the exact framework request principal binding.',
+      "Fixes: wrap the vector/RAG adapter with derived(adapter, { key, kind: 'vector' }) and pass the exact handler request to every query/upsert; keep ordinary storage, egress, and durable-task payloads free of owner-scoped database rows.",
+      'SPEC §6.6 and §10.3 C9 require derived artifacts to inherit owner scope through the existing provenance engine and runtime-opaque ScopedKey namespace.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Owner-scoped or governed data reaches a persistent non-engine sink.',
+  },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
 
 /**
@@ -1300,7 +1364,9 @@ export function createRegisteredDiagnosticDefinition(
  * @internal Create a structured diagnostic through the shared validating door.
  * Code and severity always come from `diagnosticDefinitions`; call sites may add
  * own-data context and a contextual message, but cannot override registry-owned
- * fields. This is the runtime half of SPEC §11's generated constructor binding.
+ * fields. Returned diagnostics are frozen so code/severity provenance survives aliases, helper
+ * calls, and container transfers. This is the runtime half of SPEC §11's generated constructor
+ * binding.
  */
 export function createRegisteredDiagnostic<Code extends DiagnosticCode>(
   code: Code,
@@ -1340,11 +1406,17 @@ export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields e
     throw new TypeError('Diagnostic message must be non-empty.');
   }
 
-  const diagnostic: RegisteredDiagnostic<Code> & Record<string, unknown> = {
+  const diagnostic = {
     code,
     message,
     severity: definition.severity,
-  };
+  } as Record<PropertyKey, unknown>;
+  securityDefineProperty(diagnostic, registeredDiagnosticBrand, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
+  });
   if (contextualHelp !== undefined && contextualHelp.length === 0) {
     throw new TypeError('Diagnostic help must be non-empty.');
   }
@@ -1387,9 +1459,27 @@ export function createRegisteredDiagnostic<Code extends DiagnosticCode, Fields e
     }
   }
 
+  const registered = freezeSecurityValue(diagnostic);
+  securityWeakSetAdd(registeredDiagnosticRegistry, registered);
+
   // The overload is backed by the reserved-field runtime checks above; the cast
-  // only retains the caller's already-validated own-data field types.
-  return diagnostic as RegisteredDiagnostic<Code> & Fields;
+  // only retains the caller's already-validated own-data field types. Runtime
+  // provenance is the private WeakSet membership above, not the TypeScript brand.
+  return registered as RegisteredDiagnostic<Code> & Fields;
+}
+
+/**
+ * @internal Derive a new registered diagnostic from an already enrolled source diagnostic.
+ * This is the only supported transfer/remint door: exact source identity is checked against the
+ * module-private registry before code authority is forwarded to the validating constructor.
+ */
+export function deriveRegisteredDiagnostic<Code extends DiagnosticCode, Fields extends object>(
+  source: RegisteredDiagnostic<Code>,
+  fields: Fields & ReservedDiagnosticFields,
+  options: DiagnosticConstructionOptions = {},
+): RegisteredDiagnostic<Code> & Fields {
+  assertRegisteredDiagnostic(source, 'Registered diagnostic derivation source');
+  return createRegisteredDiagnostic(source.code, fields, options);
 }
 
 /** @internal Create one generated, code-specific diagnostic constructor. */

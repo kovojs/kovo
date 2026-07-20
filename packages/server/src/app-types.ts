@@ -1,4 +1,4 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { EgressOptions } from './egress.js';
 import type { CsrfOptions } from './csrf.js';
@@ -18,6 +18,7 @@ import type { AppResponseHeaders } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.js';
 import type { Reader } from './managed-db.js';
+import type { PrincipalEpochStore } from './principal-epoch.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
@@ -118,14 +119,10 @@ export type ErrorShellRenderer = (context: { request: Request; status: 403 | 404
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {
   /**
-   * SF (secure-framework Tier 3, SPEC §6.6 runtime DiD, cross-browser floor — NOT a
-   * by-construction proof): app-facing third-party CSP allowlist + Trusted Types opt-in
-   * threaded into the auto-attached strict document CSP. The `allowlist` APPENDS origins
-   * to the overridable per-fetch directives (`script-src`/`style-src`/`frame-src`/
-   * `connect-src`/`img-src`) so analytics/Stripe/Sentry embeds — denied by default since
-   * there is no report-only ramp — can be declared. The non-overridable hardening
-   * directives (`base-uri`/`object-src`/`form-action`/`frame-ancestors`) stay locked and
-   * are unreachable from here (see {@link DocumentCspConfig} / `csp.ts`).
+   * SPEC §6.6 browser defense-in-depth: compiler-derived CSP origins, reviewed non-static
+   * origins, reporting/Trusted Types posture, and optional closed cross-origin isolation.
+   * String allowlist origins must match the compiler census; a non-static integration needs
+   * the explicit `{ origin, rationale }` escape. Hardening directives remain framework-owned.
    */
   csp?: DocumentCspConfig;
   structured?: DocumentConfig;
@@ -162,11 +159,19 @@ export interface AppRequestRateLimitOptions {
  */
 export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
   /**
+   * End-to-end request deadline in milliseconds. The framework aborts owned effects and discards
+   * a response that has not crossed the response mint door in time. Must be 1..300,000; arbitrary
+   * synchronous JavaScript remains cooperatively, not forcibly, cancellable (SPEC §9.5).
+   */
+  deadlineMs?: number;
+  /**
    * Maximum accepted request body size. The shell rejects an oversized `Content-Length`
    * before dispatch and wraps body readers so chunked/missing-length bodies fail with 413
    * before parse. Must be between 0 and 67,108,864 bytes; the gate cannot be disabled.
    */
   maxBodyBytes?: number;
+  /** Maximum concurrently admitted requests for this app instance (1..10,000; SPEC §9.5). */
+  maxInFlight?: number;
   /**
    * Maximum array length a framework-owned query/list result may ship to the client wire.
    * Defaults to the API4 resource-consumption floor; an audited large-read surface may raise it
@@ -207,7 +212,9 @@ export interface ResolvedAppRequestRateLimitOptions {
 /** Normalized request-shell load-shedding posture stored on `KovoApp`. */
 export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLimitOptions {
   clientIp?: (request: Request) => string | undefined;
+  deadlineMs: number;
   maxBodyBytes: number;
+  maxInFlight: number;
   maxQueryListItems: number;
   mutations: ResolvedAppRequestRateLimitOptions;
   queries: ResolvedAppRequestRateLimitOptions;
@@ -299,6 +306,8 @@ export interface CreateAppOptions<
   // replay the stored response without re-executing the handler. Production mutation declarations
   // require createPostgresAppRuntimeDb().mutationReplayStore.
   mutationReplayStore?: MutationReplayStore;
+  /** Persistent principal revocation authority used by credentials and replay receipts. */
+  principalEpochStore?: PrincipalEpochStore;
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
@@ -316,13 +325,10 @@ export interface CreateAppOptions<
  * returned by `createApp`). Carries the diagnostic code, message, source file, and
  * optional severity/position so app tooling can report it (SPEC §9.5).
  */
-export interface AppDiagnostic {
-  code: DiagnosticCode;
+export interface AppDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName: string;
   help?: string;
   length?: number;
-  message: string;
-  severity?: DiagnosticSeverity;
   start?: { column: number; line: number };
 }
 
@@ -350,6 +356,7 @@ export interface KovoApp<
   readonly liveTargetRenderers: readonly LiveTargetRenderer<any>[];
   readonly mutations: readonly AppMutationDeclaration<any>[];
   readonly mutationReplayStore?: MutationReplayStore;
+  readonly principalEpochStore?: PrincipalEpochStore;
   readonly onError?: ServerErrorHandler;
   readonly queries: readonly AppQueryDeclaration<any>[];
   readonly renderRoute?: (

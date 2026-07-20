@@ -11,7 +11,12 @@ import {
   compilerSnapshotDenseArray,
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
-import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import {
+  contextualizeCompilerDiagnostic,
+  diagnosticAt,
+  type CompilerDiagnostic,
+  type DiagnosticFactory,
+} from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
@@ -67,7 +72,12 @@ export function validateDataBindings(
       if (!result.exists) {
         compilerArrayAppend(
           output,
-          diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
+          diagnosticAt(
+            diagnostics,
+            'KV302',
+            { start: binding.index, length: binding.length },
+            binding.path,
+          ),
           'Compiler binding diagnostics',
         );
       } else if (result.nullableTraversal) {
@@ -84,7 +94,12 @@ export function validateDataBindings(
       if (!validateStateBindingPath(binding, context).exists) {
         compilerArrayAppend(
           output,
-          diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
+          diagnosticAt(
+            diagnostics,
+            'KV302',
+            { start: binding.index, length: binding.length },
+            binding.path,
+          ),
           'Compiler state binding diagnostics',
         );
       }
@@ -108,7 +123,12 @@ export function validateDataBindings(
       if (!result.exists) {
         compilerArrayAppend(
           output,
-          diagnostics.at('KV302', { start: binding?.index, length: binding?.length }, stamp.list),
+          diagnosticAt(
+            diagnostics,
+            'KV302',
+            { start: binding?.index, length: binding?.length },
+            stamp.list,
+          ),
           'Compiler list binding diagnostics',
         );
       } else if (result.nullableTraversal && binding) {
@@ -157,11 +177,19 @@ export function validateStampExpressionDrift(
     }
     compilerArrayAppend(
       output,
-      diagnostics.at(
-        stamp.binding === stamp.expression ? 'KV223' : 'KV222',
-        { start: stamp.index, length: stamp.length },
-        `data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
-      ),
+      stamp.binding === stamp.expression
+        ? diagnosticAt(
+            diagnostics,
+            'KV223',
+            { start: stamp.index, length: stamp.length },
+            `data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
+          )
+        : diagnosticAt(
+            diagnostics,
+            'KV222',
+            { start: stamp.index, length: stamp.length },
+            `data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
+          ),
       'Compiler binding-expression diagnostics',
     );
   }
@@ -469,14 +497,15 @@ function kv227Diagnostic(
   binding: DataBindAttribute,
   traversal: { segment: string },
 ): CompilerDiagnostic {
-  return {
-    ...diagnostics.at(
+  return contextualizeCompilerDiagnostic(
+    diagnosticAt(
+      diagnostics,
       'KV227',
       { start: binding.index, length: binding.length },
       `${binding.path} (segment: ${traversal.segment})`,
     ),
-    help: diagnosticDefinitions.KV227.help,
-  };
+    { help: diagnosticDefinitions.KV227.help },
+  );
 }
 
 function jsxAttributes(model: ComponentModuleModel) {

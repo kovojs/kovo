@@ -4,6 +4,8 @@ import { createBetterAuthCredentialMutation } from '@kovojs/server/internal/bett
 import {
   betterAuthCredentialRateLimitFailure,
   betterAuthCredentialMutationErrors,
+  betterAuthPasswordResetMutationErrors,
+  betterAuthRequestPasswordResetInput,
   betterAuthSignInEmailInput,
   betterAuthSignOutInput,
   betterAuthSignUpEmailInput,
@@ -20,6 +22,7 @@ import type {
 } from './credential-options.js';
 import type {
   BetterAuthCredentialMutationValue,
+  BetterAuthCredentialHandlerLike,
   BetterAuthBindingRequest,
   BetterAuthResponseLike,
   BetterAuthSignInEmailLike,
@@ -28,15 +31,24 @@ import type {
 } from './internal.js';
 import {
   callBetterAuthCredentialHandler,
+  callBetterAuthPasswordResetHandler,
   callBetterAuthSignOut,
   pinBetterAuthCredentialHandler,
   pinBetterAuthSignOut,
 } from './internal/trusted-plaintext.js';
 import {
+  cancelBetterAuthPasswordResetMailAttempt,
+  dispatchBetterAuthPasswordResetMail,
+  type BetterAuthPasswordResetMailAttempt,
+  type PinnedBetterAuthPasswordResetMailDoor,
+} from './password-reset-mail.js';
+import {
   betterAuthOwnDataOption,
   betterAuthResponseHeaders,
   betterAuthResponseStatus,
 } from './internal/intrinsics.js';
+import { normalizeBetterAuthAccountOperation } from './response-observation.js';
+import { normalizeBetterAuthPasswordResetResponse } from './response-observation.js';
 
 const NativeError = Error;
 const betterAuthCredentialBoundaryFailureMessage =
@@ -44,6 +56,96 @@ const betterAuthCredentialBoundaryFailureMessage =
 
 function betterAuthCredentialBoundaryFailure(): Error {
   return new NativeError(betterAuthCredentialBoundaryFailureMessage);
+}
+
+interface BetterAuthPasswordResetMutationOptions<
+  Key extends string,
+  Request extends BetterAuthBindingRequest,
+  GuardedRequest extends Request,
+> extends BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest> {
+  mail: PinnedBetterAuthPasswordResetMailDoor;
+}
+
+/**
+ * @internal Builds the fixed binding's feature-conditional password-reset request mutation.
+ *
+ * The routed Better Auth response is normalized to one generic accepted result and the exact
+ * registered mail sender receives one reset-shaped message in both account worlds (SPEC §9.2).
+ */
+export function betterAuthRequestPasswordResetMutation<
+  const Key extends string = 'auth/request-password-reset',
+  Request extends BetterAuthBindingRequest = BetterAuthBindingRequest,
+  GuardedRequest extends Request = Request,
+>(
+  auth: BetterAuthCredentialHandlerLike,
+  options: BetterAuthPasswordResetMutationOptions<Key, Request, GuardedRequest>,
+): MutationDefinition<
+  Key,
+  typeof betterAuthRequestPasswordResetInput,
+  typeof betterAuthPasswordResetMutationErrors,
+  Request,
+  BetterAuthCredentialMutationValue<'recovery-accepted'>,
+  GuardedRequest
+> &
+  MutationFormDefinition<Key, Request> {
+  const pinnedAuth = pinBetterAuthCredentialHandler(auth, 'requestPasswordReset');
+  const mail = betterAuthOwnDataOption<PinnedBetterAuthPasswordResetMailDoor>(
+    options,
+    'mail',
+    'Better Auth password-reset mutation mail door',
+  );
+  if (mail === undefined) {
+    throw new NativeError('Better Auth password-reset mutation requires its pinned mail door.');
+  }
+  const key = betterAuthOwnDataOption<Key>(options, 'key', 'Better Auth credential option key');
+  return createBetterAuthCredentialMutation(key ?? ('auth/request-password-reset' as Key), {
+    ...credentialMutationDefinitionOptions(
+      'requestPasswordReset',
+      options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
+    ),
+    errors: betterAuthPasswordResetMutationErrors,
+    input: betterAuthRequestPasswordResetInput,
+    redirectTo: (result: { value: BetterAuthCredentialMutationValue<'recovery-accepted'> }) =>
+      result.value.redirectTo,
+    async handler(input, request, _context) {
+      let attempt: BetterAuthPasswordResetMailAttempt | undefined;
+      try {
+        const routed = await callBetterAuthPasswordResetHandler(
+          pinnedAuth,
+          { email: input.email, redirectTo: mail.resetPath },
+          request.headers,
+          request,
+          mail,
+        );
+        attempt = routed.attempt;
+        const rateLimitFailure = betterAuthCredentialRateLimitFailure(routed.response);
+        if (rateLimitFailure !== undefined) {
+          cancelBetterAuthPasswordResetMailAttempt(attempt);
+          attempt = undefined;
+          return rateLimitFailure;
+        }
+        const responseStatus = betterAuthResponseStatus(routed.response);
+        if (responseStatus !== undefined && responseStatus >= 500) {
+          cancelBetterAuthPasswordResetMailAttempt(attempt);
+          attempt = undefined;
+          throw betterAuthCredentialBoundaryFailure();
+        }
+        await dispatchBetterAuthPasswordResetMail(attempt);
+        attempt = undefined;
+        return await normalizeBetterAuthPasswordResetResponse(routed.response);
+      } catch {
+        if (attempt !== undefined) {
+          try {
+            cancelBetterAuthPasswordResetMailAttempt(attempt);
+          } catch {
+            // Dispatch seals before invoking the deployer sender; a sender failure therefore
+            // reaches this cleanup path after the attempt has already been irreversibly removed.
+          }
+        }
+        throw betterAuthCredentialBoundaryFailure();
+      }
+    },
+  });
 }
 
 /**
@@ -182,7 +284,11 @@ export function betterAuthSignUpEmailMutation<
     input: betterAuthSignUpEmailInput,
     redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-up'> }) =>
       result.value.redirectTo,
-    async handler(input, request, context) {
+    async handler(input, request, _context) {
+      const accepted = {
+        redirectTo: redirectPath(input.next, defaultRedirectTo),
+        status: 'signed-up' as const,
+      };
       try {
         const response = await callBetterAuthCredentialHandler(
           pinnedAuth,
@@ -202,19 +308,13 @@ export function betterAuthSignUpEmailMutation<
           throw betterAuthCredentialBoundaryFailure();
         }
 
-        const success = await resolveBetterAuthCredentialSuccess(response, context, {
-          redirectTo: redirectPath(input.next, defaultRedirectTo),
-          status: 'signed-up',
-        });
-
-        if (success === null) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        return success;
+        // SPEC §9.2 account-creation: duplicate and newly created accounts cross the Kovo-owned
+        // credential-handler door as one generic accepted result. In particular, sign-up never
+        // forwards an account-dependent session cookie (fixed bindings use autoSignIn:false).
+        return await normalizeBetterAuthAccountOperation(response, accepted);
       } catch (error) {
         if (isBetterAuthCredentialFailureError(error)) {
-          return context.fail('INVALID_CREDENTIALS', {});
+          return accepted;
         }
 
         throw betterAuthCredentialBoundaryFailure();

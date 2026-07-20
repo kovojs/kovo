@@ -89,6 +89,14 @@ const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
 );
+const compilerCapabilityClosureVerdictPath = path.join(
+  repoRoot,
+  'packages/compiler/src/security/capability-closure.ts',
+);
+const cliDependencyCapabilityLoaderPath = path.join(
+  repoRoot,
+  'packages/cli/src/dependency-capability-loader.ts',
+);
 const frameworkImplementationDigestPath = path.join(
   repoRoot,
   'packages/compiler/src/security/framework-implementation-digest.ts',
@@ -133,6 +141,7 @@ const serverRequestBodyProvenancePath = path.join(
 );
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
 const serverGuardsPath = path.join(repoRoot, 'packages/server/src/guards.ts');
+const serverGuardArgsReceiptPath = path.join(repoRoot, 'packages/server/src/guard-args-receipt.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
@@ -164,6 +173,247 @@ const serverBuildBehavioralInstrumentation = [
   'export const __securityMutationVercelFunctionSource = vercelFunctionSource;',
 ].join('\n');
 
+const dependencyLoaderPreEvaluationModuleCensusBranch = [
+  '      if (reviewedPackage !== undefined) {',
+  '        let ast: unknown;',
+].join('\n');
+const removedDependencyLoaderPreEvaluationModuleCensusBranch = [
+  '      if (false && reviewedPackage !== undefined) {',
+  '        let ast: unknown;',
+].join('\n');
+const dependencyLoaderSsrExternalOverlapBranch = [
+  '        if (',
+  '          config.ssr.external === true ||',
+  '          config.ssr.external?.some((external) => dependencySpecifierMatches(specifier, external))',
+  '        ) {',
+].join('\n');
+const removedDependencyLoaderSsrExternalOverlapBranch = ['        if (false) {'].join('\n');
+const dependencyLoaderExternalHtmlModuleClosureBranch = [
+  "      if (lane === 'build-client' && sourcePath !== undefined && isHtmlSourcePath(sourcePath)) {",
+  '        assertHtmlExecutableSources(',
+  '          source,',
+  '          sourcePath,',
+  '          configuredRoot,',
+  '          configuredPublicDir,',
+  '          approvedPaths,',
+  '        );',
+].join('\n');
+const removedDependencyLoaderExternalHtmlModuleClosureBranch = [
+  '      if (false) {',
+  '        assertHtmlExecutableSources(',
+  '          source,',
+  '          sourcePath,',
+  '          configuredRoot,',
+  '          configuredPublicDir,',
+  '          approvedPaths,',
+  '        );',
+].join('\n');
+const dependencyLoaderCjsAliasClosureBranch = '        if (aliasesCommonJsLoaderAuthority(ast)) {';
+const removedDependencyLoaderCjsAliasClosureBranch =
+  '        if (false && aliasesCommonJsLoaderAuthority(ast)) {';
+const dependencyLoaderReviewedChildAliasClosureBranch = [
+  '          if (',
+  '            configuredAliases.some(',
+  '              (alias) =>',
+  '                aliasReplacementFor(edge.specifier!, alias.find, alias.replacement) !== undefined,',
+  '            )',
+  '          ) {',
+].join('\n');
+const removedDependencyLoaderReviewedChildAliasClosureBranch = [
+  '          if (false &&',
+  '            configuredAliases.some(',
+  '              (alias) =>',
+  '                aliasReplacementFor(edge.specifier!, alias.find, alias.replacement) !== undefined,',
+  '            )',
+  '          ) {',
+].join('\n');
+const dependencyLoaderReviewedExtensionOrderClosureBranch = [
+  '      if (',
+  '        admittedSpecifiers.size > 0 &&',
+  '        (config.resolve.extensions.length !== reviewedPackageResolveExtensions.length ||',
+  '          config.resolve.extensions.some(',
+  '            (extension, index) => extension !== reviewedPackageResolveExtensions[index],',
+  '          ))',
+  '      ) {',
+].join('\n');
+const removedDependencyLoaderReviewedExtensionOrderClosureBranch = [
+  '      if (false &&',
+  '        admittedSpecifiers.size > 0 &&',
+  '        (config.resolve.extensions.length !== reviewedPackageResolveExtensions.length ||',
+  '          config.resolve.extensions.some(',
+  '            (extension, index) => extension !== reviewedPackageResolveExtensions[index],',
+  '          ))',
+  '      ) {',
+].join('\n');
+const dependencyLoaderUnsupportedSubgraphSuffixBranch = [
+  'function specifierHasUnsupportedSubgraphSuffix(specifier: string): boolean {',
+  "  return specifier.includes('?') || specifier.includes('#');",
+].join('\n');
+const removedDependencyLoaderUnsupportedSubgraphSuffixBranch = [
+  'function specifierHasUnsupportedSubgraphSuffix(specifier: string): boolean {',
+  '  return false;',
+].join('\n');
+const dependencyLoaderReviewedModuleSuffixClosureBranch = [
+  'function isReviewedPackageCodeModule(sourcePath: string): boolean {',
+  '  return reviewedPackageModuleSuffixes.has(extname(sourcePath));',
+].join('\n');
+const removedDependencyLoaderReviewedModuleSuffixClosureBranch = [
+  'function isReviewedPackageCodeModule(sourcePath: string): boolean {',
+  '  return true;',
+].join('\n');
+const dependencyLoaderReviewedWorkerConstructorClosureBranch = [
+  "function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {",
+  '  const pending: unknown[] = [ast];',
+].join('\n');
+const removedDependencyLoaderReviewedWorkerConstructorClosureBranch = [
+  "function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {",
+  '  return undefined;',
+  '  const pending: unknown[] = [ast];',
+].join('\n');
+const dependencyLoaderExecutableAssetCarrierClosureBranch = [
+  'function reviewedExecutableAssetCarrier(',
+  '  ast: unknown,',
+  "): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {",
+  '  const pending: unknown[] = [ast];',
+].join('\n');
+const removedDependencyLoaderExecutableAssetCarrierClosureBranch = [
+  'function reviewedExecutableAssetCarrier(',
+  '  ast: unknown,',
+  "): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {",
+  '  return undefined;',
+  '  const pending: unknown[] = [ast];',
+].join('\n');
+const dependencyLoaderDirectExportOwnershipClosureBranch =
+  '        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)';
+const removedDependencyLoaderDirectExportOwnershipClosureBranch = '        false';
+const dependencyLoaderNonliteralArtifactClosureBranch =
+  '        if (artifactModuleEdges.some((edge) => edge.specifier === undefined)) {';
+const removedDependencyLoaderNonliteralArtifactClosureBranch =
+  '        if (false && artifactModuleEdges.some((edge) => edge.specifier === undefined)) {';
+const dependencyLoaderChunkOutputKindClosureBranch = [
+  '      const bundleOwnedChunkFileNames = new Set(',
+  '        Object.values(bundle).flatMap((output) =>',
+  "          output.type === 'chunk' ? [output.fileName] : [],",
+  '        ),',
+  '      );',
+].join('\n');
+const weakenedDependencyLoaderChunkOutputKindClosureBranch = [
+  '      const bundleOwnedChunkFileNames = new Set(',
+  '        Object.values(bundle).flatMap((output) =>',
+  "          output.type === 'chunk' || output.type === 'asset' ? [output.fileName] : [],",
+  '        ),',
+  '      );',
+].join('\n');
+const dependencyLoaderArtifactUrlAmbiguityClosureBranch = [
+  'function artifactRelativeSpecifierHasRuntimeUrlAmbiguity(specifier: string): boolean {',
+  "  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;",
+].join('\n');
+const removedDependencyLoaderArtifactUrlAmbiguityClosureBranch = [
+  'function artifactRelativeSpecifierHasRuntimeUrlAmbiguity(specifier: string): boolean {',
+  '  return false;',
+  "  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;",
+].join('\n');
+const metaRefreshStaticPolicyClosureBranch =
+  "  if (control.staticPolicy === 'meta-refresh-http-equiv') {";
+const removedMetaRefreshStaticPolicyClosureBranch =
+  "  if (false && control.staticPolicy === 'meta-refresh-http-equiv') {";
+const dependencyLoaderNestedPackageBoundaryBranch = [
+  '        if (',
+  '          relativePackageImportCrossesNestedBoundary(',
+  '            reviewedPackage.root,',
+  '            importerPath,',
+  '            specifier,',
+  '          ) ||',
+  '          (resolvedPath !== undefined &&',
+  '            sourceIsWithinRoot(reviewedPackage.root, resolvedPath) &&',
+  '            !sourceBelongsToPackageRoot(reviewedPackage.root, resolvedPath))',
+  '        ) {',
+].join('\n');
+const removedDependencyLoaderNestedPackageBoundaryBranch = [
+  '        if (',
+  '          false ||',
+  '          (resolvedPath !== undefined &&',
+  '            sourceIsWithinRoot(reviewedPackage.root, resolvedPath) &&',
+  '            !sourceBelongsToPackageRoot(reviewedPackage.root, resolvedPath))',
+  '        ) {',
+].join('\n');
+const dependencyLoaderHtmlSmilClosureBranch = [
+  '  if (',
+  "    element.namespaceURI === 'http://www.w3.org/2000/svg' &&",
+  '    htmlSvgSmilExecutionElements.has(element.tagName.toLowerCase())',
+  '  ) {',
+].join('\n');
+const removedDependencyLoaderHtmlSmilClosureBranch = [
+  '  if (false &&',
+  "    element.namespaceURI === 'http://www.w3.org/2000/svg' &&",
+  '    htmlSvgSmilExecutionElements.has(element.tagName.toLowerCase())',
+  '  ) {',
+].join('\n');
+const dependencyLoaderHtmlElementControlClosureBranch = '    if (contextIssue !== undefined) {';
+const removedDependencyLoaderHtmlElementControlClosureBranch =
+  '    if (false && contextIssue !== undefined) {';
+const dependencyLoaderHtmlBaseTargetClosureBranch =
+  "    if (htmlAttribute(element, 'target') !== undefined) {";
+const removedDependencyLoaderHtmlBaseTargetClosureBranch =
+  "    if (false && htmlAttribute(element, 'target') !== undefined) {";
+const dependencyLoaderHtmlNestedDocumentClosureBranch = [
+  '  if (',
+  "    element.tagName === 'iframe' ||",
+  "    element.tagName === 'frame' ||",
+  "    element.tagName === 'frameset' ||",
+  "    element.tagName === 'object' ||",
+  "    element.tagName === 'embed'",
+  '  ) {',
+].join('\n');
+const removedDependencyLoaderHtmlNestedDocumentClosureBranch = [
+  '  if (false && (',
+  "    element.tagName === 'iframe' ||",
+  "    element.tagName === 'frame' ||",
+  "    element.tagName === 'frameset' ||",
+  "    element.tagName === 'object' ||",
+  "    element.tagName === 'embed'",
+  '  )) {',
+].join('\n');
+const dependencyLoaderHtmlPublicShadowBranch =
+  '      if (publicTarget !== undefined && existsSync(publicTarget)) {';
+const removedDependencyLoaderHtmlPublicShadowBranch =
+  '      if (false && publicTarget !== undefined && existsSync(publicTarget)) {';
+const dependencyLoaderRetainedArtifactTargetBranch = [
+  '  throw dependencyCapabilityError(',
+  '    `unresolved module target ${specifier} escaped the supported ${lane} bundle-owned artifact`,',
+  '  );',
+].join('\n');
+const removedDependencyLoaderRetainedArtifactTargetBranch = '  return;';
+const dependencyLoaderArtifactRelativeIdentityBranch = [
+  'function artifactSpecifierIsBundleOwned(',
+  '  importerFileName: string,',
+  '  specifier: string,',
+  '  bundleOwnedFileNames: ReadonlySet<string>,',
+  '): boolean {',
+  "  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;",
+].join('\n');
+const weakenedDependencyLoaderArtifactRelativeIdentityBranch = [
+  'function artifactSpecifierIsBundleOwned(',
+  '  importerFileName: string,',
+  '  specifier: string,',
+  '  bundleOwnedFileNames: ReadonlySet<string>,',
+  '): boolean {',
+  '  if (bundleOwnedFileNames.has(specifier)) return true;',
+  "  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;",
+].join('\n');
+const compilerGeneratedWireInitializerPostureBranch = [
+  "    '@kovojs/server/internal/wire',",
+  '    {',
+  '      // mutation-wire.ts acquires the development attestation secret at module initialization.',
+  '      initializer: generatedCryptoDoor,',
+].join('\n');
+const weakenedCompilerGeneratedWireInitializerPostureBranch = [
+  "    '@kovojs/server/internal/wire',",
+  '    {',
+  '      // mutation-wire.ts acquires the development attestation secret at module initialization.',
+  '      initializer: generatedAuthorityFree,',
+].join('\n');
+
 const runtimeSelectedExecutableReferenceClosureBranch =
   '      appendRuntimeSelectedExecutableReferenceDiagnostics(found, diagnostics, element);';
 const removedRuntimeSelectedExecutableReferenceClosureBranch =
@@ -182,6 +432,13 @@ const lifecyclePrivateScopeCarrierPinBranch =
   '  return pinnedPrivateScopeRequestCarrier(lifecycleRequest) as LifecycleRequest<';
 const removedLifecyclePrivateScopeCarrierPinBranch =
   '  return lifecycleRequest as LifecycleRequest<';
+const guardArgsReceiptBranch = 'snapshotGuardArgsReceipt(args)';
+const removedGuardArgsReceiptBranch = 'args';
+const guardArgsDateRejectionBranch = '  if (securityIsDate(value)) {';
+const weakenedGuardArgsDateRejectionBranch = [
+  '  if (securityIsDate(value)) return { handled: true, value };',
+  '  if (false) {',
+].join('\n');
 const dynamicBindingControlPlaneClosureBranch = [
   "  if (options.posture === 'dynamic-binding' && isGeneratedOnlySemanticAttribute(name)) {",
   '    return blockedDecision(',
@@ -278,7 +535,7 @@ function finiteBrowserControlTupleDeletionMutants() {
   const tupleSources = [
     ...manifestSource.matchAll(/^  freezeSecurityValue\(\[\n(?:    .*\n){5}  \] as const\),$/gm),
   ].map((match) => match[0]);
-  if (tupleSources.length !== 66) {
+  if (tupleSources.length !== 67) {
     throw new Error(
       `finite browser-control tuple source denominator drifted: ${tupleSources.length}`,
     );
@@ -293,7 +550,7 @@ function finiteBrowserControlTupleDeletionMutants() {
     const mutationIdentity = `${tag}-${attribute}`.replaceAll(/[^a-z0-9]+/g, '-');
     return {
       behavioralTypeScript: true,
-      description: `Deletes ${tag}[${attribute}] from the canonical 66-tuple browser-control denominator.`,
+      description: `Deletes ${tag}[${attribute}] from the canonical 67-tuple browser-control denominator.`,
       expectedKiller: 'the finite browser-control denominator must retain every exact tuple',
       name: `runtime-sink/drop-finite-browser-${mutationIdentity}-tuple`,
       replacement: `  // ${tag}[${attribute}] finite browser-control tuple removed by mutant`,
@@ -426,6 +683,7 @@ const removedInlineTypedMutationMismatchClosureBranch = [
 const browserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
   "  ['Bun', 'process'],",
+  "  ['Crypto', 'crypto-acquisition'],",
   "  ['Deno', 'process'],",
   "  ['EventSource', 'network'],",
   "  ['Function', 'vm'],",
@@ -434,6 +692,7 @@ const browserRtcNetworkCapabilityBranch = [
 const weakenedBrowserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
   "  ['Bun', 'process'],",
+  "  ['Crypto', 'crypto-acquisition'],",
   "  ['Deno', 'process'],",
   "  ['EventSource', 'network'],",
   "  ['Function', 'vm'],",
@@ -1226,13 +1485,11 @@ const semanticGraphBehavioralInstrumentation = [
 ].join('\n');
 
 const semanticV2SourceByteEqualityBranch =
-  '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();';
-const weakenedSemanticV2SourceByteEqualityBranch =
-  '    if (!sourceFile || !semanticSource) return new Map();';
-const semanticV2SchemaBranch =
-  "      if (graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();";
+  '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {';
+const weakenedSemanticV2SourceByteEqualityBranch = '    if (!sourceFile || !semanticSource) {';
+const semanticV2SchemaBranch = "      if (graph.schema !== 'kovo-security-semantic-graph/v2') {";
 const weakenedSemanticV2SchemaBranch =
-  "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();";
+  "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') {";
 const semanticV2FactoryRootBranch = [
   '    requestCompilerSemanticRootForFactoryCall(binding.factory, factoryCall, fileName) !==',
   '      root.root ||',
@@ -1313,12 +1570,58 @@ const weakenedAmbientCryptoRandomUuidStabilityBranch = [
   '    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&',
   '    true &&',
 ].join('\n');
-const finiteManagedDatabaseContinuationBranch =
-  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&';
-const weakenedFiniteManagedDatabaseContinuationBranch = '      true &&';
-const managedDatabaseForeignArgumentClosureBranch =
-  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)';
-const weakenedManagedDatabaseForeignArgumentClosureBranch = '      true';
+const finiteManagedDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+].join('\n');
+const weakenedFiniteManagedDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      true &&',
+].join('\n');
+const managedDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)',
+].join('\n');
+const weakenedManagedDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      true',
+].join('\n');
+const finiteGeneratedReadonlyDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+].join('\n');
+const weakenedFiniteGeneratedReadonlyDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      true &&',
+].join('\n');
+const generatedReadonlyDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)',
+].join('\n');
+const weakenedGeneratedReadonlyDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      true',
+].join('\n');
 const exactProjectSchemaFactoryIdentityBranch =
   '  return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);';
 const weakenedExactProjectSchemaFactoryIdentityBranch = '  return factoryIdentity !== undefined;';
@@ -1694,6 +1997,7 @@ const staticBuildAuthoritativeProjectBranch = [
   '  cookieDowngrades: CookieDowngradeExplain[];',
   '  diagnostics: StaticDiagnosticFact[];',
   '  revealed: RevealExplainFact[];',
+  '  trustEscapes: TrustEscapeExplain[];',
   '  unregisteredSinks: UnregisteredSinkFact[];',
   '} {',
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
@@ -1704,10 +2008,11 @@ const bypassedStaticBuildAuthoritativeProjectBranch = [
   '  cookieDowngrades: CookieDowngradeExplain[];',
   '  diagnostics: StaticDiagnosticFact[];',
   '  revealed: RevealExplainFact[];',
+  '  trustEscapes: TrustEscapeExplain[];',
   '  unregisteredSinks: UnregisteredSinkFact[];',
   '} {',
   '  if (!options.buildConfigEntryFileName) {',
-  '    return { capabilities: [], cookieDowngrades: [], diagnostics: [], revealed: [], unregisteredSinks: [] };',
+  '    return { capabilities: [], cookieDowngrades: [], diagnostics: [], revealed: [], trustEscapes: [], unregisteredSinks: [] };',
   '  }',
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
 ].join('\n');
@@ -1717,10 +2022,26 @@ const rawRegistrationRequestProcessClosureBranch = [
   '      sourceFiles,',
   '      options.buildConfigEntryFileName,',
   '      options.compilerSecuritySemanticSources,',
+  '      options.compilerTaskBClosure,',
   '    );',
 ].join('\n');
 const removedRawRegistrationRequestProcessClosureBranch =
   '    const facts: UnregisteredSinkFact[] = [];';
+const taskBCapabilityRootCorrespondenceBranch =
+  '        verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);';
+const removedTaskBCapabilityRootCorrespondenceBranch =
+  '        // TASK B capability-root correspondence removed by mutant';
+const taskBPackageRootCorrespondenceBranch = [
+  '  if (',
+  '    dependencyRootKinds.length === 0 ||',
+  '    dependencyRootKinds.some((rootKinds) => !rootKinds.has(rootKind))',
+  '  ) {',
+].join('\n');
+const removedTaskBPackageRootCorrespondenceBranch = '  if (false) {';
+const taskBSemanticRootCorrespondenceBranch =
+  '  verifyRequestTaskBSemanticRoot(context, callable);';
+const removedTaskBSemanticRootCorrespondenceBranch =
+  '  // TASK B semantic-root correspondence removed by mutant';
 
 const reviewedCommandCapabilityDoorBranch =
   '  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
@@ -1756,9 +2077,9 @@ const reviewedDeclaredSecretReadExecutionBranch =
 const removedReviewedDeclaredSecretReadExecutionBranch =
   '  if (false && serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {';
 const reviewedTrustedRevealDoorBranch =
-  '  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {';
+  '  if (frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {';
 const removedReviewedTrustedRevealDoorBranch =
-  '  if (false && serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {';
+  '  if (false && frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {';
 const reviewedSecretBoxDoorBranch =
   '  if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {';
 const removedReviewedSecretBoxDoorBranch =
@@ -1816,6 +2137,290 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 
 export const SECURITY_GATE_MUTANTS = [
   {
+    baseModule: {},
+    description: 'Lets a Vite alias retarget a reviewed package child edge after review.',
+    expectedKiller:
+      'reviewed package child edges must remain independent of application Vite aliases',
+    name: 'dependency-loader/drop-reviewed-child-alias-closure',
+    replacement: removedDependencyLoaderReviewedChildAliasClosureBranch,
+    search: dependencyLoaderReviewedChildAliasClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderReviewedChildAliasBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets custom Vite extension ordering retarget a reviewed package child edge.',
+    expectedKiller:
+      'reviewed package child identities require the framework-fixed extension resolution order',
+    name: 'dependency-loader/drop-reviewed-extension-order-closure',
+    replacement: removedDependencyLoaderReviewedExtensionOrderClosureBranch,
+    search: dependencyLoaderReviewedExtensionOrderClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderReviewedExtensionOrderBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets reviewed or approved module edges acquire Vite query/fragment subgraphs.',
+    expectedKiller:
+      'reviewed and approved module edges must reject query or fragment semantics without a Kovo-owned proof',
+    name: 'dependency-loader/drop-unsupported-subgraph-suffix-closure',
+    replacement: removedDependencyLoaderUnsupportedSubgraphSuffixBranch,
+    search: dependencyLoaderUnsupportedSubgraphSuffixBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderUnsupportedSubgraphSuffixBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets Vite assign asset or stylesheet semantics inside a reviewed package graph.',
+    expectedKiller:
+      'reviewed package exports and child edges must resolve only to the closed JS/TS module suffix set',
+    name: 'dependency-loader/drop-reviewed-module-suffix-closure',
+    replacement: removedDependencyLoaderReviewedModuleSuffixClosureBranch,
+    search: dependencyLoaderReviewedModuleSuffixClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderReviewedModuleSuffixBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a reviewed package create a Worker from an ordinary URL string.',
+    expectedKiller:
+      'reviewed packages must not create Worker or SharedWorker subgraphs outside the dependency closure',
+    name: 'dependency-loader/drop-reviewed-worker-constructor-closure',
+    replacement: removedDependencyLoaderReviewedWorkerConstructorClosureBranch,
+    search: dependencyLoaderReviewedWorkerConstructorClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderReviewedWorkerConstructorBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a reviewed package emit an opaque new-URL executable asset side graph.',
+    expectedKiller:
+      'reviewed packages must not emit executable new-URL assets outside the dependency closure',
+    name: 'dependency-loader/drop-executable-asset-carrier-closure',
+    replacement: removedDependencyLoaderExecutableAssetCarrierClosureBranch,
+    search: dependencyLoaderExecutableAssetCarrierClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderExecutableAssetCarrierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a direct package export cross into a nested package identity.',
+    expectedKiller: 'direct export resolution must retain the exact nearest owning package root',
+    name: 'dependency-loader/drop-direct-export-ownership-closure',
+    replacement: removedDependencyLoaderDirectExportOwnershipClosureBranch,
+    search: dependencyLoaderDirectExportOwnershipClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderDirectExportOwnershipBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops non-literal module edges from the final executable artifact census.',
+    expectedKiller:
+      'supported artifacts must reject every retained non-literal import before deployment',
+    name: 'dependency-loader/drop-nonliteral-artifact-closure',
+    replacement: removedDependencyLoaderNonliteralArtifactClosureBranch,
+    search: dependencyLoaderNonliteralArtifactClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderNonliteralArtifactBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a JavaScript asset masquerade as a bundle-owned executable chunk.',
+    expectedKiller: 'only OutputChunk file names may satisfy executable module ownership',
+    name: 'dependency-loader/widen-bundle-owned-chunk-kind',
+    replacement: weakenedDependencyLoaderChunkOutputKindClosureBranch,
+    search: dependencyLoaderChunkOutputKindClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderChunkOutputKindBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets runtime URL decoding retarget a retained relative module specifier.',
+    expectedKiller:
+      'percent, query, fragment, backslash, and control ambiguity must close before chunk ownership',
+    name: 'dependency-loader/drop-artifact-url-ambiguity-closure',
+    replacement: removedDependencyLoaderArtifactUrlAmbiguityClosureBranch,
+    search: dependencyLoaderArtifactUrlAmbiguityClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderArtifactUrlAmbiguityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets raw SVG SMIL transfer values into executable browser sinks.',
+    expectedKiller:
+      'raw HTML must reject the same closed SMIL primitive set as compiler-owned JSX lowering',
+    name: 'dependency-loader/drop-html-smil-closure',
+    replacement: removedDependencyLoaderHtmlSmilClosureBranch,
+    search: dependencyLoaderHtmlSmilClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderHtmlSmilBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets raw HTML bypass the shared finite element-control policy.',
+    expectedKiller: 'raw targets and relationship controls must not mint window.opener authority',
+    name: 'dependency-loader/drop-html-element-control-closure',
+    replacement: removedDependencyLoaderHtmlElementControlClosureBranch,
+    search: dependencyLoaderHtmlElementControlClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderHtmlElementControlBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets meta refresh regain automatic navigation authority.',
+    expectedKiller:
+      'the canonical finite sink policy must reject meta http-equiv refresh in every consumer',
+    name: 'runtime-sink/drop-meta-refresh-static-policy',
+    replacement: removedMetaRefreshStaticPolicyClosureBranch,
+    search: metaRefreshStaticPolicyClosureBranch,
+    sourceFile: coreSinkPolicyPath,
+    sourceOnly: true,
+    test: assertMetaRefreshStaticPolicyBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets raw HTML set a document-wide browsing-context target.',
+    expectedKiller: 'base target must not retarget later raw HTML navigation contexts',
+    name: 'dependency-loader/drop-html-base-target-closure',
+    replacement: removedDependencyLoaderHtmlBaseTargetClosureBranch,
+    search: dependencyLoaderHtmlBaseTargetClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderHtmlBaseTargetBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets an initially empty raw embedded document become a named navigation target.',
+    expectedKiller:
+      'raw iframe, frame, frameset, object, and embed elements must remain compiler-owned',
+    name: 'dependency-loader/drop-html-nested-document-closure',
+    replacement: removedDependencyLoaderHtmlNestedDocumentClosureBranch,
+    search: dependencyLoaderHtmlNestedDocumentClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderHtmlNestedDocumentBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a Vite public asset shadow an approved raw-HTML module URL.',
+    expectedKiller:
+      'raw HTML modules must bind to the approved source even when publicDir contains the same URL',
+    name: 'dependency-loader/drop-html-public-shadow-closure',
+    replacement: removedDependencyLoaderHtmlPublicShadowBranch,
+    search: dependencyLoaderHtmlPublicShadowBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderHtmlPublicShadowBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a retained non-bare import execute outside the bundle-owned artifact.',
+    expectedKiller:
+      'literal Vite-ignored relative and file URL imports must fail the final artifact census',
+    name: 'dependency-loader/drop-retained-artifact-target-closure',
+    replacement: removedDependencyLoaderRetainedArtifactTargetBranch,
+    search: dependencyLoaderRetainedArtifactTargetBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderRetainedArtifactTargetBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats a retained bare specifier as owned when it equals a bundle file name.',
+    expectedKiller:
+      'only relative runtime specifiers normalized from their importer may bind bundle-owned files',
+    name: 'dependency-loader/allow-bare-bundle-key-collision',
+    replacement: weakenedDependencyLoaderArtifactRelativeIdentityBranch,
+    search: dependencyLoaderArtifactRelativeIdentityBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderBareBundleKeyBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a relative package edge cross into a physically nested package identity.',
+    expectedKiller: 'reviewed relative edges must retain the exact nearest owning package boundary',
+    name: 'dependency-loader/drop-nested-package-boundary-closure',
+    replacement: removedDependencyLoaderNestedPackageBoundaryBranch,
+    search: dependencyLoaderNestedPackageBoundaryBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderNestedPackageBoundaryBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a reviewed CommonJS package alias loader authority into a dynamic edge.',
+    expectedKiller:
+      'reviewed packages may invoke literal loader edges but cannot retain or alias the loader itself',
+    name: 'dependency-loader/drop-cjs-loader-alias-closure',
+    replacement: removedDependencyLoaderCjsAliasClosureBranch,
+    search: dependencyLoaderCjsAliasClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderCjsAliasBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Deletes the pre-evaluation AST census for reviewed package module edges in Vite SSR.',
+    expectedKiller:
+      'supported SSR app evaluation must reject uncensused package children and Node builtins before execution',
+    name: 'dependency-loader/drop-ssr-pre-evaluation-module-census',
+    replacement: removedDependencyLoaderPreEvaluationModuleCensusBranch,
+    search: dependencyLoaderPreEvaluationModuleCensusBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderSsrPreEvaluationBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a direct app dependency borrow an explicitly trusted SSR host external.',
+    expectedKiller:
+      'app dependency manifests must not overlap an SSR external that bypasses loader re-witnessing',
+    name: 'dependency-loader/drop-direct-ssr-external-overlap-closure',
+    replacement: removedDependencyLoaderSsrExternalOverlapBranch,
+    search: dependencyLoaderSsrExternalOverlapBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderDirectSsrExternalBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets executable HTML module URLs bypass the immutable app-source snapshot.',
+    expectedKiller:
+      'client builds must reject local, remote, data, and encoded module URLs outside exact approved files',
+    name: 'dependency-loader/drop-external-html-module-closure',
+    replacement: removedDependencyLoaderExternalHtmlModuleClosureBranch,
+    search: dependencyLoaderExternalHtmlModuleClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderExternalHtmlModuleBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Misclassifies the compiler-generated wire module initializer as authority-free.',
+    expectedKiller:
+      'the exact generated wire ABI manifest must retain its module-initializer crypto door',
+    name: 'capability-closure/weaken-generated-wire-initializer-posture',
+    replacement: weakenedCompilerGeneratedWireInitializerPostureBranch,
+    search: compilerGeneratedWireInitializerPostureBranch,
+    sourceFile: compilerCapabilityClosureVerdictPath,
+    sourceOnly: true,
+    test: assertCompilerGeneratedWireAbiPostureBehavior,
+  },
+  {
     behavioralTypeScript: true,
     description:
       'Restores allow-by-omission in the standalone generated-client security-operation helper.',
@@ -1838,7 +2443,7 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertScopedKeyRuntimeWitnessIsPinned,
   },
   {
-    behavioralEntryFile: compilerSecurityProvenanceRelationPath,
+    behavioralEntryFile: compilerBehavioralEntryPath,
     behavioralTypeScript: true,
     description:
       'Deletes compiler provenance closure for app-authored static lowered executable references.',
@@ -2477,6 +3082,28 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description: 'Layers app-owned parsed args directly onto the guarded request carrier.',
+    expectedKiller:
+      'withGuardArgs must reconstruct one stable receipt before guards and handlers observe args',
+    name: 'server-lifecycle/drop-guard-args-receipt',
+    replacement: removedGuardArgsReceiptBranch,
+    search: guardArgsReceiptBranch,
+    sourceFile: serverGuardsPath,
+    test: assertGuardArgsReceiptIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Treats a mutable native Date as an already-safe validated-args receipt.',
+    expectedKiller:
+      'Date internal slots must be rejected before guards or final read/write consumers run',
+    name: 'server-lifecycle/allow-mutable-date-guard-args-receipt',
+    replacement: weakenedGuardArgsDateRejectionBranch,
+    search: guardArgsDateRejectionBranch,
+    sourceFile: serverGuardArgsReceiptPath,
+    test: assertGuardArgsDateRejectionIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
     description: 'Lets an unenrolled positional parameter pass as private context.',
     expectedKiller: 'private helper calls must reject positional/name/type carrier guesses',
     name: 'drizzle-analyzer-summary/trust-renamed-input-carrier',
@@ -2780,6 +3407,38 @@ export const SECURITY_GATE_MUTANTS = [
     search: rawRegistrationRequestProcessClosureBranch,
     sourceFile: drizzleTrustEscapesPath,
     test: assertTaskBRawRegistrationClosureIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact capability-root correspondence from the TASK B routing proof.',
+    expectedKiller:
+      'TASK B must reject a request root absent from the same-snapshot capability census',
+    name: 'drizzle-task-b/drop-capability-root-correspondence',
+    replacement: removedTaskBCapabilityRootCorrespondenceBranch,
+    search: taskBCapabilityRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBCapabilityRootCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact finite-IR semantic-root correspondence from TASK B.',
+    expectedKiller: 'TASK B must reject a compiler-owned handler with no exact semantic root',
+    name: 'drizzle-task-b/drop-semantic-root-correspondence',
+    replacement: removedTaskBSemanticRootCorrespondenceBranch,
+    search: taskBSemanticRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBSemanticRootCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact package-summary root correspondence from TASK B.',
+    expectedKiller:
+      'TASK B must reject a capability root omitted from one reachable package-summary entry',
+    name: 'drizzle-task-b/drop-package-root-correspondence',
+    replacement: removedTaskBPackageRootCorrespondenceBranch,
+    search: taskBPackageRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBPackageRootCorrespondenceIsEnforced,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -3147,6 +3806,32 @@ export const SECURITY_GATE_MUTANTS = [
     search: managedDatabaseForeignArgumentClosureBranch,
     sourceFile: compilerSecuritySemanticGraphPath,
     test: assertManagedDatabaseForeignArgumentClosureBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description:
+      'Admits any generated readonly-app-DB continuation instead of the finite method set.',
+    expectedKiller:
+      'generated readonly-app-DB continuations must retain the exact finite method vocabulary',
+    name: 'compiler-finite-ir/allow-unknown-generated-readonly-db-continuation',
+    replacement: weakenedFiniteGeneratedReadonlyDatabaseContinuationBranch,
+    search: finiteGeneratedReadonlyDatabaseContinuationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    test: assertFiniteGeneratedReadonlyDatabaseContinuationBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description:
+      'Lets an imported executable value enter a reviewed generated readonly-app-DB continuation.',
+    expectedKiller:
+      'generated readonly-app-DB continuations must reject unreviewed foreign executable arguments',
+    name: 'compiler-finite-ir/allow-foreign-generated-readonly-db-argument',
+    replacement: weakenedGeneratedReadonlyDatabaseForeignArgumentClosureBranch,
+    search: generatedReadonlyDatabaseForeignArgumentClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    test: assertGeneratedReadonlyDatabaseForeignArgumentClosureBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -3972,6 +4657,7 @@ const exactFiniteBrowserControlKeys = [
   'image[crossorigin]',
   'feimage[crossorigin]',
   'meta[name]',
+  'meta[http-equiv]',
 ];
 const exactIframeSandboxTokens = [
   'allow-forms',
@@ -4434,7 +5120,11 @@ function runIsolatedPackageVitestMutation({
     if (packageName === 'browser') {
       const coreInternalRoot = path.join(tempRoot, 'packages', 'core', 'src', 'internal');
       mkdirSync(coreInternalRoot, { recursive: true });
-      for (const name of ['semantic-attribute-manifest.ts', 'sink-policy.ts']) {
+      for (const name of [
+        'semantic-attribute-manifest.ts',
+        'sink-policy.ts',
+        'wire-input-grammar.ts',
+      ]) {
         cpSync(
           path.join(repoRoot, 'packages/core/src/internal', name),
           path.join(coreInternalRoot, name),
@@ -4471,6 +5161,247 @@ function runIsolatedPackageVitestMutation({
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
+}
+
+function assertDependencyLoaderReviewedChildAliasBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'retargets a reviewed package child edge',
+  });
+}
+
+function assertDependencyLoaderReviewedExtensionOrderBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'custom resolve extensions',
+  });
+}
+
+function assertDependencyLoaderUnsupportedSubgraphSuffixBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package .* worker query|approved app query import worker subgraph',
+  });
+}
+
+function assertDependencyLoaderReviewedModuleSuffixBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'before Vite assigns non-module semantics|direct reviewed export whose target has non-module',
+  });
+}
+
+function assertDependencyLoaderReviewedWorkerConstructorBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'Worker URL string constructor',
+  });
+}
+
+function assertDependencyLoaderExecutableAssetCarrierBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package service worker new-URL executable asset',
+  });
+}
+
+function assertDependencyLoaderDirectExportOwnershipBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'direct reviewed export crossing',
+  });
+}
+
+function assertDependencyLoaderNonliteralArtifactBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'retained non-literal HTML-client import',
+  });
+}
+
+function assertDependencyLoaderChunkOutputKindBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'collides with a bundle-owned asset name',
+  });
+}
+
+function assertDependencyLoaderArtifactUrlAmbiguityBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'percent-encoded dot segments',
+  });
+}
+
+function assertMetaRefreshStaticPolicyBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'core',
+    relativeSourcePath: 'internal/sink-policy.ts',
+    sourceText,
+    testFile: 'packages/core/src/sink-policy.test.ts',
+    testNamePattern: 'applies finite static policy',
+  });
+}
+
+function assertDependencyLoaderHtmlSmilBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'SVG SMIL',
+  });
+}
+
+function assertDependencyLoaderHtmlElementControlBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'named opener target|explicit opener relationship',
+  });
+}
+
+function assertDependencyLoaderHtmlBaseTargetBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'base browsing-context target',
+  });
+}
+
+function assertDependencyLoaderHtmlNestedDocumentBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'empty named browsing-context element',
+  });
+}
+
+function assertDependencyLoaderSsrPreEvaluationBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'before supported SSR app evaluation',
+  });
+}
+
+function assertDependencyLoaderCjsAliasBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed CJS loader alias',
+  });
+}
+
+function assertDependencyLoaderNestedPackageBoundaryBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'relative edge from a reviewed package',
+  });
+}
+
+function assertDependencyLoaderHtmlPublicShadowBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'shadowed by a public asset',
+  });
+}
+
+function assertDependencyLoaderRetainedArtifactTargetBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'Vite-ignored',
+  });
+}
+
+function assertDependencyLoaderBareBundleKeyBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'collides with a bundle file name',
+  });
+}
+
+function assertDependencyLoaderDirectSsrExternalBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'overlaps a trusted SSR host external',
+  });
+}
+
+function assertDependencyLoaderExternalHtmlModuleBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'executable HTML',
+  });
+}
+
+function assertCompilerGeneratedWireAbiPostureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'compiler',
+    relativeSourcePath: 'security/capability-closure.ts',
+    sourceText,
+    testFile: 'packages/compiler/src/capability-closure.security.test.ts',
+    testNamePattern: 'admits only exact compiler-generated wire ABI',
+  });
 }
 
 async function assertDynamicBindingControlPlaneClosureBehavior(moduleUnderTest) {
@@ -4620,7 +5551,11 @@ function assertInlineLoaderFreshnessBehavior(_moduleUnderTest, { sourceText }) {
       path.join(repoRoot, 'packages/browser/package.json'),
       path.join(browserRoot, 'package.json'),
     );
-    for (const name of ['semantic-attribute-manifest.ts', 'sink-policy.ts']) {
+    for (const name of [
+      'semantic-attribute-manifest.ts',
+      'sink-policy.ts',
+      'wire-input-grammar.ts',
+    ]) {
       cpSync(
         path.join(repoRoot, 'packages/core/src/internal', name),
         path.join(coreInternalRoot, name),
@@ -4687,6 +5622,10 @@ async function assertInlineDynamicControlPlaneClosureBehavior(_moduleUnderTest, 
     cpSync(
       path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts'),
       path.join(coreInternalRoot, 'sink-policy.ts'),
+    );
+    cpSync(
+      path.join(repoRoot, 'packages/core/src/internal/wire-input-grammar.ts'),
+      path.join(coreInternalRoot, 'wire-input-grammar.ts'),
     );
     symlinkSync(
       path.join(repoRoot, 'packages/browser/node_modules'),
@@ -5179,6 +6118,53 @@ export const save = mutation('contacts/save', {
   handler(_input, request) { return request.db.select().where(foreignPredicate); },
 });
 `,
+  );
+}
+
+const generatedReadonlyDatabaseExtraFiles = [
+  {
+    fileName: 'src/_kovo/app-runtime-db.ts',
+    source: `
+import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+const appDatabase = createSqliteAppRuntime({});
+export const appRuntimeReadonlyDb = appDatabase.readonlyDb;
+`,
+  },
+  {
+    fileName: 'src/db.ts',
+    source: `
+import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
+export const readonlyAppDb = appRuntimeReadonlyDb;
+`,
+  },
+];
+
+function assertFiniteGeneratedReadonlyDatabaseContinuationBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { readonlyAppDb } from './db.js';
+export const save = mutation('contacts/save', {
+  handler() { return readonlyAppDb.select().dropEverything(); },
+});
+`,
+    generatedReadonlyDatabaseExtraFiles,
+  );
+}
+
+function assertGeneratedReadonlyDatabaseForeignArgumentClosureBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { foreignPredicate } from './lookalike.js';
+import { readonlyAppDb } from './db.js';
+export const save = mutation('contacts/save', {
+  handler() { return readonlyAppDb.select().where(foreignPredicate); },
+});
+`,
+    generatedReadonlyDatabaseExtraFiles,
   );
 }
 
@@ -5980,6 +6966,43 @@ async function assertLifecyclePrivateScopeCarrierPinIsEnforced(moduleUnderTest) 
   }
 }
 
+async function assertGuardArgsReceiptIsEnforced(moduleUnderTest) {
+  let reads = 0;
+  const parsedArgs = new Proxy(
+    { id: 'owned' },
+    {
+      get(target, property, receiver) {
+        if (property !== 'id') return Reflect.get(target, property, receiver);
+        reads += 1;
+        return reads === 1 ? 'owned' : 'victim';
+      },
+    },
+  );
+  const request = moduleUnderTest.withGuardArgs({}, parsedArgs);
+  const authorized = request.args.id;
+  await Promise.resolve();
+  const consumed = request.args.id;
+  if (authorized !== 'owned' || consumed !== 'owned' || reads !== 0) {
+    throw new Error(
+      `guard args receipt drifted: authorized=${String(authorized)} consumed=${String(consumed)} sourceReads=${String(reads)}`,
+    );
+  }
+}
+
+async function assertGuardArgsDateRejectionIsEnforced(moduleUnderTest) {
+  let failure;
+  try {
+    moduleUnderTest.snapshotGuardArgsReceipt({ when: new Date('2025-07-20T00:00:00.000Z') });
+  } catch (error) {
+    failure = error;
+  }
+  if (!/Date internal slots are mutable through borrowed native mutators/u.test(String(failure))) {
+    throw new Error(
+      `mutable Date guard-args receipt was not rejected precisely: ${String(failure)}`,
+    );
+  }
+}
+
 async function assertAnalyzerSummaryCallCarrierIsEnforced(moduleUnderTest) {
   const privateKey = analyzerSummaryPrivateScopeVerdict(
     moduleUnderTest,
@@ -6637,8 +7660,8 @@ async function assertAnalyzerSummaryStaticCallCarrierIsEnforced(moduleUnderTest)
     moduleUnderTest,
     'summary-static-call-carrier.ts',
     analyzerSummaryQueryFixtureSource([
-      'function current(context: Context) { return context.request.guard.userId; }',
-      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'function current(context: Context) { return context.request.session.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "session", path: "userId" } });',
       'export const list = query("list", {',
       '  async load(input: Input, _context: Context) {',
       '    const verdict = current(input as unknown as Context);',
@@ -6673,7 +7696,7 @@ async function assertAnalyzerSummaryDirectCallCalleeIsEnforced(moduleUnderTest) 
       }
       const callee = call.getExpression();
       const context = moduleUnderTest.__analyzerSummaryContextForReference(callee, {
-        kind: 'guard',
+        kind: 'session',
         path: 'userId',
         requiresGuard: false,
       });
@@ -6773,8 +7796,8 @@ async function assertAnalyzerSummaryConditionalEffectClosureIsEnforced(moduleUnd
     'summary-conditional-effect.ts',
     analyzerSummaryQueryFixtureSource([
       'declare function choose(): boolean;',
-      'function current(context: Context) { return context.request.guard.userId; }',
-      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'function current(context: Context) { return context.request.session.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "session", path: "userId" } });',
       'export const list = query("list", {',
       '  async load(_input: Input, context: Context) {',
       '    const userId = choose()',
@@ -6853,6 +7876,132 @@ element.addEventListener('click', () => element.focus());
     !sinkKinds.has('request-handler.opaque-call')
   ) {
     throw new Error('raw browser registration escaped authoritative request-graph closure');
+  }
+}
+
+function taskBMutationProof(files, capabilityFacts, rootKinds) {
+  return {
+    capabilityFacts: [
+      ...capabilityFacts,
+      {
+        kind: 'summary',
+        packageName: '@kovojs/server',
+        packageVersion: '0.2.0',
+        site: `${files[0]?.fileName ?? 'app.ts'}:1:1`,
+        status: 'valid',
+      },
+    ],
+    dependencyManifest: {
+      dependencies: [
+        {
+          entries: [
+            {
+              conditions: ['default', 'import'],
+              importers: files.map((file) => file.fileName),
+              imports: [{ capabilities: [], disposition: 'authority-free', name: '<module>' }],
+              rootKinds,
+              sites: files.map((file) => `${file.fileName}:1:1`),
+              specifier: '@kovojs/server',
+            },
+          ],
+          packageName: '@kovojs/server',
+          packageVersion: '0.2.0',
+          verdict: 'open',
+        },
+      ],
+      schema: 'kovo-app-dependency-capabilities/v1',
+    },
+    files,
+    schema: 'kovo-task-b-closure/v1',
+  };
+}
+
+async function assertTaskBCapabilityRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const files = [{ fileName: 'app.ts', source }];
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(files, [], ['application']),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' &&
+        sink.source?.includes('sink=capability-closure'),
+    )
+  ) {
+    throw new Error('TASK B admitted a root absent from the exact capability census');
+  }
+}
+
+async function assertTaskBPackageRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const files = [{ fileName: 'app.ts', source }];
+  const offset = source.indexOf('createApp({})');
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(
+      files,
+      [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'app',
+          rootKind: 'application',
+          site: `app.ts:${line}:${column}`,
+        },
+      ],
+      [],
+    ),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' &&
+        sink.source?.includes('sink=package-summary'),
+    )
+  ) {
+    throw new Error('TASK B admitted a root omitted from a reachable package summary');
+  }
+}
+
+async function assertTaskBSemanticRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source =
+    "import { mutation } from '@kovojs/server';\nexport const save = mutation('save', { handler() { return { ok: true }; } });";
+  const files = [{ fileName: 'app.ts', source }];
+  const offset = source.indexOf("mutation('save'");
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(
+      files,
+      [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'save',
+          rootKind: 'mutation',
+          site: `app.ts:${line}:${column}`,
+        },
+      ],
+      ['mutation'],
+    ),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' && sink.source?.includes('sink=finite-ir'),
+    )
+  ) {
+    throw new Error('TASK B admitted a handler absent from the exact semantic root census');
   }
 }
 
@@ -7046,15 +8195,18 @@ export const report = query({
 `;
 
 const reviewedSecretProjectionFixture = `
-import { secret, trustedReveal } from '@kovojs/core';
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
 import { query } from '@kovojs/server';
 export const report = query({
-  load(input) {
-    const reviewed = trustedReveal(secret(input.value), {
-      justification: 'reviewed server projection',
-      method: 'server-projection',
-      source: 'accounts.classified',
-    });
+  load() {
+    const reviewed = trustedReveal(
+      secret('server-owned'),
+      DeclassifyPolicy.create({
+        door: 'trustedReveal',
+        ownerScope: 'application',
+        purpose: 'public-projection',
+      }),
+    );
     return { reviewed };
   },
 });

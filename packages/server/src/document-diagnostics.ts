@@ -1,5 +1,8 @@
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+} from '@kovojs/core/internal/diagnostics';
 import { escapeHtml } from './html.js';
 import { renderDocument, type DocumentRoutePageResponse } from './document-core.js';
 import {
@@ -13,13 +16,10 @@ import {
 } from './response-security-intrinsics.js';
 
 /** @internal */
-export interface DiagnosticDocumentDiagnostic {
-  code: DiagnosticCode;
+export interface DiagnosticDocumentDiagnostic extends RegisteredDiagnostic<DiagnosticCode> {
   fileName?: string;
   help?: string;
   length?: number;
-  message: string;
-  severity?: DiagnosticSeverity;
   start?: {
     column: number;
     line: number;
@@ -61,6 +61,7 @@ export function renderDiagnosticDocument(
         diagnostics: input,
         ...(source === undefined ? {} : { source }),
       };
+  assertDiagnosticDocumentCollection(options.diagnostics);
   const title =
     options.diagnostics.length === 1
       ? `${options.diagnostics[0]?.code ?? 'KV'} diagnostic`
@@ -81,6 +82,14 @@ export function renderDiagnosticDocument(
     },
     status: 500,
   };
+}
+
+function assertDiagnosticDocumentCollection(
+  diagnostics: readonly DiagnosticDocumentDiagnostic[],
+): void {
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    assertRegisteredDiagnostic(diagnostics[index], `Diagnostic document diagnostics[${index}]`);
+  }
 }
 
 function isDiagnosticDocumentOptions(
