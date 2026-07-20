@@ -1236,6 +1236,98 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     },
   );
 
+  // @kovo-security-certifies C13 dependency-reviewed-executable-asset-closure
+  it.each([
+    [
+      'service worker',
+      "navigator.serviceWorker.register(new URL('./payload.mjs', import.meta.url), { type: 'module' })",
+    ],
+    ['paint worklet', "CSS.paintWorklet.addModule(new URL('./payload.mjs', import.meta.url))"],
+    [
+      'audio worklet',
+      "context.audioWorklet.addModule(new URL('./payload.mjs', import.meta.url))",
+    ],
+  ] as const)(
+    'rejects a reviewed package %s new-URL executable asset',
+    async (carrier, expression) => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-executable-asset-')));
+      const appModulePath = join(root, 'client.mjs');
+      const packageRoot = join(root, 'node_modules', 'safe-parser');
+      const outDir = join(root, 'dist');
+      const source = "import { start } from 'safe-parser'; start({});\n";
+      try {
+        mkdirSync(packageRoot, { recursive: true });
+        writeFileSync(
+          join(packageRoot, 'package.json'),
+          JSON.stringify({
+            exports: { '.': './index.mjs' },
+            name: 'safe-parser',
+            type: 'module',
+            version: '1.2.3',
+          }),
+        );
+        writeFileSync(
+          join(packageRoot, 'index.mjs'),
+          `export const start = context => ${expression};\n`,
+        );
+        writeFileSync(
+          join(packageRoot, 'payload.mjs'),
+          "import 'data:text/javascript,globalThis.__KOVO_EXECUTABLE_ASSET_IMPORT__%3D%27EXECUTED%27'; globalThis.__KOVO_EXECUTABLE_ASSET__ = 'EXECUTED';\n",
+        );
+        writeFileSync(appModulePath, source);
+        const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+        const exactManifest: AppDependencyCapabilityManifest = {
+          dependencies: [
+            {
+              entries: [
+                {
+                  conditions: installed.conditions,
+                  importers: ['client.mjs'],
+                  imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
+                  rootKinds: ['route'],
+                  sites: ['client.mjs:1:1'],
+                  specifier: 'safe-parser',
+                },
+              ],
+              manifestFingerprint: installed.manifestFingerprint,
+              packageName: installed.packageName,
+              packageVersion: installed.packageVersion,
+              summaryVersion: 'safe-parser-review/1',
+              verdict: 'open',
+            },
+          ],
+          schema: 'kovo-app-dependency-capabilities/v1',
+        };
+
+        await expect(
+          viteBuild({
+            build: {
+              emptyOutDir: true,
+              outDir,
+              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+            },
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [
+              dependencyCapabilityLoaderVitePlugin(
+                appModulePath,
+                [{ fileName: 'client.mjs', source }],
+                exactManifest,
+                'build-client',
+              ),
+            ],
+            root,
+          }),
+        ).rejects.toThrow(
+          new RegExp(`KV448.*reviewed package safe-parser creates a ${carrier} executable asset`, 'u'),
+        );
+        expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
+
   // @kovo-security-certifies C13 dependency-approved-worker-subgraph-closure
   it.each(['query import', 'constructor'] as const)(
     'rejects an approved app %s worker subgraph that omits dependency closure',
