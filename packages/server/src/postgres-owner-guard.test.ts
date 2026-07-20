@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
 import { kovo, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
-import { pgTable, text } from 'drizzle-orm/pg-core';
+import { getTableColumns } from 'drizzle-orm';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
 import { describe, expect, it } from 'vitest';
 
@@ -21,6 +22,10 @@ import {
   registerFrameworkPostgresOwnerGuardSchema,
 } from './postgres-owner-guard.js';
 import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
+import {
+  snapshotFrameworkNativeDrizzleOwnerGuardTableForExecution,
+  snapshotFrameworkNativeDrizzleTableForExecution,
+} from './sql-safe-handle.js';
 
 const documents = pgTable(
   'owner_guard_documents',
@@ -28,6 +33,9 @@ const documents = pgTable(
     id: text('document_id').primaryKey(),
     ownerId: text('owner_id').notNull(),
     title: text('title').notNull(),
+    // Regression: Drizzle represents defaultNow() as native SQL metadata. The guard query does
+    // not execute this unrelated column, so the C9 execution snapshot must not carry it.
+    createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
 );
@@ -40,6 +48,7 @@ const manifest = {
         { key: 'id', name: 'document_id' },
         { key: 'ownerId', name: 'owner_id' },
         { key: 'title', name: 'title' },
+        { key: 'createdAt', name: 'created_at' },
       ],
       dialect: 'postgres',
       domain: 'document:tenant',
@@ -65,6 +74,52 @@ const ownerGuard = () =>
   });
 
 describe('framework-derived Postgres owner guard', () => {
+  it('reconstructs only the manifest-proven query identities and rejects mutable selected identities', () => {
+    expect(() => snapshotFrameworkNativeDrizzleTableForExecution(documents)).toThrow(/KV422/u);
+    const snapshot = snapshotFrameworkNativeDrizzleOwnerGuardTableForExecution(
+      documents,
+      'owner_guard_documents',
+      undefined,
+      documents.id,
+      'id',
+      'document_id',
+      documents.ownerId,
+      'ownerId',
+      'owner_id',
+    );
+    expect(Object.keys(getTableColumns(snapshot.table as never))).toEqual(['id', 'ownerId']);
+    expect(Object.hasOwn(snapshot.table, 'title')).toBe(false);
+    expect(Object.hasOwn(snapshot.table, 'createdAt')).toBe(false);
+    expect(Object.hasOwn(snapshot.keyColumn, 'default')).toBe(false);
+    expect(Object.hasOwn(snapshot.ownerColumn, 'default')).toBe(false);
+    expect(Object.isFrozen(snapshot.table)).toBe(true);
+    expect(Object.isFrozen(snapshot.keyColumn)).toBe(true);
+    expect(Object.isFrozen(snapshot.ownerColumn)).toBe(true);
+
+    const accessorBacked = pgTable('owner_guard_accessor', {
+      id: text('id').primaryKey(),
+      ownerId: text('owner_id').notNull(),
+    });
+    Object.defineProperty(accessorBacked.id, 'name', {
+      configurable: true,
+      enumerable: true,
+      get: () => 'id',
+    });
+    expect(() =>
+      snapshotFrameworkNativeDrizzleOwnerGuardTableForExecution(
+        accessorBacked,
+        'owner_guard_accessor',
+        undefined,
+        accessorBacked.id,
+        'id',
+        'id',
+        accessorBacked.ownerId,
+        'ownerId',
+        'owner_id',
+      ),
+    ).toThrow(/KV422/u);
+  });
+
   it('preserves the exact reader execution registration when lifecycle composition also sees the writer', async () => {
     const release = installGeneratedTableSecurityManifestForCommand(manifest);
     const calls: string[] = [];
@@ -263,6 +318,7 @@ describe('framework-derived Postgres owner guard', () => {
           id: text('document_id').primaryKey(),
           ownerId: text('owner_id').notNull(),
           title: text('title').notNull(),
+          createdAt: timestamp('created_at').notNull().defaultNow(),
         },
         kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
       );

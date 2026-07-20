@@ -20,7 +20,7 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
-import { snapshotFrameworkNativeDrizzleTableForExecution } from './sql-safe-handle.js';
+import { snapshotFrameworkNativeDrizzleOwnerGuardTableForExecution } from './sql-safe-handle.js';
 
 interface FrameworkPostgresOwnerGuardBinding {
   readonly keyColumn: AnyPgColumn;
@@ -181,6 +181,7 @@ export function registerFrameworkPostgresOwnerGuardSchema(
       );
     }
     const sourceKeyColumn = ownDataObject(table, keySource.columnKey);
+    const sourceOwnerColumn = ownDataObject(table, ownerSource.columnKey);
     // A non-proved table remains a valid managed schema; it simply receives no proof binding.
     if (
       sourceKeyColumn === undefined ||
@@ -188,30 +189,46 @@ export function registerFrameworkPostgresOwnerGuardSchema(
     ) {
       continue;
     }
+    if (sourceOwnerColumn === undefined) {
+      throw new TypeError(
+        `KV414: compiler/runtime owner-guard owner identity diverged for ${tableName} (SPEC §10.3).`,
+      );
+    }
     const keyIdentity = witnessMapGet(metadata.columnSources, sourceKeyColumn);
+    const ownerIdentity = witnessMapGet(metadata.columnSources, sourceOwnerColumn);
     if (
       keyIdentity === undefined ||
       keyIdentity.key !== keySource.columnKey ||
       keyIdentity.column !== keySource.columnName ||
-      keyIdentity.table !== tableName
+      keyIdentity.table !== tableName ||
+      ownerIdentity === undefined ||
+      ownerIdentity.key !== ownerSource.columnKey ||
+      ownerIdentity.column !== ownerSource.columnName ||
+      ownerIdentity.table !== tableName ||
+      ownerIdentity.schema !== keyIdentity.schema
     ) {
       throw new TypeError(
-        `KV414: compiler/runtime owner-guard key identity diverged for ${tableName} (SPEC §10.3).`,
+        `KV414: compiler/runtime owner-guard column identity diverged for ${tableName} (SPEC §10.3).`,
       );
     }
 
-    const stableTable = snapshotFrameworkNativeDrizzleTableForExecution(table) as AnyPgTable;
-    const stableKeyColumn = ownDataObject(stableTable, keySource.columnKey) as
-      | AnyPgColumn
-      | undefined;
-    const stableOwnerColumn = ownDataObject(stableTable, ownerSource.columnKey) as
-      | AnyPgColumn
-      | undefined;
-    if (stableKeyColumn === undefined || stableOwnerColumn === undefined) {
-      throw new TypeError(
-        `KV414: stable owner-guard query identity is incomplete for ${tableName} (SPEC §10.3).`,
-      );
-    }
+    // This framework-owned evaluator emits only these two manifest-proven column identities.
+    // Reconstructing the whole Drizzle table would unnecessarily carry unrelated DDL/default SQL
+    // into the SELECT sink (SPEC §6.6 C9/C15, §10.3 finite owner-policy correspondence).
+    const stable = snapshotFrameworkNativeDrizzleOwnerGuardTableForExecution(
+      table,
+      tableName,
+      keyIdentity.schema,
+      sourceKeyColumn,
+      keySource.columnKey,
+      keySource.columnName,
+      sourceOwnerColumn,
+      ownerSource.columnKey,
+      ownerSource.columnName,
+    );
+    const stableTable = stable.table as AnyPgTable;
+    const stableKeyColumn = stable.keyColumn as AnyPgColumn;
+    const stableOwnerColumn = stable.ownerColumn as AnyPgColumn;
     const term = postgresOwnerColumnPolicyTerm({
       columnName: ownerSource.columnName,
       tableName,

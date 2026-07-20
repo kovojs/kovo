@@ -399,6 +399,176 @@ export function snapshotFrameworkNativeDrizzleTableForExecution(value: unknown):
   return reconstructNativeDrizzleTableEntity(value, createWitnessWeakMap<object, unknown>(), false);
 }
 
+/**
+ * The finite Postgres owner guard emits only a table identifier and the compiler-manifest key and
+ * owner column identifiers. Reconstruct exactly that projection instead of snapshotting unrelated
+ * schema metadata such as defaults, generated expressions, indexes, or foreign keys. In
+ * particular, native Drizzle SQL held by `defaultNow()` never crosses this execution door and is
+ * not newly accepted by the general managed-builder snapshot (SPEC §6.6 C9/C15, §10.3).
+ *
+ * @internal Package-private owner-guard construction hook; not exported from a public barrel.
+ */
+export function snapshotFrameworkNativeDrizzleOwnerGuardTableForExecution(
+  value: unknown,
+  tableName: string,
+  schemaName: string | undefined,
+  keyColumn: unknown,
+  keyColumnKey: string,
+  keyColumnName: string,
+  ownerColumn: unknown,
+  ownerColumnKey: string,
+  ownerColumnName: string,
+): {
+  readonly keyColumn: object;
+  readonly ownerColumn: object;
+  readonly table: object;
+} {
+  if (
+    !isRecord(value) ||
+    !witnessSetHas(nativeDrizzleEntityKinds(value), 'Table') ||
+    typeof tableName !== 'string' ||
+    tableName.length === 0 ||
+    (schemaName !== undefined && typeof schemaName !== 'string') ||
+    typeof keyColumnKey !== 'string' ||
+    keyColumnKey.length === 0 ||
+    typeof keyColumnName !== 'string' ||
+    keyColumnName.length === 0 ||
+    typeof ownerColumnKey !== 'string' ||
+    ownerColumnKey.length === 0 ||
+    typeof ownerColumnName !== 'string' ||
+    ownerColumnName.length === 0
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  const columnsDescriptor = witnessGetOwnPropertyDescriptor(value, DRIZZLE_TABLE_COLUMNS);
+  if (
+    columnsDescriptor === undefined ||
+    !('value' in columnsDescriptor) ||
+    !isRecord(columnsDescriptor.value)
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  assertNativeDrizzleOwnerGuardColumnIdentity(
+    value,
+    columnsDescriptor.value,
+    keyColumn,
+    keyColumnKey,
+    keyColumnName,
+  );
+  assertNativeDrizzleOwnerGuardColumnIdentity(
+    value,
+    columnsDescriptor.value,
+    ownerColumn,
+    ownerColumnKey,
+    ownerColumnName,
+  );
+  if (keyColumnKey === ownerColumnKey && keyColumn !== ownerColumn) {
+    throw nativeDrizzleProvenanceError();
+  }
+
+  if (
+    requiredOwnString(value, DRIZZLE_TABLE_NAME) !== tableName ||
+    optionalOwnString(value, DRIZZLE_TABLE_SCHEMA) !== schemaName ||
+    requiredOwnBoolean(value, DRIZZLE_TABLE_IS_ALIAS)
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+  const table = new Table(tableName, schemaName, tableName);
+  witnessWeakMapSet(frameworkCanonicalNativeSqlSources, table, value);
+  witnessDefineProperty(table, DRIZZLE_TABLE_IS_ALIAS, { value: false, writable: false });
+
+  const reconstructedKeyColumn = reconstructNativeDrizzleOwnerGuardColumnIdentity(
+    keyColumn,
+    table,
+    keyColumnName,
+  );
+  const reconstructedOwnerColumn =
+    ownerColumn === keyColumn
+      ? reconstructedKeyColumn
+      : reconstructNativeDrizzleOwnerGuardColumnIdentity(ownerColumn, table, ownerColumnName);
+  const columns = witnessCreateNullRecord<object>();
+  witnessDefineProperty(columns, keyColumnKey, {
+    enumerable: true,
+    value: reconstructedKeyColumn,
+  });
+  witnessDefineProperty(table, keyColumnKey, {
+    enumerable: true,
+    value: reconstructedKeyColumn,
+  });
+  if (ownerColumnKey !== keyColumnKey) {
+    witnessDefineProperty(columns, ownerColumnKey, {
+      enumerable: true,
+      value: reconstructedOwnerColumn,
+    });
+    witnessDefineProperty(table, ownerColumnKey, {
+      enumerable: true,
+      value: reconstructedOwnerColumn,
+    });
+  }
+  witnessDefineProperty(table, DRIZZLE_TABLE_COLUMNS, { value: witnessFreeze(columns) });
+  witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, reconstructedKeyColumn);
+  witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, reconstructedOwnerColumn);
+  witnessWeakSetAdd(frameworkCanonicalNativeSqlValues, table);
+  witnessFreeze(table);
+  return witnessFreeze({
+    keyColumn: reconstructedKeyColumn,
+    ownerColumn: reconstructedOwnerColumn,
+    table,
+  });
+}
+
+function assertNativeDrizzleOwnerGuardColumnIdentity(
+  table: object,
+  columns: object,
+  column: unknown,
+  columnKey: string,
+  columnName: string,
+): asserts column is object {
+  if (!isRecord(column) || !witnessSetHas(nativeDrizzleEntityKinds(column), 'Column')) {
+    throw nativeDrizzleProvenanceError();
+  }
+  const tableColumnDescriptor = witnessGetOwnPropertyDescriptor(table, columnKey);
+  const registryColumnDescriptor = witnessGetOwnPropertyDescriptor(columns, columnKey);
+  const sourceTableDescriptor = witnessGetOwnPropertyDescriptor(column, 'table');
+  if (
+    tableColumnDescriptor === undefined ||
+    !('value' in tableColumnDescriptor) ||
+    tableColumnDescriptor.value !== column ||
+    registryColumnDescriptor === undefined ||
+    !('value' in registryColumnDescriptor) ||
+    registryColumnDescriptor.value !== column ||
+    sourceTableDescriptor === undefined ||
+    !('value' in sourceTableDescriptor) ||
+    sourceTableDescriptor.value !== table ||
+    requiredOwnString(column, 'name') !== columnName
+  ) {
+    throw nativeDrizzleProvenanceError();
+  }
+}
+
+function reconstructNativeDrizzleOwnerGuardColumnIdentity(
+  value: object,
+  table: object,
+  name: string,
+): object {
+  // Drizzle's SQL renderer consults exactly `name`, `keyAsName`, and `table` for a Column. Do not
+  // copy its broader schema/config carrier: those fields describe DDL and insert mapping, neither
+  // of which belongs to this fixed SELECT-only framework door.
+  const column = witnessCreateWithPrototype<Record<PropertyKey, unknown>>(Column.prototype);
+  witnessDefineProperty(column, 'name', { enumerable: true, value: name });
+  witnessDefineProperty(column, 'keyAsName', { enumerable: true, value: false });
+  witnessDefineProperty(column, 'table', { value: table });
+  witnessDefineProperty(column, 'mapFromDriverValue', { value: snapshotColumnIdentity });
+  witnessDefineProperty(column, 'mapToDriverValue', { value: snapshotColumnIdentity });
+  witnessWeakMapSet(frameworkCanonicalNativeSqlSources, column, value);
+  witnessWeakMapSet(
+    frameworkCanonicalNativeSqlColumnIdentities,
+    column,
+    snapshotNativeDrizzleColumnIdentity(name, table),
+  );
+  return witnessFreeze(column);
+}
+
 function wrapDbAdapter(
   db: object,
   mode: SqlSafetyMode,
