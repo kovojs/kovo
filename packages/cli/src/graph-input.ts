@@ -59,11 +59,17 @@ export function readGraphInput(
 }
 
 export function discoverGraphInputPath(invocationCwd = process.cwd()): string | undefined {
-  return (
-    findNearestFile(invocationCwd, 'graph.json', { stopDir: invocationCwd }) ??
-    findNearestFile(invocationCwd, '.kovo/graph.json', { stopDir: invocationCwd }) ??
-    findNearestFile(invocationCwd, 'dist/.kovo/graph.json', { stopDir: invocationCwd })
-  );
+  return discoverGraphInputPaths(invocationCwd)[0];
+}
+
+/** @internal Return every conventional graph artifact instead of silently choosing one. */
+export function discoverGraphInputPaths(invocationCwd = process.cwd()): readonly string[] {
+  const candidates = [
+    findNearestFile(invocationCwd, 'graph.json', { stopDir: invocationCwd }),
+    findNearestFile(invocationCwd, '.kovo/graph.json', { stopDir: invocationCwd }),
+    findNearestFile(invocationCwd, 'dist/.kovo/graph.json', { stopDir: invocationCwd }),
+  ];
+  return Object.freeze(candidates.filter((path): path is string => path !== undefined));
 }
 
 export function inputErrorMessage(error: InputReadError): string {

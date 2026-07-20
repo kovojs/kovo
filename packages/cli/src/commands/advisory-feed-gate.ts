@@ -18,6 +18,7 @@ export function collectAdvisoryFeedGateFindings(
   guaranteeValue: unknown,
   tcbValue: unknown,
   now: number,
+  previousFeedValue: unknown,
 ): { readonly feed?: KovoSecurityAdvisoryFeed; readonly findings: readonly string[] } {
   const findings: string[] = [];
   let feed: KovoSecurityAdvisoryFeed;
@@ -37,6 +38,7 @@ export function collectAdvisoryFeedGateFindings(
   if (feed.maxFeedAgeSeconds > MAX_PUBLISHED_FEED_AGE_SECONDS) {
     findings.push('live advisory feed maxFeedAgeSeconds exceeds the 90-day release ceiling');
   }
+  collectFeedHistoryFindings(feed, previousFeedValue, findings);
 
   const guaranteeLedger = objectValue(guaranteeValue) as GuaranteeLedger | undefined;
   const tcbManifest = objectValue(tcbValue) as TcbManifest | undefined;
@@ -70,6 +72,29 @@ export function collectAdvisoryFeedGateFindings(
     }
   }
   return { feed, findings: Object.freeze(findings) };
+}
+
+function collectFeedHistoryFindings(
+  feed: KovoSecurityAdvisoryFeed,
+  previousFeedValue: unknown,
+  findings: string[],
+): void {
+  let previous: KovoSecurityAdvisoryFeed;
+  try {
+    previous = parseAdvisoryFeed(previousFeedValue);
+  } catch (error) {
+    findings.push(
+      `parent advisory feed is invalid: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
+  if (feed.epoch < previous.epoch) {
+    findings.push('live advisory feed epoch decreased from its first parent');
+    return;
+  }
+  if (feed.epoch === previous.epoch && JSON.stringify(feed) !== JSON.stringify(previous)) {
+    findings.push('live advisory feed changed without increasing epoch');
+  }
 }
 
 function idSet(
