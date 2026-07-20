@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { mintFrameworkLoadShedError } from './app-load-shed.js';
 import { endpoint } from './endpoint.js';
@@ -12,6 +13,44 @@ const rawTextResponse = {
 } as const;
 
 describe('Postgres posture app load shedding', () => {
+  it('rejects an oversized streamed body before managed database admission', async () => {
+    const admit = vi.fn(async () => undefined);
+    const provider = createFrameworkManagedDbProvider(async () => ({}), { admit });
+    const ingest = endpoint('/ingest', {
+      access: publicAccess('streamed admission-order regression fixture'),
+      auth: { kind: 'none', justification: 'streamed admission-order regression fixture' },
+      csrf: false,
+      csrfJustification: 'fixture models a machine upload receiver',
+      handler: () =>
+        new Response('should not run', {
+          headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain' },
+        }),
+      method: 'POST',
+      reason: 'prove the remote body gate precedes database posture work',
+      response: rawTextResponse,
+    });
+    const handler = createRequestHandler(
+      createApp({ db: provider, endpoints: [ingest], requestLimits: { maxBodyBytes: 4 } }),
+    );
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('12345'));
+        controller.close();
+      },
+    });
+
+    const response = await handler(
+      new Request('https://app.example/ingest', {
+        body,
+        duplex: 'half',
+        method: 'POST',
+      } as RequestInit & { duplex: 'half' }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(admit).not.toHaveBeenCalled();
+  });
+
   it('maps only a framework-minted posture admission failure to a stable 503 shell', async () => {
     const onError = vi.fn();
     const provider = createFrameworkManagedDbProvider(async () => ({}), {

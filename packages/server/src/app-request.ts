@@ -145,17 +145,28 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
           });
         }
 
+        // SPEC §9.2/§9.5: the streamed byte ceiling is an ingress admission gate, not work the
+        // database posture path may run ahead of. Content-Length is only a hint, so fully verify
+        // endpoint/mutation bodies before lease renewal, catalog probes, or provider acquisition.
+        // Reserved reporting keeps its independently bounded body reader below; attestation has
+        // already returned through its dedicated 4 KiB branch above.
+        const dispatchRequest =
+          match.kind === 'endpoint' || match.kind === 'mutation'
+            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)
+            : deadlineRequest;
+        if (match.kind === 'endpoint' || match.kind === 'mutation') {
+          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
+        }
+
         if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
 
         if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
           return kovoSecurityReportResponse(app, deadlineRequest);
         }
 
-        const dispatchRequest =
-          match.kind === 'endpoint' || match.kind === 'mutation'
-            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)
-            : deadlineRequest;
-        limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
+        if (match.kind !== 'endpoint' && match.kind !== 'mutation') {
+          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
+        }
         return dispatchMatchedAppRequest({
           app,
           match,
