@@ -1749,7 +1749,70 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           root,
         }),
       ).rejects.toThrow(/KV448.*supported build-client artifact.*non-literal module edge/u);
-      expect(() => readFileSync(join(outDir, 'payload.mjs'), 'utf8')).toThrow();
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-artifact-runtime-url-identity
+  it('rejects percent-encoded dot segments before they can confuse chunk ownership', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-encoded-dot-')));
+    const appModulePath = join(root, 'app.mjs');
+    const decoyModulePath = join(root, 'decoy.mjs');
+    const outDir = join(root, 'dist');
+    const appSource = [
+      'export async function run() {',
+      "  return import(/* @vite-ignore */ './%2e%2e/payload.js');",
+      '}',
+      '',
+    ].join('\n');
+    const decoySource = "export const decoy = 'reviewed chunk';\n";
+    try {
+      mkdirSync(join(root, 'public'), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(decoyModulePath, decoySource);
+      writeFileSync(
+        join(root, 'public', 'payload.js'),
+        "globalThis.__KOVO_ENCODED_DOT_PUBLIC__ = 'EXECUTED';\n",
+      );
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: {
+              input: appModulePath,
+              output: { entryFileNames: 'assets/entry.mjs' },
+            },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            {
+              buildStart() {
+                this.emitFile({
+                  fileName: 'assets/%2e%2e/payload.js',
+                  id: decoyModulePath,
+                  type: 'chunk',
+                });
+              },
+              name: 'emit-encoded-dot-decoy-chunk',
+            },
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [
+                { fileName: 'app.mjs', source: appSource },
+                { fileName: 'decoy.mjs', source: decoySource },
+              ],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*ambiguous runtime URL module target.*%2e%2e/u);
+      expect(() => readFileSync(join(outDir, 'assets', 'entry.mjs'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
