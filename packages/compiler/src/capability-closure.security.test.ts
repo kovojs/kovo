@@ -899,6 +899,22 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     const omitted = analyze(files, { packages, packageSummaries: [summary] });
     expect(omitted.diagnostics[0]!.message).toContain('does not classify export <module>');
 
+    const wildcardOnly = analyze(files, {
+      packages,
+      packageSummaries: [
+        {
+          ...summary,
+          entries: [
+            {
+              ...summary.entries[0]!,
+              exports: [{ capabilities: [], disposition: 'pure', name: '*' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(wildcardOnly.diagnostics[0]!.message).toContain('does not classify export <module>');
+
     const raw = analyze(files, {
       packages,
       packageSummaries: [

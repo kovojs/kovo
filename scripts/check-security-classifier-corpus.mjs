@@ -2082,8 +2082,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           '@kovo-security-certifies C13 dependency-module-initializer-verdict',
           'requires every named package import to consume an explicit module initializer verdict',
           'does not classify export <module>',
+          "disposition: 'pure', name: '*'",
           'export <module> exposes raw network authority',
           "toEqual(['<module>', 'parse'])",
+        ],
+      },
+      {
+        id: 'dependency-transitive-reviewed-external',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-transitive-reviewed-external',
+          'rejects a reviewed package reaching a raw runtime external that skipped resolveId',
+          "external: (id) => id === 'pg'",
+          "allowRuntimeExternal: (id) => id === 'pg'",
+          'uncensused transitive dependency pg imported by reviewed package safe-parser',
         ],
       },
       {

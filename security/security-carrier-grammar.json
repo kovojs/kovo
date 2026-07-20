@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 265,
+    "historicalWitnesses": 266,
     "productions": 12
   },
   "productions": [
@@ -974,6 +974,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness requires every package import to consume the explicit initializer verdict as well as each requested export verdict."
+    },
+    {
+      "anchor": "dependency-transitive-reviewed-external",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness attributes a Rollup-externalized raw dependency edge to the reviewed third-party package that imported it even when resolveId was skipped."
     },
     {
       "anchor": "dependency-inline-html-module-closure",

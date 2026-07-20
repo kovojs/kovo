@@ -453,6 +453,83 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-transitive-reviewed-external
+  it('rejects a reviewed package reaching a raw runtime external that skipped resolveId', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-external-loader-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          dependencies: { pg: '8.16.3' },
+          exports: { '.': './index.js' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.js'),
+        "import { Client } from 'pg'; export const parse = value => [value, Client];\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            outDir: join(root, 'dist'),
+            rollupOptions: { external: (id) => id === 'pg', input: appModulePath },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              'build-server',
+              { allowRuntimeExternal: (id) => id === 'pg' },
+            ),
+          ],
+          root,
+          ssr: { noExternal: ['safe-parser'] },
+        }),
+      ).rejects.toThrow(
+        /KV448.*uncensused transitive dependency pg imported by reviewed package safe-parser/u,
+      );
+      expect(() => readFileSync(join(root, 'dist', 'app.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-inline-html-module-closure
   it('rejects inline HTML module proxies outside the immutable approved-source snapshot', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-inline-html-')));
