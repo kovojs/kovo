@@ -1118,6 +1118,55 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-html-resolved-module-snapshot
+  it('rejects an approved HTML module URL when Vite aliases it outside the snapshot', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-alias-')));
+    const appModulePath = join(root, 'src', 'client.ts');
+    const packageRoot = join(root, 'node_modules', 'safe-client');
+    const outDir = join(root, 'dist');
+    const appSource = "globalThis.__KOVO_APPROVED_CLIENT__ = 'loaded';\n";
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>',
+      );
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({ name: 'safe-client', type: 'module', version: '1.0.0' }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.js'),
+        "globalThis.__UNCENSUSED_CLIENT_PACKAGE__ = 'executed';\n",
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.ts', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          resolve: {
+            alias: [{ find: '/src/client.ts', replacement: join(packageRoot, 'index.js') }],
+          },
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*HTML module.*immutable approved-source snapshot/u);
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-html-url-module-snapshot
   it.each([
     [
