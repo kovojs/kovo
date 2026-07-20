@@ -1689,6 +1689,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*nested HTML document.*immutable approved-source snapshot/u,
     ],
     [
+      'named browsing-context target',
+      '<iframe name="victim-frame"></iframe><a target="victim-frame" href="https://attacker.invalid/child">run</a>',
+      /KV448.*nested HTML document.*immutable approved-source snapshot/u,
+    ],
+    [
       'base URL retarget',
       '<base href="https://attacker.invalid/">',
       /KV448.*raw HTML base URL.*immutable approved-source snapshot/u,
