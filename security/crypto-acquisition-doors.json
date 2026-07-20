@@ -108,6 +108,14 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-059",
+      "file": "packages/cli/src/commands/advisories.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact named non-keyed SHA-256 digest over bounded public advisory-feed bytes; the digest binds attestation and rollback state without acquiring entropy, key material, or a keyed operation."
+    },
+    {
       "id": "crypto-door-015",
       "file": "packages/compiler/src/compiler-security-intrinsics.ts",
       "kind": "crypto-acquisition",
@@ -342,6 +350,14 @@
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+    },
+    {
+      "id": "crypto-door-060",
+      "file": "scripts/check-replay-reservation-model.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact named non-keyed SHA-256 digest used only to verify pinned public TLC tool bytes; it acquires no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-044",
