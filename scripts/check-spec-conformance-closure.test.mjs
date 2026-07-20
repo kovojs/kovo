@@ -81,11 +81,11 @@ function replaceFunctionDeclaration(text, signature, replacement) {
 describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)', () => {
   it('binds the live registry, generated constructors, production sites, and evidence ledger', () => {
     expect(evaluate()).toMatchObject({
-      codes: 90,
-      errorCodes: 70,
+      codes: 92,
+      errorCodes: 72,
       findings: [],
       ok: true,
-      sites: 197,
+      sites: 200,
     });
   }, 180_000);
 
@@ -303,7 +303,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(197);
+    expect(result.sites).toBe(200);
     expect(result.findings.join('\n')).toContain(
       'production diagnostic emission site manifest drifted',
     );
@@ -322,7 +322,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
         text.replace(exact, replacement),
       );
       const result = evaluate({ productionFiles });
-      expect(result.sites).toBe(197);
+      expect(result.sites).toBe(200);
       expect(result.findings.join('\n')).toContain(
         'production diagnostic emission site manifest drifted',
       );
@@ -349,7 +349,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
         ),
     );
     const result = evaluate({ productionFiles });
-    expect(result.sites).toBe(197);
+    expect(result.sites).toBe(200);
     expect(result.findings.join('\n')).toContain(
       'reviewed validator registry and dispatch summary drifted',
     );
@@ -2127,6 +2127,27 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
           '\n',
         ),
       ).toContain('collection control flow drifted from its reviewed exact body');
+    }
+  });
+
+  it('C13 canary: serialized SQL-safety diagnostics retain exact registry rehydration', () => {
+    const fileName = 'packages/server/src/internal/data-plane-static-analysis.ts';
+    const canaries = [
+      (text) => text.replace('if (!isDiagnosticCode(code)', "if (typeof code !== 'string'"),
+      (text) =>
+        text.replace(
+          'if (severity !== diagnostic.severity)',
+          'if (false && severity !== diagnostic.severity)',
+        ),
+    ];
+    for (const mutate of canaries) {
+      expect(
+        validateDiagnosticEmissionDoorBindings(
+          diagnosticDoorFiles({ [fileName]: mutate(productionText(fileName)) }),
+        ).join('\n'),
+      ).toContain(
+        'serialized SQL-safety diagnostic rehydration door drifted from its reviewed exact body',
+      );
     }
   });
 
