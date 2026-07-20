@@ -1356,6 +1356,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })",
           "digest: 'sha256:not-a-digest'",
           "const reference = 'tests/authz/dynamic';",
+          'trustedAssign(input.email, obligation)',
+          '...obligation',
+          "invariant: 'request-input-is-safe'",
         ],
       },
       {
@@ -2045,7 +2048,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           '@kovo-security-certifies C13 structured-escape-review-signature',
           'composes with the runtime-attestation trust anchor and binds site, obligation, and artifact',
           'rejects a replacement key, fingerprint, or signature',
-          "siteIdentity: 'src/mutations.ts:45'",
+          "siteIdentity: 'src/mutations.ts:45:99'",
           "reference: 'tests/authz/forged'",
           'publicKeySpki: replacement.publicKeySpki',
         ],

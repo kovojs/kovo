@@ -30,6 +30,12 @@ export {
   registeredRuntimePostureManifest,
 } from '../generated-runtime-posture-registry.js';
 export { runtimeAttestationPayloadSource } from '../runtime-attestation.js';
+export {
+  escapeObligationReviewPayload,
+  verifyEscapeObligationReviewEnvelope,
+  type EscapeObligationReviewEnvelope,
+  type EscapeObligationReviewSubject,
+} from '../escape-obligation-review.js';
 export { exportSecurityEvents } from '../security-event-export.js';
 export {
   extractCompilerBoundKovoRuntimeDbMetadata,

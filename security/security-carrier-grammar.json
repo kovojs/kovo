@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 258,
+    "historicalWitnesses": 259,
     "productions": 12
   },
   "productions": [
@@ -944,6 +944,12 @@
       "corpus": "client-handler-import",
       "production": "module-boundary",
       "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "structured-escape-review-signature",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "The verifier reconstructs the exact site, obligation, and artifact subject, then rejects replacement keys, anchors, and signatures at the detached review boundary."
     },
     {
       "anchor": "capability-mint-symbol-identity-census",

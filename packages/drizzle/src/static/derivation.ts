@@ -93,6 +93,7 @@ import {
   directDrizzleReceiverCallSurface,
   objectPropertyInitializer,
 } from '../static.js';
+import { structuredTrustedAssignObligation } from './structured-audit-obligation.js';
 import {
   domainWriteObject,
   domainWriteProperties,
@@ -960,7 +961,7 @@ function dedupeEffectFacts(facts: readonly SymbolicEffectFact[]): SymbolicEffect
 //
 // Two-tier escape (author-assertion, audit-grade):
 //   serverValue(value, reason)   — discharges only independently proven non-input provenance.
-//   trustedAssign(value, reason)   — the louder audited path for a deliberate privileged write.
+//   trustedAssign(value, obligation) — the louder audited path for a deliberate privileged write.
 // Opaque helpers remain unknown. App-authored metadata cannot mint server
 // provenance; use a directly analyzable value or the explicit audited escape.
 
@@ -1448,7 +1449,8 @@ interface GovernedValueVerdict {
 /**
  * Classify a value flowing into a governed column. Fail-closed:
  *  - `serverValue(x, reason)` passes only with positive literal/private/server proof.
- *  - `trustedAssign(x, reason)` is the audited privileged write — always passes (recorded).
+ *  - `trustedAssign(x, obligation)` is the audited privileged write only when its exact inline
+ *    invariant/why/evidence grammar closes (recorded); prose and dynamic records fail closed.
  *  - literal / structurally proven `server` (req.session/guard/tenant) passes.
  *  - `input` provenance → reject (`input`).
  *  - anything else (unprovable / opaque helper) → reject (`unknown`, fail-closed).
@@ -1461,9 +1463,18 @@ function governedValueVerdict(
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    // trustedAssign(value, reason): the audited privileged write — always passes (recorded).
+    // trustedAssign(value, obligation): only the exact structured obligation grammar discharges
+    // KV438. A legacy prose reason or dynamic/malformed record remains fail-closed.
     if (isPrivilegedHelperCall(callee, 'trustedAssign')) {
-      return { ok: true, provenance: 'input' };
+      const value = expression.getArguments()[0];
+      const obligation = structuredTrustedAssignObligation(expression.getArguments()[1]);
+      if (value && obligation) return { ok: true, provenance: 'input' };
+      const inner = value ? governedValueVerdict(value, context) : undefined;
+      return {
+        detail: expression.getText(),
+        ok: false,
+        provenance: inner?.ok ? 'unknown' : (inner?.provenance ?? 'unknown'),
+      };
     }
     if (isPrivilegedHelperCall(callee, 'serverValue')) {
       const inner = expression.getArguments()[0];
@@ -1549,7 +1560,17 @@ function confidentialAtRestValueVerdict(
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
     if (isPrivilegedHelperCall(callee, 'trustedAssign')) {
-      return { ok: true, provenance: 'input' };
+      const value = expression.getArguments()[0];
+      const obligation = structuredTrustedAssignObligation(expression.getArguments()[1]);
+      if (value && obligation) return { ok: true, provenance: 'input' };
+      const provenance = value
+        ? symbolProvenanceForExpression(value, context.symbolContext)
+        : undefined;
+      return {
+        detail: expression.getText(),
+        ok: false,
+        provenance: provenance?.kind === 'input' ? 'input' : 'unknown',
+      };
     }
     if (isBlessedEncryptAtRestCall(expression, context)) {
       return { ok: true, provenance: 'unknown' };

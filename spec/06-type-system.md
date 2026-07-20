@@ -402,6 +402,18 @@ core cannot import the Node server runtime; that authority is verify-only, boot-
 provider signing material out of public verifier metadata. Types and private brands are ergonomics;
 the runtime witness, closed registry, and acquisition gates are the enforcement.
 
+The runtime-posture Ed25519 trust anchor also verifies detached privileged-write reviews from
+§10.3. An escape-review signature is domain-separated by the exact
+`kovo.escape-obligation-review/v1` subject and binds one scanner-owned call-span identity, one
+structured obligation, and one reviewed artifact subject. This reuses the runtime-attestation
+fingerprint; a second review root is forbidden. Build emits only unsigned subjects, and its import
+graph plus the app-facing/internal execution surface expose verification but no signing handle.
+Signing authority belongs to the out-of-band review/deployment process and is absent from the build
+environment and coding-agent capability set. A valid signature is evidence that the pinned key
+holder approved those exact bytes. It is not evidence that the asserted guard or policy exists,
+that the cited evidence is sufficient, or that a human reviewer was independent; those are retained
+operational obligations.
+
 The closed registry is `kovo-crypto-purpose-registry/v1`. Every framework derivation is
 HKDF-SHA256 over its root with public salt `kovo-crypto-authority-v1`. Its fixed-width info is the
 SHA-256 commitment of the injective, length-framed tuple

@@ -3512,7 +3512,17 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     await runWithRequestInputProvenance({ role: 'admin' }, async (input) => {
       await expect(
-        handle.update(table).set({ role: trustedAssign(input.role, 'operator role grant') }),
+        handle.update(table).set({
+          role: trustedAssign(input.role, {
+            evidence: {
+              digest: `sha256:${'a'.repeat(64)}`,
+              kind: 'test',
+              reference: 'tests/managed-db/operator-role-grant',
+            },
+            invariant: 'governed-write.authorized-principal',
+            why: { guard: 'operator-role-guard', kind: 'guard-chain' },
+          }),
+        }),
       ).resolves.toBe('updated');
       expect(() =>
         handle.update(table).set({ role: serverValue(input.role, 'attempted laundering') }),

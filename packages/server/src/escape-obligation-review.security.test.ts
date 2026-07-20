@@ -9,6 +9,7 @@ import {
   createEscapeObligationReviewEnvelope,
   verifyEscapeObligationReviewEnvelope,
 } from './escape-obligation-review.js';
+import * as internalExecution from './internal/execution.js';
 
 const artifactSubject = `sha256:${'b'.repeat(64)}` as const;
 const obligation = {
@@ -31,7 +32,7 @@ describe('escape-obligation review signatures (SPEC §§6.6, 11.2)', () => {
       {
         artifactSubject,
         obligation,
-        siteIdentity: 'src/mutations.ts:44',
+        siteIdentity: 'src/mutations.ts:44:99',
       },
       authority,
     );
@@ -46,7 +47,7 @@ describe('escape-obligation review signatures (SPEC §§6.6, 11.2)', () => {
     ).toBe(true);
 
     for (const subject of [
-      { ...envelope.subject, siteIdentity: 'src/mutations.ts:45' },
+      { ...envelope.subject, siteIdentity: 'src/mutations.ts:45:99' },
       { ...envelope.subject, artifactSubject: `sha256:${'c'.repeat(64)}` as const },
       {
         ...envelope.subject,
@@ -79,7 +80,7 @@ describe('escape-obligation review signatures (SPEC §§6.6, 11.2)', () => {
       'deployment:test',
     );
     const envelope = createEscapeObligationReviewEnvelope(
-      { artifactSubject, obligation, siteIdentity: 'src/mutations.ts:44' },
+      { artifactSubject, obligation, siteIdentity: 'src/mutations.ts:44:99' },
       authority,
     );
     const options = {
@@ -93,16 +94,76 @@ describe('escape-obligation review signatures (SPEC §§6.6, 11.2)', () => {
         {
           ...envelope,
           publicKeySpki: replacement.publicKeySpki,
-          trustAnchorFingerprint: replacement.trustAnchorFingerprint,
+          trustAnchorFingerprint: replacement.trustAnchorFingerprint as `sha256:${string}`,
         },
         options,
       ),
     ).toBe(false);
     expect(
       verifyEscapeObligationReviewEnvelope(
-        { ...envelope, signature: `${envelope.signature.slice(0, -1)}A` },
+        { ...envelope, keyId: `${envelope.keyId}-forged` },
         options,
       ),
     ).toBe(false);
+    expect(
+      verifyEscapeObligationReviewEnvelope(
+        {
+          ...envelope,
+          signature: `${envelope.signature[0] === 'A' ? 'B' : 'A'}${envelope.signature.slice(1)}`,
+        },
+        options,
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects ambiguous fields and accessors without invoking them', () => {
+    const authority = createRuntimeAttestationCryptoHandle(
+      'escape-review-test-secret-0123456789abcdef0123456789abcdef',
+      'deployment:test',
+    );
+    const envelope = createEscapeObligationReviewEnvelope(
+      {
+        artifactSubject,
+        obligation,
+        siteIdentity: 'src/routes/[tenant id]/mutations.ts:44:99',
+      },
+      authority,
+    );
+    const options = {
+      artifactSubject,
+      trustAnchorFingerprint: authority.trustAnchorFingerprint,
+      verification: createRuntimeAttestationVerificationHandle(),
+    };
+
+    expect(
+      verifyEscapeObligationReviewEnvelope(
+        { ...envelope, unsignedNote: 'looks reviewed' },
+        options,
+      ),
+    ).toBe(false);
+    expect(
+      verifyEscapeObligationReviewEnvelope(
+        { ...envelope, subject: { ...envelope.subject, reason: 'looks reviewed' } },
+        options,
+      ),
+    ).toBe(false);
+
+    let getterCalls = 0;
+    const accessorEnvelope = { ...envelope } as Record<string, unknown>;
+    Object.defineProperty(accessorEnvelope, 'signature', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        return envelope.signature;
+      },
+    });
+    expect(verifyEscapeObligationReviewEnvelope(accessorEnvelope, options)).toBe(false);
+    expect(getterCalls).toBe(0);
+  });
+
+  it('keeps the signing capability off the exported build/execution surface', () => {
+    expect('createEscapeObligationReviewEnvelope' in internalExecution).toBe(false);
+    expect('createRuntimeAttestationCryptoHandle' in internalExecution).toBe(false);
+    expect('verifyEscapeObligationReviewEnvelope' in internalExecution).toBe(true);
   });
 });

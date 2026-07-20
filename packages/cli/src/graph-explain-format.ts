@@ -11,6 +11,7 @@ import {
   deriveOwnershipPostureFacts,
   deriveSessionAuthorityFacts,
 } from '@kovojs/core/internal/graph';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import type { KovoTargetExplainOptions } from './graph-args.js';
@@ -873,14 +874,21 @@ export function compareCapability(
 }
 
 export function capabilityLine(capability: CoreGraph.CapabilityExplain): string {
-  return [
+  const fields = [
     'CAPABILITY',
     `kind=${capability.kind}`,
     `site=${capability.site}`,
     `module=${capability.moduleSpecifier ?? '-'}`,
     `target=${capability.target ?? '-'}`,
     `justification=${stableValue(capability.justification)}`,
-  ].join(' ');
+  ];
+  if (capability.siteIdentity !== undefined) {
+    fields.push(`siteIdentity=${stableValue(capability.siteIdentity)}`);
+  }
+  if (capability.obligation !== undefined) {
+    fields.push(`obligation=${canonicalJsonStringify(capability.obligation)}`);
+  }
+  return fields.join(' ');
 }
 
 /**

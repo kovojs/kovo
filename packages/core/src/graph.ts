@@ -909,14 +909,29 @@ export const AUDITED_CAPABILITY_KINDS = freezeSecurityValue([
 export interface CapabilityExplain {
   /** The capability family the escape belongs to. */
   kind: (typeof AUDITED_CAPABILITY_KINDS)[number];
-  /** A human justification recorded at the escape site (the audit's load-bearing field). */
+  /** Human justification for legacy audit-only capability families; never used by trustedAssign. */
   justification?: string;
+  /** Closed invariant/basis/evidence record for structured privileged-write escapes. */
+  obligation?: StructuredAuditObligationFact;
   /** Source module for module-scoped escapes such as `publishToClient`. */
   moduleSpecifier?: string;
+  /** Exact scanner-owned call-span identity used to bind detached review signatures. */
+  siteIdentity?: string;
   /** The escape target/value descriptor (e.g. host:port, query path, cookie name). */
   target?: string;
   /** The source span of the escape. */
   site: string;
+}
+
+/** @internal Analyzer-checked structured review obligation for a privileged governed write. */
+export interface StructuredAuditObligationFact {
+  evidence: {
+    digest: `sha256:${string}`;
+    kind: 'policy-review' | 'test';
+    reference: string;
+  };
+  invariant: 'governed-write.authorized-principal';
+  why: { guard: string; kind: 'guard-chain' } | { kind: 'policy'; policy: string };
 }
 
 /**

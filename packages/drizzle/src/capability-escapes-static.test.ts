@@ -28,7 +28,11 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
       import { serverValue, trustedAssign } from '@kovojs/server';
       export function grant(input: { role: string }) {
         const a = serverValue(generatedId, 'server-generated key');
-        const b = trustedAssign(input.role, 'admin role grant');
+        const b = trustedAssign(input.role, {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/admin-role-grant' },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'guards.role:admin', kind: 'guard-chain' }
+        });
         return [a, b];
       }
     `);
@@ -41,9 +45,18 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
         target: 'serverValue',
       }),
       expect.objectContaining({
-        justification: 'admin role grant',
         kind: 'serverValue',
+        obligation: {
+          evidence: {
+            digest: `sha256:${'a'.repeat(64)}`,
+            kind: 'test',
+            reference: 'tests/authz/admin-role-grant',
+          },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'guards.role:admin', kind: 'guard-chain' },
+        },
         site: 'app.tsx:5',
+        siteIdentity: expect.stringMatching(/^app\.tsx:\d+:\d+$/u),
         target: 'trustedAssign',
       }),
     ]);

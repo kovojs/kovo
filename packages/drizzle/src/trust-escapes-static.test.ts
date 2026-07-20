@@ -11313,6 +11313,31 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         extra: `const reference = 'tests/authz/dynamic';`,
       }),
       mutationSource({
+        assignment: `trustedAssign(input.email, obligation)`,
+        extra: `const obligation = {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/dynamic-obligation' },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        };`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          ...obligation,
+          invariant: 'governed-write.authorized-principal'
+        })`,
+        extra: `const obligation = {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/spread' },
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        };`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/wrong-invariant' },
+          invariant: 'request-input-is-safe',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        })`,
+      }),
+      mutationSource({
         assignment: `trustedAssign(input.email, {
           evidence: { digest: 'sha256:not-a-digest', kind: 'test', reference: 'tests/authz/bad-digest' },
           invariant: 'governed-write.authorized-principal',

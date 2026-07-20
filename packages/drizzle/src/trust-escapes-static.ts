@@ -46,6 +46,7 @@ import {
   runtimeSetAdd,
   runtimeSetHas,
 } from './runtime-security-intrinsics.js';
+import { structuredTrustedAssignObligation } from './static/structured-audit-obligation.js';
 
 /** @internal */
 export interface TrustEscapeSourceFileInput {
@@ -14413,7 +14414,6 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     // timers) have already closed above. Dynamic loaders, document methods, constructor
     // indirection, and every other unresolved invocation close through the single callable
     // resolution boundary below. Do not reintroduce a parallel terminal-name lexicon here.
-    const callee = call.getExpression();
     const fetchInvocation = requestReviewedFetchInvocation(call, callable, context.provenance);
     if (
       fetchInvocation &&
@@ -33027,52 +33027,13 @@ function requestCallIsExactTrustedAssignOutput(call: Node): boolean {
   ) {
     return false;
   }
-  const [value, reason, ...extra] = call.getArguments();
-  if (!value || !reason || extra.length !== 0) return false;
-  const source = unwrapStaticExpression(reason);
-  const isNonEmptyStaticString = (candidate: Node): boolean => {
-    const string = unwrapStaticExpression(candidate);
-    return isStringLiteralLike(string) && runtimeRegExpTest(/\S/u, string.getLiteralText());
-  };
-  if (isStringLiteralLike(source)) return isNonEmptyStaticString(source);
-  if (!Node.isObjectLiteralExpression(source)) return false;
-
-  let sawReason = false;
-  const seen = runtimeSet<string>();
-  for (const property of source.getProperties()) {
-    if (
-      !Node.isPropertyAssignment(property) ||
-      Node.isComputedPropertyName(property.getNameNode())
-    ) {
-      return false;
-    }
-    const name = staticMemberName(property.getNameNode());
-    const initializer = property.getInitializer();
-    if (!name || !initializer || runtimeSetHas(seen, name)) return false;
-    runtimeSetAdd(seen, name);
-    if (name === 'columns') {
-      const columns = unwrapStaticExpression(initializer);
-      if (
-        !Node.isArrayLiteralExpression(columns) ||
-        !columns
-          .getElements()
-          .every((entry) => !Node.isSpreadElement(entry) && isNonEmptyStaticString(entry))
-      ) {
-        return false;
-      }
-      continue;
-    }
-    if (
-      !['actor', 'callsite', 'producer', 'reason', 'session', 'sourceProvenance', 'table'].includes(
-        name,
-      ) ||
-      !isNonEmptyStaticString(initializer)
-    ) {
-      return false;
-    }
-    if (name === 'reason') sawReason = true;
-  }
-  return sawReason;
+  const [value, obligation, ...extra] = call.getArguments();
+  return !!(
+    value &&
+    obligation &&
+    extra.length === 0 &&
+    structuredTrustedAssignObligation(obligation)
+  );
 }
 
 function requestExactServerValueCarriesRequestAuthority(
@@ -39071,8 +39032,9 @@ function methodCapabilityKind(name: string): CapabilityExplain['kind'] | undefin
 /**
  * Collect every app-authored escape-hatch call site as a `CapabilityExplain` (SPEC §6.6,
  * AUDIT-ONLY for `kovo explain --capabilities`, threat-matrix M3). One row per escape call; the
- * recorded `justification` (from a `reason`/`justification` argument, a trailing string, or a
- * leading `// justification:` comment) is the load-bearing audit field but is never required here.
+ * Legacy doors retain their recorded `justification`. `trustedAssign` instead carries an exact
+ * structured obligation plus scanner-owned call identity; artifact emission refuses an incomplete
+ * row before any deployable output is written.
  *
  * @internal
  */
@@ -39321,11 +39283,17 @@ function frameworkCapabilityEscape(
   const args = call.getArguments();
   const target = capabilityTargetForCall(exportName, args);
   const justification = capabilityJustificationForCall(exportName, args, call);
+  const obligation =
+    exportName === 'trustedAssign' ? structuredTrustedAssignObligation(args[1]) : undefined;
   return {
     kind,
     site: siteFor(file, call),
+    ...(exportName === 'trustedAssign'
+      ? { siteIdentity: runtimeRevealCallIdentity(file, call) }
+      : {}),
     ...(target === undefined ? {} : { target }),
     ...(justification === undefined ? {} : { justification }),
+    ...(obligation === undefined ? {} : { obligation }),
   };
 }
 
@@ -39352,6 +39320,7 @@ function capabilityJustificationForCall(
   args: readonly Node[],
   call: Node,
 ): string | undefined {
+  if (exportName === 'trustedAssign') return undefined;
   if (exportName === 'declarePublicRelation') {
     const options = args[0];
     return options && Node.isObjectLiteralExpression(options)
@@ -39373,7 +39342,7 @@ function capabilityJustificationForCall(
       : leadingJustification(call);
   }
   if (exportName === 'usePostgresSystemDb') return leadingJustification(call);
-  // serverValue(v, reason) / trustedAssign(v, reason|{reason}) / unsafeRegex(re, justification):
+  // serverValue(v, reason) / unsafeRegex(re, justification):
   // the reason is the SECOND argument, as a string or a `{ reason }` object.
   const reasonArg = args[1];
   if (reasonArg && isStringLiteralLike(reasonArg)) return reasonArg.getLiteralText();

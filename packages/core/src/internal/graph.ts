@@ -73,6 +73,7 @@ export type {
   SqlSafetyDiagnosticFact,
   SqlSafetyExplainFact,
   StaticDiagnosticFact,
+  StructuredAuditObligationFact,
   TaskExplain,
   ToctouFact,
   TouchGraph,

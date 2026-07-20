@@ -97,13 +97,13 @@
     {
       "site": "packages/create-kovo/templates/src/mutations.ts#site-0001",
       "file": "packages/create-kovo/templates/src/mutations.ts",
-      "line": 37,
+      "line": 36,
       "column": 9,
       "owner": "writeContact",
       "door": "trustedAssign",
       "identity": "import:@kovojs/server#trustedAssign",
       "callee": "trustedAssign",
-      "expressionSha256": "bb735ea48939fa54ae51f0a81ea906443ecccf2990f2f7cab2f53af0d12500c0"
+      "expressionSha256": "5c80b32f16c0a4af425b0030cc562665efc7a8f5ceb13b64cb04ed3b8bc2c5d2"
     },
     {
       "site": "packages/server/src/csrf.ts#site-0001",
@@ -119,7 +119,7 @@
     {
       "site": "packages/server/src/mutation.ts#site-0001",
       "file": "packages/server/src/mutation.ts",
-      "line": 1387,
+      "line": 1400,
       "column": 7,
       "owner": "revealCsrfTokenInput",
       "door": "revealUntrusted",

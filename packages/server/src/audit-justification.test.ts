@@ -45,7 +45,9 @@ describe('server audited text floor (SPEC §6.6)', () => {
       const forged = `reviewed${control}FORGED AUDIT ROW`;
 
       expect(() => unsafeRegex(/x/u, forged)).toThrow(/printable|control/u);
-      expect(() => trustedAssign('admin', forged)).toThrow(/printable|control/u);
+      expect(() => trustedAssign('admin', trustedAssignObligation(forged))).toThrow(
+        /machine-readable/u,
+      );
       expect(() => publicAccess(forged)).toThrow(/printable|control/u);
       expect(() => committedSecretWaiver('fixture', { justification: forged })).toThrow(
         /printable|control/u,
@@ -60,7 +62,9 @@ describe('server audited text floor (SPEC §6.6)', () => {
     const oversized = 'a'.repeat(4_097);
 
     expect(() => unsafeRegex(/x/u, oversized)).toThrow(/4096/u);
-    expect(() => trustedAssign('admin', oversized)).toThrow(/4096/u);
+    expect(() => trustedAssign('admin', trustedAssignObligation(oversized))).toThrow(
+      /machine-readable/u,
+    );
     expect(() => publicAccess(oversized)).toThrow(/4096/u);
     expect(() => committedSecretWaiver('fixture', { justification: oversized })).toThrow(/4096/u);
     expect(() => replayMutationWireBody('cached', { reason: oversized })).toThrow(/4096/u);
@@ -158,3 +162,15 @@ describe('server audited text floor (SPEC §6.6)', () => {
     expect(() => guard('g'.repeat(4_097), () => true)).toThrow(/4096/u);
   });
 });
+
+function trustedAssignObligation(reference: string) {
+  return {
+    evidence: {
+      digest: `sha256:${'a'.repeat(64)}` as `sha256:${string}`,
+      kind: 'test' as const,
+      reference,
+    },
+    invariant: 'governed-write.authorized-principal' as const,
+    why: { guard: 'guards.role:admin', kind: 'guard-chain' as const },
+  };
+}

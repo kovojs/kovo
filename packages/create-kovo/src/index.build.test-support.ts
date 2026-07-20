@@ -530,28 +530,41 @@ export function addRawSqlOwnerWriteProof(
     'raw SQL proof domain declaration',
   );
   mutations = patchRawSqlProofMutationRegistry(mutations, declareTables);
+  const contactAssignment = [
+    '    id: trustedAssign(row.email, {',
+    '      evidence: {',
+    "        digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e',",
+    "        kind: 'test',",
+    "        reference: 'starter-tests/contact-email-primary-key',",
+    '      },',
+    "      invariant: 'governed-write.authorized-principal',",
+    "      why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },",
+    '    }),',
+  ];
+  const inlineContactAssignment =
+    "trustedAssign(row.email, { evidence: { digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e', kind: 'test', reference: 'starter-tests/contact-email-primary-key' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' } })";
   mutations = replaceRequired(
     mutations,
     [
       '  await db.insert(contacts).values({',
       '    company: row.company,',
       '    email: row.email,',
-      "    id: trustedAssign(id, 'opaque server-generated contact id'),",
+      ...contactAssignment,
       '    name: row.name,',
       '  });',
     ].join('\n'),
     [
       `  await db.${rawSqlMethod}(`,
       options.trusted
-        ? "    trustedSql(sql`update raw_owners set label = ${row.company} where id = ${trustedAssign(id, 'opaque server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
+        ? `    trustedSql(sql\`update raw_owners set label = \${row.company} where id = \${${inlineContactAssignment}}\`, { justification: 'reviewed owner predicate' }),`
         : staticStatement
           ? "    staticSql`update raw_owners set label = 'fixture' where id = 'fixture'`,"
-          : "    sql`update raw_owners set label = ${row.company} where id = ${trustedAssign(id, 'opaque server-generated contact id')}`,",
+          : `    sql\`update raw_owners set label = \${row.company} where id = \${${inlineContactAssignment}}\`,`,
       '  );',
       '  await db.insert(contacts).values({',
       '    company: row.company,',
       '    email: row.email,',
-      "    id: trustedAssign(id, 'opaque server-generated contact id'),",
+      ...contactAssignment,
       '    name: row.name,',
       '  });',
     ].join('\n'),
@@ -1018,7 +1031,7 @@ export function addRuntimeMutationSafetyProofs(
       '',
       "async function insertTxProofRow(db: AppRequest['db'], id: string) {",
       '  void id;',
-      "  await db.insert(txProofs).values({ id: trustedAssign(crypto.randomUUID(), 'opaque server-generated transaction proof id') });",
+      `  await db.insert(txProofs).values({ id: trustedAssign(crypto.randomUUID(), { evidence: { digest: 'sha256:50bdcf18fca1a51200dab11f42ace64b20ae8d42194762c00cd14f9e0596ad73', kind: 'test', reference: 'starter-tests/transaction-proof-id' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.transaction-proof-id/v1' } }) });`,
       '}',
       '',
       ...(includeManagedWriteEscapeAttempt

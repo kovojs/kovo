@@ -72,8 +72,14 @@ export { declareSecretReadCapability } from './secret-read-boundary.js';
 export type { DeclaredSecretReadCapability } from './secret-read-boundary.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
-export { trustedAssign, serverValue } from './write-governance.js';
-export type { TrustedAssignOptions } from './write-governance.js';
+export {
+  trustedAssign,
+  serverValue,
+  type TrustedAssignEvidence,
+  type TrustedAssignInvariant,
+  type TrustedAssignObligation,
+  type TrustedAssignWhy,
+} from './write-governance.js';
 export {
   createConfidentialAtRestCipher,
   decryptAtRest,

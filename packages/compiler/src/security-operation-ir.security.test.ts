@@ -2070,7 +2070,11 @@ import { contacts } from './schema.js';
 async function writeContact(db, row) {
   const id = crypto.randomUUID();
   await db.insert(contacts).values({
-    id: trustedAssign(id, 'framework-generated opaque identifier'),
+    id: trustedAssign(id, {
+      evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/contacts/generated-id' },
+      invariant: 'governed-write.authorized-principal',
+      why: { kind: 'policy', policy: 'contacts.generated-id/v1' }
+    }),
     email: row.email,
   });
 }

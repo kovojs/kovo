@@ -4,7 +4,10 @@ import { resolve as builtinResolve } from 'node:path';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   createRuntimeAttestationVerificationHandle,
+  verifyEscapeObligationReviewEnvelope,
   runtimeAttestationPayloadSource,
+  type EscapeObligationReviewEnvelope,
+  type EscapeObligationReviewSubject,
 } from '@kovojs/server/internal/execution';
 
 import {
@@ -29,6 +32,7 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 interface AttestOptions {
   artifactPath: string;
+  escapeReviewsPath?: string;
   trustAnchor: string;
   url: string;
 }
@@ -39,19 +43,34 @@ export function parseAttestArgs(
 ): { ok: true; options: AttestOptions } | { message: string; ok: false } {
   const parsed = parseCommandArgv(args, EXPLAIN_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('explain', parsed, `kovo: usage: ${EXPLAIN_USAGE_LINE}`);
-  if (parsed.value.positionals.length !== 0 || parsed.value.options.size !== 3) {
+  if (parsed.value.positionals.length !== 0) {
     return { message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`, ok: false };
   }
   const url = parsedStringOption(parsed.value, '--attest');
   const artifactPath = parsedStringOption(parsed.value, '--artifact');
   const trustAnchor = parsedStringOption(parsed.value, '--trust-anchor');
-  if (url === undefined || artifactPath === undefined || trustAnchor === undefined) {
+  const escapeReviewsPath = parsedStringOption(parsed.value, '--escape-reviews');
+  const expectedOptionCount = escapeReviewsPath === undefined ? 3 : 4;
+  if (
+    url === undefined ||
+    artifactPath === undefined ||
+    trustAnchor === undefined ||
+    parsed.value.options.size !== expectedOptionCount
+  ) {
     return { message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`, ok: false };
   }
   if (!/^sha256:[a-f0-9]{64}$/u.test(trustAnchor)) {
     return { message: 'kovo: --trust-anchor must be a sha256 fingerprint.', ok: false };
   }
-  return { ok: true, options: { artifactPath, trustAnchor, url } };
+  return {
+    ok: true,
+    options: {
+      artifactPath,
+      ...(escapeReviewsPath === undefined ? {} : { escapeReviewsPath }),
+      trustAnchor,
+      url,
+    },
+  };
 }
 
 /** Verify one nonce-bound response against an out-of-band artifact and trust anchor. @internal */
@@ -61,6 +80,13 @@ export async function runAttestCommand(
 ): Promise<CliCommandResult> {
   try {
     const artifact = readReviewedArtifact(resolve(invocationCwd, options.artifactPath));
+    const reviewedEscapes = verifyReviewedEscapeObligations(
+      artifact.escapeObligations,
+      options.escapeReviewsPath === undefined
+        ? undefined
+        : resolve(invocationCwd, options.escapeReviewsPath),
+      options.trustAnchor,
+    );
     const endpoint = attestationEndpoint(options.url);
     const nonce = attestationVerification.challengeNonce();
     const response = await runtimeFetch(endpoint, {
@@ -87,7 +113,10 @@ export async function runAttestCommand(
         `VERIFIED deployment=${envelope.payload.deploymentId} instance=${envelope.payload.instanceIdentity}`,
         `ARTIFACT subject=${envelope.payload.artifactSubject}`,
         `POSTURE digest=${envelope.payload.postureDigest}`,
+        `ESCAPE-REVIEWS verified=${reviewedEscapes}`,
         'CLAIM one key-holding responding instance reported the reviewed posture at the signed time',
+        'CLAIM each listed escape review was signed by the same out-of-band deployment trust anchor',
+        'NONCLAIM an escape obligation signature does not prove its justification true',
         'NONCLAIM executed-code identity is not proved',
         'NONCLAIM host integrity is not proved',
         'NONCLAIM telemetry completeness is not proved',
@@ -105,6 +134,7 @@ export async function runAttestCommand(
 
 interface ReviewedArtifact {
   artifactSubject: string;
+  escapeObligations: readonly EscapeObligationReviewSubject[];
   postureDigest: string;
   postureFacts: unknown;
 }
@@ -145,7 +175,105 @@ function readReviewedArtifact(path: string): ReviewedArtifact {
       `reviewed posture digest mismatch expected=${postureDigest} actual=${computedPosture}`,
     );
   }
-  return { artifactSubject, postureDigest, postureFacts: posture.facts };
+  return {
+    artifactSubject,
+    escapeObligations: escapeObligationsFromGraph(record, artifactSubject),
+    postureDigest,
+    postureFacts: posture.facts,
+  };
+}
+
+function escapeObligationsFromGraph(
+  graph: Record<string, unknown>,
+  artifactSubject: string,
+): EscapeObligationReviewSubject[] {
+  if (graph.capabilities === undefined) return [];
+  if (!Array.isArray(graph.capabilities)) {
+    throw new Error('reviewed graph capabilities must be an array');
+  }
+  const subjects: EscapeObligationReviewSubject[] = [];
+  for (const [index, value] of graph.capabilities.entries()) {
+    const capability = requireRecord(value, `reviewed graph capabilities[${index}]`);
+    if (capability.target !== 'trustedAssign') continue;
+    if (
+      typeof capability.site !== 'string' ||
+      typeof capability.siteIdentity !== 'string' ||
+      capability.obligation === undefined
+    ) {
+      throw new Error(
+        `reviewed graph trustedAssign capability[${index}] lacks a structured obligation or analyzer-owned site identity`,
+      );
+    }
+    subjects.push({
+      artifactSubject: artifactSubject as `sha256:${string}`,
+      obligation: capability.obligation as EscapeObligationReviewSubject['obligation'],
+      schema: 'kovo.escape-obligation-review/v1',
+      siteIdentity: capability.siteIdentity,
+    });
+  }
+  return subjects;
+}
+
+function verifyReviewedEscapeObligations(
+  expected: readonly EscapeObligationReviewSubject[],
+  reviewPath: string | undefined,
+  trustAnchorFingerprint: string,
+): number {
+  if (reviewPath === undefined) {
+    if (expected.length > 0) {
+      throw new Error(
+        `reviewed artifact has ${expected.length} structured escape obligation(s); --escape-reviews is required`,
+      );
+    }
+    return 0;
+  }
+  const reviews = readEscapeReviewFile(reviewPath);
+  if (reviews.length !== expected.length) {
+    throw new Error(
+      `escape review count mismatch expected=${expected.length} actual=${reviews.length}`,
+    );
+  }
+  const consumed = new Set<number>();
+  for (const subject of expected) {
+    const canonical = canonicalJsonStringify(subject);
+    const matching: number[] = [];
+    for (let index = 0; index < reviews.length; index += 1) {
+      if (canonicalJsonStringify(reviews[index]?.subject) === canonical) matching.push(index);
+    }
+    if (matching.length !== 1 || consumed.has(matching[0]!)) {
+      throw new Error(`escape review is missing or duplicated for site ${subject.siteIdentity}`);
+    }
+    const index = matching[0]!;
+    consumed.add(index);
+    if (reviews[index]!.trustAnchorFingerprint !== trustAnchorFingerprint) {
+      throw new Error(
+        `escape review does not match the out-of-band fingerprint for site ${subject.siteIdentity}`,
+      );
+    }
+    if (
+      !verifyEscapeObligationReviewEnvelope(reviews[index]!, {
+        artifactSubject: subject.artifactSubject,
+        trustAnchorFingerprint,
+        verification: attestationVerification,
+      })
+    ) {
+      throw new Error(`escape review signature is invalid for site ${subject.siteIdentity}`);
+    }
+  }
+  return consumed.size;
+}
+
+function readEscapeReviewFile(path: string): EscapeObligationReviewEnvelope[] {
+  if (statSync(path).size > MAX_ARTIFACT_BYTES) {
+    throw new Error('escape review file exceeds the artifact size limit');
+  }
+  const value = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  const record = requireRecord(value, 'escape review file');
+  if (record.schema !== 'kovo.escape-obligation-reviews/v1' || !Array.isArray(record.reviews)) {
+    throw new Error('escape review file has an unsupported schema');
+  }
+  if (record.reviews.length > 4_096) throw new Error('escape review file exceeds 4096 reviews');
+  return record.reviews as EscapeObligationReviewEnvelope[];
 }
 
 async function boundedResponseText(response: Response): Promise<string> {

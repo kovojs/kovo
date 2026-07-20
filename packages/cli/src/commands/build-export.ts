@@ -89,6 +89,7 @@ import type {
   KovoBuildPresetContext,
   KovoBuildPresetDiagnostic,
 } from '@kovojs/server/internal/build-preset';
+import type { EscapeObligationReviewSubject } from '@kovojs/server/internal/execution';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { assertDocumentCspConfigMatchesBrowserPosture } from '@kovojs/server/internal/csp';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
@@ -693,6 +694,8 @@ export async function runBuildCommand(
       ...graphWithProvenance,
       runtimePosture,
     };
+    // Validate every trustedAssign review subject before any client/server artifact is emitted.
+    const escapeObligationManifest = escapeObligationManifestForBuild(attestedCheckGraph);
     const outDir = resolve(invocationRoot, options.outDir);
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
     const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
@@ -761,7 +764,7 @@ export async function runBuildCommand(
       serverHandlerSource: serverHandlerBuild.source,
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
-    writeKovoBuildGraphArtifact(neutralBuild, attestedCheckGraph);
+    writeKovoBuildGraphArtifact(neutralBuild, attestedCheckGraph, escapeObligationManifest);
     const presetToken =
       selectedPreset.name === 'cloudflare'
         ? cloudflare()
@@ -1207,6 +1210,7 @@ type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
 function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
   graph: CoreGraph.KovoCheckInput,
+  escapeObligations: ReturnType<typeof escapeObligationManifestForBuild>,
 ): void {
   // SPEC §5.2.3/§5.3: the build-derived graph is a review/debug artifact, not just an
   // in-memory preflight input. Persist it in the neutral build metadata directory
@@ -1216,6 +1220,50 @@ function writeKovoBuildGraphArtifact(
   // Plan 3 §2.1: the release-bound framework certificate is an independently-checkable sibling,
   // not an app-authored graph field. Its committed canonical bytes are embedded in the CLI build.
   writeFileSync(join(neutralBuild.outDir, 'certificate.json'), kovoCertificateV1Json);
+  // Plan 3 §4.2: this is deliberately unsigned build output. A second-party reviewer signs each
+  // subject outside the build/coding-agent environment with the already-pinned deployment
+  // attestation key; `kovo explain --attest --escape-reviews` verifies the detached envelopes.
+  writeFileSync(
+    join(neutralBuild.outDir, 'escape-obligations.json'),
+    `${stringifyBuildValue(escapeObligations, 2)}\n`,
+  );
+}
+
+/** @internal Derive detached review subjects without ever acquiring signing authority. */
+export function escapeObligationManifestForBuild(graph: CoreGraph.KovoCheckInput): {
+  artifactSubject: `sha256:${string}`;
+  schema: 'kovo.escape-obligations/v1';
+  subjects: readonly EscapeObligationReviewSubject[];
+} {
+  const artifactSubject = graph.runtimePosture?.artifactSubject;
+  if (artifactSubject === undefined) {
+    throw new TypeError('Escape-obligation emission requires the build-owned artifact subject.');
+  }
+  const subjects: EscapeObligationReviewSubject[] = [];
+  for (const capability of graph.capabilities ?? []) {
+    if (capability.target !== 'trustedAssign') continue;
+    if (capability.obligation === undefined) {
+      throw new TypeError(
+        `KV438: trustedAssign at ${capability.site} requires an analyzer-checked structured obligation before artifact emission.`,
+      );
+    }
+    if (capability.siteIdentity === undefined) {
+      throw new TypeError(
+        `KV438: trustedAssign at ${capability.site} requires an analyzer-owned call-site identity before artifact emission.`,
+      );
+    }
+    subjects.push({
+      artifactSubject,
+      obligation: capability.obligation,
+      schema: 'kovo.escape-obligation-review/v1',
+      siteIdentity: capability.siteIdentity,
+    });
+  }
+  return {
+    artifactSubject,
+    schema: 'kovo.escape-obligations/v1',
+    subjects,
+  };
 }
 
 function runtimePostureManifestForBuild(

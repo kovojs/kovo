@@ -71,7 +71,8 @@ failure paths.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
    `createStorageDownloadEndpoint`, and review the download endpoint in `kovo explain --endpoints`.
 9. **Run the security review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
-   `--endpoints`, `--revealed`, `--trust`, `--access`, `--cookies`, and `--sources-sinks`.
+   `--endpoints`, `--revealed`, `--trust`, `--capabilities`, `--access`, `--cookies`, and
+   `--sources-sinks`. Verify detached escape reviews with `--attest` before deployment.
 10. **Review every escape hatch** in the source/sink table before merging raw protocol code.
 
 ## Type your session
@@ -414,13 +415,25 @@ await db.update(accounts).set({
 });
 
 await db.update(accounts).set({
-  role: trustedAssign(input.role, { reason: 'admin role editor' }),
+  role: trustedAssign(input.role, {
+    invariant: 'governed-write.authorized-principal',
+    why: { kind: 'guard-chain', guard: 'guards.role:admin' },
+    evidence: {
+      kind: 'test',
+      reference: 'tests/authz/admin-role-editor',
+      digest: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    },
+  }),
 });
 ```
 
 `serverValue(...)` documents a literal or private value that Kovo already proves is not request
 input. It does not accept an opaque helper result. Use `trustedAssign(...)` for an intentionally
-reviewed opaque computation or an authorized admin write; it leaves an audit row.
+reviewed opaque computation or an authorized admin write. Keep the obligation inline: prose,
+variables, spreads, computed fields, and malformed evidence fail `kovo check`. The build writes the
+unsigned subject to `.kovo/escape-obligations.json`; your out-of-band reviewer signs it for
+`kovo explain --attest ... --escape-reviews reviews.json`. That signature records review of these
+exact bytes. It does not prove the policy is correct.
 
 ## Serve file downloads with capability URLs
 
@@ -509,7 +522,8 @@ reservation: SPEC §10.3. The typed read endpoint and per-read guard checks: SPE
 guard re-checks (fragments must not become a privilege-escalation channel): SPEC §9.3. The `owner:`
 annotation and `exempt`: SPEC §10.1. The verification surface and `--endpoints` machine-ingress
 audit: SPEC §11.4. Confidential data and `trustedReveal`: SPEC §6.6, KV435. Governed write
-provenance and mass-assignment: SPEC §10.3, KV438. Capability URLs for storage downloads:
+provenance, structured obligations, and detached review signatures: SPEC §6.6, §10.3, §11.4,
+KV438. Capability URLs for storage downloads:
 SPEC §6.6. Typed mutation error path: SPEC §9.2.
 
 API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).

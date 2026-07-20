@@ -38,6 +38,28 @@ describe('graph explain formatters', () => {
     );
   });
 
+  it('prints the exact structured obligation and scanner-owned identity', () => {
+    expect(
+      capabilityLine({
+        kind: 'serverValue',
+        obligation: {
+          evidence: {
+            digest: `sha256:${'a'.repeat(64)}`,
+            kind: 'test',
+            reference: 'tests/authz/admin-role-grant',
+          },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'guards.role:admin', kind: 'guard-chain' },
+        },
+        site: 'app/admin.ts:8',
+        siteIdentity: 'app/admin.ts:120:420',
+        target: 'trustedAssign',
+      }),
+    ).toBe(
+      `CAPABILITY kind=serverValue site=app/admin.ts:8 module=- target=trustedAssign justification=- siteIdentity="app/admin.ts:120:420" obligation={"evidence":{"digest":"sha256:${'a'.repeat(64)}","kind":"test","reference":"tests/authz/admin-role-grant"},"invariant":"governed-write.authorized-principal","why":{"guard":"guards.role:admin","kind":"guard-chain"}}`,
+    );
+  });
+
   it('prints capability-closure provenance without hiding the failing edge', () => {
     expect(
       capabilityClosureLine({

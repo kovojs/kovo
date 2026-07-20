@@ -1675,6 +1675,101 @@ export default createApp({
     }
   });
 
+  it('emits exact unsigned trustedAssign review subjects and rejects prose before emission', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-escape-obligation-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const invalidOutDir = join(root, 'invalid-dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        [
+          "import { createApp, trustedAssign } from '@kovojs/server';",
+          '',
+          'export function reviewedGrant(input) {',
+          '  return trustedAssign(input.role, {',
+          `    evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/admin-role-grant' },`,
+          "    invariant: 'governed-write.authorized-principal',",
+          "    why: { guard: 'guards.role:admin', kind: 'guard-chain' },",
+          '  });',
+          '}',
+          'export default createApp({ routes: [] });',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir, '--no-cache']);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        capabilities: readonly {
+          obligation: unknown;
+          site: string;
+          siteIdentity: string;
+          target: string;
+        }[];
+        runtimePosture: { artifactSubject: string };
+      };
+      const manifest = JSON.parse(
+        readFileSync(join(outDir, '.kovo/escape-obligations.json'), 'utf8'),
+      ) as {
+        artifactSubject: string;
+        schema: string;
+        subjects: readonly Record<string, unknown>[];
+      };
+      const capability = graph.capabilities.find((fact) => fact.target === 'trustedAssign');
+      expect(capability).toBeDefined();
+      expect(capability?.siteIdentity).toMatch(/^app\.mjs:\d+:\d+$/u);
+      expect(manifest).toEqual({
+        artifactSubject: graph.runtimePosture.artifactSubject,
+        schema: 'kovo.escape-obligations/v1',
+        subjects: [
+          {
+            artifactSubject: graph.runtimePosture.artifactSubject,
+            obligation: capability?.obligation,
+            schema: 'kovo.escape-obligation-review/v1',
+            siteIdentity: capability?.siteIdentity,
+          },
+        ],
+      });
+      const manifestSource = JSON.stringify(manifest);
+      expect(manifestSource).not.toMatch(/private|publicKey|signature|keyId/u);
+
+      writeFileSync(
+        appPath,
+        [
+          "import { createApp, trustedAssign } from '@kovojs/server';",
+          "export function unreviewedGrant(input) { return trustedAssign(input.role, 'make check green'); }",
+          'export default createApp({ routes: [] });',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      stderr.mockClear();
+      await expect(
+        mainAsync(['build', appPath, '--out', invalidOutDir, '--no-cache']),
+      ).resolves.toBe(1);
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(
+        /KV438.*structured obligation/u,
+      );
+      expect(existsSync(join(invalidOutDir, '.kovo'))).toBe(false);
+      expect(existsSync(join(invalidOutDir, '.kovo/escape-obligations.json'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('builds a declared config-secret app without receiving the production value', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-unavailable-'));
     const appPath = join(root, 'app.mjs');
