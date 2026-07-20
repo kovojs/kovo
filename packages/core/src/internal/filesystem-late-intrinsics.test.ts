@@ -98,6 +98,57 @@ describe('framework filesystem late intrinsic confinement', () => {
     }
   });
 
+  it('keeps bounded durable reads, mode changes, and fsyncs pinned after fs export replacement', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-late-durability-'));
+    const root = join(base, 'root');
+    await mkdir(root);
+    await writeFile(join(root, 'source.tsx'), 'REVIEWED', 'utf8');
+    await writeFile(join(root, 'state.json'), '{"epoch":1}\n', 'utf8');
+    const fileSystem = await createFrameworkFileSystemBoundary(root);
+    const snapshot = await fileSystem.captureFileForReplacement('source.tsx');
+    const originalFchmod = fs.fchmod;
+    const originalFsync = fs.fsync;
+    const originalRead = fs.read;
+    let poisonHits = 0;
+    let operationError: unknown;
+    try {
+      fs.fchmod = (() => {
+        poisonHits += 1;
+        throw new Error('poisoned fchmod');
+      }) as typeof fs.fchmod;
+      fs.fsync = (() => {
+        poisonHits += 1;
+        throw new Error('poisoned fsync');
+      }) as typeof fs.fsync;
+      fs.read = (() => {
+        poisonHits += 1;
+        throw new Error('poisoned read');
+      }) as typeof fs.read;
+      syncBuiltinESMExports();
+
+      try {
+        await fileSystem.replaceCapturedFile(snapshot!, 'REPLACEMENT');
+        await fileSystem.updateDurableFile('state.json', () => '{"epoch":2}\n');
+      } catch (error) {
+        operationError = error;
+      }
+    } finally {
+      fs.fchmod = originalFchmod;
+      fs.fsync = originalFsync;
+      fs.read = originalRead;
+      syncBuiltinESMExports();
+    }
+
+    try {
+      expect(operationError).toBeUndefined();
+      expect(poisonHits).toBe(0);
+      await expect(readFile(join(root, 'source.tsx'), 'utf8')).resolves.toBe('REPLACEMENT');
+      await expect(readFile(join(root, 'state.json'), 'utf8')).resolves.toBe('{"epoch":2}\n');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
   it('C182 rejects staging-prefix traversal while preserving valid sibling prefixes', async () => {
     const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-staging-prefix-'));
     const siblingParent = join(base, 'authority');

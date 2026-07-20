@@ -1,19 +1,11 @@
 import { createHash } from 'node:crypto';
-import {
-  closeSync,
-  existsSync,
-  fsyncSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
 
+import {
+  createFrameworkFileSystemBoundary,
+  type FrameworkFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 import type { KovoArtifactProvenance } from '@kovojs/core/internal/graph';
 
 import {
@@ -39,8 +31,6 @@ const MAX_LIST_ENTRIES = 128;
 const MAX_TEXT = 1_024;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1_000;
 const MIN_ADVISORY_EPOCH = 1;
-const STATE_LOCK_RETRY_DELAY_MS = 25;
-const STATE_LOCK_RETRY_LIMIT = 200;
 
 export const KOVO_ADVISORY_SCHEMA = 'kovo.security.advisory/v1' as const;
 export const KOVO_ADVISORY_FEED_SCHEMA = 'kovo.security.advisory-feed/v1' as const;
@@ -192,16 +182,12 @@ export async function runAdvisoryCheck(
     );
 
     const statePath = safeStatePath(invocationCwd, options.statePath);
-    await updateAdvisoryState(
-      statePath,
-      feed,
-      {
-        feedDigest,
-        highestEpoch: feed.epoch,
-        schema: KOVO_ADVISORY_STATE_SCHEMA,
-      },
-      invocationCwd,
-    );
+    const stateFileSystem = await createFrameworkFileSystemBoundary(resolve(invocationCwd));
+    await updateAdvisoryState(stateFileSystem, statePath, feed, {
+      feedDigest,
+      highestEpoch: feed.epoch,
+      schema: KOVO_ADVISORY_STATE_SCHEMA,
+    });
 
     return evaluateAdvisories(feed, artifact, options.severityFloor);
   } catch (error) {
@@ -532,16 +518,9 @@ function assertNoFeedRollback(
   }
 }
 
-function readAdvisoryState(path: string): AdvisoryState | undefined {
-  if (!existsSync(path)) return undefined;
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new TypeError('advisory state must be a regular non-symlink file');
-  }
-  const value = recordValue(
-    parseBoundedJson(readBoundedFile(path, 'advisory state'), 'advisory state'),
-    'advisory state',
-  );
+function readAdvisoryState(bytes: Uint8Array | undefined): AdvisoryState | undefined {
+  if (bytes === undefined) return undefined;
+  const value = recordValue(parseBoundedJson(bytes, 'advisory state'), 'advisory state');
   const state = exactRecord(value, 'advisory state', ['feedDigest', 'highestEpoch', 'schema']);
   if (
     state.schema !== KOVO_ADVISORY_STATE_SCHEMA ||
@@ -560,88 +539,19 @@ function readAdvisoryState(path: string): AdvisoryState | undefined {
 }
 
 async function updateAdvisoryState(
-  path: string,
+  fileSystem: FrameworkFileSystemBoundary,
+  relativePath: string,
   feed: KovoSecurityAdvisoryFeed,
   state: AdvisoryState,
-  invocationCwd: string,
 ): Promise<void> {
-  const parent = dirname(path);
-  ensureSafeDirectoryChain(resolve(invocationCwd), parent, 'advisory state parent');
-  const lockPath = `${path}.lock`;
-  const lockDescriptor = await acquireAdvisoryStateLock(lockPath);
-  try {
-    const current = readAdvisoryState(path);
+  await fileSystem.updateDurableFile(relativePath, (currentBytes) => {
+    const current = readAdvisoryState(currentBytes);
     assertNoFeedRollback(feed, state.feedDigest, current);
     if (current?.highestEpoch === state.highestEpoch && current.feedDigest === state.feedDigest) {
-      fsyncParentDirectory(parent);
-      return;
+      return undefined;
     }
-    writeAdvisoryState(path, state, invocationCwd);
-  } finally {
-    closeSync(lockDescriptor);
-    unlinkSync(lockPath);
-    fsyncParentDirectory(parent);
-  }
-}
-
-async function acquireAdvisoryStateLock(path: string): Promise<number> {
-  for (let attempt = 0; attempt < STATE_LOCK_RETRY_LIMIT; attempt += 1) {
-    try {
-      return openSync(path, 'wx', 0o600);
-    } catch (error) {
-      if (!isSystemError(error, 'EEXIST')) throw error;
-      await delay(STATE_LOCK_RETRY_DELAY_MS);
-    }
-  }
-  throw new TypeError('advisory state lock remained busy');
-}
-
-function writeAdvisoryState(path: string, state: AdvisoryState, invocationCwd: string): void {
-  const parent = dirname(path);
-  ensureSafeDirectoryChain(resolve(invocationCwd), parent, 'advisory state parent');
-  if (existsSync(path)) {
-    const current = lstatSync(path);
-    if (!current.isFile() || current.isSymbolicLink()) {
-      throw new TypeError('advisory state target must be a regular non-symlink file');
-    }
-  }
-  const temporary = `${path}.tmp-${process.pid}-${state.highestEpoch}`;
-  let descriptor: number | undefined;
-  try {
-    descriptor = openSync(temporary, 'wx', 0o600);
-    writeFileSync(descriptor, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-    fsyncSync(descriptor);
-    closeSync(descriptor);
-    descriptor = undefined;
-    renameSync(temporary, path);
-    fsyncParentDirectory(parent);
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-    if (existsSync(temporary)) unlinkSync(temporary);
-  }
-}
-
-function fsyncParentDirectory(path: string): void {
-  let descriptor: number | undefined;
-  try {
-    descriptor = openSync(path, 'r');
-    fsyncSync(descriptor);
-  } catch (error) {
-    if (
-      process.platform !== 'win32' ||
-      !(['EACCES', 'EINVAL', 'EISDIR', 'EPERM'] as const).some((code) => isSystemError(error, code))
-    ) {
-      throw error;
-    }
-    // Windows does not expose durable directory handles through this API. The atomic rename and
-    // file fsync remain mandatory there; POSIX platforms additionally sync the parent directory.
-  } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-  }
-}
-
-function isSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error && error.code === code;
+    return `${JSON.stringify(state, null, 2)}\n`;
+  });
 }
 
 async function defaultFetchBytes(source: string): Promise<Uint8Array> {
@@ -714,7 +624,8 @@ function safeInputPath(invocationCwd: string, inputPath: string, label: string):
 }
 
 function safeStatePath(invocationCwd: string, inputPath: string): string {
-  return safeInputPath(invocationCwd, inputPath, 'advisory state');
+  const root = resolve(invocationCwd);
+  return relative(root, safeInputPath(root, inputPath, 'advisory state'));
 }
 
 function resolveInputSource(invocationCwd: string, source: string): string {
@@ -735,26 +646,6 @@ function assertSafeExistingDirectoryChain(root: string, parent: string, label: s
   for (const segment of segments) {
     current = resolve(current, segment);
     if (!existsSync(current)) return;
-    const stat = lstatSync(current);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) {
-      throw new TypeError(`${label} must contain only regular non-symlink directories`);
-    }
-  }
-}
-
-function ensureSafeDirectoryChain(root: string, parent: string, label: string): void {
-  const rootStat = lstatSync(root);
-  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
-    throw new TypeError('advisory invocation root must be a regular non-symlink directory');
-  }
-  const child = relative(root, parent);
-  if (child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) {
-    throw new TypeError(`${label} resolves outside the invocation root`);
-  }
-  let current = root;
-  for (const segment of child === '' ? [] : child.split(sep)) {
-    current = resolve(current, segment);
-    if (!existsSync(current)) mkdirSync(current, { mode: 0o700 });
     const stat = lstatSync(current);
     if (!stat.isDirectory() || stat.isSymbolicLink()) {
       throw new TypeError(`${label} must contain only regular non-symlink directories`);

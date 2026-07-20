@@ -1,18 +1,12 @@
-import {
-  closeSync,
-  fsyncSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import type { Stats } from 'node:fs';
-import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { DiagnosticCode } from '@kovojs/core';
+import {
+  createFrameworkFileSystemBoundary,
+  type CapturedFileReplacement,
+  type FrameworkFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 import {
   analyzeSafeComponentFixes,
   measureAgentAuthoredCostToGreenCorpus,
@@ -38,8 +32,6 @@ export type FixCommandOptions =
 export type FixArgParseResult =
   | { readonly ok: true; readonly options: FixCommandOptions }
   | { readonly message: string; readonly ok: false };
-
-let temporaryFileSequence = 0;
 
 /** @internal Parse `kovo fix` through the manifest-owned argv grammar. */
 export function parseFixArgs(args: readonly string[]): FixArgParseResult {
@@ -78,7 +70,7 @@ export async function runFixCommand(
 ): Promise<CliCommandResult> {
   try {
     if ('costReport' in options) return costReportResult();
-    const source = readAuthoredSource(invocationCwd, options.sourcePath);
+    const source = await readAuthoredSource(invocationCwd, options.sourcePath);
     const analysis = analyzeSafeComponentFixes({
       fileName: source.relativePath,
       source: source.value,
@@ -105,8 +97,7 @@ export async function runFixCommand(
       };
     }
 
-    assertSourceUnchanged(source);
-    atomicReplaceSource(source, analysis.source);
+    await source.fileSystem.replaceCapturedFile(source.snapshot, analysis.source);
     return {
       exitCode: 0,
       output: `${lines}OK kovo fix ${source.relativePath} rewritten=${analysis.edits.length} analyzer=green\n`,
@@ -120,29 +111,32 @@ export async function runFixCommand(
 }
 
 interface AuthoredSource {
-  readonly canonicalPath: string;
+  readonly fileSystem: FrameworkFileSystemBoundary;
   readonly relativePath: string;
-  readonly stat: Stats;
+  readonly snapshot: CapturedFileReplacement;
   readonly value: string;
 }
 
-function readAuthoredSource(invocationCwd: string, inputPath: string): AuthoredSource {
+async function readAuthoredSource(
+  invocationCwd: string,
+  inputPath: string,
+): Promise<AuthoredSource> {
   const root = realpathSync(invocationCwd);
   const lexicalPath = resolve(root, inputPath);
   const lexicalRelativePath = relativeAuthoredPath(root, lexicalPath, inputPath);
   assertAuthoredPathShape(lexicalRelativePath, inputPath);
-  const stat = lstatSync(lexicalPath);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
+  const fileSystem = await createFrameworkFileSystemBoundary(root);
+  const snapshot = await fileSystem.captureFileForReplacement(lexicalRelativePath);
+  if (snapshot === undefined) {
     throw new Error(`${inputPath} must be a regular, non-symlink source file`);
   }
-  const canonicalPath = realpathSync(lexicalPath);
-  const relativePath = relativeAuthoredPath(root, canonicalPath, inputPath);
+  const relativePath = snapshot.relativePath;
   assertAuthoredPathShape(relativePath, inputPath);
   return {
-    canonicalPath,
+    fileSystem,
     relativePath,
-    stat,
-    value: readFileSync(canonicalPath, 'utf8'),
+    snapshot,
+    value: new TextDecoder('utf-8').decode(snapshot.body),
   };
 }
 
@@ -175,41 +169,6 @@ function assertAuthoredPathShape(relativePath: string, inputPath: string): void 
     ) {
       throw new Error(`${inputPath} is under generated or dependency path ${segment}`);
     }
-  }
-}
-
-function assertSourceUnchanged(source: AuthoredSource): void {
-  const current = lstatSync(source.canonicalPath);
-  if (
-    !current.isFile() ||
-    current.isSymbolicLink() ||
-    current.dev !== source.stat.dev ||
-    current.ino !== source.stat.ino ||
-    current.size !== source.stat.size ||
-    current.mtimeMs !== source.stat.mtimeMs ||
-    readFileSync(source.canonicalPath, 'utf8') !== source.value
-  ) {
-    throw new Error(`${source.relativePath} changed while its rewrite was being proved`);
-  }
-}
-
-function atomicReplaceSource(source: AuthoredSource, value: string): void {
-  temporaryFileSequence += 1;
-  const temporaryPath = resolve(
-    dirname(source.canonicalPath),
-    `.${basename(source.canonicalPath)}.kovo-fix-${process.pid}-${temporaryFileSequence}`,
-  );
-  let fileDescriptor: number | undefined;
-  try {
-    fileDescriptor = openSync(temporaryPath, 'wx', source.stat.mode);
-    writeFileSync(fileDescriptor, value, 'utf8');
-    fsyncSync(fileDescriptor);
-    closeSync(fileDescriptor);
-    fileDescriptor = undefined;
-    renameSync(temporaryPath, source.canonicalPath);
-  } finally {
-    if (fileDescriptor !== undefined) closeSync(fileDescriptor);
-    rmSync(temporaryPath, { force: true });
   }
 }
 

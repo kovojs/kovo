@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -78,6 +86,33 @@ export const CartBadge = component({
     expect(result.output).toContain('analyzer=green');
     expect(readFileSync(sourcePath, 'utf8')).not.toContain('data-bind="cart.count"');
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves authored source permissions across the proved atomic rewrite',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'kovo-fix-mode-'));
+      const sourcePath = join(root, 'cart-badge.tsx');
+      try {
+        writeFileSync(
+          sourcePath,
+          `
+export const CartBadge = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
+});
+`,
+        );
+        chmodSync(sourcePath, 0o751);
+
+        await expect(
+          runFixCommand({ check: false, sourcePath: 'cart-badge.tsx' }, root),
+        ).resolves.toMatchObject({ exitCode: 0 });
+        expect(statSync(sourcePath).mode & 0o777).toBe(0o751);
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   it('keeps --check read-only and fails when a safe rewrite is available', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-fix-check-'));

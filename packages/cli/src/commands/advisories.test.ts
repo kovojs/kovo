@@ -1,6 +1,13 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -462,6 +469,11 @@ describe('authenticated advisory evaluation', () => {
     expect(
       JSON.parse(readFileSync(join(equivocationRoot, '.kovo/advisory-state.json'), 'utf8')),
     ).toMatchObject({ highestEpoch: 4, schema: 'kovo.security.advisory-state/v1' });
+    if (process.platform !== 'win32') {
+      expect(statSync(join(equivocationRoot, '.kovo/advisory-state.json')).mode & 0o777).toBe(
+        0o600,
+      );
+    }
   });
 
   it('serializes rollback state across processes and rechecks after acquiring the lock', async () => {
@@ -539,6 +551,16 @@ describe('authenticated advisory evaluation', () => {
     );
     expect(result.exitCode).toBe(2);
     expect('output' in result ? result.output : '').toContain('offline');
+  });
+
+  it('bounds rollback-state reads before parsing attacker-controlled bytes', async () => {
+    const root = rootWithGraph();
+    writeFileSync(join(root, '.kovo/advisory-state.json'), new Uint8Array(1_048_577));
+
+    const result = await check(root, feed());
+
+    expect(result.exitCode).toBe(2);
+    expect('output' in result ? result.output : '').toContain('byte limit');
   });
 
   it('rejects corrupt state and symlinked state paths instead of losing rollback memory', async () => {

@@ -1,4 +1,5 @@
 import {
+  chmod,
   link,
   lstat,
   mkdir,
@@ -9,6 +10,7 @@ import {
   rename,
   rm,
   symlink,
+  stat,
   writeFile,
 } from 'node:fs/promises';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
@@ -518,6 +520,148 @@ describe('framework filesystem boundary', () => {
     } finally {
       await rm(root, { force: true, recursive: true });
       await rm(outside, { force: true, recursive: true });
+    }
+  });
+
+  it('replaces only the exact regular file captured by the same boundary', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-captured-replacement-'));
+    const root = join(base, 'root');
+    const sourcePath = join(root, 'source.tsx');
+    await mkdir(root);
+    await writeFile(sourcePath, 'reviewed source', 'utf8');
+    try {
+      const fileSystem = await createFrameworkFileSystemBoundary(root);
+      const otherBoundary = await createFrameworkFileSystemBoundary(root);
+      const snapshot = await fileSystem.captureFileForReplacement('source.tsx');
+      expect(new TextDecoder().decode(snapshot?.body)).toBe('reviewed source');
+
+      await expect(
+        otherBoundary.replaceCapturedFile(snapshot!, 'foreign replacement'),
+      ).rejects.toThrow(/snapshot from this boundary/u);
+
+      await writeFile(sourcePath, 'attacker source', 'utf8');
+      await expect(fileSystem.replaceCapturedFile(snapshot!, 'proved replacement')).rejects.toThrow(
+        /captured file changed/u,
+      );
+      await expect(readFile(sourcePath, 'utf8')).resolves.toBe('attacker source');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves captured source mode and creates durable private state',
+    async () => {
+      const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-durable-mode-'));
+      const root = join(base, 'root');
+      const sourcePath = join(root, 'source.tsx');
+      const statePath = join(root, '.kovo/state.json');
+      await mkdir(root);
+      await writeFile(sourcePath, 'reviewed source', 'utf8');
+      await chmod(sourcePath, 0o751);
+      try {
+        const fileSystem = await createFrameworkFileSystemBoundary(root);
+        const snapshot = await fileSystem.captureFileForReplacement('source.tsx');
+        await fileSystem.replaceCapturedFile(snapshot!, 'proved replacement');
+        expect((await stat(sourcePath)).mode & 0o777).toBe(0o751);
+        await expect(readFile(sourcePath, 'utf8')).resolves.toBe('proved replacement');
+
+        await fileSystem.updateDurableFile('.kovo/state.json', () => '{"epoch":1}\n');
+        expect((await stat(join(root, '.kovo'))).mode & 0o777).toBe(0o700);
+        expect((await stat(statePath)).mode & 0o777).toBe(0o600);
+        await expect(readFile(statePath, 'utf8')).resolves.toBe('{"epoch":1}\n');
+        await expect(lstat(`${statePath}.lock`)).rejects.toMatchObject({ code: 'ENOENT' });
+      } finally {
+        await rm(base, { force: true, recursive: true });
+      }
+    },
+  );
+
+  it('serializes durable compare-and-set updates across independently created boundaries', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-durable-cas-'));
+    const root = join(base, 'root');
+    await mkdir(root);
+    const decoder = new TextDecoder();
+    try {
+      const first = await createFrameworkFileSystemBoundary(root);
+      const second = await createFrameworkFileSystemBoundary(root);
+      const increment = (current: Uint8Array | undefined): string => {
+        const count = current === undefined ? 0 : Number(decoder.decode(current));
+        return String(count + 1);
+      };
+      await expect(
+        Promise.all([
+          first.updateDurableFile('state.txt', increment),
+          second.updateDurableFile('state.txt', increment),
+        ]),
+      ).resolves.toEqual([undefined, undefined]);
+      await expect(readFile(join(root, 'state.txt'), 'utf8')).resolves.toBe('2');
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('bounds durable state reads and writes while releasing the exclusive lock', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-durable-limit-'));
+    const root = join(base, 'root');
+    const statePath = join(root, 'state.bin');
+    await mkdir(root);
+    await writeFile(statePath, new Uint8Array(1_048_577));
+    try {
+      const fileSystem = await createFrameworkFileSystemBoundary(root);
+      let updateCalled = false;
+      await expect(
+        fileSystem.updateDurableFile('state.bin', () => {
+          updateCalled = true;
+          return 'unsafe';
+        }),
+      ).rejects.toThrow(/byte limit/u);
+      expect(updateCalled).toBe(false);
+      expect((await stat(statePath)).size).toBe(1_048_577);
+      await expect(lstat(`${statePath}.lock`)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      await writeFile(statePath, 'safe', 'utf8');
+      await expect(
+        fileSystem.updateDurableFile('state.bin', () => new Uint8Array(1_048_577)),
+      ).rejects.toThrow(/byte limit/u);
+      await expect(readFile(statePath, 'utf8')).resolves.toBe('safe');
+      await expect(lstat(`${statePath}.lock`)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects symlink carriers for captured files, durable parents, targets, and locks', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-durable-symlinks-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    const outsideVictim = join(outside, 'victim.txt');
+    await mkdir(join(root, '.kovo'), { recursive: true });
+    await mkdir(outside);
+    await writeFile(outsideVictim, 'outside', 'utf8');
+    try {
+      const fileSystem = await createFrameworkFileSystemBoundary(root);
+      await symlink(outsideVictim, join(root, 'source.tsx'));
+      await expect(fileSystem.captureFileForReplacement('source.tsx')).resolves.toBeUndefined();
+
+      await symlink(outside, join(root, 'linked-parent'), 'dir');
+      await expect(
+        fileSystem.updateDurableFile('linked-parent/nested/state.json', () => 'unsafe'),
+      ).rejects.toThrow(/symbolic link/u);
+      await expect(lstat(join(outside, 'nested'))).rejects.toMatchObject({ code: 'ENOENT' });
+
+      await symlink(outsideVictim, join(root, '.kovo/state.json'));
+      await expect(
+        fileSystem.updateDurableFile('.kovo/state.json', () => 'unsafe'),
+      ).rejects.toThrow(/non-symbolic-link file/u);
+
+      await symlink(outsideVictim, join(root, '.kovo/locked.json.lock'));
+      await expect(
+        fileSystem.updateDurableFile('.kovo/locked.json', () => 'unsafe'),
+      ).rejects.toThrow(/not a private regular file/u);
+      await expect(readFile(outsideVictim, 'utf8')).resolves.toBe('outside');
+    } finally {
+      await rm(base, { force: true, recursive: true });
     }
   });
 });

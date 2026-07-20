@@ -5,7 +5,9 @@ import {
   close as closeFileDescriptor,
   constants as fsConstants,
   Dirent,
+  fchmod as setFileDescriptorMode,
   fstat as statFileDescriptor,
+  fsync as syncFileDescriptor,
   lstatSync,
   open as openFileDescriptor,
   read as readFileDescriptorChunk,
@@ -27,6 +29,7 @@ import {
   stat,
   unlink,
 } from 'node:fs/promises';
+import { setTimeout as setTimer } from 'node:timers';
 
 /**
  * Boot-pinned scalar controls for filesystem and storage confinement.
@@ -40,6 +43,7 @@ const NativeArrayBuffer = globalThis.ArrayBuffer;
 const NativeDataView = globalThis.DataView;
 const NativeFunction = globalThis.Function;
 const NativeMap = globalThis.Map;
+const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
 const NativePromise = globalThis.Promise;
 const NativeReadableStream = globalThis.ReadableStream;
@@ -66,6 +70,7 @@ const nativeArraySome = NativeArray.prototype.some;
 const nativeMapDelete = NativeMap.prototype.delete;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapSet = NativeMap.prototype.set;
+const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
 const nativeObjectFreeze = NativeObject.freeze;
@@ -123,6 +128,7 @@ const nativeNoFollowOpenFlag =
 const nativeReadOnlyOpenFlag = fsConstants.O_RDONLY | nativeNoFollowOpenFlag;
 const nativeExclusiveWriteOpenFlag =
   fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | nativeNoFollowOpenFlag;
+const nativePrivateDirectoryMode = 0o700;
 const nativePrivateFileMode = 0o600;
 const nativeReadableStreamControllerClose = NativeReadableStreamDefaultController.prototype.close;
 const nativeReadableStreamControllerEnqueue =
@@ -139,6 +145,8 @@ const nativeRemove = rm;
 const nativeRandomUuid = randomUUID;
 const nativeStat = stat;
 const nativeStatFileDescriptor = statFileDescriptor;
+const nativeSetFileDescriptorMode = setFileDescriptorMode;
+const nativeSetTimer = setTimer;
 const nativeStatsIsDirectory = Stats.prototype.isDirectory;
 const nativeStatsIsFile = Stats.prototype.isFile;
 const nativeStatsIsSymbolicLink = Stats.prototype.isSymbolicLink;
@@ -154,6 +162,7 @@ const nativeJsonStringify = NativeJSON.stringify;
 const nativeTextDecoderDecode = NativeTextDecoder.prototype.decode;
 const nativeTextEncoderEncode = NativeTextEncoder.prototype.encode;
 const nativeUnlink = unlink;
+const nativeSyncFileDescriptor = syncFileDescriptor;
 const nativeWriteFileDescriptor = writeFileDescriptor;
 const textDecoder = new NativeTextDecoder();
 const textEncoder = new NativeTextEncoder();
@@ -279,6 +288,8 @@ function capturedControlsAreSound(): boolean {
       apply(nativeMapGet, map, ['escape']) === undefined &&
       apply(nativeMapDelete, map, ['safe']) === true &&
       apply(nativeMapGet, map, ['safe']) === undefined &&
+      apply(nativeNumberIsSafeInteger, NativeNumber, [1]) === true &&
+      apply(nativeNumberIsSafeInteger, NativeNumber, [1.5]) === false &&
       decoded === 'Kovo-storage' &&
       copied !== encoded &&
       copied.length === encoded.length &&
@@ -304,6 +315,9 @@ function capturedControlsAreSound(): boolean {
       typeof nativeStat === 'function' &&
       typeof nativeStatFileDescriptor === 'function' &&
       typeof nativeStatSync === 'function' &&
+      typeof nativeSetFileDescriptorMode === 'function' &&
+      typeof nativeSetTimer === 'function' &&
+      typeof nativeSyncFileDescriptor === 'function' &&
       typeof nativeUnlink === 'function' &&
       typeof nativeWriteFileDescriptor === 'function' &&
       typeof nativeReadOnlyOpenFlag === 'number' &&
@@ -642,6 +656,13 @@ export function fileSystemCloseFileDescriptor(fileDescriptor: number): Promise<v
   });
 }
 
+export function fileSystemDelay(milliseconds: number): Promise<void> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<void>((resolve) => {
+    apply(nativeSetTimer, undefined, [resolve, milliseconds]);
+  });
+}
+
 const FILE_SYSTEM_STREAM_CHUNK_SIZE = 64 * 1024;
 
 export function fileSystemCreateReadableStream(fileDescriptor: number): ReadableStream<Uint8Array> {
@@ -744,6 +765,11 @@ export function fileSystemMkdir(directoryPath: string, recursive = false): Promi
   return recursive ? nativeMkdir(directoryPath, { recursive: true }) : nativeMkdir(directoryPath);
 }
 
+export function fileSystemMkdirPrivate(directoryPath: string): Promise<unknown> {
+  assertFileSystemIntrinsics();
+  return nativeMkdir(directoryPath, { mode: nativePrivateDirectoryMode });
+}
+
 export function fileSystemMkdtemp(prefix: string): Promise<string> {
   assertFileSystemIntrinsics();
   return nativeMkdtemp(prefix);
@@ -799,6 +825,46 @@ export function fileSystemReadFileDescriptor(fileDescriptor: number): Promise<Ui
       },
     ]);
   });
+}
+
+export async function fileSystemReadFileDescriptorBounded(
+  fileDescriptor: number,
+  maximumBytes: number,
+): Promise<Uint8Array> {
+  assertFileSystemIntrinsics();
+  if (!apply(nativeNumberIsSafeInteger, NativeNumber, [maximumBytes]) || maximumBytes < 0) {
+    throw new NativeTypeError('Kovo filesystem byte limit must be a non-negative safe integer.');
+  }
+  const chunks: Uint8Array[] = [];
+  let chunkCount = 0;
+  let total = 0;
+  for (;;) {
+    const remaining = maximumBytes - total;
+    const readLength =
+      remaining >= FILE_SYSTEM_STREAM_CHUNK_SIZE ? FILE_SYSTEM_STREAM_CHUNK_SIZE : remaining + 1;
+    const chunk = new NativeUint8Array(readLength);
+    const bytesRead = await readFileDescriptorStreamChunk(fileDescriptor, chunk, readLength);
+    if (bytesRead < 0 || bytesRead > readLength) {
+      throw new NativeTypeError('Kovo filesystem descriptor returned an invalid byte count.');
+    }
+    if (bytesRead === 0) break;
+    total += bytesRead;
+    if (total > maximumBytes) {
+      throw new NativeTypeError('Kovo filesystem descriptor exceeds its byte limit.');
+    }
+    const exact = new NativeUint8Array(bytesRead);
+    for (let index = 0; index < bytesRead; index += 1) exact[index] = chunk[index]!;
+    chunks[chunkCount] = exact;
+    chunkCount += 1;
+  }
+  const output = new NativeUint8Array(total);
+  let offset = 0;
+  for (let index = 0; index < chunkCount; index += 1) {
+    const chunk = chunks[index]!;
+    apply(nativeUint8ArraySet, output, [chunk, offset]);
+    offset += apply<number>(nativeTypedArrayByteLengthGetter!, chunk, []);
+  }
+  return output;
 }
 
 export function fileSystemWriteFileDescriptor(
@@ -870,6 +936,33 @@ export function fileSystemStatFileDescriptor(fileDescriptor: number): Promise<St
       fileDescriptor,
       (error: Error | null, stats: Stats) => {
         if (error === null) resolve(stats);
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemSetFileMode(fileDescriptor: number, mode: number): Promise<void> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<void>((resolve, reject) => {
+    apply(nativeSetFileDescriptorMode, undefined, [
+      fileDescriptor,
+      mode,
+      (error: Error | null) => {
+        if (error === null) resolve();
+        else reject(error);
+      },
+    ]);
+  });
+}
+
+export function fileSystemSyncFileDescriptor(fileDescriptor: number): Promise<void> {
+  assertFileSystemIntrinsics();
+  return new NativePromise<void>((resolve, reject) => {
+    apply(nativeSyncFileDescriptor, undefined, [
+      fileDescriptor,
+      (error: Error | null) => {
+        if (error === null) resolve();
         else reject(error);
       },
     ]);
