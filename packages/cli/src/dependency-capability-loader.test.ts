@@ -58,6 +58,15 @@ function recursiveBudgetCarrierExpression(assetPath: string): string {
   return `(() => { function install(box) { var cycle = cycle; console.log(cycle); const holder = { get target() { return box; } }; holder.target.platform = globalThis; } const box = {}; install(box); return new box.platform.Worker('${assetPath}'); })()`;
 }
 
+function deepStructuredArgumentCarrierExpression(assetPath: string): string {
+  const depth = 56;
+  const nested = Array.from({ length: depth }).reduce<string>(
+    (value) => `{ next: ${value} }`,
+    '{ box }',
+  );
+  return `(() => { const box = {}; const root = ${nested}; function install(value) { value${'.next'.repeat(depth)}.box.platform = globalThis; } install(root); return new box.platform.Worker('${assetPath}'); })()`;
+}
+
 describe('SPEC §6.6 app dependency loader attenuation', () => {
   // @kovo-security-certifies C13 dependency-complete-ssr-wiring
   it('forces complete dependency traversal in both supported SSR app-evaluation lanes', () => {
@@ -1908,6 +1917,81 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; holder[getSetterKey()] = box; return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
+    [
+      'audit-Proxy-set-trap-written Worker',
+      "(() => { const box = {}; const holder = new Proxy({}, { set(_target, _key, value) { value.platform = globalThis; return true; } }); holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-Proxy-get-trap-returned Worker',
+      "(() => { const holder = new Proxy({}, { get(_target, key) { return key === 'platform' ? globalThis : undefined; } }); return new holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-legacy-defineSetter-written Worker',
+      "(() => { const holder = {}; holder.__defineSetter__('target', value => { value.platform = globalThis; }); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-legacy-defineGetter-returned Worker',
+      "(() => { const holder = {}; holder.__defineGetter__('platform', () => globalThis); return new holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-method-this-written Worker',
+      "(() => { const holder = { install() { this.platform = globalThis; } }; holder.install(); return new holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-call-invoked-helper-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; install.call(null, box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-apply-invoked-helper-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; install.apply(null, [box]); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-bind-invoked-helper-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; install.bind(null, box)(); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-object-destructuring-target-written Worker',
+      "(() => { const box = {}; ({ value: box.platform } = { value: globalThis }); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-array-destructuring-target-written Worker',
+      "(() => { const box = {}; [box.platform] = [globalThis]; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-destructuring-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; ({ value: holder.target } = { value: box }); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-constructor-arguments-written Worker',
+      "(() => { function Installer() { arguments[0].platform = globalThis; } const box = {}; new Installer(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-setter-arguments-written Worker',
+      "(() => { const holder = { set target(_value) { arguments[0].platform = globalThis; } }; const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-static-setter-this-written Worker',
+      "(() => { class Holder { static set target(value) { this.platform = value; } } Holder.target = globalThis; return new Holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-deep-structured-argument-written Worker',
+      deepStructuredArgumentCarrierExpression('/worker.mjs'),
+      'Worker',
+    ],
     ['depth-budget-helper-written Worker', depthBudgetCarrierExpression('/worker.mjs'), 'Worker'],
     [
       'recursive-budget-helper-written Worker',
@@ -2517,6 +2601,81 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'dynamic-key-setter-written Worker',
       "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; holder[getSetterKey()] = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-Proxy-set-trap-written Worker',
+      "(() => { const box = {}; const holder = new Proxy({}, { set(_target, _key, value) { value.platform = globalThis; return true; } }); holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-Proxy-get-trap-returned Worker',
+      "(() => { const holder = new Proxy({}, { get(_target, key) { return key === 'platform' ? globalThis : undefined; } }); return new holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-legacy-defineSetter-written Worker',
+      "(() => { const holder = {}; holder.__defineSetter__('target', value => { value.platform = globalThis; }); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-legacy-defineGetter-returned Worker',
+      "(() => { const holder = {}; holder.__defineGetter__('platform', () => globalThis); return new holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-method-this-written Worker',
+      "(() => { const holder = { install() { this.platform = globalThis; } }; holder.install(); return new holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-call-invoked-helper-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; install.call(null, box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-apply-invoked-helper-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; install.apply(null, [box]); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-bind-invoked-helper-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; install.bind(null, box)(); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-object-destructuring-target-written Worker',
+      "(() => { const box = {}; ({ value: box.platform } = { value: globalThis }); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-array-destructuring-target-written Worker',
+      "(() => { const box = {}; [box.platform] = [globalThis]; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-destructuring-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; ({ value: holder.target } = { value: box }); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-constructor-arguments-written Worker',
+      "(() => { function Installer() { arguments[0].platform = globalThis; } const box = {}; new Installer(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-setter-arguments-written Worker',
+      "(() => { const holder = { set target(_value) { arguments[0].platform = globalThis; } }; const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-static-setter-this-written Worker',
+      "(() => { class Holder { static set target(value) { this.platform = value; } } Holder.target = globalThis; return new Holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-deep-structured-argument-written Worker',
+      deepStructuredArgumentCarrierExpression('/payload.mjs'),
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
