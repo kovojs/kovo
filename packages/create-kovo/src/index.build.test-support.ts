@@ -27,8 +27,7 @@ export function productionArtifactAttestationEnv(label: string): Readonly<{
 }> {
   return {
     KOVO_ATTESTATION_DEPLOYMENT_ID: `deployment:test:${label}`,
-    KOVO_ATTESTATION_SECRET:
-      'production-artifact-test-secret-0123456789abcdef0123456789abcdef',
+    KOVO_ATTESTATION_SECRET: 'production-artifact-test-secret-0123456789abcdef0123456789abcdef',
   };
 }
 

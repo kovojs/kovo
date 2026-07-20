@@ -4275,7 +4275,8 @@ function approvedBuildSourcesVitePlugin(
       if (importerFileName === undefined || !buildSetHas(appSourcePaths, importerFileName)) {
         return null;
       }
-      if (isApprovedBuildVirtualSpecifier(source) || isBuildBareModuleSpecifier(source)) return null;
+      if (isApprovedBuildVirtualSpecifier(source) || isBuildBareModuleSpecifier(source))
+        return null;
       const resolved = await this.resolve(source, importer, { skipSelf: true });
       if (resolved === null || resolved.external === true) {
         throw new Error(
