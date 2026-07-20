@@ -1811,6 +1811,16 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'constructor-written Worker',
+      "(() => { function Installer(box) { box.platform = globalThis; } const box = {}; new Installer(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'setter-argument-written Worker',
+      "(() => { const box = {}; const holder = { set target(value) { value.platform = globalThis; } }; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'array-written Worker',
       "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
       'Worker',
@@ -2326,6 +2336,16 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'returned-class-method-written Worker',
       "(() => { function prepare(box) { return class Installer { install(platform) { box.platform = platform; } }; } const box = {}; const Installer = prepare(box); new Installer().install(globalThis); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'constructor-written Worker',
+      "(() => { function Installer(box) { box.platform = globalThis; } const box = {}; new Installer(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'setter-argument-written Worker',
+      "(() => { const box = {}; const holder = { set target(value) { value.platform = globalThis; } }; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
