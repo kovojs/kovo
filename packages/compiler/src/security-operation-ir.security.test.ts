@@ -774,6 +774,40 @@ export const items = pgTable('items', {
     expect(diagnostics).toEqual([]);
   });
 
+  // @kovo-security-classifier-corpus C13 declassification-robustness
+  it.each([
+    [
+      'attacker-controlled enabling condition',
+      `if (input.expose) {
+         return trustedReveal(secret('server-owned'), {
+           justification: 'publish a fixed reviewed projection',
+           method: 'server-projection',
+         });
+       }
+       return { reviewed: false };`,
+    ],
+    [
+      'attacker-controlled released value',
+      `return trustedReveal(secret(input.value), {
+         justification: 'publish a request-selected projection',
+         method: 'server-projection',
+       });`,
+    ],
+  ])('rejects a declassification with an %s', (_label, statement) => {
+    const diagnostics = kv449(`
+import { secret, trustedReveal } from '@kovojs/core';
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(input) {
+    ${statement}
+  },
+});
+`);
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain('declassification');
+  });
+
   // @kovo-security-classifier-corpus C13 finite-ir-declared-secret-read-execution
   it('classifies one exactly declared secret-read execute call as a managed query read', () => {
     expect(
