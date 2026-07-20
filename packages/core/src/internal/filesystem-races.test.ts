@@ -224,17 +224,31 @@ describe('framework filesystem pathname-race confinement (SPEC §10.6)', () => {
   });
 
   it.skipIf(process.platform === 'win32')(
-    'fsyncs replacement and durable-state files plus their rename and lock directories',
+    'fsyncs first-write parent chains before durable-state file and directory commits',
     async () => {
       const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-durable-fsync-'));
       const root = join(base, 'root');
       await mkdir(root);
       await writeFile(join(root, 'source.tsx'), 'REVIEWED', 'utf8');
-      const syncKinds: Array<'directory' | 'file'> = [];
+      const canonicalRoot = await realpath(root);
+      const directoryPathsByFileDescriptor = new Map<number, string>();
+      const syncTargets: string[] = [];
 
       mockFileSystemIntrinsics((actual) => ({
+        async fileSystemCloseFileDescriptor(fileDescriptor) {
+          directoryPathsByFileDescriptor.delete(fileDescriptor);
+          await actual.fileSystemCloseFileDescriptor(fileDescriptor);
+        },
+        async fileSystemOpenFileDescriptor(filePath) {
+          const fileDescriptor = await actual.fileSystemOpenFileDescriptor(filePath);
+          if (fstatSync(fileDescriptor).isDirectory()) {
+            directoryPathsByFileDescriptor.set(fileDescriptor, filePath);
+          }
+          return fileDescriptor;
+        },
         async fileSystemSyncFileDescriptor(fileDescriptor) {
-          syncKinds.push(fstatSync(fileDescriptor).isDirectory() ? 'directory' : 'file');
+          syncTargets[syncTargets.length] =
+            directoryPathsByFileDescriptor.get(fileDescriptor) ?? 'file';
           await actual.fileSystemSyncFileDescriptor(fileDescriptor);
         },
       }));
@@ -244,16 +258,61 @@ describe('framework filesystem pathname-race confinement (SPEC §10.6)', () => {
         const boundary = await createFrameworkFileSystemBoundary(root);
         const snapshot = await boundary.captureFileForReplacement('source.tsx');
         await boundary.replaceCapturedFile(snapshot!, 'REPLACEMENT');
-        expect(syncKinds).toEqual(['file', 'directory']);
+        expect(syncTargets).toEqual(['file', canonicalRoot]);
 
-        syncKinds.length = 0;
-        await boundary.updateDurableFile('.kovo/state.json', () => '{"epoch":1}\n');
-        expect(syncKinds).toEqual(['file', 'directory', 'directory']);
+        syncTargets.length = 0;
+        await boundary.updateDurableFile('.kovo/advisories/state.json', () => '{"epoch":1}\n');
+        const privateDirectory = join(canonicalRoot, '.kovo');
+        const targetDirectory = join(privateDirectory, 'advisories');
+        expect(syncTargets).toEqual([
+          targetDirectory,
+          privateDirectory,
+          canonicalRoot,
+          'file',
+          targetDirectory,
+          targetDirectory,
+        ]);
       } finally {
         await rm(base, { force: true, recursive: true });
       }
     },
   );
+
+  it('rejects a newly created parent-chain symlink swap before its durability sync', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-durable-parent-race-'));
+    const root = join(base, 'root');
+    const outside = join(base, 'outside');
+    const parkedPrivateDirectory = join(root, '.kovo-parked');
+    await mkdir(root);
+    await mkdir(join(outside, 'advisories'), { recursive: true });
+    const targetDirectory = join(await realpath(root), '.kovo', 'advisories');
+    let swapped = false;
+
+    mockFileSystemIntrinsics((actual) => ({
+      async fileSystemOpenFileDescriptor(filePath) {
+        if (!swapped && filePath === targetDirectory) {
+          swapped = true;
+          await rename(join(root, '.kovo'), parkedPrivateDirectory);
+          await symlink(outside, join(root, '.kovo'), 'dir');
+        }
+        return await actual.fileSystemOpenFileDescriptor(filePath);
+      },
+    }));
+
+    try {
+      const { createFrameworkFileSystemBoundary } = await freshFileSystemModule();
+      const boundary = await createFrameworkFileSystemBoundary(root);
+      await expect(
+        boundary.updateDurableFile('.kovo/advisories/state.json', () => '{"epoch":1}\n'),
+      ).rejects.toThrow(/directory identity changed before durability sync/u);
+      expect(swapped).toBe(true);
+      await expect(readFile(join(outside, 'advisories/state.json'), 'utf8')).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      await rm(base, { force: true, recursive: true });
+    }
+  });
 
   it('serializes concurrent framework commits within one prepared root', async () => {
     const base = await mkdtemp(join(tmpdir(), 'kovo-filesystem-concurrent-commit-'));

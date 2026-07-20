@@ -152,6 +152,11 @@ interface FileSystemIdentity {
   readonly inode: number;
 }
 
+interface ConfinedDirectoryDurabilityWitness {
+  readonly identity: FileSystemIdentity;
+  readonly path: string;
+}
+
 interface IdentityBoundRegularFile {
   readonly canonicalPath: string;
   readonly fileDescriptor: number;
@@ -833,9 +838,10 @@ async function updateDurableConfinedFile(
   const root = preparedRootPath(rootState);
   const targetPath = confinedPath(root, relativePath);
   if (targetPath === undefined) throw new Error('Filesystem path escapes its root.');
-  await createConfinedParentDirectories(rootState, root, targetPath);
 
   await withFileSystemRootCommitLock(root, async () => {
+    const createdDirectories = await createConfinedParentDirectories(rootState, root, targetPath);
+    await syncCreatedConfinedDirectoryChain(rootState, root, createdDirectories);
     const lockPath = `${targetPath}.lock`;
     const lock = await acquireDurableFileLock(rootState, root, lockPath);
     try {
@@ -1429,18 +1435,35 @@ async function verifyDurableFileLock(
   }
 }
 
-async function syncConfinedDirectory(directoryPath: string): Promise<void> {
+async function syncConfinedDirectory(
+  directoryPath: string,
+  expectedIdentity?: FileSystemIdentity,
+): Promise<void> {
   let fileDescriptor: number | undefined;
   try {
     const lexicalStat = await fileSystemLstat(directoryPath);
     if (fileSystemStatsIsSymbolicLink(lexicalStat) || !fileSystemStatsIsDirectory(lexicalStat)) {
       throw new Error(`Filesystem durability target '${directoryPath}' is not a directory.`);
     }
+    if (
+      expectedIdentity !== undefined &&
+      !sameFileSystemIdentity(expectedIdentity, fileSystemIdentity(lexicalStat))
+    ) {
+      throw confinedEntryIdentityChangedError(
+        directoryPath,
+        'directory identity changed before durability sync',
+      );
+    }
     fileDescriptor = await fileSystemOpenFileDescriptor(directoryPath);
     const descriptorStat = await fileSystemStatFileDescriptor(fileDescriptor);
     if (
       !fileSystemStatsIsDirectory(descriptorStat) ||
-      !sameFileSystemIdentity(fileSystemIdentity(lexicalStat), fileSystemIdentity(descriptorStat))
+      !sameFileSystemIdentity(
+        fileSystemIdentity(lexicalStat),
+        fileSystemIdentity(descriptorStat),
+      ) ||
+      (expectedIdentity !== undefined &&
+        !sameFileSystemIdentity(expectedIdentity, fileSystemIdentity(descriptorStat)))
     ) {
       throw confinedEntryIdentityChangedError(
         directoryPath,
@@ -1448,6 +1471,22 @@ async function syncConfinedDirectory(directoryPath: string): Promise<void> {
       );
     }
     await fileSystemSyncFileDescriptor(fileDescriptor);
+    const completedStat = await fileSystemLstat(directoryPath);
+    if (
+      fileSystemStatsIsSymbolicLink(completedStat) ||
+      !fileSystemStatsIsDirectory(completedStat) ||
+      !sameFileSystemIdentity(
+        fileSystemIdentity(descriptorStat),
+        fileSystemIdentity(completedStat),
+      ) ||
+      (expectedIdentity !== undefined &&
+        !sameFileSystemIdentity(expectedIdentity, fileSystemIdentity(completedStat)))
+    ) {
+      throw confinedEntryIdentityChangedError(
+        directoryPath,
+        'directory identity changed during durability sync',
+      );
+    }
   } catch (error) {
     if (!isWindowsDirectorySyncError(error)) throw error;
   } finally {
@@ -1815,7 +1854,7 @@ async function createConfinedParentDirectories(
   rootState: FileSystemRootState,
   root: string,
   targetPath: string,
-): Promise<void> {
+): Promise<readonly ConfinedDirectoryDurabilityWitness[]> {
   const parentPath = fileSystemPathDirname(targetPath);
   const resolvedRoot = fileSystemPathResolve(root);
   const relativeDirectory =
@@ -1825,10 +1864,12 @@ async function createConfinedParentDirectories(
     relativeDirectory === ''
       ? []
       : fileSystemStringSplit(relativeDirectory, fileSystemPathSeparator());
+  const createdDirectories: ConfinedDirectoryDurabilityWitness[] = [];
   let current = resolvedRoot;
   for (let index = 0; index < segments.length; index += 1) {
     current = fileSystemPathJoin(current, segments[index]!);
     let parentStat = await safeLstat(current);
+    const wasMissing = parentStat === undefined;
     if (parentStat === undefined) {
       // SPEC §10.6: create one checked component at a time. Node has no portable mkdirat(2), so
       // the narrow lstat/mkdir interval remains part of the documented hostile-local-actor ceiling.
@@ -1845,6 +1886,12 @@ async function createConfinedParentDirectories(
     if (!fileSystemStatsIsDirectory(parentStat)) {
       throw new Error(`Filesystem parent '${current}' is not a directory.`);
     }
+    if (wasMissing) {
+      createdDirectories[createdDirectories.length] = {
+        identity: fileSystemIdentity(parentStat),
+        path: current,
+      };
+    }
     await revalidatePreparedRoot(rootState);
   }
   const canonicalParent = await safeRealpath(parentPath);
@@ -1854,6 +1901,51 @@ async function createConfinedParentDirectories(
       `resolved to '${String(canonicalParent)}' instead of the confined parent`,
     );
   }
+  await revalidatePreparedRoot(rootState);
+  return createdDirectories;
+}
+
+async function syncCreatedConfinedDirectoryChain(
+  rootState: FileSystemRootState,
+  root: string,
+  createdDirectories: readonly ConfinedDirectoryDurabilityWitness[],
+): Promise<void> {
+  if (createdDirectories.length === 0) return;
+
+  // SPEC §10.6 durable state: mkdir persistence is a separate commit from file persistence.
+  // Sync each newly created directory deepest-first, then sync the first existing parent that
+  // carries the shallowest new directory entry. This makes the whole namespace chain durable
+  // before a lock or replacement file can be committed inside it.
+  for (let index = createdDirectories.length - 1; index >= 0; index -= 1) {
+    const directory = createdDirectories[index]!;
+    await syncWitnessedConfinedDirectory(rootState, root, directory);
+  }
+
+  const carrierPath = fileSystemPathDirname(createdDirectories[0]!.path);
+  await ensureParentsStayDirectories(root, carrierPath);
+  await revalidatePreparedRoot(rootState);
+  const carrierStat = await fileSystemLstat(carrierPath);
+  if (fileSystemStatsIsSymbolicLink(carrierStat) || !fileSystemStatsIsDirectory(carrierStat)) {
+    throw new Error(`Filesystem durability carrier '${carrierPath}' is not a directory.`);
+  }
+  await syncWitnessedConfinedDirectory(rootState, root, {
+    identity: fileSystemIdentity(carrierStat),
+    path: carrierPath,
+  });
+}
+
+async function syncWitnessedConfinedDirectory(
+  rootState: FileSystemRootState,
+  root: string,
+  directory: ConfinedDirectoryDurabilityWitness,
+): Promise<void> {
+  if (!containsPath(root, directory.path)) {
+    throw new Error('Filesystem durability path escapes its root.');
+  }
+  await ensureParentsStayDirectories(root, directory.path);
+  await revalidatePreparedRoot(rootState);
+  await syncConfinedDirectory(directory.path, directory.identity);
+  await ensureParentsStayDirectories(root, directory.path);
   await revalidatePreparedRoot(rootState);
 }
 
