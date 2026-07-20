@@ -17,6 +17,8 @@ import { Node, Project, SyntaxKind, VariableDeclarationKind, ts, type SourceFile
 import { builtinModules as builtinNodeModules } from 'node:module';
 import { posix as nodePath } from 'node:path';
 import type {
+  AppDependencyCapabilityManifest,
+  CapabilityClosureExplainFact,
   CapabilityExplain,
   CookieDowngradeExplain,
   RevealExplainFact,
@@ -67,12 +69,31 @@ export interface CompilerSecuritySemanticSource {
   source: string;
 }
 
+/**
+ * Compiler-owned L1 proof carrier for the exact source snapshot routed into TASK B.
+ *
+ * The carrier is intentionally redundant with `files`: TASK B reconstructs every request root
+ * from its own parser view and requires the corresponding capability-closure root row at the exact
+ * call site. A stale source census, malformed loader manifest, or missing root therefore closes
+ * instead of silently falling back to a syntax-only allow path (SPEC §6.6; Plan 1 Phase 3C).
+ *
+ * @internal
+ */
+export interface CompilerTaskBClosureProof {
+  readonly capabilityFacts: readonly CapabilityClosureExplainFact[];
+  readonly dependencyManifest: AppDependencyCapabilityManifest;
+  readonly files: readonly TrustEscapeSourceFileInput[];
+  readonly schema: 'kovo-task-b-closure/v1';
+}
+
 /** @internal */
 export interface TrustEscapeProjectOptions {
   /** Exact authored build-config entry whose deferred preset authority must use built-in witnesses. */
   buildConfigEntryFileName?: string;
   /** Same-snapshot compiler verdicts; never an app-authored assertion. */
   compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[];
+  /** Same-snapshot L1 root/package closure consumed before legacy residual analysis. */
+  compilerTaskBClosure?: CompilerTaskBClosureProof;
   files: readonly TrustEscapeSourceFileInput[];
 }
 
@@ -576,6 +597,7 @@ export function collectUnregisteredSinksFromProject(
       sourceFiles,
       options.buildConfigEntryFileName,
       options.compilerSecuritySemanticSources,
+      options.compilerTaskBClosure,
     );
     return facts.sort(
       (left, right) => left.site.localeCompare(right.site) || left.sink.localeCompare(right.sink),
@@ -656,6 +678,7 @@ export function collectStaticBuildTrustFactsFromProject(options: TrustEscapeProj
         sourceFiles,
         options.buildConfigEntryFileName,
         options.compilerSecuritySemanticSources,
+        options.compilerTaskBClosure,
       ),
     );
     return {
@@ -1473,6 +1496,7 @@ interface RequestProcessScanContext {
   readonly provenance: RequestProvenanceSession;
   readonly retainedConfigTargets: Set<string>;
   readonly scanned: Set<string>;
+  readonly taskBClosure?: RequestTaskBClosureState;
 }
 
 interface RequestCompilerSemanticHelperProof {
@@ -1490,6 +1514,24 @@ interface RequestCompilerSemanticInventoryNode {
   readonly children: Map<string, RequestCompilerSemanticInventoryNode>;
   hasInvocation: boolean;
   readonly operationKinds: Set<ServerSecurityOperationKind>;
+}
+
+interface RequestCompilerSemanticProofIndex {
+  readonly helperProofs: ReadonlyMap<string, readonly RequestCompilerSemanticHelperProof[]>;
+  readonly invalidReason?: string;
+  readonly rootsByCallable: ReadonlyMap<string, readonly SecuritySemanticGraph['roots'][number][]>;
+}
+
+interface RequestTaskBClosureState {
+  readonly capabilityRootsBySite: ReadonlyMap<string, readonly CapabilityClosureExplainFact[]>;
+  readonly checkedCapabilityRoots: Set<string>;
+  readonly checkedSemanticRoots: Set<string>;
+  readonly dependencyRootKindsByImporter: ReadonlyMap<string, readonly ReadonlySet<string>[]>;
+  readonly invalidReason?: string;
+  readonly semanticRootsByCallable: ReadonlyMap<
+    string,
+    readonly SecuritySemanticGraph['roots'][number][]
+  >;
 }
 
 const REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS = runtimeSet<ServerSecurityOperationKind>();
@@ -1658,6 +1700,7 @@ function requestProcessSinksForProject(
   sourceFiles: readonly SourceFile[],
   buildConfigEntryFileName?: string,
   compilerSecuritySemanticSources?: readonly CompilerSecuritySemanticSource[],
+  compilerTaskBClosure?: CompilerTaskBClosureProof,
 ): UnregisteredSinkFact[] {
   const filesByPath = new Map<string, TrustEscapeSourceFileInput>();
   for (const [index, sourceFile] of sourceFiles.entries()) {
@@ -1665,16 +1708,30 @@ function requestProcessSinksForProject(
     if (file) filesByPath.set(sourceFile.getFilePath(), file);
   }
 
+  const semanticProofs = requestCompilerSemanticProofIndex(
+    files,
+    sourceFiles,
+    compilerSecuritySemanticSources,
+  );
+  const taskBClosure = compilerTaskBClosure
+    ? requestTaskBClosureState(files, compilerTaskBClosure, semanticProofs)
+    : undefined;
   const context: RequestProcessScanContext = {
     ...(buildConfigEntryFileName === undefined ? {} : { buildConfigEntryFileName }),
     facts: [],
     filesByPath,
-    provenance: createRequestProvenanceSession(
-      requestCompilerSemanticHelperProofs(files, sourceFiles, compilerSecuritySemanticSources),
-    ),
+    provenance: createRequestProvenanceSession(semanticProofs.helperProofs),
     retainedConfigTargets: new Set(),
     scanned: new Set(),
+    ...(taskBClosure === undefined ? {} : { taskBClosure }),
   };
+  if (taskBClosure?.invalidReason && sourceFiles[0]) {
+    appendRequestTaskBRouteFailure(
+      context,
+      sourceFiles[0],
+      `root=<census>; transfers=<none>; sink=compiler-route; verdict=closed:${taskBClosure.invalidReason}`,
+    );
+  }
   let requestRootCount = 0;
 
   for (const [index, sourceFile] of sourceFiles.entries()) {
@@ -1705,6 +1762,7 @@ function requestProcessSinksForProject(
         }
         requestRootCount += 1;
         const { args, factory, site } = invocation;
+        verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);
         if (!args || args.length === 0) {
           appendOpaqueRequestHandlerFact(context, site, '<dynamic-or-empty-config>');
           continue;
@@ -1748,32 +1806,253 @@ function requestProcessSinksForProject(
   return context.facts;
 }
 
-function requestCompilerSemanticHelperProofs(
+function requestTaskBClosureState(
+  files: readonly TrustEscapeSourceFileInput[],
+  proof: CompilerTaskBClosureProof,
+  semanticProofs: RequestCompilerSemanticProofIndex,
+): RequestTaskBClosureState {
+  const invalid = (invalidReason: string): RequestTaskBClosureState => ({
+    capabilityRootsBySite: new Map(),
+    checkedCapabilityRoots: new Set(),
+    checkedSemanticRoots: new Set(),
+    dependencyRootKindsByImporter: new Map(),
+    invalidReason,
+    semanticRootsByCallable: semanticProofs.rootsByCallable,
+  });
+  if (proof.schema !== 'kovo-task-b-closure/v1') {
+    return invalid(`unsupported TASK B closure carrier ${String(proof.schema)}`);
+  }
+  if (proof.files.length !== files.length) {
+    return invalid(
+      `capability source census has ${proof.files.length} rows for ${files.length} source files`,
+    );
+  }
+  const proofFiles = new Map<string, string>();
+  for (const file of proof.files) {
+    if (proofFiles.has(file.fileName)) {
+      return invalid(`capability source census duplicates ${file.fileName}`);
+    }
+    proofFiles.set(file.fileName, file.source);
+  }
+  for (const file of files) {
+    if (proofFiles.get(file.fileName) !== file.source) {
+      return invalid(`capability source bytes do not match ${file.fileName}`);
+    }
+  }
+  if (proof.dependencyManifest.schema !== 'kovo-app-dependency-capabilities/v1') {
+    return invalid(
+      `unsupported capability dependency manifest ${String(proof.dependencyManifest.schema)}`,
+    );
+  }
+
+  const sourceNames = new Set(files.map((file) => requestTaskBNormalizeModule(file.fileName)));
+  const dependencyRootKindsByImporter = new Map<string, Set<string>[]>();
+  for (const dependency of proof.dependencyManifest.dependencies) {
+    for (const entry of dependency.entries) {
+      for (const importer of entry.importers) {
+        const normalized = requestTaskBNormalizeModule(importer);
+        if (!sourceNames.has(normalized)) {
+          return invalid(`capability dependency importer ${importer} is outside the source census`);
+        }
+        const kinds = new Set<string>();
+        for (const kind of entry.rootKinds) kinds.add(kind);
+        const entries = dependencyRootKindsByImporter.get(normalized) ?? [];
+        entries.push(kinds);
+        dependencyRootKindsByImporter.set(normalized, entries);
+      }
+    }
+  }
+
+  const capabilityRootsBySite = new Map<string, CapabilityClosureExplainFact[]>();
+  const rootKeys = new Set<string>();
+  for (const fact of proof.capabilityFacts) {
+    if (fact.kind !== 'root') continue;
+    if (!fact.module || !fact.rootKind || !fact.name) {
+      return invalid(`capability root at ${fact.site} has an incomplete identity`);
+    }
+    const module = requestTaskBNormalizeModule(fact.module);
+    if (!sourceNames.has(module)) {
+      return invalid(
+        `capability root ${fact.rootKind}:${fact.name} names unknown module ${fact.module}`,
+      );
+    }
+    const rootKey = `${fact.site}\0${module}\0${fact.rootKind}\0${fact.name}`;
+    if (rootKeys.has(rootKey)) {
+      return invalid(
+        `capability root census duplicates ${fact.rootKind}:${fact.name}@${fact.site}`,
+      );
+    }
+    rootKeys.add(rootKey);
+    const values = capabilityRootsBySite.get(fact.site) ?? [];
+    values.push(fact);
+    capabilityRootsBySite.set(fact.site, values);
+  }
+
+  for (const dependency of proof.dependencyManifest.dependencies) {
+    if (!dependency.entries.some((entry) => entry.rootKinds.length > 0)) continue;
+    const summaries = proof.capabilityFacts.filter(
+      (fact) =>
+        fact.kind === 'summary' &&
+        fact.packageName === dependency.packageName &&
+        fact.packageVersion === dependency.packageVersion,
+    );
+    const expectedStatus = dependency.verdict === 'open' ? 'valid' : undefined;
+    const hasCorrespondingSummary = summaries.some((fact) =>
+      expectedStatus === undefined ? fact.status !== 'valid' : fact.status === expectedStatus,
+    );
+    if (!hasCorrespondingSummary) {
+      return invalid(
+        `package ${dependency.packageName}@${dependency.packageVersion} has ${dependency.verdict} loader verdict without a corresponding capability summary`,
+      );
+    }
+  }
+
+  return {
+    capabilityRootsBySite,
+    checkedCapabilityRoots: new Set(),
+    checkedSemanticRoots: new Set(),
+    dependencyRootKindsByImporter,
+    ...(semanticProofs.invalidReason === undefined
+      ? {}
+      : { invalidReason: semanticProofs.invalidReason }),
+    semanticRootsByCallable: semanticProofs.rootsByCallable,
+  };
+}
+
+function requestTaskBNormalizeModule(value: string): string {
+  const normalized: string[] = [];
+  for (const part of value.replaceAll('\\', '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..' && normalized.length > 0 && normalized[normalized.length - 1] !== '..') {
+      normalized.pop();
+    } else {
+      normalized.push(part);
+    }
+  }
+  return normalized.join('/') || '.';
+}
+
+function requestTaskBCapabilityRootKinds(
+  factory: RequestHandlerFactoryName,
+): readonly NonNullable<CapabilityClosureExplainFact['rootKind']>[] {
+  switch (factory) {
+    case 'createApp':
+      return ['application'];
+    case 'endpoint':
+      return ['endpoint'];
+    case 'layout':
+      return ['layout'];
+    case 'mutation':
+      return ['mutation'];
+    case 'query':
+      return ['query'];
+    case 'route':
+      return ['route'];
+    case 'task':
+      return ['durable-task', 'scheduled-task'];
+    case 'webhook':
+      return ['webhook'];
+  }
+}
+
+function verifyRequestTaskBCapabilityRoot(
+  context: RequestProcessScanContext,
+  factory: RequestHandlerFactoryName,
+  siteNode: Node,
+): void {
+  const state = context.taskBClosure;
+  if (!state || state.invalidReason) return;
+  const sourceFile = siteNode.getSourceFile();
+  const input = context.filesByPath.get(sourceFile.getFilePath());
+  if (!input) {
+    appendRequestTaskBRouteFailure(
+      context,
+      siteNode,
+      `root=${factory}:<unknown>; transfers=source-census; sink=capability-closure; verdict=closed:source module is absent`,
+    );
+    return;
+  }
+  const position = sourceFile.getLineAndColumnAtPos(siteNode.getStart());
+  const site = `${input.fileName}:${position.line}:${position.column}`;
+  const expectedKinds = requestTaskBCapabilityRootKinds(factory);
+  const checkKey = `${site}\0${factory}`;
+  if (state.checkedCapabilityRoots.has(checkKey)) return;
+  state.checkedCapabilityRoots.add(checkKey);
+  const module = requestTaskBNormalizeModule(input.fileName);
+  const roots = (state.capabilityRootsBySite.get(site) ?? []).filter(
+    (fact) =>
+      fact.module !== undefined &&
+      requestTaskBNormalizeModule(fact.module) === module &&
+      fact.rootKind !== undefined &&
+      expectedKinds.includes(fact.rootKind),
+  );
+  if (roots.length !== 1) {
+    appendRequestTaskBRouteFailure(
+      context,
+      siteNode,
+      `root=${factory}:<reconstructed>; transfers=${module}; sink=capability-closure; verdict=closed:expected exactly one root row at ${site}, found ${roots.length}`,
+    );
+    return;
+  }
+  const rootKind = roots[0]!.rootKind!;
+  const dependencyRootKinds = state.dependencyRootKindsByImporter.get(module) ?? [];
+  if (
+    dependencyRootKinds.length === 0 ||
+    dependencyRootKinds.some((rootKinds) => !rootKinds.has(rootKind))
+  ) {
+    appendRequestTaskBRouteFailure(
+      context,
+      siteNode,
+      `root=${rootKind}:${roots[0]!.name}; transfers=${module}; sink=package-summary; verdict=closed:dependency manifest omits the reconstructed root kind`,
+    );
+  }
+}
+
+function requestCompilerSemanticProofIndex(
   files: readonly TrustEscapeSourceFileInput[],
   sourceFiles: readonly SourceFile[],
   semanticSources: readonly CompilerSecuritySemanticSource[] | undefined,
-): ReadonlyMap<string, readonly RequestCompilerSemanticHelperProof[]> {
-  if (!semanticSources || semanticSources.length !== files.length) return new Map();
+): RequestCompilerSemanticProofIndex {
+  const invalid = (invalidReason: string): RequestCompilerSemanticProofIndex => ({
+    helperProofs: new Map(),
+    invalidReason,
+    rootsByCallable: new Map(),
+  });
+  if (!semanticSources) return invalid('compiler semantic source carrier is absent');
+  if (semanticSources.length !== files.length) {
+    return invalid(
+      `compiler semantic source census has ${semanticSources.length} rows for ${files.length} source files`,
+    );
+  }
   const sourcesByName = new Map<string, CompilerSecuritySemanticSource>();
   for (const source of semanticSources) {
-    if (sourcesByName.has(source.fileName)) return new Map();
+    if (sourcesByName.has(source.fileName)) {
+      return invalid(`compiler semantic source census duplicates ${source.fileName}`);
+    }
     sourcesByName.set(source.fileName, source);
   }
 
   const proofs = new Map<string, RequestCompilerSemanticHelperProof[]>();
+  const rootsByCallable = new Map<string, SecuritySemanticGraph['roots'][number][]>();
   const invalidProofKeys = new Set<string>();
   for (const [index, file] of files.entries()) {
     const sourceFile = sourceFiles[index];
     const semanticSource = sourcesByName.get(file.fileName);
-    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();
+    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {
+      return invalid(`compiler semantic source bytes do not match ${file.fileName}`);
+    }
     const callsBySpan = new Map<string, import('ts-morph').CallExpression>();
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const key = `${call.getStart()}:${call.getEnd()}`;
-      if (callsBySpan.has(key)) return new Map();
+      if (callsBySpan.has(key)) {
+        return invalid(`compiler semantic call census duplicates ${file.fileName}:${key}`);
+      }
       callsBySpan.set(key, call);
     }
     for (const graph of semanticSource.graphs) {
-      if (graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();
+      if (graph.schema !== 'kovo-security-semantic-graph/v2') {
+        return invalid(`compiler semantic graph for ${file.fileName} is not version 2`);
+      }
       for (const root of graph.roots) {
         if (
           !requestCompilerSemanticRootFactsAreExact(
@@ -1783,8 +2062,12 @@ function requestCompilerSemanticHelperProofs(
             callsBySpan,
           )
         ) {
-          return new Map();
+          return invalid(`compiler semantic root ${root.root} does not match ${file.fileName}`);
         }
+        const rootKey = `${sourceFile.getFilePath()}:${root.binding.callableSpan.start}:${root.binding.callableSpan.end}`;
+        const roots = rootsByCallable.get(rootKey) ?? [];
+        roots.push(root);
+        rootsByCallable.set(rootKey, roots);
         const rootClosed = root.traces.some((trace) => trace.verdict === 'closed');
         for (const summary of root.summaries) {
           const { end, start } = summary.callableSpan;
@@ -1819,7 +2102,7 @@ function requestCompilerSemanticHelperProofs(
     }
   }
   for (const key of invalidProofKeys) proofs.delete(key);
-  return proofs;
+  return { helperProofs: proofs, rootsByCallable };
 }
 
 function requestCompilerSemanticRootFactsAreExact(
@@ -14298,6 +14581,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
   const key = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.rootFactory ?? 'nested'}:${callable.rootCallback ?? (callable.moduleInitializer ? 'module-initializer' : 'helper')}:${callable.rootParameterRoles?.join(',') ?? 'untyped'}:${callable.compilerSemanticHelper ? 'compiler-semantic' : 'legacy'}:${callable.lexicalParent ? requestNodeIdentity(callable.lexicalParent.declaration) : 'no-lexical-parent'}`;
   if (context.scanned.has(key)) return;
   context.scanned.add(key);
+  verifyRequestTaskBSemanticRoot(context, callable);
 
   if (!callable.moduleInitializer) {
     registerRequestPromiseSettlementCallables(callable, context.provenance);
@@ -32820,6 +33104,74 @@ function requestCompilerSemanticRootCallbackMatches(root: RequestCallable): bool
   }
 }
 
+function verifyRequestTaskBSemanticRoot(
+  context: RequestProcessScanContext,
+  callable: RequestCallable,
+): void {
+  const state = context.taskBClosure;
+  if (!state || state.invalidReason || !requestCompilerSemanticRootCallbackMatches(callable)) {
+    return;
+  }
+  const factoryCall = requestExactDirectRootFactoryCall(callable, context.provenance);
+  const factory = callable.rootFactory;
+  const callback = callable.rootCallback;
+  if (!factory || !callback || !factoryCall) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${factory ?? '<unknown>'}:${callback ?? '<unknown>'}; transfers=<root-binding>; sink=finite-ir; verdict=closed:exact factory call is unresolved`,
+    );
+    return;
+  }
+  const checkKey = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.declaration.getEnd()}:${factoryCall.getStart()}:${factoryCall.getEnd()}`;
+  if (state.checkedSemanticRoots.has(checkKey)) return;
+  state.checkedSemanticRoots.add(checkKey);
+  const callableKey = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.declaration.getEnd()}`;
+  const candidates = state.semanticRootsByCallable.get(callableKey) ?? [];
+  const matches = candidates.filter((root) => {
+    const binding = root.binding;
+    return (
+      binding.factory === factory &&
+      binding.callback === callback &&
+      binding.callableSpan.start === callable.declaration.getStart() &&
+      binding.callableSpan.end === callable.declaration.getEnd() &&
+      binding.factoryCallSpan.start === factoryCall.getStart() &&
+      binding.factoryCallSpan.end === factoryCall.getEnd() &&
+      binding.root === root.root
+    );
+  });
+  if (matches.length !== 1) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${factory}:${callback}; transfers=<direct>; sink=finite-ir; verdict=closed:expected one exact semantic root, found ${matches.length}`,
+    );
+    return;
+  }
+  const root = matches[0]!;
+  const closed = root.traces.find((trace) => trace.verdict === 'closed');
+  if (closed) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${root.root}; transfers=${closed.transfers.join(' -> ') || '<direct>'}; sink=${closed.sink}; verdict=closed:${closed.reason}`,
+    );
+    return;
+  }
+  const closedSummary = root.summaries.find((summary) => summary.verdict === 'closed');
+  const closedInvocation = root.helperInvocations.find(
+    (invocation) => invocation.verdict === 'closed',
+  );
+  if (closedSummary || closedInvocation) {
+    const closedFact = closedSummary ?? closedInvocation!;
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${root.root}; transfers=${closedFact.callable}; sink=normalized-provenance; verdict=closed:helper summary is not proved`,
+    );
+  }
+}
+
 function requestCallIsReviewedDrizzleDbReadChainInDeclaredRoot(
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
@@ -36024,6 +36376,31 @@ function appendOpaqueRequestHandlerFact(
       'keep request handler source inside the authoritative app snapshot; use runCommand(cmd(...)) for process execution',
     site: projectSiteFor(context.filesByPath, siteNode),
     source,
+  });
+}
+
+function appendRequestTaskBRouteFailure(
+  context: RequestProcessScanContext,
+  siteNode: Node,
+  trace: string,
+): void {
+  const site = projectSiteFor(context.filesByPath, siteNode);
+  if (
+    context.facts.some(
+      (fact) =>
+        fact.sink === 'request-handler.opaque-source' &&
+        fact.site === site &&
+        fact.source === trace,
+    )
+  ) {
+    return;
+  }
+  context.facts.push({
+    safePath:
+      'keep the exact authored root in the compiler capability census and finite semantic graph; inspect kovo explain --capabilities for the closed provenance path',
+    sink: 'request-handler.opaque-source',
+    site,
+    source: trace,
   });
 }
 

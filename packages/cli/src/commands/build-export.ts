@@ -1028,6 +1028,12 @@ function runPreEvaluationStaticTrustPreflight(
         }
       : collectStaticBuildTrustFactsFromProject({
           compilerSecuritySemanticSources: sourceGraphFacts.compilerSecuritySemanticSources,
+          compilerTaskBClosure: {
+            capabilityFacts: capabilityClosure.facts,
+            dependencyManifest: capabilityClosure.dependencyManifest,
+            files,
+            schema: 'kovo-task-b-closure/v1',
+          },
           files,
         });
   const accessGuardDiagnostics = preEvaluationAccessGuardDiagnostics(files);

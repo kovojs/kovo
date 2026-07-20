@@ -1190,6 +1190,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'task-b-layered-root-and-semantic-correspondence',
+        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        snippets: [
+          'binds every TASK B root to the same-snapshot capability and package-root census',
+          'sink=capability-closure',
+          'sink=package-summary',
+          'requires an exact finite-IR semantic root for every compiler-owned TASK B handler',
+          'sink=finite-ir',
+          "schema: 'kovo-task-b-closure/v1'",
+        ],
+      },
+      {
         id: 'existing-dangerous-sink-closed-verdicts',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
