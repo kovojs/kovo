@@ -2018,18 +2018,23 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'audit-for-await-member-target-written Worker',
+      "(async () => { const box = {}; for await (box.platform of [globalThis]) { break; } return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'audit-defineProperties-prototype-setter-written Worker',
-      "(() => { function Holder() {} Object.defineProperties(Holder.prototype, { target: { set(value) { value.platform = globalThis; } } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      "(() => { function Holder() {} const prototype = Holder.prototype; Object.defineProperties(prototype, { target: { set(value) { value.platform = globalThis; } } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
     [
       'audit-Reflect-defineProperty-prototype-setter-written Worker',
-      "(() => { function Holder() {} Reflect.defineProperty(Holder.prototype, 'target', { set(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      "(() => { function Holder() {} const holder = new Holder(); Reflect.defineProperty(holder, 'target', { set(value) { value.platform = globalThis; } }); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
     [
       'audit-setPrototypeOf-prototype-setter-written Worker',
-      "(() => { function Holder() {} Object.setPrototypeOf(Holder.prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      "(() => { function Holder() {} const prototype = Holder.prototype; Object.setPrototypeOf(prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
     ['depth-budget-helper-written Worker', depthBudgetCarrierExpression('/worker.mjs'), 'Worker'],
@@ -2744,18 +2749,23 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
+      'audit-for-await-member-target-written Worker',
+      "(async () => { const box = {}; for await (box.platform of [globalThis]) { break; } return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
       'audit-defineProperties-prototype-setter-written Worker',
-      "(() => { function Holder() {} Object.defineProperties(Holder.prototype, { target: { set(value) { value.platform = globalThis; } } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      "(() => { function Holder() {} const prototype = Holder.prototype; Object.defineProperties(prototype, { target: { set(value) { value.platform = globalThis; } } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
       'audit-Reflect-defineProperty-prototype-setter-written Worker',
-      "(() => { function Holder() {} Reflect.defineProperty(Holder.prototype, 'target', { set(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      "(() => { function Holder() {} const holder = new Holder(); Reflect.defineProperty(holder, 'target', { set(value) { value.platform = globalThis; } }); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
       'audit-setPrototypeOf-prototype-setter-written Worker',
-      "(() => { function Holder() {} Object.setPrototypeOf(Holder.prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      "(() => { function Holder() {} const prototype = Holder.prototype; Object.setPrototypeOf(prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
