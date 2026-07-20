@@ -2065,6 +2065,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'principal-epoch-credential-door-census',
+        file: 'scripts/capability-surface-census-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 principal-epoch-credential-door-census',
+          'closes principal-epoch freshness over capability URL and mutation replay credential doors',
+          "credential: 'capability-url'",
+          "credential: 'mutation-replay-receipt'",
+          "phase: 'inapplicable'",
+          'does not consume currentPrincipalEpoch from principal-epoch',
+        ],
+      },
+      {
         id: 'crypto-acquisition-and-purpose-closure',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [

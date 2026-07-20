@@ -539,14 +539,59 @@ write propagation through FK referential actions, partition/inheritance routing,
 redirects. Each such attached code path MUST resolve to the same safe object set above or fail
 closed.
 
+**Principal-epoch revocation and mutation completeness (normative).** The app's
+`principalEpochStore` is the §6.6 authoritative identity-lifecycle capability. Production apps that
+combine a `sessionProvider` with mutations MUST use the module-private durable provenance exposed by
+`createPostgresAppRuntimeDb().principalEpochStore`; a missing, memory, custom structural, or
+global-symbol lookalike fails boot. Postgres persists one SHA-256 principal commitment rather than a
+raw principal id, with strictly monotone epoch/change time, permanent tombstone status, a finite
+last-reason constraint, and no ordinary reader/writer/admin/runtime-login table privileges. The
+system role receives only `SELECT`, `INSERT`, and `UPDATE`. The SQLite/memory implementation is
+development/test-only and preserves the same state semantics for one process lifetime.
+
+An authenticated mutation captures an active authoritative epoch after parse and guards, then
+rechecks that exact epoch inside the transaction callback after handler work and before the callback
+may request commit. A concurrent password/role/tenant/admin/provider/deletion transition therefore
+throws through the rollback path. A mutation that itself changes privilege MUST declare one exact
+`principalEpoch` registry entry: `{ action: 'advance' | 'tombstone', principal(input, request),
+reason }`, where `reason` belongs to the matching finite union. Kovo executes that declared
+transition after handler success but before transaction-callback success. Only the exact current
+request receives a module-private old-to-new receipt permitting its response/replay settlement
+under the now-retired prior epoch; any different or later transition closes settlement. The
+mutation registry is a completeness ledger, not semantic inference from table or mutation names.
+An epoch transition may commit before a later app-transaction COMMIT failure; that conservative
+case over-revokes, while an epoch failure prevents app transaction commit. Kovo does not claim
+cross-database atomic commit.
+
+Provider and out-of-band paths use `initializePrincipalEpoch`, `advancePrincipalEpoch`, and
+`tombstonePrincipalEpoch`. Initialization atomically creates active epoch 1 or returns the existing
+row unchanged and cannot revive a tombstone. Better Auth's first-party binding invokes it before an
+authenticated provider identity reaches app code. Password changes, role/tenant changes,
+administrative actions, external-provider revocation, and deletion MUST advance or tombstone the
+same row even when no Kovo mutation initiated the event. Every current lookup is authoritative,
+uncached, and limited to 1,000 ms. Missing/malformed rows, provider errors, timeout, stale epoch, and
+tombstone all fail closed. This yields zero positive-cache staleness; only one bounded in-flight
+authoritative read/action race remains.
+
+The credential-door census is exact: principal-scoped capability URL mint/verify plus mutation
+replay-receipt reservation, response release, handler admission, in-transaction completion, and
+settlement are applicable, while the exactly-once adapter continuation is inapplicable because it
+cannot outlive its call frame. Capability v4 signs the epoch and checks it before replay burn/storage
+read (§9.1). Mutation reservation appends the captured epoch to the already principal-bound
+canonical scope. Every listed verifier rechecks authoritative freshness. A `Kovo-Idem` issued before the current
+`changedAtMs` is a conflict before handler work; equality is accepted only for epoch-1 identity
+initialization and is closed for every later revocation epoch because millisecond ordering is
+unknowable. Expiry remains defense-in-depth, never a substitute for freshness.
+
 **Request lifecycle (normative):**
 
 ```
 (pre-dispatch shell: max-body-size → 413 · coarse per-IP/global rate → 429
  · app occupancy → 503 · finite deadline capability — §9.5)
-CSRF validation → replay reservation by (principal, CSRF rotation binding, derived mutation identity, idem-token) → parse+coerce input (schema)
-→ guard chain → BEGIN tx → handler (receives a transaction-scoped db whose public type hides raw transaction openers)
-→ in-tx deadline checkpoint → COMMIT (settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
+CSRF validation → parse+coerce input (schema) → guard chain
+→ capture authoritative principal epoch and reserve by (principal, epoch, CSRF rotation binding, derived mutation identity, idem-token)
+→ bind handler admission to that exact reservation epoch → BEGIN tx → handler (receives a transaction-scoped db whose public type hides raw transaction openers)
+→ declared privilege transition, epoch freshness, and deadline checkpoints → COMMIT (recheck epoch, settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
 → render <kovo-query>/<kovo-fragment> → respond
                     ⇘ on fail() or pre-commit deadline: ROLLBACK → abort replay reservation
                     ⇘ deadline after possible COMMIT: preserve replay truth → discard response only
@@ -562,7 +607,7 @@ is known to have succeeded, the durable settlement remains authoritative even if
 deadline then expires; Kovo may discard the late wire response, but MUST NOT call that a rollback,
 erase replay truth, or execute the mutation again on retry.
 
-This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ CSRF session/rotation binding ∧ source-derived mutation identity ∧ idem-token), using canonical length framing for each identity component, so a replay can only ever return to the same principal that produced it even when an app supplies a shared rotation id. Session/rotation ids, independently resolved principals, anonymous-CSRF secrets, and mutation identities are each capped at 1,024 JavaScript code units before composition. A framework lifecycle binding embeds its pinned principal exactly once and replay rejects a later mismatch rather than appending duplicate identity. At those maxima, the canonical framework CSRF binding is 2,124 code units, the enhanced raw replay scope is 3,158, and the `nojs:` scope is 3,163 — all below the durable store's 4,096-code-unit raw-scope ceiling.
+This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ principal epoch ∧ CSRF session/rotation binding ∧ source-derived mutation identity ∧ idem-token), using canonical length framing for each identity component, so a replay can only ever return to the same principal and epoch that produced it even when an app supplies a shared rotation id. Session/rotation ids, independently resolved principals, anonymous-CSRF secrets, and mutation identities are each capped at 1,024 JavaScript code units before composition. A framework lifecycle binding embeds its pinned principal exactly once and replay rejects a later mismatch rather than appending duplicate identity. The bounded epoch suffix is appended only after the existing principal-bound scope is established; the complete raw scope MUST remain below the durable store's 4,096-code-unit ceiling.
 
 Every mutation replay-store call MUST carry the runtime-witnessed canonical §6.6 system
 `ScopedKey` under the finite `mutation-replay` posture. Its app-key is the exact injective length
@@ -572,8 +617,8 @@ The volatile store keys its map by the complete frame. The durable Postgres stor
 complete frame into its physical replay namespace before SQL; hashing the raw scope and token as
 independent authority is insufficient. Custom development/test stores receive the witnessed key
 as their first argument through the same validating snapshot door. This registered composite
-posture preserves the maximum 3,158-code-unit enhanced scope plus the canonical 49-code-unit idem
-token while keeping the outer frame within 4,096 code units. Public/principal keys and every other
+posture preserves the bounded enhanced scope plus the canonical 49-code-unit idem token and finite
+epoch suffix while keeping the outer frame within 4,096 code units. Public/principal keys and every other
 system posture retain the ordinary 1,024-code-unit app-key bound.
 
 The handler `request.db` type is a defense-in-depth authoring guardrail, not the security proof:
@@ -586,7 +631,7 @@ inside a mutation handler is not a mutation-specific type or KV-gate error; it i
 uniform outbound-egress floor (§6.6). Durable tasks (§9.6) are the framework primitive for
 retryable/idempotent after-commit effects, not the only syntactically legal place to call `fetch`.
 
-**Replay is an atomic reservation, not a lookup (normative).** The replay step MUST atomically claim its complete replay identity before executing a write — an `INSERT … ON CONFLICT` against the replay store (or an equivalent unique-key claim) inside the same serialization boundary that the commit settles. A request that wins the claim proceeds; a concurrent or sequential request carrying the same identity MUST block on the in-flight reservation and then replay the settled response, never re-execute the handler. For browser mutations, the identity is `(principal, CSRF session/rotation binding, source-derived mutation identity, idem-token)` under canonical length framing, and the claim occurs before the guard chain. The store is scoped to the current principal and validated CSRF binding (a different `req.session` identity or credential rotation never replays a prior principal's response) and to the specific mutation, so an idem-token reused across mutations cannot cross-replay. For `webhook()`, the identity is the source-derived webhook scope plus the canonical authenticated provider-event facts from §9.1; its claim occurs after verify, loose parse, and temporal validation but before the handler. The provider key is the unique lookup key, and a live row for that key whose stored `occurredAtMs` or `expiresAtMs` differs from the supplied canonical identity is an integrity conflict, not a replay hit and not a second admissible event. These rules cover the enhanced and no-JS `mutation()` lifecycle, `webhook()`, and the streaming path, so concurrency, not merely strictly sequential retries, is deduplicated.
+**Replay is an atomic reservation, not a lookup (normative).** The replay step MUST atomically claim its complete replay identity before executing a write — an `INSERT … ON CONFLICT` against the replay store (or an equivalent unique-key claim) inside the same serialization boundary that the commit settles. A request that wins the claim proceeds; a concurrent or sequential request carrying the same identity MUST block on the in-flight reservation and then replay the settled response, never re-execute the handler. For browser mutations, the identity is `(principal, principal epoch, CSRF session/rotation binding, source-derived mutation identity, idem-token)` under canonical length framing, and the claim occurs after parse/coerce and the current guard chain but before handler work. The store is scoped to the current principal epoch and validated CSRF binding (a different `req.session` identity, credential rotation, or revocation epoch never replays a prior response) and to the specific mutation, so an idem-token reused across mutations cannot cross-replay. For `webhook()`, the identity is the source-derived webhook scope plus the canonical authenticated provider-event facts from §9.1; its claim occurs after verify, loose parse, and temporal validation but before the handler. The provider key is the unique lookup key, and a live row for that key whose stored `occurredAtMs` or `expiresAtMs` differs from the supplied canonical identity is an integrity conflict, not a replay hit and not a second admissible event. These rules cover the enhanced and no-JS `mutation()` lifecycle, `webhook()`, and the streaming path, so concurrency, not merely strictly sequential retries, is deduplicated.
 
 **Durable replay storage is bounded and refuse-never-evict (normative).** The shipped Postgres store gives mutation and webhook pending truth separate, database-enforced admission pools of 1,000 claims each. Only a pending claim owns a unique numbered slot, so concurrent replicas cannot race above the in-flight ceiling; successful settlement atomically clears its slot while retaining the committed row. At pending capacity, an existing identity still joins its in-flight claim or replays committed truth, while unseen work is refused before its handler runs (the mutation 429 / webhook retry outcome). No pending claim is evicted merely to admit new work. Aborting a pre-commit reservation or the explicit generation-fenced operator reconciliation path releases its slot.
 

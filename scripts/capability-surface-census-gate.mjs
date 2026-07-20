@@ -66,6 +66,16 @@ const requestDeadlineConsumers = new Set([
   'onCurrentRequestDeadline',
   'RequestDeadlineAdmission.signal',
 ]);
+const requiredPrincipalEpochCredentialDoorIds = [
+  'capability-url.mint',
+  'capability-url.verify',
+  'mutation-replay-receipt.mint',
+  'mutation-replay-receipt.release',
+  'mutation-replay-receipt.handler-admission',
+  'mutation-replay-receipt.transaction-complete',
+  'mutation-replay-receipt.settlement',
+  'continuation.in-frame',
+];
 
 /**
  * Resolve the exact framework mint APIs through the TypeScript checker and return every call site.
@@ -208,6 +218,9 @@ export function generatedCapabilitySurfaceCensus({ discovered, existing }) {
     requestDeadlineEffectDoors: Array.isArray(existing?.requestDeadlineEffectDoors)
       ? existing.requestDeadlineEffectDoors
       : [],
+    principalEpochCredentialDoors: Array.isArray(existing?.principalEpochCredentialDoors)
+      ? existing.principalEpochCredentialDoors
+      : [],
     mintSites,
   };
 }
@@ -297,6 +310,100 @@ export function evaluateRequestDeadlineEffectDoors({
     ok: findings.length === 0,
     summary: { effectDoors: rows.length },
   };
+}
+
+/** Validate the exact durable credential mint/verify denominator against canonical epoch doors. */
+export function evaluatePrincipalEpochCredentialDoors({
+  canonicalModule,
+  requiredIds = requiredPrincipalEpochCredentialDoorIds,
+  rows,
+  sources,
+}) {
+  const findings = [];
+  const summary = { inapplicable: 0, mint: 0, verify: 0 };
+  if (!Array.isArray(rows)) {
+    return {
+      findings: ['principalEpochCredentialDoors must be an array'],
+      ok: false,
+      summary,
+    };
+  }
+  if (!(sources instanceof Map) || typeof canonicalModule !== 'string') {
+    return {
+      findings: ['principalEpochCredentialDoors require an exact source map and canonical module'],
+      ok: false,
+      summary,
+    };
+  }
+  const required = new Set(requiredIds);
+  const seen = new Set();
+  for (const row of rows) {
+    if (
+      !isRecord(row) ||
+      typeof row.id !== 'string' ||
+      typeof row.path !== 'string' ||
+      typeof row.owner !== 'string' ||
+      typeof row.credential !== 'string'
+    ) {
+      findings.push('principal epoch credential-door row is malformed');
+      continue;
+    }
+    if (seen.has(row.id)) findings.push(`${row.id}: duplicate principal epoch credential door`);
+    seen.add(row.id);
+    if (!required.has(row.id)) findings.push(`${row.id}: stale principal epoch credential door`);
+    if (!substantive(row.reason)) {
+      findings.push(`${row.id}: principal epoch credential door needs a substantive reason`);
+    }
+    if (row.phase !== 'mint' && row.phase !== 'verify' && row.phase !== 'inapplicable') {
+      findings.push(`${row.id}: phase must be mint, verify, or inapplicable`);
+      continue;
+    }
+    summary[row.phase] += 1;
+    const sourceText = sources.get(row.path);
+    if (typeof sourceText !== 'string') {
+      findings.push(`${row.id}: missing credential-door source ${row.path}`);
+      continue;
+    }
+    const sourceFile = ts.createSourceFile(
+      row.path,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      row.path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    const owner = requestDeadlineOwner(sourceFile, row.owner);
+    if (owner === undefined) {
+      findings.push(`${row.id}: missing credential-door owner ${row.owner}`);
+      continue;
+    }
+    if (row.phase === 'inapplicable') {
+      if (row.consumes !== undefined) {
+        findings.push(`${row.id}: inapplicable continuation must not claim an epoch consumer`);
+      }
+      continue;
+    }
+    const allowedConsumers =
+      row.phase === 'mint'
+        ? new Set(['currentPrincipalEpoch'])
+        : new Set(['assertPrincipalEpochFresh', 'assertPrincipalEpochFreshForRequest']);
+    if (!allowedConsumers.has(row.consumes)) {
+      findings.push(
+        `${row.id}: ${row.phase} consumes must be one of ${[...allowedConsumers].join(', ')}`,
+      );
+      continue;
+    }
+    const imports = principalEpochImportBindings(sourceFile, row.path, canonicalModule);
+    const called = importedDeadlineCalls(owner, imports);
+    if (!called.has(row.consumes)) {
+      findings.push(
+        `${row.id}: ${row.owner} does not consume ${row.consumes} from principal-epoch`,
+      );
+    }
+  }
+  for (const id of required) {
+    if (!seen.has(id)) findings.push(`${id}: missing required principal epoch credential door`);
+  }
+  return { findings, ok: findings.length === 0, summary };
 }
 
 export function evaluatePublicCapabilitySurfaces(manifest) {
@@ -594,8 +701,22 @@ export function main({ rootDir = repoRoot, write = process.argv.includes('--writ
     rows: deadlineRows,
     sources: deadlineSources,
   });
+  const epochRows = Array.isArray(manifest.principalEpochCredentialDoors)
+    ? manifest.principalEpochCredentialDoors
+    : [];
+  const epochSources = new Map();
+  for (const row of epochRows) {
+    if (!isRecord(row) || typeof row.path !== 'string' || epochSources.has(row.path)) continue;
+    epochSources.set(row.path, readFileSync(path.join(rootDir, row.path), 'utf8'));
+  }
+  const epochResult = evaluatePrincipalEpochCredentialDoors({
+    canonicalModule: 'packages/server/src/principal-epoch.ts',
+    rows: epochRows,
+    sources: epochSources,
+  });
   result.findings.push(
     ...deadlineResult.findings,
+    ...epochResult.findings,
     ...evaluatePublicCapabilitySurfaces(manifest),
     ...evaluateCapabilityBoundaryPosture({
       readText: (file) => readFileSync(path.join(rootDir, file), 'utf8'),
@@ -603,7 +724,7 @@ export function main({ rootDir = repoRoot, write = process.argv.includes('--writ
   );
   result.ok = result.findings.length === 0;
   process.stdout.write(
-    `capability-surface-census/v2 ${result.ok ? 'OK' : 'FAIL'} sites=${result.summary.sites} mints=${result.summary.mints} registries=${result.summary.internalRegistries} deadlineDoors=${deadlineResult.summary.effectDoors}\n`,
+    `capability-surface-census/v2 ${result.ok ? 'OK' : 'FAIL'} sites=${result.summary.sites} mints=${result.summary.mints} registries=${result.summary.internalRegistries} deadlineDoors=${deadlineResult.summary.effectDoors} epochDoors=${epochRows.length}\n`,
   );
   for (const finding of result.findings) process.stderr.write(`${finding}\n`);
   return result.ok;
@@ -646,6 +767,38 @@ function requestDeadlineImportBindings(sourceFile, sourcePath) {
     for (const element of statement.importClause.namedBindings.elements) {
       const imported = element.propertyName?.text ?? element.name.text;
       if (requestDeadlineConsumers.has(imported)) bindings.set(element.name.text, imported);
+    }
+  }
+  return bindings;
+}
+
+function principalEpochImportBindings(sourceFile, sourcePath, canonicalModule) {
+  const bindings = new Map();
+  const canonicalPath = path.posix.normalize(canonicalModule);
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !ts.isNamedImports(statement.importClause?.namedBindings)
+    ) {
+      continue;
+    }
+    const importedPath = path.posix
+      .normalize(path.posix.join(path.posix.dirname(sourcePath), statement.moduleSpecifier.text))
+      .replace(/\.(?:m?js)$/u, '.ts');
+    const canonicalMatches = canonicalPath.includes('/')
+      ? importedPath === canonicalPath
+      : path.posix.basename(importedPath) === canonicalPath;
+    if (!canonicalMatches) continue;
+    for (const element of statement.importClause.namedBindings.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      if (
+        imported === 'currentPrincipalEpoch' ||
+        imported === 'assertPrincipalEpochFresh' ||
+        imported === 'assertPrincipalEpochFreshForRequest'
+      ) {
+        bindings.set(element.name.text, imported);
+      }
     }
   }
   return bindings;

@@ -248,15 +248,25 @@
       {
         "id": "W.principal-revocation-epoch",
         "owner": "identity-provider epoch adapter and credential verifier doors",
-        "authoritativeSource": ["plans/security-architecture-decisions-phase-0-2026-07-19.md"],
+        "authoritativeSource": [
+          "packages/server/src/principal-epoch.ts",
+          "scripts/capability-surface-census.manifest.json",
+          "spec/06-type-system.md",
+          "spec/09-wire-protocol.md",
+          "spec/10-data-plane.md"
+        ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "renewalTrigger": "not implemented",
-        "ttl": "undefined",
-        "failurePosture": "credentials rely on expiry without epoch freshness",
-        "costBudget": "unbudgeted",
-        "evidence": [],
-        "gap": "Credential mint and verify doors do not yet bind a persistent monotone principal epoch.",
+        "status": "rewitnessed",
+        "renewalTrigger": "every principal credential mint, replay reservation/read/settlement, explicit Kovo privilege transition, and provider or out-of-band identity event",
+        "ttl": "one authoritative lookup or one credential lifecycle; no positive application cache and zero successful-lookup staleness",
+        "failurePosture": "missing, malformed, contradictory, unavailable, timed-out, stale, or tombstoned state closes before credential release or privilege-write commit",
+        "costBudget": "one uncached authoritative lookup per mint/verify door, each bounded to 1000 ms; settlement rechecks after handler work",
+        "evidence": [
+          "packages/server/src/principal-epoch.test.ts",
+          "packages/server/src/postgres-runtime.test.ts",
+          "scripts/capability-surface-census-gate.test.mjs"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

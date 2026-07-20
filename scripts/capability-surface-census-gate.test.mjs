@@ -69,7 +69,8 @@ it('closes principal-epoch freshness over capability URL and mutation replay cre
     [
       'principal-epoch.ts',
       `export function currentPrincipalEpoch() {}
-       export function assertPrincipalEpochFresh() {}`,
+       export function assertPrincipalEpochFresh() {}
+       export function assertPrincipalEpochFreshForRequest() {}`,
     ],
     [
       'capability.ts',
@@ -82,8 +83,17 @@ it('closes principal-epoch freshness over capability URL and mutation replay cre
       'replay.ts',
       `import { currentPrincipalEpoch as current } from './principal-epoch.js';
        import { assertPrincipalEpochFresh as fresh } from './principal-epoch.js';
+       import { assertPrincipalEpochFreshForRequest as freshForRequest } from './principal-epoch.js';
        export const reserveReplayReceipt = () => current();
-       export const readReplayReceipt = () => fresh();`,
+       export const releaseReplayReceipt = () => fresh();
+       export const settleReplayReceipt = () => freshForRequest();`,
+    ],
+    [
+      'mutation.ts',
+      `import { assertPrincipalEpochFresh as fresh } from './principal-epoch.js';
+       import { assertPrincipalEpochFreshForRequest as freshForRequest } from './principal-epoch.js';
+       export const admitReplayReceipt = () => fresh();
+       export const completeReplayTransaction = () => freshForRequest();`,
     ],
     [
       'continuation.ts',
@@ -121,11 +131,38 @@ it('closes principal-epoch freshness over capability URL and mutation replay cre
     {
       consumes: 'assertPrincipalEpochFresh',
       credential: 'mutation-replay-receipt',
-      id: 'mutation-replay-receipt.verify',
-      owner: 'readReplayReceipt',
+      id: 'mutation-replay-receipt.release',
+      owner: 'releaseReplayReceipt',
       path: 'replay.ts',
       phase: 'verify',
       reason: 'A replay response is released only while its embedded epoch remains current.',
+    },
+    {
+      consumes: 'assertPrincipalEpochFresh',
+      credential: 'mutation-replay-receipt',
+      id: 'mutation-replay-receipt.handler-admission',
+      owner: 'admitReplayReceipt',
+      path: 'mutation.ts',
+      phase: 'verify',
+      reason: 'The handler remains unreachable unless the epoch that won reservation is current.',
+    },
+    {
+      consumes: 'assertPrincipalEpochFreshForRequest',
+      credential: 'mutation-replay-receipt',
+      id: 'mutation-replay-receipt.transaction-complete',
+      owner: 'completeReplayTransaction',
+      path: 'mutation.ts',
+      phase: 'verify',
+      reason: 'The transaction cannot complete after an out-of-band epoch change.',
+    },
+    {
+      consumes: 'assertPrincipalEpochFreshForRequest',
+      credential: 'mutation-replay-receipt',
+      id: 'mutation-replay-receipt.settlement',
+      owner: 'settleReplayReceipt',
+      path: 'replay.ts',
+      phase: 'verify',
+      reason: 'A replay receipt cannot settle after its principal epoch becomes stale.',
     },
     {
       credential: 'continuation',
@@ -144,7 +181,7 @@ it('closes principal-epoch freshness over capability URL and mutation replay cre
       rows,
       sources: credentialSources,
     }),
-  ).toMatchObject({ ok: true, summary: { inapplicable: 1, mint: 2, verify: 2 } });
+  ).toMatchObject({ ok: true, summary: { inapplicable: 1, mint: 2, verify: 5 } });
 
   credentialSources.set(
     'capability.ts',
