@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   checkResponseObservation,
   responseObservationManifest,
+  responseObservationPackageManifest,
+  responseObservationWorkflow,
 } from './check-response-observation.mjs';
 
 const tuple = {
@@ -43,7 +45,17 @@ const manifest = {
 
 function run(source, nextManifest = manifest) {
   const files = {
+    [responseObservationPackageManifest]: JSON.stringify({
+      scripts: {
+        'test:response-indistinguishability-nightly':
+          'KOVO_RESPONSE_TIMING_ORACLE=1 vitest --run security/response-indistinguishability.nightly.test.ts --reporter=dot',
+      },
+    }),
     [responseObservationManifest]: JSON.stringify(nextManifest),
+    [responseObservationWorkflow]: `
+run: vp exec pnpm run test:response-indistinguishability-nightly
+path: .kovo/security-failures/**
+`,
     'packages/server/src/reset.ts': source,
   };
   return checkResponseObservation({
@@ -90,5 +102,28 @@ describe('check-response-observation', () => {
     const result = run('export const reset = true;');
     expect(result.ok).toBe(false);
     expect(result.findings.join('\n')).toContain('policy auth.reset has no production candidate');
+  });
+
+  it('rejects deletion of the nightly run or persisted-counterexample upload', () => {
+    const files = {
+      [responseObservationPackageManifest]: JSON.stringify({
+        scripts: {
+          'test:response-indistinguishability-nightly':
+            'KOVO_RESPONSE_TIMING_ORACLE=1 vitest --run security/response-indistinguishability.nightly.test.ts --reporter=dot',
+        },
+      }),
+      [responseObservationManifest]: JSON.stringify(manifest),
+      [responseObservationWorkflow]: 'name: deleted timing controls',
+      'packages/server/src/reset.ts': '// @kovo-response-observation-candidate auth.reset',
+    };
+    const result = checkResponseObservation({
+      manifest,
+      readText: (file) => files[file] ?? '',
+      repoRoot: '/repo',
+      sourceFiles: ['packages/server/src/reset.ts'],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain('nightly timing oracle is not enrolled');
+    expect(result.findings.join('\n')).toContain('counterexample artifact upload is missing');
   });
 });

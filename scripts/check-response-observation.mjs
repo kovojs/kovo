@@ -8,6 +8,8 @@ import { collectSourceFiles } from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 export const responseObservationManifest = 'security/response-observation-surfaces.v1.json';
+export const responseObservationPackageManifest = 'package.json';
+export const responseObservationWorkflow = '.github/workflows/security-nightly.yml';
 export const responseObservationSourceRoots = ['packages/better-auth/src', 'packages/server/src'];
 
 const schema = 'kovo-response-observation/v1';
@@ -39,6 +41,7 @@ export function checkResponseObservation(options = {}) {
 
   const budgets = validateBudgets(manifest.timingBudgets, findings);
   const policies = validatePolicies(manifest.surfaces, budgets, findings);
+  validateNightlyEnrollment(readText, findings);
 
   for (const [id, source] of candidates) {
     const policy = policies.get(id);
@@ -57,6 +60,27 @@ export function checkResponseObservation(options = {}) {
   }
 
   return verdict(findings, candidates.size);
+}
+
+function validateNightlyEnrollment(readText, findings) {
+  const packageJson = JSON.parse(readText(responseObservationPackageManifest));
+  if (
+    packageJson.scripts?.['test:response-indistinguishability-nightly'] !==
+    'KOVO_RESPONSE_TIMING_ORACLE=1 vitest --run security/response-indistinguishability.nightly.test.ts --reporter=dot'
+  ) {
+    findings.push(
+      `${responseObservationPackageManifest}: nightly timing script is missing or drifted`,
+    );
+  }
+  const workflow = readText(responseObservationWorkflow);
+  if (!workflow.includes('run: vp exec pnpm run test:response-indistinguishability-nightly')) {
+    findings.push(
+      `${responseObservationWorkflow}: nightly timing oracle is not enrolled through vp`,
+    );
+  }
+  if (!workflow.includes('path: .kovo/security-failures/**')) {
+    findings.push(`${responseObservationWorkflow}: counterexample artifact upload is missing`);
+  }
 }
 
 function collectCandidates(sourceFiles, readText, findings) {
