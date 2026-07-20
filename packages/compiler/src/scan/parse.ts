@@ -126,10 +126,16 @@ export type * from './model.js';
 ensureTypescriptRuntime(ts);
 
 const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
+const frameworkTrustedUrlReasonFacts = compilerCreateWeakMap<object, string>();
 
 /** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
 export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
   return compilerWeakMapGet(frameworkTrustedUrlFacts, fact) === true;
+}
+
+/** @internal Static audited reason carried by an exact framework trustedUrl call, when present. */
+export function parserFactFrameworkTrustedUrlReason(fact: object): string | undefined {
+  return compilerWeakMapGet(frameworkTrustedUrlReasonFacts, fact);
 }
 
 interface ComponentFactoryBindings {
@@ -3485,12 +3491,8 @@ function handlerCacheInfluenceModel(
       ? {}
       : { externalDataVersions: declaration.externalDataVersions }),
     ...(declaration.authorization ? { authorization: true as const } : {}),
-    ...(declaration.principalSession
-      ? { principal: true as const, session: true as const }
-      : {}),
-    ...(declaration.unclassified.length === 0
-      ? {}
-      : { unclassified: declaration.unclassified }),
+    ...(declaration.principalSession ? { principal: true as const, session: true as const } : {}),
+    ...(declaration.unclassified.length === 0 ? {} : { unclassified: declaration.unclassified }),
   };
   collectHandlerCacheInfluences(sourceFile, body, parameters, surface, influences);
   return { authored: declaration.authored, influences, root, surface };
@@ -3512,9 +3514,7 @@ function opaqueCacheInfluenceModel(
         ? {}
         : { externalDataVersions: declaration.externalDataVersions }),
       ...(declaration.authorization ? { authorization: true as const } : {}),
-      ...(declaration.principalSession
-        ? { principal: true as const, session: true as const }
-        : {}),
+      ...(declaration.principalSession ? { principal: true as const, session: true as const } : {}),
       unclassified: [
         ...declaration.unclassified,
         `${surface} handler root is outside the finite analyzable cache language`,
@@ -3545,7 +3545,8 @@ function cacheInfluenceDeclarationModel(
   const postureObjectName = surface === 'query' ? 'read' : 'response';
   const postureObjectExpression = componentPropertyInitializer(definition, postureObjectName);
   const postureObject =
-    postureObjectExpression && ts.isObjectLiteralExpression(unwrapExpression(postureObjectExpression))
+    postureObjectExpression &&
+    ts.isObjectLiteralExpression(unwrapExpression(postureObjectExpression))
       ? (unwrapExpression(postureObjectExpression) as ts.ObjectLiteralExpression)
       : undefined;
   if (postureObjectExpression && !postureObject) {
@@ -3806,15 +3807,16 @@ function collectHandlerCacheInfluences(
           dbNames,
         );
         if (kind !== undefined) {
-          changed = collectCacheAliasBinding(
-            node.name,
-            kind,
-            requestNames,
-            contextNames,
-            headerNames,
-            inputNames,
-            dbNames,
-          ) || changed;
+          changed =
+            collectCacheAliasBinding(
+              node.name,
+              kind,
+              requestNames,
+              contextNames,
+              headerNames,
+              inputNames,
+              dbNames,
+            ) || changed;
         }
       }
       if (
@@ -3831,15 +3833,16 @@ function collectHandlerCacheInfluences(
           dbNames,
         );
         if (kind !== undefined) {
-          changed = collectCacheAliasBinding(
-            node.left,
-            kind,
-            requestNames,
-            contextNames,
-            headerNames,
-            inputNames,
-            dbNames,
-          ) || changed;
+          changed =
+            collectCacheAliasBinding(
+              node.left,
+              kind,
+              requestNames,
+              contextNames,
+              headerNames,
+              inputNames,
+              dbNames,
+            ) || changed;
         }
       }
       ts.forEachChild(node, visitAliases);
@@ -3879,11 +3882,7 @@ function collectHandlerCacheInfluences(
         inputNames,
         dbNames,
       );
-      if (
-        receiverKind === 'request' ||
-        receiverKind === 'context' ||
-        receiverKind === 'headers'
-      ) {
+      if (receiverKind === 'request' || receiverKind === 'context' || receiverKind === 'headers') {
         appendUnclassified(`computed ${receiverKind} member`);
       }
       const member = node.argumentExpression && unwrapExpression(node.argumentExpression);
@@ -3948,7 +3947,10 @@ function collectHandlerCacheInfluences(
           inputNames,
           dbNames,
         );
-        if (receiverKind === 'headers' && (callee.name.text === 'get' || callee.name.text === 'has')) {
+        if (
+          receiverKind === 'headers' &&
+          (callee.name.text === 'get' || callee.name.text === 'has')
+        ) {
           classifiedCall = true;
           const header = staticHeaderName(callArgument(node, 0), staticStrings);
           if (header === undefined) {
@@ -3983,7 +3985,10 @@ function collectHandlerCacheInfluences(
         influences.frameworkState = true;
       }
       if (!classifiedCall) appendUnclassified('call outside the finite cache-influence language');
-      const argumentsSnapshot = compilerSnapshotDenseArray(node.arguments, 'Cache influence call arguments');
+      const argumentsSnapshot = compilerSnapshotDenseArray(
+        node.arguments,
+        'Cache influence call arguments',
+      );
       for (let index = 0; index < argumentsSnapshot.length; index += 1) {
         if (
           cacheExpressionContainsAuthorityCarrier(
@@ -4021,10 +4026,7 @@ function collectHandlerCacheInfluences(
         inputNames,
         dbNames,
       );
-      if (
-        (carrier === 'context' || carrier === 'db') &&
-        !isSafeCacheContextCarrierUse(node)
-      ) {
+      if ((carrier === 'context' || carrier === 'db') && !isSafeCacheContextCarrierUse(node)) {
         appendUnclassified(`${carrier} authority leaves the finite cache-influence language`);
       }
     }
@@ -4205,10 +4207,7 @@ function isSafeCacheContextCarrierUse(node: ts.Expression): boolean {
   if (ts.isVariableDeclaration(parent) && parent.initializer === node) {
     return ts.isIdentifier(parent.name);
   }
-  if (
-    ts.isBinaryExpression(parent) &&
-    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
-  ) {
+  if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
     if (parent.left === node) return true;
     return parent.right === node && ts.isIdentifier(parent.left);
   }
@@ -6882,6 +6881,12 @@ function recordFrameworkTrustedUrlFact(
   )
     return;
   compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
+  const rawReason = candidate.arguments[1];
+  if (rawReason === undefined) return;
+  const reason = unwrapExpression(rawReason);
+  if (!ts.isStringLiteralLike(reason) && !ts.isNoSubstitutionTemplateLiteral(reason)) return;
+  const normalized = compilerStringTrim(reason.text);
+  if (normalized !== '') compilerWeakMapSet(frameworkTrustedUrlReasonFacts, fact, normalized);
 }
 
 function jsxAttributeExpressionStaticValue(

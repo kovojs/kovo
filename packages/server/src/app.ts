@@ -34,6 +34,7 @@ import {
 } from './live-target-app-identity.js';
 import { mutation } from './mutation.js';
 import { assertCompatibleAnonymousCsrfCookiePostures } from './csrf.js';
+import type { CspAllowlistEntry } from './csp.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import { query } from './query.js';
 import { layout, route, routeLayoutLiveTargetRenderers } from './route.js';
@@ -597,16 +598,23 @@ function normalizeAppDocumentOptions(
 function snapshotAppDocumentCsp(value: unknown): NonNullable<KovoApp['document']['csp']> {
   const record = appDocumentRecord(value, 'document.csp');
   const allowlist = appDocumentOwnDataValue(record, 'allowlist');
+  const crossOriginIsolation = appDocumentOwnDataValue(record, 'crossOriginIsolation');
   const reporting = appDocumentOwnDataValue(record, 'reporting');
   const trustedTypes = appDocumentOwnDataValue(record, 'trustedTypes');
+  if (crossOriginIsolation !== undefined && crossOriginIsolation !== true) {
+    throw new TypeError(
+      'createApp document.csp.crossOriginIsolation must be true when present (SPEC §6.6).',
+    );
+  }
   if (trustedTypes !== undefined && typeof trustedTypes !== 'boolean') {
     throw new TypeError('createApp document.csp.trustedTypes must be boolean (SPEC §6.6).');
   }
   if (reporting !== undefined && reporting !== false && typeof reporting !== 'object') {
     throw new TypeError('createApp document.csp.reporting must be false or an options object.');
   }
-  return witnessFreeze({
+  const snapshot = witnessFreeze({
     ...(allowlist === undefined ? {} : { allowlist: snapshotAppDocumentCspAllowlist(allowlist) }),
+    ...(crossOriginIsolation === undefined ? {} : { crossOriginIsolation: true as const }),
     ...(reporting === undefined
       ? {}
       : {
@@ -614,22 +622,79 @@ function snapshotAppDocumentCsp(value: unknown): NonNullable<KovoApp['document']
             reporting === false ? false : snapshotAppDocumentCspReporting(reporting as object),
         }),
     ...(trustedTypes === undefined ? {} : { trustedTypes }),
-  });
+  }) as NonNullable<KovoApp['document']['csp']>;
+  return snapshot;
 }
 
 function snapshotAppDocumentCspAllowlist(
   value: unknown,
 ): NonNullable<NonNullable<KovoApp['document']['csp']>['allowlist']> {
   const record = appDocumentRecord(value, 'document.csp.allowlist');
-  const snapshot = witnessCreateNullRecord<readonly string[]>() as Record<
+  const snapshot = witnessCreateNullRecord<readonly CspAllowlistEntry[]>() as Record<
     string,
-    readonly string[]
+    readonly CspAllowlistEntry[]
   >;
-  for (const field of ['connectSrc', 'frameSrc', 'imgSrc', 'scriptSrc', 'styleSrc'] as const) {
+  for (const field of [
+    'connectSrc',
+    'fontSrc',
+    'frameSrc',
+    'imgSrc',
+    'mediaSrc',
+    'scriptSrc',
+    'styleSrc',
+    'workerSrc',
+  ] as const) {
     const entries = appDocumentOwnDataValue(record, field);
     if (entries !== undefined) {
-      snapshot[field] = snapshotAppDocumentStringArray(entries, `document.csp.allowlist.${field}`);
+      snapshot[field] = snapshotAppDocumentCspEntries(entries, `document.csp.allowlist.${field}`);
     }
+  }
+  return witnessFreeze(snapshot) as NonNullable<
+    NonNullable<KovoApp['document']['csp']>['allowlist']
+  >;
+}
+
+function snapshotAppDocumentCspEntries(
+  value: unknown,
+  label: string,
+): readonly CspAllowlistEntry[] {
+  if (!nativeArrayIsArray(value)) {
+    throw new TypeError(`createApp ${label} must be a dense CSP origin array.`);
+  }
+  if (value.length > 100_000) {
+    throw new TypeError(`createApp ${label} must be a bounded CSP origin array.`);
+  }
+  const snapshot: CspAllowlistEntry[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = witnessGetOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined || !('value' in descriptor)) {
+      throw new TypeError(`createApp ${label} must contain stable own entries.`);
+    }
+    const entry = descriptor.value;
+    let closed: CspAllowlistEntry;
+    if (typeof entry === 'string') {
+      closed = entry;
+    } else {
+      const entryRecord = appDocumentRecord(entry, `${label}[${index}]`);
+      const origin = appDocumentOwnDataValue(entryRecord, 'origin');
+      const rationale = appDocumentOwnDataValue(entryRecord, 'rationale');
+      if (
+        typeof origin !== 'string' ||
+        typeof rationale !== 'string' ||
+        securityStringTrim(rationale) === ''
+      ) {
+        throw new TypeError(
+          `createApp ${label}[${index}] requires string origin and non-empty rationale.`,
+        );
+      }
+      closed = witnessFreeze({ origin, rationale: securityStringTrim(rationale) });
+    }
+    witnessDefineProperty(snapshot, index, {
+      configurable: true,
+      enumerable: true,
+      value: closed,
+      writable: true,
+    });
   }
   return witnessFreeze(snapshot);
 }

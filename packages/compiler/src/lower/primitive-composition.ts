@@ -10,6 +10,7 @@ import {
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
+  mergeableAttributeFrameworkTrustedUrlReason,
   mergeableAttributeHasFrameworkTrustedUrl,
   primitiveIdRewrite,
   primitiveObjectEntryAttributes,
@@ -244,6 +245,7 @@ function mergeableToIrAttribute(
   const value = mergeableValueToIr(
     attribute.value,
     mergeableAttributeHasFrameworkTrustedUrl(attribute),
+    mergeableAttributeFrameworkTrustedUrlReason(attribute),
   );
   const base =
     attribute.origin === 'primitive'
@@ -269,12 +271,14 @@ function mergeableToIrAttribute(
 function mergeableValueToIr(
   value: MergeableAttributeValue,
   frameworkTrustedUrl: boolean,
+  trustedUrlReason?: string,
 ): JsxIrAttributeValue {
   if (value.kind === 'boolean') return value;
   if (value.kind === 'expression') {
     return {
       ...value,
       ...(frameworkTrustedUrl ? { trustedUrl: true as const } : {}),
+      ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
     };
   }
   if (value.kind === 'number') return value;

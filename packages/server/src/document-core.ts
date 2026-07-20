@@ -16,6 +16,7 @@ import {
   type CspInlineMetadata,
   type DocumentCspConfig,
 } from './csp.js';
+import { browserResponsePostureHeaders } from './browser-response-posture.js';
 import {
   renderDeferredStream,
   renderDeferredStreamingResponse,
@@ -24,6 +25,7 @@ import {
 import { escapeHtml, escapeScriptJson, escapeWireAttribute } from './html.js';
 import { renderShellAttributes, type DocumentConfig } from './document-structured.js';
 import {
+  assertPageHintsCrossOriginIsolationEligible,
   renderPageHints,
   type PageHintOptions,
   type PageHints,
@@ -31,7 +33,6 @@ import {
 } from './hints.js';
 import {
   DOCUMENT_HSTS_VALUE,
-  DOCUMENT_ISOLATION_HEADERS,
   isRoutePageResponseOutcome,
   markFrameworkDocumentResponse,
   readHeader,
@@ -460,9 +461,18 @@ export const renderRouteDocumentResponse = wireEmitter(
       return response;
     }
 
+    if (cspConfig?.crossOriginIsolation === true) {
+      assertPageHintsCrossOriginIsolationEligible(assemblyOptions.hints ?? {});
+    }
+
     const document = routeDocumentResult({ ...response, body: response.body }, assemblyOptions);
     const shouldAttachFrameworkCsp =
       findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined;
+    if (cspConfig?.crossOriginIsolation === true && !shouldAttachFrameworkCsp) {
+      throw new TypeError(
+        'crossOriginIsolation requires the compiler-derived Content-Security-Policy; the route response cannot replace it.',
+      );
+    }
     const shouldAttachReporting =
       shouldAttachFrameworkCsp &&
       findHeaderRecordName(response.headers, 'Report-To') === undefined &&
@@ -493,11 +503,12 @@ export const renderRouteDocumentResponse = wireEmitter(
       // conservative LOW-false-positive isolation/hardening baseline
       // (`X-Frame-Options: DENY` clickjacking defense, COOP cross-window-scripting
       // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
-      // Each is applied only when the route response didn't already set it, so an author
-      // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
+      // Conservative responses preserve an authored override. Explicit cross-origin isolation
+      // instead pins every selected header byte-for-byte from the compiler manifest.
       ...documentIsolationHeaders(
         response.headers,
         reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
+        documentCspConfig,
       ),
       // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
       // auto-attached to every framework-rendered HTML document by default. Kovo is the
@@ -721,40 +732,33 @@ export function stampGuardFailureDocumentSecurityFloor(
 function documentIsolationHeaders(
   existing: ResponseHeaders,
   reportingGroup?: string,
+  csp: DocumentCspConfig = {},
 ): Record<string, string> {
   const headers = createSecurityNullRecord<string>() as Record<string, string>;
-  const isolationHeaderNames = securityObjectKeys(DOCUMENT_ISOLATION_HEADERS);
+  const posture = browserResponsePostureHeaders({
+    ...(csp.crossOriginIsolation === true ? { crossOriginIsolation: true as const } : {}),
+    ...(reportingGroup === undefined ? {} : { reportingGroup }),
+  });
+  const isolationHeaderNames = securityObjectKeys(posture);
   for (let index = 0; index < isolationHeaderNames.length; index += 1) {
     const name = isolationHeaderNames[index]!;
-    const value = DOCUMENT_ISOLATION_HEADERS[name]!;
-    if (findHeaderRecordName(existing, name) !== undefined) continue;
-    if (name === 'Cross-Origin-Opener-Policy' && reportingGroup !== undefined) {
-      headers[name] = `${value}; report-to="${reportingGroup}"`;
-      continue;
-    }
-    if (name === 'Permissions-Policy' && reportingGroup !== undefined) {
-      headers[name] = permissionsPolicyWithReporting(reportingGroup);
+    const baseValue = posture[name]!;
+    const value =
+      name === 'Cross-Origin-Opener-Policy' && reportingGroup !== undefined
+        ? `${baseValue}; report-to="${reportingGroup}"`
+        : baseValue;
+    const existingName = findHeaderRecordName(existing, name);
+    if (existingName !== undefined) {
+      if (csp.crossOriginIsolation === true && existing[existingName] !== value) {
+        throw new TypeError(
+          `crossOriginIsolation requires ${name}: ${value}; the route response cannot weaken it.`,
+        );
+      }
       continue;
     }
     headers[name] = value;
   }
   return headers;
-}
-
-function permissionsPolicyWithReporting(reportingGroup: string): string {
-  // Permissions Policy reporting has no single policy-wide Reporting API parameter.
-  // Current browser syntax attaches `report-to` to each feature directive, so keep the
-  // denied feature set explicit instead of inventing an unsupported global hook.
-  return securityArrayJoin(
-    [
-      `camera=();report-to=${reportingGroup}`,
-      `microphone=();report-to=${reportingGroup}`,
-      `geolocation=();report-to=${reportingGroup}`,
-      `payment=();report-to=${reportingGroup}`,
-      `usb=();report-to=${reportingGroup}`,
-    ],
-    ', ',
-  );
 }
 
 function standardDocumentResult(document: DocumentRenderResult): {

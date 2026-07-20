@@ -1,6 +1,7 @@
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue, type StaticLiteralValue } from '../scan/object.js';
 import {
+  parserFactFrameworkTrustedUrlReason,
   parserFactHasFrameworkTrustedUrl,
   type JsxAttributeModel,
   type ObjectLiteralEntry,
@@ -55,10 +56,18 @@ export type MergeableAttributeValue =
   | { kind: 'string'; value: string };
 
 const frameworkTrustedUrlValues = compilerCreateWeakMap<MergeableAttributeValue, true>();
+const frameworkTrustedUrlReasons = compilerCreateWeakMap<MergeableAttributeValue, string>();
 
 /** @internal Exact parser provenance retained without widening the public merge-value shape. */
 export function mergeableAttributeHasFrameworkTrustedUrl(attribute: MergeableAttribute): boolean {
   return compilerWeakMapGet(frameworkTrustedUrlValues, attribute.value) === true;
+}
+
+/** @internal Static audited reason retained with the exact framework trustedUrl identity. */
+export function mergeableAttributeFrameworkTrustedUrlReason(
+  attribute: MergeableAttribute,
+): string | undefined {
+  return compilerWeakMapGet(frameworkTrustedUrlReasons, attribute.value);
 }
 
 /**
@@ -289,7 +298,11 @@ function primitiveObjectEntryAttribute(
 ): MergeableAttribute | null | undefined {
   if (entry.value === undefined) return null;
 
-  const value = staticAttributeValue(entry.value, parserFactHasFrameworkTrustedUrl(entry));
+  const value = staticAttributeValue(
+    entry.value,
+    parserFactHasFrameworkTrustedUrl(entry),
+    parserFactFrameworkTrustedUrlReason(entry),
+  );
   if (value === null) return null;
   if (value === undefined || isAbsentAttributeValue(value)) return undefined;
 
@@ -317,6 +330,8 @@ function jsxAttributeValue(attribute: JsxAttributeModel): MergeableAttributeValu
     };
     if (parserFactHasFrameworkTrustedUrl(attribute)) {
       compilerWeakMapSet(frameworkTrustedUrlValues, value, true);
+      const reason = parserFactFrameworkTrustedUrlReason(attribute);
+      if (reason !== undefined) compilerWeakMapSet(frameworkTrustedUrlReasons, value, reason);
     }
     return value;
   }
@@ -326,6 +341,7 @@ function jsxAttributeValue(attribute: JsxAttributeModel): MergeableAttributeValu
 function staticAttributeValue(
   source: string,
   trustedUrl = false,
+  trustedUrlReason?: string,
 ): MergeableAttributeValue | null | undefined {
   const value = literalValue(source);
   if (value === undefined) {
@@ -333,7 +349,12 @@ function staticAttributeValue(
       kind: 'expression',
       source: compilerStringTrim(source),
     };
-    if (trustedUrl) compilerWeakMapSet(frameworkTrustedUrlValues, expression, true);
+    if (trustedUrl) {
+      compilerWeakMapSet(frameworkTrustedUrlValues, expression, true);
+      if (trustedUrlReason !== undefined) {
+        compilerWeakMapSet(frameworkTrustedUrlReasons, expression, trustedUrlReason);
+      }
+    }
     return expression;
   }
   return staticLiteralAttributeValue(value, source);

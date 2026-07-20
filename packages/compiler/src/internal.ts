@@ -6,6 +6,11 @@ export { snapshotCompileComponentOptions } from './compile-options.js';
 export { compileComponentModuleForFramework } from './framework-compile.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export { appGraphContributionHash } from './app-graph.js';
+export {
+  deriveBrowserPostureManifestFromSourceFiles,
+  mergeBrowserPostureManifests,
+} from './browser-posture-project.js';
+export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
   analyzeCapabilityClosure,

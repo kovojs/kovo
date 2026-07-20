@@ -1,0 +1,565 @@
+import type {
+  BrowserPostureCspDirective,
+  BrowserPostureExternalOrigin,
+  BrowserPostureIsolationBlocker,
+  BrowserPostureOpaqueExternalUrl,
+} from '@kovojs/core/internal/security-operation-ir';
+
+import {
+  compilerAbsoluteHttpUrlOrigin,
+  compilerArrayLength,
+  compilerDefineOwnDataProperty,
+  compilerOwnDataValue,
+  compilerSnapshotDenseArray,
+  compilerStringCharCodeAt,
+  compilerStringIncludes,
+  compilerStringLocaleCompare,
+  compilerStringSlice,
+  compilerStringStartsWith,
+  compilerStringToLowerCase,
+  compilerStringTrim,
+} from './compiler-security-intrinsics.js';
+import { contextualizeCompilerDiagnostic, diagnosticFor } from './diagnostics.js';
+import type { CompilerDiagnostic } from './diagnostics.js';
+import type { JsxIrAttribute, JsxIrElement } from './jsx-ir.js';
+
+/** @internal Browser posture facts derived from the final effective intrinsic tree. */
+export interface DerivedBrowserPostureFacts {
+  readonly diagnostics: readonly CompilerDiagnostic[];
+  readonly externalOrigins: readonly BrowserPostureExternalOrigin[];
+  readonly isolationBlockers: readonly BrowserPostureIsolationBlocker[];
+  readonly opaqueExternalUrls: readonly BrowserPostureOpaqueExternalUrl[];
+}
+
+interface AssetPosition {
+  readonly attribute: string;
+  readonly directive: BrowserPostureCspDirective;
+}
+
+/**
+ * Derive the exact browser fetch posture after spread and primitive composition lowering.
+ *
+ * SPEC §2/§4.8: the same effective element/attribute tuple that selects a browser request is
+ * the source of CSP intent. A caller-owned expression is closed unless the exact trustedUrl
+ * constructor carries a static audit reason; no spelling-based lookalike is accepted.
+ *
+ * @internal
+ */
+export function deriveBrowserPostureFacts(
+  roots: readonly JsxIrElement[],
+  options: { readonly fileName: string; readonly source: string },
+): DerivedBrowserPostureFacts {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const externalOrigins: BrowserPostureExternalOrigin[] = [];
+  const isolationBlockers: BrowserPostureIsolationBlocker[] = [];
+  const opaqueExternalUrls: BrowserPostureOpaqueExternalUrl[] = [];
+
+  const visit = (element: JsxIrElement): void => {
+    if (element.removed) return;
+    const tag = element.intrinsicTagName;
+    if (tag !== undefined) {
+      const normalizedTag = compilerStringToLowerCase(tag);
+      const positions = assetPositions(element, normalizedTag);
+      const positionLength = compilerArrayLength(positions, 'Browser posture asset positions');
+      for (let index = 0; index < positionLength; index += 1) {
+        const position = compilerOwnDataValue(
+          positions,
+          index,
+          'Browser posture asset positions',
+        ) as AssetPosition;
+        const attribute = effectiveAttribute(element, position.attribute);
+        if (attribute !== undefined) {
+          classifyAssetAttribute(
+            element,
+            attribute,
+            position,
+            options,
+            diagnostics,
+            externalOrigins,
+            opaqueExternalUrls,
+            isolationBlockers,
+          );
+        }
+      }
+
+      if (
+        normalizedTag === 'link' &&
+        effectiveAttribute(element, 'href') !== undefined &&
+        effectiveAttribute(element, 'rel')?.value.kind === 'expression'
+      ) {
+        append(
+          diagnostics,
+          browserPostureDiagnostic(
+            options,
+            spanFor(element),
+            '<link> has a computed rel that prevents exact external asset URL classification',
+          ),
+        );
+      }
+
+      if (hasOpaqueSpread(element) && possibleAssetAttributes(element, normalizedTag).length > 0) {
+        append(
+          diagnostics,
+          browserPostureDiagnostic(
+            options,
+            spanFor(element),
+            `<${normalizedTag}> has an opaque spread that could introduce a computed external asset URL`,
+          ),
+        );
+      }
+
+      if (normalizedTag === 'iframe') {
+        append(isolationBlockers, {
+          fileName: options.fileName,
+          kind: 'frame',
+          site: 'iframe',
+          span: spanFor(element),
+        });
+      }
+      const popupAttribute = popupTargetAttribute(element, normalizedTag);
+      if (popupAttribute !== undefined && popupTargetIsOpen(popupAttribute)) {
+        append(isolationBlockers, {
+          fileName: options.fileName,
+          kind: 'popup',
+          site: `${normalizedTag}[${popupAttribute.name}]`,
+          span: spanForAttribute(element, popupAttribute),
+        });
+      }
+    }
+
+    const childLength = compilerArrayLength(element.children, 'Browser posture child elements');
+    for (let index = 0; index < childLength; index += 1) {
+      const child = compilerOwnDataValue(
+        element.children,
+        index,
+        'Browser posture child elements',
+      ) as (typeof element.children)[number];
+      if (child.kind === 'element') visit(child);
+    }
+  };
+
+  const rootLength = compilerArrayLength(roots, 'Browser posture roots');
+  for (let index = 0; index < rootLength; index += 1) {
+    visit(compilerOwnDataValue(roots, index, 'Browser posture roots') as JsxIrElement);
+  }
+
+  return {
+    diagnostics,
+    externalOrigins: sortedExternalOrigins(externalOrigins),
+    isolationBlockers: sortedBlockers(isolationBlockers),
+    opaqueExternalUrls: sortedOpaqueUrls(opaqueExternalUrls),
+  };
+}
+
+function classifyAssetAttribute(
+  element: JsxIrElement,
+  attribute: JsxIrAttribute,
+  position: AssetPosition,
+  options: { readonly fileName: string; readonly source: string },
+  diagnostics: CompilerDiagnostic[],
+  externalOrigins: BrowserPostureExternalOrigin[],
+  opaqueExternalUrls: BrowserPostureOpaqueExternalUrl[],
+  isolationBlockers: BrowserPostureIsolationBlocker[],
+): void {
+  const site = `${compilerStringToLowerCase(element.intrinsicTagName ?? element.tag)}[${position.attribute}]`;
+  const span = spanForAttribute(element, attribute);
+  if (attribute.value.kind === 'expression') {
+    if (attribute.value.trustedUrl !== true || attribute.value.trustedUrlReason === undefined) {
+      append(
+        diagnostics,
+        browserPostureDiagnostic(
+          options,
+          span,
+          `${site} contains a computed external asset URL without the exact trustedUrl(value, auditedReason) escape`,
+        ),
+      );
+      return;
+    }
+    append(opaqueExternalUrls, {
+      directive: position.directive,
+      fileName: options.fileName,
+      reason: attribute.value.trustedUrlReason,
+      site,
+      span,
+    });
+    append(isolationBlockers, {
+      fileName: options.fileName,
+      kind: 'opaque-resource',
+      site,
+      span,
+    });
+    return;
+  }
+  if (attribute.value.kind !== 'string') return;
+  const value = compilerStringTrim(attribute.value.value);
+  if (position.attribute === 'srcset') {
+    const candidates = staticSrcsetUrls(value);
+    const length = compilerArrayLength(candidates, 'Browser posture srcset candidates');
+    for (let index = 0; index < length; index += 1) {
+      classifyStaticAssetUrl(
+        compilerOwnDataValue(candidates, index, 'Browser posture srcset candidates') as string,
+        site,
+        span,
+        position.directive,
+        options,
+        diagnostics,
+        externalOrigins,
+        isolationBlockers,
+      );
+    }
+    return;
+  }
+  classifyStaticAssetUrl(
+    value,
+    site,
+    span,
+    position.directive,
+    options,
+    diagnostics,
+    externalOrigins,
+    isolationBlockers,
+  );
+}
+
+function classifyStaticAssetUrl(
+  value: string,
+  site: string,
+  span: { readonly end: number; readonly start: number },
+  directive: BrowserPostureCspDirective,
+  options: { readonly fileName: string; readonly source: string },
+  diagnostics: CompilerDiagnostic[],
+  externalOrigins: BrowserPostureExternalOrigin[],
+  isolationBlockers: BrowserPostureIsolationBlocker[],
+): void {
+  if (value === '' || isLocalAssetUrl(value)) return;
+  const origin = compilerAbsoluteHttpUrlOrigin(value);
+  if (origin === undefined) {
+    append(
+      diagnostics,
+      browserPostureDiagnostic(
+        options,
+        span,
+        `${site} has an external asset URL whose canonical HTTP(S) origin cannot be derived`,
+      ),
+    );
+    return;
+  }
+  append(externalOrigins, {
+    directive,
+    fileName: options.fileName,
+    origin,
+    site,
+    span,
+  });
+  append(isolationBlockers, {
+    fileName: options.fileName,
+    kind: 'external-resource',
+    site,
+    span,
+  });
+}
+
+/** Parse only the URL token from each static HTML srcset candidate, including data-URL commas. */
+function staticSrcsetUrls(value: string): string[] {
+  const urls: string[] = [];
+  const length = value.length;
+  let index = 0;
+  while (index < length) {
+    while (index < length) {
+      const code = compilerStringCharCodeAt(value, index);
+      if (code !== 0x2c && !isAsciiSpace(code)) break;
+      index += 1;
+    }
+    if (index >= length) break;
+    const start = index;
+    while (index < length && !isAsciiSpace(compilerStringCharCodeAt(value, index))) index += 1;
+    let end = index;
+    while (end > start && compilerStringCharCodeAt(value, end - 1) === 0x2c) end -= 1;
+    if (end > start) append(urls, compilerStringSlice(value, start, end));
+    if (end !== index) continue;
+    while (index < length && compilerStringCharCodeAt(value, index) !== 0x2c) index += 1;
+    if (index < length) index += 1;
+  }
+  return urls;
+}
+
+function isAsciiSpace(code: number): boolean {
+  return code === 0x09 || code === 0x0a || code === 0x0c || code === 0x0d || code === 0x20;
+}
+
+function assetPositions(element: JsxIrElement, tag: string): AssetPosition[] {
+  switch (tag) {
+    case 'script':
+      return [{ attribute: 'src', directive: 'script-src' }];
+    case 'iframe':
+      return [{ attribute: 'src', directive: 'frame-src' }];
+    case 'img':
+      return [
+        { attribute: 'src', directive: 'img-src' },
+        { attribute: 'srcset', directive: 'img-src' },
+      ];
+    case 'image':
+    case 'feimage':
+      return [
+        { attribute: 'href', directive: 'img-src' },
+        { attribute: 'xlink:href', directive: 'img-src' },
+      ];
+    case 'audio':
+      return [{ attribute: 'src', directive: 'media-src' }];
+    case 'track':
+      return [{ attribute: 'src', directive: 'media-src' }];
+    case 'input':
+      return staticLowerAttributeValue(element, 'type') === 'image'
+        ? [{ attribute: 'src', directive: 'img-src' }]
+        : [];
+    case 'video':
+      return [
+        { attribute: 'poster', directive: 'img-src' },
+        { attribute: 'src', directive: 'media-src' },
+      ];
+    case 'source':
+      return [
+        { attribute: 'src', directive: 'media-src' },
+        { attribute: 'srcset', directive: 'img-src' },
+      ];
+    case 'link':
+      return linkAssetPositions(element);
+    default:
+      return [];
+  }
+}
+
+function linkAssetPositions(element: JsxIrElement): AssetPosition[] {
+  const rel = staticLowerAttributeValue(element, 'rel');
+  const as = staticLowerAttributeValue(element, 'as');
+  if (rel !== undefined && asciiTokenListHas(rel, 'stylesheet')) {
+    return [{ attribute: 'href', directive: 'style-src' }];
+  }
+  if (rel !== undefined && asciiTokenListHas(rel, 'modulepreload')) {
+    return [{ attribute: 'href', directive: 'script-src' }];
+  }
+  if (
+    rel !== undefined &&
+    (asciiTokenListHas(rel, 'icon') ||
+      asciiTokenListHas(rel, 'apple-touch-icon') ||
+      asciiTokenListHas(rel, 'mask-icon'))
+  ) {
+    return [{ attribute: 'href', directive: 'img-src' }];
+  }
+  if (rel === undefined || !asciiTokenListHas(rel, 'preload')) return [];
+  switch (as) {
+    case 'fetch':
+      return [{ attribute: 'href', directive: 'connect-src' }];
+    case 'font':
+      return [{ attribute: 'href', directive: 'font-src' }];
+    case 'image':
+      return [{ attribute: 'href', directive: 'img-src' }];
+    case 'script':
+      return [{ attribute: 'href', directive: 'script-src' }];
+    case 'style':
+      return [{ attribute: 'href', directive: 'style-src' }];
+    default:
+      return [];
+  }
+}
+
+function asciiTokenListHas(value: string, expected: string): boolean {
+  let index = 0;
+  while (index < value.length) {
+    while (index < value.length && isAsciiSpace(compilerStringCharCodeAt(value, index))) index += 1;
+    const start = index;
+    while (index < value.length && !isAsciiSpace(compilerStringCharCodeAt(value, index)))
+      index += 1;
+    if (compilerStringSlice(value, start, index) === expected) return true;
+  }
+  return false;
+}
+
+function possibleAssetAttributes(element: JsxIrElement, tag: string): readonly string[] {
+  switch (tag) {
+    case 'script':
+    case 'iframe':
+    case 'audio':
+    case 'track':
+      return ['src'];
+    case 'input':
+      return staticLowerAttributeValue(element, 'type') === 'image' ? ['src'] : [];
+    case 'img':
+      return ['src', 'srcset'];
+    case 'image':
+    case 'feimage':
+      return ['href', 'xlink:href'];
+    case 'video':
+      return ['poster', 'src'];
+    case 'source':
+      return ['src', 'srcset'];
+    case 'link':
+      return ['href'];
+    default:
+      return [];
+  }
+}
+
+function popupTargetAttribute(element: JsxIrElement, tag: string): JsxIrAttribute | undefined {
+  if (tag === 'a' || tag === 'area' || tag === 'form') return effectiveAttribute(element, 'target');
+  if (tag === 'button' || tag === 'input') return effectiveAttribute(element, 'formtarget');
+  return undefined;
+}
+
+function popupTargetIsOpen(attribute: JsxIrAttribute): boolean {
+  if (attribute.value.kind !== 'string') return true;
+  const target = compilerStringToLowerCase(compilerStringTrim(attribute.value.value));
+  return (
+    target !== '' &&
+    target !== '_self' &&
+    target !== '_parent' &&
+    target !== '_top' &&
+    target !== '_unfencedtop'
+  );
+}
+
+function effectiveAttribute(element: JsxIrElement, name: string): JsxIrAttribute | undefined {
+  let found: JsxIrAttribute | undefined;
+  const visit = (attributes: readonly JsxIrAttribute[]): void => {
+    const length = compilerArrayLength(attributes, 'Browser posture element attributes');
+    for (let index = 0; index < length; index += 1) {
+      const attribute = compilerOwnDataValue(
+        attributes,
+        index,
+        'Browser posture element attributes',
+      ) as JsxIrAttribute;
+      if (compilerStringToLowerCase(attribute.name) === name) found = attribute;
+    }
+  };
+  visit(element.attributes);
+  visit(element.generatedAttributes);
+  return found;
+}
+
+function hasOpaqueSpread(element: JsxIrElement): boolean {
+  const length = compilerArrayLength(element.attributes, 'Browser posture spread attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      element.attributes,
+      index,
+      'Browser posture spread attributes',
+    ) as JsxIrAttribute;
+    if (compilerStringStartsWith(attribute.name, '...')) return true;
+  }
+  return false;
+}
+
+function staticLowerAttributeValue(element: JsxIrElement, name: string): string | undefined {
+  const attribute = effectiveAttribute(element, name);
+  return attribute?.value.kind === 'string'
+    ? compilerStringToLowerCase(compilerStringTrim(attribute.value.value))
+    : undefined;
+}
+
+function isLocalAssetUrl(value: string): boolean {
+  return (
+    compilerStringStartsWith(value, '/') ||
+    compilerStringStartsWith(value, './') ||
+    compilerStringStartsWith(value, '../') ||
+    compilerStringStartsWith(value, '#') ||
+    (!compilerStringStartsWith(value, '//') && !compilerStringIncludes(value, ':'))
+  );
+}
+
+function spanForAttribute(
+  element: JsxIrElement,
+  attribute: JsxIrAttribute,
+): { end: number; start: number } {
+  return attribute.anchor === undefined
+    ? spanFor(element)
+    : { end: attribute.anchor.end, start: attribute.anchor.start };
+}
+
+function spanFor(element: JsxIrElement): { end: number; start: number } {
+  const anchor = element.provenance.anchor;
+  return anchor === undefined
+    ? { end: element.element.openingEnd, start: element.element.start }
+    : { end: anchor.end, start: anchor.start };
+}
+
+function browserPostureDiagnostic(
+  options: { readonly fileName: string; readonly source: string },
+  span: { readonly end: number; readonly start: number },
+  reason: string,
+): CompilerDiagnostic {
+  return contextualizeCompilerDiagnostic(
+    diagnosticFor(options.fileName, 'KV236', options.source, span.start, span.end - span.start),
+    {
+      help: 'Fixes: keep the asset URL static so Kovo can derive its CSP origin, or use the exact trustedUrl(value, auditedReason) constructor and declare every admitted runtime origin with a rationale. SPEC §2/§4.8 requires browser response posture to fail closed when the compiler cannot derive the browser request authority.',
+      message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
+    },
+  );
+}
+
+function append<Value>(target: Value[], value: Value): void {
+  compilerDefineOwnDataProperty(
+    target,
+    compilerArrayLength(target, 'Browser posture facts'),
+    value,
+  );
+}
+
+function sortedExternalOrigins(
+  values: readonly BrowserPostureExternalOrigin[],
+): BrowserPostureExternalOrigin[] {
+  return insertionSorted(
+    values,
+    'Browser posture external origins',
+    (left, right) =>
+      compilerStringLocaleCompare(left.directive, right.directive) ||
+      compilerStringLocaleCompare(left.origin, right.origin) ||
+      compilerStringLocaleCompare(left.fileName, right.fileName) ||
+      left.span.start - right.span.start,
+  );
+}
+
+function sortedOpaqueUrls(
+  values: readonly BrowserPostureOpaqueExternalUrl[],
+): BrowserPostureOpaqueExternalUrl[] {
+  return insertionSorted(
+    values,
+    'Browser posture opaque URLs',
+    (left, right) =>
+      compilerStringLocaleCompare(left.directive, right.directive) ||
+      compilerStringLocaleCompare(left.reason, right.reason) ||
+      compilerStringLocaleCompare(left.fileName, right.fileName) ||
+      left.span.start - right.span.start,
+  );
+}
+
+function sortedBlockers(
+  values: readonly BrowserPostureIsolationBlocker[],
+): BrowserPostureIsolationBlocker[] {
+  return insertionSorted(
+    values,
+    'Browser posture isolation blockers',
+    (left, right) =>
+      compilerStringLocaleCompare(left.kind, right.kind) ||
+      compilerStringLocaleCompare(left.fileName, right.fileName) ||
+      compilerStringLocaleCompare(left.site, right.site) ||
+      (left.span?.start ?? -1) - (right.span?.start ?? -1),
+  );
+}
+
+function insertionSorted<Value>(
+  values: readonly Value[],
+  label: string,
+  compare: (left: Value, right: Value) => number,
+): Value[] {
+  const sorted = compilerSnapshotDenseArray(values, label);
+  for (let index = 1; index < sorted.length; index += 1) {
+    const value = sorted[index]!;
+    let insertion = index;
+    while (insertion > 0 && compare(sorted[insertion - 1]!, value) > 0) {
+      sorted[insertion] = sorted[insertion - 1]!;
+      insertion -= 1;
+    }
+    sorted[insertion] = value;
+  }
+  return sorted;
+}

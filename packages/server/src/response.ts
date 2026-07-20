@@ -12,6 +12,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 
 import { snapshotAuditJustification, snapshotAuditReason } from './audit-justification.js';
+import { DEFAULT_BROWSER_PERMISSIONS_POLICY } from './browser-response-posture.js';
 import { createContentDispositionWithFilename } from './content-disposition.js';
 import {
   createSerializedHeaderSafetyAssertion,
@@ -577,11 +578,9 @@ export function mergeResponseHeaders(
  *   subresources — explicitly out of scope). Document assembly appends the browser's
  *   supported `report-to` parameter only when it also owns the matching Reporting API
  *   endpoint headers.
- * - `Permissions-Policy` — deny-by-default for the high-risk ambient capabilities a
- *   content app virtually never needs. A conservative deny-all baseline; an app that
- *   uses one of these overrides the header on the route response. Permissions Policy
- *   reporting is per-feature (`feature=();report-to=<group>`), so document assembly
- *   adds only those per-feature hooks when the Reporting API group is present.
+ * - `Permissions-Policy` — one exhaustive decision table owns every compiler browser
+ *   operation and both normal/reporting bytes. Current operations require none of the
+ *   five high-risk ambient capabilities, so the baseline denies all five.
  * - `Origin-Agent-Cluster: ?1` — asks the browser to isolate the origin into its own
  *   agent cluster so same-site but cross-origin documents do not share process-global
  *   JS state. OPP-15 labels this runtime defense-in-depth, not a construction proof.
@@ -594,13 +593,13 @@ export function mergeResponseHeaders(
  * brick localhost/non-HTTPS dev), and CORP belongs on the immutable client-module
  * asset responses (see the `SF-WIRE` note below), not on documents.
  *
- * Every header is applied only when the route response did not already set it
- * (case-insensitively), so an author opt-out is always preserved.
+ * In the conservative default, an exact route header remains an author override. Explicit
+ * cross-origin isolation instead pins every selected posture header byte-for-byte.
  */
 export const DOCUMENT_ISOLATION_HEADERS: Readonly<Record<string, string>> = witnessFreeze({
   'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
   'Origin-Agent-Cluster': '?1',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'Permissions-Policy': DEFAULT_BROWSER_PERMISSIONS_POLICY,
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
 });

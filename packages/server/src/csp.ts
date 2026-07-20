@@ -1,4 +1,13 @@
 import { escapeAttribute } from './html.js';
+import type {
+  BrowserPostureCspDirective,
+  BrowserPostureManifest,
+} from '@kovojs/core/internal/security-operation-ir';
+import {
+  registeredGeneratedBrowserPostureManifest,
+  snapshotBrowserPostureManifest,
+} from './generated-browser-posture-registry.js';
+import { assertCrossOriginIsolationEligible } from './browser-response-posture.js';
 import {
   witnessArrayAppend,
   witnessCreateNullRecord,
@@ -22,6 +31,8 @@ import {
   securitySha256Base64,
   securityStringCharCodeAt,
   securityStringReplaceAll,
+  securityStringTrim,
+  securityUrlSnapshot,
 } from './response-security-intrinsics.js';
 
 /** CSP hash metadata for inline scripts/styles generated during document assembly. */
@@ -62,7 +73,9 @@ export interface ContentSecurityPolicyOptions {
    * when undefined, so it falls back to `default-src 'self'` (no third-party frames).
    */
   frameSrc?: readonly string[];
+  fontSrc?: readonly string[];
   imgSrc?: readonly string[];
+  mediaSrc?: readonly string[];
   /**
    * G2 (bugs-part3 CSP-2): `object-src` source list. Defaults to `'none'` and is
    * emitted unconditionally (legacy `<object>`/`<embed>` plugin-content vector).
@@ -76,6 +89,7 @@ export interface ContentSecurityPolicyOptions {
   reportTo?: string;
   scriptSrc?: readonly string[];
   styleSrc?: readonly string[];
+  workerSrc?: readonly string[];
   /**
    * SF (secure-framework Tier 3): when `true`, append `require-trusted-types-for 'script'`
    * and a `trusted-types <policies>` directive that admits only Kovo's generated
@@ -110,17 +124,39 @@ const KOVO_BROWSER_TRUSTED_TYPES_POLICY = 'kovo-browser';
  * non-overridable hardening directives (`base-uri`/`object-src`/`form-action`/
  * `frame-ancestors`) are NEVER reachable from here.
  */
+/** One reviewed CSP origin that cannot be connected to a static compiler census entry. */
+export interface CspAllowlistOrigin {
+  /** Canonical absolute HTTP(S)/WS(S) origin admitted by the reviewed escape. */
+  origin: string;
+  /** Non-empty audit reason for admitting an origin absent from the static census. */
+  rationale: string;
+}
+
+/** A census-matched origin or an explicit reviewed escape. */
+export type CspAllowlistEntry = string | CspAllowlistOrigin;
+
+/**
+ * App-facing third-party origins that extend, but never replace, Kovo's strict per-resource
+ * defaults. Uncensused origins must use {@link CspAllowlistOrigin} so the reviewed rationale is
+ * explicit; hardening directives such as `base-uri` and `object-src` are not configurable here.
+ */
 export interface CspAllowlist {
   /** Extra origins admitted for `connect-src` (XHR/fetch/WebSocket/EventSource/beacon). */
-  connectSrc?: readonly string[];
+  connectSrc?: readonly CspAllowlistEntry[];
+  /** Extra origins admitted for `font-src`. */
+  fontSrc?: readonly CspAllowlistEntry[];
   /** Extra origins admitted for `frame-src` (embedded `<iframe>` sources). */
-  frameSrc?: readonly string[];
+  frameSrc?: readonly CspAllowlistEntry[];
   /** Extra origins admitted for `img-src` (external image hosts/CDNs). */
-  imgSrc?: readonly string[];
+  imgSrc?: readonly CspAllowlistEntry[];
+  /** Extra origins admitted for `media-src`. */
+  mediaSrc?: readonly CspAllowlistEntry[];
   /** Extra origins admitted for `script-src` (third-party SDKs). */
-  scriptSrc?: readonly string[];
+  scriptSrc?: readonly CspAllowlistEntry[];
   /** Extra origins admitted for `style-src` (external stylesheet hosts). */
-  styleSrc?: readonly string[];
+  styleSrc?: readonly CspAllowlistEntry[];
+  /** Extra origins admitted for `worker-src`. */
+  workerSrc?: readonly CspAllowlistEntry[];
 }
 
 /**
@@ -130,6 +166,11 @@ export interface CspAllowlist {
  */
 export interface DocumentCspConfig {
   allowlist?: CspAllowlist;
+  /**
+   * Enable COOP/COEP/CORP only when the generated posture proves there are no external resources,
+   * frames, popups, opaque URLs, or dynamic browser fetch/worker effects.
+   */
+  crossOriginIsolation?: true;
   /**
    * OPP-14 / SPEC §6.6 audit-only telemetry: omitted/`{}` emits a framework-owned
    * Reporting API group and CSP `report-to` directive for the strict enforced policy.
@@ -173,10 +214,13 @@ interface CspReportingHeaderOptions {
 
 const CSP_ALLOWLIST_KEYS = [
   'connectSrc',
+  'fontSrc',
   'frameSrc',
   'imgSrc',
+  'mediaSrc',
   'scriptSrc',
   'styleSrc',
+  'workerSrc',
 ] as const satisfies readonly (keyof CspAllowlist)[];
 
 const CSP_POLICY_ARRAY_KEYS = [
@@ -186,10 +230,13 @@ const CSP_POLICY_ARRAY_KEYS = [
   'formAction',
   'frameAncestors',
   'frameSrc',
+  'fontSrc',
   'imgSrc',
+  'mediaSrc',
   'objectSrc',
   'scriptSrc',
   'styleSrc',
+  'workerSrc',
 ] as const satisfies readonly (keyof ContentSecurityPolicyOptions)[];
 
 function snapshotCspInlineMetadata(source: CspInlineMetadata): CspInlineMetadata {
@@ -221,8 +268,16 @@ function snapshotDocumentCspConfig(source: DocumentCspConfig): DocumentCspConfig
     throw new TypeError('Document CSP config must be a stable own-data record.');
   }
   const rawAllowlist = cspOwnDataValue(source, 'allowlist', 'Document CSP config');
+  const crossOriginIsolation = cspOwnDataValue(
+    source,
+    'crossOriginIsolation',
+    'Document CSP config',
+  );
   const rawReporting = cspOwnDataValue(source, 'reporting', 'Document CSP config');
   const trustedTypes = cspOwnDataValue(source, 'trustedTypes', 'Document CSP config');
+  if (crossOriginIsolation !== undefined && crossOriginIsolation !== true) {
+    throw new TypeError('Document CSP crossOriginIsolation must be true when present.');
+  }
   if (trustedTypes !== undefined && typeof trustedTypes !== 'boolean') {
     throw new TypeError('Document CSP trustedTypes must be a boolean.');
   }
@@ -233,6 +288,7 @@ function snapshotDocumentCspConfig(source: DocumentCspConfig): DocumentCspConfig
       : snapshotCspReportingConfig(rawReporting);
   const snapshot = witnessCreateNullRecord<unknown>();
   snapshot.allowlist = allowlist;
+  snapshot.crossOriginIsolation = crossOriginIsolation;
   snapshot.reporting = reporting;
   snapshot.trustedTypes = trustedTypes;
   return witnessFreeze(snapshot) as unknown as DocumentCspConfig;
@@ -247,9 +303,49 @@ function snapshotCspAllowlist(source: unknown): CspAllowlist {
     const key = CSP_ALLOWLIST_KEYS[index]!;
     const value = cspOwnDataValue(source, key, 'Document CSP allowlist');
     snapshot[key] =
-      value === undefined ? undefined : snapshotCspStringArray(value, `CSP allowlist.${key}`);
+      value === undefined ? undefined : snapshotCspAllowlistEntries(value, `CSP allowlist.${key}`);
   }
   return witnessFreeze(snapshot) as unknown as CspAllowlist;
+}
+
+function snapshotCspAllowlistEntries(source: unknown, label: string): readonly CspAllowlistEntry[] {
+  if (!witnessIsArray(source)) throw new TypeError(`${label} must be an array.`);
+  const length = cspRequiredOwnDataValue(source, 'length', label);
+  if (
+    typeof length !== 'number' ||
+    !securityNumberIsFinite(length) ||
+    securityMathFloor(length) !== length ||
+    length < 0 ||
+    length > 100_000
+  ) {
+    throw new TypeError(`${label} must be a bounded dense array.`);
+  }
+  const snapshot: CspAllowlistEntry[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = cspRequiredOwnDataValue(source, index, label);
+    if (typeof entry === 'string') {
+      witnessArrayAppend(snapshot, entry, label);
+      continue;
+    }
+    if (typeof entry !== 'object' || entry === null || witnessIsArray(entry)) {
+      throw new TypeError(`${label} entries must be origins or reviewed origin records.`);
+    }
+    const origin = cspRequiredOwnDataValue(entry, 'origin', `${label}[${index}]`);
+    const rationale = cspRequiredOwnDataValue(entry, 'rationale', `${label}[${index}]`);
+    if (
+      typeof origin !== 'string' ||
+      typeof rationale !== 'string' ||
+      securityStringTrim(rationale) === ''
+    ) {
+      throw new TypeError(`${label} reviewed entries require string origin and rationale.`);
+    }
+    witnessArrayAppend(
+      snapshot,
+      witnessFreeze({ origin, rationale: securityStringTrim(rationale) }),
+      label,
+    );
+  }
+  return witnessFreeze(snapshot);
 }
 
 function snapshotCspReportingConfig(source: unknown): CspReportingConfig {
@@ -353,38 +449,52 @@ function cspStableDescriptorValue(
  * This is the dispatch-path counterpart of {@link renderContentSecurityPolicy}: it
  * starts from the strong default (`'self'` + Kovo's inline-script/style hashes + the
  * NON-overridable `base-uri`/`object-src`/`form-action`/`frame-ancestors` hardening
- * directives) and folds in a third-party {@link CspAllowlist} by APPENDING origins to
- * the per-fetch directives only. The hardening directives are assembled internally and
- * are never reachable from `config`, so an allowlist can widen where scripts/styles/
- * frames/connections may come from but can never relax clickjacking/base-uri/object/
- * form-exfil protection.
+ * directives), admits compiler-censused origins, and folds in only census-matched or
+ * explicitly rationalized {@link CspAllowlist} origins. The hardening directives are
+ * never reachable from `config`.
  *
  * @param metadata - Inline-script/style CSP hashes surfaced on the rendered document.
- * @param config - Optional third-party allowlist + Trusted Types opt-in.
+ * @param config - Optional reviewed origins, reporting/Trusted Types, and isolation posture.
  * @returns The assembled strict `Content-Security-Policy` header value.
  */
 export function renderDefaultDocumentCsp(
   metadata: CspInlineMetadata,
   config: DocumentCspConfig = {},
 ): string {
+  return renderDefaultDocumentCspFromManifest(
+    metadata,
+    config,
+    registeredGeneratedBrowserPostureManifest(),
+  );
+}
+
+/** Render against an explicit compiler carrier for framework tests and generated gates. @internal */
+export function renderDefaultDocumentCspFromManifest(
+  metadata: CspInlineMetadata,
+  config: DocumentCspConfig,
+  manifest: BrowserPostureManifest | undefined,
+): string {
   const closedMetadata = snapshotCspInlineMetadata(metadata);
   const closedConfig = snapshotDocumentCspConfig(config);
-  const allow = closedConfig.allowlist ?? witnessCreateNullRecord<readonly string[]>();
+  if (closedConfig.crossOriginIsolation === true) {
+    assertDocumentCspConfigMatchesBrowserPosture(closedConfig, manifest);
+  }
+  const sources = browserPostureCspSources(closedConfig, manifest);
   const reporting = resolveCspReporting(closedConfig.reporting);
-  const scriptSrc = appendSourceValues(["'self'"], allow.scriptSrc);
-  const styleSrc = appendSourceValues(["'self'"], allow.styleSrc);
+  const scriptSrc = appendSourceValues(["'self'"], sources.scriptSrc);
+  const styleSrc = appendSourceValues(["'self'"], sources.styleSrc);
   const imgSrc =
-    allow.imgSrc !== undefined && allow.imgSrc.length > 0
-      ? appendSourceValues(["'self'", 'data:'], allow.imgSrc)
-      : undefined;
+    sources.imgSrc.length > 0 ? appendSourceValues(["'self'", 'data:'], sources.imgSrc) : undefined;
   const connectSrc =
-    allow.connectSrc !== undefined && allow.connectSrc.length > 0
-      ? appendSourceValues(["'self'"], allow.connectSrc)
-      : undefined;
+    sources.connectSrc.length > 0 ? appendSourceValues(["'self'"], sources.connectSrc) : undefined;
   const frameSrc =
-    allow.frameSrc !== undefined && allow.frameSrc.length > 0
-      ? appendSourceValues([], allow.frameSrc)
-      : undefined;
+    sources.frameSrc.length > 0 ? appendSourceValues(["'self'"], sources.frameSrc) : undefined;
+  const fontSrc =
+    sources.fontSrc.length > 0 ? appendSourceValues(["'self'"], sources.fontSrc) : undefined;
+  const mediaSrc =
+    sources.mediaSrc.length > 0 ? appendSourceValues(["'self'"], sources.mediaSrc) : undefined;
+  const workerSrc =
+    sources.workerSrc.length > 0 ? appendSourceValues(["'self'"], sources.workerSrc) : undefined;
   // The allowlist EXTENDS the secure `'self'` base — it never replaces it — and it can
   // only touch the per-fetch directives below. `base-uri`/`object-src`/`form-action`/
   // `frame-ancestors` are assembled by `renderContentSecurityPolicy` from their secure
@@ -395,6 +505,9 @@ export function renderDefaultDocumentCsp(
     ...(imgSrc === undefined ? {} : { imgSrc }),
     ...(connectSrc === undefined ? {} : { connectSrc }),
     ...(frameSrc === undefined ? {} : { frameSrc }),
+    ...(fontSrc === undefined ? {} : { fontSrc }),
+    ...(mediaSrc === undefined ? {} : { mediaSrc }),
+    ...(workerSrc === undefined ? {} : { workerSrc }),
     ...(reporting === undefined ? {} : { reportTo: reporting.group }),
     // SF (secure-framework Tier 3): Trusted Types is now DEFAULT-ON. Every framework-
     // assembled DOM-write sink — the module-side `morph.ts`/`query-bindings.ts` writes AND
@@ -409,6 +522,131 @@ export function renderDefaultDocumentCsp(
     // its own un-named TT policy or an unrouted raw-HTML sink).
     ...(closedConfig.trustedTypes === false ? {} : { trustedTypes: true }),
   });
+}
+
+/** Validate authored CSP entries against the compiler-owned external-origin census. @internal */
+export function assertDocumentCspConfigMatchesBrowserPosture(
+  config: DocumentCspConfig,
+  manifest: BrowserPostureManifest | undefined = registeredGeneratedBrowserPostureManifest(),
+): void {
+  const closed = snapshotDocumentCspConfig(config);
+  browserPostureCspSources(closed, manifest);
+  if (closed.crossOriginIsolation === true) {
+    assertCrossOriginIsolationEligible(manifest);
+    if (cspAllowlistHasEntries(closed.allowlist)) {
+      throw new TypeError(
+        'crossOriginIsolation cannot prove CORP/CORS requirements for authored CSP allowlist origins.',
+      );
+    }
+  }
+}
+
+function cspAllowlistHasEntries(allowlist: CspAllowlist | undefined): boolean {
+  if (allowlist === undefined) return false;
+  for (let index = 0; index < CSP_ALLOWLIST_KEYS.length; index += 1) {
+    const values = allowlist[CSP_ALLOWLIST_KEYS[index]!];
+    if (values !== undefined && values.length > 0) return true;
+  }
+  return false;
+}
+
+interface BrowserPostureCspSources {
+  connectSrc: readonly string[];
+  fontSrc: readonly string[];
+  frameSrc: readonly string[];
+  imgSrc: readonly string[];
+  mediaSrc: readonly string[];
+  scriptSrc: readonly string[];
+  styleSrc: readonly string[];
+  workerSrc: readonly string[];
+}
+
+function browserPostureCspSources(
+  config: DocumentCspConfig,
+  manifest: BrowserPostureManifest | undefined,
+): BrowserPostureCspSources {
+  const closedManifest =
+    manifest === undefined ? undefined : snapshotBrowserPostureManifest(manifest);
+  return witnessFreeze({
+    connectSrc: sourcesForBrowserDirective(
+      'connect-src',
+      config.allowlist?.connectSrc,
+      closedManifest,
+    ),
+    fontSrc: sourcesForBrowserDirective('font-src', config.allowlist?.fontSrc, closedManifest),
+    frameSrc: sourcesForBrowserDirective('frame-src', config.allowlist?.frameSrc, closedManifest),
+    imgSrc: sourcesForBrowserDirective('img-src', config.allowlist?.imgSrc, closedManifest),
+    mediaSrc: sourcesForBrowserDirective('media-src', config.allowlist?.mediaSrc, closedManifest),
+    scriptSrc: sourcesForBrowserDirective(
+      'script-src',
+      config.allowlist?.scriptSrc,
+      closedManifest,
+    ),
+    styleSrc: sourcesForBrowserDirective('style-src', config.allowlist?.styleSrc, closedManifest),
+    workerSrc: sourcesForBrowserDirective(
+      'worker-src',
+      config.allowlist?.workerSrc,
+      closedManifest,
+    ),
+  });
+}
+
+function sourcesForBrowserDirective(
+  directive: BrowserPostureCspDirective,
+  entries: readonly CspAllowlistEntry[] | undefined,
+  manifest: BrowserPostureManifest | undefined,
+): readonly string[] {
+  const census: string[] = [];
+  const origins = manifest?.externalOrigins ?? [];
+  for (let index = 0; index < origins.length; index += 1) {
+    const fact = origins[index]!;
+    if (fact.directive === directive) securityArrayPush(census, fact.origin);
+  }
+  const sources = dedupe(census);
+  if (entries === undefined) return witnessFreeze(sources);
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    const reviewed = typeof entry !== 'string';
+    const origin = canonicalCspOrigin(reviewed ? entry.origin : entry, directive);
+    if (!reviewed && !containsSource(census, origin)) {
+      throw new TypeError(
+        `CSP allowlist ${directive} origin ${origin} is absent from the compiler-derived browser posture census; add a rationale only for an audited non-static source.`,
+      );
+    }
+    securityArrayPush(sources, origin);
+  }
+  return witnessFreeze(dedupe(sources));
+}
+
+function canonicalCspOrigin(value: string, directive: BrowserPostureCspDirective): string {
+  if (securityStringTrim(value) !== value || value === '') {
+    throw new TypeError(`CSP allowlist ${directive} entries must be canonical non-empty origins.`);
+  }
+  let url: ReturnType<typeof securityUrlSnapshot>;
+  try {
+    url = securityUrlSnapshot(value);
+  } catch {
+    throw new TypeError(`CSP allowlist ${directive} contains an invalid absolute origin.`);
+  }
+  if (
+    (url.protocol !== 'http:' &&
+      url.protocol !== 'https:' &&
+      url.protocol !== 'ws:' &&
+      url.protocol !== 'wss:') ||
+    url.origin !== value
+  ) {
+    throw new TypeError(
+      `CSP allowlist ${directive} entries must be canonical HTTP(S) or WS(S) origins.`,
+    );
+  }
+  return url.origin;
+}
+
+function containsSource(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
 }
 
 export function renderCspReportingHeaders(
@@ -551,6 +789,9 @@ export function renderContentSecurityPolicy(
     directive('img-src', closedOptions.imgSrc),
     directive('connect-src', closedOptions.connectSrc),
     directive('frame-src', closedOptions.frameSrc),
+    directive('font-src', closedOptions.fontSrc),
+    directive('media-src', closedOptions.mediaSrc),
+    directive('worker-src', closedOptions.workerSrc),
     // G2 (bugs-part3 CSP-2): `base-uri` and `object-src` are NON-overridable hardening
     // directives with no `default-src` fallback. Without `base-uri`, an injected
     // `<base href="//evil">` (markup injection, no script execution) reroutes every

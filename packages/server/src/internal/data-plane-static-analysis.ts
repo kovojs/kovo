@@ -8,6 +8,7 @@ import {
 } from 'node:path';
 
 import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
+import { deriveBrowserPostureManifestFromSourceFiles } from '@kovojs/compiler/internal';
 import {
   compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
@@ -309,9 +310,16 @@ export async function collectRuntimeRegistryFacts(options: {
   root: string;
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
-  if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
+  if (analysis.files.length === 0) {
+    return {
+      browserPosture: deriveBrowserPostureManifestFromSourceFiles([]),
+      mutationTouches: {},
+      queryReads: [],
+    };
+  }
 
   return {
+    browserPosture: deriveBrowserPostureManifestFromSourceFiles(analysis.files),
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(
       analysis.staticFacts.touchGraph === undefined
         ? {}
@@ -1384,10 +1392,7 @@ function registeredSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike
     isDiagnosticCode(code) &&
     typeof message === 'string' &&
     typeof site === 'string' &&
-    (severity === 'error' ||
-      severity === 'warn' ||
-      severity === 'lint' ||
-      severity === 'notice')
+    (severity === 'error' || severity === 'warn' || severity === 'lint' || severity === 'notice')
   ) {
     return value as TouchGraphDiagnosticLike;
   }

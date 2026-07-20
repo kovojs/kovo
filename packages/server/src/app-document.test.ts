@@ -558,11 +558,17 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
       document: {
         csp: {
           allowlist: {
-            scriptSrc: ['https://cdn.analytics.test'],
-            connectSrc: ['https://api.stripe.test'],
-            frameSrc: ['https://checkout.stripe.test'],
-            imgSrc: ['https://images.cdn.test'],
-            styleSrc: ['https://fonts.cdn.test'],
+            scriptSrc: [
+              { origin: 'https://cdn.analytics.test', rationale: 'analytics test fixture' },
+            ],
+            connectSrc: [
+              { origin: 'https://api.stripe.test', rationale: 'Stripe API test fixture' },
+            ],
+            frameSrc: [
+              { origin: 'https://checkout.stripe.test', rationale: 'checkout test fixture' },
+            ],
+            imgSrc: [{ origin: 'https://images.cdn.test', rationale: 'image CDN test fixture' }],
+            styleSrc: [{ origin: 'https://fonts.cdn.test', rationale: 'font CDN test fixture' }],
           },
         },
       },
@@ -581,7 +587,7 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     expect(csp).toContain("script-src 'self' https://cdn.analytics.test");
     expect(csp).toContain("style-src 'self' https://fonts.cdn.test");
     expect(csp).toContain("connect-src 'self' https://api.stripe.test");
-    expect(csp).toContain('frame-src https://checkout.stripe.test');
+    expect(csp).toContain("frame-src 'self' https://checkout.stripe.test");
     expect(csp).toContain("img-src 'self' data: https://images.cdn.test");
   });
 
@@ -618,7 +624,9 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
           allowlist: {
             // A bypass attempt: these field names are not part of CspAllowlist, so the
             // type system already rejects them; cast through to prove the runtime floor.
-            scriptSrc: ['https://cdn.analytics.test'],
+            scriptSrc: [
+              { origin: 'https://cdn.analytics.test', rationale: 'analytics test fixture' },
+            ],
             objectSrc: ['https://evil.test'],
             baseUri: ['https://evil.test'],
             formAction: ['https://evil.test'],
@@ -653,7 +661,7 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
   });
 
   it('snapshots structured shell and CSP inputs before request dispatch (bugz-26 H2)', async () => {
-    const scriptSources = ['https://cdn.safe.test'];
+    const scriptSources = [{ origin: 'https://cdn.safe.test', rationale: 'snapshot test fixture' }];
     const structured = Document({
       children: Head({ children: Meta({ content: 'yes', name: 'safe-shell' }) }),
     });
@@ -670,7 +678,7 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     expect(Object.isFrozen(app.document)).toBe(true);
     expect(Object.isFrozen(app.document.structured)).toBe(true);
     expect(Reflect.set(structured.head, 0, '<script>globalThis.pwned=true</script>')).toBe(false);
-    scriptSources[0] = 'https://evil.test';
+    scriptSources[0] = { origin: 'https://evil.test', rationale: 'mutated test fixture' };
 
     const request = new Request('https://example.test/');
     const response = await renderAppRouteDocumentResponse({
@@ -696,7 +704,11 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
       const app = createApp({
         document: {
           csp: {
-            allowlist: { scriptSrc: ['https://cdn.safe.test'] },
+            allowlist: {
+              scriptSrc: [
+                { origin: 'https://cdn.safe.test', rationale: 'intrinsics test fixture' },
+              ],
+            },
             reporting: { maxAgeSeconds: 60 },
             trustedTypes: true,
           },
@@ -705,7 +717,9 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
       });
 
       expect(app.document.lang).toBe('en');
-      expect(app.document.csp?.allowlist?.scriptSrc).toEqual(['https://cdn.safe.test']);
+      expect(app.document.csp?.allowlist?.scriptSrc).toEqual([
+        { origin: 'https://cdn.safe.test', rationale: 'intrinsics test fixture' },
+      ]);
       expect(app.document.csp?.reporting).toEqual({ maxAgeSeconds: 60 });
       expect(Object.isFrozen(app.document)).toBe(true);
       expect(Object.isFrozen(app.document.csp)).toBe(true);

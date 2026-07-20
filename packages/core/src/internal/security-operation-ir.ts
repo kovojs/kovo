@@ -41,6 +41,63 @@ export const browserSecurityOperationKinds = freezeSecurityValue([
 /** @internal */
 export type BrowserSecurityOperationKind = (typeof browserSecurityOperationKinds)[number];
 
+/** @internal Compiler/server schema for the derived browser response posture. */
+export const browserPostureManifestSchema = 'kovo-browser-posture/v1' as const;
+
+/** @internal CSP fetch directives owned by the compiler-derived browser asset census. */
+export type BrowserPostureCspDirective =
+  | 'connect-src'
+  | 'font-src'
+  | 'frame-src'
+  | 'img-src'
+  | 'media-src'
+  | 'script-src'
+  | 'style-src'
+  | 'worker-src';
+
+/** @internal One statically visible external asset origin and its authored source span. */
+export interface BrowserPostureExternalOrigin {
+  readonly directive: BrowserPostureCspDirective;
+  readonly fileName: string;
+  readonly origin: string;
+  readonly site: string;
+  readonly span: { readonly end: number; readonly start: number };
+}
+
+/** @internal One exact trustedUrl escape whose runtime origin cannot be derived statically. */
+export interface BrowserPostureOpaqueExternalUrl {
+  readonly directive: BrowserPostureCspDirective;
+  readonly fileName: string;
+  readonly reason: string;
+  readonly site: string;
+  readonly span: { readonly end: number; readonly start: number };
+}
+
+/** @internal Why the optional cross-origin-isolated response posture is not derivable. */
+export interface BrowserPostureIsolationBlocker {
+  readonly fileName: string;
+  readonly kind:
+    | 'dynamic-fetch-or-worker'
+    | 'external-resource'
+    | 'frame'
+    | 'opaque-resource'
+    | 'popup';
+  readonly site: string;
+  readonly span?: { readonly end: number; readonly start: number };
+}
+
+/**
+ * @internal Compiler-owned browser response posture. App code cannot mint this carrier; supported
+ * dev/build runners serialize it before evaluating the app module (SPEC §2, §4.8, §6.6).
+ */
+export interface BrowserPostureManifest {
+  readonly externalOrigins: readonly BrowserPostureExternalOrigin[];
+  readonly isolationBlockers: readonly BrowserPostureIsolationBlocker[];
+  readonly opaqueExternalUrls: readonly BrowserPostureOpaqueExternalUrl[];
+  readonly operations: readonly BrowserSecurityOperationKind[];
+  readonly schema: typeof browserPostureManifestSchema;
+}
+
 /**
  * @internal Closed server-effect and compiler-control inventory. `server.handler.root` is a source
  * census record and `server.helper.call` is an exact same-file authority-transfer edge; neither is
