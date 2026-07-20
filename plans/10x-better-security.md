@@ -366,7 +366,7 @@ Measurements are versioned and reproducible:
   - Current survivor: specialized Drizzle KV406/OPP correspondence in
     `static/session-provenance.ts`, `static/summaries.ts`, and the write analyzer. Exact carrier,
     principal projection, predicate, operation, and target mapping cover query/mutation/write roots
-    and owner/predicate terminals. C13 anchor `drizzle-analyzer-provenance` and all 28 executable
+    and owner/predicate terminals. C13 anchor `drizzle-analyzer-provenance` and all 32 executable
     `drizzle-analyzer-summary/*` mutants kill declaration, carrier, alias, and predicate laundering.
     Delete this survivor only when the normalized graph proves the same correspondence; arbitrary
     JavaScript predicate correctness remains an engine/audit responsibility.
@@ -416,9 +416,10 @@ Measurements are versioned and reproducible:
 - [x] Run deterministic seeded fuzzers in nightly CI with minimized repro persistence, execution
       and coverage budgets, mutation score, and an exact release-time command. Cross-implementation
       disagreement is triaged; only the normative property decides safe versus unsafe.
-  - Evidence: `pnpm run check:security-fuzz-campaign` validates the six-family, 17-case manifest,
-    nightly/release budgets, 249-mutant denominator, scheduled workflow, replay artifacts, and exact
-    release command; `pnpm exec vitest run scripts/security-fuzz-campaign.test.mjs` passes 15/15.
+  - Evidence: `pnpm run check:security-fuzz-campaign` validates the seven-family, 21-case manifest,
+    nightly/release budgets, 289-mutant denominator, scheduled workflow, replay artifacts, and exact
+    release command; `pnpm run test:security-fuzz-release` passes all 21 cases and kills 289/289
+    mutants.
 - [x] Define a fixed weekly internal adversarial charter and seeded canaries, then record R without
       changing the scope, prompt family, investigator count, or elapsed budget between rounds.
   - Evidence: `security/security-convergence-audit-charter.json` freezes the scope, three-prompt
