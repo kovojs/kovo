@@ -825,14 +825,14 @@ TLA+ is a real learning cost nobody on the team has paid.
       `_kovo_jobs` maps to a named model action, and the status literals equal the registered model
       constants in `formal/replay/protocol-alphabet.json`. Fails the build on a sixth transition CTE
       or a new job status. (~0.35 pm)
-  - Evidence: `pnpm run check:protocol-alphabet` maps 70 source-derived statements to 29 actions and
+  - Evidence: `pnpm run check:protocol-alphabet` maps 82 source-derived statements to 33 actions and
     closes five transition CTEs, six durable-job states, and two replay states; five C13 tests pass.
 - [x] Honesty-boundary gate: SPEC text + `kovo explain` listing the Postgres-atomicity axiom (each CTE
       modeled as one atomic action, justified by the `FOR UPDATE` on the watermark row — a **human
       assumption**, not a verified one), the bounded scope, and the explicit not-modeled list, with a
       gate asserting that list is the complement of the registered model set.
-  - Evidence: `pnpm run check:model-honesty-boundary` proves the 7 modeled + 22 excluded action
-    partition over all 29 registered actions and six SPEC-visible exclusions; CLI suites pass 124/124.
+  - Evidence: `pnpm run check:model-honesty-boundary` proves the 7 modeled + 26 excluded action
+    partition over all 33 registered actions and seven SPEC-visible exclusions; its suite passes 7/7.
 
 ---
 
