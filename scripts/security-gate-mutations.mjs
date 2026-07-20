@@ -155,6 +155,10 @@ const serverMutationReplayPolicyPath = path.join(
 );
 const serverMutationPath = path.join(repoRoot, 'packages/server/src/mutation.ts');
 const serverMutationNoJsPath = path.join(repoRoot, 'packages/server/src/mutation/no-js.ts');
+const serverMutationStreamingPath = path.join(
+  repoRoot,
+  'packages/server/src/mutation/streaming.ts',
+);
 const serverMutationWireResponsePath = path.join(
   repoRoot,
   'packages/server/src/mutation/wire-response.ts',
@@ -1649,6 +1653,26 @@ const removedEnhancedReplayDeliveryMatch =
 const enhancedReplayActualDeliverySelection =
   "    executionWireRequest.stream === true && typeof definition.stream === 'function'";
 const requestBitOnlyEnhancedReplayDeliverySelection = '    executionWireRequest.stream === true';
+const streamingTerminalAfterReplaySettlement = [
+  '            const terminalLine = bufferLine(terminalHtml);',
+  '            await reservation?.commit({',
+  "              body: frameworkWireBody(securityArrayJoin(buffered, '')),",
+  '              headers: finalResponse.headers,',
+  '              status: finalResponse.status,',
+  '            });',
+  '            enqueueLine(terminalLine);',
+  '            securityStreamClose(controller);',
+].join('\n');
+const streamingTerminalBeforeReplaySettlement = [
+  '            const terminalLine = bufferLine(terminalHtml);',
+  '            enqueueLine(terminalLine);',
+  '            securityStreamClose(controller);',
+  '            await reservation?.commit({',
+  "              body: frameworkWireBody(securityArrayJoin(buffered, '')),",
+  '              headers: finalResponse.headers,',
+  '              status: finalResponse.status,',
+  '            });',
+].join('\n');
 const deterministicNoJsFailureReplayCommit =
   '      return await commitReservedMutationReplay(lifecycle.reservation, render);';
 const abortedDeterministicNoJsFailureReplay = [
@@ -5082,6 +5106,18 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertUnsupportedEnhancedStreamNormalizationBehavior,
   },
   {
+    behavioralTypeScript: true,
+    description:
+      'Releases the successful streaming terminal and closes the client body before replay settlement resolves.',
+    expectedKiller:
+      'stream completion must remain pending until the exact replay response settles durably',
+    name: 'mutation-replay/release-stream-terminal-before-settlement',
+    replacement: streamingTerminalBeforeReplaySettlement,
+    search: streamingTerminalAfterReplaySettlement,
+    sourceFile: serverMutationStreamingPath,
+    test: assertStreamingTerminalFollowsReplaySettlementBehavior,
+  },
+  {
     behavioralInstrumentation: mutationNoJsBehavioralInstrumentation,
     behavioralTypeScript: true,
     description: 'Aborts a deterministic no-JS application failure instead of committing it.',
@@ -5513,6 +5549,55 @@ async function assertUnsupportedEnhancedStreamNormalizationBehavior(moduleUnderT
     throw new Error(
       `unsupported stream request did not normalize to buffered delivery: marker=${String(response.headers['Kovo-Stream'])} body=${typeof response.body} handlers=${handlerCalls}`,
     );
+  }
+}
+
+async function assertStreamingTerminalFollowsReplaySettlementBehavior(moduleUnderTest) {
+  let releaseSettlement;
+  let markCommitStarted;
+  const settlement = new Promise((resolve) => {
+    releaseSettlement = resolve;
+  });
+  const commitStarted = new Promise((resolve) => {
+    markCommitStarted = resolve;
+  });
+  let committedResponse;
+  const response = moduleUnderTest.renderStreamingMutationWireResponse(
+    [moduleUnderTest.stream.text('assistant:a1', 'progressive response')],
+    {
+      body: '',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Stream': 'true',
+      },
+      status: 200,
+    },
+    {
+      commit(value) {
+        committedResponse = value;
+        markCommitStarted();
+        return settlement;
+      },
+    },
+  );
+  const body = new Response(response.body).text();
+  await commitStarted;
+  const beforeSettlement = await Promise.race([
+    body.then(() => 'completed'),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 25)),
+  ]);
+  releaseSettlement();
+  const liveBody = await body;
+
+  if (beforeSettlement !== 'pending') {
+    throw new Error('stream exposed successful terminal bytes before replay settlement resolved');
+  }
+  if (
+    committedResponse?.body !== liveBody ||
+    !liveBody.includes('<kovo-done></kovo-done>') ||
+    response.headers['Kovo-Stream'] !== 'true'
+  ) {
+    throw new Error('settled stream and same-mode replay vocabulary diverged');
   }
 }
 

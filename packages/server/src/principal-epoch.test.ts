@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { signCapability, verifyCapability } from './capability-url.js';
+import { csrfToken } from './csrf.js';
 import { createFrameworkManagedDbProvider } from './guards.js';
 import { mutation, renderMutationEndpointResponse, runMutation } from './mutation.js';
 import { mintMutationIdemToken } from './mutation-idem.js';
@@ -313,7 +314,10 @@ describe('persistent principal epoch authority', () => {
     const principalEpochStore = createMemoryPrincipalEpochStore({ now: () => now });
     await initializePrincipalEpoch(principalEpochStore, 'u1');
     const request = await resolveKovoLifecycleRequest(
-      new Request('https://example.test/_m/account/save', { method: 'POST' }),
+      new Request('https://example.test/_m/account/save', {
+        headers: { Origin: 'https://example.test' },
+        method: 'POST',
+      }),
       {
         csrf: { mode: 'protected' },
         idempotency: { mode: 'replay-store' },
@@ -335,14 +339,15 @@ describe('persistent principal epoch authority', () => {
       set() {},
     };
     const handler = vi.fn(() => ({ saved: true }));
+    const csrf = { secret: SECRET, sessionId: () => 'rotation-1' };
     const save = mutation('account/save-reservation-race', {
-      csrf: false,
-      csrfJustification: 'test request already carries framework principal evidence',
+      csrf,
       handler,
       input: s.object({}),
     });
     const rawInput = new FormData();
     rawInput.set('Kovo-Idem', mintMutationIdemToken(issuedAt));
+    rawInput.set('kovo-csrf', csrfToken(request, csrf, { mutation: save }));
 
     const response = await renderMutationEndpointResponse(save, {
       headers: {},
@@ -373,7 +378,10 @@ describe('persistent principal epoch authority', () => {
       tombstone: memory.tombstone,
     });
     const request = await resolveKovoLifecycleRequest(
-      new Request('https://example.test/_m/account/save', { method: 'POST' }),
+      new Request('https://example.test/_m/account/save', {
+        headers: { Origin: 'https://example.test' },
+        method: 'POST',
+      }),
       {
         csrf: { mode: 'protected' },
         idempotency: { mode: 'replay-store' },
@@ -391,9 +399,9 @@ describe('persistent principal epoch authority', () => {
       },
       set() {},
     };
+    const csrf = { secret: SECRET, sessionId: () => 'rotation-1' };
     const save = mutation('account/save-outage', {
-      csrf: false,
-      csrfJustification: 'test request already carries framework principal evidence',
+      csrf,
       handler() {
         outage = true;
         return { saved: true };
@@ -402,6 +410,7 @@ describe('persistent principal epoch authority', () => {
     });
     const rawInput = new FormData();
     rawInput.set('Kovo-Idem', mintMutationIdemToken());
+    rawInput.set('kovo-csrf', csrfToken(request, csrf, { mutation: save }));
 
     const response = await renderMutationEndpointResponse(save, {
       headers: {},
@@ -421,7 +430,10 @@ describe('persistent principal epoch authority', () => {
     const principalEpochStore = createMemoryPrincipalEpochStore({ now: () => now });
     await advancePrincipalEpoch(principalEpochStore, 'u1', 'principal-created');
     const request = await resolveKovoLifecycleRequest(
-      new Request('https://example.test/_m/account/save', { method: 'POST' }),
+      new Request('https://example.test/_m/account/save', {
+        headers: { Origin: 'https://example.test' },
+        method: 'POST',
+      }),
       {
         csrf: { mode: 'protected' },
         idempotency: { mode: 'replay-store' },
@@ -430,9 +442,9 @@ describe('persistent principal epoch authority', () => {
       },
     );
     let runs = 0;
+    const csrf = { secret: SECRET, sessionId: () => 'rotation-1' };
     const save = mutation('account/save', {
-      csrf: false,
-      csrfJustification: 'test request already carries framework principal evidence',
+      csrf,
       handler: () => ({ runs: ++runs }),
       input: s.object({}),
     });
@@ -442,6 +454,7 @@ describe('persistent principal epoch authority', () => {
     const submit = () => {
       const rawInput = new FormData();
       rawInput.set('Kovo-Idem', idem);
+      rawInput.set('kovo-csrf', csrfToken(request, csrf, { mutation: save }));
       return renderMutationEndpointResponse(save, {
         headers: {},
         principalEpochStore,

@@ -187,39 +187,50 @@ export const renderStreamingMutationWireResponse = wireEmitter(
           // replay store after the stream completes, not the head-only body before.
           const buffered: string[] = [];
 
-          const enqueue = (text: string): void => {
+          const bufferLine = (text: string): string => {
             const line = `${text}\n`;
             securityArrayPush(buffered, line);
+            return line;
+          };
+
+          const enqueueLine = (line: string): void => {
             securityStreamEnqueue(controller, securityTextEncode(line));
+          };
+
+          const enqueue = (text: string): void => {
+            enqueueLine(bufferLine(text));
+          };
+
+          const settleAndComplete = async (terminalHtml: string): Promise<void> => {
+            // SPEC §9.1/§10.3: the terminal marker is the browser's confirmation boundary. Keep
+            // it in the exact replay body, but do not release it or close the live stream until
+            // durable replay settlement has accepted those same bytes. A settlement failure then
+            // remains able to take the existing sanitized error-terminal path without a prior
+            // successful <kovo-done> having escaped.
+            const terminalLine = bufferLine(terminalHtml);
+            await reservation?.commit({
+              body: frameworkWireBody(securityArrayJoin(buffered, '')),
+              headers: finalResponse.headers,
+              status: finalResponse.status,
+            });
+            enqueueLine(terminalLine);
+            securityStreamClose(controller);
           };
 
           try {
             for (;;) {
               const { done, value: chunk } = await iterator.next();
               if (done) break;
-              enqueue(renderMutationStreamChunk(chunk));
               if (chunk.kind === 'done') {
-                securityStreamClose(controller);
-                // Commit the full settled body so replays re-serve the complete stream.
-                await reservation?.commit({
-                  body: frameworkWireBody(securityArrayJoin(buffered, '')),
-                  headers: finalResponse.headers,
-                  status: finalResponse.status,
-                });
+                await settleAndComplete(renderMutationStreamChunk(chunk));
                 return;
               }
+              enqueue(renderMutationStreamChunk(chunk));
             }
             // Generator exhausted without an explicit done chunk; emit the reconciled
             // fragment body (pre-rendered query/fragment HTML) and kovo-done.
             if (finalResponse.body) enqueue(finalResponse.body);
-            enqueue(renderDoneWireHtml());
-            securityStreamClose(controller);
-            // Commit after the generator exhausted (no explicit done chunk).
-            await reservation?.commit({
-              body: frameworkWireBody(securityArrayJoin(buffered, '')),
-              headers: finalResponse.headers,
-              status: finalResponse.status,
-            });
+            await settleAndComplete(renderDoneWireHtml());
           } catch (error) {
             // L10-1 (SPEC §9): a streaming generator threw mid-stream. Report it via the
             // server error hook and emit a `<kovo-done reason="error">` terminator so the
