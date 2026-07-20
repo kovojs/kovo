@@ -727,15 +727,20 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 
 ### 5.1 Retrospective answerability (~1 pm, mostly composition)
 
-- [ ] State and enforce a **completeness property** for plan-2 §4.3's security-event record using the
+- [x] State and enforce a **completeness property** for plan-2 §4.3's security-event record using the
       same single-door + emission-coverage-recorder technique plan-2 §1.2 applies to KV emission, so
       "an authorization decision without a record" is a **build failure**, not an ops gap. The record
       carries principal, epoch, build-stable decision-site identity, and resource scope — and **no
       payload data**.
-- [ ] `kovo incident scope <advisory>`: replay an advisory's decision-site predicate against the
+  - Evidence: `pnpm run check:security-event-answerability` passes 5 files/18 tests with seven exact
+    decision doors, six required fact fields, production arming, missing-journal failure, and no
+    payload fields; the focused seven-door runtime integration suite passes 276/276.
+- [x] `kovo incident scope <advisory>`: replay an advisory's decision-site predicate against the
       append-only tamper-evident record to return the affected principal/tenant set. It must report
       "unanswerable within the covered doors" rather than "no impact" when an exploit never crossed a
       Kovo decision door.
+  - Evidence: the same 18-test answerability gate exercises the finite advisory predicate, tamper and
+    dropped-record handling, affected principal/tenant projection, and the exact unanswerable verdict.
 
 ### 5.2 Advisories (deferred until a real advisory exists or v1 freeze approaches)
 
