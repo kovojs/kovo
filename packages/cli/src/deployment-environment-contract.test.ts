@@ -41,6 +41,9 @@ describe('assume-guarantee deployment environment contract', () => {
     );
     expect(result.output).toContain('RETAINED antecedent=bootstrap-order');
     expect(result.output).toContain(
+      'obligation="The supported Kovo bootstrap executes before authored modules',
+    );
+    expect(result.output).toContain(
       'guarantees=explicit-secret-query-wire-egress,pglite-secret-column-reader-role-test-floor,pglite-secret-view-reader-role-test-floor',
     );
     expect(result.output).toContain('RETAINED antecedent=no-shared-cache');
