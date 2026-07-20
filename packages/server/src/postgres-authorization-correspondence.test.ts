@@ -4,11 +4,16 @@ import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
-import { explainPostgresGuardCorrespondence, guards } from './guards.js';
+import {
+  explainGuard,
+  explainPostgresGuardCorrespondence,
+  guardAuditName,
+  guards,
+} from './guards.js';
 import {
   POSTGRES_OWNER_POLICY_MAX_OWNER_VIA_DEPTH,
   POSTGRES_RLS_SQL_EMISSION_SITES,
-  createFrameworkPostgresOwnershipBinding,
+  createFrameworkPostgresOwnerColumnBinding,
   decidePostgresOwnerPolicyCorrespondence,
   deriveFrameworkPostgresOwnsRow,
   emitPostgresRlsPolicySql,
@@ -273,7 +278,10 @@ describe('finite Postgres authorization correspondence', () => {
     const arbitraryGuard = guards.unprovenOwns(
       (request: { args: { id: string }; session?: { user?: { id?: string } } }) => request.args.id,
       async () => true,
-      { resourceKey: 'args.id' },
+      {
+        justification: 'Legacy application predicate under explicit review.',
+        resourceKey: 'args.id',
+      },
     );
     const ownerPolicy = {
       emissionSite: 'owner' as const,
@@ -355,31 +363,60 @@ describe('finite Postgres authorization correspondence', () => {
       columnName: 'owner_id',
       tableName: 'documents',
     });
+    let accessorReads = 0;
+    const accessorRow = {} as Readonly<Record<string, unknown>>;
+    Object.defineProperty(accessorRow, 'owner_id', {
+      get() {
+        accessorReads += 1;
+        return 'principal';
+      },
+    });
     const rows = new Map<string, Readonly<Record<string, unknown>>>([
       ['owned', { owner_id: 'principal' }],
+      ['snapshot', { owner_id: 'principal' }],
       ['foreign', { owner_id: 'someone-else' }],
       ['null-owner', { owner_id: null }],
       ['unset-owner', {}],
+      ['inherited-owner', Object.create({ owner_id: 'principal' })],
+      ['accessor-owner', accessorRow],
     ]);
-    const binding = createFrameworkPostgresOwnershipBinding<Request, string>({
-      lookupParent: () => undefined,
-      lookupRow: (_request, key) => rows.get(key),
+    const binding = createFrameworkPostgresOwnerColumnBinding<Request, string>({
+      lookupRow: (request, key) => {
+        if (key === 'snapshot' && request.session?.user !== undefined) {
+          request.session.user.id = 'mutated-after-principal-snapshot';
+        }
+        return rows.get(key);
+      },
       term,
     });
-    const guard = guards.owns<Request, Request, string>(
-      (request) => request.args.id,
-      binding,
-      { name: 'document-owner', resourceKey: 'args.id' },
-    );
+    const guard = guards.owns<Request, Request, string>((request) => request.args.id, binding, {
+      name: 'document-owner',
+      resourceKey: 'args.id',
+    });
+    expect(guardAuditName(guard)).toBe('owns');
 
     await expect(
       guard({ args: { id: 'owned' }, session: { user: { id: 'principal' } } }),
     ).resolves.toBe(true);
-    for (const id of ['foreign', 'null-owner', 'unset-owner', 'missing']) {
+    for (const id of [
+      'foreign',
+      'null-owner',
+      'unset-owner',
+      'inherited-owner',
+      'accessor-owner',
+      'missing',
+    ]) {
       await expect(
         guard({ args: { id }, session: { user: { id: 'principal' } } }),
       ).resolves.toEqual({ kind: 'forbidden', payload: {} });
     }
+    expect(accessorReads).toBe(0);
+    const snapshotRequest: Request = {
+      args: { id: 'snapshot' },
+      session: { user: { id: 'principal' } },
+    };
+    await expect(guard(snapshotRequest)).resolves.toBe(true);
+    expect(snapshotRequest.session?.user?.id).toBe('mutated-after-principal-snapshot');
 
     expect(() =>
       guards.owns<Request, Request, string>(
@@ -414,17 +451,38 @@ describe('finite Postgres authorization correspondence', () => {
               predicate: renderPostgresOwnerPolicyPredicate(term),
               tableName: 'documents',
             },
-            staticProof: 'framework-derived',
+            staticProof: 'framework-derived-owner-column',
           },
         ],
-        semantics: 'framework-derived-owner-policy',
+        semantics: 'framework-derived-owner-column',
       },
       status: 'proved',
+    });
+
+    const otherTerm = postgresOwnerColumnPolicyTerm({
+      columnName: 'owner_id',
+      tableName: 'invoices',
+    });
+    expect(
+      explainPostgresGuardCorrespondence({
+        guard,
+        policy: {
+          emissionSite: 'owner',
+          predicate: renderPostgresOwnerPolicyPredicate(otherTerm),
+          tableName: 'invoices',
+          term: otherTerm,
+        },
+      }),
+    ).toMatchObject({
+      guard: { semantics: 'framework-derived-owner-column' },
+      reason: expect.stringContaining('different generated Postgres owner policy'),
+      status: 'divergent',
     });
 
     const unprovenGuard = guards.unprovenOwns<Request, Request, string>(
       (request) => request.args.id,
       async () => true,
+      { justification: 'Legacy application predicate under explicit review.' },
     );
     expect(
       explainPostgresGuardCorrespondence({
@@ -442,7 +500,7 @@ describe('finite Postgres authorization correspondence', () => {
     });
   });
 
-  it('runs ownerVia guards through the bound framework row and parent lookups', async () => {
+  it('keeps ownerVia behind the justified unproven escape until parent lookup is framework-owned', async () => {
     type Request = {
       args: { id: string };
       session?: { user?: { id?: string } };
@@ -457,41 +515,38 @@ describe('finite Postgres authorization correspondence', () => {
       parentKeyColumnName: 'id',
       tableName: 'entries',
     });
-    const parentLookups: unknown[] = [];
-    const binding = createFrameworkPostgresOwnershipBinding<Request, string>({
-      lookupParent: (input) => {
-        parentLookups.push(input);
-        return input.keyValue === 'account-1'
-          ? { id: 'account-1', owner_id: 'principal' }
-          : input.keyValue === 'account-2'
-            ? { id: 'account-2', owner_id: null }
-            : undefined;
-      },
-      lookupRow: (_request, key) =>
-        key === 'entry-1'
-          ? { account_id: 'account-1' }
-          : key === 'entry-null'
-            ? { account_id: 'account-2' }
-            : key === 'entry-missing-edge'
-              ? { account_id: null }
-              : undefined,
-      term: entries,
-    });
-    const guard = guards.owns<Request, Request, string>((request) => request.args.id, binding);
+    expect(() =>
+      createFrameworkPostgresOwnerColumnBinding<Request, string>({
+        lookupRow: () => ({ account_id: 'account-1' }),
+        term: entries as never,
+      }),
+    ).toThrow(/ownerVia requires guards\.unprovenOwns/u);
 
-    await expect(
-      guard({ args: { id: 'entry-1' }, session: { user: { id: 'principal' } } }),
-    ).resolves.toBe(true);
-    await expect(
-      guard({ args: { id: 'entry-null' }, session: { user: { id: 'principal' } } }),
-    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
-    await expect(
-      guard({ args: { id: 'entry-missing-edge' }, session: { user: { id: 'principal' } } }),
-    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
-    expect(parentLookups).toEqual([
-      { keyColumnName: 'id', keyValue: 'account-1', tableName: 'accounts' },
-      { keyColumnName: 'id', keyValue: 'account-2', tableName: 'accounts' },
+    const guard = guards.unprovenOwns<Request, Request, string>(
+      (request) => request.args.id,
+      async (_request, key) => key === 'entry-1',
+      { justification: 'ownerVia traversal is pending a framework-owned parent lookup.' },
+    );
+    expect(explainGuard(guard)).toMatchObject([
+      {
+        justification: 'ownerVia traversal is pending a framework-owned parent lookup.',
+        staticProof: 'not-claimed',
+      },
     ]);
+    expect(
+      explainPostgresGuardCorrespondence({
+        guard,
+        policy: {
+          emissionSite: 'ownerVia',
+          predicate: renderPostgresOwnerPolicyPredicate(entries),
+          tableName: 'entries',
+          term: entries,
+        },
+      }),
+    ).toMatchObject({
+      guard: { semantics: 'arbitrary-app-callback' },
+      status: 'unproven',
+    });
   });
 });
 

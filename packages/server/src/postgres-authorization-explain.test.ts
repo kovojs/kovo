@@ -2,17 +2,21 @@
 import { describe, expect, it } from 'vitest';
 
 import { guards } from './guards.js';
+import {
+  createFrameworkPostgresOwnerColumnBinding,
+  postgresOwnerColumnPolicyTerm,
+} from './postgres-authorization-correspondence.js';
 import { authorizationCorrespondenceFactsFromApp } from './postgres-authorization-explain.js';
 
 describe('Postgres authorization production explain facts', () => {
   it('pairs each exact surface guard with its table policy without aggregating unrelated guards', () => {
-    const ownsDocuments = guards.owns<{
+    const ownsDocuments = guards.unprovenOwns<{
       args: { id: string };
       session?: { user?: { id?: string } };
     }>(
       (request) => request.args.id,
       async () => true,
-      { resourceKey: 'args.id' },
+      { justification: 'Legacy document predicate under explicit review.', resourceKey: 'args.id' },
     );
     const billingRole = guards.role('billing');
     const app = {
@@ -73,9 +77,7 @@ describe('Postgres authorization production explain facts', () => {
 
     expect(facts).toHaveLength(6);
     expect(
-      facts.find(
-        (fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read',
-      ),
+      facts.find((fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read'),
     ).toMatchObject({
       activation: { source: 'build', status: 'environment-unchecked' },
       correspondence: {
@@ -112,10 +114,12 @@ describe('Postgres authorization production explain facts', () => {
       table: { domain: 'invoice', name: 'invoices' },
     });
     expect(
-      facts.filter((fact) => fact.surface.kind === 'framework-policy').map((fact) => ({
-        site: fact.correspondence.rls.emissionSite,
-        table: fact.table.name,
-      })),
+      facts
+        .filter((fact) => fact.surface.kind === 'framework-policy')
+        .map((fact) => ({
+          site: fact.correspondence.rls.emissionSite,
+          table: fact.table.name,
+        })),
     ).toEqual([
       { site: 'admin', table: 'documents' },
       { site: 'system', table: 'documents' },
@@ -126,5 +130,63 @@ describe('Postgres authorization production explain facts', () => {
     expect(facts[0]?.correspondence.roleGuc.warning).toContain(
       'no generated RLS predicate reads it',
     );
+  });
+
+  it('serializes a proved surface only for an exact framework-witnessed owner binding', () => {
+    type Request = {
+      args: { id: string };
+      session?: { user?: { id?: string } };
+    };
+    const term = postgresOwnerColumnPolicyTerm({
+      columnName: 'owner_id',
+      tableName: 'documents',
+    });
+    const binding = createFrameworkPostgresOwnerColumnBinding<Request, string>({
+      lookupRow: () => ({ owner_id: 'principal' }),
+      term,
+    });
+    const ownsDocuments = guards.owns<Request, Request, string>(
+      (request) => request.args.id,
+      binding,
+      { resourceKey: 'args.id' },
+    );
+    const facts = authorizationCorrespondenceFactsFromApp({
+      app: {
+        mutations: [],
+        queries: [{ guard: ownsDocuments, key: 'document/read' }],
+        routes: [],
+      },
+      mutations: [],
+      pages: [],
+      queries: [{ domains: ['document'], query: 'document/read' }],
+      tableSecurity: {
+        tables: [
+          {
+            authorizationClassifications: ['owned'],
+            columns: [
+              { key: 'id', name: 'id' },
+              { key: 'ownerId', name: 'owner_id' },
+            ],
+            dialect: 'postgres',
+            domain: 'document',
+            governedColumnKeys: ['id', 'ownerId'],
+            name: 'documents',
+            owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+            secretColumnKeys: [],
+            secretDeclared: false,
+          },
+        ],
+      },
+    });
+
+    expect(
+      facts.find((fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read'),
+    ).toMatchObject({
+      correspondence: {
+        decision: { checkedModels: 3, expectedModels: 3, status: 'proved' },
+        guard: { semantics: 'framework-derived-owner-column' },
+        status: 'proved',
+      },
+    });
   });
 });

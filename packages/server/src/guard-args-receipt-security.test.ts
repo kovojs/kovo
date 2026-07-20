@@ -47,9 +47,10 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
   }
 
   function ownershipGuard() {
-    return guards.owns<AppRequest, ArgsRequest, string>(
+    return guards.unprovenOwns<AppRequest, ArgsRequest, string>(
       (request) => request.args.id,
       async (_request, acceptedKey) => acceptedKey === 'owned',
+      { justification: 'Receipt regression exercises a legacy ownership predicate.' },
     );
   }
 
@@ -70,9 +71,10 @@ describe('guard args classify-and-pin receipt (SPEC §6.6 / §10.3 C15)', () => 
   }
 
   function dateOwnershipThenRemoteSelection(): Guard<AppRequest> {
-    const ownsAuthorizedDate = guards.owns<AppRequest, DateArgsRequest, Date>(
+    const ownsAuthorizedDate = guards.unprovenOwns<AppRequest, DateArgsRequest, Date>(
       (request) => request.args.authorized,
       async (_request, accepted) => accepted.toISOString() === authorizedDate,
+      { justification: 'Receipt regression exercises a legacy ownership predicate.' },
     );
     const applyRemoteSelection: Guard<AppRequest> = (request) => {
       const args = (request as DateArgsRequest).args;

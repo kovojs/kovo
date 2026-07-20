@@ -255,6 +255,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     lines.push(
       [
         `SUMMARY total=${facts.length}`,
+        `proved=${facts.filter((fact) => fact.correspondence.status === 'proved').length}`,
         `unproven=${facts.filter((fact) => fact.correspondence.status === 'unproven').length}`,
         `divergent=${facts.filter((fact) => fact.correspondence.status === 'divergent').length}`,
         `environmentUnchecked=${facts.filter((fact) => fact.activation.status === 'environment-unchecked').length}`,

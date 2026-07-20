@@ -7,7 +7,7 @@ import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 // Retained regression for SPEC §6.6 / §10.3 C15: both final consumers must use the detached value
-// accepted by guards.owns, never a later read from the schema-produced Proxy.
+// accepted by guards.unprovenOwns, never a later read from the schema-produced Proxy.
 describe('OPP-28 runtime receipt regression', () => {
   type AppRequest = { session?: { user?: { id: string } | null } | null };
   type ArgsRequest = GuardArgsRequest<AppRequest, { id: string }>;
@@ -33,9 +33,10 @@ describe('OPP-28 runtime receipt regression', () => {
   }
 
   function ownershipGuard() {
-    return guards.owns<AppRequest, ArgsRequest, string>(
+    return guards.unprovenOwns<AppRequest, ArgsRequest, string>(
       (request) => request.args.id,
       async (_request, acceptedKey) => acceptedKey === 'owned',
+      { justification: 'Receipt regression exercises a legacy ownership predicate.' },
     );
   }
 

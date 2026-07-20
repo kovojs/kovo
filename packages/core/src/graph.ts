@@ -152,10 +152,24 @@ export type AuthorizationGuardAuditFact =
   | {
       auth: 'session-user';
       kind: 'owns';
+      justification: string;
       name: string;
       principal: AuthorizationGuardPrincipalKeyAudit;
       resourceKey?: AuthorizationGuardResourceKeyAudit;
       staticProof: 'not-claimed';
+    }
+  | {
+      auth: 'session-user';
+      kind: 'owns';
+      name: string;
+      ownerPolicy: {
+        emissionSite: 'owner';
+        predicate: string;
+        tableName: string;
+      };
+      principal: AuthorizationGuardPrincipalKeyAudit;
+      resourceKey?: AuthorizationGuardResourceKeyAudit;
+      staticProof: 'framework-derived-owner-column';
     }
   | {
       kind: 'rateLimit';
@@ -206,7 +220,7 @@ export interface AuthorizationCorrespondenceExplainFact {
     };
     guard: {
       facts: readonly AuthorizationGuardAuditFact[];
-      semantics: 'arbitrary-app-callback' | 'none';
+      semantics: 'arbitrary-app-callback' | 'framework-derived-owner-column' | 'none';
     };
     reason: string;
     rls: {
@@ -221,7 +235,7 @@ export interface AuthorizationCorrespondenceExplainFact {
       writers: 1;
     };
     schema: 'kovo.postgres.authorization-correspondence/v1';
-    status: 'divergent' | 'unproven';
+    status: 'divergent' | 'proved' | 'unproven';
   };
   schema: 'kovo.postgres.authorization-surface/v1';
   surface: {
@@ -2385,7 +2399,7 @@ function validateAuthorizationCorrespondence(
     ownGraphData(correspondence, 'status', `${path}.status`),
     `${path}.status`,
     'correspondence.status',
-    ['divergent', 'unproven'],
+    ['divergent', 'proved', 'unproven'],
     errors,
   );
   validateRequiredGraphString(
@@ -2400,7 +2414,7 @@ function validateAuthorizationCorrespondence(
       ownGraphData(guard, 'semantics', `${path}.guard.semantics`),
       `${path}.guard.semantics`,
       'guard.semantics',
-      ['arbitrary-app-callback', 'none'],
+      ['arbitrary-app-callback', 'framework-derived-owner-column', 'none'],
       errors,
     );
     validateAuthorizationGuardFacts(
@@ -2520,13 +2534,42 @@ function validateAuthorizationGuardFacts(
         ['session-user'],
         errors,
       );
+      const staticProof = ownGraphData(fact, 'staticProof', `${factPath}.staticProof`);
       validateExactGraphString(
-        ownGraphData(fact, 'staticProof', `${factPath}.staticProof`),
+        staticProof,
         `${factPath}.staticProof`,
         'guard fact staticProof',
-        ['not-claimed'],
+        ['framework-derived-owner-column', 'not-claimed'],
         errors,
       );
+      if (staticProof === 'framework-derived-owner-column') {
+        const ownerPolicy = requiredGraphRecord(fact, 'ownerPolicy', factPath, errors);
+        if (ownerPolicy !== undefined) {
+          validateExactGraphString(
+            ownGraphData(ownerPolicy, 'emissionSite', `${factPath}.ownerPolicy.emissionSite`),
+            `${factPath}.ownerPolicy.emissionSite`,
+            'guard ownerPolicy emissionSite',
+            ['owner'],
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'predicate', `${factPath}.ownerPolicy.predicate`),
+            `${factPath}.ownerPolicy.predicate`,
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'tableName', `${factPath}.ownerPolicy.tableName`),
+            `${factPath}.ownerPolicy.tableName`,
+            errors,
+          );
+        }
+      } else if (staticProof === 'not-claimed') {
+        validateRequiredGraphString(
+          ownGraphData(fact, 'justification', `${factPath}.justification`),
+          `${factPath}.justification`,
+          errors,
+        );
+      }
       validateAuthorizationGuardKey(
         requiredGraphRecord(fact, 'principal', factPath, errors),
         `${factPath}.principal`,

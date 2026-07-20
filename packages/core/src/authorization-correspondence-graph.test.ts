@@ -24,6 +24,48 @@ describe('authorization correspondence graph validation', () => {
       path: 'authorizationCorrespondence[0].correspondence.roleGuc.status',
     });
   });
+
+  it('accepts the exact proved owner-policy fact and rejects a missing binding description', () => {
+    const fact = authorizationFact();
+    const proved = {
+      ...fact,
+      correspondence: {
+        ...fact.correspondence,
+        guard: {
+          facts: [
+            {
+              auth: 'session-user',
+              kind: 'owns',
+              name: 'owns',
+              ownerPolicy: {
+                emissionSite: 'owner',
+                predicate: fact.correspondence.rls.predicate,
+                tableName: 'documents',
+              },
+              principal: {
+                expression: 'session.user.id',
+                path: 'user.id',
+                source: 'session',
+              },
+              staticProof: 'framework-derived-owner-column',
+            },
+          ],
+          semantics: 'framework-derived-owner-column',
+        },
+        status: 'proved',
+      },
+    };
+    expect(validateKovoExplainInput({ authorizationCorrespondence: [proved] })).toEqual([]);
+
+    const withoutPolicy = structuredClone(proved);
+    delete (withoutPolicy.correspondence.guard.facts[0] as { ownerPolicy?: unknown }).ownerPolicy;
+    expect(
+      validateKovoExplainInput({ authorizationCorrespondence: [withoutPolicy] }),
+    ).toContainEqual({
+      message: 'ownerPolicy must be an object',
+      path: 'authorizationCorrespondence[0].correspondence.guard.facts[0].ownerPolicy',
+    });
+  });
 });
 
 function authorizationFact() {

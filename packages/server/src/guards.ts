@@ -4,7 +4,7 @@ import {
   snapshotAccessDecision,
   type AccessDecision,
 } from './access.js';
-import { snapshotAuditText } from './audit-justification.js';
+import { snapshotAuditJustification, snapshotAuditText } from './audit-justification.js';
 import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   mergeVaryHeader,
@@ -25,6 +25,8 @@ import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
   explainPostgresAuthorizationCorrespondence,
+  resolveFrameworkPostgresOwnerColumnBinding,
+  type FrameworkPostgresOwnerPolicyAudit,
   type PostgresAuthorizationCorrespondenceExplainRecord,
   type PostgresOwnerPolicyModel,
   type PostgresAuthorizationPolicyExplainInput,
@@ -189,14 +191,27 @@ export interface RateLimitGuardAuditFact {
   per: 'global' | 'session' | 'ip' | 'custom';
 }
 
-export interface OwnershipGuardAuditFact {
+interface OwnershipGuardAuditFactBase {
   auth: 'session-user';
   kind: 'owns';
   name: string;
   principal: GuardPrincipalKeyAudit;
   resourceKey?: GuardResourceKeyAudit;
+}
+
+export interface FrameworkDerivedOwnershipGuardAuditFact extends OwnershipGuardAuditFactBase {
+  ownerPolicy: FrameworkPostgresOwnerPolicyAudit;
+  staticProof: 'framework-derived-owner-column';
+}
+
+export interface UnprovenOwnershipGuardAuditFact extends OwnershipGuardAuditFactBase {
+  justification: string;
   staticProof: 'not-claimed';
 }
+
+export type OwnershipGuardAuditFact =
+  | FrameworkDerivedOwnershipGuardAuditFact
+  | UnprovenOwnershipGuardAuditFact;
 
 export interface OwnershipGuardAuditOptions {
   /**
@@ -211,6 +226,25 @@ export interface OwnershipGuardAuditOptions {
   resourceKey?: GuardResourceKeyAudit | string;
   /** Optional stable label for this ownership guard in explain/audit output. */
   name?: string;
+}
+
+export interface UnprovenOwnershipGuardAuditOptions extends OwnershipGuardAuditOptions {
+  /** Required review reason retained in authorization explain output. */
+  justification: string;
+}
+
+declare const frameworkPostgresOwnerColumnBindingBrand: unique symbol;
+
+/**
+ * An opaque package-owned binding between one validated resource key, its framework row lookup,
+ * and the exact generated Postgres owner-column policy. Structural lookalikes and casts are
+ * rejected by the framework's private registration map before a guard can be constructed.
+ */
+export interface FrameworkPostgresOwnerColumnBinding<Request, Key> {
+  readonly [frameworkPostgresOwnerColumnBindingBrand]: {
+    readonly key: Key;
+    readonly request: Request;
+  };
 }
 
 const guardAuditFacts = createWitnessWeakMap<Function, readonly GuardAuditFact[]>();
@@ -315,8 +349,8 @@ export type AuthenticatedRequest<Request extends SessionRequestLike> = Request &
  * guard inspects (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4). The query/mutation
  * runners thread the same `s.*`-coerced `args` the loader/handler see onto the request *after*
  * schema parse/coerce and *before* the guard chain, so an ownership guard's `keyOf` can read
- * `req.args` without a cast and discharge the KV414 IDOR obligation for that key. Compose over the
- * app request, e.g. `guards.owns<GuardArgsRequest<AppRequest, { id: string }>, string>(...)`.
+ * `req.args` without a cast. Pass it as the keyed request view while the guard remains base-typed,
+ * e.g. `guards.owns<AppRequest, GuardArgsRequest<AppRequest, { id: string }>, string>(...)`.
  */
 export type GuardArgsRequest<Request, Args = unknown> = Request & { args: Args };
 
@@ -717,6 +751,68 @@ export function guard<Request, RefinedRequest extends Request = Request>(
   return stampGuardAudit(namedGuard, facts);
 }
 
+type OwnershipGuardProofAudit =
+  | {
+      readonly ownerPolicy: FrameworkPostgresOwnerPolicyAudit;
+      readonly staticProof: 'framework-derived-owner-column';
+    }
+  | { readonly justification: string; readonly staticProof: 'not-claimed' };
+
+function createOwnershipGuard<
+  Request extends SessionRequestLike,
+  KeyedRequest extends Request,
+  Key,
+>(
+  keyOf: (request: KeyedRequest) => Key,
+  ownsRow: (
+    request: KeyedRequest,
+    key: Key,
+    principal: string | undefined,
+  ) => boolean | Promise<boolean>,
+  audit: OwnershipGuardAuditOptions | undefined,
+  proof: OwnershipGuardProofAudit,
+  auditLabel: 'guards.owns()' | 'guards.unprovenOwns()',
+): Guard<Request> {
+  const closedAudit = snapshotOwnershipGuardAuditOptions(audit, auditLabel);
+  const fact: OwnershipGuardAuditFact =
+    proof.staticProof === 'framework-derived-owner-column'
+      ? {
+          auth: 'session-user',
+          kind: 'owns',
+          name: closedAudit.name,
+          ownerPolicy: proof.ownerPolicy,
+          principal: closedAudit.principal,
+          ...(closedAudit.resourceKey === undefined
+            ? {}
+            : { resourceKey: closedAudit.resourceKey }),
+          staticProof: 'framework-derived-owner-column',
+        }
+      : {
+          auth: 'session-user',
+          kind: 'owns',
+          justification: proof.justification,
+          name: closedAudit.name,
+          principal: closedAudit.principal,
+          ...(closedAudit.resourceKey === undefined
+            ? {}
+            : { resourceKey: closedAudit.resourceKey }),
+          staticProof: 'not-claimed',
+        };
+  return stampGuardAudit(
+    async (request) => {
+      const principal = requestPrincipalSnapshot(request);
+      if (principal.kind !== 'proven') return unauthenticatedGuardFailure();
+      // The runners merge validated args / resolved params before the guard chain. Only selectors
+      // and the closed framework binding see this keyed view; the attached guard remains base-typed.
+      const keyedRequest = request as unknown as KeyedRequest;
+      return (await ownsRow(keyedRequest, keyOf(keyedRequest), principal.principal)) === true
+        ? true
+        : unauthorizedGuardFailure();
+    },
+    [fact],
+  );
+}
+
 /**
  * Built-in guard factories for routes, queries, and mutations. `guards.authed()`
  * requires a logged-in session (and refines the request type), `guards.role(r)`
@@ -859,61 +955,59 @@ export const guards = witnessFreeze({
     );
   },
   /**
-   * Ownership guard (SPEC §10.3:1155-1157 "Guards (arg-aware, normative)", §9.4): passes only
-   * when the authenticated principal owns the row the validated key selects, discharging the
-   * KV414 IDOR obligation for that key. `keyOf` reads the owned-row key from the request, which —
-   * because guards run *after* schema parse/coerce — carries the query's/mutation's validated
-   * `args` (queries/mutations) or the route's resolved `params` (route pages) the framework
-   * merges on before the guard chain (the query/mutation/route runners do this; without it
-   * `req.args` is `undefined` and a correct predicate would deny every owner — latent IDOR). Type
-   * the keyed request with {@link GuardArgsRequest}/{@link GuardParamsRequest} so `req.args`/
-   * `req.params` need no cast. The returned guard is a `Guard<Request>` over the *base* (app)
-   * request, so it attaches to a query/route/mutation typed on the app request without a
-   * contravariant-assignment cast — only `keyOf`/`ownsRow` see the merged `KeyedRequest`. `ownsRow`
-   * is the app-provided ownership predicate — the app owns the data layer, so the guard stays
-   * decoupled from Drizzle (the SPEC `owns((a) => a.id, table.col)` column-form is the planned
-   * compile-time sugar over this runtime contract). Composes with the other guards, e.g.
-   * `all(authed, owns((req) => req.args.id, ownsOrder))`.
+   * Proof-bearing ownership guard (SPEC §10.3). The second argument must be an opaque binding
+   * minted by framework Postgres wiring from the same owner-policy term that emits RLS. A plain
+   * callback, structural lookalike, or cast is rejected at construction; intentionally arbitrary
+   * predicates belong on {@link unprovenOwns} and remain visibly unproven in authorization explain.
+   * `keyOf` still reads only framework-validated args or resolved params merged before guards run.
    */
   owns<Request extends SessionRequestLike, KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
-    ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
+    binding: FrameworkPostgresOwnerColumnBinding<KeyedRequest, Key>,
     audit?: OwnershipGuardAuditOptions,
   ): Guard<Request> {
-    const closedAudit = snapshotOwnershipGuardAuditOptions(audit);
-    return stampGuardAudit(
-      async (request) => {
-        if (requestPrincipalSnapshot(request).kind !== 'proven') {
-          return unauthenticatedGuardFailure();
-        }
-        // The query/mutation/route runners merge the validated args / resolved params onto `request`
-        // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
-        // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
-        const keyedRequest = request as unknown as KeyedRequest;
-        return (await ownsRow(keyedRequest, keyOf(keyedRequest))) === true
-          ? true
-          : unauthorizedGuardFailure();
+    const closedBinding = resolveFrameworkPostgresOwnerColumnBinding(binding);
+    return createOwnershipGuard(
+      keyOf,
+      closedBinding.evaluate,
+      audit,
+      {
+        ownerPolicy: closedBinding.ownerPolicy,
+        staticProof: 'framework-derived-owner-column',
       },
-      [
-        {
-          auth: 'session-user',
-          kind: 'owns',
-          name: closedAudit.name,
-          principal: closedAudit.principal,
-          ...(closedAudit.resourceKey === undefined
-            ? {}
-            : { resourceKey: closedAudit.resourceKey }),
-          staticProof: 'not-claimed',
-        },
-      ],
+      'guards.owns()',
+    );
+  },
+  /**
+   * Explicit escape for an intentionally app-authored ownership predicate. This is the former
+   * `guards.owns(keyOf, ownsRow, audit?)` callback behavior under a name that cannot be mistaken for
+   * framework-derived guard/RLS correspondence. A pinned justification is mandatory, and explain
+   * output always retains it beside `staticProof: 'not-claimed'`.
+   */
+  unprovenOwns<
+    Request extends SessionRequestLike,
+    KeyedRequest extends Request = Request,
+    Key = unknown,
+  >(
+    keyOf: (request: KeyedRequest) => Key,
+    ownsRow: (request: KeyedRequest, key: Key) => boolean | Promise<boolean>,
+    audit: UnprovenOwnershipGuardAuditOptions,
+  ): Guard<Request> {
+    const justification = snapshotUnprovenOwnershipJustification(audit);
+    return createOwnershipGuard(
+      keyOf,
+      (request, key) => ownsRow(request, key),
+      audit,
+      { justification, staticProof: 'not-claimed' },
+      'guards.unprovenOwns()',
     );
   },
 });
 
 /**
  * Return framework-owned audit metadata stamped on a built-in guard. These facts are intentionally
- * narrower than static proof: an `owns` fact declares the runtime principal/resource-key intent for
- * OPP-28 review, while the app predicate and future static analyzer still own enforcement/proof.
+ * narrower than whole-program static proof. A framework-derived owner fact authenticates the exact
+ * generated Postgres policy binding; an unproven fact records only principal/resource-key intent.
  */
 export function explainGuard<Request>(
   guard: Guard<Request> | undefined,
@@ -923,8 +1017,6 @@ export function explainGuard<Request>(
 
 /**
  * @internal Pair one generated Postgres RLS predicate with the executable guard's audit facts.
- * SPEC §10.3: arbitrary public `guards.owns` callbacks remain explicitly unproven. A finite
- * abstract match is evidence, not executable binding; the later migration owns that claim.
  */
 export function explainPostgresGuardCorrespondence<Request>(input: {
   guard: Guard<Request> | undefined;
@@ -944,15 +1036,27 @@ export function explainPostgresGuardCorrespondence<Request>(input: {
 export function guardAuditName<Request>(guard: Guard<Request>): string {
   const facts = explainGuard(guard);
   let firstName: string | undefined;
+  let namedName: string | undefined;
+  let hasDerivedOwner = false;
+  let hasUnprovenOwner = false;
   for (let index = 0; index < facts.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(facts, index);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError('Guard audit facts must be a dense own-data array.');
     }
     const fact = descriptor.value as GuardAuditFact;
-    if (fact.kind === 'named') return fact.name;
+    if (fact.kind === 'owns') {
+      if (fact.staticProof === 'not-claimed') hasUnprovenOwner = true;
+      else hasDerivedOwner = true;
+    }
+    if (fact.kind === 'named' && namedName === undefined) namedName = fact.name;
     if (firstName === undefined) firstName = fact.name;
   }
+  // Fail closed for serialized access names: app labels and named wrappers cannot make the
+  // arbitrary escape look like the exact `owns` token consumed by ownership-posture derivation.
+  if (hasUnprovenOwner) return 'unprovenOwns';
+  if (hasDerivedOwner) return 'owns';
+  if (namedName !== undefined) return namedName;
   if (firstName !== undefined) return firstName;
   return stableGuardFunctionAuditName(guard);
 }
@@ -1008,6 +1112,9 @@ function freezeGuardAuditFact(fact: GuardAuditFact): GuardAuditFact {
   if (fact.kind === 'owns') {
     return witnessFreeze({
       ...fact,
+      ...(fact.staticProof === 'framework-derived-owner-column'
+        ? { ownerPolicy: witnessFreeze({ ...fact.ownerPolicy }) }
+        : {}),
       principal: witnessFreeze({ ...fact.principal }),
       ...(fact.resourceKey === undefined
         ? {}
@@ -1077,7 +1184,18 @@ function normalizeResourceKeyAudit(value: GuardResourceKeyAudit | string): Guard
   };
 }
 
-function snapshotOwnershipGuardAuditOptions(value: OwnershipGuardAuditOptions | undefined): {
+function snapshotUnprovenOwnershipJustification(value: UnprovenOwnershipGuardAuditOptions): string {
+  const label = 'guards.unprovenOwns() audit metadata';
+  return snapshotAuditJustification(
+    stableGuardAuditDataValue(value, 'justification', label),
+    `${label}.justification`,
+  );
+}
+
+function snapshotOwnershipGuardAuditOptions(
+  value: OwnershipGuardAuditOptions | undefined,
+  label: 'guards.owns()' | 'guards.unprovenOwns()',
+): {
   name: string;
   principal: GuardPrincipalKeyAudit;
   resourceKey?: GuardResourceKeyAudit;
@@ -1089,22 +1207,14 @@ function snapshotOwnershipGuardAuditOptions(value: OwnershipGuardAuditOptions | 
     };
   }
   if (typeof value !== 'object' || value === null || witnessIsArray(value)) {
-    throw new TypeError('guards.owns() audit metadata must be a stable own-data record.');
+    throw new TypeError(`${label} audit metadata must be a stable own-data record.`);
   }
-  const name = stableOptionalGuardAuditDataValue(value, 'name', 'guards.owns() audit metadata');
-  const principal = stableOptionalGuardAuditDataValue(
-    value,
-    'principal',
-    'guards.owns() audit metadata',
-  );
-  const resourceKey = stableOptionalGuardAuditDataValue(
-    value,
-    'resourceKey',
-    'guards.owns() audit metadata',
-  );
+  const auditMetadataLabel = `${label} audit metadata`;
+  const name = stableOptionalGuardAuditDataValue(value, 'name', auditMetadataLabel);
+  const principal = stableOptionalGuardAuditDataValue(value, 'principal', auditMetadataLabel);
+  const resourceKey = stableOptionalGuardAuditDataValue(value, 'resourceKey', auditMetadataLabel);
   return {
-    name:
-      name === undefined ? 'owns' : snapshotAuditText(name, 'guards.owns() audit metadata name'),
+    name: name === undefined ? 'owns' : snapshotAuditText(name, `${auditMetadataLabel} name`),
     principal: normalizePrincipalKeyAudit(
       principal === undefined ? 'session.user.id' : (principal as GuardPrincipalKeyAudit | string),
     ),
