@@ -347,9 +347,12 @@ the guard checks a role SQL never sees.
 > Sequencing: the framework-generated `ownsRow` default is a **breaking change to a shipped public
 > guard**. Land it as its own change _after_ the decision procedure is green — never bundled into it.
 
-- [ ] In a separately reviewed breaking change, bind the shipped owner-guard path to the
+- [x] In a separately reviewed breaking change, bind the shipped owner-guard path to the
       framework-derived evaluator and remove arbitrary app callback semantics from the proven
       fragment; retain a distinctly named audited escape for intentionally unproven predicates.
+  - Evidence: the 148/148 integration suite proves `guards.owns(keyOf, table.keyColumn)` against exact
+    manifest identity, live unique-key/owner lookup, real PGlite denial controls, and `unprovenOwns`;
+    `pnpm run check:rls-emission-door` passes 48/48.
 
 ### 1.3 Grammar containment: a kABNF → DFA substrate
 
