@@ -168,6 +168,32 @@ For a Kovo app, the following are checkable **without executing a browser**:
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 
+**Safe cost-to-green rewrites (normative).** `kovo fix` accepts exactly one regular, non-symlink
+app-authored `.tsx`/`.jsx` file inside the invocation root, excluding `.kovo`, `dist`, `generated`,
+and `node_modules` trees. It MUST NOT synthesize a trust wrapper, justification, allowlist entry, or
+other escape. A rewrite is available only through this closed compiler-owned recipe set:
+
+- KV223 may remove one exact `data-bind` JSX attribute only when the genuine compiler reports that
+  the attribute is redundant with its typed child expression. Because hand-authored lowered IR is
+  already rejected by KV235 and can suppress compiler-owned escaping, this is a security-hardening
+  rewrite, not a claim that the invalid input had accepted behavior to preserve.
+- KV232 may remove one exact author-owned `role`, `aria-*`, or `data-state` override only when the
+  rewritten compiler output has the exact same semantic behavior fingerprint.
+
+The independent post-rewrite pass MUST prove that the candidate differs only by the approved typed
+AST nodes, that every target obligation is absent, and that the complete genuine compiler analysis
+is green before a write. Unknown diagnostics, mixed proof classes, overlapping edits, stale source,
+an analyzer residue, or a changed behavior fingerprint where equality is required MUST fail closed
+without returning candidate source. `--check` is read-only and non-zero when a safe rewrite is
+available.
+
+`kovo fix --cost-report` emits `kovo.cost-to-green/v1` over the versioned agent-authored corpus. Its
+per-diagnostic metric is `safe AST-node edit atoms − escape argv atoms`, where deleting one typed
+AST node costs one atom and `--allow-diagnostic CODE` costs two. A missing safe recipe has unbounded
+safe cost. Every row where escape is cheaper, including an unbounded safe cost, MUST be reported as
+a framework defect with a non-empty owner; the report exits non-zero while any such row exists. This
+is an ergonomics and routing measurement, not evidence that an escape is safe or should be chosen.
+
 **Deployment assume-guarantee contract (normative).** Every current `SECURITY.md` guarantee MUST
 carry a machine-readable `antecedents` list. That list is derived, never independently authored:
 the versioned `kovo.deployment-environment-doors/v1` registry binds each environment fact to the

@@ -1,9 +1,10 @@
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import { mainAsync } from '../index.js';
 import { parseFixArgs, runFixCommand } from './fix.js';
 
 describe('kovo fix', () => {
@@ -24,6 +25,39 @@ describe('kovo fix', () => {
     expect(parseFixArgs(['--unknown'])).toMatchObject({ ok: false });
   });
 
+  it('dispatches the real kovo fix command against the invocation cwd', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-fix-dispatch-'));
+    const sourcePath = join(root, 'cart-badge.tsx');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+    try {
+      writeFileSync(
+        sourcePath,
+        `
+export const CartBadge = component({
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
+});
+`,
+      );
+      process.chdir(root);
+
+      await expect(mainAsync(['fix', 'cart-badge.tsx'])).resolves.toBe(0);
+
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('FIX KV223 cart-badge.tsx:4:31');
+      expect(output).toContain('analyzer=green');
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(sourcePath, 'utf8')).not.toContain('data-bind="cart.count"');
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('rewrites a fixable file only after the compiler proves it green', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-fix-'));
     const sourcePath = join(root, 'cart-badge.tsx');
@@ -37,10 +71,7 @@ export const CartBadge = component({
 `,
     );
 
-    const result = await runFixCommand(
-      { check: false, sourcePath: 'cart-badge.tsx' },
-      root,
-    );
+    const result = await runFixCommand({ check: false, sourcePath: 'cart-badge.tsx' }, root);
 
     expect(result).toMatchObject({ exitCode: 0 });
     expect(result.output).toContain('FIX KV223');
@@ -53,7 +84,11 @@ export const CartBadge = component({
     const sourcePath = join(root, 'toggle.tsx');
     const source = `
 export const Toggle = component({
-  render: () => <button data-state="closed" data-state="closed">Toggle</button>,
+  render: () => (
+    <Tooltip.Trigger attrs={{ 'data-state': 'closed' }}>
+      {(attrs) => <button {...attrs} data-state="open">Toggle</button>}
+    </Tooltip.Trigger>
+  ),
 });
 `;
     writeFileSync(sourcePath, source);
@@ -70,7 +105,7 @@ export const Toggle = component({
     const sourcePath = join(root, 'link.tsx');
     const source = `
 export const Link = component({
-  render: ({ profile }) => <a href={profile.next}>Next</a>,
+  render: ({ profile }) => <script>{profile.inline}</script>,
 });
 `;
     writeFileSync(sourcePath, source);
@@ -80,10 +115,7 @@ export const Link = component({
     expect(ambiguous.output).toContain('BLOCKED KV236');
     expect(readFileSync(sourcePath, 'utf8')).toBe(source);
 
-    const generated = await runFixCommand(
-      { check: false, sourcePath: 'dist/component.tsx' },
-      root,
-    );
+    const generated = await runFixCommand({ check: false, sourcePath: 'dist/component.tsx' }, root);
     expect(generated).toMatchObject({ exitCode: 1 });
 
     const linkPath = join(root, 'linked.tsx');

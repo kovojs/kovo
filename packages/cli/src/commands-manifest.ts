@@ -84,6 +84,10 @@ export const COMPILE_USAGE = [
 export const COMPILE_USAGE_LINE =
   'kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>] | kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check] | kovo compile graph <input.json> --out <graph.json> [--check] | kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check] | kovo compile drizzle-static <input.json> --out <facts.json> [--check] | kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check] | kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]';
 
+/** @internal Usage forms emitted for `kovo fix`. */
+export const FIX_USAGE =
+  'usage: kovo fix <source.tsx|source.jsx> [--check] | kovo fix --cost-report';
+
 /** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
 export const EXPORT_USAGE =
   'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]';
@@ -231,6 +235,14 @@ export const BUILD_ARGV_SPEC = {
     },
     { flag: '--check', kind: 'boolean' },
     { flag: '--no-cache', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Safe source rewrite and cost-report flags consumed by `parseFixArgs`. */
+export const FIX_ARGV_SPEC = {
+  options: [
+    { flag: '--check', kind: 'boolean' },
+    { flag: '--cost-report', kind: 'boolean' },
   ],
 } as const satisfies CommandArgvSpec;
 
@@ -867,6 +879,26 @@ export const COMMANDS_MANIFEST = [
       'kovo compile drizzle-optimistic dist/kovo/cart-add.optimistic.json --out dist/kovo/optimistic/cart-add.ts',
       'kovo compile package-css @kovojs/ui --entry src/app.ts --out dist/assets/kovo-ui.css',
     ],
+  },
+  {
+    name: 'fix',
+    noArgsOrder: 6.5,
+    summary: 'Apply only compiler-proven safe TSX/JSX rewrites and re-analyze the result.',
+    unknownOrder: 4.5,
+    usage: FIX_USAGE,
+    async: true,
+    flags: [
+      {
+        flag: '--check',
+        description: 'Report available safe rewrites without changing the source file.',
+      },
+      {
+        flag: '--cost-report',
+        description:
+          'Measure safe-vs-escape structural edit cost over the versioned agent-authored corpus.',
+      },
+    ],
+    examples: ['kovo fix src/components/cart.tsx', 'kovo fix --cost-report'],
   },
   {
     name: 'audit',
