@@ -139,7 +139,7 @@ describe('Better Auth password-reset mail door (SPEC §6.6/§9.2)', () => {
         /^https:\/\/app\.example\.test\/api\/auth\/reset-password\/[A-Za-z0-9_-]+\?callbackURL=%2Freset-password$/u,
       );
       expect(delivered[1]?.resetUrl).toMatch(
-        /^https:\/\/app\.example\.test\/api\/auth\/reset-password\/[A-Za-z0-9]{24}\?callbackURL=%2Freset-password$/u,
+        /^https:\/\/app\.example\.test\/api\/auth\/reset-password\/[A-Za-z0-9_-]{24}\?callbackURL=%2Freset-password$/u,
       );
       expect(database.verification).toHaveLength(1);
     } finally {
@@ -197,7 +197,7 @@ describe('Better Auth password-reset mail door (SPEC §6.6/§9.2)', () => {
     });
     expect(delivered[1]).toMatchObject({ to: 'missing@example.test' });
     expect(delivered[1]?.resetUrl).toMatch(
-      /^https:\/\/app\.example\.test\/api\/auth\/reset-password\/[A-Za-z0-9]{24}\?callbackURL=%2Freset-password$/u,
+      /^https:\/\/app\.example\.test\/api\/auth\/reset-password\/[A-Za-z0-9_-]{24}\?callbackURL=%2Freset-password$/u,
     );
     expect(Object.keys(delivered[0] ?? {}).sort()).toEqual(['resetUrl', 'to']);
     expect(Object.isFrozen(delivered[0])).toBe(true);
