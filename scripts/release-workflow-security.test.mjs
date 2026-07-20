@@ -6,6 +6,42 @@ const releaseWorkflow = readFileSync(
   new URL('../.github/workflows/release.yml', import.meta.url),
   'utf8',
 );
+const ATTESTATION_JOB_ACTIONS = Object.freeze([
+  'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5',
+  'actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6',
+]);
+const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
+  'attestations: write',
+  'contents: read',
+  'id-token: write',
+]);
+
+function attestationJob(source) {
+  const start = source.indexOf('  attest-advisory-feed:');
+  const end = source.indexOf('  publish:', start);
+  return start < 0 || end < 0 ? '' : source.slice(start, end);
+}
+
+function attestationJobMatchesStepAllowlist(source) {
+  const job = attestationJob(source);
+  const actions = [...job.matchAll(/^[ \t]+(?:-\s+)?uses:\s+(\S+)\s*$/gmu)].map(
+    (match) => match[1],
+  );
+  const steps = job.match(/^      -\s+/gmu) ?? [];
+  const permissionStart = job.indexOf('    permissions:');
+  const permissionEnd = job.indexOf('    steps:', permissionStart);
+  const permissions = job
+    .slice(permissionStart, permissionEnd)
+    .match(/^      [a-z-]+:\s+(?:read|write|none)$/gmu)
+    ?.map((line) => line.trim());
+  return (
+    steps.length === ATTESTATION_JOB_ACTIONS.length &&
+    actions.length === ATTESTATION_JOB_ACTIONS.length &&
+    actions.every((action, index) => action === ATTESTATION_JOB_ACTIONS[index]) &&
+    permissions?.length === ATTESTATION_JOB_PERMISSIONS.length &&
+    permissions.every((permission, index) => permission === ATTESTATION_JOB_PERMISSIONS[index])
+  );
+}
 
 describe('release workflow authority', () => {
   it('admits only an exact successful main commit and has no dispatch bypass', () => {
@@ -32,7 +68,7 @@ describe('release workflow authority', () => {
     const publishJob = releaseWorkflow.indexOf('  publish:');
     const authorize = releaseWorkflow.slice(authorizeJob, prepareJob);
     const prepare = releaseWorkflow.slice(prepareJob, attestJob);
-    const attest = releaseWorkflow.slice(attestJob, publishJob);
+    const attest = attestationJob(releaseWorkflow);
     const publish = releaseWorkflow.slice(publishJob);
 
     expect(authorizeJob).toBeGreaterThanOrEqual(0);
@@ -74,12 +110,15 @@ describe('release workflow authority', () => {
     expect(attest).not.toContain('vp install');
     expect(attest).not.toContain('npm install');
     expect(attest).not.toContain('pnpm ');
+    expect(attestationJobMatchesStepAllowlist(releaseWorkflow)).toBe(true);
+    expect(releaseWorkflow.match(/^\s+attestations: write$/gmu)).toHaveLength(1);
 
     expect(publish).toContain('if: ${{ !inputs.dry_run }}');
     expect(publish).toContain('- prepare');
     expect(publish).toContain('- attest-advisory-feed');
     expect(publish).toContain('environment: release');
     expect(publish).toContain('id-token: write');
+    expect(publish).not.toContain('attestations: write');
     expect(publish).toContain('uses: actions/checkout@');
     expect(publish).toContain('ref: ${{ github.sha }}');
     expect(publish).toContain('uses: actions/download-artifact@');
@@ -100,6 +139,16 @@ describe('release workflow authority', () => {
     expect(publish).not.toContain('verify-release-input.mjs');
     expect(publish).not.toContain('test:security-fuzz-release');
     expect(publish).not.toContain('.kovo/security-failures');
+  });
+
+  it('rejects any additional action in the advisory attestation job', () => {
+    const mutated = releaseWorkflow.replace(
+      '      - name: Attest exact advisory feed',
+      '      - uses: actions/cache@2f8e54208210a422b2efd51efaa6bd6d7ca8920f\n\n' +
+        '      - name: Attest exact advisory feed',
+    );
+    expect(mutated).not.toBe(releaseWorkflow);
+    expect(attestationJobMatchesStepAllowlist(mutated)).toBe(false);
   });
 
   it('rejects build-time drift anywhere in the tracked release tree', () => {

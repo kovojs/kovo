@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import type { KovoArtifactProvenance } from '@kovojs/core/internal/graph';
 
@@ -22,7 +23,7 @@ import {
   parsedStringOption,
   parseCommandArgv,
 } from '../commands-manifest.js';
-import { discoverGraphInputPath } from '../graph-input.js';
+import { discoverGraphInputPaths } from '../graph-input.js';
 import type { CliCommandResult, CliProcessResult } from '../shared.js';
 
 const DEFAULT_ADVISORY_FEED_URL =
@@ -38,6 +39,8 @@ const MAX_LIST_ENTRIES = 128;
 const MAX_TEXT = 1_024;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1_000;
 const MIN_ADVISORY_EPOCH = 1;
+const STATE_LOCK_RETRY_DELAY_MS = 25;
+const STATE_LOCK_RETRY_LIMIT = 200;
 
 export const KOVO_ADVISORY_SCHEMA = 'kovo.security.advisory/v1' as const;
 export const KOVO_ADVISORY_FEED_SCHEMA = 'kovo.security.advisory-feed/v1' as const;
@@ -156,10 +159,17 @@ export async function runAdvisoryCheck(
   dependencies: AdvisoryCheckDependencies = {},
 ): Promise<CliProcessResult> {
   try {
-    const graphPath = options.graphPath ?? discoverGraphInputPath(invocationCwd);
-    if (graphPath === undefined) {
-      throw new TypeError('no graph artifact was found; build the app or pass graph.json');
+    const discoveredGraphs =
+      options.graphPath === undefined ? discoverGraphInputPaths(invocationCwd) : [];
+    if (options.graphPath === undefined && discoveredGraphs.length > 1) {
+      const names = discoveredGraphs
+        .map((path) => relative(resolve(invocationCwd), path))
+        .join(', ');
+      throw new TypeError(`multiple graph artifacts were found (${names}); pass one explicitly`);
     }
+    const graphPath = options.graphPath ?? discoveredGraphs[0];
+    if (graphPath === undefined)
+      throw new TypeError('no graph artifact was found; build the app or pass graph.json');
     const artifact = readArtifactPosture(invocationCwd, graphPath);
     const feedSource = options.feed ?? DEFAULT_ADVISORY_FEED_URL;
     const fetchBytes = dependencies.fetchBytes ?? defaultFetchBytes;
@@ -182,10 +192,9 @@ export async function runAdvisoryCheck(
     );
 
     const statePath = safeStatePath(invocationCwd, options.statePath);
-    const state = readAdvisoryState(statePath);
-    assertNoFeedRollback(feed, feedDigest, state);
-    writeAdvisoryState(
+    await updateAdvisoryState(
       statePath,
+      feed,
       {
         feedDigest,
         highestEpoch: feed.epoch,
@@ -407,15 +416,49 @@ async function verifyFeedAttestation(
   throw new TypeError('no valid release-workflow attestation covers the feed digest');
 }
 
-async function verifySigstoreBundle(bundle: unknown): Promise<void> {
+/** @internal Production Sigstore policy; the optional trust source supports offline fixtures. */
+export async function verifySigstoreBundle(
+  bundle: unknown,
+  trust: Readonly<{ tufCachePath?: string; tufForceCache?: boolean }> = {},
+): Promise<void> {
+  await verifySigstoreBundleWithPolicy(
+    bundle,
+    {
+      certificateIdentityURI: EXPECTED_CERTIFICATE_IDENTITY,
+      certificateIssuer: EXPECTED_CERTIFICATE_ISSUER,
+      ctLogThreshold: 1,
+      tlogThreshold: 1,
+    },
+    trust,
+  );
+}
+
+/**
+ * Exercise the real Sigstore verifier with an explicit policy and optional offline TUF cache.
+ * Production callers use the closed policy above; this seam exists for trust-boundary fixtures.
+ *
+ * @internal
+ */
+export async function verifySigstoreBundleWithPolicy(
+  bundle: unknown,
+  policy: Readonly<{
+    certificateIdentityURI: string;
+    certificateIssuer: string;
+    ctLogThreshold: number;
+    tlogThreshold: number;
+  }>,
+  trust: Readonly<{ tufCachePath?: string; tufForceCache?: boolean }> = {},
+): Promise<void> {
   const { verify } = await import('sigstore');
   await verify(bundle as Parameters<typeof verify>[0], {
-    certificateIdentityURI: EXPECTED_CERTIFICATE_IDENTITY,
-    certificateIssuer: EXPECTED_CERTIFICATE_ISSUER,
-    ctLogThreshold: 1,
+    certificateIdentityURI: policy.certificateIdentityURI,
+    certificateIssuer: policy.certificateIssuer,
+    ctLogThreshold: policy.ctLogThreshold,
     retry: 1,
     timeout: 5_000,
-    tlogThreshold: 1,
+    tlogThreshold: policy.tlogThreshold,
+    ...(trust.tufCachePath === undefined ? {} : { tufCachePath: trust.tufCachePath }),
+    ...(trust.tufForceCache === undefined ? {} : { tufForceCache: trust.tufForceCache }),
   });
 }
 
@@ -516,6 +559,43 @@ function readAdvisoryState(path: string): AdvisoryState | undefined {
   };
 }
 
+async function updateAdvisoryState(
+  path: string,
+  feed: KovoSecurityAdvisoryFeed,
+  state: AdvisoryState,
+  invocationCwd: string,
+): Promise<void> {
+  const parent = dirname(path);
+  ensureSafeDirectoryChain(resolve(invocationCwd), parent, 'advisory state parent');
+  const lockPath = `${path}.lock`;
+  const lockDescriptor = await acquireAdvisoryStateLock(lockPath);
+  try {
+    const current = readAdvisoryState(path);
+    assertNoFeedRollback(feed, state.feedDigest, current);
+    if (current?.highestEpoch === state.highestEpoch && current.feedDigest === state.feedDigest) {
+      fsyncParentDirectory(parent);
+      return;
+    }
+    writeAdvisoryState(path, state, invocationCwd);
+  } finally {
+    closeSync(lockDescriptor);
+    unlinkSync(lockPath);
+    fsyncParentDirectory(parent);
+  }
+}
+
+async function acquireAdvisoryStateLock(path: string): Promise<number> {
+  for (let attempt = 0; attempt < STATE_LOCK_RETRY_LIMIT; attempt += 1) {
+    try {
+      return openSync(path, 'wx', 0o600);
+    } catch (error) {
+      if (!isSystemError(error, 'EEXIST')) throw error;
+      await delay(STATE_LOCK_RETRY_DELAY_MS);
+    }
+  }
+  throw new TypeError('advisory state lock remained busy');
+}
+
 function writeAdvisoryState(path: string, state: AdvisoryState, invocationCwd: string): void {
   const parent = dirname(path);
   ensureSafeDirectoryChain(resolve(invocationCwd), parent, 'advisory state parent');
@@ -534,10 +614,34 @@ function writeAdvisoryState(path: string, state: AdvisoryState, invocationCwd: s
     closeSync(descriptor);
     descriptor = undefined;
     renameSync(temporary, path);
+    fsyncParentDirectory(parent);
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
     if (existsSync(temporary)) unlinkSync(temporary);
   }
+}
+
+function fsyncParentDirectory(path: string): void {
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(path, 'r');
+    fsyncSync(descriptor);
+  } catch (error) {
+    if (
+      process.platform !== 'win32' ||
+      !(['EACCES', 'EINVAL', 'EISDIR', 'EPERM'] as const).some((code) => isSystemError(error, code))
+    ) {
+      throw error;
+    }
+    // Windows does not expose durable directory handles through this API. The atomic rename and
+    // file fsync remain mandatory there; POSIX platforms additionally sync the parent directory.
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+function isSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error && error.code === code;
 }
 
 async function defaultFetchBytes(source: string): Promise<Uint8Array> {

@@ -274,10 +274,14 @@ IDs. The canonical `kovo.security.advisory-feed/v1` record contains a positive m
 canonical `issuedAt`, `maxFeedAgeSeconds`, and an ID-sorted advisory array. The repository gate MUST
 keep the feed schema exact, fresh within a maximum 90-day release window, and equal in advisory IDs
 and retraction sets to the public guarantee register; unknown guarantee or TCB IDs fail the gate.
+It MUST compare the checked-in feed to the first-parent feed: a lower epoch, or any canonical feed
+change without an epoch increase, fails before release signing.
 
 `kovo check advisories [graph.json]` MUST first read build-owned
 `kovo.artifact.provenance/v1` from the graph and obtain every exact `@kovojs/*` package version plus
-the graph schema version. It then fetches the feed over HTTPS (or reads an explicit in-root regular
+the graph schema version. When no graph path is explicit, exactly one conventional graph artifact
+MUST exist; multiple candidates produce UNKNOWN instead of a precedence-based choice. The command
+then fetches the feed over HTTPS (or reads an explicit in-root regular
 file for an offline drill), computes its SHA-256 digest, and obtains an attestation by that digest.
 The accepted bundle MUST pass Sigstore signature and Fulcio-chain verification, the GitHub Actions
 OIDC issuer, the exact `.github/workflows/release.yml@refs/heads/main` certificate identity, and at
@@ -285,14 +289,22 @@ least one certificate-transparency and one transparency-log check. Kovo MUST ind
 the verified DSSE payload and require exactly one matching feed digest plus the exact Kovo main
 release-workflow repository, ref, and path. The release job producing this attestation has only
 checkout/read and attestation OIDC authority: it performs no dependency installation, repository
-script, build, or long-lived private-key operation.
+script, build, or long-lived private-key operation. The Fulcio certificate identity is workflow-
+wide rather than job-ID evidence. Default remote verification therefore also depends on the
+digest-indexed Kovo repository attestation API, while the workflow grants `attestations: write` only
+to the exact two-action attestation job; the package-publish job's npm OIDC authority cannot attach
+repository attestations. An explicit local bundle is caller-supplied offline evidence and retains
+only the cryptographically checked workflow-level identity.
 
 After authentication, the command rejects a feed future-dated by more than five minutes, stale
 beyond its own bounded `maxFeedAgeSeconds`, below the highest locally accepted epoch, or different
 from a previously accepted digest at the same epoch. It persists only
 `kovo.security.advisory-state/v1` (`highestEpoch`, `feedDigest`) by an atomic regular-file write
-inside the invocation root; a corrupt state file, symlink target, symlinked parent component, or
-unwritable state is failure, not permission to forget rollback history. An advisory matches when
+inside the invocation root. Concurrent processes MUST serialize on an exclusive sidecar lock,
+re-read and compare state while holding that lock, fsync the state file, atomically rename it, and
+fsync the parent directory where the platform exposes durable directory handles. A corrupt state
+file, busy lock, symlink target, symlinked parent component, or unwritable state is failure, not
+permission to forget rollback history. An advisory matches when
 its graph schema equals the artifact schema and at least one exact Kovo package version lies in its
 range. There are only three verdict classes:
 

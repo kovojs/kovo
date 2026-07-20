@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +12,8 @@ import {
   parseAdvisoryArgs,
   parseAdvisoryFeed,
   runAdvisoryCheck,
+  verifySigstoreBundle,
+  verifySigstoreBundleWithPolicy,
   type AdvisoryCheckOptions,
   type KovoSecurityAdvisoryFeed,
 } from './advisories.js';
@@ -18,6 +21,13 @@ import { mainAsync } from '../index.js';
 
 const NOW = Date.parse('2026-07-20T12:00:00.000Z');
 const encoder = new TextEncoder();
+const REAL_SIGSTORE_POLICY = Object.freeze({
+  certificateIdentityURI:
+    '^https://github\\.com/kovojs/kovo/\\.github/workflows/release\\.yml@refs/heads/main$',
+  certificateIssuer: 'https://token.actions.githubusercontent.com',
+  ctLogThreshold: 1,
+  tlogThreshold: 1,
+});
 
 function advisory(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -100,6 +110,25 @@ function rootWithGraph(version = '0.2.0', graphSchemaVersion = 'kovo.graph/v1'):
   const root = mkdtempSync(join(tmpdir(), 'kovo-advisories-'));
   writeGraph(root, version, graphSchemaVersion);
   return root;
+}
+
+function realSigstoreBundle(): unknown {
+  // Inert npm provenance for @kovojs/cli@0.2.0, signed by the real Kovo release workflow.
+  return JSON.parse(
+    readFileSync(new URL('./advisories.sigstore.fixture.json', import.meta.url), 'utf8'),
+  ) as unknown;
+}
+
+function record(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${label} must be a record`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function changeBase64(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${label} is missing`);
+  return `${value[0] === 'A' ? 'B' : 'A'}${value.slice(1)}`;
 }
 
 async function check(
@@ -240,6 +269,81 @@ describe('advisory argv grammar', () => {
   });
 });
 
+describe('real Sigstore trust boundary', () => {
+  it('verifies the official fixture and rejects every mutated trust control', async () => {
+    const trust = {
+      tufCachePath: mkdtempSync(join(tmpdir(), 'kovo-advisory-tuf-')),
+      tufForceCache: true,
+    };
+    const official = realSigstoreBundle();
+    await expect(verifySigstoreBundle(official, trust)).resolves.toBeUndefined();
+
+    await expect(
+      verifySigstoreBundleWithPolicy(
+        official,
+        {
+          ...REAL_SIGSTORE_POLICY,
+          certificateIdentityURI:
+            '^https://github\\.com/vitejs/vite/\\.github/workflows/publish\\.yml@refs/tags/v7\\.2\\.4$',
+        },
+        trust,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      verifySigstoreBundleWithPolicy(
+        official,
+        { ...REAL_SIGSTORE_POLICY, certificateIssuer: 'https://issuer.example.invalid' },
+        trust,
+      ),
+    ).rejects.toThrow();
+
+    const corruptCertificate = structuredClone(official);
+    const certificate = record(
+      record(corruptCertificate, 'bundle').verificationMaterial,
+      'verification material',
+    ).certificate;
+    const certificateRecord = record(certificate, 'certificate');
+    certificateRecord.rawBytes = changeBase64(certificateRecord.rawBytes, 'certificate bytes');
+    await expect(verifySigstoreBundle(corruptCertificate, trust)).rejects.toThrow();
+
+    await expect(
+      verifySigstoreBundleWithPolicy(
+        official,
+        { ...REAL_SIGSTORE_POLICY, ctLogThreshold: 2 },
+        trust,
+      ),
+    ).rejects.toThrow();
+
+    const missingTransparencyLog = structuredClone(official);
+    record(
+      record(missingTransparencyLog, 'bundle').verificationMaterial,
+      'verification material',
+    ).tlogEntries = [];
+    await expect(verifySigstoreBundle(missingTransparencyLog, trust)).rejects.toThrow();
+
+    const corruptSignature = structuredClone(official);
+    const signatureEnvelope = record(
+      record(corruptSignature, 'bundle').dsseEnvelope,
+      'DSSE envelope',
+    );
+    if (!Array.isArray(signatureEnvelope.signatures)) throw new TypeError('signatures are missing');
+    const signature = record(signatureEnvelope.signatures[0], 'signature');
+    signature.sig = changeBase64(signature.sig, 'signature bytes');
+    await expect(verifySigstoreBundle(corruptSignature, trust)).rejects.toThrow();
+
+    const corruptPayload = structuredClone(official);
+    const payloadEnvelope = record(record(corruptPayload, 'bundle').dsseEnvelope, 'DSSE envelope');
+    if (typeof payloadEnvelope.payload !== 'string') throw new TypeError('payload is missing');
+    const statement = record(
+      JSON.parse(Buffer.from(payloadEnvelope.payload, 'base64').toString('utf8')) as unknown,
+      'statement',
+    );
+    statement.predicateType = 'https://slsa.dev/provenance/v2';
+    payloadEnvelope.payload = Buffer.from(JSON.stringify(statement)).toString('base64');
+    await expect(verifySigstoreBundle(corruptPayload, trust)).rejects.toThrow();
+  });
+});
+
 describe('authenticated advisory evaluation', () => {
   it('returns AFFECTED and blocks at or above the configured floor', async () => {
     const result = await check(rootWithGraph(), feed());
@@ -271,6 +375,21 @@ describe('authenticated advisory evaluation', () => {
     );
   });
 
+  it('returns UNKNOWN for ambiguous discovered graphs until the artifact is explicit', async () => {
+    const root = rootWithGraph();
+    writeFileSync(join(root, 'graph.json'), readFileSync(join(root, '.kovo/graph.json')));
+
+    const ambiguous = await check(root, feed());
+    expect(ambiguous.exitCode).toBe(2);
+    expect('output' in ambiguous ? ambiguous.output : '').toContain(
+      'multiple graph artifacts were found',
+    );
+
+    const explicit = await check(root, feed(), { graphPath: '.kovo/graph.json' });
+    expect(explicit.exitCode).toBe(1);
+    expect('output' in explicit ? explicit.output : '').toContain('AFFECTED GHSA-test-0001');
+  });
+
   it.each([
     [
       'a stale feed',
@@ -280,7 +399,12 @@ describe('authenticated advisory evaluation', () => {
     ['a future-dated feed', feed({ issuedAt: new Date(NOW + 600_000).toISOString() }), undefined],
     ['a rejected signature', feed(), async () => Promise.reject(new Error('bad signature'))],
   ])('returns UNKNOWN with exit 2 for %s', async (_label, value, verifier) => {
-    const result = await check(rootWithGraph(), value, {}, { verifyBundle: verifier });
+    const result = await check(
+      rootWithGraph(),
+      value,
+      {},
+      verifier === undefined ? {} : { verifyBundle: verifier },
+    );
     expect(result.exitCode).toBe(2);
     expect('output' in result ? result.output : '').toContain('UNKNOWN advisories');
     expect('output' in result ? result.output : '').toContain('UNKNOWN is not no-impact');
@@ -338,6 +462,72 @@ describe('authenticated advisory evaluation', () => {
     expect(
       JSON.parse(readFileSync(join(equivocationRoot, '.kovo/advisory-state.json'), 'utf8')),
     ).toMatchObject({ highestEpoch: 4, schema: 'kovo.security.advisory-state/v1' });
+  });
+
+  it('serializes rollback state across processes and rechecks after acquiring the lock', async () => {
+    const root = rootWithGraph();
+    const statePath = join(root, '.kovo/advisory-state.json');
+    const lockPath = `${statePath}.lock`;
+    const child = spawn(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        `
+          import { closeSync, fsyncSync, openSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+          import { dirname } from 'node:path';
+          const [lockPath, statePath] = process.argv.slice(1);
+          const lock = openSync(lockPath, 'wx', 0o600);
+          process.stdout.write('LOCKED\\n');
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          const temporary = statePath + '.child';
+          const state = {
+            feedDigest: 'sha256:' + 'f'.repeat(64),
+            highestEpoch: 3,
+            schema: 'kovo.security.advisory-state/v1',
+          };
+          const output = openSync(temporary, 'wx', 0o600);
+          writeFileSync(output, JSON.stringify(state) + '\\n');
+          fsyncSync(output);
+          closeSync(output);
+          renameSync(temporary, statePath);
+          if (process.platform !== 'win32') {
+            const parent = openSync(dirname(statePath), 'r');
+            fsyncSync(parent);
+            closeSync(parent);
+          }
+          closeSync(lock);
+          unlinkSync(lockPath);
+        `,
+        lockPath,
+        statePath,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    const exited = new Promise<void>((resolve, reject) => {
+      child.once('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`state writer exited ${String(code)}: ${stderr}`));
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      let stdout = '';
+      child.stdout.on('data', (chunk) => {
+        stdout += String(chunk);
+        if (stdout.includes('LOCKED')) resolve();
+      });
+      child.once('exit', () => reject(new Error(`state writer exited before lock: ${stderr}`)));
+    });
+
+    const result = await check(root, feed({ epoch: 2 }));
+    await exited;
+    expect(result.exitCode).toBe(2);
+    expect('output' in result ? result.output : '').toContain('advisory feed epoch rolled back');
+    expect(JSON.parse(readFileSync(statePath, 'utf8'))).toMatchObject({ highestEpoch: 3 });
   });
 
   it('fails UNKNOWN when the feed is unreachable', async () => {
