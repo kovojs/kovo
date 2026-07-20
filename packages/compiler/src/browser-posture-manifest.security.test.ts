@@ -170,6 +170,75 @@ export const ReviewedSpread = component({
     ]);
   });
 
+  it('uses browser-effective attribute order for duplicate and spread-owned asset URLs', () => {
+    const { diagnostics, manifest } = browserPosture(`
+import { component } from '@kovojs/core';
+
+export const OrderedAssets = component({
+  render: () => (
+    <main>
+      <script
+        SRC="https://first.example.test/runtime.js"
+        src="https://second.example.test/runtime.js"
+        external
+      />
+      <img
+        {...{ src: "https://overwritten.example.test/avatar.png" }}
+        src="https://effective.example.test/avatar.png"
+        alt="ordered"
+        external
+      />
+    </main>
+  ),
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+    expect(manifest?.externalOrigins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          directive: 'script-src',
+          origin: 'https://first.example.test',
+        }),
+        expect.objectContaining({
+          directive: 'img-src',
+          origin: 'https://effective.example.test',
+        }),
+      ]),
+    );
+    expect(manifest?.externalOrigins).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ origin: 'https://second.example.test' }),
+        expect.objectContaining({ origin: 'https://overwritten.example.test' }),
+      ]),
+    );
+  });
+
+  it('carries exact trustedUrl provenance through a nested finite object spread', () => {
+    const { diagnostics, manifest } = browserPosture(`
+import { component } from '@kovojs/core';
+import { trustedUrl } from '@kovojs/browser';
+
+export const NestedReviewedAsset = component({
+  render: ({ avatar }) => (
+    <img
+      {...{ ...{ src: trustedUrl(avatar, 'reviewed nested avatar CDN') } }}
+      alt="avatar"
+    />
+  ),
+});
+`);
+
+    expect(diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+    expect(manifest?.opaqueExternalUrls).toEqual([
+      expect.objectContaining({
+        directive: 'img-src',
+        reason: 'reviewed nested avatar CDN',
+        site: 'img[src]',
+      }),
+    ]);
+  });
+
   it('parses static srcset candidates and preload/media directives without URL-list drift', () => {
     const { diagnostics, manifest } = browserPosture(`
 import { component } from '@kovojs/core';
