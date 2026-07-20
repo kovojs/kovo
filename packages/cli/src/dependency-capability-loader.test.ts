@@ -1357,9 +1357,10 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
 
   // @kovo-security-certifies C13 dependency-html-public-shadow-snapshot
   it.each([
-    ['ordinary module', ''],
-    ['Vite-ignored module', ' vite-ignore'],
-  ])('rejects an approved-looking %s shadowed by a public asset', async (_label, ignore) => {
+    ['ordinary module', 'module', ''],
+    ['Vite-ignored module', 'module', ' vite-ignore'],
+    ['browser-case-insensitive module', 'MODULE', ''],
+  ])('rejects an approved-looking %s shadowed by a public asset', async (_label, type, ignore) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-public-shadow-')));
     const appModulePath = join(root, 'src', 'client.ts');
     const publicModulePath = join(root, 'public', 'src', 'client.ts');
@@ -1375,7 +1376,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       );
       writeFileSync(
         join(root, 'index.html'),
-        `<!doctype html><script type="module"${ignore} src="/src/client.ts"></script>`,
+        `<!doctype html><script type="${type}"${ignore} src="/src/client.ts"></script>`,
       );
 
       await expect(
