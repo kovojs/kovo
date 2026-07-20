@@ -148,6 +148,15 @@ const serverRequestBodyProvenancePath = path.join(
   'packages/server/src/request-body-provenance.ts',
 );
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
+const serverMutationReplayPolicyPath = path.join(
+  repoRoot,
+  'packages/server/src/mutation/replay-policy.ts',
+);
+const serverMutationNoJsPath = path.join(repoRoot, 'packages/server/src/mutation/no-js.ts');
+const serverResponseSecurityIntrinsicsPath = path.join(
+  repoRoot,
+  'packages/server/src/response-security-intrinsics.ts',
+);
 const serverGuardsPath = path.join(repoRoot, 'packages/server/src/guards.ts');
 const serverGuardArgsReceiptPath = path.join(repoRoot, 'packages/server/src/guard-args-receipt.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
@@ -156,6 +165,11 @@ const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
 const serverPostgresAuthorizationCorrespondencePath = path.join(
   repoRoot,
   'packages/server/src/postgres-authorization-correspondence.ts',
+);
+const serverTaskRuntimePath = path.join(repoRoot, 'packages/server/src/task-runtime.ts');
+const serverTaskSecurityIntrinsicsPath = path.join(
+  repoRoot,
+  'packages/server/src/task-security-intrinsics.ts',
 );
 
 const serverEgressBehavioralInstrumentation = [
@@ -179,6 +193,31 @@ const schemaSecretBehavioralInstrumentation = [
 const serverBuildBehavioralInstrumentation = [
   '',
   'export const __securityMutationVercelFunctionSource = vercelFunctionSource;',
+].join('\n');
+const mutationReplayPolicyBehavioralInstrumentation = [
+  '',
+  "export { createMemoryMutationReplayStore as __securityMutationReplayStore } from '../replay.js';",
+  "export { mintMutationIdemToken as __securityMutationMintIdem } from '../mutation-idem.js';",
+].join('\n');
+const mutationNoJsBehavioralInstrumentation = [
+  '',
+  "export { mutation as __securityMutationNoJsMutation, renderNoJsMutationResponse as __securityMutationRenderNoJs } from '../mutation.js';",
+  "export { createMemoryMutationReplayStore as __securityMutationReplayStore } from '../replay.js';",
+  "export { mintMutationIdemToken as __securityMutationMintIdem } from '../mutation-idem.js';",
+  "export { s as __securityMutationNoJsSchema } from '../schema.js';",
+].join('\n');
+const taskRuntimeBehavioralInstrumentation = [
+  '',
+  "export { mutation as __securityMutationTaskMutation } from './mutation.js';",
+  "export { query as __securityMutationTaskQuery } from './query.js';",
+  "export { s as __securityMutationTaskSchema } from './schema.js';",
+  'export async function __securityMutationTaskRuntimeHooks(app: KovoApp) {',
+  '  const runtime = new DefaultAppTaskRuntime(app);',
+  '  await runtime.ensureStarted();',
+  '  const runner = (runtime as unknown as { runner: DurableTaskRunner }).runner;',
+  '  await runner.stop();',
+  '  return (runner as unknown as { hooks: unknown }).hooks;',
+  '}',
 ].join('\n');
 
 const dependencyLoaderPreEvaluationModuleCensusBranch = [
@@ -1388,6 +1427,88 @@ const weakenedTaskStartupAfterRequestAdmissionBranch = [
 const taskScheduleSchemaAdmission =
   '  const parsedArgs = await parseSchemaAsync(input.definition.input, input.args);';
 const removedTaskScheduleSchemaAdmission = '  const parsedArgs = input.args;';
+const machineReplaySelectorPlumbingBranch = [
+  '      context = mutationReplayContext(mode.csrf ?? false, {',
+  '        ...mode.request,',
+  '        idem: idemFacts.token,',
+  '        ...(machineReplayPrincipal === undefined ? {} : { machineReplayPrincipal }),',
+  '        mutationKey: mode.mutationKey,',
+  '        replayStore: freshnessCheckedStore,',
+  '      });',
+].join('\n');
+const restoredMachineWideReplayFallbackBranch = [
+  '      context = mutationReplayContext(mode.csrf ?? false, {',
+  '        ...mode.request,',
+  '        idem: idemFacts.token,',
+  "        machineReplayPrincipal: 'mutation-wide-fallback',",
+  '        mutationKey: mode.mutationKey,',
+  '        replayStore: freshnessCheckedStore,',
+  '      });',
+].join('\n');
+const unifiedNoJsReplayNamespaceBranch = [
+  '    const base = await context;',
+  '    if (mode.csrf === false && base.scope === null) throw new MutationReplayConflictError();',
+  '    return principalEpochReplayContext(',
+  '      base,',
+  '      principalEpochStore,',
+  '      mode.request.request,',
+  '      idemFacts.issuedAtMs,',
+  '    );',
+].join('\n');
+const restoredPrefixedNoJsReplayNamespaceBranch = [
+  '    const base = await context;',
+  '    if (mode.csrf === false && base.scope === null) throw new MutationReplayConflictError();',
+  '    return principalEpochReplayContext(',
+  '      { ...base, scope: base.scope === null ? null : `nojs:${base.scope}` },',
+  '      principalEpochStore,',
+  '      mode.request.request,',
+  '      idemFacts.issuedAtMs,',
+  '    );',
+].join('\n');
+const rejectedMachineReplayPromiseDrain =
+  '    if (securityIsPromise(selected)) requestStateIgnorePromiseRejection(selected);';
+const removedRejectedMachineReplayPromiseDrain =
+  '    if (securityIsPromise(selected)) void selected;';
+const deterministicNoJsFailureReplayCommit =
+  '      return await commitReservedMutationReplay(lifecycle.reservation, render);';
+const abortedDeterministicNoJsFailureReplay = [
+  '      await lifecycle.reservation?.abort?.();',
+  '      return render();',
+].join('\n');
+const exactUtf16MachinePrincipalHash =
+  "  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf16le']);";
+const weakenedUtf8MachinePrincipalHash =
+  "  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf8']);";
+const canonicalTaskInternalOrigin =
+  "const TASK_INTERNAL_REQUEST_URL = 'https://kovo.invalid/_kovo/task';";
+const attackerSelectedTaskInternalOrigin =
+  "const TASK_INTERNAL_REQUEST_URL = 'https://attacker.example/_kovo/task';";
+const taskMutationSessionProviderExclusion = [
+  '            ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),',
+  '            principalPosture: ingressOptions.principalPosture,',
+  '            taskScheduler: this.scheduler,',
+].join('\n');
+const restoredTaskMutationSessionProvider = [
+  '            ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),',
+  '            ...(this.app.sessionProvider === undefined',
+  '              ? {}',
+  '              : { sessionProvider: this.app.sessionProvider }),',
+  '            principalPosture: ingressOptions.principalPosture,',
+  '            taskScheduler: this.scheduler,',
+].join('\n');
+const taskQuerySessionProviderExclusion = [
+  '            maxListItems: this.app.requestLimits.maxQueryListItems,',
+  '            ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),',
+  '            principalPosture: ingressOptions.principalPosture,',
+].join('\n');
+const restoredTaskQuerySessionProvider = [
+  '            maxListItems: this.app.requestLimits.maxQueryListItems,',
+  '            ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),',
+  '            ...(this.app.sessionProvider === undefined',
+  '              ? {}',
+  '              : { sessionProvider: this.app.sessionProvider }),',
+  '            principalPosture: ingressOptions.principalPosture,',
+].join('\n');
 const taskEgressCapabilitySeal =
   "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
 const removedTaskEgressCapabilitySeal = '    return context;';
@@ -4580,6 +4701,102 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertViteJsToTsSiblingDiscoveryBehavior,
   },
   {
+    behavioralInstrumentation: mutationReplayPolicyBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Replaces the post-guard machine replay selector result with a mutation-wide fallback.',
+    expectedKiller:
+      'csrf:false replay claims must remain isolated by the exact validated machine principal',
+    name: 'mutation-replay/restore-machine-wide-principal-fallback',
+    replacement: restoredMachineWideReplayFallbackBranch,
+    search: machineReplaySelectorPlumbingBranch,
+    sourceFile: serverMutationReplayPolicyPath,
+    test: assertMachineReplaySelectorIsolationBehavior,
+  },
+  {
+    behavioralInstrumentation: mutationReplayPolicyBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Restores a no-JS-only prefix around the shared mutation replay claim scope.',
+    expectedKiller:
+      'enhanced and no-JS submissions must contend on one claim before response-vocabulary checks',
+    name: 'mutation-replay/restore-nojs-prefixed-namespace',
+    replacement: restoredPrefixedNoJsReplayNamespaceBranch,
+    search: unifiedNoJsReplayNamespaceBranch,
+    sourceFile: serverMutationReplayPolicyPath,
+    test: assertEnhancedAndNoJsShareReplayClaimBehavior,
+  },
+  {
+    behavioralInstrumentation: mutationNoJsBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Aborts a deterministic no-JS application failure instead of committing it.',
+    expectedKiller:
+      'an identical retry of a deterministic no-JS failure must replay without rerunning the handler',
+    name: 'mutation-replay/abort-deterministic-nojs-failure',
+    replacement: abortedDeterministicNoJsFailureReplay,
+    search: deterministicNoJsFailureReplayCommit,
+    sourceFile: serverMutationNoJsPath,
+    test: assertDeterministicNoJsFailureReplayBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Hashes machine principals through UTF-8 replacement semantics instead of exact UTF-16 code units.',
+    expectedKiller:
+      'distinct lone-surrogate machine principals must retain distinct replay identities',
+    name: 'mutation-replay/hash-machine-principal-as-utf8',
+    replacement: weakenedUtf8MachinePrincipalHash,
+    search: exactUtf16MachinePrincipalHash,
+    sourceFile: serverResponseSecurityIntrinsicsPath,
+    test: assertExactUtf16MachinePrincipalHashBehavior,
+  },
+  {
+    behavioralInstrumentation: mutationReplayPolicyBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Drops the rejection drain for a Promise returned by a cast-bypassed selector.',
+    expectedKiller:
+      'malformed Promise selector results must acquire a rejection reaction before failing closed',
+    name: 'mutation-replay/drop-rejected-selector-promise-drain',
+    replacement: removedRejectedMachineReplayPromiseDrain,
+    search: rejectedMachineReplayPromiseDrain,
+    sourceFile: serverMutationReplayPolicyPath,
+    test: assertRejectedMachineReplaySelectorPromiseDrainBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Replaces the fixed durable-task internal origin with an attacker-selected origin.',
+    expectedKiller: 'durable task requests and diagnostics must use the canonical inert origin',
+    name: 'server-task/replace-canonical-internal-origin',
+    replacement: attackerSelectedTaskInternalOrigin,
+    search: canonicalTaskInternalOrigin,
+    sourceFile: serverTaskSecurityIntrinsicsPath,
+    test: assertCanonicalTaskInternalOriginBehavior,
+  },
+  {
+    behavioralInstrumentation: taskRuntimeBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Restores the remote session provider inside durable-task query execution.',
+    expectedKiller:
+      'task runQuery must derive authority only from its explicit task principal posture',
+    name: 'server-task/restore-query-session-provider',
+    replacement: restoredTaskQuerySessionProvider,
+    search: taskQuerySessionProviderExclusion,
+    sourceFile: serverTaskRuntimePath,
+    test: assertTaskQueryExcludesSessionProviderBehavior,
+  },
+  {
+    behavioralInstrumentation: taskRuntimeBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Restores the remote session provider inside durable-task mutation execution.',
+    expectedKiller:
+      'task runMutation must derive authority only from its explicit task principal posture',
+    name: 'server-task/restore-mutation-session-provider',
+    replacement: restoredTaskMutationSessionProvider,
+    search: taskMutationSessionProviderExclusion,
+    sourceFile: serverTaskRuntimePath,
+    test: assertTaskMutationExcludesSessionProviderBehavior,
+  },
+  {
     behavioralInstrumentation: serverEgressBehavioralInstrumentation,
     behavioralTypeScript: true,
     description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
@@ -4671,6 +4888,264 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
 ];
+
+function machineReplayPolicyRequest(store, idem) {
+  return {
+    idem,
+    rawInput: { value: 'same-body' },
+    replayStore: store,
+    request: {},
+  };
+}
+
+function enhancedReplayFixtureResponse() {
+  return {
+    body: '<kovo-fragment></kovo-fragment>',
+    headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+    status: 200,
+  };
+}
+
+async function assertMachineReplaySelectorIsolationBehavior(moduleUnderTest) {
+  const store = moduleUnderTest.__securityMutationReplayStore();
+  const idem = moduleUnderTest.__securityMutationMintIdem();
+  const request = machineReplayPolicyRequest(store, idem);
+  let tenantACalls = 0;
+  let tenantBCalls = 0;
+  const tenantA = moduleUnderTest.enhancedMutationReplayPolicy({
+    csrf: false,
+    machineReplayPrincipal() {
+      tenantACalls += 1;
+      return 'tenant-a';
+    },
+    mutationKey: 'security/machine-selector',
+    request,
+  });
+  const tenantB = moduleUnderTest.enhancedMutationReplayPolicy({
+    csrf: false,
+    machineReplayPrincipal() {
+      tenantBCalls += 1;
+      return 'tenant-b';
+    },
+    mutationKey: 'security/machine-selector',
+    request,
+  });
+  const reserved = await tenantA.reserve({ guarded: 'tenant-a' });
+  if (reserved.kind !== 'reserved') {
+    throw new Error(`tenant A did not reserve its isolated replay claim: ${reserved.kind}`);
+  }
+  await reserved.reservation.commit(enhancedReplayFixtureResponse());
+  const tenantBReplay = await tenantB.read({ guarded: 'tenant-b' });
+  if (tenantBReplay !== undefined) {
+    throw new Error('tenant B observed tenant A replay truth through a shared fallback');
+  }
+  if (tenantACalls !== 1 || tenantBCalls !== 1) {
+    throw new Error(
+      `machine replay selectors were not each consumed exactly once: A=${tenantACalls} B=${tenantBCalls}`,
+    );
+  }
+}
+
+async function assertEnhancedAndNoJsShareReplayClaimBehavior(moduleUnderTest) {
+  const store = moduleUnderTest.__securityMutationReplayStore();
+  const idem = moduleUnderTest.__securityMutationMintIdem();
+  const request = machineReplayPolicyRequest(store, idem);
+  const enhanced = moduleUnderTest.enhancedMutationReplayPolicy({
+    csrf: false,
+    machineReplayPrincipal: () => 'tenant-a',
+    mutationKey: 'security/cross-mode',
+    request,
+  });
+  const reserved = await enhanced.reserve({ guarded: 'tenant-a' });
+  if (reserved.kind !== 'reserved') {
+    throw new Error(`enhanced request did not reserve the shared claim: ${reserved.kind}`);
+  }
+  await reserved.reservation.commit(enhancedReplayFixtureResponse());
+
+  const noJs = moduleUnderTest.noJsMutationReplayPolicy({
+    csrf: false,
+    machineReplayPrincipal: () => 'tenant-a',
+    mutationKey: 'security/cross-mode',
+    request,
+  });
+  let conflicted = false;
+  try {
+    await noJs.read({ guarded: 'tenant-a' });
+  } catch {
+    conflicted = true;
+  }
+  if (!conflicted) {
+    throw new Error('no-JS request escaped the enhanced claim through a prefixed namespace');
+  }
+}
+
+async function assertDeterministicNoJsFailureReplayBehavior(moduleUnderTest) {
+  let handlerCalls = 0;
+  const definition = moduleUnderTest.__securityMutationNoJsMutation(
+    'security/deterministic-nojs-failure',
+    {
+      csrf: false,
+      csrfJustification: 'mutation forcing fixture uses an explicit machine replay principal',
+      errors: { DENIED: moduleUnderTest.__securityMutationNoJsSchema.object({}) },
+      handler(_input, _request, context) {
+        handlerCalls += 1;
+        return context.fail('DENIED', {});
+      },
+      input: moduleUnderTest.__securityMutationNoJsSchema.object({
+        value: moduleUnderTest.__securityMutationNoJsSchema.string(),
+      }),
+      machineReplayPrincipal: () => 'tenant-a',
+      redirectTo: '/done',
+    },
+  );
+  const store = moduleUnderTest.__securityMutationReplayStore();
+  const idem = moduleUnderTest.__securityMutationMintIdem();
+  const request = {
+    idem,
+    rawInput: { value: 'same-body' },
+    redirectTo: '/done',
+    replayStore: store,
+    request: {},
+  };
+  const first = await moduleUnderTest.__securityMutationRenderNoJs(definition, request);
+  const replayed = await moduleUnderTest.__securityMutationRenderNoJs(definition, request);
+  if (first.status !== 422 || replayed.status !== 422 || handlerCalls !== 1) {
+    throw new Error(
+      `deterministic no-JS failure was not replayed exactly once: statuses=${first.status}/${replayed.status} calls=${handlerCalls}`,
+    );
+  }
+}
+
+function assertExactUtf16MachinePrincipalHashBehavior(moduleUnderTest) {
+  const first = moduleUnderTest.securitySha256Utf16LeHex('\uD800');
+  const second = moduleUnderTest.securitySha256Utf16LeHex('\uD801');
+  if (
+    first !== '205022e3428b7c8276cf247b36e4e512db5651e5cb3472c253d9ee893a8ac750' ||
+    second !== '4a9868967003d43ddf0f042f7746934a6e27d3464b9b32ac9d93bab42b295696' ||
+    first === second
+  ) {
+    throw new Error(`machine replay hash aliased exact UTF-16 identities: ${first}/${second}`);
+  }
+}
+
+async function assertRejectedMachineReplaySelectorPromiseDrainBehavior(moduleUnderTest) {
+  let reactionCount = 0;
+  let rejectSelected = () => undefined;
+  class ReactionPromise extends Promise {
+    static get [Symbol.species]() {
+      return class ObservedReactionPromise extends Promise {
+        constructor(executor) {
+          reactionCount += 1;
+          super(executor);
+        }
+      };
+    }
+  }
+  const selected = new ReactionPromise((_resolve, reject) => {
+    rejectSelected = reject;
+  });
+  const policy = moduleUnderTest.enhancedMutationReplayPolicy({
+    csrf: false,
+    machineReplayPrincipal: () => selected,
+    mutationKey: 'security/rejected-selector',
+    request: machineReplayPolicyRequest(
+      moduleUnderTest.__securityMutationReplayStore(),
+      moduleUnderTest.__securityMutationMintIdem(),
+    ),
+  });
+  let conflicted = false;
+  try {
+    await policy.reserve({ guarded: 'tenant-a' });
+  } catch {
+    conflicted = true;
+  }
+  const drained = reactionCount > 0;
+  if (!drained) selected.catch(() => undefined);
+  rejectSelected(new Error('selector secret must be drained'));
+  await new Promise((resolve) => setImmediate(resolve));
+  if (!conflicted || !drained) {
+    throw new Error(
+      `Promise selector did not fail closed with an installed rejection drain: conflict=${conflicted} drain=${drained}`,
+    );
+  }
+}
+
+function assertCanonicalTaskInternalOriginBehavior(moduleUnderTest) {
+  const request = moduleUnderTest.taskInternalRequest();
+  const url = moduleUnderTest.taskInternalUrl();
+  if (
+    request.url !== 'https://kovo.invalid/_kovo/task' ||
+    request.method !== 'POST' ||
+    url !== 'https://kovo.invalid/_kovo/task'
+  ) {
+    throw new Error(
+      `durable task internal origin drifted: request=${request.url} method=${request.method} url=${url}`,
+    );
+  }
+}
+
+async function taskRuntimeHookFixture(moduleUnderTest) {
+  let sessionProviderCalls = 0;
+  const db = {
+    async query(text) {
+      if (text === 'select now() as now') {
+        return { rows: [{ now: '2026-07-20T10:00:00.000Z' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+  const hooks = await moduleUnderTest.__securityMutationTaskRuntimeHooks({
+    db: () => db,
+    requestLimits: { maxQueryListItems: 100 },
+    sessionProvider() {
+      sessionProviderCalls += 1;
+      return { user: { id: 'remote-session-principal' } };
+    },
+    tasks: [],
+  });
+  return { hooks, sessionProviderCalls: () => sessionProviderCalls };
+}
+
+async function assertTaskQueryExcludesSessionProviderBehavior(moduleUnderTest) {
+  const fixture = await taskRuntimeHookFixture(moduleUnderTest);
+  const definition = moduleUnderTest.__securityMutationTaskQuery('security/task-query', {
+    load(_input, context) {
+      return context.request.url;
+    },
+  });
+  const value = await fixture.hooks.runQuery(definition, undefined, {
+    principalPosture: undefined,
+    signal: new AbortController().signal,
+  });
+  if (value !== 'https://kovo.invalid/_kovo/task' || fixture.sessionProviderCalls() !== 0) {
+    throw new Error(
+      `task query acquired remote session authority: value=${String(value)} calls=${fixture.sessionProviderCalls()}`,
+    );
+  }
+}
+
+async function assertTaskMutationExcludesSessionProviderBehavior(moduleUnderTest) {
+  const fixture = await taskRuntimeHookFixture(moduleUnderTest);
+  const definition = moduleUnderTest.__securityMutationTaskMutation('security/task-mutation', {
+    input: moduleUnderTest.__securityMutationTaskSchema.object({}),
+    handler(_input, request) {
+      return request.url;
+    },
+  });
+  const value = await fixture.hooks.runMutation(
+    definition,
+    {},
+    {
+      principalPosture: undefined,
+      signal: new AbortController().signal,
+    },
+  );
+  if (value !== 'https://kovo.invalid/_kovo/task' || fixture.sessionProviderCalls() !== 0) {
+    throw new Error(
+      `task mutation acquired remote session authority: value=${String(value)} calls=${fixture.sessionProviderCalls()}`,
+    );
+  }
+}
 
 async function assertRuntimeSelectedExecutableReferenceClosureBehavior(moduleUnderTest) {
   const result = compileFiniteIrFixture(

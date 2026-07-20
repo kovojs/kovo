@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after TASK B routing closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(295);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(303);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
@@ -77,6 +77,24 @@ describe('security-gate-mutations', () => {
       'request-body/drop-formdata-foreach-provenance',
       'request-body-provenance/restore-eager-scalar-boxing',
       'request-body/drop-json-pretag-shape-budget',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
+  });
+
+  it('enrolls behavioral replay-isolation and task-authority forcing mutants', () => {
+    const names = [
+      'mutation-replay/abort-deterministic-nojs-failure',
+      'mutation-replay/drop-rejected-selector-promise-drain',
+      'mutation-replay/hash-machine-principal-as-utf8',
+      'mutation-replay/restore-machine-wide-principal-fallback',
+      'mutation-replay/restore-nojs-prefixed-namespace',
+      'server-task/replace-canonical-internal-origin',
+      'server-task/restore-mutation-session-provider',
+      'server-task/restore-query-session-provider',
     ];
     const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
 
