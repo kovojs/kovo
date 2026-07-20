@@ -3901,6 +3901,29 @@ export default async function handler(request) {
         expect(response.headers.get('x-middleware-next')).toBeNull();
       }
 
+      // SPEC §9.5: this middleware is the last Kovo-owned door before Vercel's filesystem
+      // routing, so GET/HEAD framing must close here rather than only in the later Node function.
+      const bodyFramedMiddlewareResponses = runGeneratedVercelIngressMiddleware(
+        join(vercelOutDir, 'functions/kovo-ingress.func/index.js'),
+        [
+          {
+            headers: [['content-length', '1']],
+            method: 'GET',
+            url: 'https://deployment.example/assets/cart.css',
+          },
+          {
+            headers: [['transfer-encoding', 'chunked']],
+            method: 'HEAD',
+            url: 'https://deployment.example/c/__v/cart-v1/cart.client.js',
+          },
+        ],
+      );
+      expect(bodyFramedMiddlewareResponses).toHaveLength(2);
+      for (const response of bodyFramedMiddlewareResponses) {
+        expect(response.status).toBe(413);
+        expect(response.headers.get('x-middleware-next')).toBeNull();
+      }
+
       const emittedVercelAdapter = (await import(
         `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/node-adapter.mjs')).href}?t=${Date.now()}`
       )) as NodeAdapterModule;
@@ -6130,6 +6153,7 @@ interface GeneratedWorkerResult {
 }
 
 interface GeneratedVercelIngressRequest {
+  readonly headers?: readonly (readonly [string, string])[];
   readonly method?: string;
   readonly url: string;
 }
@@ -6429,7 +6453,10 @@ delete process.env.KOVO_BUILD_TEST_PROBE;
 const middleware = (await import(${JSON.stringify(pathToFileURL(middlewarePath).href)})).default;
 const results = [];
 for (const probe of requests) {
-  const response = await middleware(new Request(probe.url, { method: probe.method }));
+  const response = await middleware(new Request(probe.url, {
+    headers: probe.headers,
+    method: probe.method,
+  }));
   results.push({
     body: await response.text(),
     headers: [...response.headers.entries()],
