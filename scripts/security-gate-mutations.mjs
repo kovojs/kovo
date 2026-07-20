@@ -1486,10 +1486,8 @@ const semanticGraphBehavioralInstrumentation = [
 
 const semanticV2SourceByteEqualityBranch =
   '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {';
-const weakenedSemanticV2SourceByteEqualityBranch =
-  '    if (!sourceFile || !semanticSource) {';
-const semanticV2SchemaBranch =
-  "      if (graph.schema !== 'kovo-security-semantic-graph/v2') {";
+const weakenedSemanticV2SourceByteEqualityBranch = '    if (!sourceFile || !semanticSource) {';
+const semanticV2SchemaBranch = "      if (graph.schema !== 'kovo-security-semantic-graph/v2') {";
 const weakenedSemanticV2SchemaBranch =
   "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') {";
 const semanticV2FactoryRootBranch = [
