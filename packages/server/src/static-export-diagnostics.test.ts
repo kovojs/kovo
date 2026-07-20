@@ -12,11 +12,47 @@ import { route } from './route.js';
 import {
   blockingStaticExportDiagnostics,
   isStaticExportDiagnosticError,
+  staticExportCompileDiagnosticsFromModule,
   staticExportDiagnostic,
 } from './static-export-diagnostics.js';
 import { exportStaticApp } from './static-export.js';
 
 describe('server static export diagnostic boundary', () => {
+  it('rehydrates only origin-registered compiler diagnostics from own app-module data', () => {
+    const registered = createRegisteredDiagnostic(
+      'KV201',
+      { fileName: 'src/cart.tsx', start: { column: 12, line: 4 } },
+      {
+        help: 'Fixes: move the value into component/query state via ctx.',
+        message: 'Closure captures unserializable value.',
+      },
+    );
+    let getterReads = 0;
+    const accessorModule = Object.defineProperty({}, 'diagnostics', {
+      get() {
+        getterReads += 1;
+        return [registered];
+      },
+    });
+
+    const collected = staticExportCompileDiagnosticsFromModule({
+      diagnostics: [
+        registered,
+        {
+          code: 'KV201',
+          fileName: 'src/forged.tsx',
+          message: 'structural lookalike',
+          severity: 'error',
+        },
+      ],
+    });
+
+    expect(collected).toEqual([registered]);
+    expect(collected[0]).not.toBe(registered);
+    expect(staticExportCompileDiagnosticsFromModule(accessorModule)).toEqual([]);
+    expect(getterReads).toBe(0);
+  });
+
   it('accepts only origin-registered own-data diagnostic error rows', () => {
     expect(
       isStaticExportDiagnosticError({

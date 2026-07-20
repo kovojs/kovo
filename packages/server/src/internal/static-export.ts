@@ -21,6 +21,7 @@ export {
   formatStaticExportDiagnostics,
   isStaticExportDiagnostic,
   isStaticExportDiagnosticError,
+  staticExportCompileDiagnosticsFromModule,
 } from '../static-export-diagnostics.js';
 export {
   assertStaticExportManifestMatchesResult,

@@ -43,8 +43,8 @@ const verifierDiagnosticsPath = 'packages/test/src/verifier-diagnostics.ts';
 const verifierSecurityIntrinsicsPath = 'packages/test/src/verifier-security-intrinsics.ts';
 const rootDiagnosticDoor = `${coreDiagnosticsPath}#createRegisteredDiagnostic`;
 const derivedDiagnosticDoor = `${coreDiagnosticsPath}#deriveRegisteredDiagnostic`;
-const cliStaticExportDiagnosticRehydrationDoor =
-  'packages/cli/src/commands/build-export.ts#rehydrateStaticExportCompileDiagnostic';
+const staticExportDiagnosticRehydrationDoor =
+  'packages/server/src/static-export-diagnostics.ts#rehydrateStaticExportCompileDiagnostic';
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
@@ -57,7 +57,7 @@ const expectedRegisteredDiagnosticAssertionDigest =
   '2d4f399c61a679f28a081902b5464a2009a92dd3b24c198ca1aee6b3a0313c26';
 const expectedDerivedDiagnosticDoorDigest =
   '45d97a10f0537ad7fcdbcfc806e9ce227ba5a157e73eaab13e108717f4d7e63a';
-const expectedCliStaticExportDiagnosticRehydrationDoorDigest =
+const expectedStaticExportDiagnosticRehydrationDoorDigest =
   '38e9f176edf8a6520ec7884e2e05d0d86c6a44938fd11c2a370a789f84ce704c';
 const expectedRegisteredDiagnosticDefinitionFactoryDigest =
   'e8dd153b51da2c8f22bc81bfe190d872c63bca35acf4a10ddef4db6f511f6a97';
@@ -78,7 +78,7 @@ const expectedCompileComponentModuleDigest =
 const expectedValidateComponentPhaseDigest =
   '54f995664b8b91f754f04481585a009e256dce30ac8f3a66cabb80fc53d109db';
 const expectedCoreBuildDistCommand =
-  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/classifier-verdict.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/semantic-attribute-manifest.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-json.ts --dts';
+  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts';
 // Capability-closure summaries for the few framework-owned loaders whose target is intentionally
 // runtime-selected. Each row pins both the complete source file and the acquisition expression, so
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
@@ -302,8 +302,12 @@ const protectedCoreBridgeExports = new Map([
 const reviewedDiagnosticWrappers = new Map([
   [derivedDiagnosticDoor, { exported: true, name: 'deriveRegisteredDiagnostic' }],
   [
-    cliStaticExportDiagnosticRehydrationDoor,
+    staticExportDiagnosticRehydrationDoor,
     { exported: false, name: 'rehydrateStaticExportCompileDiagnostic' },
+  ],
+  [
+    'packages/cli/src/commands/build-export.ts#rehydrateStaticExportDiagnostic',
+    { exported: false, name: 'rehydrateStaticExportDiagnostic' },
   ],
   [`${compilerDiagnosticsPath}#diagnosticFor`, { exported: true, name: 'diagnosticFor' }],
   [
@@ -346,6 +350,7 @@ const reviewedDiagnosticEmitterNames = new Set([
   'drizzleDiagnostic',
   'drizzleDiagnosticWithoutSite',
   'eventTriggerDiagnostic',
+  'rehydrateStaticExportDiagnostic',
   'rehydrateStaticExportCompileDiagnostic',
   'staticExportDiagnostic',
   'blockingStaticExportDiagnostic',
@@ -4157,15 +4162,17 @@ function validateRegisteredDiagnosticProvenance(sourceFile, analysis) {
     }
   }
 
-  const cliSource = analysis.sourceFiles.get('packages/cli/src/commands/build-export.ts');
-  const cliRehydration =
-    cliSource === undefined
+  const staticExportSource = analysis.sourceFiles.get(
+    'packages/server/src/static-export-diagnostics.ts',
+  );
+  const staticExportRehydration =
+    staticExportSource === undefined
       ? undefined
-      : findTopLevelFunction(cliSource, 'rehydrateStaticExportCompileDiagnostic');
-  const cliDigest = sourceNodeDigest(cliRehydration, cliSource);
-  if (cliDigest !== expectedCliStaticExportDiagnosticRehydrationDoorDigest) {
+      : findTopLevelFunction(staticExportSource, 'rehydrateStaticExportCompileDiagnostic');
+  const staticExportDigest = sourceNodeDigest(staticExportRehydration, staticExportSource);
+  if (staticExportDigest !== expectedStaticExportDiagnosticRehydrationDoorDigest) {
     findings.push(
-      `${cliStaticExportDiagnosticRehydrationDoor}: serialized diagnostic rehydration door drifted from its reviewed exact body (received ${cliDigest})`,
+      `${staticExportDiagnosticRehydrationDoor}: serialized diagnostic rehydration door drifted from its reviewed exact body (received ${staticExportDigest})`,
     );
   }
   return findings;

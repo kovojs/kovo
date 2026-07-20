@@ -500,15 +500,12 @@ type BuildExecutionModule = Pick<
 interface LoadedExportAppModule {
   appModule: unknown;
   close?: () => Promise<void>;
-  createStaticExportCompileDiagnostic: (
-    code: DiagnosticCode,
-    fields: { fileName: string; start?: { column: number; line: number } },
-    options: { help?: string; message: string },
-  ) => StaticExportCompileDiagnostic;
   exportStaticApp: ExportStaticApp;
-  isStaticExportCompileDiagnostic: (value: unknown) => boolean;
   isStaticExportDiagnostic: (value: unknown) => boolean;
   isStaticExportDiagnosticError: (value: unknown) => boolean;
+  staticExportCompileDiagnosticsFromModule: (
+    moduleValue: unknown,
+  ) => StaticExportCompileDiagnostic[];
 }
 
 export interface KovoExportCommandResult extends KovoCheckResult {
@@ -5181,11 +5178,7 @@ export async function runExportCommandStructured(
         ...(resolvedOptions.onNonExportable === undefined
           ? {}
           : { onNonExportable: resolvedOptions.onNonExportable }),
-        diagnostics: staticExportDiagnosticsFromModule(
-          loadedExport.appModule,
-          loadedExport.isStaticExportCompileDiagnostic,
-          loadedExport.createStaticExportCompileDiagnostic,
-        ),
+        diagnostics: loadedExport.staticExportCompileDiagnosticsFromModule(loadedExport.appModule),
         ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
         outDir: resolvedOptions.outDir,
         ...(resolvedOptions.assetBase === undefined
@@ -5365,9 +5358,6 @@ async function loadExportAppModule(
     const serverModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/static-export'), root),
     )) as typeof import('@kovojs/server/internal/static-export');
-    const diagnosticModule = (await server.ssrLoadModule(
-      viteSsrModuleId(requireFromApp.resolve('@kovojs/core/internal/diagnostics'), root),
-    )) as typeof import('@kovojs/core/internal/diagnostics');
     const serverInternalBuildModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     )) as typeof import('@kovojs/server/internal/build');
@@ -5377,12 +5367,11 @@ async function loadExportAppModule(
     return {
       appModule,
       close: () => lifetime.close(),
-      createStaticExportCompileDiagnostic: (code, fields, constructionOptions) =>
-        diagnosticModule.createRegisteredDiagnostic(code, fields, constructionOptions),
       exportStaticApp: exportStaticAppFromModule(serverModule),
-      isStaticExportCompileDiagnostic: diagnosticModule.isRegisteredDiagnostic,
       isStaticExportDiagnostic: serverModule.isStaticExportDiagnostic,
       isStaticExportDiagnosticError: serverModule.isStaticExportDiagnosticError,
+      staticExportCompileDiagnosticsFromModule:
+        serverModule.staticExportCompileDiagnosticsFromModule,
     };
   } catch (error) {
     await closeBuildTimeViteServerLifetime(lifetime, true, error);
@@ -5735,94 +5724,6 @@ function isKovoApp(value: unknown): value is KovoApp {
   );
 }
 
-function staticExportDiagnosticsFromModule(
-  module: unknown,
-  originIsRegistered: LoadedExportAppModule['isStaticExportCompileDiagnostic'],
-  createDiagnostic: LoadedExportAppModule['createStaticExportCompileDiagnostic'],
-): StaticExportCompileDiagnostic[] {
-  if (typeof module !== 'object' || module === null) return [];
-  const diagnostics = (module as { diagnostics?: unknown }).diagnostics;
-  if (!buildArrayIsArray(diagnostics)) return [];
-
-  const transferred: StaticExportCompileDiagnostic[] = [];
-  const source = buildSnapshotDenseArray(diagnostics, 'Static-export compile diagnostics');
-  for (let index = 0; index < source.length; index += 1) {
-    const diagnostic = registeredStaticExportCompileDiagnostic(
-      source[index],
-      index,
-      originIsRegistered,
-      createDiagnostic,
-    );
-    if (diagnostic !== undefined) {
-      buildSecurityArrayAppend(
-        transferred,
-        diagnostic,
-        'CLI packages/cli/src/commands/build-export.ts collection',
-      );
-    }
-  }
-  return transferred;
-}
-
-function registeredStaticExportCompileDiagnostic(
-  value: unknown,
-  index: number,
-  originIsRegistered: LoadedExportAppModule['isStaticExportCompileDiagnostic'],
-  createDiagnostic: LoadedExportAppModule['createStaticExportCompileDiagnostic'],
-): StaticExportCompileDiagnostic | undefined {
-  if (!originIsRegistered(value) || typeof value !== 'object' || value === null) return undefined;
-  const label = `Static-export compile diagnostics[${index}]`;
-  const code = buildOwnDataProperty(value, 'code', `${label}.code`);
-  const fileName = buildOwnDataProperty(value, 'fileName', `${label}.fileName`);
-  const help = buildOwnDataProperty(value, 'help', `${label}.help`);
-  const message = buildOwnDataProperty(value, 'message', `${label}.message`);
-  const rawStart = buildOwnDataProperty(value, 'start', `${label}.start`);
-  if (
-    !code.present ||
-    !isDiagnosticCode(code.value) ||
-    !fileName.present ||
-    typeof fileName.value !== 'string' ||
-    !message.present ||
-    typeof message.value !== 'string' ||
-    (help.present && typeof help.value !== 'string')
-  ) {
-    return undefined;
-  }
-  let start: StaticExportCompileDiagnostic['start'];
-  if (rawStart.present) {
-    if (typeof rawStart.value !== 'object' || rawStart.value === null) return undefined;
-    const column = buildOwnDataProperty(rawStart.value, 'column', `${label}.start.column`);
-    const line = buildOwnDataProperty(rawStart.value, 'line', `${label}.start.line`);
-    if (
-      !column.present ||
-      typeof column.value !== 'number' ||
-      !line.present ||
-      typeof line.value !== 'number'
-    ) {
-      return undefined;
-    }
-    start = { column: column.value, line: line.value };
-  }
-  return rehydrateStaticExportCompileDiagnostic(
-    code.value,
-    { fileName: fileName.value, ...(start === undefined ? {} : { start }) },
-    {
-      ...(help.present ? { help: help.value as string } : {}),
-      message: message.value,
-    },
-    createDiagnostic,
-  );
-}
-
-function rehydrateStaticExportCompileDiagnostic(
-  code: DiagnosticCode,
-  fields: { fileName: string; start?: { column: number; line: number } },
-  options: { help?: string; message: string },
-  createDiagnostic: LoadedExportAppModule['createStaticExportCompileDiagnostic'] = createRegisteredDiagnostic,
-): StaticExportCompileDiagnostic {
-  return createDiagnostic(code, fields, options);
-}
-
 /**
  * Cross the bundled SSR realm only through an origin-registry check and a receiving-registry
  * reconstruction. Private WeakSet provenance is deliberately realm-local; structural copying or a
@@ -5876,6 +5777,7 @@ function transferStaticExportDiagnostics(
     );
     const message = buildOwnDataProperty(diagnostic as object, 'message', `${label}.message`);
     const routePath = buildOwnDataProperty(diagnostic as object, 'routePath', `${label}.routePath`);
+    const concretePathValue = concretePath.present ? concretePath.value : undefined;
     if (
       !code.present ||
       !isDiagnosticCode(code.value) ||
@@ -5883,16 +5785,16 @@ function transferStaticExportDiagnostics(
       typeof message.value !== 'string' ||
       !routePath.present ||
       typeof routePath.value !== 'string' ||
-      (concretePath.present && typeof concretePath.value !== 'string')
+      (concretePath.present && typeof concretePathValue !== 'string')
     ) {
       throw new TypeError(`${label} has an invalid registered wire shape.`);
     }
     buildSecurityArrayAppend(
       transferred,
-      createRegisteredDiagnostic(
+      rehydrateStaticExportDiagnostic(
         code.value,
         {
-          ...(concretePath.present ? { concretePath: concretePath.value } : {}),
+          ...(typeof concretePathValue === 'string' ? { concretePath: concretePathValue } : {}),
           routePath: routePath.value,
         },
         { message: message.value },
@@ -5901,6 +5803,14 @@ function transferStaticExportDiagnostics(
     );
   }
   return transferred;
+}
+
+function rehydrateStaticExportDiagnostic(
+  code: DiagnosticCode,
+  fields: { concretePath?: string; routePath: string },
+  options: { message: string },
+): StaticExportResult['diagnostics'][number] {
+  return createRegisteredDiagnostic(code, fields, options);
 }
 
 function kovoExportResult(

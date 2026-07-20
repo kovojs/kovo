@@ -176,6 +176,112 @@ export function blockingStaticExportDiagnostics(
   return blocking;
 }
 
+/**
+ * @internal Collect compiler diagnostics from an app module inside the same framework-owned SSR
+ * realm that loaded that module. Private diagnostic provenance is realm-local, so the CLI must not
+ * inject a constructor or attempt to bless a structural value after it crosses the realm boundary
+ * (SPEC §2/§11.3).
+ */
+export function staticExportCompileDiagnosticsFromModule(
+  moduleValue: unknown,
+): StaticExportCompileDiagnostic[] {
+  if (typeof moduleValue !== 'object' || moduleValue === null) return [];
+
+  let diagnostics: ReturnType<typeof buildOwnDataProperty>;
+  try {
+    diagnostics = buildOwnDataProperty(
+      moduleValue,
+      'diagnostics',
+      'Static-export app module diagnostics',
+    );
+  } catch {
+    return [];
+  }
+  if (!diagnostics.present) return [];
+
+  let source: readonly unknown[];
+  try {
+    source = snapshotBuildArray(
+      diagnostics.value as readonly unknown[],
+      'Static-export app module diagnostics',
+    );
+  } catch {
+    return [];
+  }
+
+  const transferred: StaticExportCompileDiagnostic[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = registeredStaticExportCompileDiagnostic(source[index], index);
+    if (diagnostic !== undefined) {
+      witnessArrayAppend(
+        transferred,
+        diagnostic,
+        'Server packages/server/src/static-export-diagnostics.ts compile collection',
+      );
+    }
+  }
+  return transferred;
+}
+
+function registeredStaticExportCompileDiagnostic(
+  value: unknown,
+  index: number,
+): StaticExportCompileDiagnostic | undefined {
+  if (!isRegisteredDiagnostic(value) || typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const label = `Static-export compile diagnostics[${index}]`;
+  const code = buildOwnDataProperty(value, 'code', `${label}.code`);
+  const fileName = buildOwnDataProperty(value, 'fileName', `${label}.fileName`);
+  const help = buildOwnDataProperty(value, 'help', `${label}.help`);
+  const message = buildOwnDataProperty(value, 'message', `${label}.message`);
+  const rawStart = buildOwnDataProperty(value, 'start', `${label}.start`);
+  if (
+    !code.present ||
+    !isDiagnosticCode(code.value) ||
+    !fileName.present ||
+    typeof fileName.value !== 'string' ||
+    !message.present ||
+    typeof message.value !== 'string' ||
+    (help.present && typeof help.value !== 'string')
+  ) {
+    return undefined;
+  }
+
+  let start: StaticExportCompileDiagnostic['start'];
+  if (rawStart.present) {
+    if (typeof rawStart.value !== 'object' || rawStart.value === null) return undefined;
+    const column = buildOwnDataProperty(rawStart.value, 'column', `${label}.start.column`);
+    const line = buildOwnDataProperty(rawStart.value, 'line', `${label}.start.line`);
+    if (
+      !column.present ||
+      typeof column.value !== 'number' ||
+      !line.present ||
+      typeof line.value !== 'number'
+    ) {
+      return undefined;
+    }
+    start = { column: column.value, line: line.value };
+  }
+
+  return rehydrateStaticExportCompileDiagnostic(
+    code.value,
+    { fileName: fileName.value, ...(start === undefined ? {} : { start }) },
+    {
+      ...(help.present ? { help: help.value as string } : {}),
+      message: message.value,
+    },
+  );
+}
+
+function rehydrateStaticExportCompileDiagnostic(
+  code: DiagnosticCode,
+  fields: { fileName: string; start?: { column: number; line: number } },
+  options: { help?: string; message: string },
+): StaticExportCompileDiagnostic {
+  return createRegisteredDiagnostic(code, fields, options);
+}
+
 function registeredStaticExportDiagnostics(
   diagnostics: readonly StaticExportDiagnostic[],
   label: string,
