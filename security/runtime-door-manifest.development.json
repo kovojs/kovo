@@ -1,0 +1,126 @@
+{
+  "schema": "kovo-runtime-door-manifest/v1",
+  "tier": "development",
+  "capabilityCensus": {
+    "file": "scripts/capability-surface-census.manifest.json",
+    "schema": "kovo-capability-surface-census/v2"
+  },
+  "auditedExceptions": [],
+  "doors": [
+    {
+      "id": "dev.http.request-shell",
+      "kind": "request-shell",
+      "owner": "dispatchKovoAppShellViteDevRequest",
+      "source": "packages/server/src/vite-dev.ts",
+      "obligations": [
+        "access-policy-enforced",
+        "boot-session-minted",
+        "exact-host-bound",
+        "origin-if-present-exact",
+        "request-authority-canonical",
+        "request-target-bounded",
+        "response-posture-enforced",
+        "stateful-origin-bound"
+      ],
+      "capabilityCensusDoorRefs": ["server.node-response-transport"],
+      "authentication": {
+        "required": false,
+        "mechanisms": ["vite-websocket-token-cookie-mint"],
+        "reason": "Ordinary app routes retain production access posture and mint the local browser's boot session only after exact Host and Origin admission."
+      },
+      "exposure": ["exact-host", "origin-if-present-exact", "loopback-only"],
+      "prodMapping": {
+        "door": "prod.http.request-shell",
+        "verdict": "stronger",
+        "covers": [
+          "access-policy-enforced",
+          "request-authority-canonical",
+          "request-target-bounded",
+          "response-posture-enforced",
+          "stateful-origin-bound"
+        ]
+      }
+    },
+    {
+      "id": "dev.http.source-env",
+      "kind": "source-env",
+      "owner": "installKovoDevSourceFallbackDoor",
+      "source": "packages/cli/src/commands/dev-host-door.ts",
+      "obligations": [
+        "boot-session-authenticated",
+        "exact-host-bound",
+        "origin-if-present-exact",
+        "rejection-no-store"
+      ],
+      "capabilityCensusDoorRefs": [],
+      "authentication": {
+        "required": true,
+        "mechanisms": ["vite-websocket-token-cookie"],
+        "reason": "Environment files and source-like paths are readable only by the browser session minted at the admitted loopback app shell."
+      },
+      "exposure": ["exact-host", "origin-if-present-exact", "loopback-only"],
+      "devOnly": true
+    },
+    {
+      "id": "dev.http.module-graph",
+      "kind": "module-graph",
+      "owner": "installKovoDevSourceFallbackDoor",
+      "source": "packages/cli/src/commands/dev-host-door.ts",
+      "obligations": [
+        "boot-session-authenticated",
+        "exact-host-bound",
+        "origin-if-present-exact",
+        "rejection-no-store"
+      ],
+      "capabilityCensusDoorRefs": [],
+      "authentication": {
+        "required": true,
+        "mechanisms": ["vite-websocket-token-cookie"],
+        "reason": "Vite module transforms, virtual modules, and source fetch destinations share the boot-authenticated HTTP door."
+      },
+      "exposure": ["exact-host", "origin-if-present-exact", "loopback-only"],
+      "devOnly": true
+    },
+    {
+      "id": "dev.http.hmr-refresh",
+      "kind": "hmr-refresh",
+      "owner": "renderKovoAppShellViteDevHmrResponse",
+      "source": "packages/server/src/vite-dev.ts",
+      "obligations": [
+        "app-route-authorization-replayed",
+        "boot-session-authenticated",
+        "exact-host-bound",
+        "origin-if-present-exact",
+        "rejection-no-store"
+      ],
+      "capabilityCensusDoorRefs": [],
+      "authentication": {
+        "required": true,
+        "mechanisms": ["vite-websocket-token-cookie"],
+        "reason": "Route and live-target refresh endpoints authenticate the local browser before replaying the app's route authorization."
+      },
+      "exposure": ["exact-host", "origin-if-present-exact", "loopback-only"],
+      "devOnly": true
+    },
+    {
+      "id": "dev.websocket.hmr",
+      "kind": "hmr-websocket",
+      "owner": "installKovoDevHostDoor",
+      "source": "packages/cli/src/commands/dev-host-door.ts",
+      "obligations": [
+        "boot-session-authenticated",
+        "exact-host-bound",
+        "exact-origin-required",
+        "vite-websocket-token-authenticated"
+      ],
+      "capabilityCensusDoorRefs": [],
+      "authentication": {
+        "required": true,
+        "mechanisms": ["vite-websocket-token-cookie", "vite-websocket-token-query"],
+        "reason": "The Kovo door wraps Vite's real upgrade listener with exact authority and cookie authentication; Vite retains its independent query token."
+      },
+      "exposure": ["exact-host", "exact-origin", "loopback-only"],
+      "devOnly": true
+    }
+  ]
+}

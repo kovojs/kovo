@@ -209,16 +209,23 @@
       },
       {
         "id": "W.dev-host-tier",
-        "owner": "server dev-host boot door",
-        "authoritativeSource": ["packages/server/src/vite-dev.ts"],
+        "owner": "CLI dev-host boot door",
+        "authoritativeSource": [
+          "packages/cli/src/commands/dev-host-door.ts",
+          "security/runtime-door-manifest.development.json",
+          "security/runtime-door-manifest.production.json"
+        ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "renewalTrigger": "dev boot only",
-        "ttl": "one dev process",
-        "failurePosture": "tier obligations are not centrally compared",
-        "costBudget": "unbudgeted",
-        "evidence": [],
-        "gap": "HTTP/HMR host authority and dev/prod door parity lack one versioned re-witness manifest.",
+        "status": "rewitnessed",
+        "renewalTrigger": "every dev boot, HTTP request, and websocket upgrade",
+        "ttl": "one dev process token plus one request or upgrade authority decision",
+        "failurePosture": "reject non-loopback boot or return a no-store 4xx before Vite source/HMR dispatch",
+        "costBudget": "one exact Host/Origin comparison and one fixed-width boot-token check per protected request or upgrade",
+        "evidence": [
+          "pnpm run check:runtime-tier-door-parity",
+          "packages/cli/src/index.kovo-dev.test.ts real HTTP and websocket DNS-rebinding oracle"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {

@@ -3342,6 +3342,48 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'dev-host-door',
+    marker: '@kovo-security-classifier-corpus dev-host-door',
+    testFiles: ['packages/cli/src/index.kovo-dev.test.ts'],
+    verdictAnchors: [
+      {
+        id: 'loopback-default-and-remote-bind-closed',
+        file: 'packages/cli/src/index.kovo-dev.test.ts',
+        snippets: [
+          'closes the real HTTP and HMR websocket dev-host door against DNS rebinding',
+          "server: { host: '127.0.0.1' }",
+          "host: '0.0.0.0'",
+          '/exact loopback host/u',
+        ],
+      },
+      {
+        id: 'real-http-source-auth-and-rebinding',
+        file: 'packages/cli/src/index.kovo-dev.test.ts',
+        snippets: [
+          'crossOriginDocument',
+          'unauthenticatedSource',
+          'reboundSource',
+          'authenticatedSource',
+          'unauthenticatedExtensionlessSource',
+          'authenticatedExtensionlessSource',
+          'status: 401',
+          'status: 403',
+        ],
+      },
+      {
+        id: 'real-hmr-websocket-origin-auth',
+        file: 'packages/cli/src/index.kovo-dev.test.ts',
+        snippets: [
+          'rawDevWebSocketHandshake',
+          "origin: 'http://attacker.example'",
+          "protocol: 'vite-hmr'",
+          ').resolves.toBe(403)',
+          '101',
+        ],
+      },
+    ],
+  },
+  {
     id: 'drizzle-analyzer-provenance',
     marker: '@kovo-security-classifier-corpus drizzle-analyzer-provenance',
     testFiles: [
