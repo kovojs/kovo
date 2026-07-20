@@ -385,19 +385,19 @@
     },
     {
       "id": "crypto-door-049",
-      "file": "scripts/hermetic-proof-stage-worker.mjs",
+      "file": "scripts/kovo-certificate-signature.mjs",
       "kind": "crypto-acquisition",
-      "operations": ["createHash", "createHmac"],
+      "operations": ["createHash", "createPrivateKey", "createPublicKey", "sign", "verify"],
       "tier": "build-tooling",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "The sealed certificate signer accepts only caller-supplied PKCS8 Ed25519 key bytes, emits one fixed detached envelope, and keeps verification beside signing so the generator remains authority-free."
     },
     {
       "id": "crypto-door-050",
       "file": "scripts/hermetic-proof-stage.mjs",
       "kind": "crypto-acquisition",
-      "operations": ["createHmac", "randomBytes"],
+      "operations": ["createHash", "createPrivateKey", "createPublicKey", "generateKeyPairSync"],
       "tier": "build-tooling",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "The hermetic host orchestrator generates an ephemeral Ed25519 drill key, binds sealed tool closures by SHA-256, and verifies that the isolated signer used the supplied identity; app-graph code never runs in this process."
     },
     {
       "id": "crypto-door-051",

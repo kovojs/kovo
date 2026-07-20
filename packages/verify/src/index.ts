@@ -4,9 +4,11 @@ import path from 'node:path';
 
 import { parse } from 'es-module-lexer/js';
 
-/** The seven raw authority kinds certified by `kovo.certificate/v1` (SPEC §6.6). */
+/** The nine raw authority kinds certified by `kovo.certificate/v1` (SPEC §6.6). */
 export const KOVO_CERTIFICATE_CAPABILITY_DOMAIN = [
+  'crypto-acquisition',
   'database-driver',
+  'digest',
   'dynamic-loader',
   'filesystem',
   'network',
@@ -872,7 +874,7 @@ function parseArtifact(
       };
       opaque.set(`${entry.module}\0${entry.reason}`, entry);
     }
-    const capability = classifyRawCapabilityModuleSpecifier(specifier);
+    const capability = classifyRawCapabilityImport(source, imported, specifier);
     if (capability !== undefined) {
       localCapabilities.add(capability);
       continue;
@@ -974,7 +976,7 @@ function unsupportedModuleSpecifier(specifier: string): boolean {
 }
 
 function externalOpaqueReason(specifier: string): string {
-  return `imports external module ${JSON.stringify(specifier)} outside the seven-kind lexical capability domain`;
+  return `imports external module ${JSON.stringify(specifier)} outside the nine-kind lexical capability domain`;
 }
 
 function resolveDirectoryPackageSpecifier(root: string, specifier: string): string | undefined {
@@ -1190,9 +1192,11 @@ function classifyRawCapabilityModuleSpecifier(
   specifier: string,
 ): KovoCertificateCapabilityKind | undefined {
   const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  if (withoutNode === 'crypto') return 'crypto-acquisition';
   const builtin = rawModuleCapabilities.get(withoutNode.split('/')[0]!);
   if (builtin !== undefined) return builtin;
   const packageName = packageNameForSpecifier(specifier);
+  if (packageName === '@node-rs/argon2') return 'crypto-acquisition';
   if (rawDatabasePackages.has(packageName)) return 'database-driver';
   if (
     packageName === 'drizzle-orm' &&
@@ -1203,6 +1207,31 @@ function classifyRawCapabilityModuleSpecifier(
     return 'database-driver';
   }
   return undefined;
+}
+
+function classifyRawCapabilityImport(
+  source: string,
+  imported: { d: number; s: number; ss: number },
+  specifier: string,
+): KovoCertificateCapabilityKind | undefined {
+  const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
+  if (withoutNode !== 'crypto') return classifyRawCapabilityModuleSpecifier(specifier);
+  return imported.d === -1 && isExactDigestOnlyCryptoImport(source.slice(imported.ss, imported.s))
+    ? 'digest'
+    : 'crypto-acquisition';
+}
+
+function isExactDigestOnlyCryptoImport(prefix: string): boolean {
+  const match = /^\s*(?:import|export)\s*\{([\s\S]*)\}\s*from\s*['"]$/u.exec(prefix);
+  if (match === null) return false;
+  const entries = match[1].split(',');
+  if (entries.at(-1)?.trim() === '') entries.pop();
+  return (
+    entries.length > 0 &&
+    entries.every((entry) =>
+      /^(?:createHash|hash)(?:\s+as\s+[$A-Z_a-z][$\w]*)?$/u.test(entry.trim()),
+    )
+  );
 }
 
 function packageNameForSpecifier(specifier: string): string {

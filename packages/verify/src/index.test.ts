@@ -149,12 +149,12 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     }
   });
 
-  it('requires an exact opaque row for every external import outside the seven-kind domain', async () => {
+  it('requires an exact opaque row for every external import outside the nine-kind domain', async () => {
     const artifacts = artifactSource({
       [rootModule]: "import 'third-party-parser'; export const root = true;",
     });
     const reason =
-      'imports external module "third-party-parser" outside the seven-kind lexical capability domain';
+      'imports external module "third-party-parser" outside the nine-kind lexical capability domain';
     expect((await verifyCertificate(certificateFor(artifacts), artifacts)).findings).toEqual([
       expect.objectContaining({ code: 'opaque-missing', obligation: 'coverage' }),
     ]);
