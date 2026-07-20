@@ -320,8 +320,11 @@ Measurements are versioned and reproducible:
 
 ### 3C. Reachability: retire per-shape TASK B logic
 
-- [ ] Route TASK B roots through capability closure, finite IR, and normalized provenance; unknown
+- [x] Route TASK B roots through capability closure, finite IR, and normalized provenance; unknown
       roots, package summaries, transfers, or sinks fail closed with actionable traces.
+  - Evidence: the focused TASK B routing/Drizzle suite passes 379/379, and the five-mutant harness
+    kills deletion of capability-root, package-summary, semantic-root, raw-registration, and
+    authoritative-pass enforcement on the production carrier.
   - [x] Route exact authored request-handler snapshots through the compiler-owned semantic graph
         before evaluation, bind helper summaries to exact source bytes, callable span/name, root
         family, authority categories, terminal-operation inventory, and all-path proved verdict,
