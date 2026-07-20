@@ -17,6 +17,7 @@ import {
   EXPLAIN_USAGE,
   EXPLAIN_USAGE_LINE,
   EXPORT_USAGE,
+  INCIDENT_USAGE,
   MCP_USAGE,
   UPDATE_DOCS_USAGE,
   BUILD_ARGV_SPEC,
@@ -48,6 +49,7 @@ describe('commands manifest', () => {
     './commands/dev.ts',
     './commands/compile.ts',
     './commands/db.ts',
+    './commands/incident-scope.ts',
     './commands/mcp.ts',
     './graph-output.ts',
   ]
@@ -78,6 +80,7 @@ describe('commands manifest', () => {
         'dev',
         'explain',
         'export',
+        'incident',
         'mcp',
         'update-docs',
       ].sort(),
@@ -86,10 +89,10 @@ describe('commands manifest', () => {
 
   it('drives no-args and unknown-command diagnostics from the registry', () => {
     expect(formatNoArgsMessage()).toBe(
-      'kovo: add, audit, build, dev, check, db, compile, explain, export, mcp, update-docs\n',
+      'kovo: add, audit, build, dev, check, db, compile, explain, incident, export, mcp, update-docs\n',
     );
     expect(formatUnknownCommandMessage('nope')).toBe(
-      'kovo: unknown command "nope". expected add, build, dev, db, compile, explain, check, audit, export, mcp, or update-docs.\n',
+      'kovo: unknown command "nope". expected add, build, dev, db, compile, explain, check, audit, incident, export, mcp, or update-docs.\n',
     );
 
     const noArgs = captureWrites(() => main([]));
@@ -144,6 +147,9 @@ describe('commands manifest', () => {
       'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]',
     );
     expect(MCP_USAGE).toBe('usage: kovo mcp');
+    expect(INCIDENT_USAGE).toBe(
+      'usage: kovo incident scope <advisory.json> --events <security-events.json>',
+    );
     expect(UPDATE_DOCS_USAGE).toBe('usage: kovo update-docs');
     expect(EXPLAIN_USAGE_LINE).toContain(
       'kovo explain component|mutation|query|page|context|task <target>',
@@ -166,6 +172,7 @@ describe('commands manifest', () => {
     expect(byName.db?.usage).toBe(DB_USAGE);
     expect(byName.compile?.usage).toBe(COMPILE_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
+    expect(byName.incident?.usage).toBe(INCIDENT_USAGE);
     expect(byName.mcp?.usage).toBe(MCP_USAGE);
     expect(byName['update-docs']?.usage).toBe(UPDATE_DOCS_USAGE);
     expect(byName.explain?.usage).toBe(EXPLAIN_USAGE);
@@ -182,6 +189,7 @@ describe('commands manifest', () => {
       'DB_USAGE',
       'DEV_USAGE',
       'EXPORT_USAGE',
+      'INCIDENT_USAGE',
       'MCP_USAGE',
       'UPDATE_DOCS_USAGE',
     ]) {

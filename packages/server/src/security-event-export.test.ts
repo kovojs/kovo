@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createSecurityEventCryptoHandle } from './crypto-authority.js';
 import { EGRESS_BLOCKED_ERROR_NAME } from './egress.js';
-import { exportSecurityEvents } from './security-event-export.js';
+import { exportSecurityEvents, securityEventExportEnvelope } from './security-event-export.js';
 import {
   createSecurityEventJournal,
   installSecurityEventJournal,
@@ -31,6 +31,13 @@ describe('security-event export boundary (SPEC §§6.6, 11.2)', () => {
       'sequence',
       'type',
     ]);
+    expect(securityEventExportEnvelope()).toMatchObject({
+      coverage: {
+        doors: ['auth', 'authorization', 'declassification', 'egress', 'storage', 'task', 'replay'],
+        schema: 'kovo-security-event-coverage/v1',
+      },
+      schema: 'kovo-security-event-export/v1',
+    });
     await expect(
       exportSecurityEvents('https://collector.example.test/v1/events'),
     ).rejects.toMatchObject({

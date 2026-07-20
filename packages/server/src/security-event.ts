@@ -6,8 +6,12 @@ import {
   witnessArrayAppend,
   witnessDefineProperty,
   witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessOwnKeys,
+  witnessRegExpTest,
   witnessSetAdd,
   witnessSetHas,
+  witnessStringStartsWith,
 } from './security-witness-intrinsics.js';
 
 export const KOVO_SECURITY_EVENT_SCHEMA = 'kovo-security-event/v1' as const;
@@ -23,6 +27,90 @@ export const SECURITY_EVENT_TYPES = witnessFreeze([
 
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
+/**
+ * Closed denominator for security decisions that can answer a later principal/tenant incident
+ * question. Adding a decision door is incomplete until its resource kind and event emission are
+ * added here together (plans/10x-better-security-3.md §5.1).
+ */
+export const SECURITY_EVENT_INCIDENT_DOORS = witnessFreeze([
+  'auth',
+  'authorization',
+  'declassification',
+  'egress',
+  'storage',
+  'task',
+  'replay',
+] as const);
+
+export type SecurityEventIncidentDoor = (typeof SECURITY_EVENT_INCIDENT_DOORS)[number];
+
+/** No-payload resource identity vocabulary paired one-to-one with the incident door denominator. */
+export const SECURITY_EVENT_RESOURCE_KIND_BY_DOOR = witnessFreeze({
+  auth: 'credential',
+  authorization: 'resource',
+  declassification: 'secret',
+  egress: 'destination',
+  replay: 'reservation',
+  storage: 'object',
+  task: 'task',
+} as const satisfies Record<SecurityEventIncidentDoor, string>);
+
+export type SecurityEventResourceKind =
+  (typeof SECURITY_EVENT_RESOURCE_KIND_BY_DOOR)[SecurityEventIncidentDoor];
+
+export type SecurityDecisionOutcome = 'allow' | 'deny';
+
+export type SecurityEventPrincipalScope =
+  | {
+      readonly epoch: null;
+      readonly id: null;
+      readonly kind: 'anonymous';
+      readonly tenant: null;
+    }
+  | {
+      readonly epoch: number;
+      readonly id: string;
+      readonly kind: 'principal';
+      readonly tenant: string | null;
+    }
+  | {
+      readonly epoch: null;
+      readonly id: string;
+      readonly kind: 'system';
+      readonly tenant: string | null;
+    }
+  | {
+      readonly epoch: null;
+      readonly id: null;
+      readonly kind: 'unresolved';
+      readonly reason:
+        | 'epoch-unavailable'
+        | 'outside-request-context'
+        | 'principal-not-proven'
+        | 'tenant-unavailable';
+      readonly tenant: null;
+    };
+
+export interface SecurityEventResourceScope {
+  /** `global`, or a framework-produced digest. Raw URLs, keys, rows, and payloads are forbidden. */
+  readonly identity: 'global' | `sha256:${string}`;
+  readonly kind: SecurityEventResourceKind;
+}
+
+/**
+ * Complete input for one answerability-bearing security decision. Unlike denial telemetry, this
+ * shape cannot omit principal epoch or resource scope: JavaScript callers fail at the event door
+ * and TypeScript callers get the same requirement at author time.
+ */
+export interface SecurityDecisionEventInput {
+  readonly decisionSite: string;
+  readonly door: SecurityEventIncidentDoor;
+  readonly outcome: SecurityDecisionOutcome;
+  readonly principal: SecurityEventPrincipalScope;
+  readonly resourceScope: SecurityEventResourceScope;
+  readonly type: 'security-decision';
+}
+
 export type SecurityEventReason =
   | 'build-capability-closure'
   | 'database-admission'
@@ -37,12 +125,14 @@ export type SecurityEventReason =
   | 'runtime-registry'
   | 'static-analysis';
 
-export interface SecurityEventInput {
+export interface SecurityDenialEventInput {
   readonly reason: SecurityEventReason;
   readonly type: SecurityEventType;
 }
 
-export interface SecurityEventRecord extends SecurityEventInput {
+export type SecurityEventInput = SecurityDenialEventInput | SecurityDecisionEventInput;
+
+interface SecurityEventRecordBase {
   readonly keyId: string;
   readonly mac: string;
   readonly occurredAt: number;
@@ -50,6 +140,10 @@ export interface SecurityEventRecord extends SecurityEventInput {
   readonly schema: typeof KOVO_SECURITY_EVENT_SCHEMA;
   readonly sequence: number;
 }
+
+export type SecurityDenialEventRecord = SecurityEventRecordBase & SecurityDenialEventInput;
+export type SecurityDecisionEventRecord = SecurityEventRecordBase & SecurityDecisionEventInput;
+export type SecurityEventRecord = SecurityDenialEventRecord | SecurityDecisionEventRecord;
 
 export interface SecurityEventChainHead {
   readonly dropped: number;
@@ -94,12 +188,17 @@ let unsealedEventCount = 0;
 export function securityEvent(
   input: SecurityEventInput,
 ): Readonly<SecurityEventRecord> | undefined {
-  assertSecurityEventInput(input);
+  const normalized = normalizedSecurityEventInput(input);
   if (installedJournal === undefined) {
+    if (normalized.type === 'security-decision') {
+      throw new TypeError(
+        'Answerability-bearing security decisions require the journal before the decision can proceed.',
+      );
+    }
     unsealedEventCount += 1;
     return undefined;
   }
-  return installedJournal.record(input);
+  return installedJournal.record(normalized);
 }
 
 /** @internal Install the deployment-keyed collector before authored app evaluation. */
@@ -149,7 +248,7 @@ export function createSecurityEventJournal(options: {
       });
     },
     record(input) {
-      assertSecurityEventInput(input);
+      const normalized = normalizedSecurityEventInput(input);
       const occurredAt = now();
       if (!Number.isSafeInteger(occurredAt) || occurredAt < 0) {
         throw new TypeError('Security-event clock must return a non-negative safe integer.');
@@ -159,10 +258,9 @@ export function createSecurityEventJournal(options: {
         keyId: options.authority.currentKeyId,
         occurredAt,
         previousMac,
-        reason: input.reason,
         schema: KOVO_SECURITY_EVENT_SCHEMA,
         sequence,
-        type: input.type,
+        ...normalized,
       } as const;
       const signed = options.authority.sign(canonicalJsonStringify(unsigned));
       const record = witnessFreeze({ ...unsigned, keyId: signed.keyId, mac: signed.signature });
@@ -198,44 +296,341 @@ export function createSecurityEventJournal(options: {
     },
     verify(record) {
       if (!isSecurityEventRecord(record)) return false;
+      const keyId = ownDataValue(record, 'keyId', 'Security event record key id') as string;
+      const mac = ownDataValue(record, 'mac', 'Security event record MAC') as string;
       const source = canonicalJsonStringify({
-        keyId: record.keyId,
-        occurredAt: record.occurredAt,
-        previousMac: record.previousMac,
-        reason: record.reason,
-        schema: record.schema,
-        sequence: record.sequence,
-        type: record.type,
+        keyId,
+        occurredAt: ownDataValue(record, 'occurredAt', 'Security event record occurrence time'),
+        previousMac: ownDataValue(record, 'previousMac', 'Security event record previous MAC'),
+        schema: ownDataValue(record, 'schema', 'Security event record schema'),
+        sequence: ownDataValue(record, 'sequence', 'Security event record sequence'),
+        ...securityEventInputFromRecord(record),
       });
-      return options.authority.verify(source, record.mac, record.keyId).ok;
+      return options.authority.verify(source, mac, keyId).ok;
     },
   };
   return witnessFreeze(journal);
 }
 
 function assertSecurityEventInput(input: SecurityEventInput): void {
+  if (input === null || typeof input !== 'object') {
+    throw new TypeError('Security events require a registered type and redacted reason.');
+  }
+  const type = ownDataValue(input, 'type', 'Security event type');
+  if (type === 'security-decision') {
+    assertSecurityDecisionEventInput(input as SecurityDecisionEventInput);
+    return;
+  }
+  assertExactOwnDataFields(input, ['reason', 'type'], 'Security denial event');
+  const reason = ownDataValue(input, 'reason', 'Security denial event reason');
   if (
-    input === null ||
-    typeof input !== 'object' ||
-    !witnessSetHas(EVENT_TYPES, input.type) ||
-    !witnessSetHas(EVENT_REASONS, input.reason)
+    !witnessSetHas(EVENT_TYPES, type as SecurityEventType) ||
+    !witnessSetHas(EVENT_REASONS, reason as SecurityEventReason)
   ) {
     throw new TypeError('Security events require a registered type and redacted reason.');
   }
 }
 
+function assertSecurityDecisionEventInput(input: SecurityDecisionEventInput): void {
+  assertExactOwnDataFields(
+    input,
+    ['decisionSite', 'door', 'outcome', 'principal', 'resourceScope', 'type'],
+    'Security decision event',
+  );
+  const door = ownDataValue(input, 'door', 'Security decision door');
+  if (!isIncidentDoor(door)) {
+    throw new TypeError('Security decision event requires a registered incident door.');
+  }
+  const outcome = ownDataValue(input, 'outcome', 'Security decision outcome');
+  if (outcome !== 'allow' && outcome !== 'deny') {
+    throw new TypeError('Security decision event outcome must be allow or deny.');
+  }
+  const decisionSite = ownDataValue(input, 'decisionSite', 'Security decision site');
+  if (
+    typeof decisionSite !== 'string' ||
+    (!witnessRegExpTest(/^sha256:[a-f0-9]{64}$/u, decisionSite) &&
+      !witnessRegExpTest(
+        /^framework:(auth|authorization|declassification|egress|storage|task|replay):[a-z0-9][a-z0-9.-]{0,127}$/u,
+        decisionSite,
+      ))
+  ) {
+    throw new TypeError(
+      'Security decision site must be a build-stable sha256 or framework door identity.',
+    );
+  }
+  if (
+    witnessRegExpTest(/^framework:/u, decisionSite) &&
+    !witnessStringStartsWith(decisionSite, `framework:${door}:`)
+  ) {
+    throw new TypeError('Security decision site door does not match the event door.');
+  }
+
+  const principal = ownDataValue(input, 'principal', 'Security decision principal scope');
+  assertPrincipalScope(principal);
+  const resourceScope = ownDataValue(input, 'resourceScope', 'Security decision resource scope');
+  assertResourceScope(resourceScope, door);
+}
+
+function assertPrincipalScope(value: unknown): asserts value is SecurityEventPrincipalScope {
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError('Security decision principal scope is required.');
+  }
+  const kind = ownDataValue(value, 'kind', 'Security decision principal scope kind');
+  const expectedFields =
+    kind === 'unresolved'
+      ? ['epoch', 'id', 'kind', 'reason', 'tenant']
+      : ['epoch', 'id', 'kind', 'tenant'];
+  assertExactOwnDataFields(value, expectedFields, 'Security decision principal scope');
+  const epoch = ownDataValue(value, 'epoch', 'Security decision principal epoch');
+  const id = ownDataValue(value, 'id', 'Security decision principal id');
+  const tenant = ownDataValue(value, 'tenant', 'Security decision tenant id');
+  if (kind === 'principal') {
+    if (!boundedIdentity(id) || !Number.isSafeInteger(epoch) || (epoch as number) < 1) {
+      throw new TypeError('Principal security events require a non-empty id and positive epoch.');
+    }
+    if (tenant !== null && !boundedIdentity(tenant)) {
+      throw new TypeError('Principal security event tenant must be null or a bounded identity.');
+    }
+    return;
+  }
+  if (kind === 'system') {
+    if (!boundedIdentity(id) || epoch !== null) {
+      throw new TypeError('System security events require a non-empty id and null epoch.');
+    }
+    if (tenant !== null && !boundedIdentity(tenant)) {
+      throw new TypeError('System security event tenant must be null or a bounded identity.');
+    }
+    return;
+  }
+  if (kind === 'anonymous') {
+    if (id !== null || epoch !== null || tenant !== null) {
+      throw new TypeError('Anonymous security events require null id, epoch, and tenant.');
+    }
+    return;
+  }
+  if (kind === 'unresolved') {
+    const reason = ownDataValue(value, 'reason', 'Unresolved security principal reason');
+    if (
+      id !== null ||
+      epoch !== null ||
+      tenant !== null ||
+      (reason !== 'epoch-unavailable' &&
+        reason !== 'outside-request-context' &&
+        reason !== 'principal-not-proven' &&
+        reason !== 'tenant-unavailable')
+    ) {
+      throw new TypeError(
+        'Unresolved security events require null scope facts and a registered reason.',
+      );
+    }
+    return;
+  }
+  throw new TypeError('Security decision principal scope kind is not registered.');
+}
+
+function assertResourceScope(
+  value: unknown,
+  door: SecurityEventIncidentDoor,
+): asserts value is SecurityEventResourceScope {
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError('Security decision resource scope is required.');
+  }
+  assertExactOwnDataFields(value, ['identity', 'kind'], 'Security decision resource scope');
+  const identity = ownDataValue(value, 'identity', 'Security decision resource scope identity');
+  const kind = ownDataValue(value, 'kind', 'Security decision resource scope kind');
+  if (kind !== SECURITY_EVENT_RESOURCE_KIND_BY_DOOR[door]) {
+    throw new TypeError('Security decision resource kind does not match its incident door.');
+  }
+  if (
+    identity !== 'global' &&
+    (typeof identity !== 'string' || !witnessRegExpTest(/^sha256:[a-f0-9]{64}$/u, identity))
+  ) {
+    throw new TypeError(
+      'Security decision requires an opaque resource scope (global or sha256 digest).',
+    );
+  }
+}
+
+function normalizedSecurityEventInput(input: SecurityEventInput): SecurityEventInput {
+  assertSecurityEventInput(input);
+  const type = ownDataValue(input, 'type', 'Security event type');
+  if (type !== 'security-decision') {
+    return witnessFreeze({
+      reason: ownDataValue(input, 'reason', 'Security denial event reason') as SecurityEventReason,
+      type: type as SecurityEventType,
+    });
+  }
+  const principalInput = ownDataValue(
+    input,
+    'principal',
+    'Security decision principal scope',
+  ) as SecurityEventPrincipalScope;
+  const principalKind = ownDataValue(
+    principalInput,
+    'kind',
+    'Security decision principal scope kind',
+  );
+  const principal =
+    principalKind === 'unresolved'
+      ? witnessFreeze({
+          epoch: ownDataValue(principalInput, 'epoch', 'Security decision principal epoch') as null,
+          id: ownDataValue(principalInput, 'id', 'Security decision principal id') as null,
+          kind: 'unresolved' as const,
+          reason: ownDataValue(
+            principalInput,
+            'reason',
+            'Unresolved security principal reason',
+          ) as Extract<SecurityEventPrincipalScope, { kind: 'unresolved' }>['reason'],
+          tenant: ownDataValue(principalInput, 'tenant', 'Security decision tenant id') as null,
+        })
+      : witnessFreeze({
+          epoch: ownDataValue(principalInput, 'epoch', 'Security decision principal epoch') as
+            | number
+            | null,
+          id: ownDataValue(principalInput, 'id', 'Security decision principal id') as string | null,
+          kind: principalKind as 'anonymous' | 'principal' | 'system',
+          tenant: ownDataValue(principalInput, 'tenant', 'Security decision tenant id') as
+            | string
+            | null,
+        });
+  const resourceInput = ownDataValue(
+    input,
+    'resourceScope',
+    'Security decision resource scope',
+  ) as SecurityEventResourceScope;
+  return witnessFreeze({
+    decisionSite: ownDataValue(input, 'decisionSite', 'Security decision site') as string,
+    door: ownDataValue(input, 'door', 'Security decision door') as SecurityEventIncidentDoor,
+    outcome: ownDataValue(input, 'outcome', 'Security decision outcome') as SecurityDecisionOutcome,
+    principal: principal as SecurityEventPrincipalScope,
+    resourceScope: witnessFreeze({
+      identity: ownDataValue(
+        resourceInput,
+        'identity',
+        'Security decision resource scope identity',
+      ) as SecurityEventResourceScope['identity'],
+      kind: ownDataValue(
+        resourceInput,
+        'kind',
+        'Security decision resource scope kind',
+      ) as SecurityEventResourceKind,
+    }),
+    type: 'security-decision' as const,
+  });
+}
+
+function securityEventInputFromRecord(record: SecurityEventRecord): SecurityEventInput {
+  const type = ownDataValue(record, 'type', 'Security event record type');
+  const input =
+    type === 'security-decision'
+      ? {
+          decisionSite: ownDataValue(record, 'decisionSite', 'Security decision site') as string,
+          door: ownDataValue(record, 'door', 'Security decision door') as SecurityEventIncidentDoor,
+          outcome: ownDataValue(
+            record,
+            'outcome',
+            'Security decision outcome',
+          ) as SecurityDecisionOutcome,
+          principal: ownDataValue(
+            record,
+            'principal',
+            'Security decision principal scope',
+          ) as SecurityEventPrincipalScope,
+          resourceScope: ownDataValue(
+            record,
+            'resourceScope',
+            'Security decision resource scope',
+          ) as SecurityEventResourceScope,
+          type: 'security-decision' as const,
+        }
+      : {
+          reason: ownDataValue(
+            record,
+            'reason',
+            'Security denial event reason',
+          ) as SecurityEventReason,
+          type: type as SecurityEventType,
+        };
+  return normalizedSecurityEventInput(input);
+}
+
+function isIncidentDoor(value: unknown): value is SecurityEventIncidentDoor {
+  for (const door of SECURITY_EVENT_INCIDENT_DOORS) {
+    if (value === door) return true;
+  }
+  return false;
+}
+
+function boundedIdentity(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length >= 1 &&
+    value.length <= 512 &&
+    witnessRegExpTest(/^[^\u0000-\u001f\u007f]+$/u, value) &&
+    !witnessRegExpTest(/^\s|\s$/u, value)
+  );
+}
+
+function ownDataValue(value: object, property: PropertyKey, label: string): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${label} must be an own data property.`);
+  }
+  return descriptor.value;
+}
+
+function assertExactOwnDataFields(value: object, expected: readonly string[], label: string): void {
+  const keys = witnessOwnKeys(value);
+  if (keys.length !== expected.length) {
+    throw new TypeError(`${label} contains a missing or unexpected field.`);
+  }
+  for (const property of expected) {
+    ownDataValue(value, property, `${label}.${property}`);
+  }
+  for (const property of keys) {
+    if (typeof property !== 'string' || !expected.includes(property)) {
+      throw new TypeError(`${label} contains an unexpected field.`);
+    }
+  }
+}
+
 function isSecurityEventRecord(record: SecurityEventRecord): boolean {
   try {
-    assertSecurityEventInput(record);
+    const type = ownDataValue(record, 'type', 'Security event record type');
+    const expectedFields =
+      type === 'security-decision'
+        ? [
+            'decisionSite',
+            'door',
+            'keyId',
+            'mac',
+            'occurredAt',
+            'outcome',
+            'previousMac',
+            'principal',
+            'resourceScope',
+            'schema',
+            'sequence',
+            'type',
+          ]
+        : ['keyId', 'mac', 'occurredAt', 'previousMac', 'reason', 'schema', 'sequence', 'type'];
+    assertExactOwnDataFields(record, expectedFields, 'Security event record');
+    assertSecurityEventInput(securityEventInputFromRecord(record));
+    const schema = ownDataValue(record, 'schema', 'Security event record schema');
+    const sequence = ownDataValue(record, 'sequence', 'Security event record sequence');
+    const occurredAt = ownDataValue(record, 'occurredAt', 'Security event record occurrence time');
+    const keyId = ownDataValue(record, 'keyId', 'Security event record key id');
+    const mac = ownDataValue(record, 'mac', 'Security event record MAC');
+    const previousMac = ownDataValue(record, 'previousMac', 'Security event record previous MAC');
     return (
-      record.schema === KOVO_SECURITY_EVENT_SCHEMA &&
-      Number.isSafeInteger(record.sequence) &&
-      record.sequence > 0 &&
-      Number.isSafeInteger(record.occurredAt) &&
-      record.occurredAt >= 0 &&
-      typeof record.keyId === 'string' &&
-      typeof record.mac === 'string' &&
-      (record.previousMac === null || typeof record.previousMac === 'string')
+      schema === KOVO_SECURITY_EVENT_SCHEMA &&
+      Number.isSafeInteger(sequence) &&
+      (sequence as number) > 0 &&
+      Number.isSafeInteger(occurredAt) &&
+      (occurredAt as number) >= 0 &&
+      typeof keyId === 'string' &&
+      typeof mac === 'string' &&
+      (previousMac === null || typeof previousMac === 'string')
     );
   } catch {
     return false;

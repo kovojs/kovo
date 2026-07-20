@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
-import { createSecurityEventCryptoHandle } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createSecurityEventCryptoHandle } from '../../../server/src/crypto-authority.js';
 import {
   createSecurityEventJournal,
   type SecurityDecisionEventInput,
+  type SecurityEventInput,
 } from '../../../server/src/security-event.js';
 import { parseIncidentArgs, runIncidentScopeCommand } from './incident-scope.js';
 
@@ -53,7 +54,7 @@ function advisory(coverage: 'covered' | 'outside-covered-doors' = 'covered'): ob
 }
 
 function fixture(
-  inputs: readonly SecurityDecisionEventInput[],
+  inputs: readonly SecurityEventInput[],
   options: { dropped?: number; advisory?: object } = {},
 ): { advisoryPath: string; eventsPath: string; root: string } {
   const root = mkdtempSync(join(tmpdir(), 'kovo-incident-scope-'));
@@ -72,15 +73,7 @@ function fixture(
     eventsPath,
     canonicalJsonStringify({
       coverage: {
-        doors: [
-          'auth',
-          'authorization',
-          'declassification',
-          'egress',
-          'storage',
-          'task',
-          'replay',
-        ],
+        doors: ['auth', 'authorization', 'declassification', 'egress', 'storage', 'task', 'replay'],
         schema: 'kovo-security-event-coverage/v1',
       },
       events: journal.snapshot(),
@@ -105,6 +98,7 @@ describe('kovo incident scope', () => {
 
   it('returns a deterministic deduplicated principal and tenant set, never payload data', () => {
     const files = fixture([
+      { reason: 'invalid-token', type: 'csrf-rejected' },
       event('principal-z', 'tenant-b'),
       event('principal-a', 'tenant-a'),
       event('principal-a', 'tenant-a'),
@@ -137,7 +131,7 @@ describe('kovo incident scope', () => {
       { advisoryPath: outside.advisoryPath, eventsPath: outside.eventsPath },
       outside.root,
     );
-    expect(outsideResult).toMatchObject({ exitCode: 2 });
+    expect(outsideResult).toMatchObject({ exitCode: 1 });
     if (!('output' in outsideResult)) throw new Error(outsideResult.error);
     expect(JSON.parse(outsideResult.output)).toMatchObject({
       answerability: {
@@ -155,7 +149,7 @@ describe('kovo incident scope', () => {
       { advisoryPath: dropped.advisoryPath, eventsPath: dropped.eventsPath },
       dropped.root,
     );
-    expect(droppedResult).toMatchObject({ exitCode: 2 });
+    expect(droppedResult).toMatchObject({ exitCode: 1 });
     if (!('output' in droppedResult)) throw new Error(droppedResult.error);
     expect(JSON.parse(droppedResult.output)).toMatchObject({
       answerability: {
@@ -180,7 +174,7 @@ describe('kovo incident scope', () => {
       { advisoryPath: unresolved.advisoryPath, eventsPath: unresolved.eventsPath },
       unresolved.root,
     );
-    expect(unresolvedResult).toMatchObject({ exitCode: 2 });
+    expect(unresolvedResult).toMatchObject({ exitCode: 1 });
     if (!('output' in unresolvedResult)) throw new Error(unresolvedResult.error);
     expect(JSON.parse(unresolvedResult.output)).toMatchObject({
       answerability: { complete: false, reason: expect.stringContaining('unresolved principal') },
