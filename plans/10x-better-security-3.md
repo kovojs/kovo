@@ -485,12 +485,16 @@ Three correct patterns already exist in isolation (`propertyKey` at `drizzle/src
 `buildSecuritySourceLiteral` at `server/src/build-security-intrinsics.ts:511`, `quoteSqliteIdentifier`
 at `server/src/sqlite.ts:1583`) but are not a shared door.
 
-- [ ] **First, a hostile-emission oracle**: assert the emitted _parse tree_ confines each hostile value
+- [x] **First, a hostile-emission oracle**: assert the emitted _parse tree_ confines each hostile value
       to one leaf. It must go red today on `derive-codegen.ts:179`, or the harness is wrong.
-- [ ] Promote the three patterns into one module (`jsStringLiteral`/`jsIdentifier`/`tsPropertyKey`/
+  - Evidence: the `derive-codegen.test.ts` hostile parse-tree oracle was committed red at
+    `1b741cfd3` and now passes in `pnpm run check:emission-constructor-closure`.
+- [x] Promote the three patterns into one module (`jsStringLiteral`/`jsIdentifier`/`tsPropertyKey`/
       `importSpecifier`), each grammar-validated and fail-closed with a KV; migrate
       `derive-codegen.ts:68/89/179` and `emit/registry.ts:284`; add `check:emission-constructor-closure`
       modeled on `source-reparse-boundary.test.ts:28`'s allowlist gate.
+  - Evidence: `pnpm run check:emission-constructor-closure` passes 27/27 behavior and closure tests
+    for the four KV451 constructors, the two reviewed consumers, and six bypass mutants.
 
 ---
 

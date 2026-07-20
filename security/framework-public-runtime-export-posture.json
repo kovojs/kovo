@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "748c12f9ac382e745b7fdafcd5da59503b36adff29244c6f9052fd27f4be0dcc",
+      "sourceTreeSha256": "dfc7079979c531eb4c4a2622a71f8094970b2b9a6f2860430904c13b821ce80e",
       "manifestVariants": [
         {
           "exports": {
@@ -837,6 +837,10 @@
               "types": "./dist/internal/diagnostics.d.mts",
               "default": "./dist/internal/diagnostics.mjs"
             },
+            "./internal/emission": {
+              "types": "./dist/internal/emission.d.mts",
+              "default": "./dist/internal/emission.mjs"
+            },
             "./internal/document-protocol": {
               "types": "./dist/internal/document-protocol.d.mts",
               "default": "./dist/internal/document-protocol.mjs"
@@ -934,7 +938,7 @@
               "default": "./dist/internal/wire-json.mjs"
             }
           },
-          "fingerprint": "sha256:6ac811f078dbb6ad22a9e5bd8b7ee36b4ee6134bec267c06bdf61862daaffe45"
+          "fingerprint": "sha256:085f4391ac7c991c4d3db32bff5d0b3a672a8444c5b4ba128df6657a107e0fb1"
         },
         {
           "exports": {
@@ -947,6 +951,7 @@
             "./internal/classifier-verdict": "./src/internal/classifier-verdict.ts",
             "./internal/derivation": "./src/internal/derivation.ts",
             "./internal/diagnostics": "./src/internal/diagnostics.ts",
+            "./internal/emission": "./src/internal/emission.ts",
             "./internal/document-protocol": "./src/internal/document-protocol.ts",
             "./internal/event": "./src/internal/event.ts",
             "./internal/fragment-target": "./src/internal/fragment-target.ts",
@@ -972,7 +977,7 @@
             "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
             "./internal/wire-json": "./src/internal/wire-json.ts"
           },
-          "fingerprint": "sha256:712bea0c9e8718d0754b978ea06eddb46b8a8310d5980f11cdaaf105344c2e39"
+          "fingerprint": "sha256:fcf1c458a0315837454d6c1ac0f5f9b03e39e4859a40607370a0ce7ebef7e0c7"
         }
       ],
       "packageName": "@kovojs/core",
@@ -1684,7 +1689,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "3653f1fd07384c5c8314e882ccc0ff998dafc68b7f938ee06fd3babc5896f717"
+      "sourceTreeSha256": "a1800abc7ff4287a218a72290988565864e70fd18c890a920221bf66d6209ace"
     },
     {
       "manifestVariants": [
@@ -1952,7 +1957,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "8c8c09b9f840498fa61829aab8bbc5c9784475ff13df0f8ba6d5d9578fce9465"
+      "sourceTreeSha256": "713fd44ecec7226b8a0383019a037edbbec49d921d1b3021cd763cfd0d4a9b0a"
     },
     {
       "manifestVariants": [
