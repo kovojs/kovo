@@ -476,6 +476,39 @@
       "expressionSha256": "bdd3bd65e4a8b052027b7d84ec559f51041d02a4acacef947f46dc8911d87b97"
     },
     {
+      "id": "packages/cli/src/commands/build-export.ts#throw#KV438#0068a8b3bc15aeaa18affa6bee893d2d92d98fc31627ef8a893166c39eace672#0",
+      "code": "KV438",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/cli/src/commands/build-export.ts",
+      "owner": "escapeObligationManifestForBuild",
+      "expressionSha256": "0068a8b3bc15aeaa18affa6bee893d2d92d98fc31627ef8a893166c39eace672"
+    },
+    {
+      "id": "packages/cli/src/commands/build-export.ts#throw#KV438#772013f2c02d06f225f0027db21da194b6341e2ec50894b3f6a1ede6544dbc78#0",
+      "code": "KV438",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/cli/src/commands/build-export.ts",
+      "owner": "escapeObligationManifestForBuild",
+      "expressionSha256": "772013f2c02d06f225f0027db21da194b6341e2ec50894b3f6a1ede6544dbc78"
+    },
+    {
+      "id": "packages/cli/src/dependency-capability-loader.ts#error-object#KV448#e81f1096a5092c951e9a70f0a246b7582b267f624024e6997927d71cc208431d#0",
+      "code": "KV448",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "error-object",
+      "file": "packages/cli/src/dependency-capability-loader.ts",
+      "owner": "dependencyCapabilityError",
+      "expressionSha256": "e81f1096a5092c951e9a70f0a246b7582b267f624024e6997927d71cc208431d"
+    },
+    {
       "id": "packages/compiler/src/emit/client.ts#generated-runtime#KV449#7cd7faae0ed68c03d5d12667fbcae2c40750d3e1dc469036b439060e798d79cc#0",
       "code": "KV449",
       "enforcementClass": "compile-error",
@@ -784,6 +817,17 @@
       "expressionSha256": "6b4e1a7a5a5b496dd518696a924297fa22ac5958deda64aae38a0ea396505e50"
     },
     {
+      "id": "packages/drizzle/src/static.ts#throw#KV414#704fc8217480c8b0cca4ba2e42d0ffdf9baca5deef46dd9888e225be6998dcf7#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/drizzle/src/static.ts",
+      "owner": "decideAttenuatingGrantDeletion",
+      "expressionSha256": "704fc8217480c8b0cca4ba2e42d0ffdf9baca5deef46dd9888e225be6998dcf7"
+    },
+    {
       "id": "packages/drizzle/src/static.ts#throw#KV414#717b5257531fbd9fd735d7874223ae3a3588c3220cc911ff27751225e5f7904f#0",
       "code": "KV414",
       "enforcementClass": "compile-error",
@@ -793,6 +837,17 @@
       "file": "packages/drizzle/src/static.ts",
       "owner": "runtimeManifestAuthzPolicy",
       "expressionSha256": "717b5257531fbd9fd735d7874223ae3a3588c3220cc911ff27751225e5f7904f"
+    },
+    {
+      "id": "packages/drizzle/src/static.ts#throw#KV414#f61c767607873789071ffb21895a8c5e7c5e969b853b5c2156193b4ee18cab2f#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/drizzle/src/static.ts",
+      "owner": "decideAttenuatingGrantDeletion",
+      "expressionSha256": "f61c767607873789071ffb21895a8c5e7c5e969b853b5c2156193b4ee18cab2f"
     },
     {
       "id": "packages/server/src/access.ts#throw#KV436#8f7e35e747627babb81d30b5fca110b5eb3432475d0f344fb779cc4cca3dbda4#0",
@@ -815,6 +870,17 @@
       "file": "packages/server/src/access.ts",
       "owner": "assertUnambiguousAccessDeclaration",
       "expressionSha256": "9291725cc77af6b22a56ed4886d33ae449a74af4b77f11ffac3f02551c8d83fa"
+    },
+    {
+      "id": "packages/server/src/app-load-shed.ts#throw#KV433#e01cfe907448ee7db25f1b7dc1619ddfc55501576afdb1536bb0efb9ab867236#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/app-load-shed.ts",
+      "owner": "mintFrameworkLoadShedError",
+      "expressionSha256": "e01cfe907448ee7db25f1b7dc1619ddfc55501576afdb1536bb0efb9ab867236"
     },
     {
       "id": "packages/server/src/app.ts#throw#KV421#02014e558ca5312e7b754e49dbda48de24fbb02ba5ba51c3852941f97383d78c#0",
@@ -1112,6 +1178,94 @@
       "file": "packages/server/src/cookies.ts",
       "owner": "applyCookieFloor",
       "expressionSha256": "b2c8d45c5b24f2e0869bc340dda96856be513b243a4ef267b4264f3119b8da36"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#01a18e59d5f9effe88fb2a01d900ced8c2d215b1d302bdb366f36b35644aaced#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDerivedVectorDatasetFacts",
+      "expressionSha256": "01a18e59d5f9effe88fb2a01d900ced8c2d215b1d302bdb366f36b35644aaced"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#74a3b5caf967389e9dca582c8f14c8fdb635d8207fb5fcd74136817259beb9a1#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDenseArray",
+      "expressionSha256": "74a3b5caf967389e9dca582c8f14c8fdb635d8207fb5fcd74136817259beb9a1"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#84cb50ffd8f4b1c8c83fa7884d922033328bbc055d8d505d5ebdf238a7cbb51d#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDerivedVectorDatasetFacts",
+      "expressionSha256": "84cb50ffd8f4b1c8c83fa7884d922033328bbc055d8d505d5ebdf238a7cbb51d"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#863f8bbe4fdf1351c77b990cdfeb97211de65b3b832ee63dbd9d36dfe95a29e9#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDerivedVectorDatasetFacts",
+      "expressionSha256": "863f8bbe4fdf1351c77b990cdfeb97211de65b3b832ee63dbd9d36dfe95a29e9"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#99d82cee83f07a72837a4e1300ce1ec4401a395404e423e2b09874f53fb13ae8#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDerivedVectorDatasetFacts",
+      "expressionSha256": "99d82cee83f07a72837a4e1300ce1ec4401a395404e423e2b09874f53fb13ae8"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#9f784c3eed11eae01b63b2df4165db8b963f430c1c3d36419ccace8888caa19e#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDerivedVectorDatasetFacts",
+      "expressionSha256": "9f784c3eed11eae01b63b2df4165db8b963f430c1c3d36419ccace8888caa19e"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#a2e5de3e298ed1ac65336c7911d6ed2f5ae48231db9a7a991d77e7e20a489503#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDenseArray",
+      "expressionSha256": "a2e5de3e298ed1ac65336c7911d6ed2f5ae48231db9a7a991d77e7e20a489503"
+    },
+    {
+      "id": "packages/server/src/derived-dataset.ts#throw#KV452#c1ce89851eb2eea75ac4c48a98f6f08c7b579a89df7269a18cf1b7505647064b#0",
+      "code": "KV452",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/derived-dataset.ts",
+      "owner": "snapshotDenseArray",
+      "expressionSha256": "c1ce89851eb2eea75ac4c48a98f6f08c7b579a89df7269a18cf1b7505647064b"
     },
     {
       "id": "packages/server/src/document-structured.ts#throw#KV236#de39dcfbedeffda7f1a1f25913fa9fbde4459187bf39342934c2481992bcba58#0",
@@ -2192,6 +2346,149 @@
       "expressionSha256": "6b8e935ec333f502a67b3a5da39401df32fceabc5e94f088afbb5af4d0c039d7"
     },
     {
+      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#2bc326a09943be16cab58cfb77a5ea51098481edbd96b27f401310235d949a41#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-owner-guard.ts",
+      "owner": "registerFrameworkPostgresOwnerGuardSchema",
+      "expressionSha256": "2bc326a09943be16cab58cfb77a5ea51098481edbd96b27f401310235d949a41"
+    },
+    {
+      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#855688862c34bdc3450f30e921a8f1e18a0d340d5c9a155f00d7c6573300eb2b#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-owner-guard.ts",
+      "owner": "registerFrameworkPostgresOwnerGuardSchema",
+      "expressionSha256": "855688862c34bdc3450f30e921a8f1e18a0d340d5c9a155f00d7c6573300eb2b"
+    },
+    {
+      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#efdc69222c175a97797a0142e2e35abbb1474423fb3e4906f3f853c035112749#0",
+      "code": "KV414",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-owner-guard.ts",
+      "owner": "registerFrameworkPostgresOwnerGuardSchema",
+      "expressionSha256": "efdc69222c175a97797a0142e2e35abbb1474423fb3e4906f3f853c035112749"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#rejection#KV433#dfefb3626c0861ec175c7718333abca2ba1938136194338c3911ed6ef871779d#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "rejection",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "<anonymous>",
+      "expressionSha256": "dfefb3626c0861ec175c7718333abca2ba1938136194338c3911ed6ef871779d"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#0f3a92078aa18a42c074ce6f2ab104baf74449f6177a22159e85bbf90d5deed0#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "createPostgresPostureDigest",
+      "expressionSha256": "0f3a92078aa18a42c074ce6f2ab104baf74449f6177a22159e85bbf90d5deed0"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#3a108f8e3c62340d6d0a5e91d5c044446256f4c9d799b2635aa85a74e1885adb#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "boundedWitnessString",
+      "expressionSha256": "3a108f8e3c62340d6d0a5e91d5c044446256f4c9d799b2635aa85a74e1885adb"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#3a78215d9b6df2f280ac8182c3ea9c93e3b2cec09b36df90f35a3b5b682f96a9#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "assertPoolerWitness",
+      "expressionSha256": "3a78215d9b6df2f280ac8182c3ea9c93e3b2cec09b36df90f35a3b5b682f96a9"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#58c3b6f2766fe8d904149f65504aaa6a29b6051f09aba94a4645d9cba2cd9ab7#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "boundedWitnessString",
+      "expressionSha256": "58c3b6f2766fe8d904149f65504aaa6a29b6051f09aba94a4645d9cba2cd9ab7"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#7a6ccd64cd4c0e0dcdd0f2c387fccdb788737d50c0f2bde22e49b2091e683d59#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "normalizePostureFacts",
+      "expressionSha256": "7a6ccd64cd4c0e0dcdd0f2c387fccdb788737d50c0f2bde22e49b2091e683d59"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#8a8b1c3011d8b1adea5b139069764e7bc03f4e0c6f369771e1fb6021066aad57#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "assertPoolerWitness",
+      "expressionSha256": "8a8b1c3011d8b1adea5b139069764e7bc03f4e0c6f369771e1fb6021066aad57"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#d0f9018ad40fbdfef88b716945de616d1d22a1bf290fa6b75ecfacde268e6d89#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "normalizePostureFacts",
+      "expressionSha256": "d0f9018ad40fbdfef88b716945de616d1d22a1bf290fa6b75ecfacde268e6d89"
+    },
+    {
+      "id": "packages/server/src/postgres-posture-lease.ts#throw#KV433#ff3d48f0c7febd08ad88ca000fbc8470078b93552280b050a3d6a66c01c3e660#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-posture-lease.ts",
+      "owner": "assertPoolerWitness",
+      "expressionSha256": "ff3d48f0c7febd08ad88ca000fbc8470078b93552280b050a3d6a66c01c3e660"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#error-object#KV433#058ec9b26c582f3b1f7a077a2f8b810f0e63720e7dbbac1d91736f2d5ff04763#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "error-object",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "#destroyIdleSessions",
+      "expressionSha256": "058ec9b26c582f3b1f7a077a2f8b810f0e63720e7dbbac1d91736f2d5ff04763"
+    },
+    {
       "id": "packages/server/src/postgres-runtime.ts#error-object#KV433#621fcfef9b87098429bdf301f4333c78aca14c25e75aaee010073e76eebf2fdc#0",
       "code": "KV433",
       "enforcementClass": "compile-error",
@@ -2201,6 +2498,17 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "owner": "unsupportedAuthzPolicyError",
       "expressionSha256": "621fcfef9b87098429bdf301f4333c78aca14c25e75aaee010073e76eebf2fdc"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#error-object#KV433#84b475b82f75a2031d880205b2843c618ba63b4af953a1b33623dd4aae457c9b#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "error-object",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "transaction",
+      "expressionSha256": "84b475b82f75a2031d880205b2843c618ba63b4af953a1b33623dd4aae457c9b"
     },
     {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV406#677d9428fa8f83752136c40edf204a1096489f321e22ac177cca7b493a048c58#0",
@@ -2390,6 +2698,17 @@
       "expressionSha256": "271d38f26f8932c56b63547d3dfa3ca70b4a15d6e2bf3a562e2a81d2dd4968b7"
     },
     {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#28e2c842bd30dd4a06e33db87c2e9b1e77450c770a3006d6bb667d363a035ead#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "postgresLeaseRowString",
+      "expressionSha256": "28e2c842bd30dd4a06e33db87c2e9b1e77450c770a3006d6bb667d363a035ead"
+    },
+    {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#2c3f76fc5a6d99cc4586a54cf72cb936977eda2f63fc8422e9ac5e75c6a45cfd#0",
       "code": "KV433",
       "enforcementClass": "compile-error",
@@ -2421,6 +2740,17 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "owner": "normalizePostgresRelationName",
       "expressionSha256": "2dcd08c56af09ab11e1639745a55654cdbb2b64574b75c37e44fee3c5d3a8b7b"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#3edbe9b0f5381af6d8d43cdff25fb1aba1e4e155f7959436d7a520742d119538#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "expressionSha256": "3edbe9b0f5381af6d8d43cdff25fb1aba1e4e155f7959436d7a520742d119538"
     },
     {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#40f72639239fa8daab366ddf5d19fa42122aab54ab72ae283a9cf7850cd5b52d#0",
@@ -2487,6 +2817,28 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "owner": "assertRuntimeConnectionLeastPrivilege",
       "expressionSha256": "552b085bcee01805a426ba8c74264a14aa3146959d02523f0bda6edd6d1f2b9f"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#5b66ecdb37fcfba9540ea9772d3c301ec5216b1a8bdf3beac8dcfa40089f0d2b#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "derivePostgresPostureLeaseWitness",
+      "expressionSha256": "5b66ecdb37fcfba9540ea9772d3c301ec5216b1a8bdf3beac8dcfa40089f0d2b"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#5d7dfd1cc3b3938e81c41b754b100ba277843a1dd62510a8a23173414996b3c5#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "postgresPosturePoolerStatement",
+      "expressionSha256": "5d7dfd1cc3b3938e81c41b754b100ba277843a1dd62510a8a23173414996b3c5"
     },
     {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#607b9c7ab4ce620033c205acee19db86ef85d215fe46eb112a19030b6dcd74e0#0",
@@ -2599,6 +2951,17 @@
       "expressionSha256": "7c1215f2cee7df9f9d98395cb5de6b8855353452cf8bb167e4979feff01c4a9e"
     },
     {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#7e0973b5f974a7cc594749e1aa6bab29287545542d460709dce18299039da814#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "derivePostgresPostureLeaseWitness",
+      "expressionSha256": "7e0973b5f974a7cc594749e1aa6bab29287545542d460709dce18299039da814"
+    },
+    {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#7efc08f7517d7cbbb503c449e97965050536feb2beb36b6fda0529ec649563f8#0",
       "code": "KV433",
       "enforcementClass": "compile-error",
@@ -2674,6 +3037,28 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "owner": "assertPostgresUniqueBaseTableNames",
       "expressionSha256": "8d2e638b1d7a807d87190c3c7b93b8b25937a47f6755f96e94213721e3e75cf4"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#8e4e6e981e975e4ad1365dec8413213b73bef86125d61dcfd726528a6916f267#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "reassertPostgresPostureEpoch",
+      "expressionSha256": "8e4e6e981e975e4ad1365dec8413213b73bef86125d61dcfd726528a6916f267"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#9209ad3769b2535927daa7eb4842c40bfc1492941bf188693167f332c602e38a#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "appendPostgresLeaseFacts",
+      "expressionSha256": "9209ad3769b2535927daa7eb4842c40bfc1492941bf188693167f332c602e38a"
     },
     {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#961fbecf13e5fb713dbb336805b88fd91bc9399e9750e81dff2035665b562f2f#0",
@@ -2808,6 +3193,17 @@
       "expressionSha256": "c885ab19afd4e2e78338dd00b203d64c6b247eccb982f676b54e3f5b4f933f38"
     },
     {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#c938ad780db6267d5eda8de9303f58e316de570fa67f1052dfab96b5f06cb09c#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "derivePostgresPostureLeaseWitness",
+      "expressionSha256": "c938ad780db6267d5eda8de9303f58e316de570fa67f1052dfab96b5f06cb09c"
+    },
+    {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#cb551d6a48391d43002502f0d5dc779d3f71fb5566ca539d143dc788e98c6041#0",
       "code": "KV433",
       "enforcementClass": "compile-error",
@@ -2839,6 +3235,17 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "owner": "normalizePostgresMigrations",
       "expressionSha256": "ccf7fee4e78e909a8e4f7a65b2754f0b5d710c33ab62e10e9eb83ecb9b266960"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#d2ac5ec494748eb07657658a8e364cc615afd699fca46356d7343e3654222cb6#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "reassertPostgresPostureEpoch",
+      "expressionSha256": "d2ac5ec494748eb07657658a8e364cc615afd699fca46356d7343e3654222cb6"
     },
     {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#d4ccedc9e309bd331f96de27e54a3ac18f111cbbd03337f552075e74eaaf33a5#0",
@@ -2896,6 +3303,17 @@
       "expressionSha256": "e0c89f5356162ef68c4ec591a7ab1419dff93814328327f2dc6b5996376d14e5"
     },
     {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#e24d746403972f0e1833b10e130cd8b038e6eec9d45d03059bb61871f5842131#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "derivePostgresPostureLeaseWitness",
+      "expressionSha256": "e24d746403972f0e1833b10e130cd8b038e6eec9d45d03059bb61871f5842131"
+    },
+    {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#e9ba85cf37dc6c2f69a2b10127c60f8cbbb8d1935415fda00a8e9a17ccafafa6#0",
       "code": "KV433",
       "enforcementClass": "compile-error",
@@ -2905,6 +3323,17 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "owner": "snapshotPublicPostgresAppRuntimeOptions",
       "expressionSha256": "e9ba85cf37dc6c2f69a2b10127c60f8cbbb8d1935415fda00a8e9a17ccafafa6"
+    },
+    {
+      "id": "packages/server/src/postgres-runtime.ts#throw#KV433#eccb06be76ba3bd0ba1b87ea81cd6d27ca440790615dc477093bd205a6d29d40#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "owner": "provisionPostgresFrameworkTaskStore",
+      "expressionSha256": "eccb06be76ba3bd0ba1b87ea81cd6d27ca440790615dc477093bd205a6d29d40"
     },
     {
       "id": "packages/server/src/postgres-runtime.ts#throw#KV433#ee9ceaa6b251f313756a147a4fe7d0b59b99c83e268abbaae46c2dbcdfb13a05#0",
@@ -4203,105 +4632,6 @@
       "file": "packages/server/src/webhook.ts",
       "owner": "snapshotWebhookDefinitionForDeclaration",
       "expressionSha256": "9e9388cb9bc6460919cb64ad34543722edbc9ccf453722bc2f030b9d4a3d13c2"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#1703c01ca23e00af56975dcc479bd67440a319d587a53d035d2806bd8b1a3569#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "stableTrustedAssignDescriptor",
-      "expressionSha256": "1703c01ca23e00af56975dcc479bd67440a319d587a53d035d2806bd8b1a3569"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#2cccc9a850cca6e033503423a4ae01ca1204e2c04bfa4ad45ad06ffbabc18cac#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "stableTrustedAssignDescriptor",
-      "expressionSha256": "2cccc9a850cca6e033503423a4ae01ca1204e2c04bfa4ad45ad06ffbabc18cac"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#3a3478484858dcc532e0a0569825ebaaa2638035d95ee5bb15a3535a0e1d1bad#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "snapshotTrustedAssignFact",
-      "expressionSha256": "3a3478484858dcc532e0a0569825ebaaa2638035d95ee5bb15a3535a0e1d1bad"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#518abd09914657c792f73a53e2ae8cfd462bc6d6449ae8fb0cce8be3ab6f44bd#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "snapshotTrustedAssignFact",
-      "expressionSha256": "518abd09914657c792f73a53e2ae8cfd462bc6d6449ae8fb0cce8be3ab6f44bd"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#528359d07e9aa138c195f601ab02c84619945780fc6dc95256647df6e4867f1f#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "snapshotTrustedAssignColumns",
-      "expressionSha256": "528359d07e9aa138c195f601ab02c84619945780fc6dc95256647df6e4867f1f"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#754b6c02d678804e2b05043d617e3441b75e8dcaa53441e392842f72d8992787#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "stableTrustedAssignDescriptor",
-      "expressionSha256": "754b6c02d678804e2b05043d617e3441b75e8dcaa53441e392842f72d8992787"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#7c746bbe3a36092d56275152b63c29821eee60bbcbedf7c5574ab63acf1076fa#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "snapshotTrustedAssignColumns",
-      "expressionSha256": "7c746bbe3a36092d56275152b63c29821eee60bbcbedf7c5574ab63acf1076fa"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#7c746bbe3a36092d56275152b63c29821eee60bbcbedf7c5574ab63acf1076fa#1",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "snapshotTrustedAssignColumns",
-      "expressionSha256": "7c746bbe3a36092d56275152b63c29821eee60bbcbedf7c5574ab63acf1076fa"
-    },
-    {
-      "id": "packages/server/src/write-governance.ts#throw#KV438#df9602a0dd0ec038809c5eb8b402a00cdd8f40cb97654aeffa0daa5f1bbadd3c#0",
-      "code": "KV438",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "runtime",
-      "channel": "throw",
-      "file": "packages/server/src/write-governance.ts",
-      "owner": "snapshotTrustedAssignFact",
-      "expressionSha256": "df9602a0dd0ec038809c5eb8b402a00cdd8f40cb97654aeffa0daa5f1bbadd3c"
     },
     {
       "id": "packages/test/src/harness-operations.ts#throw#KV410#bdccac0296e80cf53652cd90dcdc22359d8c97e5db32a27b1daee24e463fb682#0",
