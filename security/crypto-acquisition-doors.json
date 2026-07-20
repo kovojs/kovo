@@ -100,14 +100,6 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
-      "id": "crypto-door-cli-advisories",
-      "file": "packages/cli/src/commands/advisories.ts",
-      "kind": "digest",
-      "operations": ["createHash"],
-      "tier": "build-tooling",
-      "review": "SHA-256 binds the exact fetched advisory feed bytes to the verified Sigstore subject and monotone rollback state; no keyed or signing operation is acquired."
-    },
-    {
       "id": "crypto-door-014",
       "file": "packages/cli/src/commands/build-export.ts",
       "kind": "digest",
