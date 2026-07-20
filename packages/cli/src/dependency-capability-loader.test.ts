@@ -978,6 +978,51 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-external-html-module-snapshot
+  it('rejects an external HTML module script outside the immutable approved-source snapshot', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-module-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-client');
+    const outDir = join(root, 'dist');
+    const appSource = "export const app = 'approved';\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/node_modules/safe-client/index.js"></script>',
+      );
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({ name: 'safe-client', type: 'module', version: '1.0.0' }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.js'),
+        "globalThis.__UNCENSUSED_CLIENT_PACKAGE__ = 'executed';\n",
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*HTML module.*immutable approved-source snapshot/u);
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('binds a nested package edge to the helper that actually resolves it', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-dependency-nested-loader-'));
     const appModulePath = join(root, 'app.mjs');
