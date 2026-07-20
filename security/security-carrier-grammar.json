@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 270,
+    "historicalWitnesses": 273,
     "productions": 12
   },
   "productions": [
@@ -398,6 +398,24 @@
       "corpus": "sink-registry",
       "production": "encoding-variant",
       "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
+    },
+    {
+      "anchor": "grant-graph-derivation-and-top-closure",
+      "corpus": "postgres-identity-posture",
+      "production": "structural-closure",
+      "reason": "This witness derives the complete grant graph and closes unclassifiable authority-bearing transitions to top."
+    },
+    {
+      "anchor": "epoch-bound-attenuating-delegation",
+      "corpus": "postgres-identity-posture",
+      "production": "runtime-floor",
+      "reason": "This witness enforces subset-only delegated rights and principal-epoch revocation at the runtime capability boundary."
+    },
+    {
+      "anchor": "grant-graph-explain-and-check-door",
+      "corpus": "postgres-identity-posture",
+      "production": "root-registration",
+      "reason": "This witness exposes the derived grant root and makes a top transition fail the authoritative check path."
     },
     {
       "anchor": "grant-shape-closure-fuzzer",
