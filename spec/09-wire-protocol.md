@@ -61,7 +61,18 @@ reject-by-default rules apply.
   unit, including lone surrogates; raw identity bytes never enter store keys or diagnostics.
   Protected-CSRF declarations reject this field. Enhanced and no-JavaScript requests use the same
   claim namespace, while their response classifiers stay closed: a cross-mode retry conflicts and
-  cannot execute under a second namespace.
+  cannot execute under a second namespace. Buffered and streaming enhanced requests likewise share
+  one claim. The endpoint first normalizes the requested mode to what the dispatched mutation can
+  actually produce (a mutation without a stream hook is buffered), then binds the committed replay
+  record and live response to that delivery vocabulary. A streaming record/response carries the
+  exact framework-owned own-data header `Kovo-Stream: true`; a buffered one omits every casing of
+  that name. The final framework response and replay-settlement seals remove app-authored marker
+  attempts before minting that vocabulary. Replay release requires a stable header-name snapshot,
+  at most one exact-cased marker, the exact string value `true`, and equality with the current
+  normalized delivery mode. Missing stream markers, injected buffered markers, duplicates, wrong
+  casing/value, accessors, and buffered-to-stream or stream-to-buffer retries produce the same
+  sanitized 422 idempotency conflict before stored bytes are returned and without rerunning the
+  handler. Same-mode streaming replay stores the complete settled body, including `<kovo-done>`.
 - Principal-derived durable authority carries the §6.6 persistent epoch without making it a
   caller-selected wire knob. A capability URL payload uses version `v4` and includes signed `p`
   (the positive integer epoch) whenever signed `s` (the principal scope) is present; a scoped token

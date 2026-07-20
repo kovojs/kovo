@@ -9,11 +9,13 @@ import { csrfToken, KOVO_IDEM_FIELD_NAME } from '../csrf.js';
 import { mintMutationIdemToken } from '../mutation-idem.js';
 import { MutationReplayConflictError } from '../replay.js';
 import type {
+  BufferedMutationWireResponse,
   MutationEndpointReplayResponse,
   MutationWireRequest,
   NoJsMutationRequest,
 } from '../mutation-wire.js';
 import {
+  bindEnhancedMutationReplayDelivery,
   enhancedMutationReplayPolicy,
   isEnhancedReplayResponse,
   isNoJsReplayResponse,
@@ -290,6 +292,120 @@ describe('mutation replay response authority', () => {
 
     expect(noJs).toBe(false);
     expect(enhanced).toBe(false);
+  });
+
+  it('binds and classifies one exact framework-owned enhanced delivery marker', () => {
+    const authoredHeaders = {
+      'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      'Kovo-Stream': 'false',
+      'kOvO-sTrEaM': 'true',
+    };
+    const response = {
+      body: '',
+      headers: authoredHeaders,
+      status: 200,
+    } as unknown as BufferedMutationWireResponse;
+
+    const buffered = bindEnhancedMutationReplayDelivery(response, 'buffered');
+    expect(buffered.headers).toEqual({
+      'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+    });
+    expect(isEnhancedReplayResponse(buffered, 'buffered')).toBe(true);
+    expect(isEnhancedReplayResponse(buffered, 'stream')).toBe(false);
+
+    const streaming = bindEnhancedMutationReplayDelivery(response, 'stream');
+    expect(streaming.headers).toEqual({
+      'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      'Kovo-Stream': 'true',
+    });
+    expect(isEnhancedReplayResponse(streaming, 'stream')).toBe(true);
+    expect(isEnhancedReplayResponse(streaming, 'buffered')).toBe(false);
+  });
+
+  it.each([
+    ['removed stream marker', 'stream', {}],
+    ['injected buffered marker', 'buffered', { 'Kovo-Stream': 'true' }],
+    ['wrong marker value', 'stream', { 'Kovo-Stream': 'false' }],
+    ['wrong marker casing', 'stream', { 'kovo-stream': 'true' }],
+    ['duplicate case variant', 'stream', { 'Kovo-Stream': 'true', 'kovo-stream': 'true' }],
+  ] as const)(
+    'rejects a custom-store carrier with a %s',
+    async (_label, expectedDelivery, deliveryHeaders) => {
+      const response = {
+        body: '<kovo-fragment target="result">stored secret</kovo-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+          ...deliveryHeaders,
+        },
+        status: 200,
+      } as unknown as MutationEndpointReplayResponse;
+      const replayStore = {
+        get() {
+          return response;
+        },
+        reserve() {
+          return undefined;
+        },
+        set() {},
+      };
+      const policy = enhancedMutationReplayPolicy({
+        csrf: false,
+        machineReplayPrincipal: () => 'settings-machine',
+        mutationKey: 'settings/update',
+        request: {
+          idem: mintMutationIdemToken(),
+          rawInput: {},
+          replayStore,
+          request: {},
+          stream: expectedDelivery === 'stream',
+        } as MutationWireRequest<object>,
+      });
+
+      await expect(policy?.read({})).rejects.toThrow(MutationReplayConflictError);
+    },
+  );
+
+  it('rejects an accessor-backed custom-store stream marker without invoking it', async () => {
+    let reads = 0;
+    const headers = {
+      'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+    } as Record<string, string>;
+    Object.defineProperty(headers, 'Kovo-Stream', {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return 'true';
+      },
+    });
+    const response = {
+      body: '<kovo-fragment target="result">stored secret</kovo-fragment>',
+      headers,
+      status: 200,
+    } as unknown as MutationEndpointReplayResponse;
+    const replayStore = {
+      get() {
+        return response;
+      },
+      reserve() {
+        return undefined;
+      },
+      set() {},
+    };
+    const policy = enhancedMutationReplayPolicy({
+      csrf: false,
+      machineReplayPrincipal: () => 'settings-machine',
+      mutationKey: 'settings/update',
+      request: {
+        idem: mintMutationIdemToken(),
+        rawInput: {},
+        replayStore,
+        request: {},
+        stream: true,
+      } as MutationWireRequest<object>,
+    });
+
+    await expect(policy?.read({})).rejects.toThrow(MutationReplayConflictError);
+    expect(reads).toBe(0);
   });
 
   it('does not execute response or header accessors while classifying replay vocabulary', () => {

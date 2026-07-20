@@ -137,7 +137,14 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     if (lifecycle.kind === 'replay-unavailable')
       return renderReplayUnavailableFragment(nonRenderingPreLifecycleRequest);
     if (lifecycle.kind === 'replayed') {
-      if (isEnhancedReplayResponse(lifecycle.response)) return lifecycle.response;
+      if (
+        isEnhancedReplayResponse(
+          lifecycle.response,
+          wireRequest.stream === true ? 'stream' : 'buffered',
+        )
+      ) {
+        return lifecycle.response;
+      }
       return renderReplayConflictFragment(preLifecycleRequest);
     }
 

@@ -9,8 +9,8 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after TASK B routing closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(303);
+  it('pins the exact forcing denominator after enhanced replay delivery closure', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(306);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
@@ -89,9 +89,12 @@ describe('security-gate-mutations', () => {
     const names = [
       'mutation-replay/abort-deterministic-nojs-failure',
       'mutation-replay/drop-rejected-selector-promise-drain',
+      'mutation-replay/drop-enhanced-delivery-marker-seal',
+      'mutation-replay/drop-enhanced-delivery-match',
       'mutation-replay/hash-machine-principal-as-utf8',
       'mutation-replay/restore-machine-wide-principal-fallback',
       'mutation-replay/restore-nojs-prefixed-namespace',
+      'mutation-replay/restore-request-bit-only-stream-delivery',
       'server-task/replace-canonical-internal-origin',
       'server-task/restore-mutation-session-provider',
       'server-task/restore-query-session-provider',

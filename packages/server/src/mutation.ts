@@ -80,7 +80,9 @@ import {
   type ValidationFailurePayload,
 } from './schema.js';
 import {
+  bindEnhancedMutationReplayDelivery,
   enhancedMutationReplayPolicy,
+  type EnhancedMutationReplayDelivery,
   type MutationLifecycleOutcome,
   noJsMutationReplayPolicy,
   optionalReplayPolicy,
@@ -1012,11 +1014,18 @@ export async function renderMutationResponse<
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
   const executionWireRequest = snapshotEnhancedMutationWireRequest(wireRequest);
+  // SPEC §9.1/§10.3: replay binds to the delivery vocabulary the endpoint can actually produce,
+  // not merely to an untrusted Kovo-Stream request bit. An unsupported stream request is buffered.
+  const replayDelivery: EnhancedMutationReplayDelivery =
+    executionWireRequest.stream === true && typeof definition.stream === 'function'
+      ? 'stream'
+      : 'buffered';
   // SPEC §9.1/§9.2: failure-form ownership is derived from the dispatched mutation definition;
   // an internal structural caller cannot substitute another mutation identity.
   const mutationRequest: MutationWireRequest<Request> = {
     ...executionWireRequest,
     mutationKey: definition.key,
+    stream: replayDelivery === 'stream',
   };
   const csrf = mutationCsrfOptions(definition, mutationRequest.csrf);
   const deliveryMode = {
@@ -1053,7 +1062,11 @@ export async function renderMutationResponse<
     ),
     wireRequest: mutationRequest,
   });
-  return csrf === false ? mutationResponseWithoutBrowserState(response) : response;
+  const browserSafeResponse =
+    csrf === false ? mutationResponseWithoutBrowserState(response) : response;
+  // The response leaves through the same framework-owned seal used by replay settlement. It
+  // scrubs authored/case-variant marker attempts and guarantees live/replayed vocabulary parity.
+  return bindEnhancedMutationReplayDelivery(browserSafeResponse, replayDelivery);
 }
 
 /** Fail before the mutation lifecycle can commit when its enhanced response cannot be versioned. */

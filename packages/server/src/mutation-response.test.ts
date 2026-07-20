@@ -2083,6 +2083,7 @@ describe('server mutation primitives', () => {
 
     const first = await renderMutationEndpointResponse(sendMessage, request);
     expect(first.body).toBeInstanceOf(ReadableStream);
+    expect(first.headers['Kovo-Stream']).toBe('true');
     await expect(readResponseBody(first.body)).resolves.toContain('first response only');
 
     // A3 (SPEC §10.3:1063 + §9): the replayed body must contain the full settled stream
@@ -2090,10 +2091,125 @@ describe('server mutation primitives', () => {
     // stream ran. This inverts the previous `toBe('')` assertion that codified the loss.
     const second = await renderMutationEndpointResponse(sendMessage, request);
     expect(typeof second.body).toBe('string');
+    expect(second.headers['Kovo-Stream']).toBe('true');
     expect(second.body).toContain('first response only');
     expect(second.body).toContain('<kovo-done>');
     expect(handlerSpy).toHaveBeenCalledOnce();
     expect(streamSpy).toHaveBeenCalledOnce();
+  });
+
+  it.each(['buffered', 'stream'] as const)(
+    'conflicts when an idempotency retry changes from %s enhanced delivery vocabulary',
+    async (firstMode) => {
+      const replayStore = createMemoryMutationReplayStore();
+      const replayDomainKey = `chat-replay-delivery-${firstMode}`;
+      const replayDomain = domain(replayDomainKey);
+      const replayQuery = query(replayDomainKey, {
+        load: () => ({ messages: 1 }),
+        reads: [replayDomain],
+      });
+      const handlerSpy = vi.fn();
+      const streamSpy = vi.fn();
+      const sendMessage = mutation(`chat/replay-delivery-${firstMode}`, {
+        input: s.object({ body: s.string() }),
+        handler(input, _request, context) {
+          handlerSpy(input);
+          context.invalidate(replayDomain);
+          return {
+            // App-authored values that resemble response metadata never own Kovo response headers.
+            headers: { 'Kovo-Stream': firstMode === 'stream' ? 'false' : 'true' },
+            responseHeaders: { 'Kovo-Stream': firstMode === 'stream' ? 'false' : 'true' },
+            value: input.body,
+          };
+        },
+        registry: { queries: [replayQuery], touches: [replayDomain] },
+        *stream({ result }) {
+          streamSpy();
+          // Even a post-handler attempt to add result metadata cannot remove the final framework
+          // delivery seal or change the replay record that is committed after settlement.
+          result.responseHeaders = { 'Kovo-Stream': 'false' };
+          yield stream.text('assistant:a1', 'stream-only payload');
+        },
+      });
+      const idem = mintIdemToken();
+      const requestFor = (mode: 'buffered' | 'stream') => ({
+        fragmentRenderers: [
+          {
+            render: () => '<p data-replay-payload="settled">settled payload</p>',
+            target: 'messages',
+          },
+        ],
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Idem': idem,
+          ...(mode === 'stream' ? { 'Kovo-Stream': 'true' } : {}),
+          'Kovo-Targets': `messages=${replayDomainKey}`,
+        },
+        rawInput: { body: 'Hi' },
+        redirectTo: '/chat',
+        replayStore,
+        request: {},
+        resolvePostLifecycleResponse: () =>
+          ({
+            headers: { 'Kovo-Stream': mode === 'stream' ? 'false' : 'true' },
+          }) as never,
+      });
+
+      const first = await renderMutationEndpointResponse(sendMessage, requestFor(firstMode));
+      expect(first.status).toBe(200);
+      expect(first.headers['Kovo-Stream']).toBe(firstMode === 'stream' ? 'true' : undefined);
+      expect(first.body instanceof ReadableStream).toBe(firstMode === 'stream');
+      const firstBody = await readResponseBody(first.body);
+      expect(firstBody).toContain('settled payload');
+      expect(firstBody.includes('stream-only payload')).toBe(firstMode === 'stream');
+      expect(firstBody.includes('<kovo-done>')).toBe(firstMode === 'stream');
+
+      const sameMode = await renderMutationEndpointResponse(sendMessage, requestFor(firstMode));
+      expect(sameMode.status).toBe(200);
+      expect(typeof sameMode.body).toBe('string');
+      expect(sameMode.body).toBe(firstBody);
+      expect(sameMode.headers['Kovo-Stream']).toBe(firstMode === 'stream' ? 'true' : undefined);
+
+      const crossMode = firstMode === 'stream' ? 'buffered' : 'stream';
+      const conflict = await renderMutationEndpointResponse(sendMessage, requestFor(crossMode));
+      expect(conflict).toMatchObject({ status: 422 });
+      expect(typeof conflict.body).toBe('string');
+      expect(conflict.body).toContain('IDEMPOTENCY_CONFLICT');
+      expect(conflict.body).not.toContain('settled payload');
+      expect(conflict.body).not.toContain('stream-only payload');
+      expect(conflict.headers['Kovo-Stream']).toBe(crossMode === 'stream' ? 'true' : undefined);
+      expect(handlerSpy).toHaveBeenCalledOnce();
+      expect(streamSpy).toHaveBeenCalledTimes(firstMode === 'stream' ? 1 : 0);
+    },
+  );
+
+  it('normalizes an unsupported stream request to buffered replay vocabulary', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const handlerSpy = vi.fn((input: { body: string }) => input);
+    const save = mutation('chat/replay-without-stream-definition', {
+      input: s.object({ body: s.string() }),
+      handler: handlerSpy,
+    });
+    const request = {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': mintIdemToken(),
+        'Kovo-Stream': 'true',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      replayStore,
+      request: {},
+    };
+
+    const first = await renderMutationEndpointResponse(save, request);
+    const replayed = await renderMutationEndpointResponse(save, request);
+
+    expect(typeof first.body).toBe('string');
+    expect(typeof replayed.body).toBe('string');
+    expect(first.headers['Kovo-Stream']).toBeUndefined();
+    expect(replayed.headers['Kovo-Stream']).toBeUndefined();
+    expect(handlerSpy).toHaveBeenCalledOnce();
   });
 
   it('M7: streaming duplicates stay joined after replay ttl until the stream commits', async () => {

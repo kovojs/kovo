@@ -27,6 +27,7 @@ import type {
   BufferedMutationWireResponse,
   MutationEndpointReplayResponse,
   MutationWireRequest,
+  MutationWireResponse,
   NoJsMutationReplayReservation,
   NoJsMutationRequest,
   NoJsMutationResponse,
@@ -39,10 +40,20 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
+  witnessOwnKeys,
   witnessReflectApply,
 } from '../security-witness-intrinsics.js';
-import { securityIsPromise, securityStringStartsWith } from '../response-security-intrinsics.js';
+import {
+  securityIsPromise,
+  securityStringStartsWith,
+  securityStringToLowerCase,
+} from '../response-security-intrinsics.js';
 import { validateMutationIdemToken } from '../mutation-idem.js';
+import {
+  mergeResponseHeaders,
+  type ResponseHeaders,
+  type ResponseHeaderValue,
+} from '../response.js';
 import {
   requestStateExactCompositeKey,
   requestStateIgnorePromiseRejection,
@@ -50,6 +61,11 @@ import {
 } from '../request-state-intrinsics.js';
 
 type MachineReplayPrincipalSelector<Request> = (request: Request) => unknown;
+
+export type EnhancedMutationReplayDelivery = 'buffered' | 'stream';
+
+const ENHANCED_STREAM_REPLAY_HEADER = 'Kovo-Stream';
+const ENHANCED_STREAM_REPLAY_HEADER_LOWER = 'kovo-stream';
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): Promise<void> | void;
@@ -135,6 +151,8 @@ export function enhancedMutationReplayPolicy<
   }
   const idemFacts = validateMutationIdemToken(idem);
   if (idemFacts === undefined) return invalidMutationIdemReplayPolicy();
+  const expectedDelivery: EnhancedMutationReplayDelivery =
+    mode.request.stream === true ? 'stream' : 'buffered';
   const principalEpochStore = optionalPrincipalEpochStore(mode.request.principalEpochStore);
   const replayStore = mode.request.replayStore;
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
@@ -209,18 +227,31 @@ export function enhancedMutationReplayPolicy<
   return {
     async read(lifecycleRequest) {
       const scoped = await replayContext(lifecycleRequest);
-      const response = enhancedReplayResponseOrConflict(await readMutationReplay(scoped.context));
+      let stored: MutationEndpointReplayResponse | undefined;
+      try {
+        stored = await readMutationReplay(scoped.context);
+      } catch (error) {
+        if (error instanceof TypeError) throw new MutationReplayConflictError();
+        throw error;
+      }
+      const response = enhancedReplayResponseOrConflict(stored, expectedDelivery);
       if (response !== undefined) await assertReplayResponseEpochFresh(scoped);
       return response;
     },
     async reserve(lifecycleRequest) {
       const scoped = await replayContext(lifecycleRequest);
-      const result = await reserveMutationReplayBeforeRun(scoped.context);
+      let result: Awaited<ReturnType<typeof reserveMutationReplayBeforeRun>>;
+      try {
+        result = await reserveMutationReplayBeforeRun(scoped.context);
+      } catch (error) {
+        if (error instanceof TypeError) throw new MutationReplayConflictError();
+        throw error;
+      }
       if (result.kind === 'replayed') {
         await assertReplayResponseEpochFresh(scoped);
         return {
           kind: 'replayed',
-          response: enhancedReplayResultOrConflict(result.response),
+          response: enhancedReplayResultOrConflict(result.response, expectedDelivery),
         };
       }
       if (result.kind !== 'reserved') return result;
@@ -236,7 +267,9 @@ export function enhancedMutationReplayPolicy<
           async commit(response: BufferedMutationWireResponse) {
             assertFreshMutationIdemSettlement(idemFacts.token);
             await assertReplaySettlementEpochFresh(scoped);
-            return result.reservation.commit(response);
+            return result.reservation.commit(
+              bindEnhancedMutationReplayDelivery(response, expectedDelivery),
+            );
           },
         },
       };
@@ -486,18 +519,144 @@ export function isNoJsReplayResponse(
 
 export function isEnhancedReplayResponse(
   response: MutationEndpointReplayResponse,
+  expectedDelivery?: EnhancedMutationReplayDelivery,
 ): response is BufferedMutationWireResponse {
   const status = stableReplayOwnData(response, 'status');
   const headers = stableReplayOwnData(response, 'headers');
   const contentType = stableReplayHeader(headers, 'Content-Type');
   const reauth = stableReplayHeader(headers, 'Kovo-Reauth');
+  const replayDelivery = enhancedReplayDeliveryFromHeaders(headers);
   return (
     status !== undefined &&
     status !== 303 &&
+    replayDelivery !== undefined &&
+    (expectedDelivery === undefined || replayDelivery === expectedDelivery) &&
     ((typeof contentType === 'string' &&
       securityStringStartsWith(contentType, 'text/vnd.kovo.fragment+html;')) ||
       typeof reauth === 'string')
   );
+}
+
+/**
+ * Bind one framework mutation response to the negotiated enhanced delivery vocabulary.
+ *
+ * This is the final live-response/replay-commit seal. It removes every app- or carrier-authored
+ * case variant before minting the one canonical stream marker, so response hooks cannot inject,
+ * suppress, or duplicate replay delivery authority (SPEC §9.1/§10.3).
+ *
+ * @internal
+ */
+export function bindEnhancedMutationReplayDelivery<
+  Response extends BufferedMutationWireResponse | MutationWireResponse,
+>(response: Response, delivery: EnhancedMutationReplayDelivery): Response {
+  const body = requiredStableReplayOwnData(response, 'body');
+  const rawHeaders = requiredStableReplayOwnData(response, 'headers');
+  const status = requiredStableReplayOwnData(response, 'status');
+  return {
+    body,
+    headers: bindEnhancedReplayDeliveryHeaders(rawHeaders, delivery),
+    status,
+  } as Response;
+}
+
+function bindEnhancedReplayDeliveryHeaders(
+  source: unknown,
+  delivery: EnhancedMutationReplayDelivery,
+): ResponseHeaders {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('Enhanced mutation response headers must be an own-data header record.');
+  }
+
+  const beforeKeys = witnessOwnKeys(source);
+  let headers = mergeResponseHeaders();
+  for (let index = 0; index < beforeKeys.length; index += 1) {
+    const name = beforeKeys[index];
+    if (typeof name !== 'string') continue;
+    const descriptor = stableReplayOwnDataDescriptor(source, name);
+    if (descriptor === undefined) {
+      throw new TypeError(`Enhanced mutation response header ${name} must be stable own data.`);
+    }
+    if (!descriptor.enumerable) continue;
+    if (securityStringToLowerCase(name) === ENHANCED_STREAM_REPLAY_HEADER_LOWER) continue;
+    headers = mergeResponseHeaders(headers, {
+      [name]: descriptor.value as ResponseHeaderValue,
+    });
+  }
+  const afterKeys = witnessOwnKeys(source);
+  if (!replayOwnKeysMatch(beforeKeys, afterKeys)) {
+    throw new TypeError('Enhanced mutation response header names changed during delivery binding.');
+  }
+
+  return mergeResponseHeaders(
+    headers,
+    delivery === 'stream' ? { [ENHANCED_STREAM_REPLAY_HEADER]: 'true' } : undefined,
+  );
+}
+
+function enhancedReplayDeliveryFromHeaders(
+  headers: unknown,
+): EnhancedMutationReplayDelivery | undefined {
+  if (typeof headers !== 'object' || headers === null || witnessIsArray(headers)) return undefined;
+  try {
+    const beforeKeys = witnessOwnKeys(headers);
+    let markerSeen = false;
+    for (let index = 0; index < beforeKeys.length; index += 1) {
+      const name = beforeKeys[index];
+      if (
+        typeof name !== 'string' ||
+        securityStringToLowerCase(name) !== ENHANCED_STREAM_REPLAY_HEADER_LOWER
+      ) {
+        continue;
+      }
+      if (markerSeen || name !== ENHANCED_STREAM_REPLAY_HEADER) return undefined;
+      markerSeen = true;
+      const descriptor = stableReplayOwnDataDescriptor(headers, name);
+      if (
+        descriptor === undefined ||
+        descriptor.enumerable !== true ||
+        descriptor.value !== 'true'
+      ) {
+        return undefined;
+      }
+    }
+    const afterKeys = witnessOwnKeys(headers);
+    if (!replayOwnKeysMatch(beforeKeys, afterKeys)) return undefined;
+    return markerSeen ? 'stream' : 'buffered';
+  } catch {
+    return undefined;
+  }
+}
+
+function replayOwnKeysMatch(
+  before: readonly PropertyKey[],
+  after: readonly PropertyKey[],
+): boolean {
+  if (before.length !== after.length) return false;
+  for (let index = 0; index < before.length; index += 1) {
+    if (!witnessObjectIs(before[index], after[index])) return false;
+  }
+  return true;
+}
+
+function stableReplayOwnDataDescriptor(
+  source: object,
+  property: PropertyKey,
+): PropertyDescriptor | undefined {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable
+  ) {
+    return undefined;
+  }
+  return before;
 }
 
 function stableReplayHeader(headers: unknown, name: string): unknown {
@@ -521,17 +680,27 @@ function stableReplayOwnData(source: unknown, property: PropertyKey): unknown {
   return before.value;
 }
 
+function requiredStableReplayOwnData(source: object, property: PropertyKey): unknown {
+  const descriptor = stableReplayOwnDataDescriptor(source, property);
+  if (descriptor === undefined) {
+    throw new TypeError(`Enhanced mutation response ${String(property)} must be stable own data.`);
+  }
+  return descriptor.value;
+}
+
 function enhancedReplayResponseOrConflict(
   response: MutationEndpointReplayResponse | undefined,
+  expectedDelivery: EnhancedMutationReplayDelivery,
 ): BufferedMutationWireResponse | undefined {
   if (response === undefined) return undefined;
-  return enhancedReplayResultOrConflict(response);
+  return enhancedReplayResultOrConflict(response, expectedDelivery);
 }
 
 function enhancedReplayResultOrConflict(
   response: MutationEndpointReplayResponse,
+  expectedDelivery: EnhancedMutationReplayDelivery,
 ): BufferedMutationWireResponse {
-  if (isEnhancedReplayResponse(response)) return response;
+  if (isEnhancedReplayResponse(response, expectedDelivery)) return response;
   throw new MutationReplayConflictError();
 }
 

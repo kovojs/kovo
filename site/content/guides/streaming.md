@@ -203,6 +203,13 @@ progressively, such as a chat assistant answer. It is not an SSE subscription an
 validation, guards, replay/idempotency, and the mutation transaction before user-visible assistant
 chunks are emitted.
 
+Keep one `Kovo-Idem` token on one delivery path. Kovo binds the request's normalized, negotiated path
+to buffered or stream vocabulary; typed failures still use a buffered body. A retry that switches
+paths returns a generic 422 conflict without rerunning the mutation or exposing the earlier response
+body. A same-path successful streaming retry replays the complete settled response, including
+`<kovo-done>`. `Kovo-Stream` on responses is framework-owned — application result values and response
+hooks cannot add, remove, or override it.
+
 The wire remains the mutation vocabulary plus one narrow text-source primitive:
 
 ```html

@@ -152,6 +152,7 @@ const serverMutationReplayPolicyPath = path.join(
   repoRoot,
   'packages/server/src/mutation/replay-policy.ts',
 );
+const serverMutationPath = path.join(repoRoot, 'packages/server/src/mutation.ts');
 const serverMutationNoJsPath = path.join(repoRoot, 'packages/server/src/mutation/no-js.ts');
 const serverResponseSecurityIntrinsicsPath = path.join(
   repoRoot,
@@ -198,6 +199,10 @@ const mutationReplayPolicyBehavioralInstrumentation = [
   '',
   "export { createMemoryMutationReplayStore as __securityMutationReplayStore } from '../replay.js';",
   "export { mintMutationIdemToken as __securityMutationMintIdem } from '../mutation-idem.js';",
+].join('\n');
+const mutationEnhancedReplayBehavioralInstrumentation = [
+  '',
+  "export { s as __securityMutationEnhancedSchema } from './schema.js';",
 ].join('\n');
 const mutationNoJsBehavioralInstrumentation = [
   '',
@@ -1474,6 +1479,20 @@ const rejectedMachineReplayPromiseDrain =
   '    if (securityIsPromise(selected)) requestStateIgnorePromiseRejection(selected);';
 const removedRejectedMachineReplayPromiseDrain =
   '    if (securityIsPromise(selected)) void selected;';
+const enhancedReplayDeliveryMarkerSeal = [
+  '  return mergeResponseHeaders(',
+  '    headers,',
+  "    delivery === 'stream' ? { [ENHANCED_STREAM_REPLAY_HEADER]: 'true' } : undefined,",
+  '  );',
+].join('\n');
+const removedEnhancedReplayDeliveryMarkerSeal = '  return headers;';
+const enhancedReplayDeliveryMatch =
+  '    (expectedDelivery === undefined || replayDelivery === expectedDelivery) &&';
+const removedEnhancedReplayDeliveryMatch =
+  '    (expectedDelivery === undefined || replayDelivery !== undefined) &&';
+const enhancedReplayActualDeliverySelection =
+  "    executionWireRequest.stream === true && typeof definition.stream === 'function'";
+const requestBitOnlyEnhancedReplayDeliverySelection = '    executionWireRequest.stream === true';
 const deterministicNoJsFailureReplayCommit =
   '      return await commitReservedMutationReplay(lifecycle.reservation, render);';
 const abortedDeterministicNoJsFailureReplay = [
@@ -4731,6 +4750,44 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertEnhancedAndNoJsShareReplayClaimBehavior,
   },
   {
+    behavioralInstrumentation: mutationReplayPolicyBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Drops the framework-owned marker minted while enhanced replay delivery is sealed.',
+    expectedKiller:
+      'same-mode streaming replay must retain one exact Kovo-Stream marker on the stored record',
+    name: 'mutation-replay/drop-enhanced-delivery-marker-seal',
+    replacement: removedEnhancedReplayDeliveryMarkerSeal,
+    search: enhancedReplayDeliveryMarkerSeal,
+    sourceFile: serverMutationReplayPolicyPath,
+    test: assertEnhancedReplayDeliveryIsolationBehavior,
+  },
+  {
+    behavioralInstrumentation: mutationReplayPolicyBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Stops comparing a stored enhanced replay record with the current delivery vocabulary.',
+    expectedKiller:
+      'buffered and streaming retries must conflict across modes while same-mode replay succeeds',
+    name: 'mutation-replay/drop-enhanced-delivery-match',
+    replacement: removedEnhancedReplayDeliveryMatch,
+    search: enhancedReplayDeliveryMatch,
+    sourceFile: serverMutationReplayPolicyPath,
+    test: assertEnhancedReplayDeliveryIsolationBehavior,
+  },
+  {
+    behavioralInstrumentation: mutationEnhancedReplayBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Treats an untrusted Kovo-Stream request bit as streaming even when the mutation has no stream hook.',
+    expectedKiller: 'unsupported stream requests must use buffered response and replay vocabulary',
+    name: 'mutation-replay/restore-request-bit-only-stream-delivery',
+    replacement: requestBitOnlyEnhancedReplayDeliverySelection,
+    search: enhancedReplayActualDeliverySelection,
+    sourceFile: serverMutationPath,
+    test: assertUnsupportedEnhancedStreamNormalizationBehavior,
+  },
+  {
     behavioralInstrumentation: mutationNoJsBehavioralInstrumentation,
     behavioralTypeScript: true,
     description: 'Aborts a deterministic no-JS application failure instead of committing it.',
@@ -4894,19 +4951,25 @@ export const SECURITY_GATE_MUTANTS = [
   },
 ];
 
-function machineReplayPolicyRequest(store, idem) {
+function machineReplayPolicyRequest(store, idem, streaming = false) {
   return {
     idem,
     rawInput: { value: 'same-body' },
     replayStore: store,
     request: {},
+    stream: streaming,
   };
 }
 
-function enhancedReplayFixtureResponse() {
+function enhancedReplayFixtureResponse(streaming = false) {
   return {
-    body: '<kovo-fragment></kovo-fragment>',
-    headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+    body: streaming
+      ? '<kovo-text target="answer">settled</kovo-text>\n<kovo-done></kovo-done>\n'
+      : '<kovo-fragment></kovo-fragment>',
+    headers: {
+      'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
+    },
     status: 200,
   };
 }
@@ -4981,6 +5044,81 @@ async function assertEnhancedAndNoJsShareReplayClaimBehavior(moduleUnderTest) {
   }
   if (!conflicted) {
     throw new Error('no-JS request escaped the enhanced claim through a prefixed namespace');
+  }
+}
+
+async function assertEnhancedReplayDeliveryIsolationBehavior(moduleUnderTest) {
+  for (const storedDelivery of ['buffered', 'stream']) {
+    const store = moduleUnderTest.__securityMutationReplayStore();
+    const idem = moduleUnderTest.__securityMutationMintIdem();
+    const storedStreaming = storedDelivery === 'stream';
+    const storedPolicy = moduleUnderTest.enhancedMutationReplayPolicy({
+      csrf: false,
+      machineReplayPrincipal: () => 'tenant-a',
+      mutationKey: 'security/enhanced-delivery',
+      request: machineReplayPolicyRequest(store, idem, storedStreaming),
+    });
+    const reserved = await storedPolicy.reserve({ guarded: 'tenant-a' });
+    if (reserved.kind !== 'reserved') {
+      throw new Error(`${storedDelivery} enhanced request did not reserve: ${reserved.kind}`);
+    }
+    await reserved.reservation.commit(enhancedReplayFixtureResponse(storedStreaming));
+
+    const sameMode = await storedPolicy.read({ guarded: 'tenant-a' });
+    if (sameMode === undefined) {
+      throw new Error(`${storedDelivery} enhanced response did not replay in the same mode`);
+    }
+    const marker = sameMode.headers['Kovo-Stream'];
+    if ((storedStreaming && marker !== 'true') || (!storedStreaming && marker !== undefined)) {
+      throw new Error(
+        `${storedDelivery} replay carried the wrong delivery marker: ${String(marker)}`,
+      );
+    }
+
+    const crossModePolicy = moduleUnderTest.enhancedMutationReplayPolicy({
+      csrf: false,
+      machineReplayPrincipal: () => 'tenant-a',
+      mutationKey: 'security/enhanced-delivery',
+      request: machineReplayPolicyRequest(store, idem, !storedStreaming),
+    });
+    let conflicted = false;
+    try {
+      await crossModePolicy.read({ guarded: 'tenant-a' });
+    } catch {
+      conflicted = true;
+    }
+    if (!conflicted) {
+      throw new Error(`${storedDelivery} replay escaped into the opposite enhanced delivery mode`);
+    }
+  }
+}
+
+async function assertUnsupportedEnhancedStreamNormalizationBehavior(moduleUnderTest) {
+  let handlerCalls = 0;
+  const definition = moduleUnderTest.mutation('security/unsupported-stream-delivery', {
+    csrf: false,
+    csrfJustification: 'forcing fixture uses an explicit machine replay principal',
+    handler() {
+      handlerCalls += 1;
+      return 'buffered';
+    },
+    input: moduleUnderTest.__securityMutationEnhancedSchema.object({}),
+    machineReplayPrincipal: () => 'tenant-a',
+  });
+  const response = await moduleUnderTest.renderMutationResponse(definition, {
+    buildToken: 'security-mutation-build',
+    rawInput: {},
+    request: {},
+    stream: true,
+  });
+  if (
+    typeof response.body !== 'string' ||
+    response.headers['Kovo-Stream'] !== undefined ||
+    handlerCalls !== 1
+  ) {
+    throw new Error(
+      `unsupported stream request did not normalize to buffered delivery: marker=${String(response.headers['Kovo-Stream'])} body=${typeof response.body} handlers=${handlerCalls}`,
+    );
   }
 }
 
