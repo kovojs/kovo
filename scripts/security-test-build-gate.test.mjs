@@ -677,7 +677,7 @@ describe('security-test-build-gate', () => {
       requiredNeedles: expect.arrayContaining([
         "const boxed = secret('runtime-secret-value')",
         'queries/runtime-secret-explicit-box-egress-query',
-        'expect(boxResponse.status, boxBody).toBe(500)',
+        'expect(boxResponse.status, `${key}: ${boxBody}`).toBe(500)',
         "expect(requestOutput).toContain('KV435')",
       ]),
       testName,

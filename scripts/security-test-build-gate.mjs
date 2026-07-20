@@ -598,7 +598,7 @@ export const SECURITY_BUILD_PROOFS = [
       'buildParanoidProductionArtifact(root)',
       "const boxed = secret('runtime-secret-value')",
       'queries/runtime-secret-explicit-box-egress-query',
-      'expect(boxResponse.status, boxBody).toBe(500)',
+      'expect(boxResponse.status, `${key}: ${boxBody}`).toBe(500)',
       'expect(boxBody).toBe(\'{"code":"SERVER_ERROR","payload":{}}\')',
       'Secret runtime value cannot cross',
       "expect(requestOutput).toContain('KV435')",

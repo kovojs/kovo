@@ -119,7 +119,7 @@
     {
       "site": "packages/server/src/mutation.ts#site-0001",
       "file": "packages/server/src/mutation.ts",
-      "line": 1400,
+      "line": 1574,
       "column": 7,
       "owner": "revealCsrfTokenInput",
       "door": "revealUntrusted",
@@ -130,7 +130,7 @@
     {
       "site": "packages/server/src/mutation/replay-policy.ts#site-0001",
       "file": "packages/server/src/mutation/replay-policy.ts",
-      "line": 428,
+      "line": 577,
       "column": 7,
       "owner": "readNoJsIdemField",
       "door": "revealUntrusted",
