@@ -2922,6 +2922,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'csrf-principal-binding',
     marker: '@kovo-security-classifier-corpus csrf-principal-binding',
     testFiles: [
+      'packages/cli/src/deployment-environment-contract.test.ts',
       'packages/server/src/csrf.test.ts',
       'packages/server/src/standalone-csrf-mint-security.test.ts',
       'packages/server/src/anonymous-csrf-cache-security.test.tsx',
