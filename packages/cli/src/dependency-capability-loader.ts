@@ -1250,8 +1250,14 @@ interface BrowserStaticIndex {
 
 interface BrowserStaticEvaluationState {
   readonly bindingStack: Set<BrowserStaticBinding>;
+  readonly budget?: BrowserStaticEvaluationBudget;
   readonly depth: number;
   readonly overrides?: ReadonlyMap<BrowserStaticBinding, readonly BrowserStaticAtom[]>;
+}
+
+interface BrowserStaticEvaluationBudget {
+  exhausted: boolean;
+  recursive: boolean;
 }
 
 function nextBrowserStaticEvaluationState(
@@ -1260,6 +1266,7 @@ function nextBrowserStaticEvaluationState(
 ): BrowserStaticEvaluationState {
   return {
     bindingStack,
+    ...(state.budget === undefined ? {} : { budget: state.budget }),
     depth: state.depth + 1,
     ...(state.overrides === undefined ? {} : { overrides: state.overrides }),
   };
@@ -1840,8 +1847,10 @@ function collectBrowserOpaqueCallArguments(
  * Summarize only which parameters a local callable may mutate or escape. A parameter-origin atom
  * survives finite aliases and member projections, so direct writes and nested helper effects map
  * back to the corresponding call arguments. Effects on freshly created locals do not taint an
- * unrelated argument. Return-value flow remains owned by evaluateBrowserStaticCallable. This is a
- * conservative post-bundle backstop, not general JavaScript effect analysis (SPEC §6.6; C13).
+ * unrelated argument. A callable returned from the helper is an escape only for outer parameters
+ * that its closure actually captures; ordinary projected return values remain owned by
+ * evaluateBrowserStaticCallable. This is a conservative post-bundle backstop, not general
+ * JavaScript effect analysis (SPEC §6.6; C13).
  */
 function browserStaticCallableEffectParameters(
   callable: Extract<BrowserStaticAtom, { kind: 'namespace' }>,
@@ -1867,8 +1876,10 @@ function browserStaticCallableEffectParameters(
       overrides,
     );
   }
+  const budget: BrowserStaticEvaluationBudget = { exhausted: false, recursive: false };
   const state: BrowserStaticEvaluationState = {
     bindingStack: new Set(),
+    budget,
     depth: 0,
     overrides,
   };
@@ -1889,9 +1900,18 @@ function browserStaticCallableEffectParameters(
       candidateScope: BrowserStaticScope,
       depth: number,
     ): void => {
-      if (depth > 48 || typeof candidate !== 'object' || candidate === null) return;
+      if (depth > 48) {
+        budget.exhausted = true;
+        return;
+      }
+      if (typeof candidate !== 'object' || candidate === null) return;
       if (Array.isArray(candidate)) {
-        for (const child of candidate) visitOrigin(child, candidateScope, depth + 1);
+        for (const child of candidate) {
+          const childScope = isAstRecord(child)
+            ? (index.scopeByNode.get(child) ?? candidateScope)
+            : candidateScope;
+          visitOrigin(child, childScope, depth + 1);
+        }
         return;
       }
       const record = candidate as Record<string, unknown>;
@@ -1983,6 +2003,22 @@ function browserStaticCallableEffectParameters(
         addDeepOrigins(record.callee, callScope);
         for (const argument of args) addDeepOrigins(argument, callScope);
       }
+    } else if (
+      type === 'ReturnStatement' &&
+      record.argument !== null &&
+      record.argument !== undefined
+    ) {
+      const returned = evaluateBrowserStaticValue(record.argument, recordScope, index, state);
+      for (const atom of returned) {
+        if (
+          atom.kind === 'namespace' &&
+          (browserAstFunctionType(String(atom.node.type)) ||
+            atom.node.type === 'ClassDeclaration' ||
+            atom.node.type === 'ClassExpression')
+        ) {
+          addDeepOrigins(atom.node, atom.scope);
+        }
+      }
     } else if (type === 'NewExpression') {
       addDeepOrigins(record.callee, recordScope);
       const args = Array.isArray(record.arguments) ? record.arguments : [];
@@ -2004,7 +2040,10 @@ function browserStaticCallableEffectParameters(
   for (const parameter of parameters) visit(parameter);
   visit(body);
   active.delete(callable.node);
-  const result = [...affected].sort((left, right) => left - right);
+  const result =
+    budget.exhausted || budget.recursive
+      ? allParameters
+      : [...affected].sort((left, right) => left - right);
   index.callableEffectParameters.set(callable.node, result);
   return result;
 }
@@ -2307,7 +2346,14 @@ function evaluateBrowserBinding(
 ): BrowserStaticAtom[] {
   const override = state.overrides?.get(binding);
   if (override !== undefined) return [...override];
-  if (state.depth > 48 || state.bindingStack.has(binding)) return [{ kind: 'closed' }];
+  if (state.depth > 48) {
+    if (state.budget !== undefined) state.budget.exhausted = true;
+    return [{ kind: 'closed' }];
+  }
+  if (state.bindingStack.has(binding)) {
+    if (state.budget !== undefined) state.budget.recursive = true;
+    return [{ kind: 'closed' }];
+  }
   const bindingStack = new Set(state.bindingStack);
   bindingStack.add(binding);
   const nextState = nextBrowserStaticEvaluationState(state, bindingStack);
@@ -2334,7 +2380,11 @@ function evaluateBrowserStaticValue(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): BrowserStaticAtom[] {
-  if (state.depth > 48 || !isAstRecord(value)) return [{ kind: 'closed' }];
+  if (state.depth > 48) {
+    if (state.budget !== undefined) state.budget.exhausted = true;
+    return [{ kind: 'closed' }];
+  }
+  if (!isAstRecord(value)) return [{ kind: 'closed' }];
   const nextState = nextBrowserStaticEvaluationState(state);
   if (value.type === 'Identifier' && typeof value.name === 'string') {
     const binding = lookupBrowserBinding(value.name, scope);
@@ -2516,14 +2566,14 @@ function evaluateBrowserStaticCallable(
         : evaluateBrowserStaticValue(argument, callerScope, index, state);
     overrides.set(binding, argumentAtoms);
   }
+  const returnState = {
+    ...nextBrowserStaticEvaluationState(state),
+    overrides,
+  } satisfies BrowserStaticEvaluationState;
   return returns.flatMap((expression) => {
     const expressionScope =
       (isAstRecord(expression) ? index.scopeByNode.get(expression) : undefined) ?? returnScope;
-    return evaluateBrowserStaticValue(expression, expressionScope, index, {
-      bindingStack: state.bindingStack,
-      depth: state.depth + 1,
-      overrides,
-    });
+    return evaluateBrowserStaticValue(expression, expressionScope, index, returnState);
   });
 }
 
@@ -2845,7 +2895,11 @@ function browserFiniteStaticStrings(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): readonly string[] | undefined {
-  if (!isAstRecord(value) || state.depth > 48) return undefined;
+  if (state.depth > 48) {
+    if (state.budget !== undefined) state.budget.exhausted = true;
+    return undefined;
+  }
+  if (!isAstRecord(value)) return undefined;
   const literal = literalAstString(value);
   if (literal !== undefined) return [literal];
   if (value.type === 'Literal' && typeof value.value === 'number') return [String(value.value)];

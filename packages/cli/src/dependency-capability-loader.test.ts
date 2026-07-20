@@ -1796,6 +1796,21 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'nested-returned-helper-written Worker',
+      "(() => { function prepare(box) { return () => platform => { box.platform = platform; }; } const box = {}; prepare(box)()(globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'projected-capture-helper-written Worker',
+      "(() => { function prepare(box) { const state = { target: box }; const write = platform => { state.target.platform = platform; }; const api = { write }; return api.write; } const box = {}; prepare(box)(globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'returned-class-method-written Worker',
+      "(() => { function prepare(box) { return class Installer { install(platform) { box.platform = platform; } }; } const box = {}; const Installer = prepare(box); new Installer().install(globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'array-written Worker',
       "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
       'Worker',
@@ -2078,9 +2093,10 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           "const localArray = []; localArray[0] = class LocalWorker { constructor() { this.kind = 'array'; } };",
           "const ignoredUnknownResult = inspectSomething({ value: 'off-slice' });",
           "const readLocalWorker = box => { const local = {}; local.seen = true; return box.worker; }; const forwardLocalWorker = box => readLocalWorker(box); const LocalViaHelper = forwardLocalWorker({ worker: class LocalWorker { constructor() { this.kind = 'helper-read'; } } }); const helperRead = new LocalViaHelper().kind;",
+          "const nonCapturingBox = { Worker: class LocalWorker { constructor() { this.kind = 'non-capturing'; } } }; function makeLocalWriter(unused) { const local = {}; return () => platform => { local.platform = platform; return local.platform; }; } const localWrite = makeLocalWriter(nonCapturingBox)()('local-only'); const nonCapturingWorker = new nonCapturingBox.Worker().kind;",
           "const describedLocal = (() => { const Object = { getOwnPropertyDescriptor: () => ({ value: class LocalWorker { constructor() { this.kind = 'local-object'; } } }) }; const Local = Object.getOwnPropertyDescriptor({}, 'Worker').value; return new Local().kind; })();",
           "const reflectedLocal = (() => { const Reflect = { get: (object, key) => object[key] }; const Local = Reflect.get({ Worker: class LocalWorker { constructor() { this.kind = 'local-reflect'; } } }, 'Worker'); return new Local().kind; })();",
-          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
+          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
           '',
         ].join('\n'),
       );
@@ -2295,6 +2311,21 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'curried-helper-written Worker',
       "(() => { function prepare(box) { return platform => { box.platform = platform; }; } const box = {}; const install = prepare(box); install(globalThis); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'nested-returned-helper-written Worker',
+      "(() => { function prepare(box) { return () => platform => { box.platform = platform; }; } const box = {}; prepare(box)()(globalThis); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'projected-capture-helper-written Worker',
+      "(() => { function prepare(box) { const state = { target: box }; const write = platform => { state.target.platform = platform; }; const api = { write }; return api.write; } const box = {}; prepare(box)(globalThis); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'returned-class-method-written Worker',
+      "(() => { function prepare(box) { return class Installer { install(platform) { box.platform = platform; } }; } const box = {}; const Installer = prepare(box); new Installer().install(globalThis); return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
