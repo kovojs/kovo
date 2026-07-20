@@ -2054,6 +2054,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'compiler-generated-wire-abi-provenance',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 compiler-generated-wire-abi-provenance',
+          'admits only exact compiler-generated wire ABI edges while authored and unknown variants stay closed',
+          "kind: 'generated-wire-abi'",
+          'does not classify public subpath ./internal/wire',
+          'outside the exact compiler-generated @kovojs/server/internal/wire ABI vocabulary',
+        ],
+      },
+      {
         id: 'capability-mint-symbol-identity-census',
         file: 'scripts/capability-surface-census-gate.test.mjs',
         snippets: [

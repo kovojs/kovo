@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   analyzeCapabilityClosure,
+  collectCapabilityPackageRequests,
+  compilerGeneratedCapabilityDependencies,
   packageCapabilitySummarySchema,
   type CapabilityClosureSourceFile,
   type PackageCapabilitySummary,
@@ -31,22 +33,23 @@ function resolved(
   const frameworkVariant = frameworkPackage?.[2].find(([, subpaths]) =>
     subpaths.some(([candidate]) => candidate === subpath),
   );
+  const frameworkIdentityVariant = frameworkVariant ?? frameworkPackage?.[2][0];
   const frameworkConditions = frameworkVariant?.[1].find(
     ([candidate]) => candidate === subpath,
   )?.[1];
-  const reviewedImplementationDigest =
-    frameworkVariant?.[2][0] === undefined
-      ? undefined
-      : canonicalFrameworkImplementationDigest(packageName, frameworkVariant[2][0]);
   const implementationDigest =
     options.implementationDigest === null
       ? undefined
-      : (options.implementationDigest ?? reviewedImplementationDigest);
+      : (options.implementationDigest ??
+        (frameworkIdentityVariant?.[2][0] === undefined
+          ? undefined
+          : canonicalFrameworkImplementationDigest(packageName, frameworkIdentityVariant[2][0])));
   return {
     conditions: options.conditions ?? frameworkConditions ?? ['default', 'import'],
     exportStatus: 'resolved',
     ...(implementationDigest === undefined ? {} : { implementationDigest }),
-    manifestFingerprint: options.fingerprint ?? frameworkVariant?.[0] ?? `manifest:${packageName}`,
+    manifestFingerprint:
+      options.fingerprint ?? frameworkIdentityVariant?.[0] ?? `manifest:${packageName}`,
     packageName,
     packageVersion:
       options.packageVersion ?? (packageName.startsWith('@kovojs/') ? FRAMEWORK_VERSION : '1.0.0'),
@@ -55,20 +58,10 @@ function resolved(
 }
 
 function packagesFor(files: readonly CapabilityClosureSourceFile[]): ResolvedCapabilityPackage[] {
-  const specifiers = new Set<string>();
-  for (const file of files) {
-    for (const match of file.source.matchAll(
-      /(?:from\s+|import\(|require\()['"]([^'".][^'"]*)['"]/gu,
-    )) {
-      const specifier = match[1]!;
-      if (!specifier.startsWith('node:')) specifiers.add(specifier);
-    }
-    for (const match of file.source.matchAll(/\bimport\s*['"]([^'"]+)['"]/gu)) {
-      const specifier = match[1]!;
-      if (!specifier.startsWith('node:')) specifiers.add(specifier);
-    }
-  }
-  return [...specifiers].map((specifier) => resolved(specifier));
+  return collectCapabilityPackageRequests(files).map(({ importer, specifier }) => ({
+    ...resolved(specifier),
+    ...(importer === undefined ? {} : { importer }),
+  }));
 }
 
 function analyze(
@@ -86,6 +79,176 @@ function analyze(
 }
 
 describe('SPEC §6.6 capability-closed module graph', () => {
+  // @kovo-security-certifies C13 compiler-generated-wire-abi-provenance
+  it('admits only exact compiler-generated wire ABI edges while authored and unknown variants stay closed', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { query, route } from '@kovojs/server';
+          export const lookup = query({ run() { return 'safe'; } });
+          export const page = route('/lookup', { render() { return lookup; } });
+        `,
+      },
+    ];
+    const compilerDependencies = compilerGeneratedCapabilityDependencies({
+      authoredSource: files[0]!.source,
+      fileName: files[0]!.fileName,
+      loweredSource: `
+        import { query, route } from '@kovojs/server';
+        import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';
+        export const lookup = __kovoAssignDerivedQueryKey(query({ run() { return 'safe'; } }), 'lookup');
+        export const page = route('/lookup', { render() { return lookup; } });
+      `,
+    });
+    expect(compilerDependencies).toEqual([
+      {
+        importer: 'app.ts',
+        importedNames: ['assignDerivedQueryKey'],
+        kind: 'generated-wire-abi',
+        site: 'app.ts:compiler-lowered',
+        specifier: '@kovojs/server/internal/wire',
+      },
+    ]);
+    const packageRequests = collectCapabilityPackageRequests(files, compilerDependencies);
+    const generated = analyzeCapabilityClosure({
+      compilerDependencies,
+      files,
+      packages: packageRequests.map(({ importer, specifier }) => ({
+        ...resolved(specifier),
+        ...(importer === undefined ? {} : { importer }),
+      })),
+    });
+    expect(generated.diagnostics).toEqual([]);
+    expect(
+      generated.dependencyManifest.dependencies
+        .flatMap((dependency) => dependency.entries)
+        .find((entry) => entry.specifier === '@kovojs/server/internal/wire'),
+    ).toEqual(
+      expect.objectContaining({
+        importers: ['app.ts'],
+        imports: expect.arrayContaining([
+          expect.objectContaining({
+            disposition: 'authority-free',
+            name: 'assignDerivedQueryKey',
+          }),
+        ]),
+      }),
+    );
+
+    const authored = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { assignDerivedQueryKey } from '@kovojs/server/internal/wire';
+          import { route } from '@kovojs/server';
+          export const page = route('/forged', { render() { return assignDerivedQueryKey; } });
+        `,
+      },
+    ];
+    const authoredResult = analyze(authored);
+    expect(authoredResult.diagnostics[0]?.message).toContain(
+      'does not classify public subpath ./internal/wire',
+    );
+
+    const unknownDependencies = compilerGeneratedCapabilityDependencies({
+      authoredSource: files[0]!.source,
+      fileName: files[0]!.fileName,
+      loweredSource: `
+        import { query, route } from '@kovojs/server';
+        import { surpriseWireEscape } from '@kovojs/server/internal/wire';
+        export const page = route('/unknown', { render() { return surpriseWireEscape; } });
+      `,
+    });
+    const unknownRequests = collectCapabilityPackageRequests(files, unknownDependencies);
+    const unknownResult = analyzeCapabilityClosure({
+      compilerDependencies: unknownDependencies,
+      files,
+      packages: unknownRequests.map(({ importer, specifier }) => ({
+        ...resolved(specifier),
+        ...(importer === undefined ? {} : { importer }),
+      })),
+    });
+    expect(unknownResult.diagnostics[0]?.message).toContain(
+      'outside the exact compiler-generated @kovojs/server/internal/wire ABI vocabulary',
+    );
+  });
+
+  it('retains package edges from malformed or rootless modules in the pre-evaluation loader census', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { trustedHtml } from '@kovojs/browser';
+          export default { render: trustedHtml };
+        `,
+      },
+    ];
+    const result = analyze(files);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.dependencyManifest.dependencies.find(
+        (dependency) => dependency.packageName === '@kovojs/browser',
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        entries: [
+          expect.objectContaining({
+            importers: ['app.ts'],
+            rootKinds: [],
+            specifier: '@kovojs/browser',
+          }),
+        ],
+        verdict: 'open',
+      }),
+    );
+  });
+
+  it('derives only the exact compiler-owned JSX runtime edges into the loader manifest', () => {
+    const files = [
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+          export const page = route('/jsx', { render() { return <main>safe</main>; } });
+        `,
+      },
+    ];
+    const result = analyze(files);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.dependencyManifest.dependencies.flatMap((dependency) => dependency.entries),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ specifier: '@kovojs/server/jsx-dev-runtime' }),
+        expect.objectContaining({ specifier: '@kovojs/server/jsx-runtime' }),
+      ]),
+    );
+    expect(
+      result.dependencyManifest.dependencies
+        .flatMap((dependency) => dependency.entries)
+        .filter((entry) => entry.specifier.includes('jsx-'))
+        .flatMap((entry) => entry.imports)
+        .every((entry) => entry.disposition === 'authority-free'),
+    ).toBe(true);
+
+    const authoredRuntimeImport = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { jsxDEV } from '@kovojs/server/jsx-dev-runtime';
+          import { route } from '@kovojs/server';
+          export const page = route('/forged-jsx', { render() { return jsxDEV; } });
+        `,
+      },
+    ]);
+    expect(authoredRuntimeImport.diagnostics[0]?.message).toContain(
+      'does not classify public subpath ./jsx-dev-runtime',
+    );
+  });
+
   it('censuses every shipping untrusted-data root kind, including application and browser callbacks', () => {
     const files = [
       {
@@ -522,6 +685,69 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       packageSummaries: [summary, { ...summary, summaryVersion: 'safe-parser-review/2' }],
     });
     expect(contradictory.diagnostics[0]!.message).toContain('2 contradictory summaries');
+  });
+
+  it('derives the loader manifest from the exact L1 package verdict and reachable roots', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { parse } from 'safe-parser';
+          export const page = route('/package', { render() { return parse('ok'); } });
+        `,
+      },
+    ];
+    const packageFact = resolved('safe-parser', {
+      conditions: ['default', 'import'],
+      fingerprint: 'sha256:package-v1',
+      packageVersion: '1.2.3',
+    });
+    const summary: PackageCapabilitySummary = {
+      entries: [
+        {
+          conditions: packageFact.conditions,
+          exports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+          subpath: '.',
+        },
+      ],
+      manifestFingerprint: packageFact.manifestFingerprint,
+      packageName: packageFact.packageName,
+      packageVersion: packageFact.packageVersion,
+      schema: packageCapabilitySummarySchema,
+      source: 'kovo.capabilities.json',
+      summaryVersion: 'safe-parser-review/1',
+    };
+    const result = analyze(files, {
+      packages: [resolved('@kovojs/server'), packageFact],
+      packageSummaries: [summary],
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.dependencyManifest).toMatchObject({
+      schema: 'kovo-app-dependency-capabilities/v1',
+    });
+    expect(
+      result.dependencyManifest.dependencies.find(
+        (dependency) => dependency.packageName === 'safe-parser',
+      ),
+    ).toEqual({
+      entries: [
+        {
+          conditions: ['default', 'import'],
+          importers: ['app.ts'],
+          imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+          rootKinds: ['route'],
+          sites: ['app.ts:3:33'],
+          specifier: 'safe-parser',
+        },
+      ],
+      manifestFingerprint: 'sha256:package-v1',
+      packageName: 'safe-parser',
+      packageVersion: '1.2.3',
+      summaryVersion: 'safe-parser-review/1',
+      verdict: 'open',
+    });
   });
 
   it('binds first-party verdicts to exact installed source or packed implementation identity', () => {
