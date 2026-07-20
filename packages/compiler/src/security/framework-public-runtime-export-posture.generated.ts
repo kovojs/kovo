@@ -36,10 +36,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/better-auth", "0.2.0", [
     ["sha256:a3d89744a6d5c81d0fc85ccdfec578e21459c803f1b44034a8b83a910d5074cb", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:c22ed73efde029a8839557d9fe695bea9d3d4ebefea22bcafaccc882709e8774"]],
+    ], ["kovo-source-tree-sha256:b975685688cf759ecf8d862457f71a0ace041995cbfaad5577ed5d977c3ca114"]],
     ["sha256:b612fda78ae2932fd34b06df4b5b440f25f6ee71834e329f539e8f9901c9c66c", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:c950d9cb26b7c051a3b233673f70dd1464dc92f425c68fc786930dbadb4d8ddd"]],
+    ], ["kovo-packed-tree-sha256:ef5b8e7ae33dee2497a2b577ceb3299787622827d3e8d724162b8da8cb34a0b4"]],
   ]],
   ["@kovojs/browser", "0.2.0", [
     ["sha256:15adc9f61802af62e281997ba39e5182d35c1dc3cf37684ac8ff7d5d708c9e90", [
@@ -62,10 +62,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/compiler", "0.2.0", [
     ["sha256:21d6efc7eb88bc768717c0e7a396abab70b204e8c0cc49c215a8885811fed018", [
 
-    ], ["kovo-compiler-self-source-tree-sha256:0cb443107da6f7f96d204f9feac26f551a0bf0a173130cb14a6b0a9cb9bb73b2"]],
+    ], ["kovo-compiler-self-source-tree-sha256:1a736344d636e43a3011a696d1cb3fb41d34d27028cbe827f7d51a0cc8ffeb93"]],
     ["sha256:ae324e67b1862da80aca7fbcce8f08ee8736916c8ee767f59093e03b6430f411", [
 
-    ], ["kovo-compiler-self-packed-tree-sha256:053c81be6a63ab4ad1045d6709ad8e0a0994bfd7484f3eb8fc6be0c0664e093f"]],
+    ], ["kovo-compiler-self-packed-tree-sha256:30b72f4def0604a3b34d25c05110c0cc7283eef761a5c3f36114dce85e3a3631"]],
   ]],
   ["@kovojs/core", "0.2.0", [
     ["sha256:6ac811f078dbb6ad22a9e5bd8b7ee36b4ee6134bec267c06bdf61862daaffe45", [
@@ -3649,7 +3649,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:d37b812762a2a7012f5839c35e96d26ab674e7245ce6b7bd07fbb81d33dadb46"]],
+    ], ["kovo-packed-tree-sha256:827928f5df4127395fff2134bced14054610c69e07000125f47224566398ee40"]],
     ["sha256:ddf6f53b981cd30cbee6a39ab2915cde76be0a61808fb5cbea18367d50ec7f83", [
       [".",["default"]],
       ["./build",["default"]],
@@ -3657,7 +3657,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default"]],
       ["./testing",["default"]],
       ["./vite",["default"]],
-    ], ["kovo-source-tree-sha256:17baf64cb01148b7c7c9745a0e66794c5aa2e18a162f41626bff580a11f98495"]],
+    ], ["kovo-source-tree-sha256:f81b9b4627ed40d5be4a630ee7af68ffd5d69bac196223c227df2cf285e93317"]],
   ]],
   ["@kovojs/style", "0.2.0", [
     ["sha256:6a05257804d6e0287e3c9bfa07ba88aa48ac29abaef9458b3b6299bb21fdac86", [

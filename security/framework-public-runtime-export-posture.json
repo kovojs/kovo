@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "0cb443107da6f7f96d204f9feac26f551a0bf0a173130cb14a6b0a9cb9bb73b2",
+      "sourceTreeSha256": "1a736344d636e43a3011a696d1cb3fb41d34d27028cbe827f7d51a0cc8ffeb93",
       "manifestVariants": [
         {
           "exports": {
@@ -449,7 +449,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "c22ed73efde029a8839557d9fe695bea9d3d4ebefea22bcafaccc882709e8774"
+      "sourceTreeSha256": "b975685688cf759ecf8d862457f71a0ace041995cbfaad5577ed5d977c3ca114"
     },
     {
       "manifestVariants": [
@@ -9643,7 +9643,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "17baf64cb01148b7c7c9745a0e66794c5aa2e18a162f41626bff580a11f98495"
+      "sourceTreeSha256": "f81b9b4627ed40d5be4a630ee7af68ffd5d69bac196223c227df2cf285e93317"
     },
     {
       "manifestVariants": [
