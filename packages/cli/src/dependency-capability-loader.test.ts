@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
-import { build as viteBuild } from 'vite-plus';
+import { build as viteBuild, createServer as createViteServer } from 'vite-plus';
 
 import {
   assertDependencyCapabilityImport,
@@ -45,6 +45,19 @@ const manifest: AppDependencyCapabilityManifest = {
 };
 
 describe('SPEC §6.6 app dependency loader attenuation', () => {
+  // @kovo-security-certifies C13 dependency-complete-ssr-wiring
+  it('forces complete dependency traversal in both supported SSR app-evaluation lanes', () => {
+    const source = readFileSync(new URL('./commands/build-export.ts', import.meta.url), 'utf8');
+    for (const functionName of ['loadBuildAppModule', 'loadExportAppModule']) {
+      const start = source.indexOf(`async function ${functionName}(`);
+      const end = source.indexOf('\nasync function ', start + 1);
+      expect(start, `${functionName} must remain present`).toBeGreaterThanOrEqual(0);
+      expect(source.slice(start, end === -1 ? undefined : end)).toContain(
+        'ssr: { noExternal: dependencyCapabilityCompleteBundleNoExternal() }',
+      );
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-capability-loader-identity
   it('admits only the exact censused dependency import and installed identity', () => {
     expect(
@@ -458,6 +471,167 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       }
       expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-transitive-ssr-pre-evaluation
+  it('rejects an uncensused transitive before supported SSR app evaluation', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-transitive-ssr-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const helperRoot = join(root, 'node_modules', 'helper-parser');
+    const executedPath = join(root, 'helper-executed');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    let server: Awaited<ReturnType<typeof createViteServer>> | undefined;
+    try {
+      for (const [directory, packageName] of [
+        [packageRoot, 'safe-parser'],
+        [helperRoot, 'helper-parser'],
+      ] as const) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          join(directory, 'package.json'),
+          JSON.stringify({
+            ...(packageName === 'safe-parser'
+              ? { dependencies: { 'helper-parser': '1.0.0' } }
+              : {}),
+            exports: { '.': './index.js' },
+            name: packageName,
+            type: 'module',
+            version: packageName === 'safe-parser' ? '1.2.3' : '1.0.0',
+          }),
+        );
+      }
+      writeFileSync(
+        join(packageRoot, 'index.js'),
+        "import { helper } from 'helper-parser'; export const parse = value => helper(value);\n",
+      );
+      writeFileSync(
+        join(helperRoot, 'index.js'),
+        `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(
+          executedPath,
+        )}, 'executed'); export const helper = value => value;\n`,
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+      server = await createViteServer({
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          dependencyCapabilityLoaderVitePlugin(
+            appModulePath,
+            [{ fileName: 'app.mjs', source }],
+            exactManifest,
+            'build-app',
+          ),
+        ],
+        root,
+        server: { hmr: false },
+        ssr: { noExternal: true },
+      });
+
+      await expect(server.ssrLoadModule('/app.mjs')).rejects.toThrow(
+        /KV448.*uncensused transitive dependency helper-parser imported by reviewed package safe-parser/u,
+      );
+      expect(() => readFileSync(executedPath, 'utf8')).toThrow();
+    } finally {
+      await server?.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-builtin-ssr-pre-evaluation
+  it('rejects a reviewed package builtin import before supported SSR app evaluation', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-builtin-ssr-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    let server: Awaited<ReturnType<typeof createViteServer>> | undefined;
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.js' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.js'),
+        "import { readFileSync } from 'node:fs'; export const parse = () => readFileSync;\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+      server = await createViteServer({
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          dependencyCapabilityLoaderVitePlugin(
+            appModulePath,
+            [{ fileName: 'app.mjs', source }],
+            exactManifest,
+            'export',
+          ),
+        ],
+        root,
+        server: { hmr: false },
+        ssr: { noExternal: true },
+      });
+
+      await expect(server.ssrLoadModule('/app.mjs')).rejects.toThrow(
+        /KV448.*uncensused transitive dependency node:fs imported by reviewed package safe-parser/u,
+      );
+    } finally {
+      await server?.close();
       rmSync(root, { force: true, recursive: true });
     }
   });
