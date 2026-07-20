@@ -70,6 +70,7 @@ export const serverBaseProvenanceStates = [
   'scoped-key-call',
   'scope-call',
   'storage',
+  'unsafe-wire-data',
   'unknown-authority',
 ] as const;
 
@@ -143,8 +144,12 @@ export const serverExpressionProvenanceArmCensus = {
   leaf: ['identifier-environment-lookup'],
   nondeterministicOracle: {
     id: 'fallthrough-containment-oracle',
-    implementationWalks: ['foreign-executable-containment', 'authority-containment'],
-    outcomes: ['local', 'foreign-executable', 'unknown-authority'],
+    implementationWalks: [
+      'foreign-executable-containment',
+      'unsafe-wire-data-containment',
+      'authority-containment',
+    ],
+    outcomes: ['local', 'foreign-executable', 'unsafe-wire-data', 'unknown-authority'],
   },
   syntaxDependent: ['object-literal-implicit-protocol-shape'],
 } as const;
@@ -165,7 +170,7 @@ export const provenanceDomainHonesty = {
     'browser provenance is censused here but its syntax-dependent transfer relation is not claimed decidable by this table',
   ],
   planSnapshotDrift:
-    'the current compiler has 38 server states, not the earlier 37-state snapshot, because scoped-key-call is now an explicit finite state',
+    'the current compiler has 39 server states: scoped-key-call is explicit and unsafe-wire-data carries request/error body provenance without pretending data is capability authority',
 } as const;
 
 /** Static names whose behavior is not represented solely by the two DB-operation predicates. */
@@ -466,7 +471,9 @@ const serverBaseMemberRules = {
   },
   local: { default: 'local' },
   request: {
-    default: 'local',
+    // Ordinary request projections are attacker-influenced wire data. Exact framework capability
+    // members remain separately overridden below.
+    default: 'unsafe-wire-data',
     overrides: {
       [literal('cancel')]: operation('server.task.compose'),
       [literal('db')]: 'database',
@@ -505,6 +512,7 @@ const serverBaseMemberRules = {
       [literal('stream')]: operation('server.storage.read'),
     },
   },
+  'unsafe-wire-data': { default: 'unsafe-wire-data' },
   'unknown-authority': { default: 'unknown-authority' },
 } as const satisfies Record<(typeof serverBaseProvenanceStates)[number], ServerMemberRule>;
 
@@ -558,6 +566,7 @@ const serverBaseAuthorityRelation = {
   'scope-call': true,
   'scoped-key-call': true,
   storage: true,
+  'unsafe-wire-data': false,
   'unknown-authority': true,
 } as const satisfies Record<(typeof serverBaseProvenanceStates)[number], boolean>;
 

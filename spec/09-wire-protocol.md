@@ -174,6 +174,46 @@ The verifier kit is part of the normative surface for `webhook()`: `hmacSignatur
 
 ### 9.2 Errors
 
+#### Rejection equivalence and observation policy (normative)
+
+Every remotely reachable surface for which account existence, resource existence/ownership, a
+secret, or a governed value can change the response MUST have an explicit
+`kovo-response-observation/v1` policy. Schema `owner:`, `secret:`, and `governed` facts nominate
+surfaces for this review; they do not choose a product policy or prove equivalence. A nominated
+surface without a policy is a build refusal. A policy names the two worlds being compared and one
+of the canonical classes below. The only canonical world pairs are `exists-not-owned` versus
+`absent`, `account-present` versus `account-absent`, and `unexpected-cause-a` versus
+`unexpected-cause-b`; a product-specific pair requires a separately reviewed class rather than an
+alias to one of these names.
+
+An attacker observation is the tuple
+`(status, redirect, selected end-to-end headers, normalized cookies/tokens, body relation,
+connection behavior, work-factor class, timing distribution)`. Header names are compared
+case-insensitively and order-independently after adapter-owned framing fields are removed.
+`Set-Cookie` is compared by cookie name, security attributes, expiry class, and token
+presence/shape; fresh random token bytes are never required to be equal. The body relation names
+media type, encoding, length relation, and content relation. Connection behavior distinguishes a
+complete response, reset/abort, and timeout. Work factor names the finite operation class and count.
+Timing is a distribution checked against a versioned statistical budget; this is not a claim of
+constant-time execution. An oracle compares the declared tuple fields and relations, not raw
+response bytes. Provider delivery and other effects outside the framework-controlled HTTP boundary
+are excluded unless the policy explicitly includes and measures them.
+
+| Canonical class         | Required worlds                                                          | Required attacker-visible relation                                                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `input-validation`      | validly parsed but rejected inputs selected by the declared error schema | HTTP 422; no redirect or credential token; declared typed body vocabulary. Error codes and field paths may differ, so this class does not conceal which submitted field failed.                                                                                                                           |
+| `authentication-needed` | enhanced versus no-JS transport for the same unauthenticated request     | The transport difference is intentional: enhanced HTTP 401 plus `Kovo-Reauth`; no-JS HTTP 303 to the same-origin login route with the same canonical `next`. Neither response establishes a session.                                                                                                      |
+| `authorization-denied`  | authenticated principals denied by the same guard                        | HTTP 403 and the declared `unauthorized` failure body. This class does not conceal resource existence; a surface that must do so selects `resource-concealment`.                                                                                                                                          |
+| `resource-concealment`  | `exists-not-owned` versus `absent`                                       | Identical 404 status, no redirect, `Cache-Control: private, no-store`, credential-varying headers, no cookie/token mutation, the same fixed body media type/bytes/length, complete connection behavior, equivalent storage/verification work class, and a timing distribution within the declared budget. |
+| `account-creation`      | `account-present` versus `account-absent`                                | The same generic accepted status/redirect/body relation; no account-dependent cookie or token. A surface claiming this class cannot auto-establish a session in only one world. Framework-controlled lookup/write/credential work is normalized and its timing stays within budget.                       |
+| `account-recovery`      | `account-present` versus `account-absent`                                | The same generic accepted status/redirect/body relation and no account-dependent cookie/token. Framework-controlled token-generation, lookup, queueing/decoy work, and timing are normalized; delivery by an external mail provider is outside the claim unless separately measured.                      |
+| `unexpected-failure`    | `unexpected-cause-a` versus `unexpected-cause-b`                         | The surface-specific stable sanitized HTTP 500 tuple defined below; no cause-derived header, cookie/token, body content/length, connection behavior, or work-class difference before the response is committed.                                                                                           |
+
+The table is a minimum floor. A surface may declare a stricter relation, but MUST NOT claim a class
+while omitting one of the tuple axes or silently treating a raw-byte mismatch as acceptable. The
+versioned policy and its dual-world oracle are release evidence; a passing unit fixture is not a
+timing guarantee for every deployment.
+
 Validation failures (schema, with field paths) and declared error codes return HTTP 422. The enhanced
 path infers the submitted form instance from the request's compiler-emitted form target and returns a
 `<kovo-fragment>` for that form only; the no-JS path re-renders the full page. Both paths call the

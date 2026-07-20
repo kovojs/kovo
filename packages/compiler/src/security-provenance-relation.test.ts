@@ -27,8 +27,8 @@ import {
 } from './scan/security-provenance-relation.js';
 
 describe('finite security provenance relation (SPEC §2/§6.6)', () => {
-  it('censuses the current 38 server and 20 browser states against operation kinds', () => {
-    expect(serverValueProvenanceStates).toHaveLength(38);
+  it('censuses the current 39 server and 20 browser states against operation kinds', () => {
+    expect(serverValueProvenanceStates).toHaveLength(39);
     expect(browserValueProvenanceStates).toHaveLength(20);
     expect(serverOperationProvenanceStates).toEqual(
       serverSecurityOperationKinds.map((kind) => `operation:${kind}`),
@@ -42,8 +42,12 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
       'object-literal-implicit-protocol-shape',
     ]);
     expect(serverExpressionProvenanceArmCensus.nondeterministicOracle).toMatchObject({
-      implementationWalks: ['foreign-executable-containment', 'authority-containment'],
-      outcomes: ['local', 'foreign-executable', 'unknown-authority'],
+      implementationWalks: [
+        'foreign-executable-containment',
+        'unsafe-wire-data-containment',
+        'authority-containment',
+      ],
+      outcomes: ['local', 'foreign-executable', 'unsafe-wire-data', 'unknown-authority'],
     });
   });
 
@@ -85,7 +89,7 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
       }
     }
     expect(executedPairs).toBe(serverValueProvenanceStates.length * serverMemberClasses.length);
-    expect(executedPairs).toBe(2_128);
+    expect(executedPairs).toBe(2_184);
   });
 
   it('derives authorityTop from the relation while unknown future states fail closed', () => {
@@ -146,6 +150,7 @@ function legacyServerMemberProvenance(
   member: string,
 ): ServerValueProvenance {
   if (receiver === 'unknown-authority' || receiver === 'foreign-executable') return receiver;
+  if (receiver === 'unsafe-wire-data') return receiver;
   if (receiver.startsWith('operation:')) return 'unknown-authority';
   if (receiver === 'context') {
     if (member === 'db' || member === 'readonlyAppDb' || member === 'tx') return 'database';
@@ -184,7 +189,7 @@ function legacyServerMemberProvenance(
     if (member === 'cancel' || member === 'schedule') {
       return legacyOperation('server.task.compose');
     }
-    return 'local';
+    return 'unsafe-wire-data';
   }
   if (receiver === 'database') {
     if (member === 'read') return 'database-read-namespace';
@@ -316,6 +321,7 @@ function legacyServerProvenanceCarriesAuthority(
     provenance !== 'intrinsic-identity-call' &&
     provenance !== 'intrinsic-object' &&
     provenance !== 'local' &&
-    provenance !== 'safe-call'
+    provenance !== 'safe-call' &&
+    provenance !== 'unsafe-wire-data'
   );
 }

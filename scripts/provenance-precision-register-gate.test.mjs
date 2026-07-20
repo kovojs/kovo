@@ -19,7 +19,7 @@ describe('provenance precision-grant register gate (Plan 3 §4.5)', () => {
   it('accepts the exact extractor denominator and register-derived generator', () => {
     expect(
       evaluateProvenancePrecisionRegister(loadProvenancePrecisionRegisterInputs()),
-    ).toMatchObject({ findings: [], ok: true, ownerless: 0, rows: 14 });
+    ).toMatchObject({ findings: [], ok: true, ownerless: 0, rows: 17 });
   });
 
   it('fails closed when an owner is removed', () => {

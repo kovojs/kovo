@@ -33,6 +33,20 @@ import {
   type MutationFormDefinition,
 } from '../mutation/definition.js';
 import type { Schema } from '../schema.js';
+export {
+  compareResponseObservations,
+  defineResponseObservationPolicy,
+  requireResponseObservationPolicy,
+  RESPONSE_OBSERVATION_SCHEMA,
+  runUniformWork,
+} from '../response-observation.js';
+export type {
+  ResponseObservation,
+  ResponseObservationPolicy,
+  ResponseObservationPolicyOptions,
+  ResponseObservationVerdict,
+  UniformWorkOptions,
+} from '../response-observation.js';
 import { usePostgresSystemDb, type KovoPostgresSystemDb } from './postgres-capability.js';
 import { useSqliteSystemDb, type KovoSqliteSystemDb } from './sqlite-capability.js';
 

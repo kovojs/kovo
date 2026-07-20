@@ -22,6 +22,7 @@ const expectedExtractor = `${precisionExtractorPath}#serverExpressionProvenance`
 const expectedFinalPrerequisites = Object.freeze([
   'serverObjectLiteralHasImplicitCallable',
   'expressionContainsServerForeignExecutable',
+  'expressionContainsServerUnsafeWireData',
   'expressionContainsServerAuthority',
 ]);
 

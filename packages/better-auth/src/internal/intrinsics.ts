@@ -44,6 +44,7 @@ const nativeHeadersSet = getMethod(NativeHeaders.prototype, 'set');
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpGlobalGetter = getGetter(NativeRegExp.prototype, 'global');
 const nativeResponseClone = getMethod(NativeResponse.prototype, 'clone');
+const nativeResponseArrayBuffer = getMethod(NativeResponse.prototype, 'arrayBuffer');
 const nativeResponseHeadersGetter = getGetter(NativeResponse.prototype, 'headers');
 const nativeResponseJson = getMethod(NativeResponse.prototype, 'json');
 const nativeResponseStatusGetter = getGetter(NativeResponse.prototype, 'status');
@@ -195,6 +196,7 @@ function capturedControlsAreSound(): boolean {
       nativeHeadersSet !== undefined &&
       apply(nativeHeadersGet, headers, ['location']) === '/safe' &&
       nativeResponseClone !== undefined &&
+      nativeResponseArrayBuffer !== undefined &&
       nativeResponseJson !== undefined
     );
   } catch {
@@ -775,6 +777,28 @@ export function betterAuthResponseJson(value: object): unknown {
   if (json !== undefined && 'value' in json && typeof json.value === 'function') {
     try {
       return betterAuthApply(json.value, value, []);
+    } catch {}
+  }
+  return undefined;
+}
+
+/** Consume an upstream response body at the handler boundary before Kovo replaces its vocabulary. */
+export function betterAuthDrainResponseBody(value: object): PromiseLike<unknown> | undefined {
+  assertBetterAuthIntrinsics();
+  if (nativeResponseArrayBuffer !== undefined) {
+    try {
+      readNativeResponseStatus(value);
+      return apply<PromiseLike<unknown>>(nativeResponseArrayBuffer, value, []);
+    } catch {}
+  }
+  const arrayBuffer = betterAuthGetOwnPropertyDescriptor(value, 'arrayBuffer');
+  if (
+    arrayBuffer !== undefined &&
+    'value' in arrayBuffer &&
+    typeof arrayBuffer.value === 'function'
+  ) {
+    try {
+      return betterAuthApply<PromiseLike<unknown>>(arrayBuffer.value, value, []);
     } catch {}
   }
   return undefined;

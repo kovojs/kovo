@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "3bac64775b9335ec7c01de43afe0d3b9d1d796a8ed89301760215c391a605d90",
+      "sourceTreeSha256": "78feab78b67546eb967e8b3ca8e6ea82abc0b50de4a873efeeffccd10e2e1a9e",
       "manifestVariants": [
         {
           "exports": {
@@ -449,7 +449,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "c22ed73efde029a8839557d9fe695bea9d3d4ebefea22bcafaccc882709e8774"
+      "sourceTreeSha256": "b8f4ccdd49b8a095a1fc74253301bce12797a916dcb6376816b8bd44f636d42a"
     },
     {
       "manifestVariants": [
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "23f389407e4a9fd57cfe6ec3b25e580d7816583e7ce1ca161cb1fade48ce33ac"
+      "sourceTreeSha256": "27365c126c1c8c642b6b0a4f84ac3e428f0ee54fc7f3adcb99f2c17675ce80d9"
     },
     {
       "manifestVariants": [
@@ -9648,7 +9648,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "82bc93c9c5684553e0c08a8b53202dd844b1bc6512daf8dc18af4ac75f9d05b2"
+      "sourceTreeSha256": "2cb639bcdf6cbb7f985bd3d66ca7e52a4c8b09e973a0e49e7015f1b1016e80b0"
     },
     {
       "manifestVariants": [

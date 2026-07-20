@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkWireOutputBoundary } from './check-wire-output-boundary.mjs';
+import {
+  checkWireOutputBoundary,
+  wireBodyProvenanceFile,
+  wireBodyProvenanceOracleFile,
+  wireBodyProvenanceRelationFile,
+} from './check-wire-output-boundary.mjs';
 
 const baseFiles = {
+  [wireBodyProvenanceFile]: `
+setServerAliasPattern(node.variableDeclaration.name, 'unsafe-wire-data', aliases);
+setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases);
+appendUnsafeWireBodyViolation(
+            node.arguments?.[0],
+            'new Response', aliases, appendViolation);
+appendUnsafeWireBodyViolation(call.arguments[0], target, aliases, appendViolation);
+`,
+  [wireBodyProvenanceRelationFile]: `'unsafe-wire-data': { default: 'unsafe-wire-data' },`,
+  [wireBodyProvenanceOracleFile]: `
+// @kovo-security-classifier-corpus finite-security-operation-ir
+// a catch-bound Error.message
+// the raw request URL
+// a request-derived JSON field
+`,
   'packages/server/src/response-posture.ts': `export function emitToWire(value) { return new Response(value.body); }`,
   'packages/server/src/response.ts': `import { emitToWire } from './response-posture.js';
 export function ok(value) { return emitToWire(value, 'framework-response', { method: 'GET' }); }`,
@@ -82,5 +102,25 @@ const example = "Response.json({})";`,
 
     expect(result.ok).toBe(false);
     expect(result.findings.join('\n')).toContain('exported emitToWire() choke is missing');
+  });
+
+  it('fails when the Layer-3 body provenance sink or hostile oracle is deleted', () => {
+    const missingSink = run({
+      [wireBodyProvenanceFile]: baseFiles[wireBodyProvenanceFile].replace(
+        'appendUnsafeWireBodyViolation(call.arguments[0], target, aliases, appendViolation);',
+        '',
+      ),
+    });
+    expect(missingSink.ok).toBe(false);
+    expect(missingSink.findings.join('\n')).toContain('Layer-3 response-body provenance anchor');
+
+    const missingOracle = run({
+      [wireBodyProvenanceOracleFile]: baseFiles[wireBodyProvenanceOracleFile].replace(
+        'a catch-bound Error.message',
+        '',
+      ),
+    });
+    expect(missingOracle.ok).toBe(false);
+    expect(missingOracle.findings.join('\n')).toContain('hostile response-body oracle anchor');
   });
 });

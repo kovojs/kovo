@@ -1107,6 +1107,14 @@ function precisionGrantWitnessSource(id: ServerProvenancePrecisionGrantId): stri
     ctx.fetch('https://oracle.invalid/precision-new-foreign');`,
         false,
       );
+    case 'new-unsafe-wire-data':
+      return renderTransferModule(
+        `class LocalValue {}`,
+        `const value = new LocalValue(_input);
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-new-unsafe-wire');`,
+        false,
+      );
     case 'new-local-constructor':
       return renderTransferModule(
         `class LocalValue {}`,
@@ -1149,6 +1157,14 @@ export const analyzerOracle = task('precision-scoped-key', {
     ctx.fetch('https://oracle.invalid/precision-response-call');`,
         false,
       );
+    case 'call-unsafe-wire-data':
+      return renderTransferModule(
+        `function local(value) { return value; }`,
+        `const value = local(_input);
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-call-unsafe-wire');`,
+        false,
+      );
     case 'call-local':
       return renderTransferModule(
         `function local(value) { return value; }`,
@@ -1187,6 +1203,14 @@ export const analyzerOracle = task('precision-scoped-key', {
         `const value = [endpoint];
     void value;
     ctx.fetch('https://oracle.invalid/precision-foreign-container');`,
+        false,
+      );
+    case 'fallthrough-unsafe-wire-data':
+      return renderTransferModule(
+        '',
+        `const value = { reflected: _input };
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-fallthrough-unsafe-wire');`,
         false,
       );
     case 'fallthrough-contained-local':
@@ -1537,6 +1561,14 @@ function transferWitnessExpectation(id: SecurityAbstractTransferId): AnalyzerOra
 }
 
 function independentLatticeBehavior(element: ServerValueProvenance): AnalyzerOracleLatticeBehavior {
+  if (element === 'unsafe-wire-data') {
+    return {
+      aliasFromBottom: element,
+      binaryWithLocal: element,
+      conditionalWithLocal: element,
+      defaultWithLocal: element,
+    };
+  }
   const authority = independentlyCarriesAuthority(element);
   const localJoin = authority
     ? 'unknown-authority'
@@ -1563,6 +1595,7 @@ function independentlyCarriesAuthority(element: ServerValueProvenance): boolean 
     case 'intrinsic-object':
     case 'local':
     case 'safe-call':
+    case 'unsafe-wire-data':
       return false;
     default:
       return true;

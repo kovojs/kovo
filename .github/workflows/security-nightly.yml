@@ -40,6 +40,9 @@ jobs:
       - name: Run nightly deterministic campaign
         if: github.event_name != 'workflow_dispatch' || inputs.profile == 'nightly'
         run: vp exec pnpm run test:security-fuzz-nightly
+      - name: Run response indistinguishability timing oracle
+        if: github.event_name != 'workflow_dispatch' || inputs.profile == 'nightly'
+        run: vp exec pnpm run test:response-indistinguishability-nightly
       - name: Run release-budget deterministic campaign
         if: github.event_name == 'workflow_dispatch' && inputs.profile == 'release'
         run: vp exec pnpm run test:security-fuzz-release
