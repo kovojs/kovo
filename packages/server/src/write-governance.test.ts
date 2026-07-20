@@ -34,6 +34,38 @@ describe('serverValue', () => {
 });
 
 describe('trustedAssign', () => {
+  it('rejects prose laundering and requires a structured governed-write obligation', () => {
+    expect(() => trustedAssign('admin', 'role grant by admin')).toThrow(/structured obligation/u);
+
+    expect(
+      trustedAssign(
+        'admin',
+        {
+          evidence: {
+            digest: `sha256:${'a'.repeat(64)}`,
+            kind: 'test',
+            reference: 'tests/authz/admin-role-grant',
+          },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'guards.role:admin', kind: 'guard-chain' },
+        } as never,
+      ),
+    ).toBe('admin');
+    expect(drainTrustedAssignFacts()).toEqual([
+      {
+        obligation: {
+          evidence: {
+            digest: `sha256:${'a'.repeat(64)}`,
+            kind: 'test',
+            reference: 'tests/authz/admin-role-grant',
+          },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'guards.role:admin', kind: 'guard-chain' },
+        },
+      },
+    ]);
+  });
+
   it('returns the value unchanged and records an audit fact', () => {
     drainTrustedAssignFacts();
     const value = 'superadmin';

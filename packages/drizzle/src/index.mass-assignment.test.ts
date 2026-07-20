@@ -441,11 +441,25 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
-  it('passes trustedAssign(input.x) as the audited privileged write', () => {
+  it('requires a structured trustedAssign obligation instead of prose laundering', () => {
     expect(
       facts(
         handler(
           '  await db.update(accounts).set({ role: trustedAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
+        ),
+      ),
+    ).toEqual([
+      expect.objectContaining({ column: 'role', provenance: 'input', via: 'set' }),
+    ]);
+
+    expect(
+      facts(
+        handler(
+          `  await db.update(accounts).set({ role: trustedAssign(input.role, {
+            evidence: { digest: "sha256:${'a'.repeat(64)}", kind: "test", reference: "tests/authz/admin-role-grant" },
+            invariant: "governed-write.authorized-principal",
+            why: { guard: "guards.role:admin", kind: "guard-chain" }
+          }) }).where(eq(accounts.id, input.id));`,
         ),
       ),
     ).toEqual([]);

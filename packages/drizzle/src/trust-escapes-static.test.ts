@@ -11248,19 +11248,33 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(
       facts(
         mutationSource({
-          assignment: `trustedAssign(crypto.randomUUID(), 'opaque server-generated id')`,
+          assignment: `trustedAssign(crypto.randomUUID(), {
+            evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/generated-id' },
+            invariant: 'governed-write.authorized-principal',
+            why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+          })`,
         }),
       ),
     ).toEqual([]);
     expect(
       facts(
         mutationSource({
-          assignment: `trustedAssign(input.email, { columns: ['id'], reason: 'reviewed grant' })`,
+          assignment: `trustedAssign(input.email, {
+            evidence: { digest: 'sha256:${'b'.repeat(64)}', kind: 'policy-review', reference: 'SEC-1234' },
+            invariant: 'governed-write.authorized-principal',
+            why: { kind: 'policy', policy: 'iam.admin-role-grant/v1' }
+          })`,
         }),
       ),
     ).toEqual([]);
 
     const closedVariants = [
+      mutationSource({
+        assignment: `trustedAssign(input.email, 'reviewed grant')`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, { reason: 'reviewed grant' })`,
+      }),
       mutationSource({
         assignment: `trustedAssign(opaque(input.email), 'reviewed grant')`,
         extra: `import { opaque } from './opaque.js';`,
@@ -11289,6 +11303,21 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       }),
       mutationSource({
         assignment: `trustedAssign(input.email, { reason: 'reviewed grant', reason: 'again' })`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        })`,
+        extra: `const reference = 'tests/authz/dynamic';`,
+      }),
+      mutationSource({
+        assignment: `trustedAssign(input.email, {
+          evidence: { digest: 'sha256:not-a-digest', kind: 'test', reference: 'tests/authz/bad-digest' },
+          invariant: 'governed-write.authorized-principal',
+          why: { guard: 'publicAccess:fixture', kind: 'guard-chain' }
+        })`,
       }),
     ];
     for (const source of closedVariants) {
