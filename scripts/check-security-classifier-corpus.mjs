@@ -737,7 +737,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'yields only a typed and runtime-checked subset while carrying the principal epoch',
           'rejects structural forgeries and propagates principal-epoch revocation',
-          "rights: ['admin:ticket' as never]",
+          "rights: ['read:other' as never]",
           "'role-change'",
         ],
       },

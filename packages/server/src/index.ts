@@ -25,6 +25,14 @@ export type {
   AgentTurnResult,
   CreateAgentSessionOptions,
 } from './agent.js';
+export { createDelegationAuthority, onBehalfOf } from './delegation.js';
+export type {
+  CreateDelegationAuthorityOptions,
+  DelegationAuthority,
+  DelegationRight,
+  DelegationRightKind,
+  OnBehalfOfOptions,
+} from './delegation.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for
