@@ -175,6 +175,10 @@ const serverViteDevPath = path.join(repoRoot, 'packages/server/src/vite-dev.ts')
 const serverVitePluginPath = path.join(repoRoot, 'packages/server/src/vite-plugin.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
+const serverConfidentialAtRestPath = path.join(
+  repoRoot,
+  'packages/server/src/confidential-at-rest.ts',
+);
 const serverPostgresAuthorizationCorrespondencePath = path.join(
   repoRoot,
   'packages/server/src/postgres-authorization-correspondence.ts',
@@ -2559,6 +2563,16 @@ const removedReviewedSecretBoxDoorBranch =
 const runtimeSchemaSecretBoxBranch = '        return secret(closedSchema.parse(input));';
 const removedRuntimeSchemaSecretBoxBranch =
   '        return closedSchema.parse(input) as unknown as SecretValue<Value>;';
+const exactConfidentialAadStringSnapshot = [
+  '  // SPEC §6.6 authenticates the exact caller AAD. Normalizing security context would alias',
+  '  // distinct application identities and allow an envelope to cross the intended context boundary.',
+  "  if (typeof value === 'string') return securityBufferFrom(value, 'utf8');",
+].join('\n');
+const trimmedConfidentialAadStringSnapshot = [
+  '  // SPEC §6.6 authenticates the exact caller AAD. Normalizing security context would alias',
+  '  // distinct application identities and allow an envelope to cross the intended context boundary.',
+  "  if (typeof value === 'string') return securityBufferFrom(securityStringTrim(value), 'utf8');",
+].join('\n');
 const reviewedDrizzleAliasDoorBranch =
   '  if (serverCallIsExactDrizzleTableAlias(sourceFile, call, aliases)) {';
 const removedReviewedDrizzleAliasDoorBranch =
@@ -4156,6 +4170,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: runtimeSchemaSecretBoxBranch,
     sourceFile: serverSchemaPath,
     test: assertRuntimeSchemaSecretBoxBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Restores whitespace trimming before confidential-at-rest caller AAD authentication.',
+    expectedKiller:
+      'distinct string AAD contexts and whitespace-only versus empty AAD must remain cryptographically isolated',
+    name: 'server-confidential-at-rest/restore-string-aad-trimming',
+    replacement: trimmedConfidentialAadStringSnapshot,
+    search: exactConfidentialAadStringSnapshot,
+    sourceFile: serverConfidentialAtRestPath,
+    test: assertExactConfidentialAadBehavior,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -10110,6 +10136,16 @@ function assertRuntimeSchemaSecretBoxBehavior(moduleUnderTest) {
     throw error;
   }
   throw new Error('s.secret(schema).parse output crossed JSON egress without KV435');
+}
+
+function assertExactConfidentialAadBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'confidential-at-rest.ts',
+    sourceText,
+    testFile: 'packages/server/src/confidential-at-rest.test.ts',
+    testNamePattern: 'authenticates the exact caller AAD bytes without trimming security context',
+  });
 }
 
 function assertReviewedDrizzleAliasDoorBehavior(moduleUnderTest) {

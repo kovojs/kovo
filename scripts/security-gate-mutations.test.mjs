@@ -9,8 +9,8 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after full Vite and dev-host ingress closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(320);
+  it('pins the exact forcing denominator across the complete security gate', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(337);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
