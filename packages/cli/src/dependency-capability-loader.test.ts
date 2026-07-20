@@ -1167,6 +1167,57 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-html-authored-execution-closure
+  it.each([
+    [
+      'event handler',
+      '<body onload="globalThis.__KOVO_HTML_HANDLER_PWNED__=\'EXECUTED\'">',
+      /KV448.*raw HTML event handler.*compiler-owned JSX lowering/u,
+    ],
+    [
+      'nested srcdoc document',
+      '<iframe srcdoc="&lt;script type=\'module\' src=\'data:text/javascript,parent.__KOVO_SRCDOC_PWNED__%3D%27EXECUTED%27\'&gt;&lt;/script&gt;"></iframe>',
+      /KV448.*nested HTML document.*immutable approved-source snapshot/u,
+    ],
+  ])('rejects raw HTML %s outside compiler-owned closure', async (_label, fragment, error) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-execution-')));
+    const appModulePath = join(root, 'src', 'client.ts');
+    const outDir = join(root, 'dist');
+    const appSource = "globalThis.__KOVO_APPROVED_CLIENT__ = 'loaded';\n";
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(
+        join(root, 'index.html'),
+        [
+          '<!doctype html>',
+          '<script type="module" src="/src/client.ts"></script>',
+          fragment,
+        ].join('\n'),
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.ts', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(error);
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-html-url-module-snapshot
   it.each([
     [
