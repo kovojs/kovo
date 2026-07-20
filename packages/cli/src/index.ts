@@ -10,6 +10,7 @@ import {
 } from './commands/build-export.js';
 import { parseDbArgs, runDbCommand } from './commands/db.js';
 import { parseAttestArgs, runAttestCommand } from './commands/attest.js';
+import { parseIncidentArgs, runIncidentScopeCommand } from './commands/incident-scope.js';
 import { parseDevArgs, runDevCommand } from './commands/dev.js';
 import {
   compileUsage,
@@ -171,6 +172,11 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         security.invocationCwd,
       ),
     );
+  },
+  incident(args, security) {
+    const parsed = parseIncidentArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(runIncidentScopeCommand(parsed.options, security.invocationCwd));
   },
 };
 

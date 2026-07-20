@@ -94,6 +94,10 @@ export const MCP_USAGE = 'usage: kovo mcp';
 /** @internal Usage line emitted for `kovo update-docs`. */
 export const UPDATE_DOCS_USAGE = 'usage: kovo update-docs';
 
+/** @internal Usage line emitted for `kovo incident`. */
+export const INCIDENT_USAGE =
+  'usage: kovo incident scope <advisory.json> --events <security-events.json>';
+
 /** @internal A single command-line flag and its human description. */
 export interface CommandFlag {
   /** The flag token as typed on the command line, e.g. `--out <dir>`. */
@@ -187,6 +191,17 @@ export const EXPLAIN_ARGV_SPEC = {
     },
     { flag: '--unguarded', kind: 'boolean' },
     { flag: '--unscoped', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Incident command flags consumed by the retrospective scope verifier. */
+export const INCIDENT_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--events',
+      kind: 'value',
+      requiresValueMessage: 'kovo: incident --events requires a security-event export path.\n',
+    },
   ],
 } as const satisfies CommandArgvSpec;
 
@@ -637,6 +652,26 @@ export const COMMANDS_MANIFEST = [
       'kovo explain --access --fail-on-findings',
       'kovo explain --unguarded --fail-on-findings',
     ],
+  },
+  {
+    name: 'incident',
+    noArgsOrder: 7.5,
+    summary:
+      'Replay a finite advisory decision-site predicate against a tamper-evident security-event export.',
+    unknownOrder: 7,
+    usage: INCIDENT_USAGE,
+    flags: [
+      {
+        flag: 'scope <advisory.json>',
+        description:
+          'Return the affected principal and tenant set, or an explicit unanswerable verdict.',
+      },
+      {
+        flag: '--events <security-events.json>',
+        description: 'Read the bounded append-only event export to scope.',
+      },
+    ],
+    examples: ['kovo incident scope advisory.json --events security-events.json'],
   },
   {
     name: 'add',
