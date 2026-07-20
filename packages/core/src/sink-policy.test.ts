@@ -513,6 +513,10 @@ describe('shared runtime sink policy', () => {
       'response header',
     );
     expect(elementContextSecurityStaticValueIssue('meta', 'name', 'description')).toBeUndefined();
+    expect(elementContextSecurityStaticValueIssue('meta', 'http-equiv', ' refresh ')).toContain(
+      'automatic navigation',
+    );
+    expect(elementContextSecurityStaticValueIssue('meta', 'http-equiv', 'content-type')).toBeUndefined();
   });
 
   it('keeps iframe sources behind a finite sandbox token set and a mandatory boundary', () => {
