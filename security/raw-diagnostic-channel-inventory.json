@@ -2203,6 +2203,72 @@
       "expressionSha256": "9fe4f9594082fe504f82d77badc0a23b366349e916f3591db720658dfe0d6815"
     },
     {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#0104fd9ee47b576f77735d2f74522a1cb2dc62c1f54820897dfaffb17ab775db#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "stylesheetSourceRelativePath",
+      "expressionSha256": "0104fd9ee47b576f77735d2f74522a1cb2dc62c1f54820897dfaffb17ab775db"
+    },
+    {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#0747c6494ae2df487697ad4a8628d3b290105e75c9a1aee6b9c82409a349fef6#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "readRequiredStylesheet",
+      "expressionSha256": "0747c6494ae2df487697ad4a8628d3b290105e75c9a1aee6b9c82409a349fef6"
+    },
+    {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#0cdbc3243e57d08c485941a006749f39954ea21be228813f397e999046012157#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "requiredStylesheetSourceFileSystem",
+      "expressionSha256": "0cdbc3243e57d08c485941a006749f39954ea21be228813f397e999046012157"
+    },
+    {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#0cdbc3243e57d08c485941a006749f39954ea21be228813f397e999046012157#1",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "readRequiredStylesheet",
+      "expressionSha256": "0cdbc3243e57d08c485941a006749f39954ea21be228813f397e999046012157"
+    },
+    {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#0d56e498d5ae764d4f1383d2473dc92df50f12b646678fc7f04b8d2930d3cc76#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "requiredStylesheetSourceFileSystem",
+      "expressionSha256": "0d56e498d5ae764d4f1383d2473dc92df50f12b646678fc7f04b8d2930d3cc76"
+    },
+    {
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#1df70dfb1ea14ead1d5b047bdd317716aa3be72b3ffe87fc935d1d241b16963d#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/neutral-build.ts",
+      "owner": "readRequiredStylesheet",
+      "expressionSha256": "1df70dfb1ea14ead1d5b047bdd317716aa3be72b3ffe87fc935d1d241b16963d"
+    },
+    {
       "id": "packages/server/src/neutral-build.ts#throw#KV229#216354757cb5f3a3f595f165597163809801e5d9b0e84babd922cb918a04973c#0",
       "code": "KV229",
       "enforcementClass": "compile-error",
@@ -2214,7 +2280,7 @@
       "expressionSha256": "216354757cb5f3a3f595f165597163809801e5d9b0e84babd922cb918a04973c"
     },
     {
-      "id": "packages/server/src/neutral-build.ts#throw#KV229#58ac75b5d73351156a6d3769696740e20500d74e008268303e432cfa1a76163e#0",
+      "id": "packages/server/src/neutral-build.ts#throw#KV229#66fe38977dda484df820b56ec689d3afb44096b67259890aba75efa1cf4e4649#0",
       "code": "KV229",
       "enforcementClass": "compile-error",
       "severity": "error",
@@ -2222,18 +2288,7 @@
       "channel": "throw",
       "file": "packages/server/src/neutral-build.ts",
       "owner": "readRequiredStylesheet",
-      "expressionSha256": "58ac75b5d73351156a6d3769696740e20500d74e008268303e432cfa1a76163e"
-    },
-    {
-      "id": "packages/server/src/neutral-build.ts#throw#KV229#fbedda630e8b356a82397f64d3009b8c1600b67bdf234f97d6fef4f733ea21eb#0",
-      "code": "KV229",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "analysis",
-      "channel": "throw",
-      "file": "packages/server/src/neutral-build.ts",
-      "owner": "stylesheetSourceFileFromRoot",
-      "expressionSha256": "fbedda630e8b356a82397f64d3009b8c1600b67bdf234f97d6fef4f733ea21eb"
+      "expressionSha256": "66fe38977dda484df820b56ec689d3afb44096b67259890aba75efa1cf4e4649"
     },
     {
       "id": "packages/server/src/postgres-authorization-correspondence.ts#throw#KV414#eaa30642901dce8e8585a164f9822a3b4c76c7871ab2331a4ef1e546672e6d58#0",
@@ -2346,7 +2401,7 @@
       "expressionSha256": "6b8e935ec333f502a67b3a5da39401df32fceabc5e94f088afbb5af4d0c039d7"
     },
     {
-      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#2bc326a09943be16cab58cfb77a5ea51098481edbd96b27f401310235d949a41#0",
+      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#26d214fd17da7ef87c95404e77db66ec340c7deaf15f9c990b62b3b35c9db02e#0",
       "code": "KV414",
       "enforcementClass": "compile-error",
       "severity": "error",
@@ -2354,7 +2409,7 @@
       "channel": "throw",
       "file": "packages/server/src/postgres-owner-guard.ts",
       "owner": "registerFrameworkPostgresOwnerGuardSchema",
-      "expressionSha256": "2bc326a09943be16cab58cfb77a5ea51098481edbd96b27f401310235d949a41"
+      "expressionSha256": "26d214fd17da7ef87c95404e77db66ec340c7deaf15f9c990b62b3b35c9db02e"
     },
     {
       "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#855688862c34bdc3450f30e921a8f1e18a0d340d5c9a155f00d7c6573300eb2b#0",
@@ -2368,7 +2423,7 @@
       "expressionSha256": "855688862c34bdc3450f30e921a8f1e18a0d340d5c9a155f00d7c6573300eb2b"
     },
     {
-      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#efdc69222c175a97797a0142e2e35abbb1474423fb3e4906f3f853c035112749#0",
+      "id": "packages/server/src/postgres-owner-guard.ts#throw#KV414#e3f925e00329d1863de0afc8a378572e4e3b51aed8101d00cd001c3c26e288a7#0",
       "code": "KV414",
       "enforcementClass": "compile-error",
       "severity": "error",
@@ -2376,7 +2431,7 @@
       "channel": "throw",
       "file": "packages/server/src/postgres-owner-guard.ts",
       "owner": "registerFrameworkPostgresOwnerGuardSchema",
-      "expressionSha256": "efdc69222c175a97797a0142e2e35abbb1474423fb3e4906f3f853c035112749"
+      "expressionSha256": "e3f925e00329d1863de0afc8a378572e4e3b51aed8101d00cd001c3c26e288a7"
     },
     {
       "id": "packages/server/src/postgres-posture-lease.ts#rejection#KV433#dfefb3626c0861ec175c7718333abca2ba1938136194338c3911ed6ef871779d#0",
