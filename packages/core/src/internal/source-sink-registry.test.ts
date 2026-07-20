@@ -440,9 +440,9 @@ describe('boundary crossing sink inventory', () => {
         ['url.navigation.selector', 'none'],
         ['css.style.output', 'none'],
         ['http.header.cookie', 'unerasable:client-state-outside-framework-erasure'],
-        ['ingress.endpoint.webhook', 'unerasable:replay-records-lack-principal-index'],
-        ['transport.query.live.broadcast', 'unerasable:durable-task-args-lack-principal-index'],
-        ['file.storage.static-export', 'unerasable:storage-adapter-has-no-list-operation'],
+        ['ingress.endpoint.webhook', 'ledger'],
+        ['transport.query.live.broadcast', 'ledger'],
+        ['file.storage.static-export', 'adapter-enumerable'],
         ['data.derived.persistence', 'unerasable:derived-adapter-has-no-enumeration-or-delete'],
         ['auth.data-access', 'db-owner'],
         ['auth.credential.non-egress', 'adapter-enumerable'],
@@ -452,7 +452,7 @@ describe('boundary crossing sink inventory', () => {
       ]),
     );
     expect([...residency.values()].filter((value) => value.startsWith('unerasable:'))).toHaveLength(
-      6,
+      3,
     );
   });
 

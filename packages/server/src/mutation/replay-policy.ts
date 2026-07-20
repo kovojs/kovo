@@ -126,15 +126,27 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   const replayStore = mode.request.replayStore;
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
   const freshnessCheckedStore = {
-    async get(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async get(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const response = await replayStore.get(key, scope, token, fingerprint);
+      const response = await replayStore.get(key, scope, token, fingerprint, principal);
       assertFreshMutationIdem(idemFacts.token);
       return response;
     },
-    async reserve(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async reserve(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const reservation = await replayStore.reserve(key, scope, token, fingerprint);
+      const reservation = await replayStore.reserve(key, scope, token, fingerprint, principal);
       if (validateMutationIdemToken(idemFacts.token) === undefined) {
         await reservation?.abort?.();
         throw new MutationReplayConflictError();
@@ -147,8 +159,9 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
       token: string,
       response: BufferedMutationWireResponse,
       fingerprint?: string,
+      principal?: string,
     ) {
-      return replayStore.set(key, scope, token, response, fingerprint);
+      return replayStore.set(key, scope, token, response, fingerprint, principal);
     },
   };
   let context: ReturnType<typeof mutationReplayContext> | undefined;
@@ -235,15 +248,27 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   if (!replayStore) return freshnessOnlyMutationIdemReplayPolicy(idemFacts.token);
 
   const freshnessCheckedStore = {
-    async get(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async get(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const response = await replayStore.get(key, scope, token, fingerprint);
+      const response = await replayStore.get(key, scope, token, fingerprint, principal);
       assertFreshMutationIdem(idemFacts.token);
       return response;
     },
-    async reserve(key: ScopedKey, scope: string, token: string, fingerprint?: string) {
+    async reserve(
+      key: ScopedKey,
+      scope: string,
+      token: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertFreshMutationIdem(idemFacts.token);
-      const reservation = await replayStore.reserve(key, scope, token, fingerprint);
+      const reservation = await replayStore.reserve(key, scope, token, fingerprint, principal);
       if (validateMutationIdemToken(idemFacts.token) === undefined) {
         await reservation?.abort?.();
         throw new MutationReplayConflictError();
@@ -309,10 +334,22 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
         scope,
         store: {
           get(_scope: string, _idem: string, fingerprint?: string) {
-            return freshnessCheckedStore.get(replayKey, scope, idemFacts.token, fingerprint);
+            return freshnessCheckedStore.get(
+              replayKey,
+              scope,
+              idemFacts.token,
+              fingerprint,
+              context.principal,
+            );
           },
           reserve(_scope: string, _idem: string, fingerprint?: string) {
-            return freshnessCheckedStore.reserve(replayKey, scope, idemFacts.token, fingerprint);
+            return freshnessCheckedStore.reserve(
+              replayKey,
+              scope,
+              idemFacts.token,
+              fingerprint,
+              context.principal,
+            );
           },
         },
       });

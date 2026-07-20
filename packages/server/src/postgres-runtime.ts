@@ -1796,14 +1796,14 @@ export function createPostgresAppRuntimeDb(
   });
   mintFrameworkDurableReplayStoreReceipt(capabilityStore, 'capability');
   const mutationStore: MutationReplayStore = witnessFreeze({
-    get(key, scope, idem, fingerprint) {
-      return durableMutationReplayStore().get(key, scope, idem, fingerprint);
+    get(key, scope, idem, fingerprint, principal) {
+      return durableMutationReplayStore().get(key, scope, idem, fingerprint, principal);
     },
-    reserve(key, scope, idem, fingerprint) {
-      return durableMutationReplayStore().reserve(key, scope, idem, fingerprint);
+    reserve(key, scope, idem, fingerprint, principal) {
+      return durableMutationReplayStore().reserve(key, scope, idem, fingerprint, principal);
     },
-    set(key, scope, idem, response, fingerprint) {
-      return durableMutationReplayStore().set(key, scope, idem, response, fingerprint);
+    set(key, scope, idem, response, fingerprint, principal) {
+      return durableMutationReplayStore().set(key, scope, idem, response, fingerprint, principal);
     },
   });
   mintFrameworkDurableReplayStoreReceipt(mutationStore, 'mutation');
@@ -3813,10 +3813,31 @@ async function provisionPostgresFrameworkTaskStore(
   client: RuntimeTransactionClient,
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
+  const principalColumnExisted = await postgresFrameworkColumnExists(
+    client,
+    '_kovo_jobs',
+    'principal',
+    'Postgres durable-task principal-index preflight',
+  );
   const executor = createDurableTaskSqlExecutor(client);
   await ensureDurableTaskSchema(executor);
+  if (
+    !principalColumnExisted &&
+    (await postgresFrameworkCount(
+      client,
+      'SELECT COUNT(*)::text AS row_count FROM public._kovo_jobs',
+      'Postgres durable-task principal-index cutover',
+    )) !== '0'
+  ) {
+    throw new Error(
+      'KV433_TASK_ERASURE_CUTOVER: public._kovo_jobs contains legacy task args created before the principal erasure index; preserve or reconcile those rows, then perform an explicit operator cutover before enabling principal-erasure receipts.',
+    );
+  }
   await ensureRecurringTaskSchema(executor);
   await grantDurableTaskWriterRole(executor, config.writerRole);
+  // Framework-owned erasure and task maintenance run through the exact system capability, not an
+  // app request writer. The system role therefore needs the same narrow task-ledger DML grant.
+  await grantDurableTaskWriterRole(executor, config.systemRole);
 }
 
 /**
@@ -3829,6 +3850,12 @@ async function provisionPostgresFrameworkReplayStore(
   runtimeLoginRole: string | undefined,
 ): Promise<void> {
   const table = quoteQualified('public', POSTGRES_REPLAY_TABLE);
+  const principalIndexColumnExisted = await postgresFrameworkColumnExists(
+    client,
+    POSTGRES_REPLAY_TABLE,
+    'principal_index',
+    'Postgres replay principal-index preflight',
+  );
   await client.exec(
     postgresJoin(
       [
@@ -3845,6 +3872,7 @@ async function provisionPostgresFrameworkReplayStore(
         'admission_slot integer,',
         'expires_at bigint,',
         'occurred_at bigint,',
+        'principal_index text,',
         'created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,',
         'committed_at timestamptz,',
         'PRIMARY KEY (surface, scope, idem),',
@@ -3861,6 +3889,7 @@ async function provisionPostgresFrameworkReplayStore(
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS expires_at bigint`);
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS occurred_at bigint`);
   await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS admission_slot integer`);
+  await client.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS principal_index text`);
   // SPEC §10.3: pre-horizon mutation/webhook rows carry no authenticated expiry. Inferring one
   // from created_at, committed_at, or current time would either delete durable execution truth too
   // early or extend a replay key beyond the signed identity. Empty legacy tables migrate; non-empty
@@ -3878,6 +3907,18 @@ async function provisionPostgresFrameworkReplayStore(
   if (timelessCount !== '0') {
     throw new Error(
       'KV433_REPLAY_STORE_CUTOVER: public._kovo_replay contains legacy mutation/webhook truth without authenticated expires_at; preserve or reconcile those rows, then perform an explicit operator cutover before provisioning the replay horizon schema.',
+    );
+  }
+  if (
+    !principalIndexColumnExisted &&
+    (await postgresFrameworkCount(
+      client,
+      `SELECT COUNT(*)::text AS row_count FROM ${table} WHERE surface = 'mutation'`,
+      'Postgres replay principal-index cutover',
+    )) !== '0'
+  ) {
+    throw new Error(
+      'KV433_REPLAY_STORE_CUTOVER: public._kovo_replay contains legacy mutation response bodies created before the principal erasure index; preserve or reconcile those rows, then perform an explicit operator cutover before enabling principal-erasure receipts.',
     );
   }
   const identityConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_pkey`);
@@ -3946,6 +3987,12 @@ async function provisionPostgresFrameworkReplayStore(
       `(response_body IS NULL OR octet_length(response_body) <= ${POSTGRES_REPLAY_MAX_RESPONSE_BODY_STORAGE_BYTES}) AND ` +
       `(response_headers IS NULL OR octet_length(response_headers) <= ${POSTGRES_REPLAY_MAX_RESPONSE_HEADER_BYTES}))`,
   );
+  const principalIndexConstraint = quoteIdent(`${POSTGRES_REPLAY_TABLE}_principal_index_check`);
+  await client.exec(`ALTER TABLE ${table} DROP CONSTRAINT IF EXISTS ${principalIndexConstraint}`);
+  await client.exec(
+    `ALTER TABLE ${table} ADD CONSTRAINT ${principalIndexConstraint} CHECK (` +
+      "principal_index IS NULL OR (surface = 'mutation' AND char_length(principal_index) BETWEEN 40 AND 128))",
+  );
   await client.exec(
     `DROP INDEX IF EXISTS ${quoteQualified(
       'public',
@@ -3972,6 +4019,16 @@ async function provisionPostgresFrameworkReplayStore(
     `CREATE UNIQUE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_admission_slot_idx`)} ` +
       `ON ${table} (surface, admission_slot) ` +
       `WHERE surface IN ('mutation', 'webhook') AND state = 'pending'`,
+  );
+  await client.exec(
+    `DROP INDEX IF EXISTS ${quoteQualified(
+      'public',
+      `${POSTGRES_REPLAY_TABLE}_principal_index_idx`,
+    )}`,
+  );
+  await client.exec(
+    `CREATE INDEX ${quoteIdent(`${POSTGRES_REPLAY_TABLE}_principal_index_idx`)} ` +
+      `ON ${table} (principal_index) WHERE surface = 'mutation' AND principal_index IS NOT NULL`,
   );
   const watermarkTable = quoteQualified('public', POSTGRES_REPLAY_WATERMARK_TABLE);
   const watermarkIdentityConstraint = quoteIdent(`${POSTGRES_REPLAY_WATERMARK_TABLE}_pkey`);
@@ -4041,6 +4098,46 @@ async function provisionPostgresFrameworkReplayStore(
   // monotonic watermark rows. It receives read-only visibility into that non-secret clock state;
   // mutation/webhook payload truth and every watermark write remain system-only (SPEC §10.3).
   await client.exec(`GRANT SELECT ON TABLE ${watermarkTable} TO ${quoteIdent(config.adminRole)}`);
+}
+
+async function postgresFrameworkColumnExists(
+  client: RuntimeTransactionClient,
+  relation: string,
+  column: string,
+  label: string,
+): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM pg_attribute AS column_row ' +
+      'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid ' +
+      'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace ' +
+      "WHERE namespace_row.nspname = 'public' AND relation_row.relname = $1 " +
+      'AND column_row.attname = $2 AND column_row.attnum > 0 AND NOT column_row.attisdropped) AS exists',
+    [relation, column],
+  );
+  if (postgresDenseArrayLength(result.rows, label) !== 1) {
+    throw new Error(`${label} returned invalid catalog truth.`);
+  }
+  const row = postgresDenseArrayValue(result.rows, 0, label);
+  const exists = postgresOwnDataValue(row, 'exists');
+  if (typeof exists !== 'boolean') throw new Error(`${label} returned invalid catalog truth.`);
+  return exists;
+}
+
+async function postgresFrameworkCount(
+  client: RuntimeTransactionClient,
+  query: string,
+  label: string,
+): Promise<string> {
+  const result = await client.query<{ row_count: string }>(query);
+  if (postgresDenseArrayLength(result.rows, label) !== 1) {
+    throw new Error(`${label} returned invalid count truth.`);
+  }
+  const row = postgresDenseArrayValue(result.rows, 0, label);
+  const count = postgresOwnDataValue(row, 'row_count');
+  if (typeof count !== 'string' || !/^(?:0|[1-9][0-9]*)$/u.test(count)) {
+    throw new Error(`${label} returned invalid count truth.`);
+  }
+  return count;
 }
 
 /** Provision persistent per-principal revocation truth outside ordinary app-role authority. */
@@ -4115,6 +4212,9 @@ interface PostgresReplayShapeRow {
   exact_expiry_column: boolean;
   exact_identity_constraint: boolean;
   exact_occurrence_column: boolean;
+  exact_principal_index_column: boolean;
+  exact_principal_index_constraint: boolean;
+  exact_principal_index: boolean;
   exact_response_constraint: boolean;
   exact_state_response_constraint: boolean;
   exact_surface_constraint: boolean;
@@ -4169,9 +4269,13 @@ const POSTGRES_REPLAY_STATE_RESPONSE_CONSTRAINT =
   "CHECK ((((state = 'pending'::text) AND (response_body IS NULL) AND (response_headers IS NULL) AND (response_status IS NULL) AND (committed_at IS NULL)) OR ((state = 'committed'::text) AND (response_body IS NOT NULL) AND (response_headers IS NOT NULL) AND (response_status IS NOT NULL) AND (committed_at IS NOT NULL))))";
 const POSTGRES_REPLAY_RESPONSE_CONSTRAINT =
   'CHECK ((((response_body IS NULL) OR (octet_length(response_body) <= 1398104)) AND ((response_headers IS NULL) OR (octet_length(response_headers) <= 65536))))';
+const POSTGRES_REPLAY_PRINCIPAL_INDEX_CONSTRAINT =
+  "CHECK (((principal_index IS NULL) OR ((surface = 'mutation'::text) AND ((char_length(principal_index) >= 40) AND (char_length(principal_index) <= 128)))))";
 const POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE = "(state = 'committed'::text)";
 const POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE =
   "((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND (state = 'pending'::text))";
+const POSTGRES_REPLAY_PRINCIPAL_INDEX_PREDICATE =
+  "((surface = 'mutation'::text) AND (principal_index IS NOT NULL))";
 const POSTGRES_REPLAY_WATERMARK_VALUE_CONSTRAINT = 'CHECK ((reclaimed_through >= 0))';
 const POSTGRES_PRINCIPAL_EPOCH_PRINCIPAL_CONSTRAINT =
   'CHECK (((char_length(principal_digest) >= 40) AND (char_length(principal_digest) <= 128)))';
@@ -4264,6 +4368,13 @@ async function postgresReplayStorePostureIssues(
         "AND column_row.attname = 'admission_slot' AND column_row.attnum > 0",
         'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
         "AND format_type(column_row.atttypid, column_row.atttypmod) = 'integer') AS exact_admission_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND column_row.attname = 'principal_index' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND NOT column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_principal_index_column,",
         'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
         'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
         'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
@@ -4328,6 +4439,14 @@ async function postgresReplayStorePostureIssues(
         'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
         "AND constraint_row.conname = '_kovo_replay_response_size_check'",
         'AND pg_get_constraintdef(constraint_row.oid) = $6) AS exact_response_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_replay'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_replay_principal_index_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $9) AS exact_principal_index_constraint,',
         'EXISTS (SELECT 1 FROM pg_index AS index_row',
         'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
         'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
@@ -4361,7 +4480,21 @@ async function postgresReplayStorePostureIssues(
         'AND index_row.indnatts = 2 AND index_row.indnkeyatts = 2',
         'AND index_row.indexprs IS NULL AND index_row.indisunique',
         'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
-        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $8) AS exact_admission_index',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $8) AS exact_admission_index,',
+        'EXISTS (SELECT 1 FROM pg_index AS index_row',
+        'JOIN pg_class AS index_relation ON index_relation.oid = index_row.indexrelid',
+        'JOIN pg_class AS table_relation ON table_relation.oid = index_row.indrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = table_relation.relnamespace',
+        'JOIN pg_am AS access_method ON access_method.oid = index_relation.relam',
+        'JOIN pg_attribute AS principal_column ON principal_column.attrelid = table_relation.oid',
+        'AND principal_column.attnum = index_row.indkey[0]',
+        "WHERE namespace_row.nspname = 'public' AND table_relation.relname = '_kovo_replay'",
+        "AND index_relation.relname = '_kovo_replay_principal_index_idx'",
+        "AND access_method.amname = 'btree' AND principal_column.attname = 'principal_index'",
+        'AND index_row.indnatts = 1 AND index_row.indnkeyatts = 1',
+        'AND index_row.indexprs IS NULL AND NOT index_row.indisunique',
+        'AND index_row.indisvalid AND index_row.indisready AND index_row.indislive',
+        'AND pg_get_expr(index_row.indpred, index_row.indrelid) = $10) AS exact_principal_index',
       ],
       ' ',
     ),
@@ -4374,6 +4507,8 @@ async function postgresReplayStorePostureIssues(
       POSTGRES_REPLAY_RESPONSE_CONSTRAINT,
       POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE,
       POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE,
+      POSTGRES_REPLAY_PRINCIPAL_INDEX_CONSTRAINT,
+      POSTGRES_REPLAY_PRINCIPAL_INDEX_PREDICATE,
     ],
   );
   const shapeRow =
@@ -4389,6 +4524,9 @@ async function postgresReplayStorePostureIssues(
     shapeRow.exact_state_response_constraint !== true ||
     shapeRow.exact_expiry_column !== true ||
     shapeRow.exact_occurrence_column !== true ||
+    shapeRow.exact_principal_index_column !== true ||
+    shapeRow.exact_principal_index_constraint !== true ||
+    shapeRow.exact_principal_index !== true ||
     shapeRow.exact_surface_constraint !== true ||
     shapeRow.exact_expiry_constraint !== true ||
     shapeRow.exact_surface_state_constraint !== true ||
@@ -4397,7 +4535,7 @@ async function postgresReplayStorePostureIssues(
     appendPostgresDenseValue(issues, {
       code: 'KV433_REPLAY_STORE_SCHEMA',
       detail:
-        'public._kovo_replay must have the exact replay-identity primary key, expiry/admission columns, capability/mutation/webhook constraints, and bounded cleanup/admission indexes; run the current framework provisioner',
+        'public._kovo_replay must have the exact replay-identity primary key, expiry/admission/principal-index columns, capability/mutation/webhook constraints, and bounded cleanup/admission/erasure indexes; run the current framework provisioner',
     });
   }
   const watermarkShape = await safeQuery<PostgresReplayWatermarkShapeRow>(

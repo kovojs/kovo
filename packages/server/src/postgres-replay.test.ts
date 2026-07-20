@@ -18,8 +18,11 @@ import {
 } from './postgres-runtime.js';
 import {
   createPostgresCapabilityReplayStoreFromExecutor,
+  countPostgresMutationReplayPrincipalRows,
   createPostgresMutationReplayStoreFromExecutor as createPostgresMutationReplayStoreBase,
   createPostgresWebhookReplayStoreFromExecutor,
+  erasePostgresMutationReplayPrincipalRows,
+  persistedReplayPrincipal,
   releasePostgresPendingReplayFromExecutor,
 } from './postgres-replay.js';
 import {
@@ -49,14 +52,33 @@ function mutationIdem(label: string, issuedAtMs = MUTATION_TEST_ISSUED_AT_MS): s
 
 function mutationReplayClient(store: MutationReplayStore) {
   return {
-    get(scope: string, idem: string, fingerprint?: string) {
-      return store.get(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint);
+    get(scope: string, idem: string, fingerprint?: string, principal?: string) {
+      return store.get(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint, principal);
     },
-    reserve(scope: string, idem: string, fingerprint?: string) {
-      return store.reserve(mutationReplayScopedKey(scope, idem), scope, idem, fingerprint);
+    reserve(scope: string, idem: string, fingerprint?: string, principal?: string) {
+      return store.reserve(
+        mutationReplayScopedKey(scope, idem),
+        scope,
+        idem,
+        fingerprint,
+        principal,
+      );
     },
-    set(scope: string, idem: string, response: MutationReplayResponse, fingerprint?: string) {
-      return store.set(mutationReplayScopedKey(scope, idem), scope, idem, response, fingerprint);
+    set(
+      scope: string,
+      idem: string,
+      response: MutationReplayResponse,
+      fingerprint?: string,
+      principal?: string,
+    ) {
+      return store.set(
+        mutationReplayScopedKey(scope, idem),
+        scope,
+        idem,
+        response,
+        fingerprint,
+        principal,
+      );
     },
   };
 }
@@ -125,6 +147,40 @@ describe('Postgres durable replay stores', () => {
     roots.push(root);
     return root;
   }
+
+  it('persists a non-authoritative principal index and erases replay bodies in real PGlite', async () => {
+    const { executor } = await runtimeAt(dataDir());
+    const store = createPostgresMutationReplayStoreFromExecutor(executor);
+    const victimIdem = mutationIdem('erase-victim');
+    const otherIdem = mutationIdem('erase-other');
+    await store.set(
+      'same-authority-shape',
+      victimIdem,
+      mutationResponse('victim'),
+      undefined,
+      'victim',
+    );
+    await store.set(
+      'same-authority-shape',
+      otherIdem,
+      mutationResponse('other'),
+      undefined,
+      'other',
+    );
+
+    const indexed = await executor.execute<{ principal_index: string; response_body: string }>({
+      text: "SELECT principal_index, response_body FROM public._kovo_replay WHERE surface = 'mutation' ORDER BY principal_index",
+      values: [],
+    });
+    expect(indexed.rows.map((row) => row.principal_index).sort()).toEqual(
+      [persistedReplayPrincipal('victim'), persistedReplayPrincipal('other')].sort(),
+    );
+    expect(indexed.rows.every((row) => row.response_body.length > 0)).toBe(true);
+
+    await expect(erasePostgresMutationReplayPrincipalRows(executor, 'victim')).resolves.toBe(1);
+    await expect(countPostgresMutationReplayPrincipalRows(executor, 'victim')).resolves.toBe(0);
+    await expect(countPostgresMutationReplayPrincipalRows(executor, 'other')).resolves.toBe(1);
+  });
 
   it('atomically consumes a one-time capability across replicas and process restart', async () => {
     const dir = dataDir();

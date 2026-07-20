@@ -1,6 +1,9 @@
 import { createHash, randomUUID as builtinRandomUuid } from 'node:crypto';
 
-import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
+import {
+  createFrameworkOutputFileSystemBoundary,
+  type FrameworkOutputFileSystemBoundary,
+} from './internal/filesystem.js';
 import { emitCoreSecurityDecision } from './internal/security-decision.js';
 import { restoreScopedKey, scopedKeyFactsFor, type ScopedKey } from './scoped-key.js';
 import {
@@ -11,9 +14,13 @@ import {
   securityGetOwnPropertyDescriptor,
   securityHasInstance,
   securityIsArray,
+  securityMapForEach,
   securityNullRecord,
   securityObjectKeys,
   securityStringSlice,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
 } from './internal/security-witness-intrinsics.js';
 import {
   createFileSystemMap,
@@ -167,6 +174,26 @@ export interface S3CompatibleDeleteObjectInput {
   key: string;
 }
 
+/** Input to one bounded S3-compatible list page used by Kovo's erasure absence proof. */
+export interface S3CompatibleListObjectsInput {
+  bucket: string;
+  /** Opaque continuation cursor returned by the preceding page. */
+  cursor?: string;
+  /** Framework-owned physical key prefix. */
+  prefix: string;
+}
+
+/** One physical object identity returned by an S3-compatible list operation. */
+export interface S3CompatibleListedObject {
+  key: string;
+}
+
+/** One bounded, dense S3-compatible list page. */
+export interface S3CompatibleListObjectsOutput {
+  cursor?: string;
+  objects: readonly S3CompatibleListedObject[];
+}
+
 /** Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
 export interface S3CompatibleObjectMetadata {
   contentLength?: number;
@@ -186,11 +213,18 @@ export interface S3CompatibleGetObjectOutput extends S3CompatibleObjectMetadata 
   body: StorageBody;
 }
 
-/** The minimal S3-compatible client an app supplies: get, head, and put object operations. */
+/**
+ * The minimal S3-compatible client an app supplies.
+ *
+ * `listObjects` is mandatory because SPEC §10.3 principal erasure must re-enumerate every blob
+ * sink and fail closed when absence cannot be proved. The listing remains adapter-internal: the
+ * returned {@link StorageCapability} does not grant app code ambient bucket-list authority.
+ */
 export interface S3CompatibleObjectClient {
   deleteObject(input: S3CompatibleDeleteObjectInput): Promise<void>;
   getObject(input: S3CompatibleGetObjectInput): Promise<S3CompatibleGetObjectOutput | undefined>;
   headObject(input: S3CompatibleHeadObjectInput): Promise<S3CompatibleObjectMetadata | undefined>;
+  listObjects(input: S3CompatibleListObjectsInput): Promise<S3CompatibleListObjectsOutput>;
   putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput>;
 }
 
@@ -218,6 +252,9 @@ interface FileSystemMetadataRecord {
 
 const sidecarSuffix = '.kovo-storage.json';
 const fileSystemObjectPrefix = 'kovo-storage-v1';
+const s3ScopedKeyFrameMetadata = 'kovo-scoped-key-frame';
+const S3_ERASURE_MAX_PAGE_OBJECTS = 1_000;
+const S3_ERASURE_MAX_PAGES = 100_000;
 const fileSystemObjectLocks = createFileSystemMap<string, Promise<void>>();
 const storageRandomUuid = builtinRandomUuid;
 const IntrinsicDate = globalThis.Date;
@@ -227,6 +264,59 @@ const intrinsicDateToISOString = IntrinsicDate.prototype.toISOString;
 interface StorageKeyIdentity {
   frame: string;
   logicalKey: string;
+}
+
+/** @internal Result of deleting one principal's objects from an exact built-in adapter. */
+export interface PrincipalStorageErasureResult {
+  readonly deleted: number;
+  readonly remaining: number;
+}
+
+interface PrincipalStorageErasureAuthority {
+  enumerate(principal: string): Promise<readonly ScopedKey[]>;
+  remove(key: ScopedKey): Promise<void>;
+}
+
+const principalStorageErasureAuthorities = securityWeakMap<
+  StorageCapability,
+  PrincipalStorageErasureAuthority
+>();
+
+/**
+ * @internal Delete and then independently re-enumerate one principal in a framework-built store.
+ * Custom structural adapters are rejected because a type assertion cannot prove listing
+ * completeness (SPEC §10.3/C9).
+ */
+export async function erasePrincipalStorageObjects(
+  storage: StorageCapability,
+  principal: string,
+): Promise<PrincipalStorageErasureResult> {
+  const authority = securityWeakMapGet(principalStorageErasureAuthorities, storage);
+  if (authority === undefined) {
+    throw new TypeError(
+      'Principal erasure requires an exact enumerable storage capability returned by Kovo.',
+    );
+  }
+  const matches = await authority.enumerate(principal);
+  for (let index = 0; index < matches.length; index += 1) {
+    await authority.remove(matches[index]!);
+  }
+  const remaining = await authority.enumerate(principal);
+  return fileSystemFreeze({ deleted: matches.length, remaining: remaining.length });
+}
+
+/** @internal Re-enumerate an exact built-in storage adapter for one principal. */
+export async function countPrincipalStorageObjects(
+  storage: StorageCapability,
+  principal: string,
+): Promise<number> {
+  const authority = securityWeakMapGet(principalStorageErasureAuthorities, storage);
+  if (authority === undefined) {
+    throw new TypeError(
+      'Principal erasure requires an exact enumerable storage capability returned by Kovo.',
+    );
+  }
+  return (await authority.enumerate(principal)).length;
 }
 
 function storageKeyIdentity(value: unknown): StorageKeyIdentity {
@@ -310,7 +400,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
   const now = (nowProperty.found ? nowProperty.value : undefined) as (() => Date) | undefined;
   const readNow = now ?? (() => new IntrinsicDate());
 
-  return {
+  const capability: StorageCapability = fileSystemFreeze({
     async delete(key) {
       fileSystemMapDelete(objects, storageKeyIdentity(key).frame);
     },
@@ -349,7 +439,24 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
 
       return storageReadResult(copyInfo(object.info), bytesToReadableStream(object.body));
     },
-  };
+  });
+  securityWeakMapSet(principalStorageErasureAuthorities, capability, {
+    async enumerate(principal) {
+      const matches: ScopedKey[] = [];
+      securityMapForEach(objects, (_object, frame) => {
+        const key = restoreScopedKey(frame);
+        const facts = scopedKeyFactsFor(key);
+        if (facts.posture === 'principal' && facts.authority === principal) {
+          securityArrayAppend(matches, key);
+        }
+      });
+      return fileSystemFreeze(matches);
+    },
+    async remove(key) {
+      fileSystemMapDelete(objects, storageKeyIdentity(key).frame);
+    },
+  });
+  return capability;
 }
 
 /**
@@ -367,7 +474,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
   }
   const fileSystem = createFrameworkOutputFileSystemBoundary(rootProperty.value);
 
-  return {
+  const capability: StorageCapability = fileSystemFreeze({
     async delete(key) {
       const identity = storageKeyIdentity(key);
       const physicalKey = fileSystemStorageKey(identity.frame);
@@ -506,7 +613,12 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
           : storageReadResult(object.info, bytesToReadableStream(object.bytes));
       });
     },
-  };
+  });
+  securityWeakMapSet(principalStorageErasureAuthorities, capability, {
+    enumerate: (principal) => enumerateFileSystemPrincipalKeys(fileSystem, principal),
+    remove: (key) => capability.delete(key),
+  });
+  return capability;
 }
 
 /**
@@ -555,13 +667,18 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
     'headObject',
     'S3 storage client.headObject',
   ) as S3CompatibleObjectClient['headObject'];
+  const listObjects = fileSystemStableMethod(
+    client,
+    'listObjects',
+    'S3 storage client.listObjects',
+  ) as S3CompatibleObjectClient['listObjects'];
   const putObject = fileSystemStableMethod(
     client,
     'putObject',
     'S3 storage client.putObject',
   ) as S3CompatibleObjectClient['putObject'];
 
-  return fileSystemFreeze({
+  const capability: StorageCapability = fileSystemFreeze({
     async delete(key) {
       const identity = storageKeyIdentity(key);
       await fileSystemReflectApply<ReturnType<S3CompatibleObjectClient['deleteObject']>>(
@@ -606,7 +723,7 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
             : { contentType: optionsSnapshot.contentType }),
           // Forward caller etag so a conforming client can persist + echo it (Part 3 bug L2 parity).
           ...(optionsSnapshot.etag === undefined ? {} : { etag: optionsSnapshot.etag }),
-          ...(optionsSnapshot.metadata === undefined ? {} : { metadata: optionsSnapshot.metadata }),
+          metadata: s3StorageMetadata(optionsSnapshot.metadata, identity.frame),
         },
       ]);
 
@@ -649,6 +766,19 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       );
     },
   });
+  securityWeakMapSet(principalStorageErasureAuthorities, capability, {
+    enumerate: (principal) =>
+      enumerateS3PrincipalKeys({
+        bucket,
+        client,
+        headObject,
+        listObjects,
+        prefix,
+        principal,
+      }),
+    remove: (key) => capability.delete(key),
+  });
+  return capability;
 }
 
 /**
@@ -1176,6 +1306,113 @@ function parseFileSystemMetadataRecord(value: unknown): FileSystemMetadataRecord
   return fileSystemFreeze(record) as unknown as FileSystemMetadataRecord;
 }
 
+interface EnumeratedFileSystemStorageRecord {
+  readonly generationPath: string;
+  readonly key: ScopedKey;
+  readonly sidecarPath: string;
+}
+
+async function enumerateFileSystemPrincipalKeys(
+  fileSystem: FrameworkOutputFileSystemBoundary,
+  principal: string,
+): Promise<readonly ScopedKey[]> {
+  const records: EnumeratedFileSystemStorageRecord[] = [];
+  const generationPaths: string[] = [];
+  const shards = await fileSystem.entries(fileSystemObjectPrefix);
+  for (let shardIndex = 0; shardIndex < shards.length; shardIndex += 1) {
+    const shard = shards[shardIndex]!;
+    if (shard.kind !== 'directory' || !isLowercaseHexText(shard.name, 2)) {
+      throw new Error(`Filesystem storage erasure cannot classify entry '${shard.relativePath}'.`);
+    }
+    const entries = await fileSystem.entriesOf(shard);
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const entry = entries[entryIndex]!;
+      if (entry.kind !== 'file') {
+        throw new Error(
+          `Filesystem storage erasure cannot classify entry '${entry.relativePath}'.`,
+        );
+      }
+      if (fileSystemStringEndsWith(entry.name, sidecarSuffix)) {
+        const bytes = await fileSystem.fileBytesOf(entry);
+        let parsed: unknown;
+        try {
+          parsed = fileSystemJsonParse(fileSystemUtf8Decode(bytes));
+        } catch (cause) {
+          throw new Error(
+            `Filesystem storage erasure found malformed metadata '${entry.relativePath}'.`,
+            { cause },
+          );
+        }
+        const record = parseFileSystemMetadataRecord(parsed);
+        if (record === undefined) {
+          throw new Error(
+            `Filesystem storage erasure found invalid metadata '${entry.relativePath}'.`,
+          );
+        }
+        const key = restoreScopedKey(record.scopedKeyFrame);
+        const expectedPhysicalKey = fileSystemStorageKey(record.scopedKeyFrame);
+        if (metadataStorageKey(expectedPhysicalKey) !== entry.relativePath) {
+          throw new Error(
+            `Filesystem storage erasure found a physical-key ownership mismatch at '${entry.relativePath}'.`,
+          );
+        }
+        securityArrayAppend(records, {
+          generationPath: generationStorageKey(expectedPhysicalKey, record.generation),
+          key,
+          sidecarPath: entry.relativePath,
+        });
+        continue;
+      }
+      if (fileSystemStringIncludes(entry.name, '.kovo-generation-')) {
+        securityArrayAppend(generationPaths, entry.relativePath);
+        continue;
+      }
+      throw new Error(`Filesystem storage erasure cannot classify entry '${entry.relativePath}'.`);
+    }
+  }
+
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index]!;
+    if (!fileSystemArraySome(generationPaths, (path) => path === record.generationPath)) {
+      throw new Error(
+        `Filesystem storage erasure found metadata without its immutable generation at '${record.sidecarPath}'.`,
+      );
+    }
+  }
+  for (let index = 0; index < generationPaths.length; index += 1) {
+    const path = generationPaths[index]!;
+    if (!fileSystemArraySome(records, (record) => record.generationPath === path)) {
+      throw new Error(
+        `Filesystem storage erasure found an unindexed immutable generation at '${path}'.`,
+      );
+    }
+  }
+
+  const matches: ScopedKey[] = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const key = records[index]!.key;
+    const facts = scopedKeyFactsFor(key);
+    if (facts.posture === 'principal' && facts.authority === principal) {
+      securityArrayAppend(matches, key);
+    }
+  }
+  return fileSystemFreeze(matches);
+}
+
+function isLowercaseHexText(value: string, length: number): boolean {
+  if (value.length !== length) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (
+      character === undefined ||
+      !((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function assertFileSystemStorageSlotOwnership(
   fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
   physicalKey: string,
@@ -1482,7 +1719,7 @@ function s3ObjectInfo(
     contentType as string | undefined,
     callerEtag ?? (serverEtag as string | undefined),
     lastModified as Date | string | undefined,
-    customMetadata as Readonly<Record<string, string>> | undefined,
+    s3PublicMetadata(customMetadata),
   );
 }
 
@@ -1497,4 +1734,139 @@ function s3PutFallbackSize(output: S3CompatiblePutObjectOutput, bodySize: number
     throw new TypeError('S3 put object size must be a non-negative safe integer.');
   }
   return size;
+}
+
+function s3StorageMetadata(
+  callerMetadata: Readonly<Record<string, string>> | undefined,
+  scopedKeyFrame: string,
+): Readonly<Record<string, string>> {
+  const snapshot =
+    callerMetadata === undefined ? undefined : snapshotStorageMetadata(callerMetadata);
+  const output = securityNullRecord<string>();
+  if (snapshot !== undefined) {
+    const keys = securityObjectKeys(snapshot);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      if (fileSystemStringToLowerCase(key) === s3ScopedKeyFrameMetadata) {
+        throw new TypeError(
+          `S3 storage metadata key '${s3ScopedKeyFrameMetadata}' is reserved for principal erasure.`,
+        );
+      }
+      defineStorageData(output, key, storageRequiredOwnData(snapshot, key, 'S3 storage metadata'));
+    }
+  }
+  defineStorageData(output, s3ScopedKeyFrameMetadata, scopedKeyFrame);
+  return fileSystemFreeze(output);
+}
+
+function s3PublicMetadata(value: unknown): Readonly<Record<string, string>> | undefined {
+  if (value === undefined) return undefined;
+  const snapshot = snapshotStorageMetadata(value);
+  const output = securityNullRecord<string>();
+  const keys = securityObjectKeys(snapshot);
+  let count = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    if (fileSystemStringToLowerCase(key) === s3ScopedKeyFrameMetadata) continue;
+    defineStorageData(output, key, storageRequiredOwnData(snapshot, key, 'S3 object metadata'));
+    count += 1;
+  }
+  return count === 0 ? undefined : fileSystemFreeze(output);
+}
+
+async function enumerateS3PrincipalKeys(options: {
+  readonly bucket: string;
+  readonly client: S3CompatibleObjectClient;
+  readonly headObject: S3CompatibleObjectClient['headObject'];
+  readonly listObjects: S3CompatibleObjectClient['listObjects'];
+  readonly prefix: string | undefined;
+  readonly principal: string;
+}): Promise<readonly ScopedKey[]> {
+  const physicalPrefix = `${s3ObjectKey(options.prefix, fileSystemObjectPrefix)}/`;
+  const seenKeys: string[] = [];
+  const seenCursors: string[] = [];
+  const matches: ScopedKey[] = [];
+  let cursor: string | undefined;
+  for (let pageIndex = 0; pageIndex < S3_ERASURE_MAX_PAGES; pageIndex += 1) {
+    const output = await fileSystemReflectApply<
+      ReturnType<S3CompatibleObjectClient['listObjects']>
+    >(options.listObjects, options.client, [
+      {
+        bucket: options.bucket,
+        prefix: physicalPrefix,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+    ]);
+    if (typeof output !== 'object' || output === null || securityIsArray(output)) {
+      throw new TypeError('S3 storage listObjects must return an object.');
+    }
+    const objects = storageRequiredOwnData(output, 'objects', 'S3 storage listObjects output');
+    if (!securityIsArray(objects) || objects.length > S3_ERASURE_MAX_PAGE_OBJECTS) {
+      throw new TypeError(
+        `S3 storage listObjects objects must be a dense array of at most ${S3_ERASURE_MAX_PAGE_OBJECTS} entries.`,
+      );
+    }
+    for (let index = 0; index < objects.length; index += 1) {
+      const descriptor = securityGetOwnPropertyDescriptor(objects, index);
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError('S3 storage listObjects objects must be a dense own-data array.');
+      }
+      const listed = descriptor.value;
+      if (typeof listed !== 'object' || listed === null || securityIsArray(listed)) {
+        throw new TypeError('S3 storage listObjects entries must be objects.');
+      }
+      const objectKey = storageRequiredOwnData(listed, 'key', 'S3 listed object');
+      if (
+        typeof objectKey !== 'string' ||
+        !fileSystemStringStartsWith(objectKey, physicalPrefix) ||
+        fileSystemArraySome(seenKeys, (seen) => seen === objectKey)
+      ) {
+        throw new Error('S3 storage listing returned an invalid or duplicate physical key.');
+      }
+      securityArrayAppend(seenKeys, objectKey);
+      const head = await fileSystemReflectApply<ReturnType<S3CompatibleObjectClient['headObject']>>(
+        options.headObject,
+        options.client,
+        [{ bucket: options.bucket, key: objectKey }],
+      );
+      if (head === undefined) {
+        throw new Error(`S3 storage object '${objectKey}' disappeared during erasure enumeration.`);
+      }
+      const metadata = storageOptionalOwnData(head, 'metadata', 'S3 object metadata');
+      if (metadata === undefined) {
+        throw new Error(`S3 storage object '${objectKey}' has no reconstructive key metadata.`);
+      }
+      const metadataSnapshot = snapshotStorageMetadata(metadata);
+      const frame = storageOptionalOwnData(
+        metadataSnapshot,
+        s3ScopedKeyFrameMetadata,
+        'S3 object ScopedKey metadata',
+      );
+      if (typeof frame !== 'string') {
+        throw new Error(`S3 storage object '${objectKey}' has no reconstructive key frame.`);
+      }
+      const key = restoreScopedKey(frame);
+      if (s3ObjectKey(options.prefix, scopedStoragePhysicalKey(frame)) !== objectKey) {
+        throw new Error(`S3 storage object '${objectKey}' failed physical-key validation.`);
+      }
+      const facts = scopedKeyFactsFor(key);
+      if (facts.posture === 'principal' && facts.authority === options.principal) {
+        securityArrayAppend(matches, key);
+      }
+    }
+    const nextCursor = storageOptionalOwnData(output, 'cursor', 'S3 storage listObjects output');
+    if (nextCursor === undefined) return fileSystemFreeze(matches);
+    if (
+      typeof nextCursor !== 'string' ||
+      nextCursor.length === 0 ||
+      nextCursor.length > 4_096 ||
+      nextCursor === cursor ||
+      fileSystemArraySome(seenCursors, (seen) => seen === nextCursor)
+    ) {
+      throw new Error('S3 storage listing returned an invalid or repeated continuation cursor.');
+    }
+    securityArrayAppend(seenCursors, nextCursor);
+    cursor = nextCursor;
+  }
+  throw new Error('S3 storage listing exceeded the erasure pagination bound.');
 }

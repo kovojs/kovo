@@ -328,15 +328,16 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'endpoint({csrf:false,reason})|webhook({verify:none,reason})',
     firstParser: 'endpoint-dispatcher-raw-request+webhook-verify-before-parse',
     guard: 'csrf-or-machine-verifier+raw-bytes-before-parse',
-    residency: 'unerasable:replay-records-lack-principal-index',
-    runtimeGuard: 'dispatcher-endpoint-auth+webhook-verify+replay-store',
+    residency: 'ledger',
+    runtimeGuard:
+      'dispatcher-endpoint-auth+webhook-verify+replay-store+mutation-replay-principal-index-delete-and-absence-probe',
     schema:
       'endpoint-raw-Response|webhook-responses|/_q-typed-reads|SSE-live-query-pushes|BroadcastChannel-rebroadcast|HMR-dev-refresh-endpoints|mutation-defer-streams|Kovo-Changes|fragment-target-selection|endpoint-method+path+body-posture|webhook-input+provider-headers-signatures+idempotency',
     sink: 'ingress.endpoint.webhook',
     source:
       'request.headers|cookies|raw-request-bodies|endpoint-webhook-bodies|webhook-provider-headers-signatures|FormData|mutation-form-input',
     specAnchor: 'SPEC.md#9.1;SPEC.md#11.4',
-    testEvidence: [existingEvidence.endpoint],
+    testEvidence: [existingEvidence.endpoint, 'packages/server/src/principal-erasure.test.ts'],
     trust: 'browser-authority-or-machine-authority',
   },
   {
@@ -346,15 +347,16 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'renderOnce|await-fragment|disableServerRefresh',
     firstParser: 'typed-query-read-endpoint+browser-live-envelope-parser',
     guard: 'guard-recheck+private-cache+principal-fingerprint+build-token',
-    residency: 'unerasable:durable-task-args-lack-principal-index',
-    runtimeGuard: 'typed-read-endpoint+BroadcastChannel-principal-discard+SSE-guard-recheck',
+    residency: 'ledger',
+    runtimeGuard:
+      'typed-read-endpoint+BroadcastChannel-principal-discard+SSE-guard-recheck+durable-task-principal-index-delete-and-absence-probe',
     schema:
       '/_q/search-args+query-shape+fragment-target-registry+Kovo-Targets+Kovo-Live-Targets+render-plan-token',
     sink: 'transport.query.live.broadcast',
     source:
       '/_q/search-args|Kovo-Targets|Kovo-Live-Targets|fragment-targets|data-stream-text|BroadcastChannel|SSE|req.session',
     specAnchor: 'SPEC.md#4.9;SPEC.md#9.3;SPEC.md#9.4',
-    testEvidence: [existingEvidence.query],
+    testEvidence: [existingEvidence.query, 'packages/server/src/principal-erasure.test.ts'],
     trust: 'session-scoped-private-data',
   },
   {
@@ -364,16 +366,20 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'respond.file|respond.stream|storage-adapter',
     firstParser: 'FileSchema+storage-key-parser+static-export-route-graph',
     guard: 'path-containment+attachment-nosniff+static-export-reference-check',
-    residency: 'unerasable:storage-adapter-has-no-list-operation',
+    residency: 'adapter-enumerable',
     runtimeGuard:
-      'safe-content-disposition+upload-and-wire-bidi-filename-neutralization+reserved-dynamic-endpoint-refusal+storage-key-validation',
+      'safe-content-disposition+upload-and-wire-bidi-filename-neutralization+reserved-dynamic-endpoint-refusal+storage-key-validation+exact-adapter-enumeration-delete-and-absence-probe',
     schema:
       'FileSchema|StoredFile|upload-schema-storage|storage-keys-metadata|filesystem-S3-adapters|respond.file|respond.stream|static-export-output-paths|Vite-manifest-asset-copies|generated-graph-output-files|static-export-route-paths-assets-manifests|storage-key|content-disposition-filename',
     sink: 'file.storage.static-export',
     source:
       'file-upload-metadata|file-upload-bytes|static-export-route-paths-assets-manifests|route-paths|asset-manifest|storage-key|app-config-env-values',
     specAnchor: 'SPEC.md#9.5;SPEC.md#11.4',
-    testEvidence: [existingEvidence.storage, existingEvidence.staticExport],
+    testEvidence: [
+      existingEvidence.storage,
+      existingEvidence.staticExport,
+      'packages/server/src/principal-erasure.test.ts',
+    ],
     trust: 'filesystem-and-object-storage-boundary',
   },
   {

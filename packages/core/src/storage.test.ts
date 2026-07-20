@@ -14,6 +14,8 @@ import {
   type S3CompatibleGetObjectInput,
   type S3CompatibleGetObjectOutput,
   type S3CompatibleHeadObjectInput,
+  type S3CompatibleListObjectsInput,
+  type S3CompatibleListObjectsOutput,
   type S3CompatibleObjectClient,
   type S3CompatibleObjectMetadata,
   type S3CompatiblePutObjectInput,
@@ -24,6 +26,8 @@ import {
 } from './index.js';
 import {
   createReadOnlyStorageCapability,
+  countPrincipalStorageObjects,
+  erasePrincipalStorageObjects,
   principalScopedKey,
   normalizeStorageKey,
   scopedKeyFactsFor,
@@ -96,6 +100,10 @@ const fileSystemSidecarSuffix = '.kovo-storage.json';
 
 function fileSystemPhysicalStorageKey(key: string): string {
   const frame = testKeyFrame(key);
+  return fileSystemPhysicalStorageFrame(frame);
+}
+
+function fileSystemPhysicalStorageFrame(frame: string): string {
   const digest = createHash('sha256').update(textEncoder.encode(frame)).digest('hex');
   return path.join('kovo-storage-v1', digest.slice(0, 2), digest.slice(2));
 }
@@ -500,6 +508,9 @@ describe('storage constructor and metadata authority', () => {
       async headObject() {
         return {};
       },
+      async listObjects() {
+        return { objects: [] };
+      },
       async putObject() {
         return {};
       },
@@ -600,6 +611,9 @@ describe('storage constructor and metadata authority', () => {
       async headObject() {
         return { contentLength: Number.NaN, lastModified: hostileDate as Date };
       },
+      async listObjects() {
+        return { objects: [] };
+      },
       async putObject() {
         return {};
       },
@@ -677,6 +691,85 @@ describe('storage read/write authority split', () => {
     });
     await expect(storage.stat('receipts/evil.txt')).resolves.toBeUndefined();
     expect(bindHits).toBe(0);
+  });
+});
+
+describe('SPEC §10.3 principal storage erasure', () => {
+  it('deletes only the exact principal and proves memory-store absence on a second pass', async () => {
+    const storage = createMemoryStorageCapability();
+    await storage.put(principalScopedKey('victim', 'avatar'), 'victim');
+    await storage.put(principalScopedKey('other', 'avatar'), 'other');
+
+    await expect(erasePrincipalStorageObjects(storage, 'victim')).resolves.toEqual({
+      deleted: 1,
+      remaining: 0,
+    });
+    await expect(countPrincipalStorageObjects(storage, 'victim')).resolves.toBe(0);
+    await expect(storage.get(principalScopedKey('other', 'avatar'))).resolves.toBeDefined();
+  });
+
+  it('reconstructs filesystem sidecars and rejects malformed residue instead of claiming absence', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-erasure-'));
+    try {
+      const storage = createFileSystemStorageCapability({ root });
+      const key = principalScopedKey('victim', 'private.bin');
+      await storage.put(key, 'private');
+      await expect(erasePrincipalStorageObjects(storage, 'victim')).resolves.toEqual({
+        deleted: 1,
+        remaining: 0,
+      });
+
+      await storage.put(key, 'private-again');
+      const frame = scopedKeyFactsFor(key).frame;
+      const sidecar = path.join(
+        root,
+        `${fileSystemPhysicalStorageFrame(frame)}${fileSystemSidecarSuffix}`,
+      );
+      await writeFile(sidecar, '{"scopedKeyFrame":"forged"}', 'utf8');
+      await expect(erasePrincipalStorageObjects(storage, 'victim')).rejects.toThrow(
+        /invalid metadata/u,
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('uses internal S3 listing metadata without exposing the principal frame to callers', async () => {
+    const client = new MockS3Client();
+    const storage = createS3CompatibleStorageCapability({ bucket: 'private', client });
+    const victim = principalScopedKey('victim', 'document');
+    const other = principalScopedKey('other', 'document');
+    await storage.put(victim, 'victim', { metadata: { color: 'blue' } });
+    await storage.put(other, 'other');
+
+    await expect(storage.stat(victim)).resolves.toMatchObject({ metadata: { color: 'blue' } });
+    expect((await storage.stat(victim))?.metadata).not.toHaveProperty('kovo-scoped-key-frame');
+    await expect(erasePrincipalStorageObjects(storage, 'victim')).resolves.toEqual({
+      deleted: 1,
+      remaining: 0,
+    });
+    await expect(storage.get(other)).resolves.toBeDefined();
+  });
+
+  it('rejects structural adapters whose type cannot prove complete enumeration', async () => {
+    const custom = {
+      async delete() {},
+      async get() {
+        return undefined;
+      },
+      async put() {
+        return { key: 'x' };
+      },
+      async stat() {
+        return undefined;
+      },
+      async stream() {
+        return undefined;
+      },
+    } as StorageCapability;
+    await expect(erasePrincipalStorageObjects(custom, 'victim')).rejects.toThrow(
+      /exact enumerable storage capability/u,
+    );
   });
 });
 
@@ -1263,6 +1356,17 @@ class MockS3Client implements S3CompatibleObjectClient {
     return mockS3Metadata(object);
   }
 
+  async listObjects(input: S3CompatibleListObjectsInput): Promise<S3CompatibleListObjectsOutput> {
+    const objects: Array<{ key: string }> = [];
+    for (const identity of this.objects.keys()) {
+      const separator = identity.indexOf('/');
+      const bucket = identity.slice(0, separator);
+      const key = identity.slice(separator + 1);
+      if (bucket === input.bucket && key.startsWith(input.prefix)) objects.push({ key });
+    }
+    return { objects };
+  }
+
   async putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput> {
     this.calls.push(`put ${input.bucket}/${input.key}`);
     const body = await storageBodyToBytes(input.body);
@@ -1306,6 +1410,17 @@ class ContentLengthBlindS3Client implements S3CompatibleObjectClient {
   ): Promise<S3CompatibleObjectMetadata | undefined> {
     const object = this.objects.get(`${input.bucket}/${input.key}`);
     return object === undefined ? undefined : blindMetadata(object);
+  }
+
+  async listObjects(input: S3CompatibleListObjectsInput): Promise<S3CompatibleListObjectsOutput> {
+    const objects: Array<{ key: string }> = [];
+    for (const identity of this.objects.keys()) {
+      const separator = identity.indexOf('/');
+      const bucket = identity.slice(0, separator);
+      const key = identity.slice(separator + 1);
+      if (bucket === input.bucket && key.startsWith(input.prefix)) objects.push({ key });
+    }
+    return { objects };
   }
 
   async putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput> {

@@ -481,6 +481,26 @@ describe('server mutation replay store', () => {
     expect(first.scope).not.toBe(second.scope);
   });
 
+  it('carries the erasure principal separately without changing mutationReplayScope composition', async () => {
+    const firstRequest = { session: { id: 'shared-scope', user: { id: 'alice' } } };
+    const secondRequest = { session: { id: 'shared-scope', user: { id: 'bob' } } };
+    registerFrameworkSessionPrincipalSnapshot(firstRequest, firstRequest.session);
+    registerFrameworkSessionPrincipalSnapshot(secondRequest, secondRequest.session);
+
+    const first = await mutationReplayContext(false, {
+      mutationKey: 'settings/save',
+      request: firstRequest,
+    });
+    const second = await mutationReplayContext(false, {
+      mutationKey: 'settings/save',
+      request: secondRequest,
+    });
+
+    expect(first.scope).toBe(second.scope);
+    expect(first.principal).toBe('alice');
+    expect(second.principal).toBe('bob');
+  });
+
   it('uses one embedded framework principal and one standalone replay principal within the durable scope budget', async () => {
     type PrincipalRequest = {
       session: { id: string; user: { id: string } };
