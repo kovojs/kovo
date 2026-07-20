@@ -57,7 +57,7 @@ ledger, but it must not add a broader guarantee outside the block.
     {
       "id": "explicit-secret-query-wire-egress",
       "state": "current",
-      "statement": "In a KOVO_PARANOID production artifact, a framework Secret value created with the validating secret constructor is refused at Kovo query-wire egress; an explicitly audited trusted reveal is accepted.",
+      "statement": "In a KOVO_PARANOID production artifact, a framework Secret value created with the validating secret constructor is refused at Kovo query-wire egress, and request-reachable modules cannot acquire audited reveal authority.",
       "antecedents": ["bootstrap-order"],
       "tcbChokes": [
         "core.secret.poison-box",
@@ -69,7 +69,7 @@ ledger, but it must not add a broader guarantee outside the block.
       ],
       "runtimeProofs": [
         "runtime-secret-explicit-box-egress",
-        "runtime-secret-audited-reveal-acceptance"
+        "runtime-secret-request-closed-reveal-denial"
       ]
     }
   ],

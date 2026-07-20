@@ -54,7 +54,7 @@
   "kovoBuildProvenance": {
     "securityGuarantees": {
       "schema": "kovo.security.guarantees/v1",
-      "canonicalHash": "sha256:3d01b8455b5a772930b63b89c5b5713e71ac7e3961d9d65329ea3b581e562547"
+      "canonicalHash": "sha256:a74f656197edd4973cde5259cf29181b3a73a6f9ae5c2960b674f81ff05e21fb"
     }
   }
 }
