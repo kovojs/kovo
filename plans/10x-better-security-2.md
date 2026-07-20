@@ -810,10 +810,14 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
       `observed ⊄ predicted` counterexamples over its versioned finite language; publish grammar,
       semantic-coverage, canary-recall, mutation, seed, and budget evidence without claiming proof of
       general JavaScript soundness.
-- [ ] D inventory has zero uncovered stable-ID obligations; every authored declaration is derived,
+- [x] D inventory has zero uncovered stable-ID obligations; every authored declaration is derived,
       mechanically checked intent, or a reviewed explicit exemption, and drift fails the build.
-- [ ] W inventory has zero uncovered stable-ID obligations; every runtime-load-bearing fact is
+  - Evidence: `node scripts/derivation-rewitness-inventory.mjs` reports `D=8/8 uncovered=0`, and
+    `derivation-rewitness-inventory.test.mjs` passes 5/5 denominator drift/mutation tests.
+- [x] W inventory has zero uncovered stable-ID obligations; every runtime-load-bearing fact is
       re-witnessed within its declared freshness/failure budget or is explicitly signed off.
+  - Evidence: the same inventory gate reports `W=9/9 uncovered=0`; every row records its source,
+    renewal/TTL, fail-closed posture, cost budget, and current evidence.
 - [ ] All three reproduced live channels—storage key isolation, durable-job coalescing, and config-
       secret runtime egress—are closed by runtime-owned doors with their exact red tests green.
 - [ ] `kovo explain --attest` verifies the bounded single-instance posture statement defined in §4.3;
