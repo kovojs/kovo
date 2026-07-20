@@ -384,6 +384,14 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-061",
+      "file": "scripts/escape-census-gate.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact named non-keyed SHA-256 digest over the public predecessor ledger; it binds the non-increasing Metric E ratchet without acquiring entropy, key material, or a keyed operation."
+    },
+    {
       "id": "crypto-door-047",
       "file": "scripts/demo-session/dispatcher.mjs",
       "kind": "crypto-acquisition",
