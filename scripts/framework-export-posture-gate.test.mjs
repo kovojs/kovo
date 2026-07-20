@@ -11,6 +11,7 @@ import {
   productionPackedTreeSha256,
   productionSourceTreeSha256,
   readFrameworkExportPostureLedger,
+  renderFrameworkExportPostureGenerated,
   validateFrameworkExportPosture,
 } from './framework-export-posture-gate.mjs';
 
@@ -423,5 +424,24 @@ describe('framework public runtime export posture gate', () => {
     expect(
       expandFrameworkExportPostureLedger(ledger).filter((row) => row.rootKind !== 'none'),
     ).toHaveLength(13);
+  });
+
+  it('cuts exact implementation dependencies only for wholly request-closed packages', () => {
+    const generated = renderFrameworkExportPostureGenerated(ledger, actual);
+    const packageBlock = (packageName) => {
+      const start = generated.indexOf(`  [${JSON.stringify(packageName)},`);
+      const end = generated.indexOf('\n  ["@kovojs/', start + 1);
+      expect(start, `generated package row for ${packageName}`).toBeGreaterThanOrEqual(0);
+      return generated.slice(start, end < 0 ? generated.length : end);
+    };
+
+    const cli = packageBlock('@kovojs/cli');
+    expect(cli).toContain('"unconditional-request-closure"');
+    expect(cli).not.toContain('kovo-source-tree-sha256:');
+    expect(cli).not.toContain('kovo-packed-tree-sha256:');
+
+    const server = packageBlock('@kovojs/server');
+    expect(server).toContain('"exact-implementation"');
+    expect(server).toContain('kovo-source-tree-sha256:');
   });
 });
