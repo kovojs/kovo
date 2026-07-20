@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
 import { guards, resolveLifecycleRequest } from './guards.js';
 import { usePostgresSystemDb } from './internal/postgres-capability.js';
+import { managedDb } from './managed-db.js';
 import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
 
 const documents = pgTable(
@@ -182,6 +183,16 @@ describe('framework-derived Postgres owner guard', () => {
       const readRequest = await requestFor(runtime, 'owned', 'alice', 'read');
       await expect(guard(writeRequest)).resolves.toBe(true);
       await expect(guard(readRequest)).resolves.toBe(true);
+
+      const unregisteredWrapperRequest: OwnerRequest = {
+        args: { id: 'owned' },
+        db: managedDb(writeRequest.db, 'write'),
+        session: { user: { id: 'alice' } },
+      };
+      await expect(guard(unregisteredWrapperRequest)).resolves.toEqual({
+        kind: 'forbidden',
+        payload: {},
+      });
 
       const lookalikeDocuments = pgTable(
         'owner_guard_documents',

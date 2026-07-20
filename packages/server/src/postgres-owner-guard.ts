@@ -20,10 +20,7 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
-import {
-  frameworkManagedDbRawTarget,
-  snapshotFrameworkNativeDrizzleTableForExecution,
-} from './sql-safe-handle.js';
+import { snapshotFrameworkNativeDrizzleTableForExecution } from './sql-safe-handle.js';
 
 interface FrameworkPostgresOwnerGuardBinding {
   readonly keyColumn: AnyPgColumn;
@@ -278,6 +275,31 @@ export function registerFrameworkPostgresOwnerGuardRequestDb(
   );
 }
 
+/**
+ * Enroll one exact framework-composed lifecycle wrapper from an already registered request DB.
+ * This is deliberately one hop: arbitrary wrappers cannot recover authority by exposing a raw
+ * target that eventually reaches a registered handle (SPEC §10.3).
+ *
+ * @internal Called only at the request lifecycle's managed-handle composition point.
+ */
+export function registerFrameworkPostgresOwnerGuardDerivedRequestDb(
+  db: unknown,
+  source: unknown,
+): void {
+  if (
+    (typeof db !== 'object' && typeof db !== 'function') ||
+    db === null ||
+    (typeof source !== 'object' && typeof source !== 'function') ||
+    source === null
+  ) {
+    return;
+  }
+  const registration = witnessWeakMapGet(frameworkPostgresOwnerGuardRequestDbs, source);
+  if (registration !== undefined) {
+    witnessWeakMapSet(frameworkPostgresOwnerGuardRequestDbs, db, registration);
+  }
+}
+
 /** Evaluate the fixed direct-owner lookup through the exact managed request DB. @internal */
 export async function evaluateFrameworkPostgresOwnerGuard(
   request: unknown,
@@ -288,12 +310,9 @@ export async function evaluateFrameworkPostgresOwnerGuard(
   if (principal === undefined || principal === '') return false;
   const requestDb = ownDataObject(request, 'db');
   if (requestDb === undefined) return false;
-  const rawDb = frameworkManagedDbRawTarget(requestDb);
-  const requestRegistration =
-    witnessWeakMapGet(frameworkPostgresOwnerGuardRequestDbs, requestDb) ??
-    (rawDb === undefined
-      ? undefined
-      : witnessWeakMapGet(frameworkPostgresOwnerGuardRequestDbs, rawDb));
+  // SPEC §10.3: the proof is bound to the exact principal-scoped request handle. Never inherit
+  // authority from a raw target hidden behind a different, unregistered managed wrapper.
+  const requestRegistration = witnessWeakMapGet(frameworkPostgresOwnerGuardRequestDbs, requestDb);
   if (requestRegistration === undefined || requestRegistration.principal !== principal)
     return false;
   const binding = witnessWeakMapGet(

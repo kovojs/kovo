@@ -33,6 +33,7 @@ import {
 } from './postgres-authorization-correspondence.js';
 import {
   evaluateFrameworkPostgresOwnerGuard,
+  registerFrameworkPostgresOwnerGuardDerivedRequestDb,
   snapshotFrameworkPostgresOwnerGuardColumn,
 } from './postgres-owner-guard.js';
 import {
@@ -1498,27 +1499,24 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     // request carries the read-only handle (write verbs throw), a mutation/write request carries
     // the read-write handle. The mode defaults to 'write' so direct/legacy callers keep read-write
     // `request.db`; `runQuery` passes 'read' so loaders are read-only end to end.
-    lifecycleRequest = requestWithProperty(
-      lifecycleRequest,
-      'db',
-      managedDb(
-        dbValue,
-        options.dbMode ?? 'write',
-        options.sqlWritePolicy === undefined ? {} : { sqlWritePolicy: options.sqlWritePolicy },
-      ),
+    const requestDb = managedDb(
+      dbValue,
+      options.dbMode ?? 'write',
+      options.sqlWritePolicy === undefined ? {} : { sqlWritePolicy: options.sqlWritePolicy },
     );
+    registerFrameworkPostgresOwnerGuardDerivedRequestDb(requestDb, dbValue);
+    lifecycleRequest = requestWithProperty(lifecycleRequest, 'db', requestDb);
   } else if (options.sqlWritePolicy !== undefined) {
     const requestDb = requestOwnDb(lifecycleRequest);
-    lifecycleRequest =
-      requestDb.present && requestDb.value !== undefined
-        ? requestWithProperty(
-            lifecycleRequest,
-            'db',
-            managedDb(requestDb.value, options.dbMode ?? 'write', {
-              sqlWritePolicy: options.sqlWritePolicy,
-            }),
-          )
-        : withoutRequestProperty(lifecycleRequest, 'db');
+    if (requestDb.present && requestDb.value !== undefined) {
+      const managedRequestDb = managedDb(requestDb.value, options.dbMode ?? 'write', {
+        sqlWritePolicy: options.sqlWritePolicy,
+      });
+      registerFrameworkPostgresOwnerGuardDerivedRequestDb(managedRequestDb, requestDb.value);
+      lifecycleRequest = requestWithProperty(lifecycleRequest, 'db', managedRequestDb);
+    } else {
+      lifecycleRequest = withoutRequestProperty(lifecycleRequest, 'db');
+    }
   }
 
   // SPEC §9.5: attach the framework-resolved trustworthy client IP after providers but before the

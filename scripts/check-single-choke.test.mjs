@@ -316,6 +316,32 @@ export async function consumeReplay(executor, replayId) {
     expect(result.findings).toEqual([]);
   });
 
+  it('accepts only the inventoried framework-owned principal epoch executor', () => {
+    const files = {
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/postgres-principal-epoch.ts': `
+export async function currentEpoch(executor, digest) {
+  return executor.execute({
+    text: 'SELECT epoch FROM public._kovo_principal_epoch WHERE principal_digest = $1',
+    values: [digest],
+  });
+}
+`,
+    };
+
+    expect(runDefaultFixture(files).findings).toEqual([]);
+
+    files['packages/server/src/app-principal-epoch-bypass.ts'] =
+      files['packages/server/src/postgres-principal-epoch.ts'];
+    expect(runDefaultFixture(files).findings).toContain(
+      'packages/server/src/app-principal-epoch-bypass.ts:3: driver method/property .execute must route through enforceManagedSql() in sql-safe-handle.ts or an audited durable-task internal SQL executor',
+    );
+  });
+
   it('accepts SQLite runtime managed handle construction as an audited framework composition point', () => {
     const result = runDefaultFixture({
       'packages/server/src/sql-safe-handle.ts': `

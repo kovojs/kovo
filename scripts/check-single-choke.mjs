@@ -29,6 +29,9 @@ export const defaultAllowedDriverFiles = [
   // SPEC.md sections 5.4 and 8.1: framework-owned durable replay stores execute only
   // static, parameterized statements against the protected _kovo_replay relation.
   'packages/server/src/postgres-replay.ts',
+  // SPEC.md sections 6.6 and 10.3: framework-owned revocation epochs execute only static,
+  // parameterized statements against the protected _kovo_principal_epoch relation.
+  'packages/server/src/postgres-principal-epoch.ts',
   'packages/server/src/secret-read-boundary.ts',
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/sql-write-oracle.ts',
