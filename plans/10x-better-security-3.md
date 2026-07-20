@@ -632,13 +632,18 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 
 ### 4.2 Structured obligations replacing free-text justifications
 
-- [ ] At the `audit-justification.ts` chokepoint, replace prose with fields the analyzer can partially
+- [x] At the `audit-justification.ts` chokepoint, replace prose with fields the analyzer can partially
       check — _which invariant, why it holds, what evidence_ — killing the prose-laundering path.
-- [ ] Escape signatures over `(site identity, obligation text, artifact/emission hash)` from a key
+  - Evidence: the six-file obligation/review integration suite passes 31/31; runtime and static
+    validation require the exact invariant, guard-or-policy reason, and digest-bound evidence record.
+- [x] Escape signatures over `(site identity, obligation text, artifact/emission hash)` from a key
       **not** present in the build environment or reachable by a coding agent, composing with plan-2
       §4.3's attestation anchor (**do not establish a second trust anchor** — if §4.3 has not landed,
       ship the census, ratchet, and structured obligations and defer the signature). Honest label: a
       process guarantee that a second party reviewed it, not a proof the justification is true.
+  - Evidence: the same 31/31 suite binds detached Ed25519 reviews to scanner span, obligation, and
+    artifact subject, rejects replacement keys/signatures, reuses the runtime-attestation fingerprint,
+    and proves build/execution exports expose verification and unsigned subjects but no signer.
 
 ### 4.3 Cost-to-green
 
