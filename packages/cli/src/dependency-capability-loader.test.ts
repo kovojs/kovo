@@ -59,6 +59,30 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  it('keeps the native SQLite wrapper external while traversing every app dependency', () => {
+    const source = readFileSync(new URL('./commands/build-export.ts', import.meta.url), 'utf8');
+    const start = source.indexOf('function dependencyCapabilityCompleteSsrOptions()');
+    const end = source.indexOf('\nfunction ', start + 1);
+    const options = source.slice(start, end === -1 ? undefined : end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(options).toContain("'better-sqlite3'");
+    expect(options).toContain('noExternal: true');
+  });
+
+  it('uses the discarded component-scan lane only for the temporary SSR compiler census', () => {
+    const source = readFileSync(new URL('./commands/build-export.ts', import.meta.url), 'utf8');
+    const start = source.indexOf('async function buildKovoComponentClientModules(');
+    const end = source.indexOf('\nfunction ', start + 1);
+    const componentScan = source.slice(start, end === -1 ? undefined : end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(componentScan).toContain("'component-scan'");
+    expect(componentScan).toContain('rmSync(tempDir, { force: true, recursive: true })');
+    expect(source.slice(0, start)).not.toContain("'component-scan'");
+    expect(source.slice(end)).not.toContain("'component-scan'");
+  });
+
   // @kovo-security-certifies C13 dependency-capability-loader-identity
   it('admits only the exact censused dependency import and installed identity', () => {
     expect(
@@ -832,6 +856,94 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         /KV448.*uncensused transitive dependency helper-parser imported by reviewed package safe-parser/u,
       );
       expect(() => readFileSync(executedPath, 'utf8')).toThrow();
+    } finally {
+      await server?.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-exact-reviewed-subgraph
+  it('does not confuse a framework-owned package export with the app-admitted package subgraph', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-shared-root-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const helperRoot = join(root, 'node_modules', 'framework-driver');
+    const driverPath = join(packageRoot, 'framework-driver.js');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    let server: Awaited<ReturnType<typeof createViteServer>> | undefined;
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      mkdirSync(helperRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          dependencies: { 'framework-driver': '1.0.0' },
+          exports: { '.': './index.js', './framework-driver': './framework-driver.js' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(join(packageRoot, 'index.js'), 'export const parse = value => value;\n');
+      writeFileSync(
+        driverPath,
+        "import { drive } from 'framework-driver'; export const driven = drive('framework');\n",
+      );
+      writeFileSync(
+        join(helperRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.js' },
+          name: 'framework-driver',
+          type: 'module',
+          version: '1.0.0',
+        }),
+      );
+      writeFileSync(join(helperRoot, 'index.js'), 'export const drive = value => value;\n');
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+      server = await createViteServer({
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          dependencyCapabilityLoaderVitePlugin(
+            appModulePath,
+            [{ fileName: 'app.mjs', source }],
+            exactManifest,
+            'build-app',
+          ),
+        ],
+        root,
+        server: { hmr: false },
+        ssr: { external: ['framework-driver'], noExternal: true },
+      });
+
+      await expect(server.ssrLoadModule('/app.mjs')).resolves.toMatchObject({ value: 'safe' });
+      await expect(
+        server.ssrLoadModule(`/@fs${driverPath}`),
+      ).resolves.toMatchObject({ driven: 'framework' });
     } finally {
       await server?.close();
       rmSync(root, { force: true, recursive: true });
@@ -1962,6 +2074,91 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     },
   );
 
+  it('literalizes an exact same-block const module target in the emitted server artifact', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-finite-import-')));
+    const appModulePath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const appSource = [
+      'export async function loadBuiltin() {',
+      "  const target = 'node:fs';",
+      '  return import(/* @vite-ignore */ target);',
+      '}',
+      '',
+    ].join('\n');
+    try {
+      writeFileSync(appModulePath, appSource);
+      await viteBuild({
+        build: {
+          emptyOutDir: true,
+          outDir,
+          rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+          ssr: true,
+        },
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          dependencyCapabilityLoaderVitePlugin(
+            appModulePath,
+            [{ fileName: 'app.mjs', source: appSource }],
+            { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+            'build-server',
+            { allowNodeBuiltins: true },
+          ),
+        ],
+        root,
+        ssr: { noExternal: true },
+      });
+
+      const artifact = readFileSync(join(outDir, 'entry.mjs'), 'utf8');
+      expect(artifact).toMatch(/import\([\s\S]{0,100}["']node:fs["']/u);
+      expect(artifact).not.toMatch(/import\(\s*target\s*\)/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not resolve a captured or shadowed dynamic module target as a finite artifact edge', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-shadowed-import-')));
+    const appModulePath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const appSource = [
+      "const target = 'node:fs';",
+      'export async function loadSelected(target) {',
+      '  return import(/* @vite-ignore */ target);',
+      '}',
+      '',
+    ].join('\n');
+    try {
+      writeFileSync(appModulePath, appSource);
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-server',
+              { allowNodeBuiltins: true },
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).rejects.toThrow(/KV448.*supported build-server artifact.*non-literal module edge/u);
+      expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-nonliteral-artifact-module-closure
   it('rejects a retained non-literal HTML-client import before a public module can execute', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-nonliteral-client-')));
@@ -2530,6 +2727,57 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-transitive-app-source-snapshot
+  it('rejects an approved browser module that reaches outside the snapshot through /@fs', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-approved-fs-edge-')));
+    const outsidePath = join(tmpdir(), `kovo-outside-browser-authority-${process.pid}.mjs`);
+    const appModulePath = join(root, 'app.mjs');
+    const clientPath = join(root, 'src', 'client.mjs');
+    const outDir = join(root, 'dist');
+    const appSource = 'export default {};\n';
+    const clientSource = [
+      `import ${JSON.stringify(`/@fs${outsidePath}`)};`,
+      'globalThis.__KOVO_APPROVED_CLIENT__ = true;',
+      '',
+    ].join('\n');
+    try {
+      mkdirSync(dirname(clientPath), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(clientPath, clientSource);
+      writeFileSync(outsidePath, 'globalThis.__OUTSIDE_SNAPSHOT_EXECUTED__ = true;\n');
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.mjs"></script>\n',
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [
+                { fileName: 'app.mjs', source: appSource },
+                { fileName: 'src/client.mjs', source: clientSource },
+              ],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(
+        /KV448.*approved app source src\/client\.mjs edge \/@fs.*outside the immutable approved-source snapshot/u,
+      );
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outsidePath, { force: true });
     }
   });
 

@@ -71,6 +71,7 @@ import {
   type AnalyzeCapabilityClosureResult,
   viteFrameworkIdentityFiles,
 } from '@kovojs/compiler/internal';
+import { createCompilerSourceFileSystem } from '@kovojs/compiler/internal/source-filesystem';
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
 import {
   collectStaticBuildTrustFactsFromProject,
@@ -272,6 +273,7 @@ function dependencyCapabilityCompleteSsrOptions(): {
       '@electric-sql/pglite',
       '@material/material-color-utilities',
       '@node-rs/argon2',
+      'better-sqlite3',
       'es-module-lexer',
       'pg',
       'pgsql-ast-parser',
@@ -893,7 +895,7 @@ async function loadAndCheckBuildApp(
     loadBuildAppModule(
       resolvedAppModulePath,
       invocationRoot,
-      preEvaluationStaticTrust.files,
+      preEvaluationStaticTrust.approvedSourceFiles,
       preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
     ),
   );
@@ -916,7 +918,7 @@ async function loadAndCheckBuildApp(
   });
   return {
     app,
-    approvedSourceFiles: buildCheck.sourceFiles,
+    approvedSourceFiles: preEvaluationStaticTrust.approvedSourceFiles,
     buildStylesheetCss,
     checkGraph: buildCheck.graph,
     cloudflare,
@@ -931,6 +933,7 @@ async function loadAndCheckBuildApp(
 }
 
 interface PreEvaluationStaticTrust {
+  readonly approvedSourceFiles: readonly BuildCheckSourceFile[];
   readonly capabilityClosure: AnalyzeCapabilityClosureResult;
   readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
   readonly files: readonly BuildCheckSourceFile[];
@@ -988,6 +991,7 @@ function runPreEvaluationStaticTrustPreflight(
   // config Vite build can transform. A project-root census would incorrectly promote unrelated
   // authored tooling such as vite.config.ts into app runtime authority.
   const files = preEvaluationAppSourceFiles(appModulePath, root);
+  const approvedSourceFiles = preEvaluationApprovedBuildFiles(appModulePath, root, files);
   // Parse and lower this exact snapshot before deriving the loader manifest. Private ABI rows are
   // admitted only when the reviewed compiler added their exact names; authored spellings remain
   // ordinary closed package edges (SPEC §5.2 rule 10 / §6.6).
@@ -1058,7 +1062,7 @@ function runPreEvaluationStaticTrustPreflight(
     'Pre-evaluation compiler and runtime-reveal audit diagnostics',
   );
   if (unregisteredSinks.length === 0 && allPreEvaluationDiagnostics.length === 0) {
-    return { capabilityClosure, facts, files, sourceGraphFacts };
+    return { approvedSourceFiles, capabilityClosure, facts, files, sourceGraphFacts };
   }
 
   const result = kovoCheck(
@@ -1070,9 +1074,11 @@ function runPreEvaluationStaticTrustPreflight(
     },
     { paranoidStaticAdvisory },
   );
-  if (result.exitCode === 0) return { capabilityClosure, facts, files, sourceGraphFacts };
+  if (result.exitCode === 0) {
+    return { approvedSourceFiles, capabilityClosure, facts, files, sourceGraphFacts };
+  }
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
-    return { capabilityClosure, facts, files, sourceGraphFacts };
+    return { approvedSourceFiles, capabilityClosure, facts, files, sourceGraphFacts };
   }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
@@ -1133,6 +1139,104 @@ function preEvaluationAppSourceFiles(appModulePath: string, root: string): Build
       { fileName, source: clientFile.source },
       'Pre-evaluation app and client source snapshot',
     );
+  }
+  return files;
+}
+
+function preEvaluationApprovedBuildFiles(
+  appModulePath: string,
+  root: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
+): BuildCheckSourceFile[] {
+  const sourceRoot = dirname(appModulePath);
+  const files = buildSnapshotDenseArray(sourceFiles, 'Pre-evaluation approved module sources');
+  const stylesheetFiles = preEvaluationClientStylesheetFiles(
+    kovoClientBuildRoot(appModulePath, root),
+    sourceRoot,
+  );
+  for (let index = 0; index < stylesheetFiles.length; index += 1) {
+    const stylesheet = stylesheetFiles[index]!;
+    let existing: BuildCheckSourceFile | undefined;
+    for (let candidateIndex = 0; candidateIndex < files.length; candidateIndex += 1) {
+      if (files[candidateIndex]!.fileName === stylesheet.fileName) {
+        existing = files[candidateIndex];
+        break;
+      }
+    }
+    if (existing !== undefined) {
+      if (existing.source !== stylesheet.source) {
+        throw new TypeError(`Kovo app source snapshot conflicts for ${stylesheet.fileName}.`);
+      }
+      continue;
+    }
+    buildSecurityArrayAppend(
+      files,
+      stylesheet,
+      'Pre-evaluation app and client stylesheet snapshot',
+    );
+  }
+  return files;
+}
+
+function preEvaluationClientStylesheetFiles(
+  clientRoot: string,
+  sourceRoot: string,
+): BuildCheckSourceFile[] {
+  const sourceDir = resolve(clientRoot, 'src');
+  const fileSystem = createCompilerSourceFileSystem(clientRoot);
+  if (fileSystem === null) {
+    throw new TypeError(`Kovo client source root is unavailable or unstable: ${clientRoot}`);
+  }
+  const sourceKind = fileSystem.kind(sourceDir);
+  if (sourceKind === 'other') return [];
+  if (sourceKind !== 'directory') {
+    throw new TypeError(`Kovo client source path is not a stable directory: ${sourceDir}`);
+  }
+
+  const files: BuildCheckSourceFile[] = [];
+  const pending: Array<{ depth: number; path: string }> = [{ depth: 0, path: sourceDir }];
+  let bytes = 0;
+  for (let index = 0; index < pending.length; index += 1) {
+    if (pending.length > 512) {
+      throw new TypeError('Kovo client stylesheet snapshot exceeds the directory limit.');
+    }
+    const directory = pending[index]!;
+    const entries = fileSystem.readDirectory(directory.path);
+    if (entries === null) {
+      throw new TypeError(`Kovo client stylesheet directory is unavailable: ${directory.path}`);
+    }
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const path = resolve(directory.path, entries[entryIndex]!);
+      const kind = fileSystem.kind(path);
+      if (kind === 'directory') {
+        if (directory.depth >= 32) {
+          throw new TypeError('Kovo client stylesheet snapshot exceeds the depth limit.');
+        }
+        buildSecurityArrayAppend(
+          pending,
+          { depth: directory.depth + 1, path },
+          'Kovo client stylesheet directories',
+        );
+        continue;
+      }
+      if (kind === 'other') {
+        throw new TypeError(`Kovo client source tree contains an unstable entry: ${path}`);
+      }
+      if (buildRegExpExec(/\.css$/iu, path) === null) continue;
+      const source = fileSystem.readFile(path);
+      if (source === null) {
+        throw new TypeError(`Kovo client stylesheet is unavailable or unstable: ${path}`);
+      }
+      bytes += buildByteLength(source);
+      if (files.length >= 2_048 || bytes > 8_388_608) {
+        throw new TypeError('Kovo client stylesheet snapshot exceeds its file or byte limit.');
+      }
+      buildSecurityArrayAppend(
+        files,
+        { fileName: slashPath(relative(sourceRoot, path)), source },
+        'Kovo client stylesheet snapshot',
+      );
+    }
   }
   return files;
 }
@@ -3626,7 +3730,7 @@ async function buildKovoComponentClientModules(
           appModulePath,
           options.approvedSourceFiles,
           options.dependencyCapabilities,
-          'build-client',
+          'component-scan',
           {
             allowNodeBuiltins: true,
             allowRuntimeExternal: isKovoServerHandlerExternalDependency,
@@ -4166,23 +4270,24 @@ function approvedBuildSourcesVitePlugin(
       return source;
     },
     async resolveId(source, importer) {
-      if (
-        importer === undefined ||
-        (!buildStringStartsWith(source, './') && !buildStringStartsWith(source, '../'))
-      ) {
-        return null;
-      }
+      if (importer === undefined) return null;
       const importerFileName = viteBuildSourceFileName(importer);
       if (importerFileName === undefined || !buildSetHas(appSourcePaths, importerFileName)) {
         return null;
       }
+      if (isApprovedBuildVirtualSpecifier(source) || isBuildBareModuleSpecifier(source)) return null;
       const resolved = await this.resolve(source, importer, { skipSelf: true });
-      if (resolved === null) return null;
-      const resolvedFileName = viteBuildSourceFileName(resolved.id);
-      if (resolvedFileName === undefined || !isBuildSourceModulePath(resolvedFileName)) {
-        return resolved;
+      if (resolved === null || resolved.external === true) {
+        throw new Error(
+          `Kovo build refused unresolved ${sourceLabel} module edge ${source}; it is outside the security-preflight snapshot (SPEC \u00a75.2/\u00a76.6).`,
+        );
       }
-      buildSetAdd(appSourcePaths, resolvedFileName);
+      const resolvedFileName = viteBuildSourceFileName(resolved.id);
+      if (resolvedFileName === undefined) {
+        throw new Error(
+          `Kovo build refused virtual ${sourceLabel} module edge ${source}; it is outside the security-preflight snapshot (SPEC \u00a75.2/\u00a76.6).`,
+        );
+      }
       if (!buildMapHas(approvedByPath, resolvedFileName)) {
         throw unapprovedBuildSourceError(buildRoot, resolvedFileName, sourceLabel);
       }
@@ -4208,7 +4313,7 @@ function approvedBuildSourcesVitePlugin(
           return null;
         }
       }
-      if (!isBuildSourceModulePath(fileName)) return null;
+      if (!isBuildSourceModulePath(fileName) && !isBuildStylesheetSourcePath(fileName)) return null;
       if (!approved && !isBuildAppSourcePath(appSourceRoot, fileName)) return null;
       const displayName = relative(buildRoot, fileName) || fileName;
       if (!approved) {
@@ -4222,6 +4327,21 @@ function approvedBuildSourcesVitePlugin(
       return null;
     },
   };
+}
+
+function isBuildBareModuleSpecifier(specifier: string): boolean {
+  return (
+    specifier.length > 0 &&
+    specifier[0] !== '\0' &&
+    !buildStringStartsWith(specifier, './') &&
+    !buildStringStartsWith(specifier, '../') &&
+    !buildStringStartsWith(specifier, 'file:') &&
+    !isAbsolute(specifier)
+  );
+}
+
+function isApprovedBuildVirtualSpecifier(specifier: string): boolean {
+  return specifier === '\0vite/preload-helper.js';
 }
 
 interface KovoFrameworkPackageContext {
@@ -4529,6 +4649,16 @@ export function kovoFrameworkSourceVitePluginForTesting(
   );
 }
 
+/** @internal Real-Vite regression seam for immutable app/config source closure. */
+export function approvedBuildSourcesVitePluginForTesting(
+  appModulePath: string,
+  buildRoot: string,
+  sourceFiles: readonly BuildCheckSourceFile[],
+  sourceLabel: 'app' | 'config' = 'app',
+): Plugin {
+  return approvedBuildSourcesVitePlugin(appModulePath, buildRoot, sourceFiles, sourceLabel);
+}
+
 /** @internal Regression seam for trust captured before app/config evaluation. */
 export function kovoFrameworkSourcePathFromTrustForTesting(
   roots: readonly KovoFrameworkSourceRoot[],
@@ -4654,6 +4784,10 @@ function viteBuildSourceFileName(id: string): string | undefined {
 
 function isBuildSourceModulePath(fileName: string): boolean {
   return buildRegExpExec(/\.(?:[cm]?[jt]sx?)$/iu, fileName) !== null;
+}
+
+function isBuildStylesheetSourcePath(fileName: string): boolean {
+  return buildRegExpExec(/\.css$/iu, fileName) !== null;
 }
 
 function isBuildAppSourcePath(root: string, fileName: string): boolean {
@@ -5176,7 +5310,7 @@ export async function runExportCommandStructured(
     const staticExport = await (async () => {
       loadedExport = await loadExportAppModule(
         resolvedOptions,
-        preEvaluationStaticTrust.files,
+        preEvaluationStaticTrust.approvedSourceFiles,
         preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       );
       const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);

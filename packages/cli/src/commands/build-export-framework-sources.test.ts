@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
 
 import {
+  approvedBuildSourcesVitePluginForTesting,
   kovoFrameworkSourcePathFromTrustForTesting,
   kovoFrameworkSourcePathForTesting,
   kovoFrameworkSourceRootsForTesting,
@@ -161,6 +162,39 @@ async function viteBuildPackedFramework(
 }
 
 describe('Kovo framework source roots', () => {
+  it('rejects a config module /@fs edge outside the immutable source snapshot', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-config-source-closure-')));
+    const configPath = join(root, 'kovo.config.mjs');
+    const outsidePath = join(tmpdir(), `kovo-config-outside-${process.pid}.mjs`);
+    const outDir = join(root, 'dist');
+    const source = `import ${JSON.stringify(`/@fs${outsidePath}`)}; export default {};\n`;
+    try {
+      writeFileSync(configPath, source, 'utf8');
+      writeFileSync(outsidePath, 'globalThis.__KOVO_OUTSIDE_CONFIG__ = true;\n', 'utf8');
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir, rollupOptions: { input: configPath }, ssr: true },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            approvedBuildSourcesVitePluginForTesting(
+              configPath,
+              root,
+              [{ fileName: 'kovo.config.mjs', source }],
+              'config',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/unapproved config source.*security preflight/u);
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+      rmSync(outsidePath, { force: true });
+    }
+  });
+
   it('keeps the genuine workspace dependency chain trusted', () => {
     const cliEntry = realpathSync(join(process.cwd(), 'packages/cli/src/index.ts'));
     const serverEntry = realpathSync(createRequire(cliEntry).resolve('@kovojs/server'));

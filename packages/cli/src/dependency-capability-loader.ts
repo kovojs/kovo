@@ -104,6 +104,7 @@ export type DependencyCapabilityLoaderLane =
   | 'build-app'
   | 'build-client'
   | 'build-server'
+  | 'component-scan'
   | 'export'
   | 'test';
 
@@ -112,12 +113,17 @@ interface DependencyCapabilityLoaderOptions {
   readonly allowRuntimeExternal?: (specifier: string) => boolean;
 }
 
+interface ReviewedThirdPartyModule {
+  readonly packageName: string;
+  readonly root: string;
+}
+
 /**
  * Bind package imports from the exact preflight-owned app graph to its derived manifest.
  *
- * Relative app-source byte ownership remains the adjacent approved-source plugin's job. This hook
- * owns only bare package specifiers and re-resolves their installed identity immediately before
- * Vite admits the import (SPEC §6.6).
+ * App-source byte ownership is shared with the adjacent approved-source plugin. This hook closes
+ * every resolved local edge over that immutable snapshot and re-resolves bare package identities
+ * immediately before Vite admits the import (SPEC §6.6).
  * @internal
  */
 export function dependencyCapabilityLoaderVitePlugin(
@@ -141,7 +147,12 @@ export function dependencyCapabilityLoaderVitePlugin(
       .filter((dependency) => dependency.verdict === 'open')
       .flatMap((dependency) => dependency.entries.map((entry) => entry.specifier)),
   );
-  const reviewedThirdPartyRoots = new Map<string, string>();
+  // Track the exact app-admitted package subgraph, not every file under a shared package root.
+  // Framework-owned code may import a different export of the same package (for example a
+  // Drizzle driver) without turning that framework edge into app dependency authority. Relative
+  // children are enrolled below as the reviewed app subgraph is resolved (SPEC §6.6; C13).
+  const reviewedThirdPartyModules = new Map<string, ReviewedThirdPartyModule>();
+  const approvedPackageEntryModules = new Set<string>();
   const loadedHtmlPaths = new Set<string>();
   let configuredRoot = sourceRoot;
   let configuredPublicDir: string | undefined;
@@ -202,6 +213,21 @@ export function dependencyCapabilityLoaderVitePlugin(
       return null;
     },
     name: 'kovo-dependency-capability-loader',
+    renderChunk(code) {
+      // A pinned dependency can preserve a finite target through generated `const target =
+      // 'node:sqlite'; import(target)` syntax. Canonicalize only an exact same-block immutable
+      // string binding into a literal edge so the emitted artifact itself carries the closed
+      // module identity. Captures, expressions, mutation, and ambiguous scope stay non-literal and
+      // fail in generateBundle below (SPEC §6.6; C13).
+      let ast: unknown;
+      try {
+        ast = this.parse(code);
+      } catch {
+        return null;
+      }
+      const canonical = canonicalizeFiniteArtifactModuleEdges(code, ast);
+      return canonical === code ? null : { code: canonical, map: null };
+    },
     transform(source, id) {
       rememberLoadedHtml(id);
       if (isViteInlineHtmlModuleProxy(id)) {
@@ -222,7 +248,7 @@ export function dependencyCapabilityLoaderVitePlugin(
       const reviewedPackage =
         sourcePath === undefined
           ? undefined
-          : packageOwnerForSource(sourcePath, reviewedThirdPartyRoots);
+          : reviewedThirdPartyModules.get(sourcePath);
       if (reviewedPackage !== undefined) {
         let ast: unknown;
         try {
@@ -306,7 +332,7 @@ export function dependencyCapabilityLoaderVitePlugin(
       const reviewedPackage =
         importerPath === undefined
           ? undefined
-          : packageOwnerForSource(importerPath, reviewedThirdPartyRoots);
+          : reviewedThirdPartyModules.get(importerPath);
       if (importerName !== undefined && specifierHasUnsupportedSubgraphSuffix(specifier)) {
         throw dependencyCapabilityError(
           `approved app source ${importerName} edge ${specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
@@ -316,6 +342,20 @@ export function dependencyCapabilityLoaderVitePlugin(
         throw dependencyCapabilityError(
           `reviewed package ${reviewedPackage.packageName} child edge ${specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
         );
+      }
+      if (importerName !== undefined && isReviewedViteBuildVirtualSpecifier(specifier)) {
+        return null;
+      }
+      if (importerName !== undefined && !isBareDependencySpecifier(specifier)) {
+        const resolved = await this.resolve(specifier, importer, { skipSelf: true });
+        const resolvedPath =
+          resolved === null || resolved.external === true ? undefined : viteSourcePath(resolved.id);
+        if (resolvedPath === undefined || !approvedPaths.has(resolvedPath)) {
+          throw dependencyCapabilityError(
+            `approved app source ${importerName} edge ${specifier} resolves outside the immutable approved-source snapshot in ${lane}`,
+          );
+        }
+        return resolved;
       }
       if (reviewedPackage !== undefined && !isBareDependencySpecifier(specifier)) {
         if (importerPath === undefined) {
@@ -377,6 +417,7 @@ export function dependencyCapabilityLoaderVitePlugin(
             `reviewed package ${reviewedPackage.packageName} ${escapeKind} import escapes its exact package root`,
           );
         }
+        reviewedThirdPartyModules.set(resolvedPath, reviewedPackage);
         return resolved;
       }
       if (!isBareDependencySpecifier(specifier)) return null;
@@ -437,13 +478,22 @@ export function dependencyCapabilityLoaderVitePlugin(
         );
       }
       if (installed?.implementationDigest === undefined) {
-        reviewedThirdPartyRoots.set(packageRoot, installed?.packageName ?? specifier);
+        reviewedThirdPartyModules.set(resolvedPath, {
+          packageName: installed?.packageName ?? specifier,
+          root: packageRoot,
+        });
       }
+      approvedPackageEntryModules.add(resolvedPath);
       // Classify and pin: Vite consumes the exact resolution checked above rather than running a
       // second resolver pass whose aliases/conditions could select different authority.
       return resolved;
     },
     generateBundle(_options, bundle) {
+      // buildKovoComponentClientModules performs an SSR compiler census, consumes only the
+      // compiler plugin's in-memory client-module facts, and deletes every emitted byte. Source
+      // resolution above still closes app/package edges before Rollup loads them; retained-edge
+      // checks belong only to artifacts that can execute or ship (SPEC §5.2/§6.6).
+      if (lane === 'component-scan') return;
       const bundleOwnedChunkFileNames = new Set(
         Object.values(bundle).flatMap((output) =>
           output.type === 'chunk' ? [output.fileName] : [],
@@ -522,7 +572,7 @@ export function dependencyCapabilityLoaderVitePlugin(
         const importerPath = viteSourcePath(id);
         if (importerPath === undefined) continue;
         const approvedImporter = approvedPaths.has(importerPath);
-        const reviewedPackage = packageOwnerForSource(importerPath, reviewedThirdPartyRoots);
+        const reviewedPackage = reviewedThirdPartyModules.get(importerPath);
         if (!approvedImporter && reviewedPackage === undefined) continue;
         const info = this.getModuleInfo(id);
         for (const importedId of [
@@ -538,6 +588,18 @@ export function dependencyCapabilityLoaderVitePlugin(
             ) {
               throw dependencyCapabilityError(
                 `reviewed package ${reviewedPackage.packageName} resolved import escapes its exact package root`,
+              );
+            }
+            if (
+              approvedImporter &&
+              !isReviewedViteBuildVirtualSpecifier(importedId) &&
+              (importedPath === undefined ||
+                (!approvedPaths.has(importedPath) &&
+                  !approvedPackageEntryModules.has(importedPath) &&
+                  !reviewedThirdPartyModules.has(importedPath)))
+            ) {
+              throw dependencyCapabilityError(
+                `approved app source ${approvedPaths.get(importerPath)} resolved import ${importedId} escapes the immutable approved-source snapshot`,
               );
             }
             continue;
@@ -781,16 +843,6 @@ function canonicalSourcePath(value: string): string {
   } catch {
     return resolve(value);
   }
-}
-
-function packageOwnerForSource(
-  sourcePath: string,
-  reviewedRoots: ReadonlyMap<string, string>,
-): { packageName: string; root: string } | undefined {
-  for (const [root, packageName] of reviewedRoots) {
-    if (sourceBelongsToPackageRoot(root, sourcePath)) return { packageName, root };
-  }
-  return undefined;
 }
 
 function sourceIsWithinRoot(root: string, sourcePath: string): boolean {
@@ -1091,6 +1143,12 @@ function isReviewedViteHtmlVirtualSpecifier(specifier: string): boolean {
   );
 }
 
+function isReviewedViteBuildVirtualSpecifier(specifier: string): boolean {
+  // Vite injects this exact authority-free helper while lowering browser dynamic imports. Keep the
+  // finite spelling explicit; arbitrary virtual IDs remain outside the app snapshot closure.
+  return specifier === '\0vite/preload-helper.js';
+}
+
 function literalRequireSpecifiers(source: string): string[] {
   const specifiers: string[] = [];
   const pattern = /\b(?:require|__require)\(\s*(['"])([^'"\\\r\n]+)\1/gu;
@@ -1286,6 +1344,147 @@ function parsedModuleEdges(ast: unknown): ParsedModuleEdge[] {
 function parsedModuleEdge(value: unknown): ParsedModuleEdge {
   const specifier = literalAstString(value);
   return specifier === undefined ? {} : { specifier };
+}
+
+interface ArtifactModuleEdgeReplacement {
+  readonly end: number;
+  readonly source: string;
+  readonly start: number;
+}
+
+function canonicalizeFiniteArtifactModuleEdges(source: string, ast: unknown): string {
+  const replacements = finiteArtifactModuleEdgeReplacements(ast);
+  replacements.sort((left, right) => right.start - left.start);
+  let result = source;
+  let previousStart = source.length;
+  for (let index = 0; index < replacements.length; index += 1) {
+    const replacement = replacements[index]!;
+    if (
+      replacement.start < 0 ||
+      replacement.end <= replacement.start ||
+      replacement.end > previousStart ||
+      replacement.end > source.length
+    ) {
+      continue;
+    }
+    result = `${result.slice(0, replacement.start)}${JSON.stringify(replacement.source)}${result.slice(replacement.end)}`;
+    previousStart = replacement.start;
+  }
+  return result;
+}
+
+function finiteArtifactModuleEdgeReplacements(ast: unknown): ArtifactModuleEdgeReplacement[] {
+  const replacements: ArtifactModuleEdgeReplacement[] = [];
+  const pending: Array<{ lexicalBody?: Record<string, unknown>; value: unknown }> = [{ value: ast }];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const item = pending.pop()!;
+    const value = item.value;
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        pending.push({ lexicalBody: item.lexicalBody, value: value[index] });
+      }
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    const type = typeof record.type === 'string' ? record.type : undefined;
+    const lexicalBody =
+      type === 'Program' || type === 'BlockStatement' ? record : item.lexicalBody;
+    if (type === 'ImportExpression') {
+      const imported = record.source;
+      if (typeof imported === 'object' && imported !== null && lexicalBody !== undefined) {
+        const importedRecord = imported as Record<string, unknown>;
+        if (
+          importedRecord.type === 'Identifier' &&
+          typeof importedRecord.name === 'string' &&
+          typeof importedRecord.start === 'number' &&
+          typeof importedRecord.end === 'number'
+        ) {
+          const constant = sameBodyConstantStringBinding(
+            lexicalBody,
+            importedRecord.name,
+            importedRecord.start,
+          );
+          if (constant !== undefined) {
+            replacements.push({
+              end: importedRecord.end,
+              source: constant,
+              start: importedRecord.start,
+            });
+          }
+        }
+      }
+    }
+    const functionBoundary = isArtifactFunctionNode(type);
+    for (const [key, child] of Object.entries(record)) {
+      if (
+        key === 'type' ||
+        key === 'start' ||
+        key === 'end' ||
+        key === 'loc' ||
+        key === 'range' ||
+        key === 'raw'
+      ) {
+        continue;
+      }
+      pending.push({
+        lexicalBody: functionBoundary ? undefined : lexicalBody,
+        value: child,
+      });
+    }
+  }
+  return replacements;
+}
+
+function isArtifactFunctionNode(type: string | undefined): boolean {
+  return (
+    type === 'ArrowFunctionExpression' ||
+    type === 'FunctionDeclaration' ||
+    type === 'FunctionExpression'
+  );
+}
+
+function sameBodyConstantStringBinding(
+  lexicalBody: Record<string, unknown>,
+  name: string,
+  before: number,
+): string | undefined {
+  const statements = Array.isArray(lexicalBody.body) ? lexicalBody.body : [];
+  let found: string | undefined;
+  for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
+    const statement = statements[statementIndex];
+    if (typeof statement !== 'object' || statement === null) continue;
+    const statementRecord = statement as Record<string, unknown>;
+    if (typeof statementRecord.start !== 'number' || statementRecord.start >= before) continue;
+    if (statementRecord.type !== 'VariableDeclaration') continue;
+    const declarations = Array.isArray(statementRecord.declarations)
+      ? statementRecord.declarations
+      : [];
+    for (let declarationIndex = 0; declarationIndex < declarations.length; declarationIndex += 1) {
+      const declaration = declarations[declarationIndex];
+      if (typeof declaration !== 'object' || declaration === null) continue;
+      const declarationRecord = declaration as Record<string, unknown>;
+      if (
+        typeof declarationRecord.start !== 'number' ||
+        typeof declarationRecord.end !== 'number' ||
+        declarationRecord.start >= before ||
+        declarationRecord.end >= before
+      ) {
+        continue;
+      }
+      const id = declarationRecord.id;
+      if (typeof id !== 'object' || id === null) continue;
+      const idRecord = id as Record<string, unknown>;
+      if (idRecord.type !== 'Identifier' || idRecord.name !== name) continue;
+      if (statementRecord.kind !== 'const' || found !== undefined) return undefined;
+      const constant = literalAstString(declarationRecord.init);
+      if (constant === undefined) return undefined;
+      found = constant;
+    }
+  }
+  return found;
 }
 
 function aliasesCommonJsLoaderAuthority(ast: unknown): boolean {
