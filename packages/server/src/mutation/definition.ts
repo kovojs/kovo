@@ -361,6 +361,19 @@ export interface MutationDefinition<
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
   key: Key;
+  /**
+   * Stable machine-caller identity used only to scope `Kovo-Idem` replay for a `csrf: false`
+   * mutation (SPEC §6.6/§10.3). Kovo invokes this selector exactly once, after the access/guard
+   * decision succeeds, validates an exact 1..1,024-code-unit string, and commits the exact UTF-16LE
+   * encoding of its length-framed value through SHA-256 before replay-store access. Return a stable
+   * public caller/tenant id rather than a credential. Protected-CSRF mutations cannot declare this
+   * field.
+   *
+   * A replay-enabled `csrf: false` request without this binding fails closed before handler work.
+   * TypeScript's discriminant is an authoring guardrail; runtime validation and the replay sink own
+   * enforcement.
+   */
+  machineReplayPrincipal?: (request: GuardedRequest) => string;
   optimistic?: MutationOptimisticMap<Key, InputSchema>;
   /** Explicit privilege-lifecycle door; Kovo never infers this semantic fact from table names. */
   principalEpoch?: PrincipalEpochMutationDeclaration<InferSchema<InputSchema>, GuardedRequest>;
@@ -402,14 +415,20 @@ type MutationDefinitionWithoutKey = Omit<MutationDefinition<any, any, any, any, 
  * branch `{ csrf: false, csrfJustification: string }`, making an unexplained
  * exemption a type error while runtime validation remains the security boundary.
  */
-export type MutationCsrfDeclaration<Request = unknown> =
+export type MutationCsrfDeclaration<Request = unknown, GuardedRequest extends Request = Request> =
   | {
       csrf?: CsrfOptions<Request>;
       csrfJustification?: never;
+      machineReplayPrincipal?: never;
     }
   | {
       csrf: false;
       csrfJustification: string;
+      /**
+       * Post-guard machine identity for replay isolation. Required at runtime whenever this
+       * mutation is served with replay storage (SPEC §6.6/§10.3).
+       */
+      machineReplayPrincipal?: (request: GuardedRequest) => string;
     };
 
 /**
@@ -500,14 +519,14 @@ export interface MutationFactory<Request = unknown> {
   >(
     definition: Omit<
       MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest>,
-      'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key'
+      'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key' | 'machineReplayPrincipal'
     > &
       (
         | { access: AccessDecision; guard?: never }
         | { access?: never; guard: Guard<ContextRequest, GuardedRequest> }
         | { access?: never; guard?: never }
       ) &
-      MutationCsrfDeclaration<ContextRequest>,
+      MutationCsrfDeclaration<ContextRequest, GuardedRequest>,
   ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> &
     MutationFormDefinition<string, ContextRequest>;
 }
@@ -557,14 +576,14 @@ export function mutation<
 >(
   definition: Omit<
     MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest>,
-    'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key'
+    'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key' | 'machineReplayPrincipal'
   > &
     (
       | { access: AccessDecision; guard?: never }
       | { access?: never; guard: Guard<Request, GuardedRequest> }
       | { access?: never; guard?: never }
     ) &
-    MutationCsrfDeclaration<Request>,
+    MutationCsrfDeclaration<Request, GuardedRequest>,
 ): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<string, Request>;
 export function mutation<
@@ -578,14 +597,14 @@ export function mutation<
   key: Key,
   definition: Omit<
     MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-    'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key'
+    'access' | 'csrf' | 'csrfJustification' | 'guard' | 'key' | 'machineReplayPrincipal'
   > &
     (
       | { access: AccessDecision; guard?: never }
       | { access?: never; guard: Guard<Request, GuardedRequest> }
       | { access?: never; guard?: never }
     ) &
-    MutationCsrfDeclaration<Request>,
+    MutationCsrfDeclaration<Request, GuardedRequest>,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<Key, Request>;
 export function mutation(

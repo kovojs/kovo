@@ -1018,6 +1018,7 @@ export const domain: any;
 export const endpoint: any;
 export const exportStaticApp: any;
 export const form: any;
+export const guard: any;
 export const guards: {
   all: any;
   authed: <Request = any>() => any;
@@ -1138,6 +1139,7 @@ export const domain = anyFn;
 export const endpoint = anyFn;
 export const exportStaticApp = anyFn;
 export const form = anyFn;
+export const guard = anyFn;
 export const hmacSignature = anyFn;
 export const installKovoLoader = anyFn;
 export const layout = anyFn as <Request = any, Params = any, Page = any, Regions = any>(

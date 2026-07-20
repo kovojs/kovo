@@ -60,7 +60,7 @@ describe('mutation replay response authority', () => {
               } as NoJsMutationRequest<object, unknown>,
             });
 
-      expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+      expect(() => policy?.read({})).toThrow(MutationReplayConflictError);
       expect(storeCalls).toBe(0);
     },
   );
@@ -94,11 +94,12 @@ describe('mutation replay response authority', () => {
     } as NoJsMutationRequest<object, unknown>;
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'settings-machine',
       mutationKey: 'settings/update',
       request,
     });
 
-    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+    expect(() => policy?.read({})).toThrow(MutationReplayConflictError);
     expect(storeCalls).toBe(0);
   });
 
@@ -113,11 +114,12 @@ describe('mutation replay response authority', () => {
     } as NoJsMutationRequest<object, unknown>;
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'settings-machine',
       mutationKey: 'settings/update',
       request,
     });
 
-    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+    expect(() => policy?.read({})).toThrow(MutationReplayConflictError);
   });
 
   it('rejects an accessor-backed no-JS field without invoking it or trusting a header fallback', () => {
@@ -141,7 +143,7 @@ describe('mutation replay response authority', () => {
       request,
     });
 
-    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+    expect(() => policy?.read({})).toThrow(MutationReplayConflictError);
     expect(reads).toBe(0);
   });
 
@@ -157,7 +159,7 @@ describe('mutation replay response authority', () => {
       request,
     });
 
-    expect(() => policy?.read()).toThrow(MutationReplayConflictError);
+    expect(() => policy?.read({})).toThrow(MutationReplayConflictError);
   });
 
   it('admits one canonical fresh token to replay storage', async () => {
@@ -181,11 +183,12 @@ describe('mutation replay response authority', () => {
     } as NoJsMutationRequest<object, unknown>;
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'settings-machine',
       mutationKey: 'settings/update',
       request,
     });
 
-    await expect(policy?.read()).resolves.toBeUndefined();
+    await expect(policy?.read({})).resolves.toBeUndefined();
     expect(observedIdem).toBe(idem);
   });
 
@@ -231,8 +234,8 @@ describe('mutation replay response authority', () => {
       } as NoJsMutationRequest<PrincipalRequest, unknown>,
     });
 
-    await expect(policy?.read()).resolves.toBeUndefined();
-    expect(observedScope).toHaveLength(3_163);
+    await expect(policy?.read({})).resolves.toBeUndefined();
+    expect(observedScope).toHaveLength(3_158);
   });
 
   it('rejects an oversized mutation identity before no-JS replay-store access', async () => {
@@ -252,6 +255,7 @@ describe('mutation replay response authority', () => {
     };
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'settings-machine',
       mutationKey: 'm'.repeat(1_025),
       request: {
         rawInput: { [KOVO_IDEM_FIELD_NAME]: mintMutationIdemToken() },
@@ -261,7 +265,7 @@ describe('mutation replay response authority', () => {
       } as NoJsMutationRequest<object, unknown>,
     });
 
-    await expect(policy?.read()).rejects.toThrow(
+    await expect(policy?.read({})).rejects.toThrow(
       /Mutation replay identity must be a 1\.\.1024-code-unit string/u,
     );
     expect(storeCalls).toBe(0);
@@ -350,11 +354,12 @@ describe('mutation replay response authority', () => {
     } as NoJsMutationRequest<object, unknown>;
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'settings-machine',
       mutationKey: 'settings/update',
       request,
     });
 
-    await expect(policy?.read()).rejects.toThrow(/headers must be an own data property/u);
+    await expect(policy?.read({})).rejects.toThrow(/headers must be an own data property/u);
     expect(reads).toBe(0);
   });
 });

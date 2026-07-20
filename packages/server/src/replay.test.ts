@@ -465,16 +465,18 @@ describe('server mutation replay store', () => {
     expect(replayGet(replayStore, scope, idem)).toEqual(response);
   });
 
-  it('length-frames mutation identity and CSRF session scope without delimiter collisions', async () => {
+  it('length-frames mutation identity and machine replay principal without delimiter collisions', async () => {
     const first = await mutationReplayContext(false, {
       idem: replayIdem('idem_scope_frame_first'),
+      machineReplayPrincipal: 'save\0alice',
       mutationKey: 'account',
-      request: { sessionId: 'save\0alice' },
+      request: {},
     });
     const second = await mutationReplayContext(false, {
       idem: replayIdem('idem_scope_frame_second'),
+      machineReplayPrincipal: 'alice',
       mutationKey: 'account\0save',
-      request: { sessionId: 'alice' },
+      request: {},
     });
 
     // Both pairs produced `account\0save\0alice` under the former delimiter concatenation.
@@ -488,10 +490,12 @@ describe('server mutation replay store', () => {
     registerFrameworkSessionPrincipalSnapshot(secondRequest, secondRequest.session);
 
     const first = await mutationReplayContext(false, {
+      machineReplayPrincipal: 'shared-machine-principal',
       mutationKey: 'settings/save',
       request: firstRequest,
     });
     const second = await mutationReplayContext(false, {
+      machineReplayPrincipal: 'shared-machine-principal',
       mutationKey: 'settings/save',
       request: secondRequest,
     });
@@ -568,28 +572,30 @@ describe('server mutation replay store', () => {
     );
     await expect(
       mutationReplayContext(false, {
+        machineReplayPrincipal: 'machine',
         mutationKey: 'm'.repeat(1_025),
         request: { sessionId: 'session' },
       }),
     ).rejects.toThrow(/Mutation replay identity must be a 1\.\.1024-code-unit string/u);
   });
 
-  it('rejects replay-scope accessors before principal checks can observe different ids', async () => {
+  it('rejects machine replay principal wrappers without coercing accessors', async () => {
     let reads = 0;
-    const request = {
-      get sessionId() {
+    const machineReplayPrincipal = {
+      get toString() {
         reads += 1;
-        return reads < 3 ? 'victim-session' : 'attacker-session';
+        return () => 'attacker-machine';
       },
     };
 
     await expect(
       mutationReplayContext(false, {
         idem: 'idem_scope_accessor',
+        machineReplayPrincipal,
         mutationKey: 'orders/update',
-        request,
+        request: {},
       }),
-    ).rejects.toThrow(/Mutation replay request sessionId must be an own data property/);
+    ).rejects.toThrow(/csrf:false machine replay principal must be a 1\.\.1024-code-unit string/);
     expect(reads).toBe(0);
   });
 
@@ -679,7 +685,7 @@ describe('server mutation response replay', () => {
     expect(writes).toBe(0);
   });
 
-  it('deduplicates sessionless csrf:false enhanced mutations by mutation identity', async () => {
+  it('deduplicates csrf:false enhanced mutations by explicit machine caller and mutation', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let firstWrites = 0;
     let secondWrites = 0;
@@ -687,6 +693,7 @@ describe('server mutation response replay', () => {
       mutation(key, {
         csrf: false,
         csrfJustification: 'test fixture models a non-browser machine caller',
+        machineReplayPrincipal: () => 'machine-caller',
         input: s.object({ value: s.string() }),
         handler(input) {
           if (key === 'machine/first') firstWrites += 1;
@@ -697,7 +704,7 @@ describe('server mutation response replay', () => {
     const firstMutation = machineMutation('machine/first');
     const secondMutation = machineMutation('machine/second');
     const request = {
-      idem: replayIdem('sessionless-enhanced-machine'),
+      idem: replayIdem('enhanced-machine'),
       rawInput: { value: 'once' },
       replayStore,
       request: {},
@@ -1940,9 +1947,10 @@ describe('server mutation response replay', () => {
     expect(replayedFirst.body).toBe(first.body);
   });
 
-  it('scopes enhanced mutation replay records by request session id', async () => {
+  it('scopes csrf:false enhanced replay records by the declared machine principal', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let writes = 0;
+    const selectedPrincipals: string[] = [];
     const cart = domain('cart');
     const cartQuery = query('cart', {
       load: (_input, context: { request: { session: { id: string } } }) => ({
@@ -1952,6 +1960,12 @@ describe('server mutation response replay', () => {
       reads: [cart],
     });
     const addToCart = mutation('cart/add', {
+      csrf: false,
+      csrfJustification: 'test fixture models a non-browser machine caller',
+      machineReplayPrincipal: (request: { session: { id: string } }) => {
+        selectedPrincipals.push(request.session.id);
+        return request.session.id;
+      },
       input: s.object({ productId: s.string() }),
       registry: {
         queries: [cartQuery],
@@ -1984,6 +1998,7 @@ describe('server mutation response replay', () => {
       request: requestA,
     });
 
+    expect(selectedPrincipals).toEqual(['s1', 's2', 's1']);
     expect(writes).toBe(2);
     expect(first.body).toContain('"session":"s1"');
     expect(second.body).toContain('"session":"s2"');

@@ -482,6 +482,14 @@ function capturedControlsAreSound(): boolean {
       [bytes, apply<Buffer>(nativeBufferFrom, NativeBuffer, ['-joined', 'utf8'])],
     ]);
     if (apply(nativeBufferToString, joinedBytes, ['utf8']) !== 'safe-joined') return false;
+    const loneSurrogateBytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, ['\uD800', 'utf16le']);
+    if (
+      apply(nativeUint8ArrayLength, loneSurrogateBytes, []) !== 2 ||
+      loneSurrogateBytes[0] !== 0 ||
+      loneSurrogateBytes[1] !== 0xd8
+    ) {
+      return false;
+    }
     const allocated = apply<Buffer>(nativeBufferAllocUnsafe, NativeBuffer, [4]);
     if (apply(nativeUint8ArrayLength, allocated, []) !== 4) return false;
     const encoded = apply<Uint8Array>(nativeTextEncoderEncode, textEncoder, ['safe']);
@@ -1246,5 +1254,14 @@ export function securitySha256Hex(value: string): string {
   assertResponseSecurityIntrinsics();
   const hash = nativeCreateHash('sha256');
   apply(nativeHashUpdate, hash, [value]);
+  return apply(nativeHashDigest, hash, ['hex']);
+}
+
+/** Boot-pinned SHA-256 over the exact UTF-16 code-unit sequence, including lone surrogates. */
+export function securitySha256Utf16LeHex(value: string): string {
+  assertResponseSecurityIntrinsics();
+  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf16le']);
+  const hash = nativeCreateHash('sha256');
+  apply(nativeHashUpdate, hash, [bytes]);
   return apply(nativeHashDigest, hash, ['hex']);
 }

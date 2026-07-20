@@ -199,7 +199,9 @@ SUMMARY total=4
 Each row is key/value text: surface, method, path, mount mode, auth scheme, CSRF posture, cache/body
 posture, response headers, file fields, dynamic-route posture, and the write-to-domain chain where
 one exists. A `csrf: false` mutation appears here too, and the CSRF/session gate guarantees that it
-does not read ambient session authority.
+does not read ambient session authority. If that mutation uses replay storage, declare
+`machineReplayPrincipal` from the post-verification request so one caller cannot replay another
+caller's response.
 
 ## Handle failure
 

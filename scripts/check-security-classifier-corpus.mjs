@@ -3296,9 +3296,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'replay-scope-length-framing',
         file: 'packages/server/src/replay.test.ts',
         snippets: [
-          'length-frames mutation identity and CSRF session scope without delimiter collisions',
+          'length-frames mutation identity and machine replay principal without delimiter collisions',
           "mutationKey: 'account\\0save'",
-          "request: { sessionId: 'save\\0alice' }",
+          "machineReplayPrincipal: 'save\\0alice'",
         ],
       },
       {
@@ -3315,7 +3315,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/server/src/mutation/replay-policy.test.ts',
         snippets: [
           'keeps the maximum framework identity within the no-JS durable scope budget',
-          'toHaveLength(3_163)',
+          'toHaveLength(3_158)',
           'rejects an oversized mutation identity before no-JS replay-store access',
         ],
       },
@@ -3506,10 +3506,24 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'mutation-idem',
     marker: '@kovo-security-classifier-corpus mutation-idem',
     testFiles: [
+      'packages/server/src/machine-replay-isolation.security.test.ts',
       'packages/server/src/mutation/replay-policy.test.ts',
       'packages/server/src/webhook.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'machine-caller-replay-isolation',
+        file: 'packages/server/src/machine-replay-isolation.security.test.ts',
+        snippets: [
+          'hashes the exact UTF-16 code-unit sequence without lone-surrogate aliases',
+          'isolates independent callers and replays only to the same caller in memory',
+          'keeps distinct lone-surrogate caller identities in separate replay scopes',
+          'blocks enhanced/no-JS cross-vocabulary retries without executing twice in either direction',
+          'collapses selector exceptions to a closed conflict without leaking or using store authority',
+          'drains a rejected native promise returned through a cast before the closed conflict',
+          'isolates callers and replays same-caller responses in real PGlite',
+        ],
+      },
       {
         id: 'bounded-time-scoped-wire-token',
         file: 'packages/server/src/mutation/replay-policy.test.ts',

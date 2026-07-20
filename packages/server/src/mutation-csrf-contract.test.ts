@@ -16,6 +16,11 @@ describe('mutation CSRF posture contract (SPEC §6.6/§9.1)', () => {
       mutation({ ...definitionBody, csrf: false });
       // @ts-expect-error Protected mutations cannot claim an exemption justification.
       mutation({ ...definitionBody, csrfJustification: 'not actually exempt' });
+      // @ts-expect-error Machine replay identity is available only on the csrf:false branch.
+      mutation({
+        ...definitionBody,
+        machineReplayPrincipal: () => 'machine-a',
+      });
     }
 
     const exempt = mutation('machine/write', {
@@ -50,6 +55,46 @@ describe('mutation CSRF posture contract (SPEC §6.6/§9.1)', () => {
         csrfJustification: 'forged exemption metadata',
       } as never),
     ).toThrow(/only valid when csrf is exactly false/);
+  });
+
+  it('rejects a machine replay principal declaration on a protected mutation', () => {
+    expect(() =>
+      mutation('browser/write', {
+        ...definitionBody,
+        machineReplayPrincipal: () => 'machine-a',
+      } as never),
+    ).toThrow(/machineReplayPrincipal is only valid when csrf is exactly false/u);
+  });
+
+  it('rejects accessor and non-function machine replay declarations without invoking accessors', () => {
+    let reads = 0;
+    const accessor = Object.defineProperty(
+      {
+        ...definitionBody,
+        csrf: false,
+        csrfJustification: 'signed inventory gateway',
+      },
+      'machineReplayPrincipal',
+      {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return () => 'machine-a';
+        },
+      },
+    );
+    expect(() => mutation('machine/accessor', accessor as never)).toThrow(
+      /machineReplayPrincipal.*own data property/u,
+    );
+    expect(reads).toBe(0);
+    expect(() =>
+      mutation('machine/non-function', {
+        ...definitionBody,
+        csrf: false,
+        csrfJustification: 'signed inventory gateway',
+        machineReplayPrincipal: 'machine-a',
+      } as never),
+    ).toThrow(/machineReplayPrincipal must be a stable selector function/u);
   });
 
   it('pins the exact justification before caller mutation', () => {

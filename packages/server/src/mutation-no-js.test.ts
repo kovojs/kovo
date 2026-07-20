@@ -414,13 +414,13 @@ describe('no-JS mutation responses', () => {
     expect(handlerCalls).toBe(1);
   });
 
-  // GAP4-2 (SPEC §10.3:1062-1066): csrf:false mutation with no session must still
-  // dedup by Kovo-Idem using a mutation-key namespace scope.
-  it('GAP4-2: csrf:false sessionless mutation deduplicates by Kovo-Idem without session', async () => {
+  // GAP4-2 (SPEC §10.3): csrf:false machine retries dedup by their explicit caller identity.
+  it('GAP4-2: csrf:false machine mutation deduplicates by Kovo-Idem and caller', async () => {
     let handlerCalls = 0;
     const extWrite = mutation('ext/write', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
+      machineReplayPrincipal: () => 'external-machine',
       input: s.object({ value: s.string() }),
       handler(input) {
         handlerCalls += 1;
@@ -454,14 +454,14 @@ describe('no-JS mutation responses', () => {
       rawInput: { value: 'hello' },
       redirectTo: '/done',
       replayStore: noJsReplayStore,
-      request: {}, // no session
+      request: {},
     };
 
     const first = await renderNoJsMutationResponse(extWrite, base);
     expect(first.status).toBe(303);
     expect(handlerCalls).toBe(1);
 
-    // Same idem, no session: must dedup and not re-run the handler.
+    // Same idem and machine caller: must dedup and not re-run the handler.
     const second = await renderNoJsMutationResponse(extWrite, base);
     expect(second.status).toBe(303);
     expect(handlerCalls).toBe(1);
@@ -560,7 +560,7 @@ describe('no-JS mutation responses', () => {
     expect(third.status).toBe(303);
   });
 
-  it('keeps enhanced fragment and no-JS PRG replay records in separate mode scopes', async () => {
+  it('conflicts an enhanced-to-no-JS retry without executing under a second mode scope', async () => {
     const handler = vi.fn((input: { productId: string }) => input);
     const addToCart = mutation('cart/mode-scope', {
       input: s.object({ productId: s.string() }),
@@ -589,9 +589,9 @@ describe('no-JS mutation responses', () => {
     });
 
     expect(enhanced.status).toBe(200);
-    expect(noJs.status).toBe(303);
-    expect(noJs.headers['Location']).toBe('/cart');
-    expect(handler).toHaveBeenCalledTimes(2);
+    expect(noJs.status).toBe(422);
+    expect(noJs.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it('rejects no-JS same Kovo-Idem with a different body as a 422 conflict', async () => {

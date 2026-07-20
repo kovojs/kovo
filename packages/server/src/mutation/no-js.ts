@@ -21,6 +21,7 @@ import type { MutationDefinition, MutationFail, MutationSuccess } from './defini
 import { renderDefaultFailurePage } from './failure-html.js';
 import { reportServerError } from '../diagnostics.js';
 import { isFrameworkMutationFailurePageRenderer } from '../mutation-failure-renderer-authority.js';
+import { commitReservedMutationReplay } from '../replay.js';
 import {
   requestStateIsSingleLeadingSlashPath,
   requestStateLocationWithQuery,
@@ -100,16 +101,23 @@ export async function renderNoJsMutationLifecycleResponse<
   }
 
   if (lifecycle.kind === 'mutation-failure') {
-    await lifecycle.reservation?.abort?.();
+    const result = lifecycle.result;
     try {
-      return renderNoJsMutationFailureResponse(
-        lifecycle.result,
-        await resolvePostLifecycleNoJsRequest(noJsRequest, {
-          kind: 'failure',
-          result: lifecycle.result,
-        }),
-      );
+      const responseRequest = await resolvePostLifecycleNoJsRequest(noJsRequest, {
+        kind: 'failure',
+        result,
+      });
+      const render = () => renderNoJsMutationFailureResponse(result, responseRequest);
+      // Match the enhanced lifecycle: schema/rate-limit/conflict outcomes are retryable and their
+      // reservation was already aborted by executeMutationLifecycle. A deterministic app-declared
+      // failure is part of the idempotent result and must settle the fully rendered no-JS response
+      // so an identical retry cannot re-run the handler (SPEC §9.1/§10.3).
+      if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
+        return render();
+      }
+      return await commitReservedMutationReplay(lifecycle.reservation, render);
     } catch (error) {
+      await lifecycle.reservation?.abort?.();
       reportServerError(noJsRequest.onError, error, {
         mutationKey: definition.key,
         operation: 'mutation-response-policy',

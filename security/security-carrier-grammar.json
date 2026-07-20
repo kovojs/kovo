@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 277,
+    "historicalWitnesses": 278,
     "productions": 12
   },
   "productions": [
@@ -1628,6 +1628,12 @@
       "corpus": "request-ingress",
       "production": "platform-differential",
       "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "machine-caller-replay-isolation",
+      "corpus": "mutation-idem",
+      "production": "runtime-floor",
+      "reason": "This witness exercises exact UTF-16 caller hashing, rejected-promise draining, and the runtime-owned durable machine replay isolation floor."
     },
     {
       "anchor": "bounded-time-scoped-wire-token",

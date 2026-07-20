@@ -645,7 +645,7 @@ const MAX_RATE_LIMIT_KEY_LENGTH = 1_024;
 /**
  * Shared upper bound for raw identity components that are canonically length-framed into a
  * mutation replay scope. Three maximum-sized components must remain below the durable Postgres
- * store's 4,096-code-unit raw scope ceiling even after framing and the no-JS namespace prefix.
+ * store's 4,096-code-unit raw scope ceiling after canonical framing.
  */
 export const MAX_MUTATION_REPLAY_IDENTITY_COMPONENT_LENGTH = 1_024;
 

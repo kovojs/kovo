@@ -132,6 +132,7 @@ describe('mutation replay horizon lifecycle', () => {
     };
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'clock-machine',
       mutationKey: 'clock/retry',
       request: {
         rawInput: { 'Kovo-Idem': idem },
@@ -141,7 +142,9 @@ describe('mutation replay horizon lifecycle', () => {
       } as NoJsMutationRequest<{ sessionId: string }, unknown>,
     });
 
-    await expect(policy?.reserve()).resolves.toEqual({ kind: 'conflict' });
+    await expect(policy?.reserve({ sessionId: 'clock-session' })).resolves.toEqual({
+      kind: 'conflict',
+    });
     expect(reserveCalls).toBe(1);
   });
 
@@ -256,6 +259,7 @@ describe('mutation replay horizon lifecycle', () => {
     };
     const policy = noJsMutationReplayPolicy({
       csrf: false,
+      machineReplayPrincipal: () => 'clock-machine',
       mutationKey: 'clock/settle',
       request: {
         rawInput: { 'Kovo-Idem': idem },
@@ -264,11 +268,11 @@ describe('mutation replay horizon lifecycle', () => {
         request: { sessionId: 'clock-session' },
       } as NoJsMutationRequest<{ sessionId: string }, unknown>,
     });
-    const result = await policy?.reserve();
+    const result = await policy?.reserve({ sessionId: 'clock-session' });
     if (result?.kind !== 'reserved') throw new Error('expected a replay reservation');
 
     clock.nowMs = expiresAtMs;
-    expect(() => result.reservation.commit(settledResponse)).toThrow(
+    await expect(result.reservation.commit(settledResponse)).rejects.toThrow(
       /expired before replay settlement/u,
     );
     expect(commitCalls).toBe(0);

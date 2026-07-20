@@ -203,16 +203,18 @@ type InternalRunMutationOptions<Request, Input = unknown> = RunMutationOptions<R
   readonly [mutationLifecycleGate]?: ValidatedMutationLifecycle<Input, Request>;
 };
 
-type MutationResponseDeliveryMode<Request, Value> =
+type MutationResponseDeliveryMode<Request, Value, GuardedRequest extends Request> =
   | {
       csrf: CsrfOptions<Request> | false | undefined;
       kind: 'enhanced-fragment';
+      machineReplayPrincipal?: (request: GuardedRequest) => string;
       mutationKey: string;
       request: MutationWireRequest<Request>;
     }
   | {
       csrf: CsrfOptions<Request> | false | undefined;
       kind: 'no-js-prg';
+      machineReplayPrincipal?: (request: GuardedRequest) => string;
       mutationKey: string;
       request: NoJsMutationRequest<Request, Value>;
     };
@@ -290,7 +292,7 @@ async function executeMutationLifecycle<
   if (options.replay) {
     let replayed: ReplayResponse | undefined;
     try {
-      replayed = await options.replay.read();
+      replayed = await options.replay.read(lifecycleRequest);
     } catch (error) {
       if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
       if (error instanceof PrincipalEpochUnavailableError) return { kind: 'replay-unavailable' };
@@ -302,7 +304,7 @@ async function executeMutationLifecycle<
       ReturnType<MutationLifecycleReplayPolicy<ReplayResponse>['reserve']>
     >;
     try {
-      reservationResult = await options.replay.reserve();
+      reservationResult = await options.replay.reserve(lifecycleRequest);
     } catch (error) {
       if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
       if (error instanceof PrincipalEpochUnavailableError) return { kind: 'replay-unavailable' };
@@ -1020,9 +1022,12 @@ export async function renderMutationResponse<
   const deliveryMode = {
     csrf,
     kind: 'enhanced-fragment',
+    ...(definition.machineReplayPrincipal === undefined
+      ? {}
+      : { machineReplayPrincipal: definition.machineReplayPrincipal }),
     mutationKey: definition.key,
     request: mutationRequest,
-  } satisfies MutationResponseDeliveryMode<Request, Value>;
+  } satisfies MutationResponseDeliveryMode<Request, Value, GuardedRequest>;
   const lifecycle = await executeMutationLifecycle<
     Key,
     InputSchema,
@@ -1259,8 +1264,8 @@ export async function renderMutationEndpointResponse<
     // SPEC §10.3:1151 ("atomic reservation … for all mutation paths — the enhanced and no-JS
     // mutation() lifecycle"): thread the same injected replay store into the no-JS POST-redirect-GET
     // branch as the enhanced wire branch so duplicate/concurrent no-JS submits dedup onto one handler
-    // run. Mode-specific replay scopes keep no-JS 303 records separate from enhanced fragment
-    // records while preserving the store's atomic reservation contract.
+    // run. Enhanced and no-JS share one claim identity; their closed response classifiers reject
+    // cross-mode retries without executing under a second namespace.
     ...(endpointRequest.replayStore === undefined
       ? {}
       : { replayStore: endpointRequest.replayStore }),
@@ -1331,9 +1336,12 @@ export async function renderNoJsMutationResponse<
   const deliveryMode = {
     csrf,
     kind: 'no-js-prg',
+    ...(definition.machineReplayPrincipal === undefined
+      ? {}
+      : { machineReplayPrincipal: definition.machineReplayPrincipal }),
     mutationKey: definition.key,
     request: noJsRequest,
-  } satisfies MutationResponseDeliveryMode<Request, Value>;
+  } satisfies MutationResponseDeliveryMode<Request, Value, GuardedRequest>;
   const lifecycle = await executeMutationLifecycle<
     Key,
     InputSchema,

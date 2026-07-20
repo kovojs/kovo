@@ -30,6 +30,7 @@ import {
 import {
   securityArrayBufferByteLength,
   securityIsArrayBuffer,
+  securitySha256Utf16LeHex,
   securityUint8ArrayLength,
 } from './response-security-intrinsics.js';
 import {
@@ -589,6 +590,7 @@ export async function mutationReplayContext<Request, Response extends MutationRe
   csrf: CsrfReplayScope<Request>,
   wireRequest: {
     idem?: string;
+    machineReplayPrincipal?: unknown;
     mutationKey?: string;
     replayStore?: MutationReplayStore<Response>;
     rawInput?: unknown;
@@ -596,7 +598,11 @@ export async function mutationReplayContext<Request, Response extends MutationRe
     requestFingerprint?: string;
   },
 ): Promise<MutationReplayContext<Response>> {
-  const sessionScope = mutationReplayScope(csrf, wireRequest.request);
+  const sessionScope = mutationReplayScope(
+    csrf,
+    wireRequest.request,
+    wireRequest.machineReplayPrincipal,
+  );
   const principal = provenPrincipalFromRequest(wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
@@ -919,6 +925,7 @@ type MutationReplayRecord<Response extends MutationReplayResponse> =
 function mutationReplayScope<Request>(
   csrf: CsrfReplayScope<Request>,
   request: Request,
+  machineReplayPrincipal: unknown,
 ): string | null {
   if (csrf !== false) {
     // A protected mutation's replay authority is exactly the validated CSRF/principal binding.
@@ -927,39 +934,20 @@ function mutationReplayScope<Request>(
     return resolveCsrfReplayBinding(request, csrf) ?? null;
   }
 
-  if (typeof request !== 'object' || request === null) return null;
-  const sessionId = stableMutationReplayRequestValue(request, 'sessionId');
-  if (typeof sessionId === 'string' && sessionId !== '') return sessionId;
-
-  const session = stableMutationReplayRequestValue(request, 'session');
-  if (typeof session === 'object' && session !== null) {
-    const nestedSessionId = stableMutationReplayRequestValue(session, 'id', 'session.id');
-    if (typeof nestedSessionId === 'string' && nestedSessionId !== '') return nestedSessionId;
-  }
-
-  return null;
-}
-
-function stableMutationReplayRequestValue(
-  source: object,
-  property: PropertyKey,
-  label = String(property),
-): unknown {
-  const before = witnessGetOwnPropertyDescriptor(source, property);
-  const after = witnessGetOwnPropertyDescriptor(source, property);
-  if (before === undefined && after === undefined) return undefined;
-  if (before === undefined || after === undefined || !('value' in before) || !('value' in after)) {
-    throw new TypeError(`Mutation replay request ${label} must be an own data property.`);
-  }
-  if (
-    !witnessObjectIs(before.value, after.value) ||
-    before.configurable !== after.configurable ||
-    before.enumerable !== after.enumerable ||
-    before.writable !== after.writable
-  ) {
-    throw new TypeError(`Mutation replay request ${label} changed during validation.`);
-  }
-  return before.value;
+  // SPEC §6.6/§10.3: a csrf:false mutation has no browser/session replay authority. Its
+  // idempotency namespace is therefore derived only from the explicit post-guard machine caller
+  // identity. Keep the exact bounded value out of store keys and diagnostics: canonically
+  // length-frame it under a versioned domain, encode every exact JavaScript code unit as UTF-16LE,
+  // then commit that frame through the bootstrap-pinned SHA-256 control. The Postgres
+  // principal_index remains an independent erasure-only index.
+  if (machineReplayPrincipal === undefined) return null;
+  const principal = requestStateBoundedMutationReplayIdentity(
+    machineReplayPrincipal,
+    'csrf:false machine replay principal',
+  );
+  return `machine:v1:sha256:${securitySha256Utf16LeHex(
+    requestStateExactCompositeKey('kovo-machine-replay-principal/v1', principal),
+  )}`;
 }
 
 /** @internal Runtime-witnessed mutation replay identity (SPEC §6.6/§10.3). */

@@ -60,7 +60,9 @@ The served HTML is still a real form:
 
 Kovo emits the CSRF and `Kovo-Idem` fields as one bundle. Do not build a mutation form with a
 standalone token helper: that would omit the replay identity. No JavaScript path gets a different
-server contract. Enhancement only changes how the response is applied.
+claim. Enhancement only changes how the response is applied. Retrying one token through the other
+response mode returns an idempotency conflict instead of running the handler twice. A deterministic
+typed failure is replayed in its original mode; validation and rate-limit failures remain retryable.
 
 ## Run it
 

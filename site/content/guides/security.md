@@ -192,14 +192,38 @@ writes through [endpoints and webhooks](/guides/endpoints-webhooks/), where cook
 interpreted and verifier auth is explicit. Every opt-out shows up in the `--endpoints` audit with
 its justification.
 
+If a machine client still uses `mutation()` and your app configures a replay store, bind retries to
+the verified caller:
+
+```ts
+import { guard, mutation, s } from '@kovojs/server';
+
+declare function verifySignedImportRequest(request: Request): boolean;
+
+export const importRows = mutation('import/rows', {
+  csrf: false,
+  csrfJustification: 'the gateway verifies a signed X-Import-Key header',
+  guard: guard('verified signed import request', verifySignedImportRequest),
+  input: s.object({ batchId: s.string() }),
+  machineReplayPrincipal: (request) => request.headers.get('X-Import-Tenant') ?? '',
+  handler: (input) => input,
+});
+```
+
+The signature verifier should cover the public `X-Import-Tenant` value. The selector runs once after
+that verifier succeeds. Return a stable public caller or tenant id, not the credential itself. Kovo
+hashes the exact UTF-16 code-unit sequence before building the replay key. A missing or invalid value
+fails before the replay store and handler.
+
 ## Idempotency and replay
 
 Each emitted form carries a `Kovo-Idem` token. It is fresh for each logical submit, not a hidden
 form-instance constant, and enhanced success responses refresh it for the next submit. The replay
-store atomically reserves `(principal, mutation, idem-token)` before input parsing; a duplicate or
-concurrent submit with the same triple replays the settled response and does not execute the handler
-again. A replay hit still re-evaluates the current guard chain before serving the stored response, so
-revoked authorization does not get an old private response.
+store atomically reserves the caller binding, mutation, and token after input parsing and the current
+guard chain. A duplicate or concurrent submit replays the settled response and does not execute the
+handler again. Protected browser writes use the CSRF/session binding. `csrf: false` machine writes
+use `machineReplayPrincipal`. Enhanced and no-JavaScript delivery share one claim, so switching
+delivery modes with the same token returns a conflict instead of running the write twice.
 
 ## Review the security graph
 

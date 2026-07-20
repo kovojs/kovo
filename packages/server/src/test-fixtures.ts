@@ -34,14 +34,30 @@ export function createLiveTargetTestAuthority<Request>(
   };
 }
 
-export const testMutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  Object.prototype.hasOwnProperty.call(definition, 'csrf')
-    ? defineMutation(key, definition)
-    : defineMutation(key, {
-        ...definition,
-        csrf: false,
-        csrfJustification: 'server test fixture uses a non-browser caller',
-      })) as typeof defineMutation;
+export const testMutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) => {
+  if (Object.prototype.hasOwnProperty.call(definition, 'csrf')) {
+    return definition.csrf === false &&
+      !Object.prototype.hasOwnProperty.call(definition, 'machineReplayPrincipal')
+      ? defineMutation(key, {
+          ...definition,
+          machineReplayPrincipal: () => 'server-test-machine',
+        })
+      : defineMutation(key, definition);
+  }
+  const selectorDescriptor = Object.getOwnPropertyDescriptor(definition, 'machineReplayPrincipal');
+  const machineReplayPrincipal =
+    selectorDescriptor !== undefined &&
+    'value' in selectorDescriptor &&
+    typeof selectorDescriptor.value === 'function'
+      ? (selectorDescriptor.value as (request: unknown) => string)
+      : () => 'server-test-machine';
+  return defineMutation(key, {
+    ...definition,
+    csrf: false,
+    csrfJustification: 'server test fixture uses a non-browser caller',
+    machineReplayPrincipal,
+  });
+}) as typeof defineMutation;
 
 export const cartFixtureValue = {
   count: 1,

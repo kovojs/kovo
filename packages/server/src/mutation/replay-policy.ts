@@ -39,10 +39,17 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
+  witnessReflectApply,
 } from '../security-witness-intrinsics.js';
-import { securityStringStartsWith } from '../response-security-intrinsics.js';
+import { securityIsPromise, securityStringStartsWith } from '../response-security-intrinsics.js';
 import { validateMutationIdemToken } from '../mutation-idem.js';
-import { requestStateExactCompositeKey } from '../request-state-intrinsics.js';
+import {
+  requestStateExactCompositeKey,
+  requestStateIgnorePromiseRejection,
+  requestStateIsBoundedMutationReplayIdentity,
+} from '../request-state-intrinsics.js';
+
+type MachineReplayPrincipalSelector<Request> = (request: Request) => unknown;
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): Promise<void> | void;
@@ -59,8 +66,10 @@ export interface ReplayPrincipalEpochAdmission {
 }
 
 export type MutationLifecycleReplayPolicy<Response> = {
-  read(): Promise<Response | undefined> | Response | undefined;
-  reserve():
+  read(lifecycleRequest: unknown): Promise<Response | undefined> | Response | undefined;
+  reserve(
+    lifecycleRequest: unknown,
+  ):
     | Promise<
         | { kind: 'conflict' }
         | { kind: 'disabled' }
@@ -111,8 +120,12 @@ export function optionalReplayPolicy<Response>(
   return replay === undefined ? {} : { replay };
 }
 
-export function enhancedMutationReplayPolicy<Request>(mode: {
+export function enhancedMutationReplayPolicy<
+  Request,
+  PrincipalRequest extends Request = Request,
+>(mode: {
   csrf: CsrfOptions<Request> | false | undefined;
+  machineReplayPrincipal?: MachineReplayPrincipalSelector<PrincipalRequest>;
   mutationKey: string;
   request: MutationWireRequest<Request>;
 }): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> | undefined {
@@ -166,23 +179,26 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   };
   let context: ReturnType<typeof mutationReplayContext> | undefined;
   let baseScopedContext: Awaited<ReturnType<typeof mutationReplayContext>> | undefined;
-  const replayContext = async (): Promise<PrincipalEpochReplayContext> => {
-    const resolved = await (context ??= mutationReplayContext(mode.csrf ?? false, {
-      ...mode.request,
-      idem: idemFacts.token,
-      mutationKey: mode.mutationKey,
-      replayStore: freshnessCheckedStore,
-    }));
-    // SPEC §10.3 atomic reservation applies to csrf:false machine clients too. With neither an
-    // anonymous-CSRF cookie nor a session, isolate their enhanced replay truth by mutation key;
-    // no-JS uses its own `nojs:` namespace below so response vocabularies cannot cross-replay.
-    const base = (baseScopedContext ??=
-      resolved.scope === null
-        ? {
-            ...resolved,
-            scope: requestStateExactCompositeKey('enhanced-sessionless', mode.mutationKey),
-          }
-        : resolved);
+  const replayContext = async (lifecycleRequest: unknown): Promise<PrincipalEpochReplayContext> => {
+    if (context === undefined) {
+      const machineReplayPrincipal = resolveMachineReplayPrincipal(
+        mode.csrf,
+        mode.machineReplayPrincipal,
+        lifecycleRequest,
+      );
+      context = mutationReplayContext(mode.csrf ?? false, {
+        ...mode.request,
+        idem: idemFacts.token,
+        ...(machineReplayPrincipal === undefined ? {} : { machineReplayPrincipal }),
+        mutationKey: mode.mutationKey,
+        replayStore: freshnessCheckedStore,
+      });
+    }
+    const resolved = await context;
+    // The scope is closed for replay-enabled csrf:false mutations unless an explicit post-guard
+    // machine principal was witnessed. Never fall back to a mutation-wide namespace.
+    if (mode.csrf === false && resolved.scope === null) throw new MutationReplayConflictError();
+    const base = (baseScopedContext ??= resolved);
     return principalEpochReplayContext(
       base,
       principalEpochStore,
@@ -191,14 +207,14 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
     );
   };
   return {
-    async read() {
-      const scoped = await replayContext();
+    async read(lifecycleRequest) {
+      const scoped = await replayContext(lifecycleRequest);
       const response = enhancedReplayResponseOrConflict(await readMutationReplay(scoped.context));
       if (response !== undefined) await assertReplayResponseEpochFresh(scoped);
       return response;
     },
-    async reserve() {
-      const scoped = await replayContext();
+    async reserve(lifecycleRequest) {
+      const scoped = await replayContext(lifecycleRequest);
       const result = await reserveMutationReplayBeforeRun(scoped.context);
       if (result.kind === 'replayed') {
         await assertReplayResponseEpochFresh(scoped);
@@ -228,8 +244,13 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   };
 }
 
-export function noJsMutationReplayPolicy<Request, Value>(mode: {
+export function noJsMutationReplayPolicy<
+  Request,
+  Value,
+  PrincipalRequest extends Request = Request,
+>(mode: {
   csrf: CsrfOptions<Request> | false | undefined;
+  machineReplayPrincipal?: MachineReplayPrincipalSelector<PrincipalRequest>;
   mutationKey: string;
   request: NoJsMutationRequest<Request, Value>;
 }): MutationLifecycleReplayPolicy<NoJsMutationResponse> | undefined {
@@ -278,36 +299,42 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
   };
 
   let context: ReturnType<typeof mutationReplayContext> | undefined;
-  const replayContext = async (): Promise<PrincipalEpochReplayContext> => {
-    const base = await (context ??= mutationReplayContext(mode.csrf ?? false, {
-      idem: idemFacts.token,
-      mutationKey: mode.mutationKey,
-      rawInput: mode.request.rawInput,
-      request: mode.request.request,
-      ...(mode.request.requestFingerprint === undefined
-        ? {}
-        : { requestFingerprint: mode.request.requestFingerprint }),
-    }));
+  const replayContext = async (lifecycleRequest: unknown): Promise<PrincipalEpochReplayContext> => {
+    if (context === undefined) {
+      const machineReplayPrincipal = resolveMachineReplayPrincipal(
+        mode.csrf,
+        mode.machineReplayPrincipal,
+        lifecycleRequest,
+      );
+      context = mutationReplayContext(mode.csrf ?? false, {
+        idem: idemFacts.token,
+        ...(machineReplayPrincipal === undefined ? {} : { machineReplayPrincipal }),
+        mutationKey: mode.mutationKey,
+        rawInput: mode.request.rawInput,
+        request: mode.request.request,
+        ...(mode.request.requestFingerprint === undefined
+          ? {}
+          : { requestFingerprint: mode.request.requestFingerprint }),
+      });
+    }
+    const base = await context;
+    if (mode.csrf === false && base.scope === null) throw new MutationReplayConflictError();
     return principalEpochReplayContext(
-      base.scope === null
-        ? {
-            ...base,
-            scope: requestStateExactCompositeKey('nojs-sessionless', mode.mutationKey),
-          }
-        : base,
+      base,
       principalEpochStore,
       mode.request.request,
       idemFacts.issuedAtMs,
     );
   };
-  // Keep response vocabularies separated while deriving both enhanced and no-JS principal/fingerprint
-  // facts from the same session-or-anonymous-CSRF binding. csrf:false sessionless no-JS retains its
-  // mutation-key fallback for the existing public-machine submission contract.
+  // Enhanced and no-JS share one replay claim identity. Their response vocabularies remain closed:
+  // a cross-mode retry observes the existing claim and returns an idempotency conflict instead of
+  // replaying incompatible bytes or executing the handler again (SPEC §9.1/§10.3).
   return {
-    async read() {
-      const scoped = await replayContext();
+    async read(lifecycleRequest) {
+      const scoped = await replayContext(lifecycleRequest);
       const context = scoped.context;
-      const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
+      if (context.scope === null) throw new MutationReplayConflictError();
+      const scope = context.scope;
       const response = await freshnessCheckedStore.get(
         mutationReplayScopedKey(scope, idemFacts.token),
         scope,
@@ -320,10 +347,11 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       if (replayed !== undefined) await assertReplayResponseEpochFresh(scoped);
       return replayed;
     },
-    async reserve() {
-      const scoped = await replayContext();
+    async reserve(lifecycleRequest) {
+      const scoped = await replayContext(lifecycleRequest);
       const context = scoped.context;
-      const scope = context.scope === null ? `nojs:${mode.mutationKey}` : `nojs:${context.scope}`;
+      if (context.scope === null) throw new MutationReplayConflictError();
+      const scope = context.scope;
       const replayKey = mutationReplayScopedKey(scope, idemFacts.token);
       const result = await reserveReplayBeforeRun<
         MutationEndpointReplayResponse,
@@ -367,6 +395,43 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       };
     },
   };
+}
+
+function resolveMachineReplayPrincipal<Request, PrincipalRequest extends Request>(
+  csrf: CsrfOptions<Request> | false | undefined,
+  selector: MachineReplayPrincipalSelector<PrincipalRequest> | undefined,
+  lifecycleRequest: unknown,
+): string | undefined {
+  if (csrf !== false) {
+    if (selector !== undefined) throw new MutationReplayConflictError();
+    return undefined;
+  }
+  // SPEC §6.6/§10.3 C9: this callback runs only from replay.read()/reserve(), which the
+  // lifecycle reaches after schema parsing and the guard/access decision. Invoke the declaration
+  // once against the framework-pinned lifecycle request and accept only an immutable primitive;
+  // never coerce an object, accessor, or wrapper that could change between validation and use.
+  if (selector === undefined) throw new MutationReplayConflictError();
+  let selected: unknown;
+  try {
+    selected = witnessReflectApply<unknown>(selector, undefined, [lifecycleRequest]);
+  } catch {
+    // A selector executes app code. Collapse every rejection/throw to the framework's closed
+    // idempotency-conflict vocabulary so credential material or attacker-controlled messages
+    // cannot escape through the generic mutation error/reporting path.
+    throw new MutationReplayConflictError();
+  }
+  // A cast can bypass the synchronous selector type. Drain a native rejected promise before the
+  // closed malformed-value verdict so app-controlled rejection data cannot become an unhandled
+  // rejection or terminate a strict Node process after Kovo has already answered 422.
+  try {
+    if (securityIsPromise(selected)) requestStateIgnorePromiseRejection(selected);
+  } catch {
+    throw new MutationReplayConflictError();
+  }
+  if (!requestStateIsBoundedMutationReplayIdentity(selected)) {
+    throw new MutationReplayConflictError();
+  }
+  return selected;
 }
 
 function invalidMutationIdemReplayPolicy<Response>(): MutationLifecycleReplayPolicy<Response> {
