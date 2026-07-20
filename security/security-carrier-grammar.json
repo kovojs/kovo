@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 248,
+    "historicalWitnesses": 251,
     "productions": 12
   },
   "productions": [
@@ -1544,6 +1544,24 @@
       "corpus": "finite-security-operation-ir",
       "production": "structural-closure",
       "reason": "This witness rejects authored intent, manifest, and Vary derivation drift."
+    },
+    {
+      "anchor": "loopback-default-and-remote-bind-closed",
+      "corpus": "dev-host-door",
+      "production": "runtime-floor",
+      "reason": "The supported dev runner rejects remote listen authority and owns one exact loopback default."
+    },
+    {
+      "anchor": "real-http-source-auth-and-rebinding",
+      "corpus": "dev-host-door",
+      "production": "platform-differential",
+      "reason": "A real HTTP server proves exact Host and Origin binding plus boot-session authentication at source reads."
+    },
+    {
+      "anchor": "real-hmr-websocket-origin-auth",
+      "corpus": "dev-host-door",
+      "production": "platform-differential",
+      "reason": "A real websocket handshake proves the same exact authority and boot-session authentication wrap Vite's HMR upgrade."
     }
   ]
 }
