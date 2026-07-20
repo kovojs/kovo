@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "0cb443107da6f7f96d204f9feac26f551a0bf0a173130cb14a6b0a9cb9bb73b2",
+      "sourceTreeSha256": "748c12f9ac382e745b7fdafcd5da59503b36adff29244c6f9052fd27f4be0dcc",
       "manifestVariants": [
         {
           "exports": {
@@ -9643,7 +9643,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "17baf64cb01148b7c7c9745a0e66794c5aa2e18a162f41626bff580a11f98495"
+      "sourceTreeSha256": "5d2c1b27cc0c3cc8bb48f4e849e19b98cdb4c8b474aff8ad2aef156f9024a948"
     },
     {
       "manifestVariants": [

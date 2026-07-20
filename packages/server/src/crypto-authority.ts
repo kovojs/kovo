@@ -369,22 +369,24 @@ function createPurposeHandle(
     verify(payload: string | Uint8Array, signature: string, keyId?: string): CryptoVerifyResult {
       if (keyId !== undefined) {
         const matching = keyById(ring, keyId);
-        if (matching === undefined) return witnessFreeze({ ok: false, reason: 'unknown-key' });
+        if (matching === undefined) {
+          return witnessFreeze<CryptoVerifyResult>({ ok: false, reason: 'unknown-key' });
+        }
         if (!keyIsEligible(matching)) {
-          return witnessFreeze({ ok: false, reason: 'revoked-key' });
+          return witnessFreeze<CryptoVerifyResult>({ ok: false, reason: 'revoked-key' });
         }
         return signatureMatches(matching, purpose, audience, payload, signature)
-          ? witnessFreeze({ keyId: matching.id, ok: true })
-          : witnessFreeze({ ok: false, reason: 'bad-signature' });
+          ? witnessFreeze<CryptoVerifyResult>({ keyId: matching.id, ok: true })
+          : witnessFreeze<CryptoVerifyResult>({ ok: false, reason: 'bad-signature' });
       }
       for (let index = 0; index < ring.keys.length; index += 1) {
         const candidate = ring.keys[index]!;
         if (!keyIsEligible(candidate)) continue;
         if (signatureMatches(candidate, purpose, audience, payload, signature)) {
-          return witnessFreeze({ keyId: candidate.id, ok: true });
+          return witnessFreeze<CryptoVerifyResult>({ keyId: candidate.id, ok: true });
         }
       }
-      return witnessFreeze({ ok: false, reason: 'bad-signature' });
+      return witnessFreeze<CryptoVerifyResult>({ ok: false, reason: 'bad-signature' });
     },
   });
 }

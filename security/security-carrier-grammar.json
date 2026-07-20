@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 246,
+    "historicalWitnesses": 248,
     "productions": 12
   },
   "productions": [
@@ -962,6 +962,18 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness requires exact imports from the framework deadline module at every reviewed request effect door; a same-named local function cannot certify the boundary."
+    },
+    {
+      "anchor": "crypto-acquisition-and-purpose-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness separates digest-only imports from secret or random crypto authority and routes the latter through purpose-minimal framework doors."
+    },
+    {
+      "anchor": "crypto-acquisition-repository-ratchet",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "This witness closes crypto acquisition over an exact path, class, operation, and non-increasing-count registry."
     },
     {
       "anchor": "complete-root-census",

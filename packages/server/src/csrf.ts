@@ -1480,12 +1480,16 @@ export function currentSigningSecret(secret: SigningSecret): string {
   }
   if (current === undefined)
     throw new Error('SigningSecret key ring options must include an active key');
-  return typeof current.secret === 'string'
-    ? current.secret
-    : securityBufferToString(securityBufferFrom(current.secret), 'base64url');
+  const activeSecret = current.secret;
+  if (activeSecret === undefined) {
+    throw new Error('SigningSecret active key must retain signing material');
+  }
+  return typeof activeSecret === 'string'
+    ? activeSecret
+    : securityBufferToString(securityBufferFrom(activeSecret), 'base64url');
 }
 
-function csrfPurpose(kind: CsrfBinding['kind']): string {
+function csrfPurpose(kind: CsrfBinding['kind']): 'anonymous-csrf' | 'csrf' {
   // The framework signing capability intentionally exposes only these two reviewed purposes.
   // Cross-kind/version separation lives in the exact length-framed payload.
   return kind === 'anonymous' ? 'anonymous-csrf' : 'csrf';

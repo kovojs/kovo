@@ -96,7 +96,7 @@ export type SigningSecret =
 export interface AuthoritySigningKey {
   readonly id: string;
   state: SigningKeyState;
-  secret?: Buffer;
+  secret?: Buffer | undefined;
   readonly acceptUntil?: number;
 }
 

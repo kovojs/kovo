@@ -30,11 +30,13 @@ async function writeContact(
   db: AppRequest['db'],
   row: { company: string; email: string; name: string },
 ): Promise<void> {
-  const id = crypto.randomUUID();
   await db.insert(contacts).values({
     company: row.company,
     email: row.email,
-    id: trustedAssign(id, 'opaque server-generated contact id'),
+    id: trustedAssign(
+      row.email,
+      'email is the starter contact primary key; the database rejects concurrent duplicates',
+    ),
     name: row.name,
   });
 }
