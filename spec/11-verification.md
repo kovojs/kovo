@@ -263,6 +263,50 @@ withholds the host-owned CSRF, request-origin, and browser-state-cache claims; a
 them back on with a flag or asserted verdict. All other composition/posture pairings fail input
 validation.
 
+**Authenticated advisory contract (normative).** `kovo.security.advisory/v1` is an exact,
+closed record containing `id`, one of `low | moderate | high | critical`, one finite
+`affectedRange`, `fixedIn`, `retracts[]`, `tcbChokes[]`, and `graphSchemaVersion`. The only range
+grammar is `>=VERSION <VERSION` over strict SemVer, with an increasing exclusive upper bound and a
+`fixedIn` version at or above it. Applicability predicates, package-name selectors, executable
+expressions, host facts, and arbitrary extension fields are forbidden. `retracts[]` names exact
+guarantee IDs in the normative `SECURITY.md` register; `tcbChokes[]` names exact current TCB entry
+IDs. The canonical `kovo.security.advisory-feed/v1` record contains a positive monotone `epoch`, a
+canonical `issuedAt`, `maxFeedAgeSeconds`, and an ID-sorted advisory array. The repository gate MUST
+keep the feed schema exact, fresh within a maximum 90-day release window, and equal in advisory IDs
+and retraction sets to the public guarantee register; unknown guarantee or TCB IDs fail the gate.
+
+`kovo check advisories [graph.json]` MUST first read build-owned
+`kovo.artifact.provenance/v1` from the graph and obtain every exact `@kovojs/*` package version plus
+the graph schema version. It then fetches the feed over HTTPS (or reads an explicit in-root regular
+file for an offline drill), computes its SHA-256 digest, and obtains an attestation by that digest.
+The accepted bundle MUST pass Sigstore signature and Fulcio-chain verification, the GitHub Actions
+OIDC issuer, the exact `.github/workflows/release.yml@refs/heads/main` certificate identity, and at
+least one certificate-transparency and one transparency-log check. Kovo MUST independently parse
+the verified DSSE payload and require exactly one matching feed digest plus the exact Kovo main
+release-workflow repository, ref, and path. The release job producing this attestation has only
+checkout/read and attestation OIDC authority: it performs no dependency installation, repository
+script, build, or long-lived private-key operation.
+
+After authentication, the command rejects a feed future-dated by more than five minutes, stale
+beyond its own bounded `maxFeedAgeSeconds`, below the highest locally accepted epoch, or different
+from a previously accepted digest at the same epoch. It persists only
+`kovo.security.advisory-state/v1` (`highestEpoch`, `feedDigest`) by an atomic regular-file write
+inside the invocation root; a corrupt state file, symlink target, symlinked parent component, or
+unwritable state is failure, not permission to forget rollback history. An advisory matches when
+its graph schema equals the artifact schema and at least one exact Kovo package version lies in its
+range. There are only three verdict classes:
+
+- `AFFECTED`: print every matching advisory; exit 1 when any match is at or above the configured
+  severity floor, otherwise exit 0 while retaining the AFFECTED label.
+- `NOT-AFFECTED`: exit 0 only after the complete authentication, freshness, rollback, and matching
+  sequence succeeds with no match.
+- `UNKNOWN`: exit 2 for every inability to read the artifact, fetch, parse, authenticate, freshness-
+  check, rollback-check, or persist state. UNKNOWN is never treated as an empty advisory set.
+
+Every verdict MUST print a non-claim: this command detects authenticated advisories Kovo has
+published for the artifact posture; even NOT-AFFECTED is not proof that the artifact has no
+vulnerability or no impact outside the feed's version-and-schema scope.
+
 `kovo explain --attest` is the deployment-review composition surface. It first recomputes the
 reviewed graph's artifact subject and posture digest. If the graph contains a `trustedAssign`
 capability, `--escape-reviews <reviews.json>` is mandatory. The detached file has schema

@@ -12,6 +12,13 @@ export interface KovoCheckResult {
 
 export type CliCommandResult = KovoCheckResult | { error: string; exitCode: 1 };
 
+/**
+ * A process-level CLI result may additionally be indeterminate. Exit code 2 is
+ * reserved for fail-closed commands whose authenticated answer is UNKNOWN
+ * (SPEC.md §11.4); ordinary framework commands remain a 0/1 contract.
+ */
+export type CliProcessResult = CliCommandResult | { exitCode: 2; output: string };
+
 export const compileOutputVersion = 'compile/v1';
 export const compileCommandOutputVersion = 'kovo-compile/v1';
 export const addOutputVersion = 'kovo-add/v1';
@@ -19,7 +26,7 @@ export const mcpOutputVersion = 'kovo-mcp/v1';
 export const buildOutputVersion = 'kovo-build/v1';
 export const dbOutputVersion = 'kovo-db/v1';
 
-export function writeCommandResult(result: CliCommandResult): 0 | 1 {
+export function writeCommandResult(result: CliProcessResult): 0 | 1 | 2 {
   if ('error' in result) {
     process.stderr.write(`${result.error}\n`);
     return 1;

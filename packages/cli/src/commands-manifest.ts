@@ -19,7 +19,11 @@
 
 /** @internal Usage line emitted for `kovo check` (see `writeCheckUsageError`). */
 export const CHECK_USAGE =
-  'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json]';
+  'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]';
+
+/** @internal Usage line emitted for the asynchronous advisory verifier. */
+export const ADVISORY_USAGE =
+  'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]';
 
 /** @internal Usage line emitted for `kovo audit` (see `parseAuditArgs`). */
 export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]';
@@ -147,6 +151,32 @@ export type ParseCommandArgvResult =
 /** @internal Check command flags consumed by `parseCheckArgs`. */
 export const CHECK_ARGV_SPEC = {
   options: [],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Advisory-check flags consumed by `parseAdvisoryArgs`. */
+export const ADVISORY_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--attestation',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --attestation requires a URL or file.\n',
+    },
+    {
+      flag: '--feed',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --feed requires a URL or file.\n',
+    },
+    {
+      flag: '--severity-floor',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --severity-floor requires a severity.\n',
+    },
+    {
+      flag: '--state',
+      kind: 'value',
+      requiresValueMessage: 'kovo: check advisories --state requires a file.\n',
+    },
+  ],
 } as const satisfies CommandArgvSpec;
 
 /** @internal Audit command flags consumed by `parseAuditArgs`. */
@@ -563,6 +593,28 @@ export const COMMANDS_MANIFEST = [
         description:
           'Probe the deployment assume-guarantee contract and print exact retained obligations and suspended guarantees.',
       },
+      {
+        flag: 'advisories',
+        description:
+          'Authenticate the signed Kovo advisory feed and match it against exact package and graph-schema provenance.',
+      },
+      {
+        flag: '--severity-floor <severity>',
+        description:
+          'Fail on matching advisories at or above low, moderate, high (default), or critical.',
+      },
+      {
+        flag: '--feed <url|file>',
+        description: 'Override the default HTTPS advisory feed, primarily for an offline drill.',
+      },
+      {
+        flag: '--attestation <url|file>',
+        description: 'Override the digest-addressed GitHub attestation response.',
+      },
+      {
+        flag: '--state <file>',
+        description: 'Override the local epoch/equivocation state file.',
+      },
     ],
     examples: [
       'kovo check',
@@ -570,6 +622,7 @@ export const COMMANDS_MANIFEST = [
       'kovo check endpoint-posture .kovo/endpoint-posture.json',
       'kovo check sources-sinks',
       'kovo check env deployment.json',
+      'kovo check advisories .kovo/graph.json',
     ],
   },
   {

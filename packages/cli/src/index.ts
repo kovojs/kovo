@@ -11,6 +11,7 @@ import {
 import { parseDbArgs, runDbCommand } from './commands/db.js';
 import { parseAttestArgs, runAttestCommand } from './commands/attest.js';
 import { parseIncidentArgs, runIncidentScopeCommand } from './commands/incident-scope.js';
+import { parseAdvisoryArgs, runAdvisoryCheck } from './commands/advisories.js';
 import { parseFixArgs, runFixCommand } from './commands/fix.js';
 import { parseDevArgs, runDevCommand } from './commands/dev.js';
 import {
@@ -249,6 +250,9 @@ export function main(
   }
 
   if (command.name === 'compile' && args.length === 1) return writeUsageError(compileUsage());
+  if (command.name === 'check' && args[1] === 'advisories') {
+    return writeUsageError('kovo: check advisories is asynchronous; call mainAsync() instead.');
+  }
   if (isAsyncCommand(command)) {
     throw new Error(`kovo ${command.name} is asynchronous; call mainAsync() instead.`);
   }
@@ -266,6 +270,11 @@ export async function mainAsync(
     const parsed = parseAttestArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runAttestCommand(parsed.options, security.invocationCwd));
+  }
+  if (command?.name === 'check' && args[1] === 'advisories') {
+    const parsed = parseAdvisoryArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runAdvisoryCheck(parsed.options, security.invocationCwd));
   }
   if (!command || !isAsyncCommand(command)) {
     if (command?.name === 'check' && args[1] === 'sources-sinks') {

@@ -104,10 +104,31 @@ kovo check coverage             # update-coverage (every query/state position ha
 kovo check coverage graph.json  # against a pre-emitted graph artifact
 kovo check endpoint-posture .kovo/endpoint-posture.json
 kovo check sources-sinks
+kovo check advisories dist/.kovo/graph.json
 ```
 
 If you want the command to be explicit in CI logs, point it at `dist/.kovo/graph.json` directly
 instead of relying on discovery.
+
+### Check published security advisories
+
+Run the advisory check against the graph you plan to deploy:
+
+```sh
+kovo check advisories dist/.kovo/graph.json
+```
+
+The command authenticates Kovo's signed feed and compares its version ranges with the exact package
+versions stamped into that graph. `AFFECTED` at or above the default `high` floor exits 1.
+`UNKNOWN` exits 2, including when the feed is offline, stale, rolled back, or has no valid release
+attestation. Do not turn `UNKNOWN` into success in CI. `NOT-AFFECTED` only means no published entry
+in the authenticated feed matches this artifact; it is not a claim that the app has no
+vulnerabilities.
+
+Use `--severity-floor moderate` to tighten the blocking threshold. `--feed`, `--attestation`, and
+`--state` exist for the release fire drill and offline verification; local feed files still require
+a valid Sigstore bundle. Give overrides a dedicated `--state` path so a drill epoch cannot advance
+the production feed's rollback floor.
 
 ### `kovo explain` — print the decision tree
 

@@ -25,17 +25,20 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow).not.toContain('SKIP_RELEASE_CHECKS');
   });
 
-  it('keeps checkout, dependencies, build, and packing outside the OIDC release job', () => {
+  it('isolates release preparation, feed attestation, and package-publish authority', () => {
     const authorizeJob = releaseWorkflow.indexOf('  authorize:');
     const prepareJob = releaseWorkflow.indexOf('  prepare:');
+    const attestJob = releaseWorkflow.indexOf('  attest-advisory-feed:');
     const publishJob = releaseWorkflow.indexOf('  publish:');
     const authorize = releaseWorkflow.slice(authorizeJob, prepareJob);
-    const prepare = releaseWorkflow.slice(prepareJob, publishJob);
+    const prepare = releaseWorkflow.slice(prepareJob, attestJob);
+    const attest = releaseWorkflow.slice(attestJob, publishJob);
     const publish = releaseWorkflow.slice(publishJob);
 
     expect(authorizeJob).toBeGreaterThanOrEqual(0);
     expect(prepareJob).toBeGreaterThan(authorizeJob);
-    expect(publishJob).toBeGreaterThan(prepareJob);
+    expect(attestJob).toBeGreaterThan(prepareJob);
+    expect(publishJob).toBeGreaterThan(attestJob);
     expect(authorize).not.toContain('environment: release');
     expect(authorize).not.toContain('id-token: write');
     expect(authorize).not.toContain('actions/checkout@');
@@ -57,8 +60,24 @@ describe('release workflow authority', () => {
     expect(prepare).toContain('uses: actions/upload-artifact@');
     expect(prepare).toContain('${{ runner.temp }}/kovo-release-${{ github.sha }}.tgz');
 
+    expect(attest).toContain('needs: prepare');
+    expect(attest).toContain('attestations: write');
+    expect(attest).toContain('contents: read');
+    expect(attest).toContain('id-token: write');
+    expect(attest).toContain('uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6');
+    expect(attest).toContain('subject-name: security/advisories/feed.json');
+    expect(attest).toContain('subject-path: security/advisories/feed.json');
+    expect(attest).toContain('ref: ${{ github.sha }}');
+    expect(attest).toContain('persist-credentials: false');
+    expect(attest).not.toContain('voidzero-dev/setup-vp@');
+    expect(attest).not.toContain('run:');
+    expect(attest).not.toContain('vp install');
+    expect(attest).not.toContain('npm install');
+    expect(attest).not.toContain('pnpm ');
+
     expect(publish).toContain('if: ${{ !inputs.dry_run }}');
-    expect(publish).toContain('needs: prepare');
+    expect(publish).toContain('- prepare');
+    expect(publish).toContain('- attest-advisory-feed');
     expect(publish).toContain('environment: release');
     expect(publish).toContain('id-token: write');
     expect(publish).toContain('uses: actions/checkout@');
