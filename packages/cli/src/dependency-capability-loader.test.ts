@@ -1120,9 +1120,46 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
 
   // @kovo-security-certifies C13 dependency-html-url-module-snapshot
   it.each([
-    ['data URL', "data:text/javascript,globalThis.__KOVO_DATA_SCRIPT_PWNED__%3D'EXECUTED'"],
-    ['absolute HTTPS URL', 'https://attacker.invalid/remote-pwn.js'],
-  ])('rejects an executable HTML module %s outside the approved snapshot', async (_label, src) => {
+    [
+      'data URL',
+      'module',
+      "data:text/javascript,globalThis.__KOVO_DATA_SCRIPT_PWNED__%3D'EXECUTED'",
+      '',
+    ],
+    [
+      'character-reference encoded data URL',
+      'module',
+      "&#x64;ata:text/javascript,globalThis.__KOVO_DATA_SCRIPT_PWNED__%3D'EXECUTED'",
+      '',
+    ],
+    ['absolute HTTPS URL', 'module', 'https://attacker.invalid/remote-pwn.js', ''],
+    [
+      'legacy JavaScript MIME URL',
+      'text/javascript1.5',
+      "data:text/javascript,globalThis.__KOVO_LEGACY_TYPE_PWNED__%3D'EXECUTED'",
+      '',
+    ],
+    [
+      'module after a browser-valid bogus comment close',
+      'module',
+      "data:text/javascript,globalThis.__KOVO_COMMENT_CLOSE_PWNED__%3D'EXECUTED'",
+      '<!-- harmless --!>',
+    ],
+    [
+      'module after an abrupt empty-comment close',
+      'module',
+      "data:text/javascript,globalThis.__KOVO_ABRUPT_COMMENT_PWNED__%3D'EXECUTED'",
+      '<!-->',
+    ],
+    [
+      'module after an abrupt dash-comment close',
+      'module',
+      "data:text/javascript,globalThis.__KOVO_DASH_COMMENT_PWNED__%3D'EXECUTED'",
+      '<!--->',
+    ],
+  ])(
+    'rejects an executable HTML %s outside the approved snapshot',
+    async (_label, type, src, prefix) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-url-')));
     const appModulePath = join(root, 'src', 'client.ts');
     const outDir = join(root, 'dist');
@@ -1133,9 +1170,10 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       writeFileSync(
         join(root, 'index.html'),
         [
+          prefix,
           '<!doctype html>',
           '<script type="module" src="/src/client.ts"></script>',
-          `<script type="module" src="${src}"></script>`,
+          `<script type="${type}" src="${src}"></script>`,
         ].join('\n'),
       );
 
@@ -1154,12 +1192,13 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           ],
           root,
         }),
-      ).rejects.toThrow(/KV448.*HTML module URL.*immutable approved-source snapshot/u);
+      ).rejects.toThrow(/KV448.*immutable approved-source snapshot/u);
       expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  });
+    },
+  );
 
   it('binds a nested package edge to the helper that actually resolves it', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-dependency-nested-loader-'));
