@@ -1147,9 +1147,15 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
   );
 
   // @kovo-security-certifies C13 dependency-reviewed-worker-constructor-closure
-  it.each(['Worker', 'SharedWorker'] as const)(
+  it.each([
+    ['Worker', 'Worker', ''],
+    ['SharedWorker', 'SharedWorker', ''],
+    ['Worker alias', 'W', 'const W = Worker; '],
+    ['global Worker member', 'globalThis.Worker', ''],
+    ['SharedWorker alias', 'W', 'const W = SharedWorker; '],
+  ] as const)(
     'rejects a reviewed package %s constructor before Vite creates an unreviewed subgraph',
-    async (constructorName) => {
+    async (label, constructorExpression, prefix) => {
       const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-worker-constructor-')));
       const appModulePath = join(root, 'client.mjs');
       const packageRoot = join(root, 'node_modules', 'safe-parser');
@@ -1174,7 +1180,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         }
         writeFileSync(
           join(packageRoot, 'index.mjs'),
-          `export const start = () => new ${constructorName}(new URL('./worker.mjs', import.meta.url), { type: 'module' });\n`,
+          `${prefix}export const start = () => new ${constructorExpression}(new URL('./worker.mjs', import.meta.url), { type: 'module' });\n`,
         );
         writeFileSync(
           join(packageRoot, 'worker.mjs'),
@@ -1230,7 +1236,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           }),
         ).rejects.toThrow(
           new RegExp(
-            `KV448.*reviewed package safe-parser creates a ${constructorName} subgraph`,
+            label === 'Worker' || label === 'SharedWorker'
+              ? `KV448.*reviewed package safe-parser creates a ${label} subgraph`
+              : label === 'Worker alias' || label === 'SharedWorker alias'
+                ? `KV448.*(?:reviewed package safe-parser creates an opaque new-URL executable asset|supported build-client artifact.*retains a ${label.startsWith('Shared') ? 'SharedWorker' : 'Worker'} constructor)`
+              : 'KV448.*reviewed package safe-parser creates an opaque new-URL executable asset',
             'u',
           ),
         );
