@@ -1068,6 +1068,7 @@ async function runCompileDrizzleStaticCommand(
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
     extractMassAssignmentFromProject,
+    extractGrantGraphFactsFromProject,
     extractMaterializedViewRefreshFactsFromProject,
     extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
@@ -1092,6 +1093,7 @@ async function runCompileDrizzleStaticCommand(
         'algebraicShapes',
         'capabilities',
         'cookieDowngrades',
+        'grantGraph',
         'massAssignmentFacts',
         'materializedViewRefreshFacts',
         'ownerAudit',
@@ -1121,6 +1123,9 @@ async function runCompileDrizzleStaticCommand(
       // SPEC §11.1 / secure-framework Phase 3: governed-column mass-assignment facts
       // the graph emission feeds to `kovo check` (KV438).
       output.massAssignmentFacts = extractMassAssignmentFromProject({ files });
+    }
+    if (extract.has('grantGraph')) {
+      output.grants = extractGrantGraphFactsFromProject({ files });
     }
     if (extract.has('queryWriteReachability')) {
       // SPEC §6.6/§9.4 / secure-framework Phase 5: query-loader write-reachability facts

@@ -1830,6 +1830,7 @@ async function staticBuildCheckGraph(
   return {
     components: sourceGraphFacts.components,
     graph: {
+      ...(drizzleFacts.grants.length === 0 ? {} : { grants: drizzleFacts.grants }),
       ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
       ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
         ? {}
@@ -2367,6 +2368,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
   return {
+    grants: [],
     massAssignmentFacts: [],
     ownerDomains: [],
     queries: [],

@@ -29,6 +29,8 @@ export type {
   EscapeCensusDoor,
   EventPayloadFact,
   FixpointCheck,
+  GrantExplainFact,
+  GrantRightKind,
   GraphInputValidationError,
   HandlerWriteSinkExplain,
   HandlerWriteSinkOperationKind,

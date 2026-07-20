@@ -713,11 +713,44 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/postgres-grant-shape-fuzzer.test.ts',
       'packages/server/src/postgres-external-probe.test.ts',
       'packages/server/src/postgres-runtime.test.ts',
+      'packages/server/src/delegation.test.ts',
+      'packages/drizzle/src/grant-graph-static.test.ts',
       'packages/core/src/authorization-correspondence-graph.test.ts',
       'packages/cli/src/authorization-explain.test.ts',
+      'packages/cli/src/index.kovo-explain-grants.test.ts',
       'scripts/check-postgres-rls-emission-door.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'grant-graph-derivation-and-top-closure',
+        file: 'packages/drizzle/src/grant-graph-static.test.ts',
+        snippets: [
+          'derives principals, resources, right kinds, and delegation edges from schema annotations',
+          'decides exact deletion as attenuation and names widening transitions as budgeted escapes',
+          'fails closed to top when an authz-bearing write cannot be classified',
+          "verdict: 'top'",
+        ],
+      },
+      {
+        id: 'epoch-bound-attenuating-delegation',
+        file: 'packages/server/src/delegation.test.ts',
+        snippets: [
+          'yields only a typed and runtime-checked subset while carrying the principal epoch',
+          'rejects structural forgeries and propagates principal-epoch revocation',
+          "rights: ['read:other' as never]",
+          "'role-change'",
+        ],
+      },
+      {
+        id: 'grant-graph-explain-and-check-door',
+        file: 'packages/cli/src/index.kovo-explain-grants.test.ts',
+        snippets: [
+          'prints derived resources, decided transitions, and named budgeted escapes',
+          'makes a top transition fail kovo check with KV414',
+          'fail-closed-top',
+          "options: { grants: true }",
+        ],
+      },
       {
         id: 'grant-shape-closure-fuzzer',
         file: 'packages/server/src/postgres-grant-shape-fuzzer.test.ts',

@@ -454,6 +454,11 @@ export function witnessObjectIs(left: unknown, right: unknown): boolean {
   return apply(nativeObjectIs, NativeObject, [left, right]);
 }
 
+export function witnessNumberIsSafeInteger(value: unknown): value is number {
+  assertSecurityWitnessIntrinsics();
+  return apply(nativeNumberIsSafeInteger, NativeNumber, [value]);
+}
+
 export function witnessObjectKeys(value: object): string[] {
   assertSecurityWitnessIntrinsics();
   return apply(nativeObjectKeys, NativeObject, [value]);
