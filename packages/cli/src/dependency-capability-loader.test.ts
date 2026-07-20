@@ -435,6 +435,58 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-bundle-owned-output-kind
+  it('rejects a retained module import that collides with a bundle-owned asset name', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-asset-collision-')));
+    const appModulePath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const appSource = [
+      'export async function run() {',
+      "  return import(/* @vite-ignore */ './payload.mjs');",
+      '}',
+      '',
+    ].join('\n');
+    try {
+      writeFileSync(appModulePath, appSource);
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            {
+              buildStart() {
+                this.emitFile({
+                  fileName: 'payload.mjs',
+                  source: "globalThis.__KOVO_ASSET_MODULE_COLLISION__ = 'EXECUTED';\n",
+                  type: 'asset',
+                });
+              },
+              name: 'emit-module-looking-asset',
+            },
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-server',
+              { allowNodeBuiltins: true },
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).rejects.toThrow(/KV448.*module import.*bundle-owned non-chunk asset/u);
+      expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-bare-bundle-key-artifact-closure
   it('rejects a retained bare package specifier that collides with a bundle file name', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-bare-bundle-key-')));
@@ -1696,7 +1748,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           ],
           root,
         }),
-      ).rejects.toThrow(/KV448.*non-literal module edge.*supported build-client artifact/u);
+      ).rejects.toThrow(/KV448.*supported build-client artifact.*non-literal module edge/u);
       expect(() => readFileSync(join(outDir, 'payload.mjs'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
