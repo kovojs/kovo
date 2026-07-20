@@ -2052,6 +2052,31 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "(() => { function Holder() {} const prototype = Holder.prototype; Object.setPrototypeOf(prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
+    [
+      'audit-static-getter-this-written Worker',
+      "(() => { class Holder { static get trigger() { this.platform = globalThis; return 1; } } Holder.trigger; return new Holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-static-block-this-written Worker',
+      "(() => { class Holder { static { this.platform = globalThis; } } return new Holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-array-callback-written Worker',
+      "(() => { const box = {}; [box].forEach(value => { value.platform = globalThis; }); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-timer-extra-argument-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; setTimeout(install, 0, box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-tagged-template-argument-written Worker',
+      "(() => { function install(_strings, box) { box.platform = globalThis; } const box = {}; install`${box}`; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
     ['depth-budget-helper-written Worker', depthBudgetCarrierExpression('/worker.mjs'), 'Worker'],
     [
       'recursive-budget-helper-written Worker',
@@ -2796,6 +2821,31 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-setPrototypeOf-prototype-setter-written Worker',
       "(() => { function Holder() {} const prototype = Holder.prototype; Object.setPrototypeOf(prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-static-getter-this-written Worker',
+      "(() => { class Holder { static get trigger() { this.platform = globalThis; return 1; } } Holder.trigger; return new Holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-static-block-this-written Worker',
+      "(() => { class Holder { static { this.platform = globalThis; } } return new Holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-array-callback-written Worker',
+      "(() => { const box = {}; [box].forEach(value => { value.platform = globalThis; }); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-timer-extra-argument-written Worker',
+      "(() => { function install(box) { box.platform = globalThis; } const box = {}; setTimeout(install, 0, box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-tagged-template-argument-written Worker',
+      "(() => { function install(_strings, box) { box.platform = globalThis; } const box = {}; install`${box}`; return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
