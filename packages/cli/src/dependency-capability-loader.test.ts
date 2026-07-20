@@ -1791,6 +1791,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'curried-helper-written Worker',
+      "(() => { function prepare(box) { return platform => { box.platform = platform; }; } const box = {}; const install = prepare(box); install(globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'array-written Worker',
       "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
       'Worker',
@@ -2285,6 +2290,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'closure-helper-written Worker',
       "(() => { function install(box, platform) { function write() { box.platform = platform; } write(); } const box = {}; install(box, globalThis); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'curried-helper-written Worker',
+      "(() => { function prepare(box) { return platform => { box.platform = platform; }; } const box = {}; const install = prepare(box); install(globalThis); return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
