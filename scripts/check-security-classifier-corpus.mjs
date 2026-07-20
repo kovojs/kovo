@@ -3503,7 +3503,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'EXTENSION_METHOD_ASSET_MUST_NOT_RUN',
           'ENCODED_TARGET_MUST_NOT_RUN',
           'FRAMED_ASSET_MUST_NOT_RUN',
-          'cloudflareWorkerSource({ staticOnly: true })',
+          `expect(staticWorkerSource).not.toContain("import('./server/handler.mjs')")`,
           'run_worker_first = true',
         ],
       },
