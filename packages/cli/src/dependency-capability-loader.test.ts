@@ -601,6 +601,103 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-direct-export-package-boundary
+  it.each(['intervening manifest', 'symlinked nested node_modules'] as const)(
+    'rejects a direct reviewed export crossing a %s package boundary',
+    async (kind) => {
+      const root = realpathSync(
+        mkdtempSync(join(tmpdir(), 'kovo-dependency-direct-nested-export-')),
+      );
+      const appModulePath = join(root, 'app.mjs');
+      const packageRoot = join(root, 'node_modules', 'safe-parser');
+      const nestedRoot =
+        kind === 'intervening manifest'
+          ? join(packageRoot, 'nested')
+          : join(packageRoot, 'node_modules', 'helper-parser');
+      const exportTarget = kind === 'intervening manifest' ? './nested/index.mjs' : './link.mjs';
+      const outDir = join(root, 'dist');
+      const source =
+        "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+      try {
+        mkdirSync(nestedRoot, { recursive: true });
+        writeFileSync(
+          join(packageRoot, 'package.json'),
+          JSON.stringify({
+            exports: { '.': exportTarget },
+            name: 'safe-parser',
+            type: 'module',
+            version: '1.2.3',
+          }),
+        );
+        if (kind === 'intervening manifest') {
+          writeFileSync(
+            join(nestedRoot, 'package.json'),
+            JSON.stringify({ name: 'helper-parser', type: 'module', version: '9.9.9' }),
+          );
+        }
+        const nestedEntry = join(nestedRoot, 'index.mjs');
+        writeFileSync(
+          nestedEntry,
+          "globalThis.__KOVO_DIRECT_NESTED_EXPORT__ = 'EXECUTED'; export const parse = value => value;\n",
+        );
+        if (kind === 'symlinked nested node_modules') {
+          symlinkSync(nestedEntry, join(packageRoot, 'link.mjs'), 'file');
+        }
+        writeFileSync(appModulePath, source);
+        const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+        const exactManifest: AppDependencyCapabilityManifest = {
+          dependencies: [
+            {
+              entries: [
+                {
+                  conditions: installed.conditions,
+                  importers: ['app.mjs'],
+                  imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                  rootKinds: ['route'],
+                  sites: ['app.mjs:1:1'],
+                  specifier: 'safe-parser',
+                },
+              ],
+              manifestFingerprint: installed.manifestFingerprint,
+              packageName: installed.packageName,
+              packageVersion: installed.packageVersion,
+              summaryVersion: 'safe-parser-review/1',
+              verdict: 'open',
+            },
+          ],
+          schema: 'kovo-app-dependency-capabilities/v1',
+        };
+
+        await expect(
+          viteBuild({
+            build: {
+              emptyOutDir: true,
+              outDir,
+              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+              ssr: true,
+            },
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [
+              dependencyCapabilityLoaderVitePlugin(
+                appModulePath,
+                [{ fileName: 'app.mjs', source }],
+                exactManifest,
+                'build-server',
+                { allowNodeBuiltins: true },
+              ),
+            ],
+            root,
+            ssr: { noExternal: true },
+          }),
+        ).rejects.toThrow(/KV448.*safe-parser resolved outside its exact package export target/u);
+        expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
+
   // @kovo-security-certifies C13 dependency-transitive-ssr-pre-evaluation
   it('rejects an uncensused transitive before supported SSR app evaluation', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-transitive-ssr-')));
@@ -1689,8 +1786,8 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*nested HTML document.*immutable approved-source snapshot/u,
     ],
     [
-      'named browsing-context target',
-      '<iframe name="victim-frame"></iframe><a target="victim-frame" href="https://attacker.invalid/child">run</a>',
+      'empty named browsing-context element',
+      '<iframe name="victim-frame"></iframe>',
       /KV448.*nested HTML document.*immutable approved-source snapshot/u,
     ],
     [
