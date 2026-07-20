@@ -24,8 +24,8 @@ describe('provenance closure artifact gate', () => {
         browserStates: 20,
         closedReasons: 8,
         memberClasses: 56,
-        relationPairs: 2_128,
-        serverStates: 38,
+        relationPairs: 2_184,
+        serverStates: 39,
       },
     });
   });
@@ -49,6 +49,7 @@ describe('provenance closure artifact gate', () => {
       'conditional-expression',
       'static-member',
       'foreign-executable-containment',
+      'unsafe-wire-data-containment',
       'authority-containment',
     ]);
   });

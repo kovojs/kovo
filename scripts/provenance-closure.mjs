@@ -39,6 +39,7 @@ const expectedServerExpressionArmOrder = [
   'conditional-expression',
   'static-member',
   'foreign-executable-containment',
+  'unsafe-wire-data-containment',
   'authority-containment',
 ];
 
@@ -188,6 +189,9 @@ function classifyIfArm(expression, sourceFile) {
   if (exactCalledNames(calls, ['isConditionalExpression'])) return 'conditional-expression';
   if (exactCalledNames(calls, ['expressionContainsServerForeignExecutable'])) {
     return 'foreign-executable-containment';
+  }
+  if (exactCalledNames(calls, ['expressionContainsServerUnsafeWireData'])) {
+    return 'unsafe-wire-data-containment';
   }
   if (ts.isIdentifier(expression) && expression.text === 'member') return 'static-member';
   const callSignature = [...calls].sort((left, right) => left.localeCompare(right)).join('+');
