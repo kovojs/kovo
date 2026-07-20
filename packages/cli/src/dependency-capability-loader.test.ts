@@ -712,15 +712,16 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
 
   // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
   it.each([
-    ['manifest-owned', true],
-    ['legacy node_modules', false],
+    ['manifest-owned', true, 'node_modules'],
+    ['legacy node_modules', false, 'node_modules'],
+    ['case-folded node_modules', false, 'NODE_MODULES'],
   ] as const)(
     'rejects a relative edge from a reviewed package into a %s nested package boundary',
-    async (_label, helperHasManifest) => {
+    async (_label, helperHasManifest, nodeModulesDirectory) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-relative-nested-')));
     const appModulePath = join(root, 'app.mjs');
     const packageRoot = join(root, 'node_modules', 'safe-parser');
-    const helperRoot = join(packageRoot, 'node_modules', 'helper-parser');
+    const helperRoot = join(packageRoot, nodeModulesDirectory, 'helper-parser');
     const outDir = join(root, 'dist');
     const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
     try {
@@ -743,7 +744,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       writeFileSync(
         join(packageRoot, 'index.cjs'),
         [
-          "require('./node_modules/helper-parser/index.cjs');",
+          `require('./${nodeModulesDirectory}/helper-parser/index.cjs');`,
           'exports.parse = value => value;',
           '',
         ].join('\n'),
