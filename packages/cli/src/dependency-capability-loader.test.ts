@@ -1756,6 +1756,41 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'helper-written Worker',
+      "(() => { function install(box, platform) { box.platform = platform; } const box = {}; install(box, globalThis); const W = box.platform.Worker; return new W('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'nested-helper-written Worker',
+      "(() => { function write(box, platform) { box.platform = platform; } function install(box, platform) { write(box, platform); } const box = {}; install(box, globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'closure-helper-written Worker',
+      "(() => { function install(box, platform) { function write() { box.platform = platform; } write(); } const box = {}; install(box, globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'Object.assign helper-written Worker',
+      "(() => { function install(box, platform) { Object.assign(box, { platform }); } const box = {}; install(box, globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'Reflect.set helper-written Worker',
+      "(() => { function install(box, platform) { Reflect.set(box, 'platform', platform); } const box = {}; install(box, globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'defineProperty helper-written Worker',
+      "(() => { function install(box, platform) { Object.defineProperty(box, 'platform', { value: platform }); } const box = {}; install(box, globalThis); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'accessor-triggered Worker',
+      "(() => { const box = { get trigger() { this.platform = globalThis; return 1; } }; function inspect(value) { Reflect.get(value, 'trigger'); } inspect(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'array-written Worker',
       "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
       'Worker',
@@ -2007,7 +2042,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
   });
 
   // @kovo-security-certifies C13 dependency-reviewed-local-carrier-name-precision
-  it('allows locally bound carrier-shaped names and proven plain-object properties', async () => {
+  it('allows locally bound carrier-shaped names, helper-local writes, and proven plain-object properties', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-local-carriers-')));
     const appModulePath = join(root, 'client.mjs');
     const packageRoot = join(root, 'node_modules', 'safe-parser');
@@ -2037,9 +2072,10 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           "const localBox = {}; localBox.Worker = class LocalWorker { constructor() { this.kind = 'member'; } };",
           "const localArray = []; localArray[0] = class LocalWorker { constructor() { this.kind = 'array'; } };",
           "const ignoredUnknownResult = inspectSomething({ value: 'off-slice' });",
+          "const readLocalWorker = box => { const local = {}; local.seen = true; return box.worker; }; const forwardLocalWorker = box => readLocalWorker(box); const LocalViaHelper = forwardLocalWorker({ worker: class LocalWorker { constructor() { this.kind = 'helper-read'; } } }); const helperRead = new LocalViaHelper().kind;",
           "const describedLocal = (() => { const Object = { getOwnPropertyDescriptor: () => ({ value: class LocalWorker { constructor() { this.kind = 'local-object'; } } }) }; const Local = Object.getOwnPropertyDescriptor({}, 'Worker').value; return new Local().kind; })();",
           "const reflectedLocal = (() => { const Reflect = { get: (object, key) => object[key] }; const Local = Reflect.get({ Worker: class LocalWorker { constructor() { this.kind = 'local-reflect'; } } }, 'Worker'); return new Local().kind; })();",
-          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
+          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
           '',
         ].join('\n'),
       );
@@ -2242,6 +2278,21 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
+      'helper-written Worker',
+      "(() => { function install(box, platform) { box.platform = platform; } const box = {}; install(box, globalThis); const W = box.platform.Worker; return new W('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'closure-helper-written Worker',
+      "(() => { function install(box, platform) { function write() { box.platform = platform; } write(); } const box = {}; install(box, globalThis); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'accessor-triggered Worker',
+      "(() => { const box = { get trigger() { this.platform = globalThis; return 1; } }; function inspect(value) { Reflect.get(value, 'trigger'); } inspect(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
       'Reflect.apply-transferred Worker',
       "new (Reflect.apply(Reflect.get, Reflect, [globalThis, 'Worker']))('/payload.mjs')",
       /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
@@ -2271,6 +2322,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           viteBuild({
             build: {
               emptyOutDir: true,
+              minify: true,
               outDir,
               rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
             },

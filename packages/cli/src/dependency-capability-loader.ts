@@ -1207,7 +1207,7 @@ type BrowserStaticAtom =
     }
   | { readonly kind: 'reflect' }
   | { readonly kind: 'reflect-get' }
-  | { readonly kind: 'plain' }
+  | { readonly callArgumentIndex?: number; readonly kind: 'plain' }
   | { readonly kind: 'proxy-constructor' }
   | { readonly kind: 'string'; readonly value: string }
   | { readonly kind: 'timer'; readonly name: 'setInterval' | 'setTimeout' }
@@ -1227,6 +1227,7 @@ interface BrowserBindingSource {
 }
 
 interface BrowserStaticBinding {
+  readonly scope: BrowserStaticScope;
   readonly sources: BrowserBindingSource[];
   opaque: boolean;
 }
@@ -1240,6 +1241,7 @@ interface BrowserStaticScope {
 interface BrowserStaticIndex {
   readonly bindings: BrowserStaticBinding[];
   readonly bindingIdentifiers: WeakSet<object>;
+  readonly callableEffectParameters: WeakMap<object, readonly number[]>;
   readonly memberSources: WeakMap<object, Map<string, BrowserBindingSource[]>>;
   readonly opaqueMemberSources: WeakSet<object>;
   readonly root: BrowserStaticScope;
@@ -1477,6 +1479,7 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
   const index: BrowserStaticIndex = {
     bindings: [],
     bindingIdentifiers: new WeakSet(),
+    callableEffectParameters: new WeakMap(),
     memberSources: new WeakMap(),
     opaqueMemberSources: new WeakSet(),
     root,
@@ -1640,7 +1643,7 @@ function ensureBrowserBinding(
 ): BrowserStaticBinding {
   const existing = scope.bindings.get(name);
   if (existing !== undefined) return existing;
-  const binding: BrowserStaticBinding = { opaque: false, sources: [] };
+  const binding: BrowserStaticBinding = { opaque: false, scope, sources: [] };
   scope.bindings.set(name, binding);
   index.bindings.push(binding);
   return binding;
@@ -1799,17 +1802,339 @@ function collectBrowserOpaqueCallArguments(
 ): void {
   const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
   const callee = evaluateBrowserStaticValue(call.callee, scope, index, state);
-  if (callee.some((atom) => atom.kind === 'object-freeze')) return;
-  if (!callee.some((atom) => atom.kind === 'closed')) return;
+  if (callee.length > 0 && callee.every((atom) => atom.kind === 'object-freeze')) return;
   const args = Array.isArray(call.arguments) ? call.arguments : [];
-  for (const argument of args) {
-    const atoms = evaluateBrowserStaticValue(argument, scope, index, state);
-    for (const atom of atoms) {
-      if (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') {
-        index.opaqueMemberSources.add(atom.node);
+  const affectedArguments = new Set<number>();
+  if (callee.some((atom) => atom.kind === 'closed')) {
+    for (let argumentIndex = 0; argumentIndex < args.length; argumentIndex += 1) {
+      affectedArguments.add(argumentIndex);
+    }
+  }
+  const localCallables = callee.filter(
+    (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
+      atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type)),
+  );
+  for (const callable of localCallables) {
+    const parameters = Array.isArray(callable.node.params) ? callable.node.params : [];
+    for (const parameterIndex of browserStaticCallableEffectParameters(
+      callable,
+      index,
+      new Set(),
+    )) {
+      const parameter = parameters[parameterIndex];
+      if (isAstRecord(parameter) && parameter.type === 'RestElement') {
+        for (let argumentIndex = parameterIndex; argumentIndex < args.length; argumentIndex += 1) {
+          affectedArguments.add(argumentIndex);
+        }
+      } else if (parameterIndex < args.length) {
+        affectedArguments.add(parameterIndex);
       }
     }
   }
+  for (const argumentIndex of affectedArguments) {
+    markBrowserStructuredArgumentOpaque(args[argumentIndex], scope, index, state);
+  }
+}
+
+/**
+ * Summarize only which parameters a local callable may mutate or escape. A parameter-origin atom
+ * survives finite aliases and member projections, so direct writes and nested helper effects map
+ * back to the corresponding call arguments. Effects on freshly created locals do not taint an
+ * unrelated argument. Return-value flow remains owned by evaluateBrowserStaticCallable. This is a
+ * conservative post-bundle backstop, not general JavaScript effect analysis (SPEC §6.6; C13).
+ */
+function browserStaticCallableEffectParameters(
+  callable: Extract<BrowserStaticAtom, { kind: 'namespace' }>,
+  index: BrowserStaticIndex,
+  active: Set<object>,
+): readonly number[] {
+  const cached = index.callableEffectParameters.get(callable.node);
+  if (cached !== undefined) return cached;
+  const parameters = Array.isArray(callable.node.params) ? callable.node.params : [];
+  const allParameters = parameters.map((_, parameterIndex) => parameterIndex);
+  if (active.has(callable.node)) return allParameters;
+  const body = callable.node.body;
+  if (!isAstRecord(body)) return allParameters;
+  active.add(callable.node);
+  const callableScope = index.scopeByNode.get(body) ?? callable.scope;
+  const callableFunctionScope = nearestBrowserFunctionScope(callableScope);
+  const overrides = new Map<BrowserStaticBinding, readonly BrowserStaticAtom[]>();
+  for (let parameterIndex = 0; parameterIndex < parameters.length; parameterIndex += 1) {
+    addBrowserCallArgumentOverrides(
+      parameters[parameterIndex],
+      parameterIndex,
+      callableScope,
+      overrides,
+    );
+  }
+  const state: BrowserStaticEvaluationState = {
+    bindingStack: new Set(),
+    depth: 0,
+    overrides,
+  };
+  const affected = new Set<number>();
+
+  const addDirectOrigins = (value: unknown, valueScope: BrowserStaticScope): void => {
+    for (const atom of evaluateBrowserStaticValue(value, valueScope, index, state)) {
+      if (atom.kind === 'plain' && atom.callArgumentIndex !== undefined) {
+        affected.add(atom.callArgumentIndex);
+      }
+    }
+  };
+
+  const addDeepOrigins = (value: unknown, valueScope: BrowserStaticScope): void => {
+    const seen = new Set<object>();
+    const visitOrigin = (
+      candidate: unknown,
+      candidateScope: BrowserStaticScope,
+      depth: number,
+    ): void => {
+      if (depth > 48 || typeof candidate !== 'object' || candidate === null) return;
+      if (Array.isArray(candidate)) {
+        for (const child of candidate) visitOrigin(child, candidateScope, depth + 1);
+        return;
+      }
+      const record = candidate as Record<string, unknown>;
+      if (seen.has(record)) return;
+      seen.add(record);
+      const expression = record.type === 'SpreadElement' ? record.argument : record;
+      for (const atom of evaluateBrowserStaticValue(expression, candidateScope, index, state)) {
+        if (atom.kind === 'plain' && atom.callArgumentIndex !== undefined) {
+          affected.add(atom.callArgumentIndex);
+        }
+        if (
+          (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') &&
+          atom.node !== record
+        ) {
+          visitOrigin(atom.node, atom.scope, depth + 1);
+        }
+      }
+      for (const [key, child] of Object.entries(record)) {
+        if (browserAstMetadataKeys.has(key)) continue;
+        const childScope = isAstRecord(child)
+          ? (index.scopeByNode.get(child) ?? candidateScope)
+          : candidateScope;
+        visitOrigin(child, childScope, depth + 1);
+      }
+    };
+    visitOrigin(value, valueScope, 0);
+  };
+
+  const visit = (value: unknown): void => {
+    if (typeof value !== 'object' || value === null) return;
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const type = typeof record.type === 'string' ? record.type : undefined;
+    if (record !== body && browserAstFunctionType(type)) return;
+    if (type === 'ClassDeclaration' || type === 'ClassExpression') return;
+    const recordScope = index.scopeByNode.get(record) ?? callableScope;
+    if (type === 'AssignmentExpression') {
+      if (isAstRecord(record.left) && record.left.type === 'MemberExpression') {
+        addDirectOrigins(record.left.object, recordScope);
+        addDeepOrigins(record.right, recordScope);
+      } else if (!browserAssignmentTargetIsLocal(record.left, recordScope, callableFunctionScope)) {
+        addDeepOrigins(record.right, recordScope);
+      }
+    } else if (type === 'UpdateExpression') {
+      if (isAstRecord(record.argument) && record.argument.type === 'MemberExpression') {
+        addDirectOrigins(record.argument.object, recordScope);
+      }
+    } else if (type === 'UnaryExpression' && record.operator === 'delete') {
+      if (isAstRecord(record.argument) && record.argument.type === 'MemberExpression') {
+        addDirectOrigins(record.argument.object, recordScope);
+      }
+    } else if (type === 'CallExpression') {
+      const callScope = index.scopeByNode.get(record) ?? callable.scope;
+      const callee = evaluateBrowserStaticValue(record.callee, callScope, index, state);
+      const args = Array.isArray(record.arguments) ? record.arguments : [];
+      let callHasUnsupportedTarget = callee.length === 0;
+      for (const atom of callee) {
+        if (atom.kind === 'object-freeze' || atom.kind === 'reflect-get') continue;
+        if (atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type))) {
+          const callableWasActive = active.has(atom.node);
+          const nestedParameters = Array.isArray(atom.node.params) ? atom.node.params : [];
+          for (const parameterIndex of browserStaticCallableEffectParameters(atom, index, active)) {
+            const parameter = nestedParameters[parameterIndex];
+            if (isAstRecord(parameter) && parameter.type === 'RestElement') {
+              for (
+                let argumentIndex = parameterIndex;
+                argumentIndex < args.length;
+                argumentIndex += 1
+              ) {
+                addDeepOrigins(args[argumentIndex], callScope);
+              }
+            } else if (parameterIndex < args.length) {
+              addDeepOrigins(args[parameterIndex], callScope);
+            }
+          }
+          if (!callableWasActive && isAstRecord(atom.node.body)) {
+            active.add(atom.node);
+            visit(atom.node.body);
+            active.delete(atom.node);
+          }
+          continue;
+        }
+        callHasUnsupportedTarget = true;
+      }
+      if (callHasUnsupportedTarget) {
+        addDeepOrigins(record.callee, callScope);
+        for (const argument of args) addDeepOrigins(argument, callScope);
+      }
+    } else if (type === 'NewExpression') {
+      addDeepOrigins(record.callee, recordScope);
+      const args = Array.isArray(record.arguments) ? record.arguments : [];
+      for (const argument of args) addDeepOrigins(argument, recordScope);
+    } else if (
+      type === 'AwaitExpression' ||
+      type === 'YieldExpression' ||
+      type === 'ThrowStatement' ||
+      type === 'TaggedTemplateExpression' ||
+      type === 'ImportExpression'
+    ) {
+      addDeepOrigins(record, recordScope);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (!browserAstMetadataKeys.has(key)) visit(child);
+    }
+  };
+
+  for (const parameter of parameters) visit(parameter);
+  visit(body);
+  active.delete(callable.node);
+  const result = [...affected].sort((left, right) => left - right);
+  index.callableEffectParameters.set(callable.node, result);
+  return result;
+}
+
+function addBrowserCallArgumentOverrides(
+  pattern: unknown,
+  parameterIndex: number,
+  scope: BrowserStaticScope,
+  overrides: Map<BrowserStaticBinding, readonly BrowserStaticAtom[]>,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    const binding = lookupBrowserBinding(pattern.name, scope);
+    if (binding !== undefined) {
+      overrides.set(binding, [{ callArgumentIndex: parameterIndex, kind: 'plain' }]);
+    }
+    return;
+  }
+  if (pattern.type === 'AssignmentPattern' || pattern.type === 'RestElement') {
+    addBrowserCallArgumentOverrides(
+      pattern.left ?? pattern.argument,
+      parameterIndex,
+      scope,
+      overrides,
+    );
+    return;
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    for (const property of properties) {
+      if (!isAstRecord(property)) continue;
+      addBrowserCallArgumentOverrides(
+        property.type === 'Property' ? property.value : property.argument,
+        parameterIndex,
+        scope,
+        overrides,
+      );
+    }
+    return;
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    for (const element of elements) {
+      addBrowserCallArgumentOverrides(element, parameterIndex, scope, overrides);
+    }
+  }
+}
+
+function browserAssignmentTargetIsLocal(
+  pattern: unknown,
+  scope: BrowserStaticScope,
+  callableFunctionScope: BrowserStaticScope,
+): boolean {
+  if (!isAstRecord(pattern)) return false;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    const binding = lookupBrowserBinding(pattern.name, scope);
+    return binding !== undefined && browserScopeIsWithin(binding.scope, callableFunctionScope);
+  }
+  if (pattern.type === 'AssignmentPattern' || pattern.type === 'RestElement') {
+    return browserAssignmentTargetIsLocal(
+      pattern.left ?? pattern.argument,
+      scope,
+      callableFunctionScope,
+    );
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    return properties.every(
+      (property) =>
+        isAstRecord(property) &&
+        browserAssignmentTargetIsLocal(
+          property.type === 'Property' ? property.value : property.argument,
+          scope,
+          callableFunctionScope,
+        ),
+    );
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    return elements.every(
+      (element) =>
+        element === null ||
+        element === undefined ||
+        browserAssignmentTargetIsLocal(element, scope, callableFunctionScope),
+    );
+  }
+  return false;
+}
+
+function browserScopeIsWithin(scope: BrowserStaticScope, ancestor: BrowserStaticScope): boolean {
+  let candidate: BrowserStaticScope | undefined = scope;
+  while (candidate !== undefined) {
+    if (candidate === ancestor) return true;
+    candidate = candidate.parent;
+  }
+  return false;
+}
+
+function markBrowserStructuredArgumentOpaque(
+  value: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): void {
+  const seen = new Set<object>();
+  const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {
+    if (depth > 48 || typeof candidate !== 'object' || candidate === null) return;
+    if (Array.isArray(candidate)) {
+      for (const child of candidate) visit(child, candidateScope, depth + 1);
+      return;
+    }
+    const record = candidate as Record<string, unknown>;
+    if (seen.has(record)) return;
+    seen.add(record);
+    const expression = record.type === 'SpreadElement' ? record.argument : record;
+    for (const atom of evaluateBrowserStaticValue(expression, candidateScope, index, state)) {
+      if (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') {
+        index.opaqueMemberSources.add(atom.node);
+        if (atom.node !== record) visit(atom.node, atom.scope, depth + 1);
+      }
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (browserAstMetadataKeys.has(key)) continue;
+      const childScope = isAstRecord(child)
+        ? (index.scopeByNode.get(child) ?? candidateScope)
+        : candidateScope;
+      visit(child, childScope, depth + 1);
+    }
+  };
+  visit(value, scope, 0);
 }
 
 function collectBrowserMemberAssignment(
@@ -2340,7 +2665,9 @@ function browserMemberAtoms(
           atoms.push({ kind: 'closed' });
         }
       } else if (receiver.kind === 'plain') {
-        if (property === 'constructor') {
+        if (receiver.callArgumentIndex !== undefined) {
+          atoms.push(receiver);
+        } else if (property === 'constructor') {
           atoms.push({ kind: 'constructor-value' });
         } else {
           atoms.push({ kind: 'plain' });
