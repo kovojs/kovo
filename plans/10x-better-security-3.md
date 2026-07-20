@@ -219,14 +219,14 @@ readiness` row (status `pending`) to `rules/prelaunch-checklist.md`.
 `package.json` sets `onlyBuiltDependencies` (good hygiene) but it is not a pipeline invariant.
 (~0.5 pm, outsized return)
 
-- [ ] `check:hermetic-proof-stage`: analysis, certificate generation, and signing run with no
+- [x] `check:hermetic-proof-stage`: analysis, certificate generation, and signing run with no
       lifecycle-script execution, no network, and no reachability from the app dependency closure to
       signing material. Fail if the proof stage's process tree could have executed app-graph code.
       This is the difference between "this certificate is evidence" and "this certificate is a rumor".
-  - Current evidence: the pinned Linux/amd64 and macOS sandbox self-test closes the exact process,
-    network, mount, key, and repository vectors and kills override mutants. It prints
-    `proof-tooling=UNBOUND`; keep this item open until the real analyzer/generator/signer is forced
-    through the executor.
+  - Evidence: `pnpm run check:hermetic-proof-stage` forces the production analyzer, generator, and
+    caller-keyed Ed25519 signer through separate sealed macOS processes and prints
+    `sandbox=closed proof-tooling=kovo-certificate-v1-signed BOUND OK`; exact-vector mutants cover
+    Linux mounts, network, lifecycle, app-graph, repository, and signing-key reachability.
 
 ---
 
@@ -422,12 +422,13 @@ pass**. Requires §0.4 and §0.6 to mean anything.
 ### 2.1 `kovo.certificate/v1` and a standalone checker
 
 - [x] Freeze the schema over the published `@kovojs/*` dist trees:
-      `{artifacts:[{path,sha512}], domain:<the 7 capability kinds>, cap:{module→kinds[]}, edges:[[m,n]],
+      `{artifacts:[{path,sha512}], domain:<the 9 capability kinds>, cap:{module→kinds[]}, edges:[[m,n]],
 roots:[{module,rootKind}], doors:[{module,site,escapeId}], opaque:[{module,reason}]}`, reusing
-      verbatim the 7-member capability union already frozen at `packages/core/src/graph.ts:703-710` and
+      verbatim the 9-member capability union frozen at `packages/core/src/graph.ts` and
       the frozen `rootKind` union.
-  - Evidence: `pnpm run check:certificate` validates the exact schema and 190 sha512-bound packed
-    modules with the frozen 7-kind domain and root vocabulary.
+  - Evidence: `pnpm run check:certificate` validates the exact schema and 192 sha512-bound packed
+    modules with the frozen 9-kind domain, including binding-sensitive `crypto-acquisition` versus
+    `digest`, and the frozen root vocabulary.
 - [x] Emit it alongside `dist/.kovo/graph.json`, with per-artifact sha512 computed exactly as
       `scripts/publish-packed-packages.mjs` computes tarball integrity.
   - Evidence: the focused `index.kovo-build.test.ts` node-preset build passes and proves the emitted

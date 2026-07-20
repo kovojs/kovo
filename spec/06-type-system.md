@@ -334,6 +334,12 @@ remaining production direct acquisition by exact path, class, and operation. Tha
 path set MUST be a non-increasing ratchet: adding or widening a row requires an explicit reviewed
 architecture change, while deleting or narrowing one requires no compatibility mode.
 
+`kovo.certificate/v1` MUST carry the exact same nine-member raw-capability domain:
+`crypto-acquisition`, `database-driver`, `digest`, `dynamic-loader`, `filesystem`, `network`,
+`process`, `vm`, and `worker`. Its search-side analyzer and disjoint checker MUST preserve the
+binding-sensitive distinction between an exact reviewed digest import and broader crypto acquisition;
+neither kind may be downgraded to an opaque external import or omitted from post-fixpoint closure.
+
 The server runtime has one primitive-owning crypto authority. It captures its Node crypto and byte
 controls during the bootstrap-before-app boundary and runs known-answer checks for RFC 5869
 HKDF-SHA256, HMAC-SHA256, fixed-width equality, and AES-256-GCM before serving. It MUST NOT expose a
