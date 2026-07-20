@@ -14,7 +14,7 @@ const protocol = Object.freeze({
 const boundary = Object.freeze({
   schema: modelBoundarySchema,
   id: 'replay-reservation/v1',
-  status: 'registered-not-model-checked',
+  status: 'bounded-model-checked',
   atomicityAxiom: {
     classification: 'human-assumption',
     detail: 'Each registered transition CTE is modeled as one atomic action.',

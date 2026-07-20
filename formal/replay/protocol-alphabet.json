@@ -17,12 +17,14 @@
     "jobs.enqueueDebounce",
     "jobs.enqueueThrottle",
     "jobs.enqueueUnkeyed",
+    "jobs.erasePrincipal",
     "jobs.grantWriter",
     "jobs.heartbeat",
     "jobs.markFailed",
     "jobs.markSucceeded",
     "jobs.observe",
     "jobs.probe",
+    "jobs.probePrincipal",
     "jobs.provision",
     "jobs.reapExpiredLeases",
     "replay.abort",
@@ -34,7 +36,9 @@
     "replay.auditWatermarkShape",
     "replay.commit",
     "replay.consumeCapability",
+    "replay.erasePrincipal",
     "replay.preflightLegacy",
+    "replay.probePrincipal",
     "replay.provision",
     "replay.read",
     "replay.reclaimCommitted",
@@ -66,7 +70,7 @@
       "owner": "commit",
       "replayStates": ["committed", "pending"],
       "site": "packages/server/src/postgres-replay.ts#commit/text[1]",
-      "sqlSha256": "8c045cf587a1b3a13fcd207d49082ad59696262f92c33410c07040c176c1edaa",
+      "sqlSha256": "33ac5079fb62e63295f13c97a73457c3334a80577f07d77dc2404f5edcffb21e",
       "tables": ["_kovo_replay", "_kovo_replay_reclaimed"]
     },
     {
@@ -81,6 +85,28 @@
       "tables": ["_kovo_replay", "_kovo_replay_reclaimed"]
     },
     {
+      "action": "replay.probePrincipal",
+      "ctes": [],
+      "file": "packages/server/src/postgres-replay.ts",
+      "jobStatuses": [],
+      "owner": "countPostgresMutationReplayPrincipalRows",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-replay.ts#countPostgresMutationReplayPrincipalRows/text[1]",
+      "sqlSha256": "73fce255134bf59ec3e3dd057fad584e12385e0a0c782f402f4aae03f1358c05",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.erasePrincipal",
+      "ctes": ["deleted"],
+      "file": "packages/server/src/postgres-replay.ts",
+      "jobStatuses": [],
+      "owner": "erasePostgresMutationReplayPrincipalRows",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-replay.ts#erasePostgresMutationReplayPrincipalRows/text[1]",
+      "sqlSha256": "41997b379b067dfdb8cb71c1c769ee17d0bb613611b48a5c4309241adf1de727",
+      "tables": ["_kovo_replay"]
+    },
+    {
       "action": "replay.read",
       "ctes": [],
       "file": "packages/server/src/postgres-replay.ts",
@@ -88,7 +114,7 @@
       "owner": "readRow",
       "replayStates": [],
       "site": "packages/server/src/postgres-replay.ts#readRow/text[1]",
-      "sqlSha256": "aff350baaf1620addbe9c1b443cfcdecdf81222faa66f802e9e8ff5cdd4fd6a7",
+      "sqlSha256": "a2be2dddfda670570bbbdaffa69eb2899d209f6545d098fdbdd1f4ce29d9ec8a",
       "tables": ["_kovo_replay"]
     },
     {
@@ -110,7 +136,7 @@
       "owner": "reserve",
       "replayStates": ["pending"],
       "site": "packages/server/src/postgres-replay.ts#reserve/text[1]",
-      "sqlSha256": "28dbf5558d43928b5c61a7b45178fdde491867f57d9cbf506532a861c74e7073",
+      "sqlSha256": "59d07c50a5edb0fa77705b41031cf65ef47ef4d5a279a927b1af2d21ba8143ca",
       "tables": ["_kovo_replay", "_kovo_replay_reclaimed"]
     },
     {
@@ -132,7 +158,7 @@
       "owner": "settleWithoutReservation",
       "replayStates": ["committed"],
       "site": "packages/server/src/postgres-replay.ts#settleWithoutReservation/text[1]",
-      "sqlSha256": "29289c58d5000cd0db61ae6a254f014b3bacf4d9ddc7047987a4cb1867105c31",
+      "sqlSha256": "74d4a5d8bb911177b5f8bdcbc7f0e625233bed4278ac216c0d966ab45e9e886f",
       "tables": ["_kovo_replay", "_kovo_replay_reclaimed"]
     },
     {
@@ -176,7 +202,7 @@
       "owner": "postgresReplayStorePostureIssues",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#postgresReplayStorePostureIssues/safeQuery[4]",
-      "sqlSha256": "d7e43dcec07b802d167216d9c6d1fbd1a2a5411552584b551b2263e250c9f4f3",
+      "sqlSha256": "7050d09e8827535bc4692f6ce7ab639b63e640b27b437e18f344b475692c195b",
       "tables": ["_kovo_replay"]
     },
     {
@@ -203,13 +229,13 @@
     },
     {
       "action": "replay.provision",
-      "ctes": [],
+      "ctes": ["ranked"],
       "file": "packages/server/src/postgres-runtime.ts",
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": [],
+      "replayStates": ["pending"],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[10]",
-      "sqlSha256": "b4aafe5386598a5211e73ef4181d696dd314314d5b14c254159e2eb08f319b14",
+      "sqlSha256": "2bfc7dedbf6a86f153f45d7eba4c76ccb0d28198792dc274ec34a0f48a34a75c",
       "tables": ["_kovo_replay"]
     },
     {
@@ -220,7 +246,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[11]",
-      "sqlSha256": "ef8873b81b556da5e12a0d1450bb4c4a1c3a64e56490bf37eb5a0f6ce6e243cd",
+      "sqlSha256": "b4aafe5386598a5211e73ef4181d696dd314314d5b14c254159e2eb08f319b14",
       "tables": ["_kovo_replay"]
     },
     {
@@ -231,7 +257,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[12]",
-      "sqlSha256": "d31e0ce6929f4de546005c9e7fc265ac495186760f684f2ba044367d0bf9c0c6",
+      "sqlSha256": "ef8873b81b556da5e12a0d1450bb4c4a1c3a64e56490bf37eb5a0f6ce6e243cd",
       "tables": ["_kovo_replay"]
     },
     {
@@ -242,7 +268,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[13]",
-      "sqlSha256": "647ea881fb2aa117383a78ea4fc7bfa4516425cd549dd71ccc2f430d6e7045b6",
+      "sqlSha256": "d31e0ce6929f4de546005c9e7fc265ac495186760f684f2ba044367d0bf9c0c6",
       "tables": ["_kovo_replay"]
     },
     {
@@ -253,7 +279,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[14]",
-      "sqlSha256": "63173b6cbe48623ef4d243d12f9e0930c8d88a2b66d7b77d6527a7c15881683e",
+      "sqlSha256": "647ea881fb2aa117383a78ea4fc7bfa4516425cd549dd71ccc2f430d6e7045b6",
       "tables": ["_kovo_replay"]
     },
     {
@@ -264,6 +290,17 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[15]",
+      "sqlSha256": "63173b6cbe48623ef4d243d12f9e0930c8d88a2b66d7b77d6527a7c15881683e",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[16]",
       "sqlSha256": "2b57fc2c167ec2be9942f046f2d226c5f33fc70f18836f2401fd656a231f291d",
       "tables": ["_kovo_replay"]
     },
@@ -274,7 +311,7 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": ["committed"],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[16]",
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[17]",
       "sqlSha256": "1ba2513297859b71a8e76c9d866fb77917c142b8a88d853f7668d374b8a68684",
       "tables": ["_kovo_replay"]
     },
@@ -285,7 +322,7 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": ["committed", "pending"],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[17]",
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[18]",
       "sqlSha256": "40b9b2162ec0b5ffd375777023e50bb5935de815293e31897f2c8ee809f1e392",
       "tables": ["_kovo_replay"]
     },
@@ -296,7 +333,7 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[18]",
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[19]",
       "sqlSha256": "138fbcdc53a50d89af3c866193414250b716a33656649a8dc10e578e0d5d6951",
       "tables": ["_kovo_replay"]
     },
@@ -307,8 +344,8 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": ["committed", "pending"],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[19]",
-      "sqlSha256": "4f9f17602e259d4f53e317a78ec1ac753dee19fe28bc5a85a3a46348080e9383",
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[1]",
+      "sqlSha256": "ffab01fa139d9d8c52eb0b4d87ce1186a1d095a93811ec2416db802aac6a31ef",
       "tables": ["_kovo_replay"]
     },
     {
@@ -318,19 +355,8 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": ["committed", "pending"],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[1]",
-      "sqlSha256": "6ca5e379d06aea5d7f740d80d977169117618093a5cf5e10ee21d93d8fe9a975",
-      "tables": ["_kovo_replay"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": [],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[20]",
-      "sqlSha256": "b11dba6918edf9b34f7ac2f3ed299ac6235351f43e304f1021aee856e5f32786",
+      "sqlSha256": "4f9f17602e259d4f53e317a78ec1ac753dee19fe28bc5a85a3a46348080e9383",
       "tables": ["_kovo_replay"]
     },
     {
@@ -341,6 +367,17 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[21]",
+      "sqlSha256": "b11dba6918edf9b34f7ac2f3ed299ac6235351f43e304f1021aee856e5f32786",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[22]",
       "sqlSha256": "b97c6a5c35fbd918d789068903f3d7de1efdab361ef5c30bb15fa76457273015",
       "tables": ["_kovo_replay"]
     },
@@ -350,20 +387,9 @@
       "file": "packages/server/src/postgres-runtime.ts",
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": ["committed"],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[22]",
-      "sqlSha256": "2c091643b5ee78f49bb43866d86b14924f9b619040b3ef1991919ddc6558ecf0",
-      "tables": ["_kovo_replay"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": [],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": ["pending"],
+      "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[23]",
-      "sqlSha256": "be6c07df35fb634d164f8080ea11f75ce2f52449d6a56358f6dfdf9e96b97690",
+      "sqlSha256": "5c45db68fab6b16df9aa1d9f8e0dc14e7a4a6337709a007f652deebf40b2f178",
       "tables": ["_kovo_replay"]
     },
     {
@@ -374,6 +400,50 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[24]",
+      "sqlSha256": "b84a77ac2afe32da9d7ce5bd30285ee634a392785f7f0915810d30e9e1204e29",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": ["committed"],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[25]",
+      "sqlSha256": "2c091643b5ee78f49bb43866d86b14924f9b619040b3ef1991919ddc6558ecf0",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": ["pending"],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[26]",
+      "sqlSha256": "be6c07df35fb634d164f8080ea11f75ce2f52449d6a56358f6dfdf9e96b97690",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[27]",
+      "sqlSha256": "36286cd98ac5b0152e6f5255d1751738eb45edbb83de451c10debf03ab9aff7e",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[28]",
       "sqlSha256": "25dcd20c2f140ec197d8a21bc18d092427d7d5badb816fed3c642e0535078256",
       "tables": ["_kovo_replay_reclaimed"]
     },
@@ -384,52 +454,8 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[25]",
-      "sqlSha256": "6d592722b2863505d3f408bdf4ea04aa92eff22f3d4a31cc94ddd90d60e79ec5",
-      "tables": ["_kovo_replay_reclaimed"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": [],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": [],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[26]",
-      "sqlSha256": "3c7df51ebdcbb551a94b1395fde6df8f03d7e5939a68e64b4f3e2afa2d9e6e63",
-      "tables": ["_kovo_replay_reclaimed"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": [],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": [],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[27]",
-      "sqlSha256": "87638d07f1c140ff98b872e9f0d4821a3eef02ad31d5b97e2c3b6540f60698b7",
-      "tables": ["_kovo_replay_reclaimed"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": [],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": [],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[28]",
-      "sqlSha256": "c941a92b89408fae0a09e1c6a588b62f6d098b1c403be2d16671db88eed11163",
-      "tables": ["_kovo_replay_reclaimed"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": [],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[29]",
-      "sqlSha256": "b6c92796713ffae47ab17f0bca57de7004be3fb0cccdd3f9833d6217fc5ef905",
+      "sqlSha256": "6d592722b2863505d3f408bdf4ea04aa92eff22f3d4a31cc94ddd90d60e79ec5",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -451,7 +477,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[30]",
-      "sqlSha256": "99c8444ffbf6dac5c3977695aaecb03d3c8826ac99f09a6c0e61f97c283e2fb0",
+      "sqlSha256": "3c7df51ebdcbb551a94b1395fde6df8f03d7e5939a68e64b4f3e2afa2d9e6e63",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -462,7 +488,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[31]",
-      "sqlSha256": "67c706a8669b1813efbe33d4e68cd1bd6522cb3dda4031d49156495889718498",
+      "sqlSha256": "87638d07f1c140ff98b872e9f0d4821a3eef02ad31d5b97e2c3b6540f60698b7",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -473,8 +499,8 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[32]",
-      "sqlSha256": "70c356a9044074ea8e7acc3d918c21024e37a8fdf57df986f5985b8fb2796296",
-      "tables": ["_kovo_replay"]
+      "sqlSha256": "c941a92b89408fae0a09e1c6a588b62f6d098b1c403be2d16671db88eed11163",
+      "tables": ["_kovo_replay_reclaimed"]
     },
     {
       "action": "replay.provision",
@@ -484,7 +510,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[33]",
-      "sqlSha256": "c02521d6afd092fa57676232603f608ebd385b54ecc2ee167a1201feab59f8e6",
+      "sqlSha256": "b6c92796713ffae47ab17f0bca57de7004be3fb0cccdd3f9833d6217fc5ef905",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -495,8 +521,8 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[34]",
-      "sqlSha256": "8a075d9a52ddea4c0e6f8c8faeeb40f84baa6b4401a5895d51dd4a247bf486b6",
-      "tables": ["_kovo_replay"]
+      "sqlSha256": "99c8444ffbf6dac5c3977695aaecb03d3c8826ac99f09a6c0e61f97c283e2fb0",
+      "tables": ["_kovo_replay_reclaimed"]
     },
     {
       "action": "replay.provision",
@@ -506,7 +532,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[35]",
-      "sqlSha256": "ffe446a84f0fc35bd44137b86d8cdf67ce91cdbc5cd6481c76fc4eec3b15ad0c",
+      "sqlSha256": "67c706a8669b1813efbe33d4e68cd1bd6522cb3dda4031d49156495889718498",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -517,7 +543,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[36]",
-      "sqlSha256": "a49cea04334b885806c7ccbd9f21f5767b6df6a31b1f91c00e28557dc4617dc5",
+      "sqlSha256": "70c356a9044074ea8e7acc3d918c21024e37a8fdf57df986f5985b8fb2796296",
       "tables": ["_kovo_replay"]
     },
     {
@@ -528,7 +554,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[37]",
-      "sqlSha256": "900da5d23f19681d39d9ef08b7030264747bba15e5f8f8d855cf30fb88abca45",
+      "sqlSha256": "c02521d6afd092fa57676232603f608ebd385b54ecc2ee167a1201feab59f8e6",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -539,7 +565,18 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[38]",
-      "sqlSha256": "9200bc77e859f27bbfff628820ca07201ad6be90f019ef7e7fffc2acb2335367",
+      "sqlSha256": "8a075d9a52ddea4c0e6f8c8faeeb40f84baa6b4401a5895d51dd4a247bf486b6",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[39]",
+      "sqlSha256": "ffe446a84f0fc35bd44137b86d8cdf67ce91cdbc5cd6481c76fc4eec3b15ad0c",
       "tables": ["_kovo_replay_reclaimed"]
     },
     {
@@ -560,6 +597,39 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[40]",
+      "sqlSha256": "a49cea04334b885806c7ccbd9f21f5767b6df6a31b1f91c00e28557dc4617dc5",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[41]",
+      "sqlSha256": "900da5d23f19681d39d9ef08b7030264747bba15e5f8f8d855cf30fb88abca45",
+      "tables": ["_kovo_replay_reclaimed"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[42]",
+      "sqlSha256": "9200bc77e859f27bbfff628820ca07201ad6be90f019ef7e7fffc2acb2335367",
+      "tables": ["_kovo_replay_reclaimed"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[4]",
       "sqlSha256": "7108264082c661701079b970a2b9a49f4396a4df5f310a18e98cbeb872c295b5",
       "tables": ["_kovo_replay"]
@@ -572,7 +642,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[5]",
-      "sqlSha256": "3626dde090cdf876b3ec575ee49e73512c2bd9674173e457a338170e6e03b0f1",
+      "sqlSha256": "25add441ff0498daea7a034e6fb9f536e43a1e722454da696538f5e9aa0df950",
       "tables": ["_kovo_replay"]
     },
     {
@@ -583,7 +653,7 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[6]",
-      "sqlSha256": "f686e04e81a450ec4e40071f2d51244fb4f0cc17f27912ada85a003260324e65",
+      "sqlSha256": "3626dde090cdf876b3ec575ee49e73512c2bd9674173e457a338170e6e03b0f1",
       "tables": ["_kovo_replay"]
     },
     {
@@ -594,6 +664,17 @@
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": [],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[7]",
+      "sqlSha256": "f686e04e81a450ec4e40071f2d51244fb4f0cc17f27912ada85a003260324e65",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[8]",
       "sqlSha256": "4704d442e199a5977432a747ac135c552d13e6e6c667118e361517bb998c8bee",
       "tables": ["_kovo_replay"]
     },
@@ -604,19 +685,8 @@
       "jobStatuses": [],
       "owner": "provisionPostgresFrameworkReplayStore",
       "replayStates": ["committed"],
-      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[8]",
-      "sqlSha256": "279788c0adfdc3ebcfda090ae7da7d5e09eb8559905d56a9ff14fd7711b82e3c",
-      "tables": ["_kovo_replay"]
-    },
-    {
-      "action": "replay.provision",
-      "ctes": ["ranked"],
-      "file": "packages/server/src/postgres-runtime.ts",
-      "jobStatuses": [],
-      "owner": "provisionPostgresFrameworkReplayStore",
-      "replayStates": ["pending"],
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/exec[9]",
-      "sqlSha256": "2bfc7dedbf6a86f153f45d7eba4c76ccb0d28198792dc274ec34a0f48a34a75c",
+      "sqlSha256": "279788c0adfdc3ebcfda090ae7da7d5e09eb8559905d56a9ff14fd7711b82e3c",
       "tables": ["_kovo_replay"]
     },
     {
@@ -629,6 +699,28 @@
       "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/query[1]",
       "sqlSha256": "f8244d587b8454193c89c154e56f42606cc91acc7e8c492d8a9d835310e1092f",
       "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "replay.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkReplayStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkReplayStore/sqlLiteral[1]",
+      "sqlSha256": "489685f69d98558d3c15771ca0181584cbfa8be7ada641544fe75d42e79f9b34",
+      "tables": ["_kovo_replay"]
+    },
+    {
+      "action": "jobs.provision",
+      "ctes": [],
+      "file": "packages/server/src/postgres-runtime.ts",
+      "jobStatuses": [],
+      "owner": "provisionPostgresFrameworkTaskStore",
+      "replayStates": [],
+      "site": "packages/server/src/postgres-runtime.ts#provisionPostgresFrameworkTaskStore/sqlLiteral[1]",
+      "sqlSha256": "b2a5c1482de0509c39054029b093030da61f91d9dfbd6a5e3310927fb42ea6c2",
+      "tables": ["_kovo_jobs"]
     },
     {
       "action": "jobs.observe",
@@ -660,7 +752,7 @@
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/taskQueueSql.claimDue",
-      "sqlSha256": "c5f503193c3a3e21b73eaa1b8cf35f63b818bbdaa8d89eb4e392333f26623c8e",
+      "sqlSha256": "5e3156a184c277945be0b2ff8b2ed14e1f73ac67ad1ff3302b08daf83dfc2d5c",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -671,7 +763,7 @@
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/taskQueueSql.enqueueDebounce",
-      "sqlSha256": "5dea7ab54bda622d7a8ae79b9a95f5d95a3893953c212ccaee196e891af66abc",
+      "sqlSha256": "0b42d000eda66a94fd920b9659d4950ab7210b6e932c3e983a39d0ba3e8e4c52",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -682,7 +774,7 @@
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/taskQueueSql.enqueueThrottle",
-      "sqlSha256": "16cb269f10e5c9bafd6ec63a723b081fa78fcbe50145e2b8160e95fa5bcb401a",
+      "sqlSha256": "82a562c248ce3eda903b147ec46c0dd09c42e5f62ccdd9b7400d0952e7dd078e",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -693,7 +785,7 @@
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/taskQueueSql.enqueueUnkeyed",
-      "sqlSha256": "2e130e2e532f87a5c82c3dee96fa98491e8fd85536c7cb00e8f5fbcca642677e",
+      "sqlSha256": "0b97d4e0841d1066f28f05ead8d0c0c8da82bd5162c1e21e86fe9e3ba6b46000",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -748,7 +840,7 @@
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/text[1]",
-      "sqlSha256": "77f5ffcd25ff65bf6da700767a34c4333cea4b6bae4590a19909671dda613df2",
+      "sqlSha256": "8d898d78480a287c2e0c4a58a65ba2dde2560471ab1bc97e450dd096d740a202",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -766,11 +858,11 @@
       "action": "jobs.provision",
       "ctes": [],
       "file": "packages/server/src/task-queue.ts",
-      "jobStatuses": ["ready"],
+      "jobStatuses": [],
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/text[3]",
-      "sqlSha256": "bbfed1d726cff8bd2ee05f1d96a5738a9d74dfd4576af271da4753e91e9a55ce",
+      "sqlSha256": "7f335383d240802cf1a2ed469b56de82ecd9b0c17a359827608f8695977abd53",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -781,6 +873,17 @@
       "owner": "<module>",
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#<module>/text[4]",
+      "sqlSha256": "bbfed1d726cff8bd2ee05f1d96a5738a9d74dfd4576af271da4753e91e9a55ce",
+      "tables": ["_kovo_jobs"]
+    },
+    {
+      "action": "jobs.provision",
+      "ctes": [],
+      "file": "packages/server/src/task-queue.ts",
+      "jobStatuses": ["ready"],
+      "owner": "<module>",
+      "replayStates": [],
+      "site": "packages/server/src/task-queue.ts#<module>/text[5]",
       "sqlSha256": "026a75b7a5a6092e5af8a8435cc35682d5f4d458654e0bd4ec199ebae51b1712",
       "tables": ["_kovo_jobs"]
     },
@@ -791,8 +894,19 @@
       "jobStatuses": ["running"],
       "owner": "<module>",
       "replayStates": [],
-      "site": "packages/server/src/task-queue.ts#<module>/text[5]",
+      "site": "packages/server/src/task-queue.ts#<module>/text[6]",
       "sqlSha256": "dd8819938fe71af7094e62aed687c37f4350bbce7450c487efb69fb3a7fbdd29",
+      "tables": ["_kovo_jobs"]
+    },
+    {
+      "action": "jobs.provision",
+      "ctes": [],
+      "file": "packages/server/src/task-queue.ts",
+      "jobStatuses": [],
+      "owner": "<module>",
+      "replayStates": [],
+      "site": "packages/server/src/task-queue.ts#<module>/text[7]",
+      "sqlSha256": "e8bd4139eea643363b43c1e20034b0c7a0daa927b6e2b8f4ba4e08a5ea088343",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -804,6 +918,28 @@
       "replayStates": [],
       "site": "packages/server/src/task-queue.ts#assertDurableTaskStoreReady/text[1]",
       "sqlSha256": "73350d24c843a0eb640a126c3b06dccf97717c874f24f1540551674ad309c189",
+      "tables": ["_kovo_jobs"]
+    },
+    {
+      "action": "jobs.probePrincipal",
+      "ctes": [],
+      "file": "packages/server/src/task-queue.ts",
+      "jobStatuses": [],
+      "owner": "countDurableTaskPrincipalRows",
+      "replayStates": [],
+      "site": "packages/server/src/task-queue.ts#countDurableTaskPrincipalRows/text[1]",
+      "sqlSha256": "c4db025cd3e231dcd92e058fb9da8f22dff319ef03d00ac1a3833aa3e33f2b62",
+      "tables": ["_kovo_jobs"]
+    },
+    {
+      "action": "jobs.erasePrincipal",
+      "ctes": ["deleted"],
+      "file": "packages/server/src/task-queue.ts",
+      "jobStatuses": [],
+      "owner": "eraseDurableTaskPrincipalRows",
+      "replayStates": [],
+      "site": "packages/server/src/task-queue.ts#eraseDurableTaskPrincipalRows/text[1]",
+      "sqlSha256": "9e6e2f3286d6f9420e92ba158308e1a1bcb8a0af6b4b98b536f588016e1a04f4",
       "tables": ["_kovo_jobs"]
     },
     {
@@ -819,8 +955,8 @@
     }
   ],
   "summary": {
-    "actionCount": 29,
+    "actionCount": 33,
     "cteCount": 5,
-    "statementCount": 70
+    "statementCount": 82
   }
 }

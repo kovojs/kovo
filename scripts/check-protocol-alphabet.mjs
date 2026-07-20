@@ -40,12 +40,14 @@ export const MODEL_ACTIONS = Object.freeze([
   'jobs.enqueueDebounce',
   'jobs.enqueueThrottle',
   'jobs.enqueueUnkeyed',
+  'jobs.erasePrincipal',
   'jobs.grantWriter',
   'jobs.heartbeat',
   'jobs.markFailed',
   'jobs.markSucceeded',
   'jobs.observe',
   'jobs.probe',
+  'jobs.probePrincipal',
   'jobs.provision',
   'jobs.reapExpiredLeases',
   'replay.abort',
@@ -57,7 +59,9 @@ export const MODEL_ACTIONS = Object.freeze([
   'replay.auditWatermarkShape',
   'replay.commit',
   'replay.consumeCapability',
+  'replay.erasePrincipal',
   'replay.preflightLegacy',
+  'replay.probePrincipal',
   'replay.provision',
   'replay.read',
   'replay.reclaimCommitted',
@@ -597,6 +601,8 @@ function inferModelAction(statement) {
   }
   if (file.endsWith('/task-observability.ts')) return 'jobs.observe';
   if (file.endsWith('/task-queue.ts')) {
+    if (owner === 'countDurableTaskPrincipalRows') return 'jobs.probePrincipal';
+    if (owner === 'eraseDurableTaskPrincipalRows') return 'jobs.erasePrincipal';
     if (owner === 'grantDurableTaskWriterRole') return 'jobs.grantWriter';
     if (owner === 'assertDurableTaskStoreReady' || owner === 'checkDurableTaskWriterRole') {
       return 'jobs.probe';
@@ -608,6 +614,8 @@ function inferModelAction(statement) {
       abort: 'replay.abort',
       commit: 'replay.commit',
       consume: 'replay.consumeCapability',
+      countPostgresMutationReplayPrincipalRows: 'replay.probePrincipal',
+      erasePostgresMutationReplayPrincipalRows: 'replay.erasePrincipal',
       readRow: 'replay.read',
       releasePostgresPendingReplayFromExecutor: 'replay.releasePending',
       reserve: 'replay.reserve',
@@ -617,6 +625,7 @@ function inferModelAction(statement) {
     return actions[owner] ?? 'UNMAPPED';
   }
   if (file.endsWith('/postgres-runtime.ts')) {
+    if (owner === 'provisionPostgresFrameworkTaskStore') return 'jobs.provision';
     if (owner === 'provisionPostgresFrameworkReplayStore') {
       return statement.sql.includes('timeless_rows')
         ? 'replay.preflightLegacy'

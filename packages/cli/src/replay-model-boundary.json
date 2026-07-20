@@ -1,7 +1,7 @@
 {
   "schema": "kovo.replay-model-boundary/v1",
   "id": "replay-reservation/v1",
-  "status": "registered-not-model-checked",
+  "status": "bounded-model-checked",
   "atomicityAxiom": {
     "classification": "human-assumption",
     "detail": "Each registered transition CTE is modeled as one atomic action.",
@@ -15,6 +15,21 @@
     "identities": 2,
     "replicas": 2,
     "slots": 2
+  },
+  "modelCheckingEvidence": {
+    "checker": "TLC",
+    "release": "v1.7.4",
+    "sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+    "java": "temurin-21.0.11+10",
+    "positiveConfig": "formal/ReplayReservation.cfg",
+    "invariants": [
+      "TypeOK",
+      "NoDoubleExecute",
+      "RefuseNeverEvict",
+      "MonotoneReclaimedThrough",
+      "NoResurrection",
+      "BoundedAdmission"
+    ]
   },
   "modeledActions": [
     "replay.abort",
@@ -31,12 +46,14 @@
     "jobs.enqueueDebounce",
     "jobs.enqueueThrottle",
     "jobs.enqueueUnkeyed",
+    "jobs.erasePrincipal",
     "jobs.grantWriter",
     "jobs.heartbeat",
     "jobs.markFailed",
     "jobs.markSucceeded",
     "jobs.observe",
     "jobs.probe",
+    "jobs.probePrincipal",
     "jobs.provision",
     "jobs.reapExpiredLeases",
     "replay.auditPrivileges",
@@ -46,7 +63,9 @@
     "replay.auditWatermark",
     "replay.auditWatermarkShape",
     "replay.consumeCapability",
+    "replay.erasePrincipal",
     "replay.preflightLegacy",
+    "replay.probePrincipal",
     "replay.provision"
   ],
   "notModeledPhenomena": [
@@ -61,6 +80,10 @@
     {
       "detail": "Postgres implements the transaction, CTE, and row-lock semantics assumed by each atomic model action.",
       "id": "postgres-lock-implementation"
+    },
+    {
+      "detail": "Principal erasure and its absence probes are inventoried but their interleavings with replay reservation are outside the state model.",
+      "id": "principal-erasure-interleavings"
     },
     {
       "detail": "Response body/header serialization, byte limits, and application response correctness are outside the interleaving model.",

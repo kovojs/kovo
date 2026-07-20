@@ -10,6 +10,13 @@ export function modelBoundariesExplainResult(version: string): KovoCheckResult {
     `AXIOM-DETAIL ${JSON.stringify(replayModelBoundary.atomicityAxiom.detail)}`,
     `JUSTIFICATION ${JSON.stringify(replayModelBoundary.atomicityAxiom.justification)}`,
     [
+      `MODEL-CHECKER ${replayModelBoundary.modelCheckingEvidence.checker}`,
+      `release=${replayModelBoundary.modelCheckingEvidence.release}`,
+      `sha256=${replayModelBoundary.modelCheckingEvidence.sha256}`,
+      `java=${replayModelBoundary.modelCheckingEvidence.java}`,
+      `config=${replayModelBoundary.modelCheckingEvidence.positiveConfig}`,
+    ].join(' '),
+    [
       `BOUND replicas=${replayModelBoundary.bounds.replicas}`,
       `slots=${replayModelBoundary.bounds.slots}`,
       `identities=${replayModelBoundary.bounds.identities}`,
@@ -17,6 +24,9 @@ export function modelBoundariesExplainResult(version: string): KovoCheckResult {
       `crashPoints=${replayModelBoundary.bounds.crashPoints}`,
     ].join(' '),
   ];
+  for (const invariant of replayModelBoundary.modelCheckingEvidence.invariants) {
+    lines.push(`INVARIANT ${invariant}`);
+  }
   for (const action of replayModelBoundary.modeledActions) lines.push(`MODELED ${action}`);
   for (const action of replayModelBoundary.notModeledActions) {
     lines.push(`NOT-MODELED-ACTION ${action}`);

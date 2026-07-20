@@ -18,7 +18,7 @@ describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
     });
 
     expect(kovoExplain({}, { modelBoundaries: true } as never).output).toContain(
-      'MODEL-BOUNDARY replay-reservation/v1 status=registered-not-model-checked\n',
+      'MODEL-BOUNDARY replay-reservation/v1 status=bounded-model-checked\n',
     );
   });
 

@@ -1,0 +1,99 @@
+{
+  "schema": "kovo.replay-tlc-counterexample/v1",
+  "actions": [
+    "Init",
+    "Settle",
+    "Tick",
+    "ReclaimOne",
+    "Tick",
+    "BackwardClockStep",
+    "CleanupAfterRollback",
+    "Reserve"
+  ],
+  "invariant": "NoResurrection",
+  "model": "formal/ReplayReservation.tla",
+  "states": [
+    {
+      "action": "Init",
+      "changes": {
+        "admissionSlot": "(identity_1 :> no_slot @@ identity_2 :> no_slot)",
+        "backwardClockSteps": "0",
+        "claim": "(replica_1 :> no_identity @@ replica_2 :> no_identity)",
+        "clock": "0",
+        "executions": "(identity_1 :> 0 @@ identity_2 :> 0)",
+        "highestReclaimedThrough": "0",
+        "owner": "(identity_1 :> no_replica @@ identity_2 :> no_replica)",
+        "phase": "(replica_1 :> \"idle\" @@ replica_2 :> \"idle\")",
+        "reclaimed": "(identity_1 :> FALSE @@ identity_2 :> FALSE)",
+        "reclaimedThrough": "0",
+        "status": "(identity_1 :> \"absent\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 1
+    },
+    {
+      "action": "Settle",
+      "changes": {
+        "executions": "(identity_1 :> 1 @@ identity_2 :> 0)",
+        "status": "(identity_1 :> \"committed\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 2
+    },
+    {
+      "action": "Tick",
+      "changes": {
+        "clock": "1"
+      },
+      "step": 3
+    },
+    {
+      "action": "ReclaimOne",
+      "changes": {
+        "highestReclaimedThrough": "1",
+        "reclaimed": "(identity_1 :> TRUE @@ identity_2 :> FALSE)",
+        "reclaimedThrough": "1",
+        "status": "(identity_1 :> \"absent\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 4
+    },
+    {
+      "action": "Tick",
+      "changes": {
+        "clock": "2"
+      },
+      "step": 5
+    },
+    {
+      "action": "BackwardClockStep",
+      "changes": {
+        "backwardClockSteps": "1",
+        "clock": "0"
+      },
+      "step": 6
+    },
+    {
+      "action": "CleanupAfterRollback",
+      "changes": {
+        "reclaimedThrough": "0"
+      },
+      "step": 7
+    },
+    {
+      "action": "Reserve",
+      "changes": {
+        "admissionSlot": "(identity_1 :> slot_1 @@ identity_2 :> no_slot)",
+        "backwardClockSteps": "1",
+        "claim": "(replica_1 :> identity_1 @@ replica_2 :> no_identity)",
+        "clock": "0",
+        "executions": "(identity_1 :> 1 @@ identity_2 :> 0)",
+        "highestReclaimedThrough": "1",
+        "owner": "(identity_1 :> replica_1 @@ identity_2 :> no_replica)",
+        "phase": "(replica_1 :> \"reserved\" @@ replica_2 :> \"idle\")",
+        "reclaimed": "(identity_1 :> TRUE @@ identity_2 :> FALSE)",
+        "reclaimedThrough": "0",
+        "status": "(identity_1 :> \"pending\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 8
+    }
+  ],
+  "variant": "naive-watermark"
+}

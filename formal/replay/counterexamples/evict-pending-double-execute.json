@@ -1,0 +1,75 @@
+{
+  "schema": "kovo.replay-tlc-counterexample/v1",
+  "actions": ["Init", "Reserve", "Execute", "EvictPending", "Reserve", "Execute"],
+  "invariant": "NoDoubleExecute",
+  "model": "formal/ReplayReservation.tla",
+  "states": [
+    {
+      "action": "Init",
+      "changes": {
+        "admissionSlot": "(identity_1 :> no_slot @@ identity_2 :> no_slot)",
+        "claim": "(replica_1 :> no_identity @@ replica_2 :> no_identity)",
+        "executions": "(identity_1 :> 0 @@ identity_2 :> 0)",
+        "owner": "(identity_1 :> no_replica @@ identity_2 :> no_replica)",
+        "pendingEvicted": "(identity_1 :> FALSE @@ identity_2 :> FALSE)",
+        "phase": "(replica_1 :> \"idle\" @@ replica_2 :> \"idle\")",
+        "status": "(identity_1 :> \"absent\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 1
+    },
+    {
+      "action": "Reserve",
+      "changes": {
+        "admissionSlot": "(identity_1 :> slot_1 @@ identity_2 :> no_slot)",
+        "claim": "(replica_1 :> identity_1 @@ replica_2 :> no_identity)",
+        "owner": "(identity_1 :> replica_1 @@ identity_2 :> no_replica)",
+        "phase": "(replica_1 :> \"reserved\" @@ replica_2 :> \"idle\")",
+        "status": "(identity_1 :> \"pending\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 2
+    },
+    {
+      "action": "Execute",
+      "changes": {
+        "executions": "(identity_1 :> 1 @@ identity_2 :> 0)",
+        "phase": "(replica_1 :> \"effected\" @@ replica_2 :> \"idle\")"
+      },
+      "step": 3
+    },
+    {
+      "action": "EvictPending",
+      "changes": {
+        "admissionSlot": "(identity_1 :> no_slot @@ identity_2 :> no_slot)",
+        "owner": "(identity_1 :> no_replica @@ identity_2 :> no_replica)",
+        "pendingEvicted": "(identity_1 :> TRUE @@ identity_2 :> FALSE)",
+        "status": "(identity_1 :> \"absent\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 4
+    },
+    {
+      "action": "Reserve",
+      "changes": {
+        "admissionSlot": "(identity_1 :> slot_1 @@ identity_2 :> no_slot)",
+        "claim": "(replica_1 :> identity_1 @@ replica_2 :> identity_1)",
+        "owner": "(identity_1 :> replica_2 @@ identity_2 :> no_replica)",
+        "phase": "(replica_1 :> \"effected\" @@ replica_2 :> \"reserved\")",
+        "status": "(identity_1 :> \"pending\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 5
+    },
+    {
+      "action": "Execute",
+      "changes": {
+        "admissionSlot": "(identity_1 :> slot_1 @@ identity_2 :> no_slot)",
+        "claim": "(replica_1 :> identity_1 @@ replica_2 :> identity_1)",
+        "executions": "(identity_1 :> 2 @@ identity_2 :> 0)",
+        "owner": "(identity_1 :> replica_2 @@ identity_2 :> no_replica)",
+        "pendingEvicted": "(identity_1 :> TRUE @@ identity_2 :> FALSE)",
+        "phase": "(replica_1 :> \"effected\" @@ replica_2 :> \"effected\")",
+        "status": "(identity_1 :> \"pending\" @@ identity_2 :> \"absent\")"
+      },
+      "step": 6
+    }
+  ],
+  "variant": "evict-pending"
+}
