@@ -1216,7 +1216,11 @@ type BrowserStaticAtom =
     }
   | { readonly kind: 'reflect' }
   | { readonly kind: 'reflect-get' }
-  | { readonly callArgumentIndex?: number; readonly kind: 'plain' }
+  | {
+      readonly callArgumentIndex?: number;
+      readonly callReceiver?: true;
+      readonly kind: 'plain';
+    }
   | { readonly kind: 'proxy-constructor' }
   | {
       readonly constructor: {
@@ -1258,20 +1262,28 @@ interface BrowserStaticScope {
 interface BrowserStaticIndex {
   readonly bindings: BrowserStaticBinding[];
   readonly bindingIdentifiers: WeakSet<object>;
-  readonly callableEffectParameters: WeakMap<object, readonly number[]>;
+  readonly callableEffects: WeakMap<object, BrowserStaticCallableEffects>;
   readonly memberSources: WeakMap<object, Map<string, BrowserBindingSource[]>>;
   readonly opaqueMemberSources: WeakSet<object>;
   readonly opaquePrototypeProperties: WeakMap<object, Set<string>>;
   readonly opaquePrototypes: WeakSet<object>;
   readonly root: BrowserStaticScope;
   readonly scopeByNode: WeakMap<object, BrowserStaticScope>;
+  effectAnalysisClosed: boolean;
 }
 
 interface BrowserStaticEvaluationState {
   readonly bindingStack: Set<BrowserStaticBinding>;
   readonly budget?: BrowserStaticEvaluationBudget;
+  readonly callReceiver?: true;
   readonly depth: number;
   readonly overrides?: ReadonlyMap<BrowserStaticBinding, readonly BrowserStaticAtom[]>;
+}
+
+interface BrowserStaticCallableEffects {
+  readonly parameterIndexes: readonly number[];
+  readonly receiver: boolean;
+  readonly variadic: boolean;
 }
 
 interface BrowserStaticEvaluationBudget {
@@ -1286,6 +1298,7 @@ function nextBrowserStaticEvaluationState(
   return {
     bindingStack,
     ...(state.budget === undefined ? {} : { budget: state.budget }),
+    ...(state.callReceiver === true ? { callReceiver: true as const } : {}),
     depth: state.depth + 1,
     ...(state.overrides === undefined ? {} : { overrides: state.overrides }),
   };
@@ -1310,6 +1323,9 @@ function reviewedExecutableBrowserCarrier(
 ): ReviewedExecutableBrowserCarrier | undefined {
   if (!isAstRecord(ast)) return undefined;
   const index = buildBrowserStaticIndex(ast);
+  if (index.effectAnalysisClosed) {
+    return { kind: 'asset', name: 'opaque browser executable carrier' };
+  }
 
   const visit = (
     value: unknown,
@@ -1505,7 +1521,8 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
   const index: BrowserStaticIndex = {
     bindings: [],
     bindingIdentifiers: new WeakSet(),
-    callableEffectParameters: new WeakMap(),
+    callableEffects: new WeakMap(),
+    effectAnalysisClosed: false,
     memberSources: new WeakMap(),
     opaqueMemberSources: new WeakSet(),
     opaquePrototypeProperties: new WeakMap(),
@@ -1522,6 +1539,16 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
     }
     const record = value as Record<string, unknown>;
     const type = typeof record.type === 'string' ? record.type : undefined;
+    if (type === 'ClassDeclaration' || type === 'ClassExpression') {
+      const body =
+        isAstRecord(record.body) && record.body.type === 'ClassBody' ? record.body : undefined;
+      const elements = body !== undefined && Array.isArray(body.body) ? body.body : [];
+      if (elements.some((element) => isAstRecord(element) && element.type === 'StaticBlock')) {
+        // Static blocks are eagerly executed with the class constructor as `this`; keep that
+        // general-JS mutation surface closed rather than losing its implicit receiver effects.
+        index.opaqueMemberSources.add(record);
+      }
+    }
     if (type === 'Program') {
       index.scopeByNode.set(record, scope);
       collectBrowserAstChildren(record, scope, collect);
@@ -1815,11 +1842,35 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
         collectBrowserMemberAssignment(record.argument, undefined, false, scope, index);
       }
       markBrowserAssignmentPatternOpaque(record.argument, scope, index);
+    } else if (
+      (record.type === 'ForInStatement' || record.type === 'ForOfStatement') &&
+      isAstRecord(record.left) &&
+      record.left.type !== 'VariableDeclaration'
+    ) {
+      // Iteration assigns an element/key rather than the right-hand collection itself. Keep that
+      // unsupported transform closed instead of attaching a falsely precise collection source.
+      markBrowserAssignmentPatternOpaque(record.left, scope, index);
+      markBrowserStructuredArgumentOpaque(record.right, scope, index, {
+        bindingStack: new Set(),
+        depth: 0,
+      });
     }
     if (record.type === 'CallExpression') {
       collectBrowserOpaqueCallArguments(record, scope, index);
     } else if (record.type === 'NewExpression') {
       collectBrowserOpaqueConstructorArguments(record, scope, index);
+    } else if (record.type === 'TaggedTemplateExpression') {
+      const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+      markBrowserStructuredArgumentOpaque(record.tag, scope, index, state);
+      if (isAstRecord(record.tag) && record.tag.type === 'MemberExpression') {
+        markBrowserStructuredArgumentOpaque(record.tag.object, scope, index, state);
+      }
+      const quasi = isAstRecord(record.quasi) ? record.quasi : undefined;
+      const expressions =
+        quasi !== undefined && Array.isArray(quasi.expressions) ? quasi.expressions : [];
+      for (const expression of expressions) {
+        markBrowserStructuredArgumentOpaque(expression, scope, index, state);
+      }
     }
     for (const [key, child] of Object.entries(record)) {
       if (!browserAstMetadataKeys.has(key)) visit(child);
@@ -1834,15 +1885,40 @@ function collectBrowserOpaqueCallArguments(
   index: BrowserStaticIndex,
 ): void {
   const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+  const calleeMember =
+    isAstRecord(call.callee) && call.callee.type === 'MemberExpression' ? call.callee : undefined;
+  const calleeProperties =
+    calleeMember === undefined
+      ? undefined
+      : browserStaticPropertyNames(calleeMember, scope, index, state);
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  if (
+    calleeMember !== undefined &&
+    (calleeProperties === undefined ||
+      calleeProperties.some((property) =>
+        ['__defineGetter__', '__defineSetter__', 'apply', 'bind', 'call'].includes(property),
+      ))
+  ) {
+    // Legacy accessor mutation and indirect invocation are outside the finite effect language.
+    // Close both the receiver and structured arguments instead of treating a plain-looking member
+    // name as proof that authority cannot be transferred (SPEC §6.6; C13).
+    markBrowserStructuredArgumentOpaque(calleeMember.object, scope, index, state);
+    for (const argument of args) markBrowserStructuredArgumentOpaque(argument, scope, index, state);
+    return;
+  }
   const callee = evaluateBrowserStaticValue(call.callee, scope, index, state);
   if (callee.length > 0 && callee.every((atom) => atom.kind === 'object-define-property')) {
     collectBrowserDefinePropertyEffects(call, scope, index, state);
     return;
   }
   if (callee.length > 0 && callee.every((atom) => atom.kind === 'object-freeze')) return;
-  const args = Array.isArray(call.arguments) ? call.arguments : [];
   const affectedArguments = new Set<number>();
-  if (callee.some((atom) => atom.kind === 'closed')) {
+  const callHasUnsupportedTarget =
+    callee.length === 0 ||
+    callee.some(
+      (atom) => atom.kind !== 'namespace' || !browserAstFunctionType(String(atom.node.type)),
+    );
+  if (callHasUnsupportedTarget) {
     for (let argumentIndex = 0; argumentIndex < args.length; argumentIndex += 1) {
       affectedArguments.add(argumentIndex);
     }
@@ -1851,7 +1927,7 @@ function collectBrowserOpaqueCallArguments(
     (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
       atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type)),
   );
-  collectBrowserAffectedInvocationArguments(
+  const receiverAffected = collectBrowserAffectedInvocationArguments(
     localCallables,
     args,
     scope,
@@ -1862,6 +1938,70 @@ function collectBrowserOpaqueCallArguments(
   for (const argumentIndex of affectedArguments) {
     markBrowserStructuredArgumentOpaque(args[argumentIndex], scope, index, state);
   }
+  const narrowedArrayJoin =
+    callHasUnsupportedTarget &&
+    calleeMember !== undefined &&
+    calleeProperties?.length === 1 &&
+    calleeProperties[0] === 'join' &&
+    callee.length === 1 &&
+    callee[0]?.kind === 'plain' &&
+    collectBrowserArrayJoinCoercionEffects(calleeMember.object, scope, index, state);
+  if (
+    (receiverAffected || (callHasUnsupportedTarget && !narrowedArrayJoin)) &&
+    calleeMember !== undefined
+  ) {
+    markBrowserStructuredArgumentOpaque(calleeMember.object, scope, index, state);
+  }
+}
+
+function collectBrowserArrayJoinCoercionEffects(
+  receiver: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): boolean {
+  const arrays = evaluateBrowserStaticValue(receiver, scope, index, state);
+  if (
+    arrays.length === 0 ||
+    !arrays.every(
+      (atom): atom is Extract<BrowserStaticAtom, { kind: 'array' }> => atom.kind === 'array',
+    )
+  ) {
+    return false;
+  }
+  const seen = new Set<object>();
+  const markCoercedValue = (
+    value: unknown,
+    valueScope: BrowserStaticScope,
+    depth: number,
+  ): void => {
+    if (depth > 48) {
+      index.effectAnalysisClosed = true;
+      return;
+    }
+    const expression =
+      isAstRecord(value) && value.type === 'SpreadElement' ? value.argument : value;
+    for (const atom of evaluateBrowserStaticValue(expression, valueScope, index, state)) {
+      if (atom.kind === 'array') {
+        if (seen.has(atom.node)) continue;
+        seen.add(atom.node);
+        index.opaqueMemberSources.add(atom.node);
+        const elements = Array.isArray(atom.node.elements) ? atom.node.elements : [];
+        for (const element of elements) markCoercedValue(element, atom.scope, depth + 1);
+      } else if (atom.kind === 'namespace' || atom.kind === 'object') {
+        index.opaqueMemberSources.add(atom.node);
+      } else if (atom.kind === 'prototype') {
+        index.opaquePrototypes.add(atom.constructor.node);
+      } else if (atom.kind === 'instance') {
+        index.opaqueMemberSources.add(atom.constructor.node);
+      }
+    }
+  };
+  for (const array of arrays) {
+    const elements = Array.isArray(array.node.elements) ? array.node.elements : [];
+    for (const element of elements) markCoercedValue(element, array.scope, 0);
+  }
+  return true;
 }
 
 function collectBrowserDefinePropertyEffects(
@@ -1908,7 +2048,6 @@ function collectBrowserOpaqueConstructorArguments(
 ): void {
   const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
   const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);
-  if (callee.length > 0 && callee.every((atom) => atom.kind === 'proxy-constructor')) return;
   const args = Array.isArray(expression.arguments) ? expression.arguments : [];
   const affectedArguments = new Set<number>();
   const callables: Extract<BrowserStaticAtom, { kind: 'namespace' }>[] = [];
@@ -1947,14 +2086,18 @@ function collectBrowserAffectedInvocationArguments(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
   affectedArguments: Set<number>,
-): void {
+): boolean {
+  let receiverAffected = false;
   for (const callable of callables) {
     const parameters = Array.isArray(callable.node.params) ? callable.node.params : [];
-    for (const parameterIndex of browserStaticCallableEffectParameters(
-      callable,
-      index,
-      new Set(),
-    )) {
+    const effects = browserStaticCallableEffects(callable, index, new Set());
+    receiverAffected ||= effects.receiver;
+    if (effects.variadic) {
+      for (let argumentIndex = 0; argumentIndex < args.length; argumentIndex += 1) {
+        affectedArguments.add(argumentIndex);
+      }
+    }
+    for (const parameterIndex of effects.parameterIndexes) {
       const parameter = parameters[parameterIndex];
       if (isAstRecord(parameter) && parameter.type === 'RestElement') {
         for (let argumentIndex = parameterIndex; argumentIndex < args.length; argumentIndex += 1) {
@@ -1965,6 +2108,7 @@ function collectBrowserAffectedInvocationArguments(
       }
     }
   }
+  return receiverAffected;
 }
 
 function browserStaticConstructorCallables(
@@ -2044,18 +2188,23 @@ function browserStaticConstructorCallables(
  * evaluateBrowserStaticCallable. This is a conservative post-bundle backstop, not general
  * JavaScript effect analysis (SPEC §6.6; C13).
  */
-function browserStaticCallableEffectParameters(
+function browserStaticCallableEffects(
   callable: Extract<BrowserStaticAtom, { kind: 'namespace' }>,
   index: BrowserStaticIndex,
   active: Set<object>,
-): readonly number[] {
-  const cached = index.callableEffectParameters.get(callable.node);
+): BrowserStaticCallableEffects {
+  const cached = index.callableEffects.get(callable.node);
   if (cached !== undefined) return cached;
   const parameters = Array.isArray(callable.node.params) ? callable.node.params : [];
   const allParameters = parameters.map((_, parameterIndex) => parameterIndex);
-  if (active.has(callable.node)) return allParameters;
+  const closedEffects: BrowserStaticCallableEffects = {
+    parameterIndexes: allParameters,
+    receiver: true,
+    variadic: true,
+  };
+  if (active.has(callable.node)) return closedEffects;
   const body = callable.node.body;
-  if (!isAstRecord(body)) return allParameters;
+  if (!isAstRecord(body)) return closedEffects;
   active.add(callable.node);
   const callableScope = index.scopeByNode.get(body) ?? callable.scope;
   const callableFunctionScope = nearestBrowserFunctionScope(callableScope);
@@ -2072,16 +2221,19 @@ function browserStaticCallableEffectParameters(
   const state: BrowserStaticEvaluationState = {
     bindingStack: new Set(),
     budget,
+    callReceiver: true,
     depth: 0,
     overrides,
   };
   const affected = new Set<number>();
+  let receiverAffected = false;
 
   const addDirectOrigins = (value: unknown, valueScope: BrowserStaticScope): void => {
     for (const atom of evaluateBrowserStaticValue(value, valueScope, index, state)) {
       if (atom.kind === 'plain' && atom.callArgumentIndex !== undefined) {
         affected.add(atom.callArgumentIndex);
       }
+      if (atom.kind === 'plain' && atom.callReceiver === true) receiverAffected = true;
     }
   };
 
@@ -2114,6 +2266,7 @@ function browserStaticCallableEffectParameters(
         if (atom.kind === 'plain' && atom.callArgumentIndex !== undefined) {
           affected.add(atom.callArgumentIndex);
         }
+        if (atom.kind === 'plain' && atom.callReceiver === true) receiverAffected = true;
         if (
           (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') &&
           atom.node !== record
@@ -2168,7 +2321,18 @@ function browserStaticCallableEffectParameters(
         if (atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type))) {
           const callableWasActive = active.has(atom.node);
           const nestedParameters = Array.isArray(atom.node.params) ? atom.node.params : [];
-          for (const parameterIndex of browserStaticCallableEffectParameters(atom, index, active)) {
+          const nestedEffects = browserStaticCallableEffects(atom, index, active);
+          if (
+            nestedEffects.receiver &&
+            isAstRecord(record.callee) &&
+            record.callee.type === 'MemberExpression'
+          ) {
+            addDeepOrigins(record.callee.object, callScope);
+          }
+          if (nestedEffects.variadic) {
+            for (const argument of args) addDeepOrigins(argument, callScope);
+          }
+          for (const parameterIndex of nestedEffects.parameterIndexes) {
             const parameter = nestedParameters[parameterIndex];
             if (isAstRecord(parameter) && parameter.type === 'RestElement') {
               for (
@@ -2232,12 +2396,54 @@ function browserStaticCallableEffectParameters(
   for (const parameter of parameters) visit(parameter);
   visit(body);
   active.delete(callable.node);
-  const result =
-    budget.exhausted || budget.recursive
-      ? allParameters
-      : [...affected].sort((left, right) => left - right);
-  index.callableEffectParameters.set(callable.node, result);
+  const closed = budget.exhausted || budget.recursive;
+  const result: BrowserStaticCallableEffects = {
+    parameterIndexes: closed ? allParameters : [...affected].sort((left, right) => left - right),
+    receiver: closed || receiverAffected,
+    variadic: closed || browserStaticCallableUsesArguments(body, index),
+  };
+  index.callableEffects.set(callable.node, result);
   return result;
+}
+
+function browserStaticCallableUsesArguments(
+  body: Readonly<Record<string, unknown>>,
+  index: BrowserStaticIndex,
+): boolean {
+  let found = false;
+  const visit = (
+    value: unknown,
+    parent?: Readonly<Record<string, unknown>>,
+    key?: string,
+  ): void => {
+    if (found || typeof value !== 'object' || value === null) return;
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child, parent, key);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if (
+      record !== body &&
+      browserAstFunctionType(String(record.type)) &&
+      record.type !== 'ArrowFunctionExpression'
+    ) {
+      return;
+    }
+    if (record.type === 'ClassDeclaration' || record.type === 'ClassExpression') return;
+    if (
+      record.type === 'Identifier' &&
+      record.name === 'arguments' &&
+      browserIdentifierIsValueReference(record, parent, key, index.bindingIdentifiers)
+    ) {
+      found = true;
+      return;
+    }
+    for (const [childKey, child] of Object.entries(record)) {
+      if (!browserAstMetadataKeys.has(childKey)) visit(child, record, childKey);
+    }
+  };
+  visit(body);
+  return found;
 }
 
 function addBrowserCallArgumentOverrides(
@@ -2342,7 +2548,11 @@ function markBrowserStructuredArgumentOpaque(
 ): void {
   const seen = new Set<object>();
   const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {
-    if (depth > 48 || typeof candidate !== 'object' || candidate === null) return;
+    if (depth > 48) {
+      index.effectAnalysisClosed = true;
+      return;
+    }
+    if (typeof candidate !== 'object' || candidate === null) return;
     if (Array.isArray(candidate)) {
       for (const child of candidate) visit(child, candidateScope, depth + 1);
       return;
@@ -2355,6 +2565,10 @@ function markBrowserStructuredArgumentOpaque(
       if (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') {
         index.opaqueMemberSources.add(atom.node);
         if (atom.node !== record) visit(atom.node, atom.scope, depth + 1);
+      } else if (atom.kind === 'prototype') {
+        index.opaquePrototypes.add(atom.constructor.node);
+      } else if (atom.kind === 'instance') {
+        index.opaqueMemberSources.add(atom.constructor.node);
       }
     }
     for (const [key, child] of Object.entries(record)) {
@@ -2398,7 +2612,7 @@ function collectBrowserSetterAssignment(
   }
   const affectedArguments = new Set<number>();
   if (resolution.closed) affectedArguments.add(0);
-  collectBrowserAffectedInvocationArguments(
+  const receiverAffected = collectBrowserAffectedInvocationArguments(
     resolution.callables,
     [expression],
     scope,
@@ -2408,6 +2622,9 @@ function collectBrowserSetterAssignment(
   );
   if (affectedArguments.has(0)) {
     markBrowserStructuredArgumentOpaque(expression, scope, index, state);
+  }
+  if (receiverAffected) {
+    markBrowserStructuredArgumentOpaque(member.object, scope, index, state);
   }
 }
 
@@ -2714,6 +2931,15 @@ function addBrowserAssignmentPatternSource(
   index: BrowserStaticIndex,
 ): void {
   if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'MemberExpression') {
+    // Destructuring writes can invoke setters or mutate a projected object without ever exposing a
+    // top-level AssignmentExpression member target. That general-JS effect is outside the finite
+    // projection grammar, so close both sides instead of silently discarding it (SPEC §6.6; C13).
+    const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+    markBrowserStructuredArgumentOpaque(pattern.object, scope, index, state);
+    markBrowserStructuredArgumentOpaque(source.expression, source.scope, index, state);
+    return;
+  }
   if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
     const binding = lookupBrowserBinding(pattern.name, scope);
     if (binding !== undefined) binding.sources.push(source);
@@ -2724,14 +2950,16 @@ function addBrowserAssignmentPatternSource(
     return;
   }
   if (pattern.type === 'RestElement') {
-    markBrowserAssignmentPatternOpaque(pattern.argument, scope, index);
+    addBrowserAssignmentPatternSource(pattern.argument, source, scope, index);
     return;
   }
   if (pattern.type === 'ObjectPattern') {
     const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
     for (const property of properties) {
       if (!isAstRecord(property) || property.type !== 'Property') {
-        if (isAstRecord(property)) {
+        if (isAstRecord(property) && property.type === 'RestElement') {
+          addBrowserAssignmentPatternSource(property.argument, source, scope, index);
+        } else if (isAstRecord(property)) {
           markBrowserAssignmentPatternOpaque(property.argument, scope, index);
         }
         continue;
@@ -2786,7 +3014,33 @@ function markBrowserAssignmentPatternOpaque(
     if (binding !== undefined) binding.opaque = true;
     return;
   }
-  addOpaqueBrowserPattern(pattern, scope, index);
+  if (pattern.type === 'MemberExpression') {
+    markBrowserStructuredArgumentOpaque(pattern.object, scope, index, {
+      bindingStack: new Set(),
+      depth: 0,
+    });
+    return;
+  }
+  if (pattern.type === 'AssignmentPattern' || pattern.type === 'RestElement') {
+    markBrowserAssignmentPatternOpaque(pattern.left ?? pattern.argument, scope, index);
+    return;
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    for (const property of properties) {
+      if (!isAstRecord(property)) continue;
+      markBrowserAssignmentPatternOpaque(
+        property.type === 'Property' ? property.value : property.argument,
+        scope,
+        index,
+      );
+    }
+    return;
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    for (const element of elements) markBrowserAssignmentPatternOpaque(element, scope, index);
+  }
 }
 
 function lookupBrowserBinding(
@@ -2849,6 +3103,11 @@ function evaluateBrowserStaticValue(
   }
   if (!isAstRecord(value)) return [{ kind: 'closed' }];
   const nextState = nextBrowserStaticEvaluationState(state);
+  if (value.type === 'ThisExpression') {
+    return state.callReceiver === true
+      ? [{ callReceiver: true, kind: 'plain' }]
+      : [{ kind: 'closed' }];
+  }
   if (value.type === 'Identifier' && typeof value.name === 'string') {
     const binding = lookupBrowserBinding(value.name, scope);
     if (binding !== undefined) return evaluateBrowserBinding(binding, index, nextState);
@@ -3198,7 +3457,7 @@ function browserMemberAtoms(
           atoms.push({ kind: 'closed' });
         }
       } else if (receiver.kind === 'plain') {
-        if (receiver.callArgumentIndex !== undefined) {
+        if (receiver.callArgumentIndex !== undefined || receiver.callReceiver === true) {
           atoms.push(receiver);
         } else if (property === 'constructor') {
           atoms.push({ kind: 'constructor-value' });
@@ -3293,6 +3552,11 @@ function browserPlainNamespaceMember(
       } else if (element.type === 'PropertyDefinition' && element.value !== undefined) {
         atoms.push(...evaluateBrowserStaticValue(element.value, namespace.scope, index, state));
       } else {
+        if (element.type === 'MethodDefinition' && element.kind === 'get') {
+          // Accessor reads may mutate or return the implicit class receiver. The finite evaluator
+          // does not execute getters, so close the constructor namespace once one is observed.
+          index.opaqueMemberSources.add(namespace.node);
+        }
         atoms.push({ kind: 'closed' });
       }
     }

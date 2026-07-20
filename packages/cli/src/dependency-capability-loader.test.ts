@@ -2063,6 +2063,26 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'audit-constructor-receiver-written Worker',
+      "(() => { function Holder() { this.platform = globalThis; } const holder = new Holder(); return new holder.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-Object-freeze-Proxy-trap-written Worker',
+      "(() => { const box = {}; const proxy = new Proxy(box, { preventExtensions(target) { target.platform = globalThis; Reflect.preventExtensions(target); return true; } }); Object.freeze(proxy); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-default-parameter-written Worker',
+      "(() => { function install(box, _unused = (box.platform = globalThis)) { return box; } const box = {}; const installed = install(box); return new installed.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-array-join-coercion-written Worker',
+      "(() => { const box = { toString() { this.platform = globalThis; return ''; } }; [box].join(':'); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'audit-array-callback-written Worker',
       "(() => { const box = {}; [box].forEach(value => { value.platform = globalThis; }); return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
@@ -2831,6 +2851,26 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-static-block-this-written Worker',
       "(() => { class Holder { static { this.platform = globalThis; } } return new Holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-constructor-receiver-written Worker',
+      "(() => { function Holder() { this.platform = globalThis; } const holder = new Holder(); return new holder.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-Object-freeze-Proxy-trap-written Worker',
+      "(() => { const box = {}; const proxy = new Proxy(box, { preventExtensions(target) { target.platform = globalThis; Reflect.preventExtensions(target); return true; } }); Object.freeze(proxy); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-default-parameter-written Worker',
+      "(() => { function install(box, _unused = (box.platform = globalThis)) { return box; } const box = {}; const installed = install(box); return new installed.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-array-join-coercion-written Worker',
+      "(() => { const box = { toString() { this.platform = globalThis; return ''; } }; [box].join(':'); return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
