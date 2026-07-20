@@ -13,10 +13,12 @@ describe('bounded Better Auth credential rate-limit storage', () => {
     const options = createBetterAuthBoundedRateLimitStorage(secret, async () => true);
     const signInRule = options.customRules?.['/sign-in/email'];
     const signUpRule = options.customRules?.['/sign-up/email'];
+    const passwordResetRule = options.customRules?.['/request-password-reset'];
 
     expect(options.enabled).toBe(true);
     expect(options.storage).toBe('database');
     expect(Object.keys(options.customRules ?? {})).toEqual([
+      '/request-password-reset',
       '/sign-in/email',
       '/sign-up/email',
       '/**',
@@ -25,6 +27,12 @@ describe('bounded Better Auth credential rate-limit storage', () => {
       throw new Error('missing exact credential rules');
     }
     expect(await signInRule(new Request('https://app.test/sign-in/email'), rule)).toBe(false);
+    expect(
+      await passwordResetRule(
+        new Request('https://app.test/request-password-reset', { method: 'POST' }),
+        rule,
+      ),
+    ).toEqual({ max: 3, window: 10 });
     expect(
       await signUpRule(new Request('https://app.test/sign-up/email', { method: 'POST' }), rule),
     ).toEqual(rule);

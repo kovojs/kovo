@@ -741,19 +741,32 @@ body, status text, content headers, or arbitrary headers. In particular, depende
 or HTML through the mount (SPEC §6.6/§9.1).
 
 **Better Auth lifecycle ownership and non-claims (normative).** The fixed SQLite/Postgres bindings
-own exactly three Kovo-owned identity transitions: the CSRF-protected `signIn` mutation, the
-CSRF-protected `signOut` mutation, and development-only seed `signUp` (which provisions a
-credential with `autoSignIn: false`). No other direct Better Auth lifecycle API is exposed. The
-opaque provider mount accepts only `GET`, so provider lifecycle operations requiring an unsafe
+own exactly four Kovo-owned identity transitions: the CSRF-protected `signIn` mutation, the
+CSRF-protected `signOut` mutation, development-only seed `signUp` (which provisions a credential
+with `autoSignIn: false`), and the feature-conditional CSRF-protected `requestPasswordReset`
+mutation. The fourth transition exists only when the binding receives a constructor-minted,
+purpose-closed password-reset mail door, an explicit public/pre-auth access decision, and one
+canonical same-origin reset path. For an accepted provider request, the mutation MUST expose one
+generic accepted result for account-present and account-absent worlds, MUST discard the provider
+response and cookies, and MUST invoke the registered sender exactly once with only
+`{ to, resetUrl }` in either world. Rate-limit or provider failure MUST stop before mail dispatch.
+The absent world uses a same-shape decoy URL minted before provider work. The real token MUST reach
+only that mail sender inside the validated same-origin URL; the standalone token, provider user
+record, request, and other dependency values MUST NOT cross the door. Mail-provider delivery and
+its attacker-visible behavior are deployment egress outside Kovo's HTTP-equivalence claim. No
+other direct Better Auth lifecycle API is exposed. The opaque provider mount accepts only `GET`, so
+provider lifecycle operations requiring an unsafe
 method are structurally unreachable through that mount. This is not a claim that every dependency
 lifecycle route is unreachable: the redirect/callback mount can reach dependency-defined `GET`
 handlers that change identity state, including provider or token callback flows. That reachable GET
 callback lifecycle is delegated and unsupported by Kovo guarantees; only the origin, non-egress,
 redirect-response, and cookie-posture boundaries above apply. Session expiry, rolling update,
 freshness, cookie-cache posture, and sign-in rotation behavior are inherited from the exact-pinned
-provider and MUST remain characterized by the provider-pin conformance test. `kovo explain
---auth-lifecycle` MUST print the inherited values, the three owned transitions, the structurally
-unreachable unsafe-method class, and the reachable delegated non-claim.
+provider and MUST remain characterized by the provider-pin conformance test. Reset-token minting,
+expiry, single use, and reset completion remain exact-pinned Better Auth protocol behavior rather
+than a Kovo guarantee. `kovo explain --auth-lifecycle` MUST print the inherited values, the four
+owned transitions (including the feature condition), the structurally unreachable unsafe-method
+class, and the reachable delegated non-claim.
 
 **Outbound egress: the positive framework capability (normative).** Untrusted-data-reachable framework code MUST have one supported positive HTTP network door: the exact framework-owned `ctx.fetch` supplied to durable/scheduled tasks, verified webhooks, and any supported agent-tool callback. A runner or app MUST NOT replace that function. Raw `fetch`, `node:http`, `node:https`, `net`, datagram, proxy-agent, database-driver, worker, process, native-socket, or dynamically loaded network authority remains unavailable from that graph unless a separately reviewed framework door explicitly owns it. `egress.allowDestinations` MUST be a dense list of exact HTTP(S) origins. Boot MUST reject an empty, malformed, credential-bearing, path/query/fragment-bearing, non-HTTP(S), or non-string entry instead of warning and widening or silently narrowing posture. Boot canonicalizes scheme, URL-normalized hostname (including Unicode, legacy IPv4, IPv6, case, and a DNS trailing dot), and effective port into one origin identity. The initial request and every redirect or pooled-request origin MUST match that canonical set **before DNS, proxy selection, pool reuse, or dial**. Every admitted hostname request/hop MUST resolve all candidate addresses and classify all of them; any closed answer closes the whole request. Every new TCP dial MUST classify the exact resolver result that Node may select and pin that immutable result into the dial, so DNS rotation is admitted only when the origin remains declared and every new answer remains safe. A declared private origin additionally needs the ambient `allowInternal` posture below. A framework-created database socket is a separate, module-private exact-endpoint capability: it may follow DNS rotation for its registered Postgres host/port without opening that endpoint to unrelated sockets. Arbitrary application proxy/dispatcher configuration is unsupported and MUST fail boot or be stripped from `ctx.fetch`; an operator-controlled transparent proxy remains deployment authority outside this application-level origin proof and does not turn the private-network floor into a sandbox. Future agent-tool APIs MUST supply this same contextual door before they are supported. Same-process deliberately malicious code or intrinsic poisoning is outside this construction proof, as stated by the capability-closure boundary above.
 

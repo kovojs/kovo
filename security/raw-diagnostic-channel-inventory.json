@@ -300,6 +300,94 @@
       "expressionSha256": "a442bb74fb293f2c7db26cafd5cad2a9fff72b1eb72ea122639fa87e86468cbc"
     },
     {
+      "id": "packages/better-auth/src/password-reset-mail.ts#error-object#KV439#f6a2119e86754b7fe4e471131577121710e629020e6d28f8eaff830e6a17efb7#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "error-object",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "invalidMailDoor",
+      "expressionSha256": "f6a2119e86754b7fe4e471131577121710e629020e6d28f8eaff830e6a17efb7"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#2366cbb098e3c4abe1ca9e32609ceb6b6c28ed88b6b6824577b89288920ee118#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "requirePasswordResetMailAttempt",
+      "expressionSha256": "2366cbb098e3c4abe1ca9e32609ceb6b6c28ed88b6b6824577b89288920ee118"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#2366cbb098e3c4abe1ca9e32609ceb6b6c28ed88b6b6824577b89288920ee118#1",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "requirePasswordResetMailAttempt",
+      "expressionSha256": "2366cbb098e3c4abe1ca9e32609ceb6b6c28ed88b6b6824577b89288920ee118"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#6952f92843a30a312f5f9c1c95e8b39fe0ec110d00cfcd6349b8901ac90d2eb6#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "betterAuthPasswordResetMailDoor",
+      "expressionSha256": "6952f92843a30a312f5f9c1c95e8b39fe0ec110d00cfcd6349b8901ac90d2eb6"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#758d2cf37583c5b366df811af49af693fbeec70de75b5f0c4eb31ca97708815e#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "beginBetterAuthPasswordResetMailAttempt",
+      "expressionSha256": "758d2cf37583c5b366df811af49af693fbeec70de75b5f0c4eb31ca97708815e"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#dc387dbe97a3c67840ef7af594e9b1d9c55072af964e609f0c6903f5529b3d95#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "captureProviderPasswordResetMail",
+      "expressionSha256": "dc387dbe97a3c67840ef7af594e9b1d9c55072af964e609f0c6903f5529b3d95"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#e6a4bf0906767041d1f30c40fdbc94c933dd3a31fa3d70700193ecce9cc9ab2e#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "captureProviderPasswordResetMail",
+      "expressionSha256": "e6a4bf0906767041d1f30c40fdbc94c933dd3a31fa3d70700193ecce9cc9ab2e"
+    },
+    {
+      "id": "packages/better-auth/src/password-reset-mail.ts#throw#KV439#eea78765bb5003a27f94764acd1a90a99b667ba597d74bed736bb6fff4231502#0",
+      "code": "KV439",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/better-auth/src/password-reset-mail.ts",
+      "owner": "settlePasswordResetMailAttempt",
+      "expressionSha256": "eea78765bb5003a27f94764acd1a90a99b667ba597d74bed736bb6fff4231502"
+    },
+    {
       "id": "packages/browser/src/events.ts#throw#KV320#323f005daf7debbbac1871c0f25f359064cac125e157d28ed47ec9cd28de52a8#0",
       "code": "KV320",
       "enforcementClass": "audited-escape",

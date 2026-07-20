@@ -4,6 +4,7 @@ vi.mock('../packages/better-auth/src/internal/runtime-lock.js', () => ({
   assertBetterAuthRuntimeRealmLocked: vi.fn(),
 }));
 
+import { createBetterAuthPasswordResetTimingWorlds } from '../packages/better-auth/src/password-reset-timing.test-helper.js';
 import { normalizeBetterAuthAccountOperation } from '../packages/better-auth/src/response-observation.js';
 import { hashPassword, verifyCredential } from '../packages/server/src/password.js';
 import {
@@ -71,4 +72,24 @@ describeNightly('nightly response indistinguishability', () => {
     }
     expect(verdict).toMatchObject({ ok: true });
   });
+
+  it('keeps real Better Auth password-reset account worlds inside the same budget', async () => {
+    const worlds = await createBetterAuthPasswordResetTimingWorlds();
+    const samples = await measureAlternatingWorlds({
+      sampleSize: budget.sampleSize,
+      warmupSamples: budget.warmupSamples,
+      worldA: worlds.accountPresent,
+      worldB: worlds.accountAbsent,
+    });
+    const verdict = evaluateTimingBudget(samples.samplesA, samples.samplesB, budget);
+    if (!verdict.ok) {
+      persistTimingCounterexample({
+        budget,
+        directory: budget.counterexampleDirectory,
+        ...samples,
+        surface: 'better-auth.request-password-reset',
+      });
+    }
+    expect(verdict).toMatchObject({ ok: true });
+  }, 120_000);
 });

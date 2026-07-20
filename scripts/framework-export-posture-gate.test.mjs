@@ -20,6 +20,7 @@ const actual = computeFrameworkRuntimeSurface();
 const securityRoleContracts = [
   ['@kovojs/better-auth', '.', 'authed', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthCsrfFromEnvironment', 'security-control'],
+  ['@kovojs/better-auth', '.', 'betterAuthPasswordResetMailDoor', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthPostgresSecret', 'secret-flow'],
   ['@kovojs/better-auth', '.', 'betterAuthSqliteSecret', 'secret-flow'],
   ['@kovojs/better-auth', '.', 'role', 'security-control'],
@@ -80,7 +81,7 @@ describe('framework public runtime export posture gate', () => {
   it('binds every manifest-public runtime value and module initializer to reviewed posture', () => {
     expect(validateFrameworkExportPosture({ actual, ledger })).toEqual([]);
     const rows = expandFrameworkExportPostureLedger(ledger);
-    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_325);
+    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_326);
     expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_839);
     expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
     expect(rows.every((row) => row.rootKind !== undefined)).toBe(true);

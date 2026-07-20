@@ -162,6 +162,9 @@ describe('Better Auth trusted plaintext zone', () => {
     expect(proveBetterAuthRequestSecretNonEgress()).toEqual([]);
 
     expect(betterAuthRequestSecretPaths.map((path) => path.id)).toEqual([
+      'better-auth.password-reset.account-email-lookup',
+      'better-auth.password-reset.account-email-mail-egress',
+      'better-auth.password-reset.token-mail-egress',
       'better-auth.sign-in.submitted-password',
       'better-auth.sign-up.submitted-password',
       'better-auth.sign-out.request-cookie',
@@ -362,11 +365,16 @@ describe('Better Auth trusted plaintext zone', () => {
         }));
       });
 
-    expect(uses).toHaveLength(16);
+    expect(uses).toHaveLength(18);
     expect(uses).toEqual(
       expect.arrayContaining([
         { file: 'internal/password.ts', name: 'passwordHash' },
         { file: 'internal/password.ts', name: 'passwordVerify' },
+        { file: 'password-reset-mail.ts', name: 'passwordResetMailDispatch' },
+        {
+          file: 'internal/trusted-plaintext.ts',
+          name: 'passwordResetHandler',
+        },
         { file: 'internal/trusted-plaintext.ts', name: 'credentialHandlerSignInEmail' },
         { file: 'internal/trusted-plaintext.ts', name: 'credentialHandlerSignUpEmail' },
         { file: 'internal/trusted-plaintext.ts', name: 'seedSignUpEmail' },
@@ -397,9 +405,10 @@ describe('Better Auth trusted plaintext zone', () => {
     );
     expect(census.issues).toEqual([]);
 
-    const contractsByToken = new Map(
-      betterAuthCredentialConsumerContracts.map((contract) => [contract.token, contract]),
-    );
+    const contractsByToken = new Map<
+      string,
+      (typeof betterAuthCredentialConsumerContracts)[number]
+    >(betterAuthCredentialConsumerContracts.map((contract) => [contract.token, contract]));
     const observed = new Set(
       census.invocations.flatMap((invocation) =>
         invocation.consumers.map((token) => {
@@ -705,7 +714,13 @@ describe('Better Auth trusted plaintext zone', () => {
   // the closed verdict vocabulary for any future reviewed API operation.
   it('keeps raw Better Auth API calls absent behind captured gate-owned callables', () => {
     expect(proveBetterAuthPlaintextApiConfinement([])).toEqual([]);
-    for (const method of ['getSession', 'signInEmail', 'signOut', 'signUpEmail']) {
+    for (const method of [
+      'getSession',
+      'requestPasswordReset',
+      'signInEmail',
+      'signOut',
+      'signUpEmail',
+    ]) {
       expect(betterAuthPlaintextReadingApiMethods).toContain(method);
     }
   });

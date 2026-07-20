@@ -18,7 +18,8 @@ export function authLifecycleExplainResult(version: string): KovoCheckResult {
   ];
   for (const transition of boundary.kovoOwnedTransitions) {
     lines.push(
-      `OWNED ${transition.id} upstream=${transition.upstreamApi} surface=${transition.surface} devOnly=${String(transition.devOnly)}`,
+      `OWNED ${transition.id} upstream=${transition.upstreamApi} surface=${transition.surface} devOnly=${String(transition.devOnly)}` +
+        ('feature' in transition ? ` feature=${transition.feature}` : ''),
     );
   }
   for (const unreachable of boundary.structurallyUnreachable) {

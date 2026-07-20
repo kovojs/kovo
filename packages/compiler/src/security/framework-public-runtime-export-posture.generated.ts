@@ -28,7 +28,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-19.6' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-19.7' as const;
 
 // Compact generated closed membership; expanded formatting triples parse input.
 // prettier-ignore
@@ -36,10 +36,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/better-auth", "0.2.0", [
     ["sha256:a3d89744a6d5c81d0fc85ccdfec578e21459c803f1b44034a8b83a910d5074cb", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:b8f4ccdd49b8a095a1fc74253301bce12797a916dcb6376816b8bd44f636d42a"]],
+    ], ["kovo-source-tree-sha256:25ed467c4429435b1feae0187f8e77f7b4ba04c9b9d7eeb059c8ce780eff1a76"]],
     ["sha256:b612fda78ae2932fd34b06df4b5b440f25f6ee71834e329f539e8f9901c9c66c", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:2fe25414d933ae6a55e6a699aaf2b429b423b73296104556dc0b2a188dc90c20"]],
+    ], ["kovo-packed-tree-sha256:d6965fbb4b6cec613aea4358090006c21c239ece469c709eb43e200f3647c180"]],
   ]],
   ["@kovojs/browser", "0.2.0", [
     ["sha256:15adc9f61802af62e281997ba39e5182d35c1dc3cf37684ac8ff7d5d708c9e90", [
@@ -54,18 +54,18 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/cli", "0.2.0", [
     ["sha256:55ced4126de7fc822390a6b2fd624a40e36d9e5571b004d0c25f1e06962b6cc9", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:9fe726ac6f38055bb447a43afe675b24652e934f128ba8a57ecf80692e21a800"]],
+    ], ["kovo-packed-tree-sha256:7661a55ecd6dca2f39d4ab0acf7f8125b996b8d1e8cb7f982ffcce41b730087b"]],
     ["sha256:be78408be21a86cbac9a8dc0fd404b3f323a33e2cbbdf32eed7dba60849ed74e", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:27365c126c1c8c642b6b0a4f84ac3e428f0ee54fc7f3adcb99f2c17675ce80d9"]],
+    ], ["kovo-source-tree-sha256:40513cc1a6eeda9e736bfa9c0af309454e15f5caf2d3a7a6ac9531c575893cd1"]],
   ]],
   ["@kovojs/compiler", "0.2.0", [
     ["sha256:21d6efc7eb88bc768717c0e7a396abab70b204e8c0cc49c215a8885811fed018", [
 
-    ], ["kovo-compiler-self-source-tree-sha256:73c02da9599a1657770fd06106118ebd254bbcd4b25454776544b555811ac975"]],
+    ], ["kovo-compiler-self-source-tree-sha256:7291d223608adfa78d6623bb7328baf41fb1438623908d4c29ac77de01da4f03"]],
     ["sha256:ae324e67b1862da80aca7fbcce8f08ee8736916c8ee767f59093e03b6430f411", [
 
-    ], ["kovo-compiler-self-packed-tree-sha256:d37147392138509450faeb57c62ad8bf7629e5eaa0d0f397b565993beb6abbec"]],
+    ], ["kovo-compiler-self-packed-tree-sha256:6e2b0317b0e9f74b1c77cdef130f347e60a8a0e5644e639502d6dc625982bdc2"]],
   ]],
   ["@kovojs/core", "0.2.0", [
     ["sha256:085f4391ac7c991c4d3db32bff5d0b3a672a8444c5b4ba128df6657a107e0fb1", [
@@ -3818,6 +3818,9 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ]],
   ["@kovojs/better-auth", "authority-free", [], "none", null, [
     [".",["betterAuthCsrfFromEnvironment"]],
+  ]],
+  ["@kovojs/better-auth", "authority-free", [], "none", null, [
+    [".",["betterAuthPasswordResetMailDoor"]],
   ]],
   ["@kovojs/better-auth", "authority-free", [], "none", null, [
     [".",["role"]],

@@ -8,6 +8,7 @@ export type BetterAuthCredentialCensusSource =
   | 'cookie.snapshot'
   | 'password.hash'
   | 'password.verify'
+  | 'password-reset-mail.dispatch'
   | 'rate-limit.constructor'
   | 'session.reconstruction';
 
@@ -307,6 +308,9 @@ export function censusBetterAuthCredentialSources(
     if (key === 'method' && isPinnedBetterAuthCredentialMethod(base)) {
       result.add('raw:better-auth.callable');
     }
+    if (key === 'method' && isPinnedBetterAuthPasswordResetMailMethod(base)) {
+      result.add('raw:password-reset-mail.dispatch');
+    }
     return result;
   }
 
@@ -318,6 +322,17 @@ export function censusBetterAuthCredentialSources(
         ts.isInterfaceDeclaration(declaration.parent) &&
         declaration.parent.name.text === 'PinnedBetterAuthApiCallable' &&
         displayFile(declaration.getSourceFile().fileName) === 'internal/trusted-plaintext.ts',
+    );
+  }
+
+  function isPinnedBetterAuthPasswordResetMailMethod(expression: ts.Expression): boolean {
+    const property = checker.getPropertyOfType(checker.getTypeAtLocation(expression), 'method');
+    return (property?.declarations ?? []).some(
+      (declaration) =>
+        ts.isPropertySignature(declaration) &&
+        ts.isInterfaceDeclaration(declaration.parent) &&
+        declaration.parent.name.text === 'PinnedBetterAuthPasswordResetMailDoor' &&
+        displayFile(declaration.getSourceFile().fileName) === 'password-reset-mail.ts',
     );
   }
 
@@ -648,6 +663,7 @@ function credentialSource(
     case 'cookie.snapshot':
     case 'password.hash':
     case 'password.verify':
+    case 'password-reset-mail.dispatch':
     case 'rate-limit.constructor':
     case 'session.reconstruction':
       return value;

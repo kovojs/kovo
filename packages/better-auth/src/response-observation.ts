@@ -47,7 +47,7 @@ export async function normalizeBetterAuthAccountOperation<Status extends string>
  * delivery is deliberately outside Kovo's HTTP-equivalence claim and must be measured by the
  * deployer.
  *
- * @kovo-response-observation-future-door better-auth.request-password-reset
+ * @kovo-response-observation-candidate better-auth.request-password-reset
  */
 export async function normalizeBetterAuthPasswordResetResponse(
   response: BetterAuthResponseLike,

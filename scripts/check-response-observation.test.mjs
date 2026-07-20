@@ -22,13 +22,6 @@ const tuple = {
 
 const futureDoors = [
   {
-    id: 'better-auth.request-password-reset',
-    normalizer: 'normalizeBetterAuthPasswordResetResponse',
-    reachability: 'structurally-unreachable',
-    source: 'packages/better-auth/src/response-observation.ts',
-    upstreamApi: 'requestPasswordReset',
-  },
-  {
     id: 'better-auth.sign-up-email',
     normalizer: 'normalizeBetterAuthAccountOperation',
     reachability: 'structurally-unreachable',
@@ -42,6 +35,12 @@ const authLifecycle = {
     { devOnly: false, id: 'signIn', upstreamApi: 'signInEmail' },
     { devOnly: false, id: 'signOut', upstreamApi: 'signOut' },
     { devOnly: true, id: 'seedSignUp', upstreamApi: 'signUpEmail' },
+    {
+      devOnly: false,
+      feature: 'password-reset-mail',
+      id: 'requestPasswordReset',
+      upstreamApi: 'requestPasswordReset',
+    },
   ],
   schema: 'kovo-auth-lifecycle-boundary/v1',
   structurallyUnreachable: [{ id: 'unsafe-method-provider-lifecycle' }],
@@ -63,6 +62,13 @@ const manifest = {
   ],
   futureDoors,
   surfaces: [
+    {
+      class: 'account-recovery',
+      id: 'better-auth.request-password-reset',
+      source: 'packages/better-auth/src/response-observation.ts',
+      tuple,
+      worlds: ['account-present', 'account-absent'],
+    },
     {
       class: 'account-recovery',
       id: 'auth.reset',
@@ -93,7 +99,7 @@ path: .kovo/security-failures/**
     'packages/better-auth/src/response-observation.ts': `
 /** @kovo-response-observation-future-door better-auth.sign-up-email */
 export async function normalizeBetterAuthAccountOperation() {}
-/** @kovo-response-observation-future-door better-auth.request-password-reset */
+/** @kovo-response-observation-candidate better-auth.request-password-reset */
 export async function normalizeBetterAuthPasswordResetResponse() {}
 `,
     'packages/server/src/reset.ts': source,
@@ -147,27 +153,30 @@ describe('check-response-observation', () => {
     expect(result.findings.join('\n')).toContain('policy auth.reset has no production candidate');
   });
 
-  it('fails closed when a Better Auth future door becomes remotely reachable', () => {
-    const result = run('// @kovo-response-observation-candidate auth.reset', manifest, {
+  it('fails closed when a remotely reachable Better Auth door loses its policy', () => {
+    const unreachableLifecycle = {
       ...authLifecycle,
-      kovoOwnedTransitions: [
-        ...authLifecycle.kovoOwnedTransitions,
-        {
-          devOnly: false,
-          id: 'requestPasswordReset',
-          upstreamApi: 'requestPasswordReset',
-        },
-      ],
-    });
-    expect(result.ok).toBe(false);
-    expect(result.findings.join('\n')).toContain(
-      'better-auth.request-password-reset: remotely reachable lifecycle cannot remain a future door',
+      kovoOwnedTransitions: authLifecycle.kovoOwnedTransitions.filter(
+        (transition) => transition.id !== 'requestPasswordReset',
+      ),
+    };
+    const withoutPolicy = run(
+      '// @kovo-response-observation-candidate auth.reset',
+      { ...manifest, surfaces: manifest.surfaces.slice(1) },
+      authLifecycle,
     );
-    expect(result.findings.join('\n')).toContain(
-      'better-auth.request-password-reset: remotely reachable Better Auth lifecycle needs a candidate marker',
-    );
-    expect(result.findings.join('\n')).toContain(
+    expect(withoutPolicy.ok).toBe(false);
+    expect(withoutPolicy.findings.join('\n')).toContain(
       'better-auth.request-password-reset: remotely reachable Better Auth lifecycle needs a surface policy',
+    );
+    const missingFutureDoor = run(
+      '// @kovo-response-observation-candidate auth.reset',
+      { ...manifest, futureDoors: [] },
+      unreachableLifecycle,
+    );
+    expect(missingFutureDoor.ok).toBe(false);
+    expect(missingFutureDoor.findings.join('\n')).toContain(
+      'missing closed future door better-auth.request-password-reset',
     );
   });
 
@@ -188,7 +197,7 @@ export { normalizeBetterAuthAccountOperation, normalizeBetterAuthPasswordResetRe
       'packages/better-auth/src/response-observation.ts': `
 /** @kovo-response-observation-future-door better-auth.sign-up-email */
 export async function normalizeBetterAuthAccountOperation() {}
-/** @kovo-response-observation-future-door better-auth.request-password-reset */
+/** @kovo-response-observation-candidate better-auth.request-password-reset */
 export async function normalizeBetterAuthPasswordResetResponse() {}
 `,
       'packages/server/src/reset.ts': '// @kovo-response-observation-candidate auth.reset',

@@ -101,6 +101,12 @@ export interface BetterAuthSignUpEmailBody extends BetterAuthSignInEmailBody {
   name: string;
 }
 
+/** Request body for the supported Better Auth account-recovery request. */
+export interface BetterAuthRequestPasswordResetBody {
+  email: string;
+  redirectTo: string;
+}
+
 /**
  * The subset of the Better Auth server `api` consumed by `betterAuthSignInEmailMutation`:
  * a `signInEmail` method invoked with `asResponse: true` so the adapter can read the raw
@@ -221,6 +227,11 @@ export const betterAuthSignUpEmailInput = s.object({
   password: s.string(),
 });
 
+/** Input schema for the feature-conditional password-reset request mutation (SPEC §9.2). */
+export const betterAuthRequestPasswordResetInput = s.object({
+  email: s.string().email(),
+});
+
 /** Input schema for `betterAuthSignOutMutation`; sign-out takes no fields. */
 export const betterAuthSignOutInput = s.object({});
 
@@ -237,12 +248,25 @@ export const betterAuthCredentialMutationErrors = betterAuthDeepFreeze(
   'Better Auth credential mutation errors',
 );
 
+/** Account recovery exposes only the shared rate-limit failure; account existence is never typed. */
+export const betterAuthPasswordResetMutationErrors = betterAuthDeepFreeze(
+  {
+    RATE_LIMITED: s.object({}),
+  },
+  'Better Auth password-reset mutation errors',
+);
+
 /** @internal Better Auth credential API names keyed by the adapter's touch/registry plumbing. */
-export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
+export type BetterAuthCredentialMutationApi =
+  | 'requestPasswordReset'
+  | 'signInEmail'
+  | 'signOut'
+  | 'signUpEmail';
 
 /** @internal Better Auth credential API names keyed by the adapter's touch/registry plumbing. */
 export const betterAuthCredentialMutationApis = betterAuthDeepFreeze(
   [
+    'requestPasswordReset',
     'signInEmail',
     'signOut',
     'signUpEmail',
