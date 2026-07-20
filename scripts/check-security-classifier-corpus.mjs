@@ -2179,6 +2179,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/compiler/src/executable-reference-attributes.test.ts',
       'packages/compiler/src/execution-triggers.test.ts',
       'packages/compiler/src/security-operation-ir.response-provenance.test.ts',
+      'packages/compiler/src/security-operation-ir.response-body-provenance.security.test.ts',
       'packages/compiler/src/security-provenance-relation.test.ts',
       'packages/core/src/sink-policy.test.ts',
       'packages/core/src/internal/cache-influence.test.ts',
@@ -2566,6 +2567,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'computed managed database method',
           'raw Response from mutation',
           'requires static justifications on the trustedSql and trustedHtml exceptional doors',
+        ],
+      },
+      {
+        id: 'raw-response-body-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.response-body-provenance.security.test.ts',
+        snippets: [
+          'SPEC §9.2 response-body provenance',
+          'a catch-bound Error.message',
+          'a catch-bound Error.stack through an immutable alias',
+          'the raw request URL',
+          'a request-derived header through a template expression',
+          'a request-derived JSON field',
+          'keeps a fixed endpoint response body representable',
         ],
       },
       {

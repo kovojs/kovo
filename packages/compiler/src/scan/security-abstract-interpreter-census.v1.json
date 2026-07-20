@@ -26,6 +26,7 @@
       "scoped-key-call",
       "scope-call",
       "storage",
+      "unsafe-wire-data",
       "unknown-authority",
       "operation:server.authority.scope",
       "operation:server.database.read",

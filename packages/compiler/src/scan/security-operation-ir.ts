@@ -38,6 +38,7 @@ import {
   compilerSetForEach,
   compilerSetHas,
   compilerSnapshotDenseArray,
+  compilerStringEndsWith,
   compilerStringSlice,
   compilerStringStartsWith,
   compilerStringTrim,
@@ -1658,7 +1659,7 @@ function analyzeServerSecurityCallable(options: {
   const signature =
     callable === undefined
       ? undefined
-      : `${surface}\0${callable.name}\0${compilerArrayJoin(authorityInputs, ',')}`;
+      : `${surface}\0${callable.name}\0${compilerArrayJoin(parameterProvenances ?? [], ',')}`;
 
   if (signature !== undefined && compilerSetHas(state.active, signature)) {
     securityAbstractTransfer('helper.cycle-close');
@@ -2645,6 +2646,12 @@ function scanServerSecurityOperationsDirect(
       const provenance = serverExpressionProvenance(callee, aliases);
       if (provenance === 'response-constructor') {
         if (surface === 'endpoint' || surface === 'webhook') {
+          appendUnsafeWireBodyViolation(
+            node.arguments?.[0],
+            'new Response',
+            aliases,
+            appendViolation,
+          );
           appendOperation(
             'server.response.raw',
             node,
@@ -3518,6 +3525,7 @@ function classifyServerCall(
       call,
       callee.text,
       surface,
+      aliases,
       appendOperation,
       appendViolation,
     );
@@ -3595,6 +3603,7 @@ function classifyServerCall(
       call,
       target,
       surface,
+      aliases,
       appendOperation,
       appendViolation,
     )
@@ -3667,7 +3676,7 @@ function classifyServerCall(
     appendOperation('server.helper.call', call, `local:${local.name}`);
     return;
   }
-  if (provenance === 'safe-call') return;
+  if (provenance === 'safe-call' || provenance === 'unsafe-wire-data') return;
   const localRoot = securityIrLeftmostExecutableRoot(callee);
   if (
     provenance === 'local' &&
@@ -4632,6 +4641,7 @@ function classifyServerProvenanceCall(
   call: ts.CallExpression,
   target: string,
   surface: ServerSecurityScanSurface,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
   appendOperation: (
     kind: ServerSecurityOperationKind,
     node: ts.Node,
@@ -4708,6 +4718,9 @@ function classifyServerProvenanceCall(
   }
   if (kind === 'server.response.raw') {
     if (surface === 'endpoint' || surface === 'webhook') {
+      if (compilerStringEndsWith(target, '.json')) {
+        appendUnsafeWireBodyViolation(call.arguments[0], target, aliases, appendViolation);
+      }
       appendOperation(kind, call, target, `${surface} access/CSRF posture`);
     } else {
       appendViolation(
@@ -4720,6 +4733,26 @@ function classifyServerProvenanceCall(
   }
   appendOperation(kind, call, target);
   return true;
+}
+
+function appendUnsafeWireBodyViolation(
+  body: ts.Expression | undefined,
+  target: string,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+  appendViolation: (
+    node: ts.Node,
+    kind: SecurityOperationViolationModel['kind'],
+    detail: string,
+  ) => void,
+): void {
+  if (body === undefined || serverExpressionProvenance(body, aliases) !== 'unsafe-wire-data') {
+    return;
+  }
+  appendViolation(
+    body,
+    'computed-security-operation',
+    `${target} body carries catch-bound error or request-derived data outside an audited render door`,
+  );
 }
 
 function serverAliasProvenance(
@@ -4749,7 +4782,27 @@ function serverAliasProvenance(
     if (surface === 'mutation' && parameterSnapshot[1]) {
       setServerAliasPattern(parameterSnapshot[1]!.name, 'request', aliases);
     }
+    if (surface === 'mutation' && parameterSnapshot[0]) {
+      setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases);
+    } else if (
+      (surface === 'endpoint' || surface === 'query' || surface === 'webhook') &&
+      parameterSnapshot[0]
+    ) {
+      setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases);
+    }
   }
+
+  // SPEC §9.2: catch-bound internals and remotely influenced request values share one
+  // non-authority provenance state. That state is inert during ordinary computation and closes
+  // only when an unaudited raw response body attempts to consume it.
+  const seedCatchBindings = (node: ts.Node): void => {
+    if (node !== body && isSecurityIrFunctionScope(node)) return;
+    if (ts.isCatchClause(node) && node.variableDeclaration) {
+      setServerAliasPattern(node.variableDeclaration.name, 'unsafe-wire-data', aliases);
+    }
+    ts.forEachChild(node, seedCatchBindings);
+  };
+  seedCatchBindings(body);
 
   securityAbstractTransfer('alias.fixed-point');
   let changed = true;
@@ -5097,6 +5150,9 @@ function serverExpressionProvenance(
     ) {
       return 'unknown-authority';
     }
+    if (serverArgumentsContainUnsafeWireData(current.arguments ?? [], aliases)) {
+      return 'unsafe-wire-data';
+    }
     return 'local';
   }
   if (ts.isCallExpression(current)) {
@@ -5123,6 +5179,13 @@ function serverExpressionProvenance(
       securityAbstractTransfer('expression.call-unknown-authority');
       return 'unknown-authority';
     }
+    if (
+      callee === 'unsafe-wire-data' ||
+      serverArgumentsContainUnsafeWireData(current.arguments, aliases)
+    ) {
+      securityAbstractTransfer('expression.call-local');
+      return 'unsafe-wire-data';
+    }
     securityAbstractTransfer('expression.call-local');
     return 'local';
   }
@@ -5148,7 +5211,34 @@ function serverExpressionProvenance(
     securityAbstractTransfer('expression.fallthrough-foreign');
     return 'foreign-executable';
   }
+  if (expressionContainsServerUnsafeWireData(current, aliases)) return 'unsafe-wire-data';
   return expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local';
+}
+
+function expressionContainsServerUnsafeWireData(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== expression && isSecurityIrFunctionScope(node)) return;
+    if (ts.isIdentifier(node) && compilerMapGet(aliases, node.text) === 'unsafe-wire-data') {
+      found = true;
+      return;
+    }
+    if (
+      node !== expression &&
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      serverExpressionProvenance(node, aliases) === 'unsafe-wire-data'
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
 }
 
 function serverObjectLiteralHasImplicitCallable(object: ts.ObjectLiteralExpression): boolean {
@@ -5271,6 +5361,22 @@ function serverArgumentsContainAuthority(
   );
   for (let index = 0; index < snapshot.length; index += 1) {
     if (serverExpressionCarriesAuthority(snapshot[index]!, aliases)) return true;
+  }
+  return false;
+}
+
+function serverArgumentsContainUnsafeWireData(
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(
+    argumentsList,
+    'Server response-body provenance arguments',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'unsafe-wire-data') return true;
   }
   return false;
 }

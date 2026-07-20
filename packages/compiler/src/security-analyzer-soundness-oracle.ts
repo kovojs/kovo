@@ -1347,6 +1347,14 @@ function transferWitnessExpectation(id: SecurityAbstractTransferId): AnalyzerOra
 }
 
 function independentLatticeBehavior(element: ServerValueProvenance): AnalyzerOracleLatticeBehavior {
+  if (element === 'unsafe-wire-data') {
+    return {
+      aliasFromBottom: element,
+      binaryWithLocal: element,
+      conditionalWithLocal: element,
+      defaultWithLocal: element,
+    };
+  }
   const authority = independentlyCarriesAuthority(element);
   const localJoin = authority
     ? 'unknown-authority'
@@ -1373,6 +1381,7 @@ function independentlyCarriesAuthority(element: ServerValueProvenance): boolean 
     case 'intrinsic-object':
     case 'local':
     case 'safe-call':
+    case 'unsafe-wire-data':
       return false;
     default:
       return true;

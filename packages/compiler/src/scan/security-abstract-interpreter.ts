@@ -197,7 +197,11 @@ export function serverAliasDeclarationTransfer(
   authority: ServerValueProvenance,
   immutable: boolean,
 ): ServerValueProvenance {
-  if (immutable || authority === 'foreign-executable') {
+  if (
+    immutable ||
+    authority === 'foreign-executable' ||
+    authority === 'unsafe-wire-data'
+  ) {
     securityAbstractTransfer('alias.const-preserve');
     return authority;
   }
@@ -220,7 +224,17 @@ export function serverAliasJoinTransfer(
 ): ServerValueProvenance | undefined {
   securityAbstractTransfer('alias.join');
   if (previous === incoming || previous === 'unknown-authority') return undefined;
-  return previous === undefined ? incoming : 'unknown-authority';
+  if (previous === undefined) return incoming;
+  if (previous === 'unsafe-wire-data' || incoming === 'unsafe-wire-data') {
+    const other = previous === 'unsafe-wire-data' ? incoming : previous;
+    const joined = other === 'foreign-executable'
+      ? 'foreign-executable'
+      : serverProvenanceAtOrBelowAuthorityTop(other)
+      ? 'unknown-authority'
+      : 'unsafe-wire-data';
+    return joined === previous ? undefined : joined;
+  }
+  return 'unknown-authority';
 }
 
 export function serverBindingDefaultTransfer(
@@ -234,9 +248,13 @@ export function serverBindingDefaultTransfer(
   ) {
     return projected === fallback ? projected : 'unknown-authority';
   }
-  return projected === 'foreign-executable' || fallback === 'foreign-executable'
-    ? 'foreign-executable'
-    : projected;
+  if (projected === 'foreign-executable' || fallback === 'foreign-executable') {
+    return 'foreign-executable';
+  }
+  if (projected === 'unsafe-wire-data' || fallback === 'unsafe-wire-data') {
+    return 'unsafe-wire-data';
+  }
+  return projected;
 }
 
 export function serverBindingProjectionTransfer(
@@ -246,6 +264,7 @@ export function serverBindingProjectionTransfer(
 ): ServerValueProvenance {
   if (rest) {
     securityAbstractTransfer('binding.rest');
+    if (provenance === 'unsafe-wire-data') return 'unsafe-wire-data';
     return serverProvenanceAtOrBelowAuthorityTop(provenance) ? 'unknown-authority' : 'local';
   }
   securityAbstractTransfer('binding.static-member');
@@ -260,8 +279,11 @@ export function serverBinaryTransfer(
   if (serverProvenanceAtOrBelowAuthorityTop(left) || serverProvenanceAtOrBelowAuthorityTop(right)) {
     return 'unknown-authority';
   }
-  return left === 'foreign-executable' || right === 'foreign-executable'
-    ? 'foreign-executable'
+  if (left === 'foreign-executable' || right === 'foreign-executable') {
+    return 'foreign-executable';
+  }
+  return left === 'unsafe-wire-data' || right === 'unsafe-wire-data'
+    ? 'unsafe-wire-data'
     : 'local';
 }
 
@@ -277,8 +299,11 @@ export function serverConditionalTransfer(
   ) {
     return 'unknown-authority';
   }
-  return whenTrue === 'foreign-executable' || whenFalse === 'foreign-executable'
-    ? 'foreign-executable'
+  if (whenTrue === 'foreign-executable' || whenFalse === 'foreign-executable') {
+    return 'foreign-executable';
+  }
+  return whenTrue === 'unsafe-wire-data' || whenFalse === 'unsafe-wire-data'
+    ? 'unsafe-wire-data'
     : 'local';
 }
 

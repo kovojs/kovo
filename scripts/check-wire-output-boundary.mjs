@@ -10,6 +10,12 @@ export const repoRoot = findRepoRoot();
 
 export const defaultSourceRoots = ['packages/server/src'];
 export const wireChokeFile = 'packages/server/src/response-posture.ts';
+export const wireBodyProvenanceFile =
+  'packages/compiler/src/scan/security-operation-ir.ts';
+export const wireBodyProvenanceRelationFile =
+  'packages/compiler/src/scan/security-provenance-relation.ts';
+export const wireBodyProvenanceOracleFile =
+  'packages/compiler/src/security-operation-ir.response-body-provenance.security.test.ts';
 export const defaultAllowedResponseConstructorFiles = [
   wireChokeFile,
   // Dev/build adapters are edge shims around the app handler or generated host assets.
@@ -55,6 +61,7 @@ export function checkWireOutputBoundary(options = {}) {
       findings.push(`${wireChokeFile}: exported emitToWire() choke is missing`);
     }
   }
+  checkWireBodyProvenanceClosure({ exists, findings, readText });
 
   for (const filePath of sourceFiles) {
     const sourceText = readText(filePath);
@@ -84,9 +91,55 @@ export function checkWireOutputBoundary(options = {}) {
     ok: findings.length === 0,
     summary:
       findings.length === 0
-        ? 'OK framework response constructors route through the DEC5 wire-output choke'
+        ? 'OK framework response constructors route through DEC5 and Layer-3 body provenance closes'
         : `${findings.length} wire-output boundary violation(s)`,
   };
+}
+
+function checkWireBodyProvenanceClosure({ exists, findings, readText }) {
+  const required = [
+    wireBodyProvenanceFile,
+    wireBodyProvenanceRelationFile,
+    wireBodyProvenanceOracleFile,
+  ];
+  for (const filePath of required) {
+    if (!exists(filePath)) findings.push(`${filePath}: response-body provenance artifact is missing`);
+  }
+  if (required.some((filePath) => !exists(filePath))) return;
+
+  const scanner = readText(wireBodyProvenanceFile);
+  const relation = readText(wireBodyProvenanceRelationFile);
+  const oracle = readText(wireBodyProvenanceOracleFile);
+  const scannerAnchors = [
+    "setServerAliasPattern(node.variableDeclaration.name, 'unsafe-wire-data', aliases)",
+    "setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases)",
+    "appendUnsafeWireBodyViolation(\n            node.arguments?.[0],\n            'new Response'",
+    'appendUnsafeWireBodyViolation(call.arguments[0], target, aliases, appendViolation)',
+  ];
+  for (const anchor of scannerAnchors) {
+    if (!scanner.includes(anchor)) {
+      findings.push(
+        `${wireBodyProvenanceFile}: Layer-3 response-body provenance anchor is missing: ${JSON.stringify(anchor)}`,
+      );
+    }
+  }
+  if (!relation.includes("'unsafe-wire-data': { default: 'unsafe-wire-data' }")) {
+    findings.push(
+      `${wireBodyProvenanceRelationFile}: unsafe-wire-data is missing from the closed member relation`,
+    );
+  }
+  for (const anchor of [
+    '@kovo-security-classifier-corpus finite-security-operation-ir',
+    'a catch-bound Error.message',
+    'the raw request URL',
+    'a request-derived JSON field',
+  ]) {
+    if (!oracle.includes(anchor)) {
+      findings.push(
+        `${wireBodyProvenanceOracleFile}: hostile response-body oracle anchor is missing: ${JSON.stringify(anchor)}`,
+      );
+    }
+  }
 }
 
 function hasExportedEmitToWireChoke(scanText) {

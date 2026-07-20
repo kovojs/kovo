@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 246,
+    "historicalWitnesses": 247,
     "productions": 12
   },
   "productions": [
@@ -1172,6 +1172,12 @@
       "corpus": "finite-security-operation-ir",
       "production": "positive-control",
       "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "raw-response-body-provenance-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "helper-transfer",
+      "reason": "Request and catch-bound data cross aliases, templates, and response helpers before the audited wire sink closes them."
     },
     {
       "anchor": "raw-response-alias-helper-and-global-provenance-closure",
