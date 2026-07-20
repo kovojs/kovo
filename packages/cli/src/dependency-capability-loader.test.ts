@@ -709,6 +709,96 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
+  it('rejects a relative edge from a reviewed package into a nested package boundary', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-relative-nested-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const helperRoot = join(packageRoot, 'node_modules', 'helper-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    try {
+      for (const [directory, packageName] of [
+        [packageRoot, 'safe-parser'],
+        [helperRoot, 'helper-parser'],
+      ] as const) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          join(directory, 'package.json'),
+          JSON.stringify({
+            exports: { '.': './index.cjs' },
+            name: packageName,
+            type: 'commonjs',
+            version: packageName === 'safe-parser' ? '1.2.3' : '1.0.0',
+          }),
+        );
+      }
+      writeFileSync(
+        join(packageRoot, 'index.cjs'),
+        [
+          "require('./node_modules/helper-parser/index.cjs');",
+          'exports.parse = value => value;',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(helperRoot, 'index.cjs'),
+        "globalThis.__KOVO_RELATIVE_NESTED_PACKAGE__ = 'EXECUTED';\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              'build-server',
+              { allowNodeBuiltins: true },
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).rejects.toThrow(/KV448.*nested package boundary.*safe-parser/u);
+      expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-builtin-ssr-pre-evaluation
   it('rejects a reviewed package builtin import before supported SSR app evaluation', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-builtin-ssr-')));
