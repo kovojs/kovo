@@ -712,36 +712,53 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
 
   // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
   it.each([
-    ['manifest-owned', true, 'node_modules', false],
-    ['legacy node_modules', false, 'node_modules', false],
-    ['case-folded node_modules', false, 'NODE_MODULES', false],
-    ['symlinked node_modules', false, 'node_modules', true],
+    ['manifest-owned', true, 'node_modules', false, false],
+    ['legacy node_modules', false, 'node_modules', false, false],
+    ['case-folded node_modules', false, 'NODE_MODULES', false, false],
+    ['symlinked node_modules', false, 'node_modules', true, false],
+    ['package-main redirect', true, 'internal', false, true],
   ] as const)(
     'rejects a relative edge from a reviewed package into a %s nested package boundary',
-    async (_label, helperHasManifest, nodeModulesDirectory, helperUsesSymlink) => {
+    async (
+      _label,
+      helperHasManifest,
+      boundaryDirectory,
+      helperUsesSymlink,
+      helperUsesMainRedirect,
+    ) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-relative-nested-')));
     const appModulePath = join(root, 'app.mjs');
     const packageRoot = join(root, 'node_modules', 'safe-parser');
-    const helperSpecifierRoot = join(packageRoot, nodeModulesDirectory, 'helper-parser');
-    const helperRoot = helperUsesSymlink
+    const helperSpecifierRoot = join(packageRoot, boundaryDirectory, 'helper-parser');
+    const helperRoot = helperUsesSymlink || helperUsesMainRedirect
       ? join(packageRoot, 'vendor', 'helper-parser')
       : helperSpecifierRoot;
     const outDir = join(root, 'dist');
     const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
     try {
-      for (const [directory, packageName] of [
-        [packageRoot, 'safe-parser'],
-        [helperRoot, 'helper-parser'],
-      ] as const) {
-        mkdirSync(directory, { recursive: true });
-        if (packageName === 'helper-parser' && !helperHasManifest) continue;
+      mkdirSync(packageRoot, { recursive: true });
+      mkdirSync(helperRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.cjs' },
+          name: 'safe-parser',
+          type: 'commonjs',
+          version: '1.2.3',
+        }),
+      );
+      if (helperHasManifest) {
+        const manifestRoot = helperUsesMainRedirect ? helperSpecifierRoot : helperRoot;
+        mkdirSync(manifestRoot, { recursive: true });
         writeFileSync(
-          join(directory, 'package.json'),
+          join(manifestRoot, 'package.json'),
           JSON.stringify({
-            exports: { '.': './index.cjs' },
-            name: packageName,
+            ...(helperUsesMainRedirect
+              ? { main: '../../vendor/helper-parser/index.cjs' }
+              : { exports: { '.': './index.cjs' } }),
+            name: 'helper-parser',
             type: 'commonjs',
-            version: packageName === 'safe-parser' ? '1.2.3' : '1.0.0',
+            version: '1.0.0',
           }),
         );
       }
@@ -752,7 +769,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       writeFileSync(
         join(packageRoot, 'index.cjs'),
         [
-          `require('./${nodeModulesDirectory}/helper-parser/index.cjs');`,
+          helperUsesMainRedirect
+            ? `require('./${boundaryDirectory}/helper-parser');`
+            : `require('./${boundaryDirectory}/helper-parser/index.cjs');`,
           'exports.parse = value => value;',
           '',
         ].join('\n'),
