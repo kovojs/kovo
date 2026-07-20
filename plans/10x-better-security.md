@@ -431,8 +431,10 @@ Measurements are versioned and reproducible:
 
 ## Phase 6 — Scoped v1 security signoff
 
-- [ ] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
+- [x] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
       specifically owned and signed-off out-of-scope disposition.
+  - Evidence: `pnpm run check:framework-export-posture` closes 12 packages / 1,839 subpaths / 2,344
+    runtime exports, and `pnpm run check:threat-matrix` passes its 8/8 exact-denominator suite.
 - [ ] `pnpm run acceptance`, including required real-Postgres 16.9 cases, passes from a clean
       checkout at the intended SHA with zero required skips.
 - [ ] Capability closure, finite IR, normalized provenance, runtime sink floors, and the complete
