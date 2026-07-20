@@ -1657,6 +1657,52 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     },
   );
 
+  // @kovo-security-certifies C13 dependency-nonliteral-artifact-module-closure
+  it('rejects a retained non-literal HTML-client import before a public module can execute', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-nonliteral-client-')));
+    const appModulePath = join(root, 'src', 'client.ts');
+    const outDir = join(root, 'dist');
+    const appSource = [
+      "const target = '/payload.mjs';",
+      'export const load = () => import(/* @vite-ignore */ target);',
+      'void load();',
+      '',
+    ].join('\n');
+    try {
+      mkdirSync(join(root, 'public'), { recursive: true });
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(
+        join(root, 'public', 'payload.mjs'),
+        "globalThis.__KOVO_NONLITERAL_CLIENT_IMPORT__ = 'EXECUTED';\n",
+      );
+      writeFileSync(
+        join(root, 'index.html'),
+        '<!doctype html><script type="module" src="/src/client.ts"></script>',
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.ts', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*non-literal module edge.*supported build-client artifact/u);
+      expect(() => readFileSync(join(outDir, 'payload.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-builtin-ssr-pre-evaluation
   it('rejects a reviewed package builtin import before supported SSR app evaluation', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-builtin-ssr-')));
