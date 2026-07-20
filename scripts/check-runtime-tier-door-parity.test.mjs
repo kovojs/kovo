@@ -130,6 +130,22 @@ describe('runtime tier door parity gate', () => {
     ).toContain(
       "packages/cli/src/commands/dev-host-door.ts: missing dev-host pin rawListeners('upgrade')",
     );
+
+    for (const replacement of [
+      'return token === candidate;',
+      'return replaceableEquals(token, candidate);',
+    ]) {
+      expect(
+        evaluate(undefined, {
+          'packages/cli/src/commands/dev-host-door.ts': doorSource.replace(
+            'return token.equals(candidate);',
+            replacement,
+          ),
+        }),
+      ).toContain(
+        'packages/cli/src/commands/dev-host-door.ts: missing dev-host pin return token.equals(candidate);',
+      );
+    }
   });
 });
 

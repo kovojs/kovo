@@ -305,7 +305,7 @@ function validateDevHostSourcePins(readText, findings) {
       'installKovoDevSourceFallbackDoor',
       "rawListeners('upgrade')",
       'Kovo-Dev-Auth',
-      'timingSafeEqual',
+      'return token.equals(candidate);',
       'SOURCE_PATH_PREFIXES',
       'server.allowedHosts',
       'server.cors = false',
