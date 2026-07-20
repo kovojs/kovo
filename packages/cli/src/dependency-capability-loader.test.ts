@@ -1537,6 +1537,16 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       '<a href="javascript:void(globalThis.__KOVO_JS_URL_PWNED__=\'EXECUTED\')">run</a>',
       /KV448.*raw HTML javascript URL.*compiler-owned JSX lowering/u,
     ],
+    [
+      'SVG SMIL set transfer',
+      '<svg><a><set attributeName="href" to="javascript:void(globalThis.__KOVO_SMIL_SET_PWNED__=\'EXECUTED\')"></set><text>run</text></a></svg>',
+      /KV448.*raw SVG SMIL execution transfer.*compiler-owned JSX lowering/u,
+    ],
+    [
+      'SVG SMIL animate transfer',
+      '<svg><a><animate attributeName="href" values="javascript:void(globalThis.__KOVO_SMIL_ANIMATE_PWNED__=\'EXECUTED\')"></animate><text>run</text></a></svg>',
+      /KV448.*raw SVG SMIL execution transfer.*compiler-owned JSX lowering/u,
+    ],
   ])('rejects raw HTML %s outside compiler-owned closure', async (_label, fragment, error) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-execution-')));
     const appModulePath = join(root, 'src', 'client.ts');
