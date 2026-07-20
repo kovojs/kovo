@@ -28,6 +28,7 @@ import {
   witnessIsArray,
   witnessObjectIs,
   witnessOwnKeys,
+  witnessReflectApply,
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from '../security-witness-intrinsics.js';
@@ -700,7 +701,7 @@ function snapshotMutationDefinition(
         ? snapshotMutationCsrfOptions(before.value as CsrfOptions<unknown>)
         : key === 'principalEpoch'
           ? snapshotPrincipalEpochMutationDeclaration(before.value)
-        : before.value;
+          : before.value;
     witnessDefineProperty(snapshot, key, {
       configurable: true,
       enumerable: before.enumerable === true,
@@ -724,6 +725,13 @@ function snapshotPrincipalEpochMutationDeclaration(
   if (typeof principal !== 'function') {
     throw new TypeError('mutation() principalEpoch.principal must be a selector function.');
   }
+  const principalSelector = (input: unknown, request: unknown): string => {
+    const selected = witnessReflectApply<unknown>(principal, undefined, [input, request]);
+    if (typeof selected !== 'string') {
+      throw new TypeError('mutation() principalEpoch.principal must return a principal string.');
+    }
+    return selected;
+  };
   if (action === 'advance') {
     if (
       reason !== 'principal-created' &&
@@ -736,13 +744,13 @@ function snapshotPrincipalEpochMutationDeclaration(
     ) {
       throw new TypeError('mutation() principalEpoch advance reason is unsupported.');
     }
-    return witnessFreeze({ action, principal, reason });
+    return witnessFreeze({ action, principal: principalSelector, reason });
   }
   if (action === 'tombstone') {
     if (reason !== 'principal-deletion' && reason !== 'provider-deletion') {
       throw new TypeError('mutation() principalEpoch tombstone reason is unsupported.');
     }
-    return witnessFreeze({ action, principal, reason });
+    return witnessFreeze({ action, principal: principalSelector, reason });
   }
   throw new TypeError('mutation() principalEpoch.action must be advance or tombstone.');
 }

@@ -5243,6 +5243,12 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         },
         set() { execFileSync('replay-set'); },
       };
+      const principalEpochStore = {
+        advance() { execFileSync('epoch-advance'); return { changedAtMs: 2, epoch: 2, status: 'active' }; },
+        current() { execFileSync('epoch-current'); return { changedAtMs: 1, epoch: 1, status: 'active' }; },
+        initialize() { execFileSync('epoch-initialize'); return { changedAtMs: 1, epoch: 1, status: 'active' }; },
+        tombstone() { execFileSync('epoch-tombstone'); return { changedAtMs: 2, epoch: 2, status: 'tombstoned' }; },
+      };
       const clientModules = {
         buildToken() { execFileSync('registry-build-token'); return 'build'; },
         entries() { return []; },
@@ -5312,6 +5318,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         endpoints: [machine, hook],
         mutationReplayStore: replayStore,
         onError() { execFileSync('on-error'); },
+        principalEpochStore,
         requestLimits: {
           clientIp() { execFileSync('client-ip'); return '127.0.0.1'; },
         },
@@ -5332,6 +5339,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
         "'csrf-session-id'",
         "'db-provider'",
         "'endpoint-access'",
+        "'epoch-advance'",
+        "'epoch-current'",
+        "'epoch-initialize'",
+        "'epoch-tombstone'",
         "'layout-access'",
         "'layout-query'",
         "'on-error'",
@@ -7830,12 +7841,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       import {
         appRuntimeDbProvider,
         appRuntimeMutationReplayStore,
+        appRuntimePrincipalEpochStore,
       } from './_kovo/app-runtime-db.js';
       import { contactsQuery } from './queries.js';
       const app = createApp({
         csrf: appCsrf,
         db: appRuntimeDbProvider,
         mutationReplayStore: appRuntimeMutationReplayStore,
+        principalEpochStore: appRuntimePrincipalEpochStore,
         mutations: [appSignIn, appSignOut],
         queries: [contactsQuery],
         routes: [],
@@ -7913,6 +7926,36 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       );
       expect(sinksForFiles(hostile), label).not.toEqual([]);
     }
+
+    const forgedPrincipalEpochStore = postgresFiles.map((file) =>
+      file.fileName === '_kovo/app-runtime-db.ts'
+        ? {
+            ...file,
+            source: file.source.replace(
+              'appDatabase.principalEpochStore;',
+              `{
+                advance() { return eval('forged-principal-epoch-store'); },
+                current() { return undefined; },
+                initialize() { return { changedAtMs: 1, epoch: 1, status: 'active' }; },
+                tombstone() { return { changedAtMs: 2, epoch: 2, status: 'tombstoned' }; },
+              };`,
+            ),
+          }
+        : file,
+    );
+    expect(sinksForFiles(forgedPrincipalEpochStore)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ sink: 'eval' })]),
+    );
+
+    const mutatedPrincipalEpochStore = postgresFiles.map((file) =>
+      file.fileName === 'app.tsx'
+        ? {
+            ...file,
+            source: `${file.source}\nappRuntimePrincipalEpochStore.advance = () => eval('mutated-principal-epoch-store');`,
+          }
+        : file,
+    );
+    expect(sinksForFiles(mutatedPrincipalEpochStore)).not.toEqual([]);
   });
 
   it('accepts a source-derived query returning an exact context-owned rawRead result', () => {
@@ -8216,6 +8259,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
             runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
             export const appRuntimeDbProvider = runtime.db;
             export const appRuntimeMutationReplayStore = runtime.mutationReplayStore;
+            export const appRuntimePrincipalEpochStore = runtime.principalEpochStore;
           `,
       },
       {
@@ -8225,6 +8269,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
             import {
               appRuntimeDbProvider,
               appRuntimeMutationReplayStore,
+              appRuntimePrincipalEpochStore,
             } from './_kovo/app-runtime-db.js';
             const clientModules = createMemoryVersionedClientModuleRegistry();
             const mutationReplayStore = appRuntimeMutationReplayStore;
@@ -8232,6 +8277,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
               clientModules,
               db: appRuntimeDbProvider,
               mutationReplayStore,
+              principalEpochStore: appRuntimePrincipalEpochStore,
               routes: [],
             });
           `,

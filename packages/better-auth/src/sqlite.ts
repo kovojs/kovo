@@ -284,7 +284,10 @@ export function createBetterAuthSqliteBindings<
             'id',
             'Better Auth sanitized user.id',
           );
-          await initializePrincipalEpoch(principalEpochStore, principal as string);
+          if (typeof principal !== 'string') {
+            throw new NativeTypeError('Better Auth sanitized user.id must be a principal string.');
+          }
+          await initializePrincipalEpoch(principalEpochStore, principal);
         },
   );
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {

@@ -895,6 +895,10 @@ const REQUEST_HANDLER_FACTORIES = [
         property: 'mutationReplayStore.set',
         roles: ['input', 'input', 'input', 'input'],
       },
+      { property: 'principalEpochStore.initialize', roles: ['input'] },
+      { property: 'principalEpochStore.current', roles: ['input', 'capability'] },
+      { property: 'principalEpochStore.advance', roles: ['input', 'input'] },
+      { property: 'principalEpochStore.tombstone', roles: ['input', 'input'] },
     ],
   },
   {
@@ -4392,7 +4396,14 @@ function requestRetainedConfigOpaqueDerivation(
     const receiver = node.getExpression();
     if (
       member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member) &&
+      [
+        'db',
+        'mutationReplayStore',
+        'principalEpochStore',
+        'readonlyDb',
+        'ready',
+        'webhookReplayStore',
+      ].includes(member) &&
       requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
       requestExactManagedAppRuntimeIsPristine(receiver)
     ) {
@@ -4856,9 +4867,17 @@ function requestRetainedConfigInitialTargets(
     if (seen.has(symbolKey)) return targets;
     seen.add(symbolKey);
     if (
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
-        (member) =>
-          requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
+      (
+        [
+          'db',
+          'mutationReplayStore',
+          'principalEpochStore',
+          'readonlyDb',
+          'ready',
+          'webhookReplayStore',
+        ] as const
+      ).some((member) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(node, member, undefined, new Set()),
       )
     ) {
       targets.add(symbolKey);
@@ -4935,7 +4954,14 @@ function requestRetainedConfigInitialTargets(
     // of createApp's retained config makes ordinary Drizzle reads look like table mutations.
     if (
       member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member) &&
+      [
+        'db',
+        'mutationReplayStore',
+        'principalEpochStore',
+        'readonlyDb',
+        'ready',
+        'webhookReplayStore',
+      ].includes(member) &&
       requestExpressionResolvesToExactManagedAppRuntime(receiver, new Set()) &&
       requestExactManagedAppRuntimeIsPristine(receiver)
     ) {
@@ -6043,11 +6069,7 @@ function requestCallIsExactPublicScopedKey(
   return !!(
     !call.getQuestionDotTokenNode() &&
     call.getArguments().length === 1 &&
-    (requestExactPristineDirectImport(
-      call.getExpression(),
-      '@kovojs/core',
-      'publicScopedKey',
-    ) ||
+    (requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'publicScopedKey') ||
       requestExactPristineDirectImport(
         call.getExpression(),
         '@kovojs/server',
@@ -6062,9 +6084,7 @@ function requestCallIsExactPublicScopedKey(
   );
 }
 
-function requestCallIsExactStaticPublicScopedKey(
-  call: import('ts-morph').CallExpression,
-): boolean {
+function requestCallIsExactStaticPublicScopedKey(call: import('ts-morph').CallExpression): boolean {
   const [key, ...extra] = call.getArguments();
   const value = key ? unwrapStaticExpression(key) : undefined;
   return !!(
@@ -6074,16 +6094,8 @@ function requestCallIsExactStaticPublicScopedKey(
     isStringLiteralLike(value) &&
     value.getLiteralText().length > 0 &&
     value.getLiteralText().length <= 1_024 &&
-    (requestExactPristineDirectImport(
-      call.getExpression(),
-      '@kovojs/core',
-      'publicScopedKey',
-    ) ||
-      requestExactPristineDirectImport(
-        call.getExpression(),
-        '@kovojs/server',
-        'publicScopedKey',
-      ))
+    (requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'publicScopedKey') ||
+      requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'publicScopedKey'))
   );
 }
 
@@ -6785,6 +6797,7 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
   const required = new Set([
     'csrf',
     'mapSession',
+    'principalEpochStore',
     'schema',
     'signInAccess',
     'signOutAccess',
@@ -6806,6 +6819,16 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
     )
       return false;
     if (name === 'mapSession' && !requestExpressionIsExactGeneratedMapSession(initializer))
+      return false;
+    if (
+      name === 'principalEpochStore' &&
+      !requestExpressionResolvesToExactManagedRuntimeMember(
+        initializer,
+        'principalEpochStore',
+        'appRuntimePrincipalEpochStore',
+        new Set(),
+      )
+    )
       return false;
     if (name === 'schema' && !requestExpressionIsExactGeneratedAuthSchema(initializer, call))
       return false;
@@ -7346,7 +7369,14 @@ function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): bool
       : staticMemberName(node.getArgumentExpression());
     return (
       !!member &&
-      ['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'].includes(member)
+      [
+        'db',
+        'mutationReplayStore',
+        'principalEpochStore',
+        'readonlyDb',
+        'ready',
+        'webhookReplayStore',
+      ].includes(member)
     );
   }
   return !!(
@@ -7355,9 +7385,11 @@ function requestExpressionMayBeExactManagedRuntimeMember(expression: Node): bool
       'appRuntimeDbProvider',
       'appRuntimeDbReady',
       'appRuntimeMutationReplayStore',
+      'appRuntimePrincipalEpochStore',
       'appRuntimeReadonlyDb',
       'appRuntimeWebhookReplayStore',
       'mutationReplayStore',
+      'principalEpochStore',
       'webhookReplayStore',
     ].includes(node.getText())
   );
@@ -7985,27 +8017,36 @@ function requestCallIsExactBootOnlyGeneratedSetup(
   }
 }
 
-interface RequestManagedReplayStoreGrammar {
-  readonly exportedName: 'appRuntimeMutationReplayStore' | 'appRuntimeWebhookReplayStore';
-  readonly localName: 'mutationReplayStore' | 'webhookReplayStore';
-  readonly runtimeMember: 'mutationReplayStore' | 'webhookReplayStore';
+interface RequestManagedStoreGrammar {
+  readonly exportedName:
+    | 'appRuntimeMutationReplayStore'
+    | 'appRuntimePrincipalEpochStore'
+    | 'appRuntimeWebhookReplayStore';
+  readonly localName: 'mutationReplayStore' | 'principalEpochStore' | 'webhookReplayStore';
+  readonly runtimeMember: 'mutationReplayStore' | 'principalEpochStore' | 'webhookReplayStore';
 }
 
 const REQUEST_MANAGED_MUTATION_REPLAY_STORE = {
   exportedName: 'appRuntimeMutationReplayStore',
   localName: 'mutationReplayStore',
   runtimeMember: 'mutationReplayStore',
-} as const satisfies RequestManagedReplayStoreGrammar;
+} as const satisfies RequestManagedStoreGrammar;
+
+const REQUEST_MANAGED_PRINCIPAL_EPOCH_STORE = {
+  exportedName: 'appRuntimePrincipalEpochStore',
+  localName: 'principalEpochStore',
+  runtimeMember: 'principalEpochStore',
+} as const satisfies RequestManagedStoreGrammar;
 
 const REQUEST_MANAGED_WEBHOOK_REPLAY_STORE = {
   exportedName: 'appRuntimeWebhookReplayStore',
   localName: 'webhookReplayStore',
   runtimeMember: 'webhookReplayStore',
-} as const satisfies RequestManagedReplayStoreGrammar;
+} as const satisfies RequestManagedStoreGrammar;
 
-function requestExpressionResolvesToExactManagedReplayStore(
+function requestExpressionResolvesToExactManagedStore(
   expression: Node,
-  grammar: RequestManagedReplayStoreGrammar,
+  grammar: RequestManagedStoreGrammar,
   seen: Set<string>,
 ): boolean {
   const node = unwrapStaticExpression(expression);
@@ -8050,7 +8091,7 @@ function requestExpressionResolvesToExactManagedReplayStore(
   return (
     values.length > 0 &&
     values.every((value) =>
-      requestExpressionResolvesToExactManagedReplayStore(value, grammar, new Set(seen)),
+      requestExpressionResolvesToExactManagedStore(value, grammar, new Set(seen)),
     )
   );
 }
@@ -12005,22 +12046,30 @@ function scanRequestRootCallbackCandidate(
     }
     return;
   }
-  const replayGrammar = callback.startsWith('mutationReplayStore.')
+  const managedStoreGrammar = callback.startsWith('mutationReplayStore.')
     ? REQUEST_MANAGED_MUTATION_REPLAY_STORE
-    : callback.startsWith('replayStore.')
-      ? REQUEST_MANAGED_WEBHOOK_REPLAY_STORE
-      : undefined;
-  const replayMember = replayGrammar ? callback.slice(callback.indexOf('.') + 1) : undefined;
-  const replayAccess = unwrapStaticExpression(expression);
+    : callback.startsWith('principalEpochStore.')
+      ? REQUEST_MANAGED_PRINCIPAL_EPOCH_STORE
+      : callback.startsWith('replayStore.')
+        ? REQUEST_MANAGED_WEBHOOK_REPLAY_STORE
+        : undefined;
+  const managedStoreMember = managedStoreGrammar
+    ? callback.slice(callback.indexOf('.') + 1)
+    : undefined;
+  const managedStoreAccess = unwrapStaticExpression(expression);
+  const managedStoreMethods =
+    managedStoreGrammar?.runtimeMember === 'principalEpochStore'
+      ? ['advance', 'current', 'initialize', 'tombstone']
+      : ['get', 'reserve', 'set'];
   if (
-    replayGrammar &&
-    replayMember &&
-    ['get', 'reserve', 'set'].includes(replayMember) &&
-    Node.isPropertyAccessExpression(replayAccess) &&
-    replayAccess.getName() === replayMember &&
-    requestExpressionResolvesToExactManagedReplayStore(
-      replayAccess.getExpression(),
-      replayGrammar,
+    managedStoreGrammar &&
+    managedStoreMember &&
+    managedStoreMethods.includes(managedStoreMember) &&
+    Node.isPropertyAccessExpression(managedStoreAccess) &&
+    managedStoreAccess.getName() === managedStoreMember &&
+    requestExpressionResolvesToExactManagedStore(
+      managedStoreAccess.getExpression(),
+      managedStoreGrammar,
       new Set(),
     )
   ) {
@@ -13360,7 +13409,13 @@ function requestExactManagedAppRuntimeIsPristine(expression: Node): boolean {
 
 function requestExpressionResolvesToExactManagedRuntimeMember(
   expression: Node,
-  member: 'db' | 'mutationReplayStore' | 'readonlyDb' | 'ready' | 'webhookReplayStore',
+  member:
+    | 'db'
+    | 'mutationReplayStore'
+    | 'principalEpochStore'
+    | 'readonlyDb'
+    | 'ready'
+    | 'webhookReplayStore',
   expectedAlias: string | undefined,
   seen: Set<string>,
 ): boolean {
@@ -16917,14 +16972,22 @@ function scanRequestPropertyAccessProtocols(
   if (
     !write &&
     (requestPropertyAccessIsExactReviewedSchemaTable(access) ||
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
-        (runtimeMember) =>
-          requestExpressionResolvesToExactManagedRuntimeMember(
-            access,
-            runtimeMember,
-            undefined,
-            new Set(),
-          ),
+      (
+        [
+          'db',
+          'mutationReplayStore',
+          'principalEpochStore',
+          'readonlyDb',
+          'ready',
+          'webhookReplayStore',
+        ] as const
+      ).some((runtimeMember) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(
+          access,
+          runtimeMember,
+          undefined,
+          new Set(),
+        ),
       ) ||
       requestPropertyAccessIsExactBetterAuthSeedCallTarget(access) ||
       (['sessionProvider', 'signIn', 'signOut'] as const).some((bindingMember) =>
@@ -19759,14 +19822,22 @@ function requestExpressionIsProtocolSafeUncached(
 
   if (
     (requestExpressionMayBeExactManagedRuntimeMember(node) &&
-      (['db', 'mutationReplayStore', 'readonlyDb', 'ready', 'webhookReplayStore'] as const).some(
-        (runtimeMember) =>
-          requestExpressionResolvesToExactManagedRuntimeMember(
-            node,
-            runtimeMember,
-            undefined,
-            new Set(),
-          ),
+      (
+        [
+          'db',
+          'mutationReplayStore',
+          'principalEpochStore',
+          'readonlyDb',
+          'ready',
+          'webhookReplayStore',
+        ] as const
+      ).some((runtimeMember) =>
+        requestExpressionResolvesToExactManagedRuntimeMember(
+          node,
+          runtimeMember,
+          undefined,
+          new Set(),
+        ),
       )) ||
     requestPropertyAccessIsExactBetterAuthSeedCallTarget(node) ||
     (requestExpressionMayBeExactBetterAuthBindingMember(node) &&

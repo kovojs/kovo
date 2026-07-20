@@ -448,9 +448,7 @@ export const verifyCapability = securityClassifier(
         method: payload.method,
         expiry: payload.expiry,
         ...(payload.scope === undefined ? {} : { scope: payload.scope }),
-        ...(payload.principalEpoch === undefined
-          ? {}
-          : { principalEpoch: payload.principalEpoch }),
+        ...(payload.principalEpoch === undefined ? {} : { principalEpoch: payload.principalEpoch }),
       };
 
       // Recompute the signature over every received authority field, including key id and replay
@@ -542,10 +540,7 @@ interface ParsedCapabilityPayload {
   readonly nonce: string;
 }
 
-async function principalEpochAtCapabilityMint(
-  store: PrincipalEpochStore,
-  principal: string,
-) {
+async function principalEpochAtCapabilityMint(store: PrincipalEpochStore, principal: string) {
   return currentPrincipalEpoch(store, principal);
 }
 
@@ -604,6 +599,7 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
   ) {
     return undefined;
   }
+  const validatedPrincipalEpoch = typeof principalEpoch === 'number' ? principalEpoch : undefined;
   const oneTime = oneTimeFlag === 1;
   let nonce = '';
   if (oneTime) {
@@ -617,7 +613,7 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
     method,
     expiry,
     ...(scope === undefined ? {} : { scope }),
-    ...(principalEpoch === undefined ? {} : { principalEpoch }),
+    ...(validatedPrincipalEpoch === undefined ? {} : { principalEpoch: validatedPrincipalEpoch }),
   };
   if (source !== serializeCapabilityPayload(keyId, claims, oneTime, nonce)) return undefined;
   return capabilityFreeze({
@@ -626,7 +622,7 @@ function parseCapabilityPayload(bytes: Uint8Array): ParsedCapabilityPayload | un
     key,
     expiry,
     ...(scope === undefined ? {} : { scope }),
-    ...(principalEpoch === undefined ? {} : { principalEpoch }),
+    ...(validatedPrincipalEpoch === undefined ? {} : { principalEpoch: validatedPrincipalEpoch }),
     oneTime,
     nonce,
   });
