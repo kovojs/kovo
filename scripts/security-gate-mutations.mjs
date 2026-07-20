@@ -14,7 +14,7 @@ import dns from 'node:dns';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
 import { build as buildWithEsbuild } from 'esbuild';
@@ -32,6 +32,12 @@ import * as frameworkImplementationDigest from '../packages/compiler/src/securit
 
 const repoRoot = findRepoRoot();
 const scriptsDir = path.join(repoRoot, 'scripts');
+const behavioralMutationWorkerRequestEnv = 'KOVO_SECURITY_GATE_MUTATION_WORKER_REQUEST';
+const behavioralMutationWorkerResultPrefix = 'KOVO_SECURITY_GATE_MUTATION_WORKER_RESULT ';
+const behavioralMutationWorkerOutputLimitBytes = 4 * 1024 * 1024;
+const behavioralMutationWorkerTimeoutMs = 180_000;
+const behavioralMutationWorkerHeapLimitMb = 1536;
+export const SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE = 16;
 const authorizationMatrixPath = path.join(repoRoot, 'security/authorization-matrix.json');
 const sinkPolicyGatePath = path.join(scriptsDir, 'check-sink-policy-gate.mjs');
 const fundamentalFixesCensusGatePath = path.join(scriptsDir, 'fundamental-fixes-census-gate.mjs');
@@ -1343,15 +1349,9 @@ const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
-const taskEgressCapabilitySeal = [
-  '    return taskDefineDataProperty(',
-  "      taskDefineDataProperty(context, 'signal', signal),",
-  "      'fetch',",
-  '      frameworkEgressFetch,',
-  '    );',
-].join('\n');
-const removedTaskEgressCapabilitySeal =
-  "    return taskDefineDataProperty(context, 'signal', signal);";
+const taskEgressCapabilitySeal =
+  "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
+const removedTaskEgressCapabilitySeal = '    return context;';
 const webhookEgressCapabilitySeal = [
   "  witnessDefineProperty(context, 'fetch', {",
   '    configurable: false,',
@@ -5833,6 +5833,46 @@ function assertFiniteIrCloses(moduleUnderTest, source, extraFiles = []) {
 const behavioralTypeScriptBaselineModules = new Map();
 
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
+  // Imported ESM bundle records cannot be evicted from a live process. Keep the complete forcing
+  // denominator, but bound retained behavioral bundles by executing registered mutants in
+  // short-lived workers; a missing, duplicate, or malformed worker result still fails closed.
+  if (securityGateMutantsCanRunInIsolatedBatches(mutants)) {
+    return runSecurityGateMutationHarnessIsolated(mutants);
+  }
+  return runSecurityGateMutationBatch(mutants);
+}
+
+export function planSecurityGateBehavioralMutationBatches(mutants) {
+  const behavioralMutants = mutants.filter((mutant) => mutant.behavioralTypeScript === true);
+  const batches = [];
+  for (
+    let offset = 0;
+    offset < behavioralMutants.length;
+    offset += SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE
+  ) {
+    batches.push(
+      behavioralMutants.slice(offset, offset + SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE),
+    );
+  }
+  return batches;
+}
+
+function securityGateMutantsCanRunInIsolatedBatches(mutants) {
+  if (mutants.length <= SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE) return false;
+  const registeredByName = new Map(SECURITY_GATE_MUTANTS.map((mutant) => [mutant.name, mutant]));
+  return mutants.every((mutant) => registeredByName.get(mutant.name) === mutant);
+}
+
+async function runSecurityGateMutationHarnessIsolated(mutants) {
+  const directMutants = mutants.filter((mutant) => mutant.behavioralTypeScript !== true);
+  const results = await runSecurityGateMutationBatch(directMutants);
+  for (const batch of planSecurityGateBehavioralMutationBatches(mutants)) {
+    results.push(...runSecurityGateBehavioralMutationWorker(batch));
+  }
+  return orderSecurityGateMutationResults(mutants, results);
+}
+
+async function runSecurityGateMutationBatch(mutants) {
   const results = [];
 
   for (const mutant of mutants) {
@@ -5942,6 +5982,110 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
   }
 
   return results;
+}
+
+function runSecurityGateBehavioralMutationWorker(mutants) {
+  const worker = spawnSync(
+    process.execPath,
+    [`--max-old-space-size=${behavioralMutationWorkerHeapLimitMb}`, fileURLToPath(import.meta.url)],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        [behavioralMutationWorkerRequestEnv]: JSON.stringify(mutants.map((mutant) => mutant.name)),
+      },
+      maxBuffer: behavioralMutationWorkerOutputLimitBytes,
+      timeout: behavioralMutationWorkerTimeoutMs,
+    },
+  );
+  if (worker.error) {
+    throw new Error(`security mutation worker failed: ${formatError(worker.error)}`);
+  }
+  if (worker.status !== 0) {
+    throw new Error(
+      `security mutation worker exited ${String(worker.status)}${
+        worker.signal === null ? '' : ` (${worker.signal})`
+      }: ${worker.stderr.trim() || '<no stderr>'}`,
+    );
+  }
+  const resultLines = worker.stdout
+    .split('\n')
+    .filter((line) => line.startsWith(behavioralMutationWorkerResultPrefix));
+  if (resultLines.length !== 1) {
+    throw new Error(
+      `security mutation worker returned ${resultLines.length} result payloads: ${
+        worker.stdout.trim() || '<no stdout>'
+      }`,
+    );
+  }
+  let results;
+  try {
+    results = JSON.parse(resultLines[0].slice(behavioralMutationWorkerResultPrefix.length));
+  } catch (error) {
+    throw new Error(`security mutation worker returned invalid JSON: ${formatError(error)}`);
+  }
+  return orderSecurityGateMutationResults(mutants, results);
+}
+
+function orderSecurityGateMutationResults(mutants, results) {
+  if (!Array.isArray(results)) {
+    throw new TypeError('security mutation worker results must be an array');
+  }
+  const expectedNames = new Set(mutants.map((mutant) => mutant.name));
+  if (expectedNames.size !== mutants.length) {
+    throw new Error('security mutation input contains duplicate mutant names');
+  }
+  const resultsByName = new Map();
+  for (const result of results) {
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      typeof result.name !== 'string' ||
+      !expectedNames.has(result.name) ||
+      resultsByName.has(result.name)
+    ) {
+      throw new Error('security mutation worker returned an unknown or duplicate result');
+    }
+    resultsByName.set(result.name, result);
+  }
+  const missing = mutants.filter((mutant) => !resultsByName.has(mutant.name));
+  if (missing.length > 0) {
+    throw new Error(
+      `security mutation worker omitted results: ${missing.map((mutant) => mutant.name).join(', ')}`,
+    );
+  }
+  return mutants.map((mutant) => resultsByName.get(mutant.name));
+}
+
+function behavioralMutationWorkerMutants() {
+  const request = process.env[behavioralMutationWorkerRequestEnv];
+  if (request === undefined) return undefined;
+  let names;
+  try {
+    names = JSON.parse(request);
+  } catch (error) {
+    throw new Error(`security mutation worker request is invalid JSON: ${formatError(error)}`);
+  }
+  if (
+    !Array.isArray(names) ||
+    names.length === 0 ||
+    names.length > SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE ||
+    names.some((name) => typeof name !== 'string') ||
+    new Set(names).size !== names.length
+  ) {
+    throw new Error('security mutation worker request is not a bounded unique name array');
+  }
+  const registeredByName = new Map(SECURITY_GATE_MUTANTS.map((mutant) => [mutant.name, mutant]));
+  return names.map((name) => {
+    const mutant = registeredByName.get(name);
+    if (mutant?.behavioralTypeScript !== true) {
+      throw new Error(
+        `security mutation worker request names an unknown behavioral mutant: ${name}`,
+      );
+    }
+    return mutant;
+  });
 }
 
 function behavioralTypeScriptBaselineModule(
@@ -9737,6 +9881,14 @@ function formatError(error) {
 }
 
 async function main() {
+  const workerMutants = behavioralMutationWorkerMutants();
+  if (workerMutants !== undefined) {
+    delete process.env[behavioralMutationWorkerRequestEnv];
+    const results = await runSecurityGateMutationBatch(workerMutants);
+    process.stdout.write(`${behavioralMutationWorkerResultPrefix}${JSON.stringify(results)}\n`);
+    return;
+  }
+
   const results = await runSecurityGateMutationHarness();
   const failed = results.filter((result) => result.status !== 'killed');
 
