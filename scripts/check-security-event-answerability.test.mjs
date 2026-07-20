@@ -93,6 +93,27 @@ describe('security-event retrospective answerability gate', () => {
     ]);
   });
 
+  it('rejects runtime or CLI principal vocabulary and identity-bound drift', () => {
+    const shrunkRuntimeVocabulary = sources();
+    shrunkRuntimeVocabulary['packages/server/src/security-event.ts'] = shrunkRuntimeVocabulary[
+      'packages/server/src/security-event.ts'
+    ].replace("  'principal-unrecordable',\n", '');
+    expect(run(shrunkRuntimeVocabulary).findings).toEqual([
+      expect.stringContaining('runtime principal vocabulary and identity bound'),
+    ]);
+
+    const narrowedCliBound = sources();
+    narrowedCliBound['packages/cli/src/commands/incident-scope.ts'] = narrowedCliBound[
+      'packages/cli/src/commands/incident-scope.ts'
+    ].replace(
+      'const INCIDENT_PRINCIPAL_IDENTITY_MAX_LENGTH = 1_024;',
+      'const INCIDENT_PRINCIPAL_IDENTITY_MAX_LENGTH = 512;',
+    );
+    expect(run(narrowedCliBound).findings).toEqual([
+      expect.stringContaining('CLI principal vocabulary and identity bound'),
+    ]);
+  });
+
   it('rejects reopening the no-journal decision path', () => {
     const reopened = sources();
     reopened['packages/server/src/security-event.ts'] = reopened[

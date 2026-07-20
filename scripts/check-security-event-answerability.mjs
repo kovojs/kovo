@@ -28,6 +28,15 @@ const EXPECTED_RESOURCE_KINDS = {
   storage: 'object',
   task: 'task',
 };
+const EXPECTED_PRINCIPAL_KINDS = ['anonymous', 'principal', 'system', 'unresolved'];
+const EXPECTED_UNRESOLVED_REASONS = [
+  'epoch-unavailable',
+  'outside-request-context',
+  'principal-unrecordable',
+  'principal-not-proven',
+  'tenant-unavailable',
+];
+const EXPECTED_PRINCIPAL_IDENTITY_MAX_LENGTH = 1_024;
 
 const REQUIRED_DECISION_FIELDS = [
   'decisionSite',
@@ -90,6 +99,21 @@ export function checkSecurityEventAnswerability(options = {}) {
       `${serverPath}: every principal-scope arm must require epoch, id, kind, and tenant facts`,
     );
   }
+  const runtimePrincipalKinds = literalArray(serverFile, 'SECURITY_EVENT_PRINCIPAL_KINDS');
+  const runtimeUnresolvedReasons = literalArray(serverFile, 'SECURITY_EVENT_UNRESOLVED_REASONS');
+  const runtimePrincipalBound = numericLiteralConstant(
+    serverFile,
+    'SECURITY_EVENT_PRINCIPAL_IDENTITY_MAX_LENGTH',
+  );
+  if (
+    JSON.stringify(runtimePrincipalKinds) !== JSON.stringify(EXPECTED_PRINCIPAL_KINDS) ||
+    JSON.stringify(runtimeUnresolvedReasons) !== JSON.stringify(EXPECTED_UNRESOLVED_REASONS) ||
+    runtimePrincipalBound !== EXPECTED_PRINCIPAL_IDENTITY_MAX_LENGTH
+  ) {
+    findings.push(
+      `${serverPath}: runtime principal vocabulary and identity bound must remain exactly registered`,
+    );
+  }
   const resourceFields = interfaceProperties(serverFile, 'SecurityEventResourceScope');
   if (
     JSON.stringify(resourceFields.names) !== JSON.stringify(['identity', 'kind']) ||
@@ -135,9 +159,25 @@ export function checkSecurityEventAnswerability(options = {}) {
 
   const cliPath = 'packages/cli/src/commands/incident-scope.ts';
   const cliSource = readText(cliPath);
-  const cliDoors = literalArray(parse(cliPath, cliSource), 'INCIDENT_DOORS');
+  const cliFile = parse(cliPath, cliSource);
+  const cliDoors = literalArray(cliFile, 'INCIDENT_DOORS');
   if (JSON.stringify(cliDoors) !== JSON.stringify(EXPECTED_DOORS)) {
     findings.push(`${cliPath}: CLI incident-door denominator drifted from the runtime door`);
+  }
+  const cliPrincipalKinds = literalArray(cliFile, 'INCIDENT_PRINCIPAL_KINDS');
+  const cliUnresolvedReasons = literalArray(cliFile, 'INCIDENT_UNRESOLVED_REASONS');
+  const cliPrincipalBound = numericLiteralConstant(
+    cliFile,
+    'INCIDENT_PRINCIPAL_IDENTITY_MAX_LENGTH',
+  );
+  if (
+    JSON.stringify(cliPrincipalKinds) !== JSON.stringify(EXPECTED_PRINCIPAL_KINDS) ||
+    JSON.stringify(cliUnresolvedReasons) !== JSON.stringify(EXPECTED_UNRESOLVED_REASONS) ||
+    cliPrincipalBound !== EXPECTED_PRINCIPAL_IDENTITY_MAX_LENGTH
+  ) {
+    findings.push(
+      `${cliPath}: CLI principal vocabulary and identity bound drifted from the runtime schema`,
+    );
   }
   if (
     !cliSource.includes('unanswerable within the covered doors') ||
@@ -483,6 +523,11 @@ function literalObject(sourceFile, name) {
   }
   entries.sort(([left], [right]) => left.localeCompare(right));
   return Object.fromEntries(entries);
+}
+
+function numericLiteralConstant(sourceFile, name) {
+  const value = declarationInitializer(sourceFile, name);
+  return ts.isNumericLiteral(value) ? Number(value.text.replaceAll('_', '')) : undefined;
 }
 
 function interfaceProperties(sourceFile, name) {

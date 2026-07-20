@@ -3,15 +3,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
-import { kovo } from '@kovojs/drizzle';
+import { kovo, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
 import { describe, expect, it } from 'vitest';
 
-import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
+import {
+  extractCompilerBoundKovoRuntimeDbMetadata,
+  installGeneratedTableSecurityManifestForCommand,
+} from './generated-table-security-registry.js';
 import { guards, resolveLifecycleRequest } from './guards.js';
 import { usePostgresSystemDb } from './internal/postgres-capability.js';
 import { managedDb } from './managed-db.js';
+import {
+  registerFrameworkPostgresOwnerGuardDerivedRequestDb,
+  registerFrameworkPostgresOwnerGuardRequestDb,
+  registerFrameworkPostgresOwnerGuardSchema,
+} from './postgres-owner-guard.js';
 import { createPostgresAppRuntimeDb } from './postgres-runtime.js';
 
 const documents = pgTable(
@@ -57,6 +65,61 @@ const ownerGuard = () =>
   });
 
 describe('framework-derived Postgres owner guard', () => {
+  it('preserves the exact reader execution registration when lifecycle composition also sees the writer', async () => {
+    const release = installGeneratedTableSecurityManifestForCommand(manifest);
+    const calls: string[] = [];
+    try {
+      const extracted = extractCompilerBoundKovoRuntimeDbMetadata([documents]);
+      const metadata: KovoRuntimeDbMetadata = {
+        ...extracted,
+        columnSources: nativeMap(extracted.columnSources),
+        keySourcesByTable: nativeMap(extracted.keySourcesByTable),
+        ownerSourcesByTable: nativeMap(extracted.ownerSourcesByTable),
+      };
+      registerFrameworkPostgresOwnerGuardSchema(metadata, [documents]);
+
+      const readerSource = {};
+      const writerSource = {};
+      const lifecycleDb = {};
+      registerFrameworkPostgresOwnerGuardRequestDb(
+        readerSource,
+        metadata,
+        { principal: 'alice' },
+        {
+          execute() {
+            calls.push('reader');
+            return [{ owner: 'alice' }];
+          },
+        },
+      );
+      registerFrameworkPostgresOwnerGuardRequestDb(
+        writerSource,
+        metadata,
+        { principal: 'alice' },
+        {
+          execute() {
+            calls.push('writer');
+            return [];
+          },
+        },
+      );
+
+      registerFrameworkPostgresOwnerGuardDerivedRequestDb(lifecycleDb, readerSource);
+      registerFrameworkPostgresOwnerGuardDerivedRequestDb(lifecycleDb, writerSource);
+
+      await expect(
+        ownerGuard()({
+          args: { id: 'owned' },
+          db: lifecycleDb,
+          session: { user: { id: 'alice' } },
+        }),
+      ).resolves.toBe(true);
+      expect(calls).toEqual(['reader']);
+    } finally {
+      release();
+    }
+  });
+
   it('rejects missing manifests, nonunique keys, SQLite, and ownerVia at construction', () => {
     expect(() => ownerGuard()).toThrow(/compiler-generated table-security manifest/u);
 
@@ -323,4 +386,10 @@ async function requestFor(
       sessionProvider: () => ({ user: { id: principal } }),
     },
   );
+}
+
+function nativeMap<Key, Value>(source: ReadonlyMap<Key, Value>): Map<Key, Value> {
+  const output = new Map<Key, Value>();
+  source.forEach((value, key) => output.set(key, value));
+  return output;
 }

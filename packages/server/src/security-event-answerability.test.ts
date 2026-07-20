@@ -144,6 +144,45 @@ describe('security-event retrospective answerability (SPEC §§6.6, 11.2)', () =
     expect(journal.snapshot()).toEqual([]);
     expect(journal.record(valid).sequence).toBe(1);
 
+    expect(
+      journal.record({
+        ...valid,
+        principal: { epoch: 1, id: 'p'.repeat(1_024), kind: 'principal', tenant: null },
+      }),
+    ).toMatchObject({ principal: { id: 'p'.repeat(1_024), kind: 'principal' } });
+    expect(() =>
+      journal.record({
+        ...valid,
+        principal: { epoch: 1, id: 'p'.repeat(1_025), kind: 'principal', tenant: null },
+      }),
+    ).toThrow(/non-empty id/u);
+    expect(
+      journal.record({
+        ...valid,
+        principal: {
+          epoch: null,
+          id: null,
+          kind: 'unresolved',
+          reason: 'principal-unrecordable',
+          tenant: null,
+        },
+      }),
+    ).toMatchObject({
+      principal: { id: null, kind: 'unresolved', reason: 'principal-unrecordable' },
+    });
+    expect(() =>
+      journal.record({
+        ...valid,
+        principal: {
+          epoch: null,
+          id: 'must-not-leak-unrecordable-identity',
+          kind: 'unresolved',
+          reason: 'principal-unrecordable',
+          tenant: null,
+        },
+      }),
+    ).toThrow(/known-or-unknown principal/u);
+
     const proxy = new Proxy(valid, {
       get(_target, property, receiver) {
         if (property === 'decisionSite') return 'framework:authorization:attacker';
@@ -157,7 +196,7 @@ describe('security-event retrospective answerability (SPEC §§6.6, 11.2)', () =
     expect(snapshotted).toMatchObject({
       decisionSite: 'framework:authorization:answerability-test',
       principal: { epoch: 7, id: 'principal-authorization', tenant: 'tenant-a' },
-      sequence: 2,
+      sequence: 4,
     });
   });
 

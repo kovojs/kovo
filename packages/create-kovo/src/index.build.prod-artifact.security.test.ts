@@ -258,7 +258,8 @@ describe('create-kovo starter (build integration: production security artifacts)
   // @kovo-security-certifies KV435 postgres-reader-role-secret-grant-floor
   // @kovo-security-certifies KV435 postgres-reader-role-secret-view-floor
   // @kovo-security-certifies KV435 runtime-secret-explicit-box-egress
-  it('distinguishes Postgres reader-role denials from runtime Secret wire refusal', async () => {
+  // @kovo-security-certifies KV435 runtime-secret-audited-reveal-acceptance
+  it('distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-runtime-secret-boundary-'));
@@ -278,7 +279,9 @@ describe('create-kovo starter (build integration: production security artifacts)
         join(root, 'migrations/001_runtime_secret_boundary.sql'),
         'utf8',
       );
-      expect(proofQueries).toContain("import { secret } from '@kovojs/core';");
+      expect(proofQueries).toContain(
+        "import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';",
+      );
       expect(proofQueries).not.toContain("from './_kovo/app-runtime-db.js'");
       expect(generatedRuntimeDb).not.toContain('declareSecretReadCapability');
       expect(proofQueries).not.toContain('declareSecretReadCapability');
@@ -312,11 +315,34 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofApp).toContain(
         'env: s.object({ KOVO_CONFIG_SECRET_PROOF: s.secret(s.string()) })',
       );
+      expect(proofQueries).toContain(
+        "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
+      );
+      expect(proofQueries).toContain("door: 'trustedReveal'");
+      expect(proofQueries).toContain("ownerScope: 'application'");
+      expect(proofQueries).toContain("purpose: 'public-projection'");
       expect(proofQueries).not.toContain('if (false)');
+      const revealCall = "trustedReveal(secret('runtime-secret-value')";
+      const revealCallIndex = proofQueries.indexOf(revealCall);
+      expect(revealCallIndex).toBeGreaterThanOrEqual(0);
+      const revealSite = `queries.ts:${proofQueries.slice(0, revealCallIndex).split('\n').length}`;
 
       // SPEC §6.6/§9.5: build derives the app graph with framework-owned unavailable
       // sentinels. Production config values are supplied only when the emitted server boots.
       buildParanoidProductionArtifact(root);
+      const builtGraph = JSON.parse(readFileSync(join(root, 'dist/.kovo/graph.json'), 'utf8')) as {
+        revealed?: readonly unknown[];
+      };
+      expect(builtGraph.revealed).toContainEqual({
+        grade: 'audit',
+        justification: 'public-projection:trustedReveal:application',
+        method: 'server-projection',
+        path: "secret('runtime-secret-value')",
+        query: 'runtime',
+        selectedSecret: true,
+        site: revealSite,
+        source: "secret('runtime-secret-value')",
+      });
       migrateRuntimeSecretBoundaryProof(root, dataDir);
 
       const refusedEnv = {
@@ -462,6 +488,20 @@ describe('create-kovo starter (build integration: production security artifacts)
           expect(requestOutput).not.toContain(secretValue);
         });
       }
+
+      const revealOutputOffset = output().length;
+      const revealResponse = await fetch(
+        `${origin}/_q/queries/runtime-secret-reveal-acceptance-query`,
+        { headers: { cookie: cookieHeader(jar) } },
+      );
+      const revealBody = await revealResponse.text();
+
+      expect(revealResponse.status, revealBody).toBe(200);
+      expect(revealBody).toContain(
+        '<kovo-query name="queries/runtime-secret-reveal-acceptance-query"',
+      );
+      expect(revealBody).toContain('runtime-secret-value');
+      expect(output().slice(revealOutputOffset)).not.toContain('KV435');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -643,8 +683,26 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('(select classified from runtime_secret_proof) as leaked');
       expect(proofQueries).toContain('drizzleSql<string>`upper(${contacts.name})');
       expect(proofQueries).toContain('label: proof.label');
+      expect(proofQueries).toContain('trustedReveal(\n          row.company,');
+      expect(proofQueries).not.toContain('as unknown as Secret');
+      const revealCallIndex = proofQueries.indexOf('trustedReveal(\n          row.company,');
+      expect(revealCallIndex).toBeGreaterThanOrEqual(0);
+      const revealSite = `queries.ts:${proofQueries.slice(0, revealCallIndex).split('\n').length}`;
 
       buildParanoidProductionArtifact(root);
+      const builtGraph = JSON.parse(readFileSync(join(root, 'dist/.kovo/graph.json'), 'utf8')) as {
+        revealed?: readonly unknown[];
+      };
+      expect(builtGraph.revealed).toContainEqual({
+        grade: 'audit',
+        justification: 'public-projection:trustedReveal:application',
+        method: 'server-projection',
+        path: 'row.company',
+        query: 'runtime',
+        selectedSecret: true,
+        site: revealSite,
+        source: 'row.company',
+      });
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -689,6 +747,16 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(publicProjectionBody).toContain(`<kovo-query name="${publicProjectionKey}"`);
       expect(publicProjectionBody).toContain('public label');
       expect(publicProjectionBody).not.toContain('runtime-secret-value');
+
+      const revealKey = 'queries/sqlite-secret-reveal-query';
+      const revealResponse = await fetch(`${origin}/_q/${revealKey}`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const revealBody = await revealResponse.text();
+
+      expect(revealResponse.status, revealBody).toBe(200);
+      expect(revealBody).toContain(`<kovo-query name="${revealKey}"`);
+      expect(revealBody).toContain('runtime-secret-value:revealed');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

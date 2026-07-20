@@ -16,8 +16,8 @@ import {
 describe('finite security decision vocabulary (SPEC §2 and §6.6)', () => {
   it('exports exact frozen operation, root, and closed-verdict inventories', () => {
     expect(browserSecurityOperationKinds).toHaveLength(12);
-    expect(serverSecurityOperationKinds).toHaveLength(16);
-    expect(securityOperationKinds).toHaveLength(28);
+    expect(serverSecurityOperationKinds).toHaveLength(17);
+    expect(securityOperationKinds).toHaveLength(29);
     expect(securityRootKinds).toHaveLength(11);
     expect(securitySemanticClosedReasons).toHaveLength(8);
 

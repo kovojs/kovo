@@ -61,6 +61,21 @@ export type SecurityEventResourceKind =
 
 export type SecurityDecisionOutcome = 'allow' | 'deny';
 
+const SECURITY_EVENT_PRINCIPAL_KINDS = witnessFreeze([
+  'anonymous',
+  'principal',
+  'system',
+  'unresolved',
+] as const);
+const SECURITY_EVENT_UNRESOLVED_REASONS = witnessFreeze([
+  'epoch-unavailable',
+  'outside-request-context',
+  'principal-unrecordable',
+  'principal-not-proven',
+  'tenant-unavailable',
+] as const);
+const SECURITY_EVENT_PRINCIPAL_IDENTITY_MAX_LENGTH = 1_024;
+
 export type SecurityEventPrincipalScope =
   | {
       readonly epoch: null;
@@ -84,11 +99,7 @@ export type SecurityEventPrincipalScope =
       readonly epoch: null;
       readonly id: string | null;
       readonly kind: 'unresolved';
-      readonly reason:
-        | 'epoch-unavailable'
-        | 'outside-request-context'
-        | 'principal-not-proven'
-        | 'tenant-unavailable';
+      readonly reason: (typeof SECURITY_EVENT_UNRESOLVED_REASONS)[number];
       readonly tenant: string | null;
     };
 
@@ -398,6 +409,9 @@ function assertPrincipalScope(value: unknown): asserts value is SecurityEventPri
     throw new TypeError('Security decision principal scope is required.');
   }
   const kind = ownDataValue(value, 'kind', 'Security decision principal scope kind');
+  if (!isSecurityEventPrincipalKind(kind)) {
+    throw new TypeError('Security decision principal scope kind is not registered.');
+  }
   const expectedFields =
     kind === 'unresolved'
       ? ['epoch', 'id', 'kind', 'reason', 'tenant']
@@ -432,11 +446,16 @@ function assertPrincipalScope(value: unknown): asserts value is SecurityEventPri
   }
   if (kind === 'unresolved') {
     const reason = ownDataValue(value, 'reason', 'Unresolved security principal reason');
+    if (!isSecurityEventUnresolvedReason(reason)) {
+      throw new TypeError('Unresolved security principal reason is not registered.');
+    }
     const knownPrincipalReason = reason === 'epoch-unavailable' || reason === 'tenant-unavailable';
     const validKnownPrincipal =
       knownPrincipalReason && boundedIdentity(id) && (tenant === null || boundedIdentity(tenant));
     const validUnknownPrincipal =
-      (reason === 'outside-request-context' || reason === 'principal-not-proven') &&
+      (reason === 'outside-request-context' ||
+        reason === 'principal-unrecordable' ||
+        reason === 'principal-not-proven') &&
       id === null &&
       tenant === null;
     if (epoch !== null || (!validKnownPrincipal && !validUnknownPrincipal)) {
@@ -584,15 +603,38 @@ function isIncidentDoor(value: unknown): value is SecurityEventIncidentDoor {
   return false;
 }
 
-function boundedIdentity(value: unknown): value is string {
+function isSecurityEventPrincipalKind(
+  value: unknown,
+): value is (typeof SECURITY_EVENT_PRINCIPAL_KINDS)[number] {
+  for (const kind of SECURITY_EVENT_PRINCIPAL_KINDS) {
+    if (value === kind) return true;
+  }
+  return false;
+}
+
+function isSecurityEventUnresolvedReason(
+  value: unknown,
+): value is (typeof SECURITY_EVENT_UNRESOLVED_REASONS)[number] {
+  for (const reason of SECURITY_EVENT_UNRESOLVED_REASONS) {
+    if (value === reason) return true;
+  }
+  return false;
+}
+
+/** @internal Whether a principal identity can enter the bounded no-control event schema. */
+export function securityEventPrincipalIdentityIsRecordable(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length >= 1 &&
-    value.length <= 512 &&
+    // SPEC §9.4: framework principals are valid through 1,024 code units. The answerability
+    // record must accept every principal the authorization/replay boundary can prove.
+    value.length <= SECURITY_EVENT_PRINCIPAL_IDENTITY_MAX_LENGTH &&
     witnessRegExpTest(/^[^\u0000-\u001f\u007f]+$/u, value) &&
     !witnessRegExpTest(/^\s|\s$/u, value)
   );
 }
+
+const boundedIdentity = securityEventPrincipalIdentityIsRecordable;
 
 function ownDataValue(value: object, property: PropertyKey, label: string): unknown {
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);

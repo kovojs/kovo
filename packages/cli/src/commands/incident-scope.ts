@@ -16,6 +16,7 @@ const readFileSync = builtinReadFileSync;
 const resolve = builtinResolve;
 const statSync = builtinStatSync;
 const MAX_INCIDENT_INPUT_BYTES = 32 * 1024 * 1024;
+const INCIDENT_PRINCIPAL_IDENTITY_MAX_LENGTH = 1_024;
 
 const INCIDENT_DOORS = [
   'auth',
@@ -25,6 +26,14 @@ const INCIDENT_DOORS = [
   'storage',
   'task',
   'replay',
+] as const;
+const INCIDENT_PRINCIPAL_KINDS = ['anonymous', 'principal', 'system', 'unresolved'] as const;
+const INCIDENT_UNRESOLVED_REASONS = [
+  'epoch-unavailable',
+  'outside-request-context',
+  'principal-unrecordable',
+  'principal-not-proven',
+  'tenant-unavailable',
 ] as const;
 
 type IncidentDoor = (typeof INCIDENT_DOORS)[number];
@@ -59,8 +68,8 @@ interface IncidentAdvisory {
 interface IncidentPrincipal {
   epoch: number | null;
   id: string | null;
-  kind: 'anonymous' | 'principal' | 'system' | 'unresolved';
-  reason?: string;
+  kind: (typeof INCIDENT_PRINCIPAL_KINDS)[number];
+  reason?: (typeof INCIDENT_UNRESOLVED_REASONS)[number];
   tenant: string | null;
 }
 
@@ -427,7 +436,7 @@ function readPrincipal(value: unknown, index: number): IncidentPrincipal {
   const principal = requireRecord(value, `security-event record[${index}] principal`);
   const kind = closedString(
     principal.kind,
-    ['anonymous', 'principal', 'system', 'unresolved'] as const,
+    INCIDENT_PRINCIPAL_KINDS,
     `security-event record[${index}] principal kind`,
   );
   requireExactKeys(
@@ -440,12 +449,12 @@ function readPrincipal(value: unknown, index: number): IncidentPrincipal {
   if (kind === 'principal') {
     return {
       epoch: positiveSafeInteger(principal.epoch, `security-event record[${index}] epoch`),
-      id: boundedText(principal.id, `security-event record[${index}] principal id`),
+      id: boundedPrincipalIdentity(principal.id, `security-event record[${index}] principal id`),
       kind,
       tenant:
         principal.tenant === null
           ? null
-          : boundedText(principal.tenant, `security-event record[${index}] tenant`),
+          : boundedPrincipalIdentity(principal.tenant, `security-event record[${index}] tenant`),
     };
   }
   if (kind === 'system') {
@@ -454,23 +463,18 @@ function readPrincipal(value: unknown, index: number): IncidentPrincipal {
     }
     return {
       epoch: null,
-      id: boundedText(principal.id, `security-event record[${index}] system id`),
+      id: boundedPrincipalIdentity(principal.id, `security-event record[${index}] system id`),
       kind,
       tenant:
         principal.tenant === null
           ? null
-          : boundedText(principal.tenant, `security-event record[${index}] tenant`),
+          : boundedPrincipalIdentity(principal.tenant, `security-event record[${index}] tenant`),
     };
   }
   if (kind === 'unresolved') {
     const reason = closedString(
       principal.reason,
-      [
-        'epoch-unavailable',
-        'outside-request-context',
-        'principal-not-proven',
-        'tenant-unavailable',
-      ] as const,
+      INCIDENT_UNRESOLVED_REASONS,
       `security-event record[${index}] unresolved reason`,
     );
     if (principal.epoch !== null) {
@@ -479,13 +483,19 @@ function readPrincipal(value: unknown, index: number): IncidentPrincipal {
     if (reason === 'epoch-unavailable' || reason === 'tenant-unavailable') {
       return {
         epoch: null,
-        id: boundedText(principal.id, `security-event record[${index}] unresolved principal id`),
+        id: boundedPrincipalIdentity(
+          principal.id,
+          `security-event record[${index}] unresolved principal id`,
+        ),
         kind,
         reason,
         tenant:
           principal.tenant === null
             ? null
-            : boundedText(principal.tenant, `security-event record[${index}] unresolved tenant`),
+            : boundedPrincipalIdentity(
+                principal.tenant,
+                `security-event record[${index}] unresolved tenant`,
+              ),
       };
     }
     if (principal.id !== null || principal.tenant !== null) {
@@ -598,6 +608,19 @@ function boundedText(value: unknown, label: string): string {
     /[\u0000-\u001f\u007f]/u.test(value)
   ) {
     throw new Error(`${label} must be bounded printable text`);
+  }
+  return value;
+}
+
+function boundedPrincipalIdentity(value: unknown, label: string): string {
+  if (
+    typeof value !== 'string' ||
+    value.length < 1 ||
+    value.length > INCIDENT_PRINCIPAL_IDENTITY_MAX_LENGTH ||
+    /^[\s]|[\s]$/u.test(value) ||
+    /[\u0000-\u001f\u007f]/u.test(value)
+  ) {
+    throw new Error(`${label} must be a bounded printable principal identity`);
   }
   return value;
 }

@@ -24,6 +24,7 @@ export type CoreSecurityDecisionPrincipal =
       readonly reason:
         | 'epoch-unavailable'
         | 'outside-request-context'
+        | 'principal-unrecordable'
         | 'principal-not-proven'
         | 'tenant-unavailable';
       readonly tenant: string | null;

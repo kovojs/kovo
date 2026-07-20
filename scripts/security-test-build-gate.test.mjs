@@ -686,12 +686,67 @@ describe('security-test-build-gate', () => {
       buildInvocation: 'starter-build-production-artifact',
       code: 'KV435',
       requiredNeedles: expect.arrayContaining([
-        "trustedReveal(secret('runtime-secret-value'), {",
+        "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
+        "door: 'trustedReveal'",
+        "ownerScope: 'application'",
+        "purpose: 'public-projection'",
+        "readFileSync(join(root, 'dist/.kovo/graph.json'), 'utf8')",
+        'expect(builtGraph.revealed).toContainEqual({',
+        "justification: 'public-projection:trustedReveal:application'",
+        "method: 'server-projection'",
+        'site: revealSite',
         'queries/runtime-secret-reveal-acceptance-query',
         'expect(revealResponse.status, revealBody).toBe(200)',
         "expect(output().slice(revealOutputOffset)).not.toContain('KV435')",
       ]),
       testName,
+    });
+
+    const revealProof = proofsByClaim.get('runtime-secret-audited-reveal-acceptance');
+    if (revealProof === undefined) throw new Error('audited reveal proof is not enrolled');
+    withTempRepo((repoRoot) => {
+      writeStarterProofFile(
+        repoRoot,
+        [
+          '// @kovo-security-certifies KV435 runtime-secret-audited-reveal-acceptance',
+          `it('${testName}', async () => {`,
+          "  const posture = { KOVO_PARANOID: '1' };",
+          '  void posture;',
+          '  addRuntimeSecretBoundaryProof(root);',
+          '  buildParanoidProductionArtifact(root);',
+          "  trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
+          "    door: 'trustedReveal',",
+          "    ownerScope: 'application',",
+          "    purpose: 'public-projection',",
+          '  }));',
+          "  await fetch('queries/runtime-secret-reveal-acceptance-query');",
+          '  expect(revealResponse.status, revealBody).toBe(200);',
+          "  expect(revealBody).toContain('runtime-secret-value');",
+          "  expect(output().slice(revealOutputOffset)).not.toContain('KV435');",
+          '});',
+        ].join('\n'),
+      );
+      writeStarterBuildHelper(repoRoot, validStarterBuildHelperSource());
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'audited reveal enrollment mutation canary',
+              file: revealProof.sourceFile,
+            },
+          ],
+          proofs: [revealProof],
+          repoRoot,
+        }),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'proof test is missing required evidence "expect(builtGraph.revealed).toContainEqual({"',
+          ),
+        ]),
+      );
     });
 
     for (const retiredClaim of [

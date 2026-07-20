@@ -98,6 +98,7 @@ import {
 } from './response-security-intrinsics.js';
 import {
   securityEvent,
+  securityEventPrincipalIdentityIsRecordable,
   type SecurityDecisionOutcome,
   type SecurityEventPrincipalScope,
 } from './security-event.js';
@@ -1563,6 +1564,15 @@ function securityEventPrincipalForRequest(request: unknown): SecurityEventPrinci
     return { epoch: null, id: null, kind: 'anonymous', tenant: null };
   }
   if (principal.kind === 'proven' && principal.principal !== undefined) {
+    if (!securityEventPrincipalIdentityIsRecordable(principal.principal)) {
+      return {
+        epoch: null,
+        id: null,
+        kind: 'unresolved',
+        reason: 'principal-unrecordable',
+        tenant: null,
+      };
+    }
     return {
       epoch: null,
       id: principal.principal,

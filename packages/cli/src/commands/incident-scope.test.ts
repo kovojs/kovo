@@ -125,6 +125,40 @@ describe('kovo incident scope', () => {
     expect(result.output.endsWith('\n')).toBe(true);
   });
 
+  it('matches the runtime principal identity bound at 512, 513, 1024, and 1025 code units', () => {
+    for (const length of [512, 513, 1_024]) {
+      const principal = 'p'.repeat(length);
+      const tenant = 't'.repeat(length);
+      const files = fixture([event(principal, tenant)]);
+      const result = runIncidentScopeCommand(
+        { advisoryPath: files.advisoryPath, eventsPath: files.eventsPath },
+        files.root,
+      );
+
+      expect(result.exitCode, `accepted identity length ${length}`).toBe(0);
+      if (!('output' in result)) throw new Error(result.error);
+      expect(JSON.parse(result.output)).toMatchObject({
+        affectedPrincipals: [principal],
+        affectedTenants: [tenant],
+        status: 'affected',
+      });
+    }
+
+    const overBound = fixture([event('p', null)]);
+    const document = JSON.parse(readFileSync(overBound.eventsPath, 'utf8')) as {
+      events: Array<{ principal: { id: string } }>;
+    };
+    document.events[0]!.principal.id = 'p'.repeat(1_025);
+    writeFileSync(overBound.eventsPath, canonicalJsonStringify(document));
+    const rejected = runIncidentScopeCommand(
+      { advisoryPath: overBound.advisoryPath, eventsPath: overBound.eventsPath },
+      overBound.root,
+    );
+    expect(rejected).toMatchObject({ exitCode: 1 });
+    if (!('error' in rejected)) throw new Error(rejected.output);
+    expect(rejected.error).toContain('bounded printable principal identity');
+  });
+
   it('reports unanswerable within covered doors for bypasses, dropped history, and unresolved principals', () => {
     const outside = fixture([], { advisory: advisory('outside-covered-doors') });
     const outsideResult = runIncidentScopeCommand(
@@ -179,6 +213,31 @@ describe('kovo incident scope', () => {
     expect(JSON.parse(unresolvedResult.output)).toMatchObject({
       affectedPrincipals: ['principal-known-without-epoch'],
       affectedTenants: ['tenant-known'],
+      answerability: { complete: false, reason: expect.stringContaining('unresolved principal') },
+      status: 'unanswerable',
+    });
+
+    const unrecordable = fixture([
+      {
+        ...event('unused', null),
+        principal: {
+          epoch: null,
+          id: null,
+          kind: 'unresolved',
+          reason: 'principal-unrecordable',
+          tenant: null,
+        },
+      },
+    ]);
+    const unrecordableResult = runIncidentScopeCommand(
+      { advisoryPath: unrecordable.advisoryPath, eventsPath: unrecordable.eventsPath },
+      unrecordable.root,
+    );
+    expect(unrecordableResult).toMatchObject({ exitCode: 1 });
+    if (!('output' in unrecordableResult)) throw new Error(unrecordableResult.error);
+    expect(JSON.parse(unrecordableResult.output)).toMatchObject({
+      affectedPrincipals: [],
+      affectedTenants: [],
       answerability: { complete: false, reason: expect.stringContaining('unresolved principal') },
       status: 'unanswerable',
     });

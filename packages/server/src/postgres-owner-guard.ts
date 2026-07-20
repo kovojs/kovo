@@ -294,6 +294,10 @@ export function registerFrameworkPostgresOwnerGuardDerivedRequestDb(
   ) {
     return;
   }
+  // `managedDb(..., 'read')` may return an already-enrolled, sealed engine-reader handle. Preserve
+  // that exact execution identity: the lifecycle also sees the writer-scoped source provider, but
+  // it must never replace the reader registration selected for this request (SPEC §10.3).
+  if (witnessWeakMapGet(frameworkPostgresOwnerGuardRequestDbs, db) !== undefined) return;
   const registration = witnessWeakMapGet(frameworkPostgresOwnerGuardRequestDbs, source);
   if (registration !== undefined) {
     witnessWeakMapSet(frameworkPostgresOwnerGuardRequestDbs, db, registration);
