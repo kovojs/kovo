@@ -174,12 +174,20 @@ export function isExplainKind(value: string | undefined): value is ExplainKind {
 
 type CheckArgParseResult =
   | { family: KovoCheckFamily; inputPath: string | undefined; ok: true }
+  | { environment: true; inputPath: string | undefined; ok: true }
   | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false }
   | { message: string; ok: false };
 
 export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
   const parsed = parseCommandArgv(args, CHECK_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('check', parsed, `kovo: ${CHECK_USAGE}`);
+
+  if (parsed.value.positionals[0] === 'env') {
+    if (parsed.value.positionals.length > 2) {
+      return { family: 'env', kind: 'too-many-args', ok: false };
+    }
+    return { environment: true, inputPath: parsed.value.positionals[1], ok: true };
+  }
 
   const family = checkFamilyArg(parsed.value.positionals[0]);
   if (family !== 'all') {
@@ -201,7 +209,7 @@ export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: f
   }
   const message =
     error.kind === 'unsupported-family'
-      ? `kovo: unsupported check family ${stableArg(error.family)}. expected optimistic, coverage, endpoint-posture, or sources-sinks.\n`
+      ? `kovo: unsupported check family ${stableArg(error.family)}. expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n`
       : `kovo: ${CHECK_USAGE}\n`;
   process.stderr.write(message);
   return 1;

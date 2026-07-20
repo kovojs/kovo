@@ -11,6 +11,8 @@ import { SECURITY_BUILD_PROOFS } from './security-test-build-gate.mjs';
 export const repoRoot = findRepoRoot();
 export const defaultGuaranteePath = 'SECURITY.md';
 export const defaultCliPackageManifestPath = 'packages/cli/package.json';
+export const defaultDeploymentEnvironmentDoorPath =
+  'packages/cli/src/deployment-environment-doors.v1.json';
 export const defaultTcbManifestPath = 'security/TCB.md';
 export const guaranteeSchema = 'kovo.security.guarantees/v1';
 export const privateVulnerabilityReportUrl =
@@ -24,6 +26,8 @@ export function checkSecurityGuarantee(options = {}) {
   const root = options.repoRoot ?? repoRoot;
   const guaranteePath = options.guaranteePath ?? defaultGuaranteePath;
   const cliPackageManifestPath = options.cliPackageManifestPath ?? defaultCliPackageManifestPath;
+  const deploymentEnvironmentDoorPath =
+    options.deploymentEnvironmentDoorPath ?? defaultDeploymentEnvironmentDoorPath;
   const tcbManifestPath = options.tcbManifestPath ?? defaultTcbManifestPath;
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
@@ -40,6 +44,16 @@ export function checkSecurityGuarantee(options = {}) {
   const register = loadGuaranteeRegister({ guaranteePath, text: guaranteeDocument });
   findings.push(...validateSecurityReportingSection(guaranteeDocument, guaranteePath));
   findings.push(...validateRegisterShape(register, guaranteePath));
+  if (findings.length > 0) return result(findings);
+  findings.push(
+    ...validateDeploymentEnvironmentAntecedents({
+      deploymentEnvironmentDoorPath,
+      exists,
+      guaranteePath,
+      readText,
+      register,
+    }),
+  );
   if (findings.length > 0) return result(findings);
   findings.push(
     ...validateGuaranteeProvenanceIdentity({
@@ -315,6 +329,17 @@ function validateRegisterShape(register, guaranteePath) {
       }
     }
     if (guarantee.state !== 'current') continue;
+    if (!Array.isArray(guarantee?.antecedents) || guarantee.antecedents.length === 0) {
+      findings.push(
+        `${guaranteePath}: ${label}.antecedents must name at least one derived deployment antecedent`,
+      );
+    } else {
+      for (const antecedent of guarantee.antecedents) {
+        if (typeof antecedent !== 'string' || antecedent === '') {
+          findings.push(`${guaranteePath}: ${label}.antecedents entries must be non-empty strings`);
+        }
+      }
+    }
     if (!Array.isArray(guarantee?.tcbChokes) || guarantee.tcbChokes.length === 0) {
       findings.push(`${guaranteePath}: ${label}.tcbChokes must name at least one TCB choke`);
     } else {
@@ -363,6 +388,190 @@ function validateRegisterShape(register, guaranteePath) {
     }
   }
   return findings;
+}
+
+/**
+ * Derive every guarantee antecedent from the framework door that consumes the environment fact.
+ * SECURITY.md records the resulting relation for third-party readers, but cannot author or widen it.
+ */
+export function validateDeploymentEnvironmentAntecedents({
+  deploymentEnvironmentDoorPath = defaultDeploymentEnvironmentDoorPath,
+  exists,
+  guaranteePath = defaultGuaranteePath,
+  readText,
+  register,
+}) {
+  const findings = [];
+  if (!exists(deploymentEnvironmentDoorPath)) {
+    return [`${deploymentEnvironmentDoorPath}: deployment environment door registry is missing`];
+  }
+  let document;
+  try {
+    document = JSON.parse(readText(deploymentEnvironmentDoorPath));
+  } catch {
+    return [
+      `${deploymentEnvironmentDoorPath}: deployment environment door registry is invalid JSON`,
+    ];
+  }
+  if (document?.schema !== 'kovo.deployment-environment-doors/v1') {
+    findings.push(
+      `${deploymentEnvironmentDoorPath}: schema must be kovo.deployment-environment-doors/v1`,
+    );
+  }
+  if (!Array.isArray(document?.antecedents) || document.antecedents.length === 0) {
+    findings.push(`${deploymentEnvironmentDoorPath}: antecedents must be a non-empty array`);
+  }
+  if (!Array.isArray(document?.guarantees) || document.guarantees.length === 0) {
+    findings.push(`${deploymentEnvironmentDoorPath}: guarantees must be a non-empty array`);
+  }
+  if (!Array.isArray(document?.doors) || document.doors.length === 0) {
+    findings.push(`${deploymentEnvironmentDoorPath}: doors must be a non-empty array`);
+  }
+  if (findings.length > 0) return findings;
+
+  const antecedentIds = uniqueRegistryIds(
+    document.antecedents,
+    'antecedents',
+    deploymentEnvironmentDoorPath,
+    findings,
+  );
+  for (const antecedent of document.antecedents) {
+    if (
+      typeof antecedent?.obligation !== 'string' ||
+      antecedent.obligation.trim() === '' ||
+      !['local-config', 'partial', 'retained'].includes(antecedent?.probeability)
+    ) {
+      findings.push(
+        `${deploymentEnvironmentDoorPath}: antecedent ${antecedent?.id ?? '-'} must name a non-empty obligation and supported probeability`,
+      );
+    }
+  }
+  const guaranteeIds = uniqueRegistryIds(
+    document.guarantees,
+    'guarantees',
+    deploymentEnvironmentDoorPath,
+    findings,
+  );
+  const publishedIds = document.guarantees
+    .filter((guarantee) => guarantee?.kind === 'published')
+    .map((guarantee) => guarantee.id)
+    .sort(compareStrings);
+  const currentIds = register.guarantees
+    .filter((guarantee) => guarantee.state === 'current')
+    .map((guarantee) => guarantee.id)
+    .sort(compareStrings);
+  if (JSON.stringify(publishedIds) !== JSON.stringify(currentIds)) {
+    findings.push(
+      `${deploymentEnvironmentDoorPath}: published guarantees must exactly match current SECURITY.md guarantees; expected ${currentIds.join(', ') || '-'}, received ${publishedIds.join(', ') || '-'}`,
+    );
+  }
+  for (const guarantee of document.guarantees) {
+    if (
+      typeof guarantee?.authority !== 'string' ||
+      guarantee.authority === '' ||
+      (guarantee?.kind !== 'published' && guarantee?.kind !== 'normative-conditional')
+    ) {
+      findings.push(
+        `${deploymentEnvironmentDoorPath}: guarantee ${guarantee?.id ?? '-'} must name authority and kind`,
+      );
+    }
+  }
+
+  const derived = new Map([...guaranteeIds].map((id) => [id, new Set()]));
+  const doorIds = new Set();
+  for (const [index, door] of document.doors.entries()) {
+    const label = typeof door?.id === 'string' && door.id !== '' ? door.id : `doors[${index}]`;
+    if (typeof door?.id !== 'string' || door.id.trim() === '') {
+      findings.push(
+        `${deploymentEnvironmentDoorPath}: doors[${index}].id must be a non-empty string`,
+      );
+    }
+    if (doorIds.has(door?.id))
+      findings.push(`${deploymentEnvironmentDoorPath}: duplicate door ${label}`);
+    doorIds.add(door?.id);
+    if (
+      typeof door?.source !== 'string' ||
+      door.source.trim() === '' ||
+      !Array.isArray(door?.sourceNeedles) ||
+      door.sourceNeedles.length === 0
+    ) {
+      findings.push(
+        `${deploymentEnvironmentDoorPath}: ${label} must name source and sourceNeedles`,
+      );
+    } else if (!exists(door.source)) {
+      findings.push(`${deploymentEnvironmentDoorPath}: ${label} source is missing: ${door.source}`);
+    } else {
+      const source = readText(door.source);
+      for (const needle of door.sourceNeedles) {
+        if (typeof needle !== 'string' || needle.trim() === '' || !source.includes(needle)) {
+          findings.push(
+            `${deploymentEnvironmentDoorPath}: ${label} source ${door.source} is missing consumer anchor ${JSON.stringify(needle)}`,
+          );
+        }
+      }
+    }
+    if (!Array.isArray(door?.antecedents) || door.antecedents.length === 0) {
+      findings.push(`${deploymentEnvironmentDoorPath}: ${label}.antecedents must be non-empty`);
+    }
+    if (!Array.isArray(door?.guarantees) || door.guarantees.length === 0) {
+      findings.push(`${deploymentEnvironmentDoorPath}: ${label}.guarantees must be non-empty`);
+    }
+    for (const antecedent of door?.antecedents ?? []) {
+      if (!antecedentIds.has(antecedent)) {
+        findings.push(
+          `${deploymentEnvironmentDoorPath}: ${label} references unknown antecedent ${antecedent}`,
+        );
+      }
+    }
+    const affectedGuarantees = [
+      ...new Set([
+        ...(door?.guarantees?.includes('*') ? publishedIds : []),
+        ...(door?.guarantees ?? []).filter((guaranteeId) => guaranteeId !== '*'),
+      ]),
+    ];
+    for (const guaranteeId of affectedGuarantees) {
+      const antecedents = derived.get(guaranteeId);
+      if (antecedents === undefined) {
+        findings.push(
+          `${deploymentEnvironmentDoorPath}: ${label} references unknown guarantee ${guaranteeId}`,
+        );
+        continue;
+      }
+      for (const antecedent of door.antecedents ?? []) antecedents.add(antecedent);
+    }
+  }
+
+  for (const [guaranteeId, antecedents] of derived) {
+    if (antecedents.size === 0) {
+      findings.push(
+        `${deploymentEnvironmentDoorPath}: guarantee ${guaranteeId} has no consuming-door antecedent`,
+      );
+    }
+  }
+  for (const guarantee of register.guarantees) {
+    if (guarantee.state !== 'current') continue;
+    const expected = [...(derived.get(guarantee.id) ?? [])].sort(compareStrings);
+    const actual = Array.isArray(guarantee.antecedents) ? guarantee.antecedents : [];
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      findings.push(
+        `${guaranteePath}: ${guarantee.id}.antecedents must be derived as ${expected.join(', ') || '-'} from ${deploymentEnvironmentDoorPath}`,
+      );
+    }
+  }
+  return findings;
+}
+
+function uniqueRegistryIds(entries, field, file, findings) {
+  const ids = new Set();
+  for (const [index, entry] of entries.entries()) {
+    if (typeof entry?.id !== 'string' || entry.id === '') {
+      findings.push(`${file}: ${field}[${index}].id must be a non-empty string`);
+      continue;
+    }
+    if (ids.has(entry.id)) findings.push(`${file}: duplicate ${field} id ${entry.id}`);
+    ids.add(entry.id);
+  }
+  return ids;
 }
 
 function result(findings, guaranteeCount = 0) {

@@ -248,7 +248,7 @@ describe('kovo build', () => {
         },
         schema: 'kovo.artifact.provenance/v1',
         securityGuarantees: {
-          canonicalHash: 'sha256:5520ba2631adaa1b36f077f5f3ce7fc52b16b49f748856f586c0a5e445f9b7db',
+          canonicalHash: 'sha256:3d01b8455b5a772930b63b89c5b5713e71ac7e3961d9d65329ea3b581e562547',
           schema: 'kovo.security.guarantees/v1',
         },
       });

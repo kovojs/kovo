@@ -318,6 +318,9 @@ snapshotted and validated before the authored handler graph is imported. Invalid
 ambiguous, or combined posture fails process boot. Authentication deployments MUST additionally
 satisfy §6.6's exact configured-origin binding, so a trusted forwarded scheme paired with the wrong
 host or port is rejected before auth state is read or changed.
+The deployment's proxy, TLS-edge, cache, cookie-domain, schema-writer, and bootstrap assumptions are
+reported through the door-derived `kovo check env` contract in §11.4; configuring this adapter does
+not by itself discharge facts the command cannot observe.
 
 **Shared request-ingress decision (normative).** Transport-source selection and hostile-value
 grammar are separate steps, and the supported source set is finite. An HTTP/1 Node source MUST

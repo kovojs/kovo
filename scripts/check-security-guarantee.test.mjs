@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkSecurityGuarantee,
   defaultCliPackageManifestPath,
+  defaultDeploymentEnvironmentDoorPath,
   isParanoidRuntimeProof,
   loadGuaranteeRegister,
   privateVulnerabilityReportContactLine,
@@ -41,6 +42,7 @@ function securityRegister(overrides = {}) {
         id: 'secret-egress',
         state: 'current',
         statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
+        antecedents: ['bootstrap-order'],
         tcbChokes: ['server.response-posture.emit-to-wire'],
         runtimeProofs: ['runtime-secret-explicit-box-egress'],
       },
@@ -49,6 +51,11 @@ function securityRegister(overrides = {}) {
     nonGoals: ['availability'],
     ...overrides,
   };
+  register.guarantees = register.guarantees.map((guarantee) =>
+    guarantee.state === 'current' && !Object.hasOwn(guarantee, 'antecedents')
+      ? { ...guarantee, antecedents: ['bootstrap-order'] }
+      : guarantee,
+  );
   return `# Fixture
 
 \`\`\`json security-guarantees
@@ -61,21 +68,59 @@ ${privateVulnerabilityReportContactLine}
 `;
 }
 
+function deploymentDoorRegister(publishedIds, overrides = {}) {
+  return JSON.stringify({
+    schema: 'kovo.deployment-environment-doors/v1',
+    antecedents: [
+      {
+        id: 'bootstrap-order',
+        obligation: 'bootstrap first',
+        probeability: 'partial',
+      },
+    ],
+    guarantees: [
+      ...publishedIds.map((id) => ({ authority: 'SECURITY.md', id, kind: 'published' })),
+      {
+        authority: 'SPEC fixture',
+        id: 'fixture-conditional',
+        kind: 'normative-conditional',
+      },
+    ],
+    doors: [
+      {
+        antecedents: ['bootstrap-order'],
+        guarantees: ['*', 'fixture-conditional'],
+        id: 'fixture.bootstrap',
+        source: 'fixture-bootstrap.ts',
+        sourceNeedles: ['consumeBootstrapOrder()'],
+      },
+    ],
+    ...overrides,
+  });
+}
+
 function run(files, options = {}) {
   const fixtureFiles = { ...files };
-  if (
-    Object.hasOwn(fixtureFiles, guaranteePath) &&
-    !Object.hasOwn(fixtureFiles, defaultCliPackageManifestPath)
-  ) {
+  if (Object.hasOwn(fixtureFiles, guaranteePath)) {
     const register = loadGuaranteeRegister({ text: fixtureFiles[guaranteePath] });
-    fixtureFiles[defaultCliPackageManifestPath] = JSON.stringify({
-      kovoBuildProvenance: {
-        securityGuarantees: {
-          canonicalHash: securityGuaranteeRegisterCanonicalHash(register),
-          schema: 'kovo.security.guarantees/v1',
+    if (!Object.hasOwn(fixtureFiles, defaultDeploymentEnvironmentDoorPath)) {
+      fixtureFiles[defaultDeploymentEnvironmentDoorPath] = deploymentDoorRegister(
+        register.guarantees
+          .filter((guarantee) => guarantee.state === 'current')
+          .map((guarantee) => guarantee.id),
+      );
+      fixtureFiles['fixture-bootstrap.ts'] = 'consumeBootstrapOrder();';
+    }
+    if (!Object.hasOwn(fixtureFiles, defaultCliPackageManifestPath)) {
+      fixtureFiles[defaultCliPackageManifestPath] = JSON.stringify({
+        kovoBuildProvenance: {
+          securityGuarantees: {
+            canonicalHash: securityGuaranteeRegisterCanonicalHash(register),
+            schema: 'kovo.security.guarantees/v1',
+          },
         },
-      },
-    });
+      });
+    }
   }
   return checkSecurityGuarantee({
     exists: (relativePath) => Object.hasOwn(fixtureFiles, relativePath),
@@ -116,6 +161,71 @@ describe('security guarantee gate', () => {
 
     expect(result.findings).toEqual([]);
     expect(result.summary).toContain('OK 1 security guarantee');
+  });
+
+  it('rejects SECURITY.md antecedents that were not derived from a consuming door', () => {
+    const result = run({
+      [guaranteePath]: securityRegister({
+        guarantees: [
+          {
+            antecedents: ['no-shared-cache'],
+            id: 'secret-egress',
+            runtimeProofs: ['runtime-secret-explicit-box-egress'],
+            state: 'current',
+            statement: 'A runtime Secret is refused at query-wire egress in paranoid mode.',
+            tcbChokes: ['server.response-posture.emit-to-wire'],
+          },
+        ],
+      }),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toContain(
+      `SECURITY.md: secret-egress.antecedents must be derived as bootstrap-order from ${defaultDeploymentEnvironmentDoorPath}`,
+    );
+  });
+
+  it('rejects a deployment antecedent when its named consumer anchor disappears', () => {
+    const result = run({
+      [defaultDeploymentEnvironmentDoorPath]: deploymentDoorRegister(['secret-egress'], {
+        doors: [
+          {
+            antecedents: ['bootstrap-order'],
+            guarantees: ['*', 'fixture-conditional'],
+            id: 'fixture.bootstrap',
+            source: 'fixture-bootstrap.ts',
+            sourceNeedles: ['missingConsumerDoor()'],
+          },
+        ],
+      }),
+      'fixture-bootstrap.ts': 'consumeBootstrapOrder();',
+      [guaranteePath]: securityRegister(),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toContain(
+      `${defaultDeploymentEnvironmentDoorPath}: fixture.bootstrap source fixture-bootstrap.ts is missing consumer anchor "missingConsumerDoor()"`,
+    );
+  });
+
+  it('rejects an environment antecedent without an operator-facing obligation', () => {
+    const result = run({
+      [defaultDeploymentEnvironmentDoorPath]: deploymentDoorRegister(['secret-egress'], {
+        antecedents: [
+          {
+            id: 'bootstrap-order',
+            obligation: '',
+            probeability: 'partial',
+          },
+        ],
+      }),
+      [guaranteePath]: securityRegister(),
+      [manifestPath]: tcbManifest([]),
+    });
+
+    expect(result.findings).toContain(
+      `${defaultDeploymentEnvironmentDoorPath}: antecedent bootstrap-order must name a non-empty obligation and supported probeability`,
+    );
   });
 
   it('canonicalizes guarantee objects by key while retaining array order', () => {

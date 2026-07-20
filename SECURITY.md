@@ -31,6 +31,7 @@ ledger, but it must not add a broader guarantee outside the block.
       "id": "pglite-secret-column-reader-role-test-floor",
       "state": "current",
       "statement": "In Kovo's PGlite-backed Postgres-role test posture for a KOVO_PARANOID production build, framework query reads run as the least-privilege reader role: declared public columns remain readable, while direct, raw-SQL, computed, function-backed, and whole-table reads that require declared secret columns are denied before a row reaches JavaScript. This proof does not claim an external-Postgres execution of the same secret-column fixture.",
+      "antecedents": ["bootstrap-order", "no-non-kovo-schema-writer"],
       "tcbChokes": [
         "server.postgres-runtime.capability-closure-audit",
         "server.postgres-runtime.request-scoped-db",
@@ -43,6 +44,7 @@ ledger, but it must not add a broader guarantee outside the block.
       "id": "pglite-secret-view-reader-role-test-floor",
       "state": "current",
       "statement": "In Kovo's PGlite-backed Postgres-role test posture for a KOVO_PARANOID production build, a security-invoker view cannot restore reader access to an underlying declared secret column; the reader-role query is denied before a row reaches JavaScript. This proof does not claim an external-Postgres execution of the same secret-view fixture.",
+      "antecedents": ["bootstrap-order", "no-non-kovo-schema-writer"],
       "tcbChokes": [
         "server.postgres-runtime.capability-closure-audit",
         "server.postgres-runtime.reachable-view-audit",
@@ -56,6 +58,7 @@ ledger, but it must not add a broader guarantee outside the block.
       "id": "explicit-secret-query-wire-egress",
       "state": "current",
       "statement": "In a KOVO_PARANOID production artifact, a framework Secret value created with the validating secret constructor is refused at Kovo query-wire egress; an explicitly audited trusted reveal is accepted.",
+      "antecedents": ["bootstrap-order"],
       "tcbChokes": [
         "core.secret.poison-box",
         "core.secret.secret",
@@ -97,6 +100,9 @@ engine denial cannot be misreported as runtime value boxing.
 Broader plan language such as "secure by construction", "one choke per property", or
 "runtime chokes close the class" is architectural direction unless and until a precise
 invariant appears in the JSON ledger with TCB entries and paranoid/runtime proof IDs.
+The `antecedents` arrays are not operator-authored assurances: the security-guarantee gate derives
+them from the versioned consuming-door registry used by `kovo check env`. An undischargeable
+deployment fact suspends the affected conditional guarantee rather than silently weakening it.
 
 ## Report a Vulnerability
 
