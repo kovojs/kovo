@@ -1448,7 +1448,7 @@ const transportManagedNodeBodyDeferredCancelBranch = [
 const weakenedTransportManagedNodeBodyDeferredCancelBranch = [
   '    cancel() {',
   '      cancelled = true;',
-  '      if (!readPending) void reader.cancel();',
+  '      void reader.cancel();',
   '    },',
 ].join('\n');
 const viteDevPreloadBodylessAdmissionBranch = [
@@ -6205,7 +6205,7 @@ function assertEmittedNodeStreamedBodyLimitFlushBehavior(_moduleUnderTest, { sou
     relativeSourcePath: 'build.ts',
     sourceText,
     testFile: 'packages/server/src/build.test.ts',
-    testNamePattern: 'emits Vercel Build Output API v3 with static files and a Node function',
+    testNamePattern: 'emits a standalone node server that serves immutable client files',
   });
 }
 

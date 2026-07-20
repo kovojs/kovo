@@ -2091,6 +2091,10 @@ export default async function handler(request) {
     await request.body?.getReader().read();
     return new Response('Payload Too Large', { status: 413 });
   }
+  if (url.pathname === '/cancel-before-413') {
+    await request.body?.cancel();
+    return new Response('Payload Too Large', { status: 413 });
+  }
   if (url.pathname === '/cookies') {
     const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8' });
     headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
@@ -2276,6 +2280,14 @@ export default async function handler(request) {
         );
         expect(chunkedOversized).toContain('HTTP/1.1 413');
         expect(chunkedOversized).toMatch(/connection: close/i);
+
+        const cancelledBefore413 = await rawHttpExchange(
+          baseUrl,
+          'POST /cancel-before-413 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n',
+        );
+        expect(cancelledBefore413).toContain('HTTP/1.1 413');
+        expect(cancelledBefore413).toMatch(/connection: close/i);
+        expect(cancelledBefore413).toContain('Payload Too Large');
 
         const incompleteStatic = await rawHttpExchange(
           baseUrl,
