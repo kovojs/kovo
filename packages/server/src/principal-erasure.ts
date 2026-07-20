@@ -23,11 +23,15 @@ import {
 } from './task-queue.js';
 import { requestStateNow } from './request-state-intrinsics.js';
 import {
+  createWitnessWeakSet,
   witnessArrayAppend,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
   witnessObjectIs,
+  witnessRegExpTest,
+  witnessWeakSetAdd,
+  witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 /** Exact receipt vocabulary for a point-in-time principal-erasure absence proof. */
@@ -90,8 +94,8 @@ export async function erasePrincipal(
   principal: string,
   options: ErasePrincipalOptions,
 ): Promise<PrincipalErasureReceipt> {
-  if (!isProvenPrincipal(principal)) {
-    throw new TypeError('erasePrincipal() requires a proven non-empty principal id.');
+  if (!isProvenPrincipal(principal) || principal.length > 1_024) {
+    throw new TypeError('erasePrincipal() requires a bounded proven principal id.');
   }
   const runtime = stableErasureOption<KovoPostgresAppRuntimeDb>(options, 'runtime');
   const signingKeyRing = stableErasureOption<SigningKeyRing>(options, 'signingKeyRing');
@@ -209,11 +213,11 @@ function snapshotPrincipalErasureReceipt(source: PrincipalErasureReceipt): Princ
     absenceProbed !== true ||
     version !== 'kovo-principal-erasure-receipt/v1' ||
     typeof keyId !== 'string' ||
-    keyId === '' ||
+    !witnessRegExpTest(/^[A-Za-z0-9_-]+$/u, keyId) ||
     typeof signature !== 'string' ||
-    signature === '' ||
+    !witnessRegExpTest(/^[A-Za-z0-9_-]{43}$/u, signature) ||
     typeof principalCommitment !== 'string' ||
-    !principalCommitment.startsWith('sha256:') ||
+    !witnessRegExpTest(/^sha256:[A-Za-z0-9+/]{43}=$/u, principalCommitment) ||
     storageAdaptersProbed < 1 ||
     tombstoneEpoch < 1
   ) {
@@ -239,6 +243,7 @@ function snapshotErasureStorageSet(source: unknown): PrincipalErasureStorageSet 
     throw new TypeError('erasePrincipal() storage must be a non-empty bounded dense array.');
   }
   const snapshot: StorageCapability[] = [];
+  const seen = createWitnessWeakSet<object>();
   for (let index = 0; index < source.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(source, index);
     if (
@@ -249,6 +254,10 @@ function snapshotErasureStorageSet(source: unknown): PrincipalErasureStorageSet 
     ) {
       throw new TypeError('erasePrincipal() storage must be a dense own-data array.');
     }
+    if (witnessWeakSetHas(seen, descriptor.value)) {
+      throw new TypeError('erasePrincipal() storage entries must be unique exact capabilities.');
+    }
+    witnessWeakSetAdd(seen, descriptor.value);
     witnessArrayAppend(snapshot, descriptor.value as StorageCapability, 'principal erasure stores');
   }
   return witnessFreeze(snapshot) as unknown as PrincipalErasureStorageSet;

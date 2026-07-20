@@ -161,6 +161,15 @@ describe('principal erasure receipts (SPEC §10.3)', () => {
         signingKeyRing,
       ),
     ).toBe(false);
+    expect(
+      verifyPrincipalErasureReceipt(
+        { ...receipt, principalCommitment: 'sha256:not-a-digest' },
+        signingKeyRing,
+      ),
+    ).toBe(false);
+    expect(verifyPrincipalErasureReceipt({ ...receipt, signature: 'short' }, signingKeyRing)).toBe(
+      false,
+    );
 
     await expect(storage.get(victimBlob)).resolves.toBeUndefined();
     await expect(storage.get(otherBlob)).resolves.toBeDefined();
@@ -238,6 +247,32 @@ describe('principal erasure receipts (SPEC §10.3)', () => {
         storage: [structuralStorage],
       }),
     ).rejects.toThrow(/exact enumerable storage capability/u);
+
+    const epoch = await appRuntime.principalEpochStore.current('victim', {
+      signal: new AbortController().signal,
+    });
+    expect(epoch).toBeUndefined();
+  });
+
+  it('rejects unbounded principals and duplicate adapters before irreversible work', async () => {
+    const storage = createMemoryStorage();
+    const structuralRuntime = {} as KovoPostgresAppRuntimeDb;
+    await expect(
+      erasePrincipal('p'.repeat(1_025), {
+        runtime: structuralRuntime,
+        signingKeyRing,
+        storage: [storage],
+      }),
+    ).rejects.toThrow(/bounded proven principal/u);
+
+    const appRuntime = await runtime();
+    await expect(
+      erasePrincipal('victim', {
+        runtime: appRuntime,
+        signingKeyRing,
+        storage: [storage, storage],
+      }),
+    ).rejects.toThrow(/storage entries must be unique exact capabilities/u);
 
     const epoch = await appRuntime.principalEpochStore.current('victim', {
       signal: new AbortController().signal,
