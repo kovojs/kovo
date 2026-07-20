@@ -870,8 +870,10 @@ a within-corpus statistic published as coverage is dishonest.
       fragment.
 - [ ] An outside party validates a `kovo.certificate/v1` with disjoint code, and the three negative
       controls fail on three distinct obligations.
-- [ ] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;
+- [x] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;
       `kovo check env` discharges what it can and names what it suspends.
+  - Evidence: the integrated agent/grant/environment/derived-dataset/dependency suite passes 116/116
+    across all five §3 parties, including retained and suspended `kovo check env` obligations.
 - [ ] A fire drill returns AFFECTED → fixed → NOT-AFFECTED → UNKNOWN-fails-closed.
 - [ ] `rules/v1-acceptance.md` cites the decided fragments, the undecidability ledger, and metric E —
       without claiming immunity outside the scoped threat model.
