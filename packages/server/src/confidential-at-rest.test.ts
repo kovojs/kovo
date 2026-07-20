@@ -51,6 +51,24 @@ describe('confidential-at-rest authority', () => {
     );
   });
 
+  it('authenticates the exact caller AAD bytes without trimming security context', () => {
+    const envelope = encryptAtRest('private-value', cipher(), { aad: ' tenant:one ' });
+    const whitespaceEnvelope = encryptAtRest('whitespace-context', cipher(), { aad: ' ' });
+
+    expect(
+      new TextDecoder().decode(decryptAtRest(envelope, cipher(), { aad: ' tenant:one ' })),
+    ).toBe('private-value');
+    expect(() => decryptAtRest(envelope, cipher(), { aad: 'tenant:one' })).toThrow(
+      /cannot be opened/u,
+    );
+    expect(() => rewrapAtRest(envelope, cipher(), { aad: 'tenant:one' })).toThrow(
+      /cannot be opened/u,
+    );
+    expect(() => decryptAtRest(whitespaceEnvelope, cipher(), { aad: '' })).toThrow(
+      /cannot be opened/u,
+    );
+  });
+
   it('rewraps through the same authenticated sink under a fresh nonce', () => {
     const original = encryptAtRest('private-value', cipher());
     const rewrapped = rewrapAtRest(original, cipher());
