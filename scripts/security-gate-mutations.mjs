@@ -262,27 +262,21 @@ const removedDependencyLoaderReviewedModuleSuffixClosureBranch = [
   '  return true;',
 ].join('\n');
 const dependencyLoaderReviewedWorkerConstructorClosureBranch = [
-  "function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {",
-  '  const pending: unknown[] = [ast];',
+  '  for (const atom of atoms) {',
+  "    if (atom.kind === 'worker') return { kind: 'worker', name: atom.name };",
 ].join('\n');
 const removedDependencyLoaderReviewedWorkerConstructorClosureBranch = [
-  "function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {",
-  '  return undefined;',
-  '  const pending: unknown[] = [ast];',
+  '  for (const atom of atoms) {',
+  "    if (false && atom.kind === 'worker') return { kind: 'worker', name: atom.name };",
 ].join('\n');
-const dependencyLoaderExecutableAssetCarrierClosureBranch = [
-  'function reviewedExecutableAssetCarrier(',
-  '  ast: unknown,',
-  "): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {",
-  '  const pending: unknown[] = [ast];',
-].join('\n');
-const removedDependencyLoaderExecutableAssetCarrierClosureBranch = [
-  'function reviewedExecutableAssetCarrier(',
-  '  ast: unknown,',
-  "): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {",
-  '  return undefined;',
-  '  const pending: unknown[] = [ast];',
-].join('\n');
+const dependencyLoaderExecutableAssetCarrierClosureBranch =
+  "    if (atom.kind === 'asset') return { kind: 'asset', name: atom.carrier };";
+const removedDependencyLoaderExecutableAssetCarrierClosureBranch =
+  "    if (false && atom.kind === 'asset') return { kind: 'asset', name: atom.carrier };";
+const dependencyLoaderClosedCarrierConstructorClosureBranch =
+  "  if (calleeAtoms.some((atom) => atom.kind === 'closed' || atom.kind === 'dynamic-code')) {";
+const removedDependencyLoaderClosedCarrierConstructorClosureBranch =
+  "  if (calleeAtoms.some((atom) => atom.kind === 'dynamic-code')) {";
 const dependencyLoaderDirectExportOwnershipClosureBranch =
   '        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)';
 const removedDependencyLoaderDirectExportOwnershipClosureBranch = '        false';
@@ -2198,15 +2192,27 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
-    description: 'Lets a reviewed package emit an opaque new-URL executable asset side graph.',
+    description: 'Lets a reviewed package acquire a known executable browser asset carrier.',
     expectedKiller:
-      'reviewed packages must not emit executable new-URL assets outside the dependency closure',
+      'reviewed packages must not acquire executable browser asset carriers outside the dependency closure',
     name: 'dependency-loader/drop-executable-asset-carrier-closure',
     replacement: removedDependencyLoaderExecutableAssetCarrierClosureBranch,
     search: dependencyLoaderExecutableAssetCarrierClosureBranch,
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderExecutableAssetCarrierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a reviewed package construct a CLOSED browser carrier transfer.',
+    expectedKiller:
+      'reviewed packages must close opaque browser carrier transfers at constructor sinks',
+    name: 'dependency-loader/drop-closed-carrier-constructor-closure',
+    replacement: removedDependencyLoaderClosedCarrierConstructorClosureBranch,
+    search: dependencyLoaderClosedCarrierConstructorClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderClosedCarrierConstructorBehavior,
   },
   {
     baseModule: {},
@@ -5220,7 +5226,17 @@ function assertDependencyLoaderExecutableAssetCarrierBehavior(_moduleUnderTest, 
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package service worker new-URL executable asset',
+    testNamePattern: 'reviewed package service worker executable asset',
+  });
+}
+
+function assertDependencyLoaderClosedCarrierConstructorBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package descriptor Worker before Vite copies',
   });
 }
 

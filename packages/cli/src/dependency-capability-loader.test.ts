@@ -1716,6 +1716,65 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "new ([globalThis][0].Worker)('/worker.mjs', { type: 'module' })",
       'Worker',
     ],
+    [
+      'descriptor Worker',
+      "new (Object.getOwnPropertyDescriptor(globalThis, 'Worker').value)('/worker.mjs')",
+      'opaque',
+    ],
+    [
+      'reflected descriptor Worker',
+      "new (Reflect.getOwnPropertyDescriptor(globalThis, 'Worker').value)('/worker.mjs')",
+      'opaque',
+    ],
+    [
+      'Reflect.apply-transferred Worker',
+      "new (Reflect.apply(Reflect.get, Reflect, [globalThis, 'Worker']))('/worker.mjs')",
+      'opaque',
+    ],
+    [
+      'intermediate identity Worker',
+      "(() => { const id = x => x; const W = id(globalThis).Worker; return new W('/worker.mjs'); })()",
+      'Worker',
+    ],
+    ['Function dynamic Worker', "Function('return Worker')()", 'opaque'],
+    [
+      'constructor-chain dynamic Worker',
+      "globalThis.constructor.constructor('return Worker')()",
+      'opaque',
+    ],
+    ['indirect eval Worker', "(0, eval)('Worker')", 'opaque'],
+    [
+      'callback-parameter Worker',
+      "((g) => { const W = g.Worker; return new W('/worker.mjs'); })(globalThis)",
+      'Worker',
+    ],
+    ['child-frame Worker', "new frames[0].Worker('/worker.mjs')", 'Worker'],
+    ['proxied-global Worker', "new (new Proxy(globalThis, {}).Worker)('/worker.mjs')", 'Worker'],
+    [
+      'member-written Worker',
+      "(() => { const box = {}; box.global = globalThis; const W = box.global.Worker; return new W('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'array-written Worker',
+      "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'prototype-inherited Worker',
+      "(() => { const holder = { __proto__: globalThis }; return new holder.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'descriptor-mutated Worker',
+      "(() => { const holder = {}; Object.defineProperty(holder, 'Worker', Object.getOwnPropertyDescriptor(globalThis, 'Worker')); return new holder.Worker('/worker.mjs'); })()",
+      'opaque',
+    ],
+    [
+      'static-field Worker',
+      "(() => { class Box { static G = globalThis } return new Box.G.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
   ] as const)(
     'rejects a reviewed package %s before Vite copies an unapproved public module',
     async (_label, expression, expectedConstructor) => {
@@ -1790,10 +1849,12 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
             root,
           }),
         ).rejects.toThrow(
-          new RegExp(
-            `KV448.*reviewed package safe-parser creates a ${expectedConstructor} subgraph`,
-            'u',
-          ),
+          expectedConstructor === 'opaque'
+            ? /KV448.*reviewed package safe-parser creates an? opaque browser executable carrier executable asset/u
+            : new RegExp(
+                `KV448.*reviewed package safe-parser creates a ${expectedConstructor} subgraph`,
+                'u',
+              ),
         );
         expect(() => readFileSync(join(outDir, 'worker.mjs'), 'utf8')).toThrow();
       } finally {
@@ -1804,6 +1865,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
 
   // @kovo-security-certifies C13 dependency-reviewed-executable-asset-closure
   it.each([
+    ['service worker', 'navigator.serviceWorker'],
     [
       'service worker',
       "navigator.serviceWorker.register(new URL('./payload.mjs', import.meta.url), { type: 'module' })",
@@ -1821,11 +1883,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "(() => { const { serviceWorker: worker } = navigator; return worker.register('/payload.mjs', { type: 'module' }); })()",
     ],
     [
-      'worklet',
+      'paint worklet',
       "(() => { const { paintWorklet: worklet } = CSS; return worklet.addModule('/payload.mjs'); })()",
     ],
     [
-      'worklet',
+      'audio worklet',
       "(() => { const { audioWorklet: worklet } = context; return worklet.addModule('/payload.mjs'); })()",
     ],
     [
@@ -1846,6 +1908,23 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'opaque browser executable carrier',
       "(() => { const key = globalThis.__KOVO_BROWSER_KEY__; const { [key]: Carrier } = globalThis; return new Carrier('/payload.mjs'); })()",
     ],
+    [
+      'service worker',
+      "Reflect.apply(Reflect.get, Reflect, [navigator, 'serviceWorker']).register('/payload.mjs')",
+    ],
+    [
+      'service worker',
+      "(() => { const read = (object, key) => object[key]; const worker = read(navigator, 'serviceWorker'); return worker?.register('/payload.mjs'); })()",
+    ],
+    [
+      'worklet',
+      "(() => { const worklet = Reflect.apply(Reflect.get, Reflect, [CSS, 'paintWorklet']); return worklet.addModule('/payload.mjs'); })()",
+    ],
+    [
+      'worklet',
+      "(() => { const worklet = Reflect.apply(Reflect.get, Reflect, [context, 'audioWorklet']); return worklet.addModule('/payload.mjs'); })()",
+    ],
+    ['opaque browser executable carrier', 'setTimeout("new Worker(\'/payload.mjs\')", 0)'],
   ] as const)('rejects a reviewed package %s executable asset', async (carrier, expression) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-executable-asset-')));
     const appModulePath = join(root, 'client.mjs');
@@ -1951,7 +2030,16 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           "class Worker { constructor() { this.kind = 'local'; } }",
           "const settings = { serviceWorker: { state: 'off' }, paintWorklet: { addModule: () => 'local' } };",
           'const { serviceWorker, paintWorklet } = settings;',
-          "export const inspect = () => [new Worker().kind, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule()].join(':');",
+          "class Namespace {} Namespace.Worker = class LocalWorker { constructor() { this.kind = 'namespace'; } };",
+          "function FunctionNamespace() {} FunctionNamespace.Worker = class LocalWorker { constructor() { this.kind = 'function-namespace'; } };",
+          "const frozen = globalThis.Object.freeze({ Worker: class LocalWorker { constructor() { this.kind = 'frozen'; } }, serviceWorker: { register: () => 'local-register' }, paintWorklet: { addModule: () => 'local-module' } });",
+          "const localClassRegister = (() => { class serviceWorker { static register() { return 'class-register'; } } return serviceWorker.register(); })();",
+          "const localBox = {}; localBox.Worker = class LocalWorker { constructor() { this.kind = 'member'; } };",
+          "const localArray = []; localArray[0] = class LocalWorker { constructor() { this.kind = 'array'; } };",
+          "const ignoredUnknownResult = inspectSomething({ value: 'off-slice' });",
+          "const describedLocal = (() => { const Object = { getOwnPropertyDescriptor: () => ({ value: class LocalWorker { constructor() { this.kind = 'local-object'; } } }) }; const Local = Object.getOwnPropertyDescriptor({}, 'Worker').value; return new Local().kind; })();",
+          "const reflectedLocal = (() => { const Reflect = { get: (object, key) => object[key] }; const Local = Reflect.get({ Worker: class LocalWorker { constructor() { this.kind = 'local-reflect'; } } }, 'Worker'); return new Local().kind; })();",
+          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
           '',
         ].join('\n'),
       );
@@ -2137,6 +2225,31 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'reflected audio worklet',
       "Reflect.get(globalThis.__KOVO_AUDIO_CONTEXT__, 'audioWorklet').addModule('/payload.mjs')",
       /KV448.*supported build-client artifact.*retains an? audio worklet executable asset/u,
+    ],
+    [
+      'descriptor Worker',
+      "new (Object.getOwnPropertyDescriptor(globalThis, 'Worker').value)('/payload.mjs')",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'opaque accessor service worker',
+      "(() => { const read = (object, key) => object[key]; const worker = read(navigator, 'serviceWorker'); return worker?.register('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a service worker executable asset/u,
+    ],
+    [
+      'member-written Worker',
+      "(() => { const box = {}; box.global = globalThis; const W = box.global.Worker; return new W('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'Reflect.apply-transferred Worker',
+      "new (Reflect.apply(Reflect.get, Reflect, [globalThis, 'Worker']))('/payload.mjs')",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'dynamic Function Worker',
+      'Function("return new Worker(\'/payload.mjs\')")()',
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
     ],
   ] as const)(
     'rejects a retained approved-app %s before a public executable module can ship',
