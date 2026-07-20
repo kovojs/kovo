@@ -386,6 +386,52 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-bundle-owned-chunk-identity
+  it('admits bundle-owned sibling chunks without treating their filenames as package externals', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-owned-chunk-')));
+    const appModulePath = join(root, 'app.mjs');
+    const handlerPath = join(root, 'handler.mjs');
+    const outDir = join(root, 'dist');
+    const appSource =
+      "export async function run() { return (await import('./handler.mjs')).handler(); }\n";
+    const handlerSource = "export const handler = () => 'owned';\n";
+    try {
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(handlerPath, handlerSource);
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: {
+              input: appModulePath,
+              output: { chunkFileNames: '[name].mjs', entryFileNames: '[name].mjs' },
+            },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [
+                { fileName: 'app.mjs', source: appSource },
+                { fileName: 'handler.mjs', source: handlerSource },
+              ],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-server',
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).resolves.toBeDefined();
+      expect(readFileSync(join(outDir, 'app.mjs'), 'utf8')).toContain("import('./handler.mjs')");
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-transitive-bundle-closure
   it('rejects uncensused transitive packages even when a supported SSR artifact bundles them', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-dependency-transitive-loader-'));
