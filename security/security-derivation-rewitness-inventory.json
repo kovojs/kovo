@@ -127,13 +127,19 @@
         "id": "D.wire-grammar",
         "owner": "core wire-ingress grammar registry",
         "authoritativeSource": [
+          "packages/core/src/internal/wire-input-grammar.ts",
           "packages/server/src/mutation-wire.ts",
-          "packages/browser/src/mutation-fetch.ts"
+          "packages/browser/src/mutation-fetch.ts",
+          "scripts/wire-input-boundary-gate.mjs"
         ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "proof": [],
-        "gap": "Browser encoders and server decoders do not yet derive from one closed typed grammar registry.",
+        "status": "derived",
+        "proof": [
+          "pnpm run check:wire-input-boundary",
+          "packages/core/src/internal/wire-input-grammar.test.ts",
+          "scripts/wire-input-boundary-gate.test.mjs"
+        ],
+        "gap": null,
         "reviewedExemption": null
       }
     ]
@@ -179,15 +185,21 @@
       {
         "id": "W.database-posture-lease",
         "owner": "server Postgres runtime posture door",
-        "authoritativeSource": ["packages/server/src/postgres-runtime.ts"],
+        "authoritativeSource": [
+          "packages/server/src/postgres-posture-lease.ts",
+          "packages/server/src/postgres-runtime.ts"
+        ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "renewalTrigger": "boot only",
-        "ttl": "unbounded after boot",
-        "failurePosture": "no periodic drift response",
-        "costBudget": "renewal budget undefined",
-        "evidence": [],
-        "gap": "Role, grant, policy, pooler, and restore freshness facts are not renewed after boot.",
+        "status": "rewitnessed",
+        "renewalTrigger": "30s jittered schedule, admission when stale, and one coalesced SQLSTATE 42501 signal",
+        "ttl": "120s hard freshness ceiling with zero serve-degraded grace",
+        "failurePosture": "shed DB admission and drain pooled sessions on expiry, witness failure, or digest divergence",
+        "costBudget": "2048 facts and 256KiB canonical evidence per interval with a 10s witness timeout",
+        "evidence": [
+          "packages/server/src/postgres-posture-lease.test.ts",
+          "packages/server/src/postgres-runtime.test.ts"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {
@@ -195,16 +207,22 @@
         "owner": "CLI and server posture-attestation doors",
         "authoritativeSource": [
           "packages/cli/src/artifact-provenance.ts",
+          "packages/cli/src/commands/attest.ts",
+          "packages/server/src/runtime-attestation.ts",
           "plans/security-architecture-decisions-phase-0-2026-07-19.md"
         ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "renewalTrigger": "not implemented",
-        "ttl": "undefined",
-        "failurePosture": "UNBOUND",
-        "costBudget": "unbudgeted",
-        "evidence": [],
-        "gap": "No externally pinned nonce-bound single-instance posture challenge exists.",
+        "status": "rewitnessed",
+        "renewalTrigger": "every kovo explain --attest request with a fresh caller-generated 32-byte nonce",
+        "ttl": "60s signed single-instance statement with a 4096-nonce replay window",
+        "failurePosture": "verification fails closed on nonce, artifact, posture, trust-anchor, time, signature, or boot-witness mismatch",
+        "costBudget": "one Ed25519 signature per challenge, 5s fetch timeout, and 1MiB response ceiling",
+        "evidence": [
+          "packages/server/src/runtime-attestation.security.test.ts",
+          "packages/cli/src/commands/attest.test.ts",
+          "packages/cli/src/artifact-provenance.test.ts"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {
