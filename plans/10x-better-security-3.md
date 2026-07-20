@@ -642,10 +642,13 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 
 ### 4.3 Cost-to-green
 
-- [ ] Measure `cost-to-green(safe) − cost-to-green(escape)` per diagnostic on an **agent-authored**
+- [x] Measure `cost-to-green(safe) − cost-to-green(escape)` per diagnostic on an **agent-authored**
       corpus, and add `kovo fix` safe rewrites whose result the analyzer proves discharges the
       obligation. Any diagnostic where escaping is cheaper is a **framework defect with an owner**.
       Start with the two highest-traffic codes.
+  - Evidence: the focused `safe-fixes.security.test.ts` and `commands/fix.test.ts` integration run
+    passes inside a 25/25 suite, proving the 12-case cost report, KV223/KV232 AST rewrites, independent
+    analyzer discharge, atomic path guards, and owned KV236 cost defect.
 
 ### 4.4 Declassification as a typed, robust, capability-gated door
 
@@ -658,12 +661,18 @@ documented as a bounded (newest 256) **destructive** drain — explicitly not a 
       source by a gate that fails on site, code, capability-identity, or door drift.
   - Evidence: `pnpm run check:declassification-census` inventories the current 15 exact sites and
     passes 7/7 closed-vocabulary and new/deleted/code/identity/door mutation controls.
-- [ ] Replace `SecretRevealReason` (a string) with a typed `DeclassifyPolicy = closed-registry purpose ×
+- [x] Replace `SecretRevealReason` (a string) with a typed `DeclassifyPolicy = closed-registry purpose ×
 door id × owner scope`; `reveal('some string')` must stop typechecking.
-- [ ] Robustness rule over the existing security IR: a declassify node whose **enabling condition or
+  - Evidence: the merged core/server policy and type tests pass in the 299-test focused integration
+    run; only the module-private validating constructor can create a policy and string reveals fail.
+- [x] Robustness rule over the existing security IR: a declassify node whose **enabling condition or
       released expression** carries `Integ ⊒ input` is an error, fail-closed on unknown. Two corpus
       fixtures (attacker-chosen condition, attacker-chosen value) must both be rejected.
-- [ ] Make the declassification door an L1 capability so untrusted-reachable modules cannot import it.
+  - Evidence: `security-operation-ir.security.test.ts` rejects both attacker-controlled condition and
+    value fixtures; the finite relation gate passes 14/14 over 44 states and 2,508 pairs.
+- [x] Make the declassification door an L1 capability so untrusted-reachable modules cannot import it.
+  - Evidence: the focused compiler capability suite passes within the same 299-test run;
+    `check:c9-sink-inventory` passes 33/33 with `server.data.declassify` owned by the nominal door.
 
 ### 4.5 Precision-grant register (the extraction-gap deliverable)
 
