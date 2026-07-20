@@ -4,6 +4,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 import { forwardSetCookie, serializeCookie } from './cookies.js';
+import { createCsrfCryptoHandle } from './crypto-authority.js';
 import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import { csrfToken, validateCsrfToken } from './csrf.js';
 import { renderDocument } from './document-core.js';
@@ -264,12 +265,10 @@ describe('document, cookie, CSP, and CSRF intrinsic closure', () => {
           },
         ],
       });
-      forgedAccepted = ring.verify({
-        audience: 'mutation:test',
-        payload: 'victim',
-        purpose: 'csrf',
-        signature: 'attacker',
-      }).ok;
+      forgedAccepted = createCsrfCryptoHandle(ring, 'csrf', 'mutation:test').verify(
+        'victim',
+        'attacker',
+      ).ok;
     } finally {
       mutableCrypto.createHash = nativeCreateHash;
       mutableCrypto.createHmac = nativeCreateHmac;
