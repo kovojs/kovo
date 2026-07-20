@@ -683,6 +683,7 @@ const removedInlineTypedMutationMismatchClosureBranch = [
 const browserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
   "  ['Bun', 'process'],",
+  "  ['Crypto', 'crypto-acquisition'],",
   "  ['Deno', 'process'],",
   "  ['EventSource', 'network'],",
   "  ['Function', 'vm'],",
@@ -691,6 +692,7 @@ const browserRtcNetworkCapabilityBranch = [
 const weakenedBrowserRtcNetworkCapabilityBranch = [
   'const globalCapabilities = new Map<string, RawCapabilityKind>([',
   "  ['Bun', 'process'],",
+  "  ['Crypto', 'crypto-acquisition'],",
   "  ['Deno', 'process'],",
   "  ['EventSource', 'network'],",
   "  ['Function', 'vm'],",
@@ -1483,13 +1485,13 @@ const semanticGraphBehavioralInstrumentation = [
 ].join('\n');
 
 const semanticV2SourceByteEqualityBranch =
-  '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) return new Map();';
+  '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {';
 const weakenedSemanticV2SourceByteEqualityBranch =
-  '    if (!sourceFile || !semanticSource) return new Map();';
+  '    if (!sourceFile || !semanticSource) {';
 const semanticV2SchemaBranch =
-  "      if (graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();";
+  "      if (graph.schema !== 'kovo-security-semantic-graph/v2') {";
 const weakenedSemanticV2SchemaBranch =
-  "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') return new Map();";
+  "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') {";
 const semanticV2FactoryRootBranch = [
   '    requestCompilerSemanticRootForFactoryCall(binding.factory, factoryCall, fileName) !==',
   '      root.root ||',
@@ -1570,12 +1572,58 @@ const weakenedAmbientCryptoRandomUuidStabilityBranch = [
   '    !identifierIsShadowedWithinBoundary(globalRoot, sourceFile) &&',
   '    true &&',
 ].join('\n');
-const finiteManagedDatabaseContinuationBranch =
-  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&';
-const weakenedFiniteManagedDatabaseContinuationBranch = '      true &&';
-const managedDatabaseForeignArgumentClosureBranch =
-  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)';
-const weakenedManagedDatabaseForeignArgumentClosureBranch = '      true';
+const finiteManagedDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+].join('\n');
+const weakenedFiniteManagedDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      true &&',
+].join('\n');
+const managedDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)',
+].join('\n');
+const weakenedManagedDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromReviewedDatabaseOperation(callee, aliases)) {',
+  '    if (',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      true',
+].join('\n');
+const finiteGeneratedReadonlyDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+].join('\n');
+const weakenedFiniteGeneratedReadonlyDatabaseContinuationBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      true &&',
+].join('\n');
+const generatedReadonlyDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      !serverArgumentsContainUnreviewedForeignExecutable(sourceFile, call.arguments, aliases)',
+].join('\n');
+const weakenedGeneratedReadonlyDatabaseForeignArgumentClosureBranch = [
+  '  if (serverCallDescendsFromExactGeneratedReadonlyAppDbRead(sourceFile, callee, aliases)) {',
+  '    if (',
+  '      ts.isPropertyAccessExpression(callee) &&',
+  '      compilerSetHas(serverReviewedDatabaseBuilderMethods, member.name) &&',
+  '      !serverArgumentsContainAuthority(call.arguments, aliases) &&',
+  '      true',
+].join('\n');
 const exactProjectSchemaFactoryIdentityBranch =
   '  return frameworkIdentityIn(factoryIdentity, SERVER_REVIEWED_DATABASE_TABLE_FACTORY_IDENTITIES);';
 const weakenedExactProjectSchemaFactoryIdentityBranch = '  return factoryIdentity !== undefined;';
@@ -2031,9 +2079,9 @@ const reviewedDeclaredSecretReadExecutionBranch =
 const removedReviewedDeclaredSecretReadExecutionBranch =
   '  if (false && serverCallIsExactDeclaredSecretReadExecution(sourceFile, call, aliases)) {';
 const reviewedTrustedRevealDoorBranch =
-  '  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {';
+  '  if (frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {';
 const removedReviewedTrustedRevealDoorBranch =
-  '  if (false && serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {';
+  '  if (false && frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {';
 const reviewedSecretBoxDoorBranch =
   '  if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {';
 const removedReviewedSecretBoxDoorBranch =
@@ -2397,7 +2445,7 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertScopedKeyRuntimeWitnessIsPinned,
   },
   {
-    behavioralEntryFile: compilerSecurityProvenanceRelationPath,
+    behavioralEntryFile: compilerBehavioralEntryPath,
     behavioralTypeScript: true,
     description:
       'Deletes compiler provenance closure for app-authored static lowered executable references.',
@@ -3764,6 +3812,32 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
     behavioralTypeScript: true,
+    description:
+      'Admits any generated readonly-app-DB continuation instead of the finite method set.',
+    expectedKiller:
+      'generated readonly-app-DB continuations must retain the exact finite method vocabulary',
+    name: 'compiler-finite-ir/allow-unknown-generated-readonly-db-continuation',
+    replacement: weakenedFiniteGeneratedReadonlyDatabaseContinuationBranch,
+    search: finiteGeneratedReadonlyDatabaseContinuationBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    test: assertFiniteGeneratedReadonlyDatabaseContinuationBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description:
+      'Lets an imported executable value enter a reviewed generated readonly-app-DB continuation.',
+    expectedKiller:
+      'generated readonly-app-DB continuations must reject unreviewed foreign executable arguments',
+    name: 'compiler-finite-ir/allow-foreign-generated-readonly-db-argument',
+    replacement: weakenedGeneratedReadonlyDatabaseForeignArgumentClosureBranch,
+    search: generatedReadonlyDatabaseForeignArgumentClosureBranch,
+    sourceFile: compilerSecuritySemanticGraphPath,
+    test: assertGeneratedReadonlyDatabaseForeignArgumentClosureBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
     description: 'Treats any imported project factory call as a reviewed Drizzle schema table.',
     expectedKiller: 'project schema admission must retain exact pgTable/sqliteTable identity',
     name: 'compiler-finite-ir/allow-foreign-project-schema-factory',
@@ -5048,7 +5122,11 @@ function runIsolatedPackageVitestMutation({
     if (packageName === 'browser') {
       const coreInternalRoot = path.join(tempRoot, 'packages', 'core', 'src', 'internal');
       mkdirSync(coreInternalRoot, { recursive: true });
-      for (const name of ['semantic-attribute-manifest.ts', 'sink-policy.ts']) {
+      for (const name of [
+        'semantic-attribute-manifest.ts',
+        'sink-policy.ts',
+        'wire-input-grammar.ts',
+      ]) {
         cpSync(
           path.join(repoRoot, 'packages/core/src/internal', name),
           path.join(coreInternalRoot, name),
@@ -5475,7 +5553,11 @@ function assertInlineLoaderFreshnessBehavior(_moduleUnderTest, { sourceText }) {
       path.join(repoRoot, 'packages/browser/package.json'),
       path.join(browserRoot, 'package.json'),
     );
-    for (const name of ['semantic-attribute-manifest.ts', 'sink-policy.ts']) {
+    for (const name of [
+      'semantic-attribute-manifest.ts',
+      'sink-policy.ts',
+      'wire-input-grammar.ts',
+    ]) {
       cpSync(
         path.join(repoRoot, 'packages/core/src/internal', name),
         path.join(coreInternalRoot, name),
@@ -5542,6 +5624,10 @@ async function assertInlineDynamicControlPlaneClosureBehavior(_moduleUnderTest, 
     cpSync(
       path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts'),
       path.join(coreInternalRoot, 'sink-policy.ts'),
+    );
+    cpSync(
+      path.join(repoRoot, 'packages/core/src/internal/wire-input-grammar.ts'),
+      path.join(coreInternalRoot, 'wire-input-grammar.ts'),
     );
     symlinkSync(
       path.join(repoRoot, 'packages/browser/node_modules'),
@@ -6034,6 +6120,53 @@ export const save = mutation('contacts/save', {
   handler(_input, request) { return request.db.select().where(foreignPredicate); },
 });
 `,
+  );
+}
+
+const generatedReadonlyDatabaseExtraFiles = [
+  {
+    fileName: 'src/_kovo/app-runtime-db.ts',
+    source: `
+import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+const appDatabase = createSqliteAppRuntime({});
+export const appRuntimeReadonlyDb = appDatabase.readonlyDb;
+`,
+  },
+  {
+    fileName: 'src/db.ts',
+    source: `
+import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
+export const readonlyAppDb = appRuntimeReadonlyDb;
+`,
+  },
+];
+
+function assertFiniteGeneratedReadonlyDatabaseContinuationBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { readonlyAppDb } from './db.js';
+export const save = mutation('contacts/save', {
+  handler() { return readonlyAppDb.select().dropEverything(); },
+});
+`,
+    generatedReadonlyDatabaseExtraFiles,
+  );
+}
+
+function assertGeneratedReadonlyDatabaseForeignArgumentClosureBehavior(moduleUnderTest) {
+  assertFiniteIrCloses(
+    moduleUnderTest,
+    `
+import { mutation } from '@kovojs/server';
+import { foreignPredicate } from './lookalike.js';
+import { readonlyAppDb } from './db.js';
+export const save = mutation('contacts/save', {
+  handler() { return readonlyAppDb.select().where(foreignPredicate); },
+});
+`,
+    generatedReadonlyDatabaseExtraFiles,
   );
 }
 
@@ -7529,8 +7662,8 @@ async function assertAnalyzerSummaryStaticCallCarrierIsEnforced(moduleUnderTest)
     moduleUnderTest,
     'summary-static-call-carrier.ts',
     analyzerSummaryQueryFixtureSource([
-      'function current(context: Context) { return context.request.guard.userId; }',
-      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'function current(context: Context) { return context.request.session.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "session", path: "userId" } });',
       'export const list = query("list", {',
       '  async load(input: Input, _context: Context) {',
       '    const verdict = current(input as unknown as Context);',
@@ -7565,7 +7698,7 @@ async function assertAnalyzerSummaryDirectCallCalleeIsEnforced(moduleUnderTest) 
       }
       const callee = call.getExpression();
       const context = moduleUnderTest.__analyzerSummaryContextForReference(callee, {
-        kind: 'guard',
+        kind: 'session',
         path: 'userId',
         requiresGuard: false,
       });
@@ -7665,8 +7798,8 @@ async function assertAnalyzerSummaryConditionalEffectClosureIsEnforced(moduleUnd
     'summary-conditional-effect.ts',
     analyzerSummaryQueryFixtureSource([
       'declare function choose(): boolean;',
-      'function current(context: Context) { return context.request.guard.userId; }',
-      'kovoAnalyzerSummary(current, { returns: { kind: "guard", path: "userId" } });',
+      'function current(context: Context) { return context.request.session.userId; }',
+      'kovoAnalyzerSummary(current, { returns: { kind: "session", path: "userId" } });',
       'export const list = query("list", {',
       '  async load(_input: Input, context: Context) {',
       '    const userId = choose()',
@@ -8064,15 +8197,18 @@ export const report = query({
 `;
 
 const reviewedSecretProjectionFixture = `
-import { secret, trustedReveal } from '@kovojs/core';
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
 import { query } from '@kovojs/server';
 export const report = query({
-  load(input) {
-    const reviewed = trustedReveal(secret(input.value), {
-      justification: 'reviewed server projection',
-      method: 'server-projection',
-      source: 'accounts.classified',
-    });
+  load() {
+    const reviewed = trustedReveal(
+      secret('server-owned'),
+      DeclassifyPolicy.create({
+        door: 'trustedReveal',
+        ownerScope: 'application',
+        purpose: 'public-projection',
+      }),
+    );
     return { reviewed };
   },
 });
