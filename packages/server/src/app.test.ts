@@ -400,6 +400,48 @@ describe('framework-owned runtime posture attestation endpoint', () => {
     expect(oversized.status).toBe(413);
     expect(appHandler).not.toHaveBeenCalled();
   });
+
+  // C13 red anchor: a colliding app endpoint must not lend its long-lived budget to the
+  // framework-owned attestation door (SPEC §9.5 and §9.2 reserved-surface ownership).
+  it('keeps the framework request deadline when a colliding endpoint is long-lived', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint(KOVO_RUNTIME_ATTESTATION_ENDPOINT, {
+            csrf: false,
+            csrfJustification: 'reserved-path deadline collision fixture',
+            handler: () => new Response('app endpoint should not win'),
+            method: 'POST',
+            reason: 'reserved runtime attestation deadline collision fixture',
+            response: {
+              ...rawTextResponse,
+              longLived: {
+                deadlineMs: 300,
+                justification: 'prove reserved attestation does not inherit app route posture',
+              },
+            },
+          }),
+        ],
+        requestLimits: { deadlineMs: 30 },
+      }),
+    );
+    const request = new Request(`https://example.test${KOVO_RUNTIME_ATTESTATION_ENDPOINT}`, {
+      body: new ReadableStream<Uint8Array>({ pull() {} }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+
+    const outcome = await Promise.race([
+      handler(request),
+      new Promise<'long-lived-budget-leaked'>((resolve) => {
+        setTimeout(() => resolve('long-lived-budget-leaked'), 120);
+      }),
+    ]);
+
+    expect(outcome).not.toBe('long-lived-budget-leaked');
+    expect((outcome as Response).status).toBe(503);
+  });
 });
 
 describe('server createApp request shell', () => {
