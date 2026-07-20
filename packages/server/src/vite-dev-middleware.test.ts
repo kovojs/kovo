@@ -118,6 +118,58 @@ describe('server app shell Vite plugin', () => {
     expect(nextCalls).toBe(0);
   });
 
+  it('rejects ambiguous authority before loading the Vite SSR dispatcher', () => {
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    const loadedModuleIds: string[] = [];
+    let nextCalls = 0;
+    let responseBody = '';
+    let responseStatus = 0;
+    const plugin = kovoAppShellViteDevPlugin();
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        loadedModuleIds.push(id);
+        return { dispatchKovoAppShellViteDevRequest() {} };
+      },
+    });
+    const request = {
+      __kovoRequestIngressSource: 'node-http1',
+      complete: true,
+      headers: { host: 'app.test' },
+      httpVersion: '1.1',
+      method: 'GET',
+      rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: '/cart',
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    middlewares[0]?.(request, response, () => {
+      nextCalls += 1;
+    });
+
+    expect(loadedModuleIds).toEqual([]);
+    expect(nextCalls).toBe(0);
+    expect({ body: responseBody, status: responseStatus }).toEqual({
+      body: 'Bad Request',
+      status: 400,
+    });
+  });
+
   it('rejects body-framed GET before graph-local Vite SSR or app loading', async () => {
     const loadedModuleIds: string[] = [];
     let nextCalls = 0;
@@ -167,6 +219,62 @@ describe('server app shell Vite plugin', () => {
     });
     expect(loadedModuleIds).toEqual([]);
     expect(nextCalls).toBe(0);
+  });
+
+  it('rejects ambiguous authority before graph-local Vite SSR or app loading', async () => {
+    const app = createApp({
+      routes: [route('/cart', { page: () => trustedHtml('<main>unreachable</main>') })],
+    });
+    const loadedModuleIds: string[] = [];
+    const shouldHandleRequest = vi.fn(() => false);
+    let nextCalls = 0;
+    let responseBody = '';
+    let responseStatus = 0;
+    const request = {
+      __kovoRequestIngressSource: 'node-http1',
+      complete: true,
+      headers: { host: 'app.test' },
+      httpVersion: '1.1',
+      method: 'GET',
+      rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: '/cart',
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    await dispatchKovoAppShellViteDevRequest(
+      {
+        middlewares: { use() {} },
+        async ssrLoadModule(id) {
+          loadedModuleIds.push(id);
+          return { default: app };
+        },
+      },
+      { shouldHandleRequest },
+      request,
+      response,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    expect(loadedModuleIds).toEqual([]);
+    expect(shouldHandleRequest).not.toHaveBeenCalled();
+    expect(nextCalls).toBe(0);
+    expect({ body: responseBody, status: responseStatus }).toEqual({
+      body: 'Bad Request',
+      status: 400,
+    });
   });
 
   it('rejects body-framed GET before live Vite filtering or app dispatch', () => {
@@ -219,6 +327,58 @@ describe('server app shell Vite plugin', () => {
     expect(shouldHandleRequest).not.toHaveBeenCalled();
     expect(page).not.toHaveBeenCalled();
     expect(nextCalls).toBe(0);
+  });
+
+  it('rejects ambiguous authority before live Vite filtering or app dispatch', () => {
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
+    const shouldHandleRequest = vi.fn(() => false);
+    const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', { page })] }), {
+      shouldHandleRequest,
+    });
+    let responseBody = '';
+    let responseStatus = 0;
+    let nextCalls = 0;
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+    const request = {
+      __kovoRequestIngressSource: 'node-http1',
+      complete: true,
+      headers: { host: 'app.test' },
+      httpVersion: '1.1',
+      method: 'GET',
+      rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: '/cart',
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    middlewares[0]?.(request, response, () => {
+      nextCalls += 1;
+    });
+
+    expect(shouldHandleRequest).not.toHaveBeenCalled();
+    expect(page).not.toHaveBeenCalled();
+    expect(nextCalls).toBe(0);
+    expect({ body: responseBody, status: responseStatus }).toEqual({
+      body: 'Bad Request',
+      status: 400,
+    });
   });
 
   it('owns the app-shell dev plugin option matrix for generated module loading', async () => {
