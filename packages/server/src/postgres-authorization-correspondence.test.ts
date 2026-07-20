@@ -8,6 +8,7 @@ import { explainPostgresGuardCorrespondence, guards } from './guards.js';
 import {
   POSTGRES_OWNER_POLICY_MAX_OWNER_VIA_DEPTH,
   POSTGRES_RLS_SQL_EMISSION_SITES,
+  createFrameworkPostgresOwnershipBinding,
   decidePostgresOwnerPolicyCorrespondence,
   deriveFrameworkPostgresOwnsRow,
   emitPostgresRlsPolicySql,
@@ -269,7 +270,7 @@ describe('finite Postgres authorization correspondence', () => {
       tableName: 'documents',
     });
     const predicate = renderPostgresOwnerPolicyPredicate(term);
-    const arbitraryGuard = guards.owns(
+    const arbitraryGuard = guards.unprovenOwns(
       (request: { args: { id: string }; session?: { user?: { id?: string } } }) => request.args.id,
       async () => true,
       { resourceKey: 'args.id' },
@@ -343,6 +344,154 @@ describe('finite Postgres authorization correspondence', () => {
         }).status,
       ).toBe('unproven');
     }
+  });
+
+  it('accepts only a framework-witnessed owner binding on the proven guards.owns path', async () => {
+    type Request = {
+      args: { id: string };
+      session?: { user?: { id?: string } };
+    };
+    const term = postgresOwnerColumnPolicyTerm({
+      columnName: 'owner_id',
+      tableName: 'documents',
+    });
+    const rows = new Map<string, Readonly<Record<string, unknown>>>([
+      ['owned', { owner_id: 'principal' }],
+      ['foreign', { owner_id: 'someone-else' }],
+      ['null-owner', { owner_id: null }],
+      ['unset-owner', {}],
+    ]);
+    const binding = createFrameworkPostgresOwnershipBinding<Request, string>({
+      lookupParent: () => undefined,
+      lookupRow: (_request, key) => rows.get(key),
+      term,
+    });
+    const guard = guards.owns<Request, Request, string>(
+      (request) => request.args.id,
+      binding,
+      { name: 'document-owner', resourceKey: 'args.id' },
+    );
+
+    await expect(
+      guard({ args: { id: 'owned' }, session: { user: { id: 'principal' } } }),
+    ).resolves.toBe(true);
+    for (const id of ['foreign', 'null-owner', 'unset-owner', 'missing']) {
+      await expect(
+        guard({ args: { id }, session: { user: { id: 'principal' } } }),
+      ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+    }
+
+    expect(() =>
+      guards.owns<Request, Request, string>(
+        (request) => request.args.id,
+        (async () => true) as never,
+      ),
+    ).toThrow(/framework-minted Postgres ownership binding/u);
+    expect(() =>
+      guards.owns<Request, Request, string>(
+        (request) => request.args.id,
+        Object.freeze({}) as never,
+      ),
+    ).toThrow(/framework-minted Postgres ownership binding/u);
+
+    const correspondence = explainPostgresGuardCorrespondence({
+      guard,
+      policy: {
+        emissionSite: 'owner',
+        predicate: renderPostgresOwnerPolicyPredicate(term),
+        tableName: 'documents',
+        term,
+      },
+    });
+    expect(correspondence).toMatchObject({
+      decision: { checkedModels: 3, expectedModels: 3, status: 'proved' },
+      guard: {
+        facts: [
+          {
+            kind: 'owns',
+            ownerPolicy: {
+              emissionSite: 'owner',
+              predicate: renderPostgresOwnerPolicyPredicate(term),
+              tableName: 'documents',
+            },
+            staticProof: 'framework-derived',
+          },
+        ],
+        semantics: 'framework-derived-owner-policy',
+      },
+      status: 'proved',
+    });
+
+    const unprovenGuard = guards.unprovenOwns<Request, Request, string>(
+      (request) => request.args.id,
+      async () => true,
+    );
+    expect(
+      explainPostgresGuardCorrespondence({
+        guard: unprovenGuard,
+        policy: {
+          emissionSite: 'owner',
+          predicate: renderPostgresOwnerPolicyPredicate(term),
+          tableName: 'documents',
+          term,
+        },
+      }),
+    ).toMatchObject({
+      guard: { semantics: 'arbitrary-app-callback' },
+      status: 'unproven',
+    });
+  });
+
+  it('runs ownerVia guards through the bound framework row and parent lookups', async () => {
+    type Request = {
+      args: { id: string };
+      session?: { user?: { id?: string } };
+    };
+    const accounts = postgresOwnerColumnPolicyTerm({
+      columnName: 'owner_id',
+      tableName: 'accounts',
+    });
+    const entries = postgresOwnerViaPolicyTerm({
+      fkColumnName: 'account_id',
+      parent: accounts,
+      parentKeyColumnName: 'id',
+      tableName: 'entries',
+    });
+    const parentLookups: unknown[] = [];
+    const binding = createFrameworkPostgresOwnershipBinding<Request, string>({
+      lookupParent: (input) => {
+        parentLookups.push(input);
+        return input.keyValue === 'account-1'
+          ? { id: 'account-1', owner_id: 'principal' }
+          : input.keyValue === 'account-2'
+            ? { id: 'account-2', owner_id: null }
+            : undefined;
+      },
+      lookupRow: (_request, key) =>
+        key === 'entry-1'
+          ? { account_id: 'account-1' }
+          : key === 'entry-null'
+            ? { account_id: 'account-2' }
+            : key === 'entry-missing-edge'
+              ? { account_id: null }
+              : undefined,
+      term: entries,
+    });
+    const guard = guards.owns<Request, Request, string>((request) => request.args.id, binding);
+
+    await expect(
+      guard({ args: { id: 'entry-1' }, session: { user: { id: 'principal' } } }),
+    ).resolves.toBe(true);
+    await expect(
+      guard({ args: { id: 'entry-null' }, session: { user: { id: 'principal' } } }),
+    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+    await expect(
+      guard({ args: { id: 'entry-missing-edge' }, session: { user: { id: 'principal' } } }),
+    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+    expect(parentLookups).toEqual([
+      { keyColumnName: 'id', keyValue: 'account-1', tableName: 'accounts' },
+      { keyColumnName: 'id', keyValue: 'account-2', tableName: 'accounts' },
+    ]);
   });
 });
 
