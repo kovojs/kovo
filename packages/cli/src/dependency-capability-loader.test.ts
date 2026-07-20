@@ -711,7 +711,12 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
   });
 
   // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
-  it('rejects a relative edge from a reviewed package into a nested package boundary', async () => {
+  it.each([
+    ['manifest-owned', true],
+    ['legacy node_modules', false],
+  ] as const)(
+    'rejects a relative edge from a reviewed package into a %s nested package boundary',
+    async (_label, helperHasManifest) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-relative-nested-')));
     const appModulePath = join(root, 'app.mjs');
     const packageRoot = join(root, 'node_modules', 'safe-parser');
@@ -724,6 +729,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         [helperRoot, 'helper-parser'],
       ] as const) {
         mkdirSync(directory, { recursive: true });
+        if (packageName === 'helper-parser' && !helperHasManifest) continue;
         writeFileSync(
           join(directory, 'package.json'),
           JSON.stringify({
@@ -798,7 +804,8 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  });
+    },
+  );
 
   // @kovo-security-certifies C13 dependency-vite-ignore-artifact-closure
   it.each(['relative', 'file URL'] as const)(
