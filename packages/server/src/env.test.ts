@@ -17,6 +17,7 @@ import {
   validateAppEnv,
 } from './env.js';
 import { withKovoBuildContext } from './internal/build-context.js';
+import { createSigningKeyRing } from './keyring.js';
 import { s, SchemaValidationError } from './schema.js';
 
 // A real, length-clearing secret (~43 base64url chars ≈ 192 bits), matching what the
@@ -115,16 +116,21 @@ describe('validateAppEnv — framework secret refuse-to-boot (SPEC §6.6)', () =
       ).not.toThrow();
     });
 
-    it('accepts an opaque custom SigningKeyRing in production env validation', () => {
-      const customKeyRing = {
+    it('rejects structural ring lookalikes and accepts an opaque Kovo SigningKeyRing', () => {
+      const structuralLookalike = {
         currentKeyId: 'external',
         sign: () => ({ keyId: 'external', signature: 'signature' }),
         verify: () => ({ ok: false as const, reason: 'bad-signature' as const }),
       };
 
       expect(() =>
-        validateAppEnv({ csrfSecret: customKeyRing }, { mode: 'production' }),
-      ).not.toThrow();
+        validateAppEnv({ csrfSecret: structuralLookalike }, { mode: 'production' }),
+      ).toThrow(CreateAppBootError);
+
+      const keyRing = createSigningKeyRing({
+        keys: [{ id: 'external', secret: STRONG_SECRET, state: 'active' }],
+      });
+      expect(() => validateAppEnv({ csrfSecret: keyRing }, { mode: 'production' })).not.toThrow();
     });
 
     it('validates current and previous CSRF rotation secrets', () => {

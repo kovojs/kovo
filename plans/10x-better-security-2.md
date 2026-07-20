@@ -818,8 +818,11 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
       re-witnessed within its declared freshness/failure budget or is explicitly signed off.
   - Evidence: the same inventory gate reports `W=9/9 uncovered=0`; every row records its source,
     renewal/TTL, fail-closed posture, cost budget, and current evidence.
-- [ ] All three reproduced live channels—storage key isolation, durable-job coalescing, and config-
+- [x] All three reproduced live channels—storage key isolation, durable-job coalescing, and config-
       secret runtime egress—are closed by runtime-owned doors with their exact red tests green.
+  - Evidence: the seven-file, 177-test live-channel suite proves cross-owner isolation in memory,
+    filesystem, S3-compatible, memory-queue, and Postgres/PGlite paths plus boxed config-secret
+    wire/clone/render/log rejection and client-artifact exclusion.
 - [ ] `kovo explain --attest` verifies the bounded single-instance posture statement defined in §4.3;
       the tier-aware dev/prod obligation mapping is green without overclaiming host or fleet identity.
 - [ ] New SPEC text (ScopedKey algebra, posture lease, request deadline, config-env door, cache
