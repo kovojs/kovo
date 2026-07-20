@@ -1785,6 +1785,9 @@ describe('guards.unprovenOwns (explicit arbitrary ownership escape)', () => {
     ]);
     expect(guardAuditName(escapedGuard)).toBe('unprovenOwns');
     expect(guardAuditName(guard('owns', escapedGuard))).toBe('unprovenOwns');
+    expect(guardAuditName(guard('owns#order#id#owner_id', () => true))).toBe('opaque');
+    expect(guardAuditName(guard('owns:order:arg:id', () => true))).toBe('opaque');
+    expect(guardAuditName(guard('owns(order,arg:id)', () => true))).toBe('opaque');
   });
 });
 

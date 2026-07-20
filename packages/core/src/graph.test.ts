@@ -213,9 +213,24 @@ describe('kovo graph input validation', () => {
 
     expect(
       deriveOwnershipPostureFacts({
-        queries: [{ domains: ['order'], guards: ['owns:order:arg:id'], query: 'orderById' }],
+        queries: [
+          { domains: ['order'], guards: ['owns:order:arg:id'], query: 'orderById' },
+          {
+            domains: ['document:tenant'],
+            guards: ['owns#document%3Atenant#document_id#owner%23id'],
+            query: 'documentById',
+          },
+        ],
       }),
     ).toEqual([
+      {
+        domain: 'document:tenant',
+        key: 'column:document_id',
+        kind: 'query',
+        name: 'documentById',
+        ownerGuarded: true,
+        source: 'ownership-posture',
+      },
       {
         domain: 'order',
         key: 'arg:id',

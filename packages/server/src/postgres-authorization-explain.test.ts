@@ -1,11 +1,10 @@
 // @kovo-security-classifier-corpus postgres-identity-posture
 import { describe, expect, it } from 'vitest';
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
 
 import { guards } from './guards.js';
-import {
-  createFrameworkPostgresOwnerColumnBinding,
-  postgresOwnerColumnPolicyTerm,
-} from './postgres-authorization-correspondence.js';
+import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
 import { authorizationCorrespondenceFactsFromApp } from './postgres-authorization-explain.js';
 
 describe('Postgres authorization production explain facts', () => {
@@ -41,6 +40,7 @@ describe('Postgres authorization production explain facts', () => {
             dialect: 'postgres',
             domain: 'document',
             governedColumnKeys: ['id', 'ownerId'],
+            key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
             name: 'documents',
             owner: { columnKey: 'ownerId', columnName: 'owner_id' },
             secretColumnKeys: [],
@@ -56,6 +56,7 @@ describe('Postgres authorization production explain facts', () => {
             dialect: 'postgres',
             domain: 'invoice',
             governedColumnKeys: ['id'],
+            key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
             name: 'invoices',
             secretColumnKeys: [],
             secretDeclared: false,
@@ -137,56 +138,62 @@ describe('Postgres authorization production explain facts', () => {
       args: { id: string };
       session?: { user?: { id?: string } };
     };
-    const term = postgresOwnerColumnPolicyTerm({
-      columnName: 'owner_id',
-      tableName: 'documents',
-    });
-    const binding = createFrameworkPostgresOwnerColumnBinding<Request, string>({
-      lookupRow: () => ({ owner_id: 'principal' }),
-      term,
-    });
-    const ownsDocuments = guards.owns<Request, Request, string>(
-      (request) => request.args.id,
-      binding,
-      { resourceKey: 'args.id' },
+    const documents = pgTable(
+      'documents',
+      { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
+      kovo({ domain: 'document', key: 'id', owner: 'ownerId' }),
     );
-    const facts = authorizationCorrespondenceFactsFromApp({
-      app: {
+    const tableSecurity = {
+      tables: [
+        {
+          authorizationClassifications: ['owned'] as const,
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          dialect: 'postgres' as const,
+          domain: 'document',
+          governedColumnKeys: ['id', 'ownerId'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' as const },
+          name: 'documents',
+          owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    };
+    const release = installGeneratedTableSecurityManifestForCommand(tableSecurity);
+    try {
+      const ownsDocuments = guards.owns<Request, Request, string>(
+        (request) => request.args.id,
+        documents.id,
+        { resourceKey: 'args.id' },
+      );
+      const facts = authorizationCorrespondenceFactsFromApp({
+        app: {
+          mutations: [],
+          queries: [{ guard: ownsDocuments, key: 'document/read' }],
+          routes: [],
+        },
         mutations: [],
-        queries: [{ guard: ownsDocuments, key: 'document/read' }],
-        routes: [],
-      },
-      mutations: [],
-      pages: [],
-      queries: [{ domains: ['document'], query: 'document/read' }],
-      tableSecurity: {
-        tables: [
-          {
-            authorizationClassifications: ['owned'],
-            columns: [
-              { key: 'id', name: 'id' },
-              { key: 'ownerId', name: 'owner_id' },
-            ],
-            dialect: 'postgres',
-            domain: 'document',
-            governedColumnKeys: ['id', 'ownerId'],
-            name: 'documents',
-            owner: { columnKey: 'ownerId', columnName: 'owner_id' },
-            secretColumnKeys: [],
-            secretDeclared: false,
-          },
-        ],
-      },
-    });
+        pages: [],
+        queries: [{ domains: ['document'], query: 'document/read' }],
+        tableSecurity,
+      });
 
-    expect(
-      facts.find((fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read'),
-    ).toMatchObject({
-      correspondence: {
-        decision: { checkedModels: 3, expectedModels: 3, status: 'proved' },
-        guard: { semantics: 'framework-derived-owner-column' },
-        status: 'proved',
-      },
-    });
+      expect(
+        facts.find(
+          (fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read',
+        ),
+      ).toMatchObject({
+        correspondence: {
+          decision: { checkedModels: 3, expectedModels: 3, status: 'proved' },
+          guard: { semantics: 'framework-derived-owner-column' },
+          status: 'proved',
+        },
+      });
+    } finally {
+      release();
+    }
   });
 });

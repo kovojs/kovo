@@ -1,4 +1,5 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   executableGuardAccessDecision,
   snapshotAccessDecision,
@@ -25,12 +26,15 @@ import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
   explainPostgresAuthorizationCorrespondence,
-  resolveFrameworkPostgresOwnerColumnBinding,
   type FrameworkPostgresOwnerPolicyAudit,
   type PostgresAuthorizationCorrespondenceExplainRecord,
   type PostgresOwnerPolicyModel,
   type PostgresAuthorizationPolicyExplainInput,
 } from './postgres-authorization-correspondence.js';
+import {
+  evaluateFrameworkPostgresOwnerGuard,
+  snapshotFrameworkPostgresOwnerGuardColumn,
+} from './postgres-owner-guard.js';
 import {
   inheritFrameworkPrincipalSnapshot,
   type NonRequestPrincipalPosture,
@@ -63,6 +67,7 @@ import {
   createWitnessWeakMap,
   createWitnessWeakSet,
   witnessDefineProperty,
+  witnessEncodeURIComponent,
   witnessFreeze,
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
@@ -233,19 +238,12 @@ export interface UnprovenOwnershipGuardAuditOptions extends OwnershipGuardAuditO
   justification: string;
 }
 
-declare const frameworkPostgresOwnerColumnBindingBrand: unique symbol;
-
 /**
- * An opaque package-owned binding between one validated resource key, its framework row lookup,
- * and the exact generated Postgres owner-column policy. Structural lookalikes and casts are
- * rejected by the framework's private registration map before a guard can be constructed.
+ * A Postgres column whose Drizzle data type is the resource key consumed by `guards.owns`.
+ * Runtime proof does not trust this structural type: Kovo authenticates the exact column identity
+ * against the compiler manifest and the managed request DB before executing its fixed lookup.
  */
-export interface FrameworkPostgresOwnerColumnBinding<Request, Key> {
-  readonly [frameworkPostgresOwnerColumnBindingBrand]: {
-    readonly key: Key;
-    readonly request: Request;
-  };
-}
+export type FrameworkPostgresOwnerKeyColumn<Key> = AnyPgColumn<{ data: Key }>;
 
 const guardAuditFacts = createWitnessWeakMap<Function, readonly GuardAuditFact[]>();
 
@@ -779,7 +777,7 @@ function createOwnershipGuard<
       ? {
           auth: 'session-user',
           kind: 'owns',
-          name: closedAudit.name,
+          name: frameworkDerivedOwnershipAuditName(proof.ownerPolicy),
           ownerPolicy: proof.ownerPolicy,
           principal: closedAudit.principal,
           ...(closedAudit.resourceKey === undefined
@@ -955,24 +953,25 @@ export const guards = witnessFreeze({
     );
   },
   /**
-   * Proof-bearing ownership guard (SPEC §10.3). The second argument must be an opaque binding
-   * minted by framework Postgres wiring from the same owner-policy term that emits RLS. A plain
-   * callback, structural lookalike, or cast is rejected at construction; intentionally arbitrary
-   * predicates belong on {@link unprovenOwns} and remain visibly unproven in authorization explain.
-   * `keyOf` still reads only framework-validated args or resolved params merged before guards run.
+   * Proof-bearing ownership guard (SPEC §10.3). The second argument is the exact single-column
+   * `kovo({ key })` identity from a compiler-generated direct-owner Postgres table. Kovo performs
+   * one fixed key/owner lookup through the same principal-scoped managed request DB that the
+   * handler receives. SQLite, ownerVia, composite/custom keys, and arbitrary callbacks belong on
+   * {@link unprovenOwns} and remain visibly unproven in authorization explain.
    */
   owns<Request extends SessionRequestLike, KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
-    binding: FrameworkPostgresOwnerColumnBinding<KeyedRequest, Key>,
+    keyColumn: FrameworkPostgresOwnerKeyColumn<Key>,
     audit?: OwnershipGuardAuditOptions,
   ): Guard<Request> {
-    const closedBinding = resolveFrameworkPostgresOwnerColumnBinding(binding);
+    const column = snapshotFrameworkPostgresOwnerGuardColumn(keyColumn);
     return createOwnershipGuard(
       keyOf,
-      closedBinding.evaluate,
+      (request, key, principal) =>
+        evaluateFrameworkPostgresOwnerGuard(request, key, column, principal),
       audit,
       {
-        ownerPolicy: closedBinding.ownerPolicy,
+        ownerPolicy: column.ownerPolicy,
         staticProof: 'framework-derived-owner-column',
       },
       'guards.owns()',
@@ -1037,7 +1036,8 @@ export function guardAuditName<Request>(guard: Guard<Request>): string {
   const facts = explainGuard(guard);
   let firstName: string | undefined;
   let namedName: string | undefined;
-  let hasDerivedOwner = false;
+  let derivedOwnerName: string | undefined;
+  let derivedOwnerCount = 0;
   let hasUnprovenOwner = false;
   for (let index = 0; index < facts.length; index += 1) {
     const descriptor = witnessGetOwnPropertyDescriptor(facts, index);
@@ -1047,7 +1047,10 @@ export function guardAuditName<Request>(guard: Guard<Request>): string {
     const fact = descriptor.value as GuardAuditFact;
     if (fact.kind === 'owns') {
       if (fact.staticProof === 'not-claimed') hasUnprovenOwner = true;
-      else hasDerivedOwner = true;
+      else {
+        derivedOwnerCount += 1;
+        derivedOwnerName ??= fact.name;
+      }
     }
     if (fact.kind === 'named' && namedName === undefined) namedName = fact.name;
     if (firstName === undefined) firstName = fact.name;
@@ -1055,10 +1058,29 @@ export function guardAuditName<Request>(guard: Guard<Request>): string {
   // Fail closed for serialized access names: app labels and named wrappers cannot make the
   // arbitrary escape look like the exact `owns` token consumed by ownership-posture derivation.
   if (hasUnprovenOwner) return 'unprovenOwns';
-  if (hasDerivedOwner) return 'owns';
-  if (namedName !== undefined) return namedName;
+  if (derivedOwnerCount === 1) return derivedOwnerName!;
+  if (derivedOwnerCount > 1) return 'opaque';
+  if (namedName !== undefined) {
+    return isReservedOwnershipAuditName(namedName) ? 'opaque' : namedName;
+  }
   if (firstName !== undefined) return firstName;
   return stableGuardFunctionAuditName(guard);
+}
+
+function frameworkDerivedOwnershipAuditName(policy: FrameworkPostgresOwnerPolicyAudit): string {
+  return snapshotAuditText(
+    `owns#${witnessEncodeURIComponent(policy.domain)}#${witnessEncodeURIComponent(policy.keyColumnName)}#${witnessEncodeURIComponent(policy.columnName)}`,
+    'framework-derived ownership audit name',
+  );
+}
+
+function isReservedOwnershipAuditName(name: string): boolean {
+  return (
+    name === 'owns' ||
+    securityStringStartsWith(name, 'owns#') ||
+    securityStringStartsWith(name, 'owns:') ||
+    securityStringStartsWith(name, 'owns(')
+  );
 }
 
 /** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */

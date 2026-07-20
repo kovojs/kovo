@@ -4179,6 +4179,13 @@ export interface RuntimeTableSecurityManifestColumn {
   name: string;
 }
 
+/** @internal Compiler-owned declared row-key fact for one physical Drizzle table. */
+export interface RuntimeTableSecurityManifestKey {
+  columnKey: string;
+  columnName: string;
+  uniqueness: 'none' | 'primary' | 'unique';
+}
+
 /** @internal Compiler-owned direct-owner fact for one physical Drizzle table. */
 export interface RuntimeTableSecurityManifestOwner {
   columnKey: string;
@@ -4213,6 +4220,7 @@ export interface RuntimeTableSecurityManifestTable {
   dialect: 'postgres' | 'sqlite';
   domain?: string;
   governedColumnKeys: readonly string[];
+  key?: RuntimeTableSecurityManifestKey;
   name: string;
   owner?: RuntimeTableSecurityManifestOwner;
   ownerVia?: RuntimeTableSecurityManifestOwnerVia;
@@ -4318,6 +4326,14 @@ function runtimeTableSecurityManifestFromProjectExtraction(
     );
     const governedColumnKeys = new Set<string>();
     const keyColumn = runtimeManifestColumnForRef(draft.columns, domainAnnotation?.key);
+    const key =
+      keyColumn === undefined
+        ? undefined
+        : {
+            columnKey: keyColumn.key,
+            columnName: keyColumn.name,
+            uniqueness: runtimeManifestDeclaredKeyUniqueness(draft.initializer, keyColumn.key),
+          };
     if (keyColumn !== undefined) governedColumnKeys.add(keyColumn.key);
     if (ownerColumn !== undefined) governedColumnKeys.add(ownerColumn.key);
     for (const column of draft.columns) {
@@ -4347,6 +4363,7 @@ function runtimeTableSecurityManifestFromProjectExtraction(
         ? {}
         : { domain: extractedDomainKey(domainAnnotation.domain) }),
       governedColumnKeys: [...governedColumnKeys].sort(compareRuntimeManifestStrings),
+      ...(key === undefined ? {} : { key }),
       name: draft.name,
       ...(owner === undefined ? {} : { owner }),
       ...(ownerVia === undefined ? {} : { ownerVia }),
@@ -4512,6 +4529,36 @@ function runtimeManifestColumns(initializer: CallExpression): RuntimeTableSecuri
   }
   columns.sort((left, right) => compareRuntimeManifestStrings(left.key, right.key));
   return columns;
+}
+
+/**
+ * Record only constraint syntax attached directly to the declared key column. Table-level Drizzle
+ * extra-config callbacks are executable app code and may be stateful, so they cannot become
+ * compiler authority for a proof-bearing ownership guard (SPEC §6.6 C9/C15, §10.3).
+ */
+function runtimeManifestDeclaredKeyUniqueness(
+  initializer: CallExpression,
+  columnKey: string,
+): RuntimeTableSecurityManifestKey['uniqueness'] {
+  const object = initializer.getArguments()[1];
+  if (!object || !Node.isObjectLiteralExpression(object)) return 'none';
+  for (const property of object.getProperties()) {
+    if (
+      !Node.isPropertyAssignment(property) ||
+      propertyNameText(property.getNameNode()) !== columnKey
+    ) {
+      continue;
+    }
+    const value = property.getInitializer();
+    if (value === undefined) return 'none';
+    const methods = columnBuilderChainMethods(
+      unwrappedTsExpression(value.compilerNode as ts.Expression),
+    );
+    if (methods.includes('primaryKey')) return 'primary';
+    if (methods.includes('unique')) return 'unique';
+    return 'none';
+  }
+  return 'none';
 }
 
 function runtimeManifestAnnotatedColumnKeys(
