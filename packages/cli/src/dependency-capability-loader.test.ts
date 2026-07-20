@@ -1193,6 +1193,88 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     },
   );
 
+  // @kovo-security-certifies C13 dependency-reviewed-module-suffix-symlink-closure
+  it('rejects a preserve-symlinks resource alias before Vite assigns its lexical suffix semantics', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-resource-symlink-')));
+    const appModulePath = join(root, 'client.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { start } from 'safe-parser'; start();\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.mjs' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        "import payloadUrl from './payload.svg'; export function start(){ const frame=document.createElement('iframe'); frame.src=payloadUrl; document.body.append(frame); }\n",
+      );
+      writeFileSync(
+        join(packageRoot, 'payload.js'),
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>parent.postMessage(\'SYMLINK_SUFFIX\',\'*\')</script></svg>\n',
+      );
+      symlinkSync('payload.js', join(packageRoot, 'payload.svg'));
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['client.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
+                rootKinds: ['route'],
+                sites: ['client.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            assetsInlineLimit: 0,
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.mjs', source }],
+              exactManifest,
+              'build-client',
+            ),
+          ],
+          resolve: { preserveSymlinks: true },
+          root,
+        }),
+      ).rejects.toThrow(
+        /KV448.*reviewed package safe-parser.*lexical module path.*payload\.svg.*closed module suffix/u,
+      );
+      expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-direct-export-module-suffix
   it('rejects a direct reviewed export whose target has non-module browser semantics', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-resource-export-')));
@@ -1974,6 +2056,64 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           root,
         }),
       ).rejects.toThrow(/KV448.*ambiguous runtime URL module target.*%2e%2e/u);
+      expect(() => readFileSync(join(outDir, 'assets', 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-artifact-empty-path-segment-identity
+  it('rejects repeated URL slashes before they can confuse chunk ownership', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-empty-segment-')));
+    const appModulePath = join(root, 'app.mjs');
+    const decoyModulePath = join(root, 'decoy.mjs');
+    const outDir = join(root, 'dist');
+    const appSource = "void import(/* @vite-ignore */ './/../target.mjs');\n";
+    const decoySource = "export const decoy = 'reviewed chunk';\n";
+    try {
+      mkdirSync(join(root, 'public', 'assets'), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(decoyModulePath, decoySource);
+      writeFileSync(
+        join(root, 'public', 'assets', 'target.mjs'),
+        "globalThis.__KOVO_EMPTY_SEGMENT_PUBLIC__ = 'EXECUTED';\n",
+      );
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: {
+              input: appModulePath,
+              output: { entryFileNames: 'assets/entry.mjs' },
+            },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            {
+              buildStart() {
+                this.emitFile({
+                  fileName: 'target.mjs',
+                  id: decoyModulePath,
+                  type: 'chunk',
+                });
+              },
+              name: 'emit-empty-segment-decoy-chunk',
+            },
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [
+                { fileName: 'app.mjs', source: appSource },
+                { fileName: 'decoy.mjs', source: decoySource },
+              ],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*ambiguous runtime URL module target.*\.\/\/\.\.\/target/u);
       expect(() => readFileSync(join(outDir, 'assets', 'entry.mjs'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
