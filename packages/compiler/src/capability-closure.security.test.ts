@@ -152,20 +152,42 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       })),
     });
     expect(generated.diagnostics).toEqual([]);
+    const generatedEntries = generated.dependencyManifest.dependencies.flatMap(
+      (dependency) => dependency.entries,
+    );
     expect(
-      generated.dependencyManifest.dependencies
-        .flatMap((dependency) => dependency.entries)
-        .find((entry) => entry.specifier === '@kovojs/server/internal/wire'),
+      generatedEntries.find((entry) => entry.specifier === '@kovojs/server/internal/wire'),
     ).toEqual(
       expect.objectContaining({
         importers: ['app.ts'],
         imports: expect.arrayContaining([
+          expect.objectContaining({
+            capabilities: ['crypto-acquisition'],
+            disposition: 'framework-door',
+            name: '<module>',
+          }),
           expect.objectContaining({
             disposition: 'authority-free',
             name: 'assignDerivedQueryKey',
           }),
         ]),
       }),
+    );
+    expect(
+      generatedEntries.find((entry) => entry.specifier === '@kovojs/server/internal/csrf'),
+    ).toEqual(
+      expect.objectContaining({
+        imports: expect.arrayContaining([
+          expect.objectContaining({
+            capabilities: ['crypto-acquisition'],
+            disposition: 'framework-door',
+            name: 'renderGeneratedMutationFormFields',
+          }),
+        ]),
+      }),
+    );
+    expect(generated.facts).toContainEqual(
+      expect.objectContaining({ capability: 'crypto-acquisition', kind: 'door' }),
     );
 
     const authored = [
@@ -672,7 +694,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       entries: [
         {
           conditions: ['browser', 'default', 'import'],
-          exports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+          exports: [
+            { capabilities: [], disposition: 'pure', name: '<module>' },
+            { capabilities: [], disposition: 'pure', name: 'parse' },
+          ],
           subpath: '.',
         },
       ],
@@ -739,7 +764,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       entries: [
         {
           conditions: packageFact.conditions,
-          exports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+          exports: [
+            { capabilities: [], disposition: 'pure', name: '<module>' },
+            { capabilities: [], disposition: 'pure', name: 'parse' },
+          ],
           subpath: '.',
         },
       ],
@@ -768,7 +796,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         {
           conditions: ['default', 'import'],
           importers: ['app.ts'],
-          imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+          imports: [
+            { capabilities: [], disposition: 'pure', name: '<module>' },
+            { capabilities: [], disposition: 'pure', name: 'parse' },
+          ],
           rootKinds: ['route'],
           sites: ['app.ts:3:33'],
           specifier: 'safe-parser',
@@ -978,6 +1009,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         {
           conditions: packageFact.conditions,
           exports: [
+            { capabilities: [], disposition: 'pure', name: '<module>' },
             { capabilities: ['network'], disposition: 'raw', name: 'connect' },
             { capabilities: ['filesystem'], disposition: 'framework-door', name: 'read' },
           ],
