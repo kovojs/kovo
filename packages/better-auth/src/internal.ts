@@ -170,6 +170,10 @@ export type {
   BetterAuthCredentialMutationInternalOptions,
   BetterAuthCredentialMutationOptions,
 } from './credential-options.js';
+export {
+  normalizeBetterAuthAccountOperation,
+  normalizeBetterAuthPasswordResetResponse,
+} from './response-observation.js';
 
 /** @internal Resolve the Kovo domain a Better Auth table is bridged into, or null when unbridged/exempt. */
 export function betterAuthTableDomain(

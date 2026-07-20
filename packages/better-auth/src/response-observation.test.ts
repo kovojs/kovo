@@ -7,7 +7,7 @@ vi.mock('./internal/runtime-lock.js', () => ({
 import {
   normalizeBetterAuthAccountOperation,
   normalizeBetterAuthPasswordResetResponse,
-} from './response-observation.js';
+} from './internal.js';
 
 describe('Better Auth account response normalization', () => {
   it.each([

@@ -12,39 +12,23 @@
       "warmupSamples": 8
     }
   ],
-  "surfaces": [
+  "futureDoors": [
     {
-      "class": "account-recovery",
       "id": "better-auth.request-password-reset",
+      "normalizer": "normalizeBetterAuthPasswordResetResponse",
+      "reachability": "structurally-unreachable",
       "source": "packages/better-auth/src/response-observation.ts",
-      "tuple": {
-        "body": "generic-accepted-equal-length",
-        "connection": "complete",
-        "cookiesAndTokens": "none",
-        "headers": ["cache-control", "content-type", "vary"],
-        "redirect": "equal",
-        "status": "equal",
-        "timingBudget": "nightly-v1",
-        "workFactor": "better-auth-recovery-handler-v1"
-      },
-      "worlds": ["account-present", "account-absent"]
+      "upstreamApi": "requestPasswordReset"
     },
     {
-      "class": "account-creation",
       "id": "better-auth.sign-up-email",
+      "normalizer": "normalizeBetterAuthAccountOperation",
+      "reachability": "structurally-unreachable",
       "source": "packages/better-auth/src/response-observation.ts",
-      "tuple": {
-        "body": "generic-accepted-equal-length",
-        "connection": "complete",
-        "cookiesAndTokens": "none",
-        "headers": ["cache-control", "content-type", "vary"],
-        "redirect": "equal",
-        "status": "equal",
-        "timingBudget": "nightly-v1",
-        "workFactor": "better-auth-signup-handler-v1"
-      },
-      "worlds": ["account-present", "account-absent"]
-    },
+      "upstreamApi": "signUpEmail"
+    }
+  ],
+  "surfaces": [
     {
       "class": "resource-concealment",
       "id": "server.storage-download",

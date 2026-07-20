@@ -5,11 +5,12 @@ import type { BetterAuthResponseLike } from './internal/contracts.js';
 import { betterAuthDrainResponseBody, betterAuthResponseStatus } from './internal/intrinsics.js';
 
 /**
- * Normalize a captured Better Auth account operation at Kovo's HTTP-handler door (SPEC §9.2).
+ * @internal Normalize a captured Better Auth account operation at Kovo's HTTP-handler door
+ * (SPEC §9.2).
  * Accepted and rejected upstream responses are fully consumed through the same work shape, then
  * replaced by the typed generic-accepted Kovo result. Upstream status/body/cookies never cross.
  *
- * @kovo-response-observation-candidate better-auth.sign-up-email
+ * @kovo-response-observation-future-door better-auth.sign-up-email
  */
 export async function normalizeBetterAuthAccountOperation<Status extends string>(
   response: BetterAuthResponseLike,
@@ -42,10 +43,11 @@ export async function normalizeBetterAuthAccountOperation<Status extends string>
 }
 
 /**
- * Password-reset specialization used at the same captured handler door. External mail delivery is
- * deliberately outside Kovo's HTTP-equivalence claim and must be measured by the deployer.
+ * @internal Password-reset specialization used at the same captured handler door. External mail
+ * delivery is deliberately outside Kovo's HTTP-equivalence claim and must be measured by the
+ * deployer.
  *
- * @kovo-response-observation-candidate better-auth.request-password-reset
+ * @kovo-response-observation-future-door better-auth.request-password-reset
  */
 export async function normalizeBetterAuthPasswordResetResponse(
   response: BetterAuthResponseLike,

@@ -8,12 +8,29 @@ import { collectSourceFiles } from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 export const responseObservationManifest = 'security/response-observation-surfaces.v1.json';
+export const responseObservationAuthLifecycle = 'packages/cli/src/auth-lifecycle-boundary.json';
+export const responseObservationBetterAuthInternal = 'packages/better-auth/src/internal.ts';
 export const responseObservationPackageManifest = 'package.json';
 export const responseObservationWorkflow = '.github/workflows/security-nightly.yml';
 export const responseObservationSourceRoots = ['packages/better-auth/src', 'packages/server/src'];
 
 const schema = 'kovo-response-observation/v1';
 const markerPattern = /@kovo-response-observation-candidate\s+([a-z0-9]+(?:[.-][a-z0-9]+)+)/gu;
+const futureDoorMarkerPattern =
+  /@kovo-response-observation-future-door\s+([a-z0-9]+(?:[.-][a-z0-9]+)+)/gu;
+const expectedBetterAuthDoors = new Map([
+  [
+    'better-auth.request-password-reset',
+    {
+      normalizer: 'normalizeBetterAuthPasswordResetResponse',
+      upstreamApi: 'requestPasswordReset',
+    },
+  ],
+  [
+    'better-auth.sign-up-email',
+    { normalizer: 'normalizeBetterAuthAccountOperation', upstreamApi: 'signUpEmail' },
+  ],
+]);
 const expectedPairs = new Map([
   ['account-creation', 'account-present:account-absent'],
   ['account-recovery', 'account-present:account-absent'],
@@ -33,6 +50,7 @@ export function checkResponseObservation(options = {}) {
   const manifest = options.manifest ?? JSON.parse(readText(responseObservationManifest));
   const findings = [];
   const candidates = collectCandidates(sourceFiles, readText, findings);
+  const futureDoorMarkers = collectFutureDoorMarkers(sourceFiles, readText, findings);
 
   if (!isRecord(manifest) || manifest.schema !== schema) {
     findings.push(`${responseObservationManifest}: expected schema ${schema}`);
@@ -40,6 +58,14 @@ export function checkResponseObservation(options = {}) {
   }
 
   const budgets = validateBudgets(manifest.timingBudgets, findings);
+  const remoteBetterAuthDoors = validateBetterAuthLifecycle(readText, findings);
+  const futureDoors = validateFutureDoors(
+    manifest.futureDoors,
+    futureDoorMarkers,
+    remoteBetterAuthDoors,
+    readText,
+    findings,
+  );
   const policies = validatePolicies(manifest.surfaces, budgets, findings);
   validateNightlyEnrollment(readText, findings);
 
@@ -58,8 +84,118 @@ export function checkResponseObservation(options = {}) {
       findings.push(`${responseObservationManifest}: policy ${id} has no production candidate`);
     }
   }
+  for (const id of remoteBetterAuthDoors) {
+    if (!candidates.has(id)) {
+      findings.push(`${id}: remotely reachable Better Auth lifecycle needs a candidate marker`);
+    }
+    if (!policies.has(id)) {
+      findings.push(`${id}: remotely reachable Better Auth lifecycle needs a surface policy`);
+    }
+  }
+  for (const [id] of expectedBetterAuthDoors) {
+    if (!remoteBetterAuthDoors.has(id) && candidates.has(id)) {
+      findings.push(
+        `${id}: candidate marker claims reachability absent from the lifecycle boundary`,
+      );
+    }
+    if (!remoteBetterAuthDoors.has(id) && !futureDoors.has(id)) {
+      findings.push(`${id}: unreachable lifecycle needs a closed future door`);
+    }
+  }
 
   return verdict(findings, candidates.size);
+}
+
+function validateBetterAuthLifecycle(readText, findings) {
+  const remote = new Set();
+  let lifecycle;
+  try {
+    lifecycle = JSON.parse(readText(responseObservationAuthLifecycle));
+  } catch {
+    findings.push(`${responseObservationAuthLifecycle}: must be valid JSON`);
+    return remote;
+  }
+  if (
+    !isRecord(lifecycle) ||
+    lifecycle.schema !== 'kovo-auth-lifecycle-boundary/v1' ||
+    !Array.isArray(lifecycle.kovoOwnedTransitions)
+  ) {
+    findings.push(`${responseObservationAuthLifecycle}: invalid lifecycle boundary`);
+    return remote;
+  }
+  if (
+    !Array.isArray(lifecycle.structurallyUnreachable) ||
+    !lifecycle.structurallyUnreachable.some(
+      (entry) => isRecord(entry) && entry.id === 'unsafe-method-provider-lifecycle',
+    )
+  ) {
+    findings.push(
+      `${responseObservationAuthLifecycle}: missing unsafe-method structural-unreachability proof`,
+    );
+  }
+  for (const [id, expected] of expectedBetterAuthDoors) {
+    if (
+      lifecycle.kovoOwnedTransitions.some(
+        (transition) =>
+          isRecord(transition) &&
+          transition.upstreamApi === expected.upstreamApi &&
+          transition.devOnly !== true,
+      )
+    ) {
+      remote.add(id);
+    }
+  }
+  return remote;
+}
+
+function validateFutureDoors(value, markers, remoteDoors, readText, findings) {
+  const doors = new Map();
+  if (!Array.isArray(value)) {
+    findings.push(`${responseObservationManifest}: futureDoors must be an array`);
+    return doors;
+  }
+  const internalSource = readText(responseObservationBetterAuthInternal);
+  for (const door of value) {
+    if (!isRecord(door) || typeof door.id !== 'string' || door.id === '') {
+      findings.push(`${responseObservationManifest}: future response door needs a stable id`);
+      continue;
+    }
+    if (doors.has(door.id)) findings.push(`duplicate future response door ${door.id}`);
+    doors.set(door.id, door);
+    const expected = expectedBetterAuthDoors.get(door.id);
+    if (
+      expected === undefined ||
+      door.normalizer !== expected.normalizer ||
+      door.upstreamApi !== expected.upstreamApi ||
+      door.reachability !== 'structurally-unreachable' ||
+      typeof door.source !== 'string' ||
+      markers.get(door.id) !== door.source
+    ) {
+      findings.push(`${door.id}: future response door contract is incomplete or drifted`);
+      continue;
+    }
+    const source = readText(door.source);
+    if (
+      !source.includes(`export async function ${door.normalizer}`) ||
+      !internalSource.includes(door.normalizer)
+    ) {
+      findings.push(
+        `${door.id}: future response normalizer is not shipped through the internal boundary`,
+      );
+    }
+    if (remoteDoors.has(door.id)) {
+      findings.push(`${door.id}: remotely reachable lifecycle cannot remain a future door`);
+    }
+  }
+  for (const [id, source] of markers) {
+    if (!doors.has(id)) findings.push(`${source}: future response door ${id} has no manifest row`);
+  }
+  for (const [id] of expectedBetterAuthDoors) {
+    if (!remoteDoors.has(id) && !doors.has(id)) {
+      findings.push(`${responseObservationManifest}: missing closed future door ${id}`);
+    }
+  }
+  return doors;
 }
 
 function validateNightlyEnrollment(readText, findings) {
@@ -98,6 +234,23 @@ function collectCandidates(sourceFiles, readText, findings) {
     }
   }
   return candidates;
+}
+
+function collectFutureDoorMarkers(sourceFiles, readText, findings) {
+  const doors = new Map();
+  for (const source of sourceFiles) {
+    const text = readText(source);
+    futureDoorMarkerPattern.lastIndex = 0;
+    for (const match of text.matchAll(futureDoorMarkerPattern)) {
+      const id = match[1];
+      if (doors.has(id)) {
+        findings.push(`${source}: duplicate response-observation future door ${id}`);
+      } else {
+        doors.set(id, source);
+      }
+    }
+  }
+  return doors;
 }
 
 function validateBudgets(value, findings) {
