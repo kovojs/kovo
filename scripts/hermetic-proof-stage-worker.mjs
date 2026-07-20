@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { createHash, createHmac } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 
 const [stage, ...args] = process.argv.slice(2);
 
@@ -12,33 +12,114 @@ if (stage === 'analyze') {
   const [subjectPath, outputPath, forbiddenKeyPath, forbiddenAppPath] = args;
   assertForbiddenRead(forbiddenKeyPath, 'signing material');
   assertForbiddenRead(forbiddenAppPath, 'app dependency closure');
-  const subject = readFileSync(subjectPath);
-  writeJson(outputPath, {
-    schema: 'kovo.hermetic-analysis/v1',
-    subjectSha256: sha256(subject),
-  });
+  const subject = readCertificateSubject(subjectPath);
+  const { analyzeKovoCertificate, validateCertificateLexicalAuthorityLedger } =
+    await import('./kovo-certificate.mjs');
+  const lexicalFindings = validateCertificateLexicalAuthorityLedger(subject.lexicalAuthority);
+  if (lexicalFindings.length > 0) {
+    throw new Error(
+      `Certificate lexical authority findings:\n  - ${lexicalFindings.join('\n  - ')}`,
+    );
+  }
+  writeJson(
+    outputPath,
+    analyzeKovoCertificate({
+      internalDoorPosture: subject.internalDoorPosture,
+      packageConfigs: subject.packageConfigs,
+      posture: subject.posture,
+      seedPackageNames: subject.seedPackageNames,
+      snapshot: subject.snapshot,
+    }),
+  );
 } else if (stage === 'generate') {
   const [analysisPath, outputPath, forbiddenKeyPath, forbiddenAppPath] = args;
   assertForbiddenRead(forbiddenKeyPath, 'signing material');
   assertForbiddenRead(forbiddenAppPath, 'app dependency closure');
+  const { generateKovoCertificateFromAnalysis, stableKovoCertificateJson } =
+    await import('./kovo-certificate-format.mjs');
   const analysis = JSON.parse(readFileSync(analysisPath, 'utf8'));
-  writeJson(outputPath, {
-    analysis,
-    schema: 'kovo.hermetic-unsigned-certificate/v1',
-  });
+  writeFileSync(
+    outputPath,
+    stableKovoCertificateJson(generateKovoCertificateFromAnalysis(analysis)),
+    'utf8',
+  );
 } else if (stage === 'sign') {
   const [unsignedPath, keyPath, outputPath, forbiddenRepoPath, forbiddenAppPath] = args;
   assertForbiddenRead(forbiddenRepoPath, 'framework/app repository');
   assertForbiddenRead(forbiddenAppPath, 'app dependency closure');
+  const { signKovoCertificate } = await import('./kovo-certificate-signature.mjs');
   const unsigned = readFileSync(unsignedPath);
-  const key = readFileSync(keyPath);
-  writeJson(outputPath, {
-    payloadSha256: sha256(unsigned),
-    schema: 'kovo.hermetic-signature/v1',
-    signature: createHmac('sha256', key).update(unsigned).digest('hex'),
-  });
+  const privateKey = readFileSync(keyPath);
+  const envelope = signKovoCertificate(unsigned, { privateKey });
+  writeJson(outputPath, envelope);
 } else {
   throw new Error(`Unknown hermetic proof stage: ${String(stage)}`);
+}
+
+function readCertificateSubject(filePath) {
+  const value = JSON.parse(readFileSync(filePath, 'utf8'));
+  if (!isPlainRecord(value) || value.schema !== 'kovo.hermetic-certificate-subject/v1') {
+    throw new Error('Hermetic certificate subject has an invalid schema.');
+  }
+  const expectedKeys = [
+    'internalDoorPosture',
+    'lexicalAuthority',
+    'packageConfigs',
+    'posture',
+    'schema',
+    'seedPackageNames',
+    'snapshot',
+  ];
+  if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error('Hermetic certificate subject has top-level schema drift.');
+  }
+  if (!Array.isArray(value.packageConfigs) || !Array.isArray(value.seedPackageNames)) {
+    throw new Error('Hermetic certificate subject package census is invalid.');
+  }
+  const subjectRoot = path.dirname(filePath);
+  const packageConfigs = value.packageConfigs.map((config, index) => {
+    if (
+      !isPlainRecord(config) ||
+      JSON.stringify(Object.keys(config).sort()) !==
+        JSON.stringify(['name', 'publishExports', 'rootDir']) ||
+      typeof config.name !== 'string' ||
+      !/^@kovojs\/[a-z0-9-]+$/u.test(config.name) ||
+      typeof config.rootDir !== 'string'
+    ) {
+      throw new Error(`Hermetic certificate subject packageConfigs[${index}] is invalid.`);
+    }
+    return {
+      name: config.name,
+      publishExports: config.publishExports,
+      rootDir: resolveSubjectPath(subjectRoot, config.rootDir),
+    };
+  });
+  if (
+    value.seedPackageNames.some(
+      (entry) => typeof entry !== 'string' || !/^@kovojs\/[a-z0-9-]+$/u.test(entry),
+    )
+  ) {
+    throw new Error('Hermetic certificate subject seed package census is invalid.');
+  }
+  return { ...value, packageConfigs };
+}
+
+function resolveSubjectPath(root, relativePath) {
+  if (
+    relativePath === '' ||
+    relativePath.includes('\\') ||
+    path.posix.isAbsolute(relativePath) ||
+    path.posix.normalize(relativePath) !== relativePath ||
+    relativePath === '..' ||
+    relativePath.startsWith('../')
+  ) {
+    throw new Error(`Hermetic certificate subject path is not canonical: ${relativePath}`);
+  }
+  const resolved = path.resolve(root, relativePath);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    throw new Error(`Hermetic certificate subject path escapes its root: ${relativePath}`);
+  }
+  return resolved;
 }
 
 async function assertNetworkDenied() {
@@ -89,10 +170,15 @@ function assertForbiddenRead(filePath, label) {
   if (readable) throw new Error(`Hermetic proof stage reached forbidden ${label}.`);
 }
 
-function sha256(value) {
-  return createHash('sha256').update(value).digest('hex');
+function isPlainRecord(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
 }
 
 function writeJson(filePath, value) {
-  writeFileSync(filePath, `${JSON.stringify(value)}\n`, 'utf8');
+  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }

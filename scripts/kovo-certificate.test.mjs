@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -6,11 +6,17 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  analyzeKovoCertificate,
   generateKovoCertificate,
+  generateKovoCertificateFromAnalysis,
   stableKovoCertificateJson,
   validateCertificateDoorPosture,
   validateCertificateLexicalAuthorityLedger,
 } from './kovo-certificate.mjs';
+import {
+  signKovoCertificate,
+  verifyKovoCertificateSignature,
+} from './kovo-certificate-signature.mjs';
 
 const roots = [];
 
@@ -19,6 +25,101 @@ afterEach(() => {
 });
 
 describe('kovo.certificate/v1 search-side generator', () => {
+  it('binds the production analyzer output to the production certificate generator', () => {
+    const fixture = createFixture({
+      '@kovojs/server': {
+        exports: { '.': './dist/index.mjs' },
+        files: {
+          'dist/index.mjs': "import 'node:fs'; export const app = true;",
+        },
+      },
+    });
+    const options = {
+      ...fixture,
+      internalDoorPosture: emptyInternalDoorPosture(),
+      posture: {
+        packages: [
+          {
+            packageName: '@kovojs/server',
+            postureGroups: [
+              {
+                capabilities: [],
+                disposition: 'authority-free',
+                id: 'server-root',
+                members: { '.': ['createApp'] },
+                rootKind: 'application',
+              },
+            ],
+          },
+        ],
+      },
+      seedPackageNames: ['@kovojs/server'],
+    };
+
+    const analysis = analyzeKovoCertificate(options);
+    expect(analysis.schema).toBe('kovo.certificate-analysis/v1');
+    expect(generateKovoCertificateFromAnalysis(analysis)).toEqual(generateKovoCertificate(options));
+
+    const widened = structuredClone(analysis);
+    widened.localCapabilities['@kovojs/server/dist/index.mjs'] = [
+      'filesystem',
+      'unknown-capability',
+    ];
+    expect(() => generateKovoCertificateFromAnalysis(widened)).toThrow(/analysis.*capability/iu);
+  });
+
+  it('preserves crypto import bindings through production analysis and generation', () => {
+    const fixture = createFixture({
+      '@kovojs/server': {
+        exports: { '.': './dist/index.mjs' },
+        files: {
+          'dist/acquire.mjs': "import * as crypto from 'node:crypto';",
+          'dist/digest.mjs': "import { createHash as hashBytes } from 'node:crypto';",
+          'dist/index.mjs': "import './acquire.mjs'; import './digest.mjs';",
+        },
+      },
+    });
+    const options = {
+      ...fixture,
+      internalDoorPosture: emptyInternalDoorPosture(),
+      posture: { packages: [] },
+      seedPackageNames: ['@kovojs/server'],
+    };
+
+    const analysis = analyzeKovoCertificate(options);
+    expect(analysis.localCapabilities).toMatchObject({
+      '@kovojs/server/dist/acquire.mjs': ['crypto-acquisition'],
+      '@kovojs/server/dist/digest.mjs': ['digest'],
+    });
+    expect(generateKovoCertificateFromAnalysis(analysis).cap).toEqual({
+      '@kovojs/server/dist/acquire.mjs': ['crypto-acquisition'],
+      '@kovojs/server/dist/digest.mjs': ['digest'],
+      '@kovojs/server/dist/index.mjs': ['crypto-acquisition', 'digest'],
+    });
+  });
+
+  it('signs the exact certificate bytes with the dependency-free Ed25519 signer', () => {
+    const certificate = Buffer.from('{"schema":"kovo.certificate/v1"}\n');
+    const privateKey = generateKeyPairSync('ed25519').privateKey.export({
+      format: 'der',
+      type: 'pkcs8',
+    });
+    const envelope = signKovoCertificate(certificate, { privateKey });
+
+    expect(envelope).toMatchObject({
+      algorithm: 'ed25519',
+      schema: 'kovo.certificate-signature/v1',
+    });
+    expect(verifyKovoCertificateSignature(certificate, envelope)).toBe(true);
+    expect(
+      verifyKovoCertificateSignature(
+        Buffer.from('{"schema":"kovo.certificate/v1","tampered":true}\n'),
+        envelope,
+      ),
+    ).toBe(false);
+    expect(() => signKovoCertificate(certificate)).toThrow(/caller-supplied PKCS8/iu);
+  });
+
   it('closes whole package trees, computes sha512 and a least post-fixpoint, and emits stable roots and doors', () => {
     const fixture = createFixture({
       '@kovojs/better-auth': {
@@ -79,7 +180,9 @@ describe('kovo.certificate/v1 search-side generator', () => {
     expect(stableKovoCertificateJson(first)).toBe(stableKovoCertificateJson(second));
     expect(first).toMatchObject({
       domain: [
+        'crypto-acquisition',
         'database-driver',
+        'digest',
         'dynamic-loader',
         'filesystem',
         'network',
@@ -101,7 +204,7 @@ describe('kovo.certificate/v1 search-side generator', () => {
       {
         module: '@kovojs/better-auth/dist/index.mjs',
         reason:
-          'imports external module "third-party-auth" outside the seven-kind lexical capability domain',
+          'imports external module "third-party-auth" outside the nine-kind lexical capability domain',
       },
     ]);
     expect(first.artifacts.map((entry) => entry.path)).toEqual([

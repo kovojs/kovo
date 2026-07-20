@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { classifyRawCapabilityModuleSpecifier } from '../packages/compiler/src/security/capability-closure-model.ts';
+import {
+  classifyRawCapabilityImport,
+  classifyRawCapabilityModuleSpecifier,
+} from '../packages/compiler/src/security/capability-closure-model.ts';
 import {
   certificateProbePackageConfigs,
   certificateProbePackageNames,
@@ -13,6 +16,17 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { normalizePackageExports, resolveExportTarget } from './package-exports.mjs';
 import { collectFiles } from './lib/source-files.mjs';
 import { repoRoot } from './public-packages.mjs';
+import {
+  generateKovoCertificateFromAnalysis,
+  kovoCertificateCapabilityDomain,
+  stableKovoCertificateJson,
+} from './kovo-certificate-format.mjs';
+
+export {
+  generateKovoCertificateFromAnalysis,
+  kovoCertificateCapabilityDomain,
+  stableKovoCertificateJson,
+};
 
 export const kovoCertificatePath = path.join(repoRoot, 'security', 'kovo-certificate-v1.json');
 export const kovoCertificateLexicalAuthorityPath = path.join(
@@ -29,16 +43,6 @@ export const kovoCertificateDoorPosturePath = path.join(
 const packSnapshotPath = path.join(repoRoot, 'scripts', 'pack-security.files.json');
 const posturePath = path.join(repoRoot, 'security', 'framework-public-runtime-export-posture.json');
 
-export const kovoCertificateCapabilityDomain = Object.freeze([
-  'database-driver',
-  'dynamic-loader',
-  'filesystem',
-  'network',
-  'process',
-  'vm',
-  'worker',
-]);
-
 const lexicalRoutes = Object.freeze([
   ['re-exported-bindings', 'modeled'],
   ['computed-dynamic-import', 'modeled'],
@@ -54,7 +58,7 @@ const lexicalRoutes = Object.freeze([
  * `@kovojs/verify` checker is not. Published module extraction stays in the TypeScript probe while
  * the checker re-parses bytes with its sole pinned parser dependency (Plan 3 §2.1).
  */
-export function generateKovoCertificate({
+export function analyzeKovoCertificate({
   internalDoorPosture = JSON.parse(readFileSync(kovoCertificateDoorPosturePath, 'utf8')),
   packageConfigs = certificateProbePackageConfigs(repoRoot),
   posture = JSON.parse(readFileSync(posturePath, 'utf8')),
@@ -106,27 +110,11 @@ export function generateKovoCertificate({
   const reachable = new Set(modules);
   const edges = report.resolvedEdges.sort(compareTuples);
   const localCapabilities = new Map(modules.map((module) => [module, new Set()]));
-  for (const [module, specifier] of report.externalImports) {
+  for (const { importedNames, module, specifier } of report.externalImportBindings) {
     if (!reachable.has(module)) continue;
-    const capability = classifyRawCapabilityModuleSpecifier(specifier);
+    const capability = classifyRawCapabilityImport(specifier, importedNames);
     if (capability !== undefined) localCapabilities.get(module).add(capability);
   }
-  const summaries = new Map(
-    modules.map((module) => [module, new Set(localCapabilities.get(module))]),
-  );
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [from, to] of edges) {
-      const importer = summaries.get(from);
-      for (const capability of summaries.get(to)) {
-        if (importer.has(capability)) continue;
-        importer.add(capability);
-        changed = true;
-      }
-    }
-  }
-
   const artifacts = modules.map((module) => {
     const config = configsByName.get(packageNameFromModule(module));
     if (config === undefined) throw new Error(`Certificate module has no package: ${module}`);
@@ -136,9 +124,6 @@ export function generateKovoCertificate({
       sha512: `sha512-${createHash('sha512').update(bytes).digest('base64')}`,
     };
   });
-  const cap = Object.fromEntries(
-    modules.map((module) => [module, sortCapabilities([...summaries.get(module)])]),
-  );
   const postureResult = postureFacts({
     configsByName,
     posture,
@@ -151,11 +136,12 @@ export function generateKovoCertificate({
     snapshot,
   });
   const roots = postureResult.roots;
-  const doors = summarizeReachableDoors({
-    doors: [...postureResult.doors, ...internalDoors],
-    edges,
-    roots,
-  });
+  const doors = [...postureResult.doors, ...internalDoors].sort((left, right) =>
+    compareStrings(
+      `${left.module}\0${left.escapeId}\0${left.site}`,
+      `${right.module}\0${right.escapeId}\0${right.site}`,
+    ),
+  );
   const opaqueByKey = new Map();
   for (const entry of report.opaqueModules.filter((entry) => reachable.has(entry.module))) {
     opaqueByKey.set(`${entry.module}\0${entry.reason}`, entry);
@@ -174,18 +160,19 @@ export function generateKovoCertificate({
 
   return {
     artifacts,
-    cap,
-    domain: [...kovoCertificateCapabilityDomain],
     doors,
     edges,
+    localCapabilities: Object.fromEntries(
+      modules.map((module) => [module, sortCapabilities([...localCapabilities.get(module)])]),
+    ),
     opaque,
     roots,
-    schema: 'kovo.certificate/v1',
+    schema: 'kovo.certificate-analysis/v1',
   };
 }
 
-export function stableKovoCertificateJson(certificate) {
-  return `${JSON.stringify(certificate, null, 2)}\n`;
+export function generateKovoCertificate(options = {}) {
+  return generateKovoCertificateFromAnalysis(analyzeKovoCertificate(options));
 }
 
 export function validateCertificateLexicalAuthorityLedger(input) {
@@ -425,50 +412,6 @@ function packedModuleForSource({ config, entry, snapshot }) {
   return matches[0];
 }
 
-/**
- * The checker receives already-summarized door sets just as it receives already-summarized `cap`.
- * Keep the exact originating module/site in the summary string so a root admission never invents
- * authority; search-side graph reachability is the only operation the tiny checker does not repeat.
- */
-function summarizeReachableDoors({ doors, edges, roots }) {
-  const byModule = new Map();
-  for (const [from, to] of edges) {
-    const targets = byModule.get(from) ?? [];
-    targets.push(to);
-    byModule.set(from, targets);
-  }
-  const summarized = new Map();
-  const append = (door) => {
-    summarized.set(`${door.module}\0${door.escapeId}\0${door.site}`, door);
-  };
-  for (const door of doors) append(door);
-
-  for (const root of roots) {
-    const reachable = new Set();
-    const queue = [root.module];
-    for (let index = 0; index < queue.length; index += 1) {
-      const module = queue[index];
-      if (reachable.has(module)) continue;
-      reachable.add(module);
-      for (const target of byModule.get(module) ?? []) queue.push(target);
-    }
-    for (const door of doors) {
-      if (!reachable.has(door.module) || door.module === root.module) continue;
-      append({
-        escapeId: door.escapeId,
-        module: root.module,
-        site: `certificate-door-summary:${door.module}:${door.site}`,
-      });
-    }
-  }
-  return [...summarized.values()].sort((left, right) =>
-    compareStrings(
-      `${left.module}\0${left.escapeId}\0${left.site}`,
-      `${right.module}\0${right.escapeId}\0${right.site}`,
-    ),
-  );
-}
-
 function exactPackageModules(snapshot, packageName) {
   const files = snapshot?.packages?.[packageName];
   if (!Array.isArray(files)) {
@@ -500,7 +443,7 @@ function sortCapabilities(values) {
 }
 
 function externalOpaqueReason(specifier) {
-  return `imports external module ${JSON.stringify(specifier)} outside the seven-kind lexical capability domain`;
+  return `imports external module ${JSON.stringify(specifier)} outside the nine-kind lexical capability domain`;
 }
 
 function validSha512(value) {

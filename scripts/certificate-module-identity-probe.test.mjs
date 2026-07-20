@@ -61,6 +61,13 @@ describe('published module identity kill gate', () => {
       ['@kovojs/server/dist/index.mjs', '@kovojs/server/dist/shared.mjs'],
     ]);
     expect(report.externalImports).toEqual([['@kovojs/server/dist/index.mjs', 'node:module']]);
+    expect(report.externalImportBindings).toEqual([
+      {
+        importedNames: ['createRequire'],
+        module: '@kovojs/server/dist/index.mjs',
+        specifier: 'node:module',
+      },
+    ]);
     expect(report.opaqueModules).toEqual([
       {
         module: '@kovojs/server/dist/index.mjs',
@@ -213,6 +220,33 @@ describe('published module identity kill gate', () => {
       '@kovojs/server/dist/default.mjs',
       '@kovojs/server/dist/dynamic.mjs',
       '@kovojs/server/dist/index.mjs',
+    ]);
+  });
+
+  it('preserves exact crypto import bindings for capability classification', () => {
+    const fixture = createFixture({
+      '@kovojs/better-auth': emptyPackage(),
+      '@kovojs/server': {
+        exports: { '.': './dist/index.mjs' },
+        files: {
+          'dist/acquire.mjs': "import * as crypto from 'node:crypto';",
+          'dist/digest.mjs': "import { createHash as hashBytes } from 'node:crypto';",
+          'dist/index.mjs': 'export {};',
+        },
+      },
+    });
+
+    expect(probePublishedModuleIdentity(fixture).externalImportBindings).toEqual([
+      {
+        importedNames: ['*'],
+        module: '@kovojs/server/dist/acquire.mjs',
+        specifier: 'node:crypto',
+      },
+      {
+        importedNames: ['createHash'],
+        module: '@kovojs/server/dist/digest.mjs',
+        specifier: 'node:crypto',
+      },
     ]);
   });
 

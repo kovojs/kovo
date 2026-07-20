@@ -1,7 +1,22 @@
 {
   "$comment": "Reviewed isolation contract for proof analysis, unsigned certificate generation, and signing. SPEC.md §6.6; plans/10x-better-security-3.md §0.6.",
   "schema": "kovo.hermetic-proof-stage/v1",
-  "toolingBinding": "sandbox-self-test-unbound",
+  "toolingBinding": "kovo-certificate-v1-signed",
+  "tooling": {
+    "analysis": {
+      "implementation": "scripts/kovo-certificate.mjs#analyzeKovoCertificate",
+      "sourceTreeSha256": "b867b88e7a678fd78ce8dc270ab56642a986c351b65b8346970943e6db9e3ce2"
+    },
+    "certificateGeneration": {
+      "implementation": "scripts/kovo-certificate-format.mjs#generateKovoCertificateFromAnalysis",
+      "sourceTreeSha256": "9c5dadb88ba2665b194dd504a963e83b4c3d9bec5a75b7e1b12b0faec29513f2"
+    },
+    "orchestratorSha256": "94fb9693dfbe079dd979b886f49f7ba14d910d84d1537ea9bcbebfad697ffb13",
+    "signing": {
+      "implementation": "scripts/kovo-certificate-signature.mjs#signKovoCertificate",
+      "sourceTreeSha256": "a8fdeb1e07dfbb798eac619ae55831dbc5b128883efeb8633a370f9f1a1c754a"
+    }
+  },
   "linuxRunner": {
     "image": "docker.io/library/node@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6",
     "network": "none",
@@ -12,23 +27,30 @@
     {
       "childProcess": "denied",
       "name": "analysis",
-      "reads": ["sealed framework analyzer", "inert subject snapshot"],
+      "reads": [
+        "sealed production certificate analyzer",
+        "inert published-artifact subject snapshot"
+      ],
       "secrets": [],
-      "writes": ["analysis output"]
+      "writes": ["certificate analysis record"]
     },
     {
       "childProcess": "denied",
       "name": "certificate-generation",
-      "reads": ["sealed certificate generator", "analysis output"],
+      "reads": ["sealed production certificate generator", "certificate analysis record"],
       "secrets": [],
-      "writes": ["unsigned certificate"]
+      "writes": ["unsigned kovo.certificate/v1"]
     },
     {
       "childProcess": "denied",
       "name": "signing",
-      "reads": ["sealed dependency-free signer", "unsigned certificate", "signing key"],
+      "reads": [
+        "sealed dependency-free Ed25519 certificate signer",
+        "unsigned kovo.certificate/v1",
+        "signing key"
+      ],
       "secrets": ["signing key"],
-      "writes": ["detached signature"]
+      "writes": ["detached kovo.certificate-signature/v1"]
     }
   ]
 }

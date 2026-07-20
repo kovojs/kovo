@@ -58,6 +58,7 @@ export function probePublishedModuleIdentity({
 
   const resolvedEdges = new Map();
   const externalImports = new Map();
+  const externalImportBindings = new Map();
   const opaqueModules = new Map();
 
   for (const packageEntry of packages) {
@@ -97,6 +98,15 @@ export function probePublishedModuleIdentity({
         } else {
           const external = [module, imported.text];
           externalImports.set(external.join('\0'), external);
+          const binding = {
+            importedNames: imported.importedNames,
+            module,
+            specifier: imported.text,
+          };
+          externalImportBindings.set(
+            `${module}\0${imported.text}\0${imported.importedNames.join('\0')}`,
+            binding,
+          );
         }
       }
     }
@@ -106,6 +116,12 @@ export function probePublishedModuleIdentity({
 
   const edges = [...resolvedEdges.values()].sort(compareTuples);
   const externals = [...externalImports.values()].sort(compareTuples);
+  const externalBindings = [...externalImportBindings.values()].sort(
+    (left, right) =>
+      compareStrings(left.module, right.module) ||
+      compareStrings(left.specifier, right.specifier) ||
+      compareStrings(left.importedNames.join('\0'), right.importedNames.join('\0')),
+  );
   const opaque = [...opaqueModules.values()].sort(
     (left, right) =>
       compareStrings(left.module, right.module) || compareStrings(left.reason, right.reason),
@@ -136,6 +152,7 @@ export function probePublishedModuleIdentity({
     packages: packageSummaries,
     resolvedEdges: edges,
     externalImports: externals,
+    externalImportBindings: externalBindings,
     opaqueModules: opaque,
   };
 }
@@ -269,7 +286,7 @@ function parsePublishedModule(module, source, findings, { allowOpaqueComputedImp
   const specifiers = [];
   let importsModuleLoader = false;
   const opaqueReasons = [];
-  const addSpecifier = (node, kind) => {
+  const addSpecifier = (node, kind, importedNames) => {
     if (!node || !ts.isStringLiteralLike(node)) return false;
     const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
     specifiers.push({
@@ -277,17 +294,18 @@ function parsePublishedModule(module, source, findings, { allowOpaqueComputedImp
       kind,
       line: start.line + 1,
       text: node.text,
+      importedNames: [...new Set(importedNames)].sort(compareStrings),
     });
     importsModuleLoader ||= node.text === 'node:module' || node.text === 'module';
     return true;
   };
   const visit = (node) => {
     if (ts.isImportDeclaration(node)) {
-      addSpecifier(node.moduleSpecifier, 'import');
+      addSpecifier(node.moduleSpecifier, 'import', importDeclarationNames(node));
     } else if (ts.isExportDeclaration(node)) {
-      addSpecifier(node.moduleSpecifier, 'export');
+      addSpecifier(node.moduleSpecifier, 'export', exportDeclarationNames(node));
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      if (!addSpecifier(node.arguments[0], 'dynamic-import')) {
+      if (!addSpecifier(node.arguments[0], 'dynamic-import', ['*'])) {
         const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
         if (allowOpaqueComputedImports) {
           opaqueReasons.push(
@@ -313,6 +331,23 @@ function parsePublishedModule(module, source, findings, { allowOpaqueComputedImp
   };
   visit(sourceFile);
   return { importsModuleLoader, opaqueReasons, specifiers };
+}
+
+function importDeclarationNames(node) {
+  const clause = node.importClause;
+  if (clause === undefined) return [];
+  const names = clause.name === undefined ? [] : ['default'];
+  if (clause.namedBindings === undefined) return names;
+  if (ts.isNamespaceImport(clause.namedBindings)) return [...names, '*'];
+  return [
+    ...names,
+    ...clause.namedBindings.elements.map((element) => (element.propertyName ?? element.name).text),
+  ];
+}
+
+function exportDeclarationNames(node) {
+  if (node.exportClause === undefined || ts.isNamespaceExport(node.exportClause)) return ['*'];
+  return node.exportClause.elements.map((element) => (element.propertyName ?? element.name).text);
 }
 
 function resolvePublishedSpecifier({ from, imported, packageEntry, packagesByName }) {

@@ -149,12 +149,12 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     }
   });
 
-  it('requires an exact opaque row for every external import outside the seven-kind domain', async () => {
+  it('requires an exact opaque row for every external import outside the nine-kind domain', async () => {
     const artifacts = artifactSource({
       [rootModule]: "import 'third-party-parser'; export const root = true;",
     });
     const reason =
-      'imports external module "third-party-parser" outside the seven-kind lexical capability domain';
+      'imports external module "third-party-parser" outside the nine-kind lexical capability domain';
     expect((await verifyCertificate(certificateFor(artifacts), artifacts)).findings).toEqual([
       expect.objectContaining({ code: 'opaque-missing', obligation: 'coverage' }),
     ]);
@@ -193,6 +193,54 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       });
       const result = await verifyCertificate(certificate, artifacts);
       expect(result.findings, specifier).toEqual([
+        expect.objectContaining({
+          code: 'local-capability-missing',
+          message: expect.stringContaining(capability),
+          obligation: 'stability',
+        }),
+      ]);
+    }
+  });
+
+  it('retains digest-only crypto imports and conservatively closes every broader acquisition', async () => {
+    expect(KOVO_CERTIFICATE_CAPABILITY_DOMAIN).toEqual([
+      'crypto-acquisition',
+      'database-driver',
+      'digest',
+      'dynamic-loader',
+      'filesystem',
+      'network',
+      'process',
+      'vm',
+      'worker',
+    ]);
+    const specimens = [
+      {
+        capability: 'digest',
+        source: "import { createHash as hashBytes } from 'node:crypto';",
+      },
+      {
+        capability: 'digest',
+        source: "import { hash } from 'crypto';",
+      },
+      {
+        capability: 'crypto-acquisition',
+        source: "import * as crypto from 'node:crypto';",
+      },
+      {
+        capability: 'crypto-acquisition',
+        source: "import { createHash, randomBytes } from 'node:crypto';",
+      },
+      {
+        capability: 'crypto-acquisition',
+        source: "import argon2 from '@node-rs/argon2';",
+      },
+    ] as const;
+
+    for (const { capability, source } of specimens) {
+      const artifacts = artifactSource({ [rootModule]: source });
+      const result = await verifyCertificate(certificateFor(artifacts), artifacts);
+      expect(result.findings, source).toEqual([
         expect.objectContaining({
           code: 'local-capability-missing',
           message: expect.stringContaining(capability),

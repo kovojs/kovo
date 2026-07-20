@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.7",
-  "runtimeSurfaceSha256": "83890e0f382c12c47f907ad7c3f40151b49a11ac8dc729b0300aad0665f30222",
-  "postureMemberSha256": "7293da5b6aafb000f489a5776f56dab3c4cda0c4d2fc1d83b475370cc368c42f",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.8",
+  "runtimeSurfaceSha256": "ff1146ea1fb0fee80a631467be02e7a6eeef69e5e8cb10a3b7df7bdfc80f4e1d",
+  "postureMemberSha256": "0616cb9faf32b6a119bafbe73bdf0017c0c5aa8fbd372c0cfa776808ab3ea6a8",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "b6ec55c2e2bfd0f7312e3d55fb35e3fc977f8cac105c7c2581f86e23beb7710e",
+      "sourceTreeSha256": "e81de8bcebd87cf157c2c719b7b59ec1d2678f1d6b7a1f60fafbd9eadde55184",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "279fb9bf862e1956506b54eebec47c007e6d75518af7cfe24602b504e20c03fe",
+      "sourceTreeSha256": "cca31828cf884523cec8da7ef8bbd1db88980f6452bba783debc0001c2efadce",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -478,7 +478,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "25ed467c4429435b1feae0187f8e77f7b4ba04c9b9d7eeb059c8ce780eff1a76"
+      "sourceTreeSha256": "f12949c510c95c5f8f2efc409eb54e0fbc9cb83710bcd3c2da38882b9f84145a"
     },
     {
       "manifestVariants": [
@@ -762,7 +762,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "52b75750eb100c019530ab916da080f1e043becb3e936584509f83ee3f9921dd"
+      "sourceTreeSha256": "4fc1c50a198256cd55650193fa46c7797987ca67edf9cb9039d10777fa0173b5"
     },
     {
       "manifestVariants": [
@@ -777,14 +777,14 @@
               "default": "./dist/index.mjs"
             }
           },
-          "fingerprint": "sha256:4e627696ab48baaaded62f94c87b188879f3482ae14d1d8df40ee5af4c38aa90"
+          "fingerprint": "sha256:2f6be87a0d9d861df2342b86e0bfa0406e3d129f632fc09a32ad822e86f40e0f"
         },
         {
           "exports": {
             ".": "./src/api.ts",
             "./internal": "./src/index.ts"
           },
-          "fingerprint": "sha256:de936640e937e5bcbc0749482e835ea7ad190de5fca5cfa8db39aa99ca7fe574"
+          "fingerprint": "sha256:a499679d6b57716824c70ad6956d834e04fd75204e0b37e5f6b142f4d1724b55"
         }
       ],
       "packageName": "@kovojs/cli",
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "ed71843a928355945babd9bbcdb43f3f06c961293bc89c6cb8b395ef84a70c8a"
+      "sourceTreeSha256": "a3efd4c9dfde2b807ce34eac6b43575c49d7aa7adb7cee3e1070642e0b166c47"
     },
     {
       "manifestVariants": [
@@ -1718,7 +1718,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "3c86766de9f75386535585d268022bb7d1e45d3dc76b530956edcaf4ece520d5"
+      "sourceTreeSha256": "207e6d83bba3c850cbc4dbf39df64b99edf5d67f8fd2e2f6620bca3636ae0e6e"
     },
     {
       "manifestVariants": [
@@ -1986,7 +1986,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "713fd44ecec7226b8a0383019a037edbbec49d921d1b3021cd763cfd0d4a9b0a"
+      "sourceTreeSha256": "dd48e82c5a848e52677127e86f544403e8a4ffa68d97ffd85ea8f1379baf93d5"
     },
     {
       "manifestVariants": [
@@ -6261,6 +6261,78 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
+          "id": "authority-free-root-factory-agent-tool-callback-agent-tool-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "runtime-infra"
+          },
+          "members": {
+            ".": ["tool"]
+          },
+          "review": {
+            "basis": "tool declares the exact mutation-backed callback root whose compiler-derived terminal operation closure is checked before agent execution.",
+            "evidence": [
+              "packages/compiler/src/agent-tool-security.test.ts",
+              "packages/server/src/agent.ts",
+              "packages/server/src/agent.security.test.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-19"
+          },
+          "rootKind": "agent-tool-callback",
+          "securityRole": "root-factory"
+        },
+        {
+          "capabilities": [],
+          "disposition": "authority-free",
+          "id": "authority-free-security-control-agent-mediation-and-principal-epoch-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "runtime-infra"
+          },
+          "members": {
+            ".": [
+              "PrincipalEpochStaleError",
+              "PrincipalEpochUnavailableError",
+              "advancePrincipalEpoch",
+              "agent",
+              "agentContent",
+              "createAgentSession",
+              "createDelegationAuthority",
+              "createMemoryPrincipalEpochStore",
+              "initializePrincipalEpoch",
+              "onBehalfOf",
+              "runAgentTurn",
+              "tombstonePrincipalEpoch"
+            ]
+          },
+          "review": {
+            "basis": "These constructors and transitions mediate agent integrity, delegation attenuation, and principal epoch freshness without capturing a raw platform capability; execution authority remains in separately classified framework doors and compiler-proved callback roots.",
+            "evidence": [
+              "packages/server/src/agent.ts",
+              "packages/server/src/agent.security.test.ts",
+              "packages/server/src/delegation.ts",
+              "packages/server/src/delegation.test.ts",
+              "packages/server/src/principal-epoch.ts",
+              "packages/server/src/principal-epoch.test.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-19"
+          },
+          "rootKind": "none",
+          "securityRole": "security-control"
+        },
+        {
+          "capabilities": [],
+          "disposition": "authority-free",
           "id": "authority-free-capability-escape-runtime-infra-1c1bb6dd9c",
           "matrix": {
             "cells": {
@@ -9677,7 +9749,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "3de35b327d33fd0516ac2637226cbcf1fb618cf146ecda639add5d2a1826f643"
+      "sourceTreeSha256": "4589849544bdf3c83c11eef9aca1392a3c8c3f82d02134d823dfd763f159a452"
     },
     {
       "manifestVariants": [
@@ -10612,8 +10684,8 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "140b9519855eec9c62d26612ea2aefbcf329d82ac5da834ff1a39320b35fe46b"
+      "sourceTreeSha256": "67a607e26a214e6588f45da2acd7f359981b0601e8649a8d62bed7cc4a0c136a"
     }
   ],
-  "classificationSha256": "a9274e45a042397be14404fc037d53d661e83e04052953f7cce78841db59708b"
+  "classificationSha256": "cd414a2c333d3e9ab35ee0127bfc40992b1ea1682edd996054309f61f3468deb"
 }

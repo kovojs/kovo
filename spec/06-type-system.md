@@ -392,6 +392,12 @@ remaining production direct acquisition by exact path, class, and operation. Tha
 path set MUST be a non-increasing ratchet: adding or widening a row requires an explicit reviewed
 architecture change, while deleting or narrowing one requires no compatibility mode.
 
+`kovo.certificate/v1` MUST carry the exact same nine-member raw-capability domain:
+`crypto-acquisition`, `database-driver`, `digest`, `dynamic-loader`, `filesystem`, `network`,
+`process`, `vm`, and `worker`. Its search-side analyzer and disjoint checker MUST preserve the
+binding-sensitive distinction between an exact reviewed digest import and broader crypto acquisition;
+neither kind may be downgraded to an opaque external import or omitted from post-fixpoint closure.
+
 The server runtime has one primitive-owning crypto authority. It captures its Node crypto and byte
 controls during the bootstrap-before-app boundary and runs known-answer checks for RFC 5869
 HKDF-SHA256, HMAC-SHA256, fixed-width equality, and AES-256-GCM before serving. It MUST NOT expose a
@@ -474,14 +480,21 @@ version, security-relevant manifest fingerprint, requested subpath, imported exp
 conditional-export arm set. Every manifest-public Kovo runtime export and every public subpath's
 `<module>` initializer MUST appear exactly once in the compiler-owned, versioned framework export
 posture ledger with an explicit raw-authority disposition, root kind or `none`, security role,
-implementation digest, manifest-target/condition fingerprint, and threat-matrix posture. A new,
-missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
-door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
-subpath membership only through one compiler-owned exact table that classifies the initializer and
-every admitted member separately; that table is consulted only after the installed first-party
-manifest fingerprint and implementation digest match. A vocabulary match alone cannot mint an
-authority-free verdict. Explicitly reviewed framework companions use the same compiler-owned,
-version-pinned verdict model. Other packages use the committed
+implementation binding, manifest-target/condition fingerprint, and threat-matrix posture. A
+posture that can produce an authority-free or framework-door verdict MUST bind the exact installed
+implementation digest. A package whose complete public runtime surface is explicitly
+`request-closed` MAY instead use the `unconditional-request-closure` binding: the compiler rejects
+that package by exact package name before version, manifest, or implementation identity can
+influence a request-root verdict. Such a binding is invalid if any public initializer or export is
+missing or has a disposition other than `request-closed`; widening the package therefore restores
+ the exact-implementation requirement rather than inheriting an identity-free allow path. A new,
+ missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
+ door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
+ subpath membership only through one compiler-owned exact table that classifies the initializer and
+ every admitted member separately; that table is consulted only after the installed first-party
+ manifest fingerprint and implementation digest match. A vocabulary match alone cannot mint an
+ authority-free verdict. Explicitly reviewed framework companions use the same compiler-owned,
+ version-pinned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
 `<module>` entry. Every package import, including a named, default, or namespace import, evaluates

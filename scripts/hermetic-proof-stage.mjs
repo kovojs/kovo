@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-import { createHmac, randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import {
   chmodSync,
   copyFileSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,43 +13,72 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+
+import { verifyKovoCertificateSignature } from './kovo-certificate-signature.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(repoRoot, 'security/hermetic-proof-stage.json');
-const workerSourcePath = path.join(repoRoot, 'scripts/hermetic-proof-stage-worker.mjs');
+const certificatePath = path.join(repoRoot, 'security/kovo-certificate-v1.json');
 const workflowPath = path.join(repoRoot, '.github/workflows/ci.yml');
 const packagePath = path.join(repoRoot, 'package.json');
+const publicPackagesPath = path.join(repoRoot, 'public-packages.json');
+const snapshotPath = path.join(repoRoot, 'scripts/pack-security.files.json');
+const posturePath = path.join(repoRoot, 'security/framework-public-runtime-export-posture.json');
+const doorPosturePath = path.join(repoRoot, 'security/certificate-door-posture.json');
+const lexicalAuthorityPath = path.join(repoRoot, 'security/certificate-lexical-authority.json');
 const linuxDockerPath = '/usr/bin/docker';
 const macSandboxExecPath = '/usr/bin/sandbox-exec';
 const linuxNodeImage =
   'docker.io/library/node@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6';
 
+const workerPath = 'scripts/hermetic-proof-stage-worker.mjs';
+const analysisToolFiles = Object.freeze([
+  workerPath,
+  'packages/compiler/src/security/capability-closure-model.ts',
+  'packages/icons/scripts/icon-plan.mjs',
+  'scripts/certificate-module-identity-probe.mjs',
+  'scripts/kovo-certificate-format.mjs',
+  'scripts/kovo-certificate.mjs',
+  'scripts/lib/cli-entry.mjs',
+  'scripts/lib/repo-root.mjs',
+  'scripts/lib/source-files.mjs',
+  'scripts/package-exports.mjs',
+  'scripts/public-packages.mjs',
+]);
+const generationToolFiles = Object.freeze([workerPath, 'scripts/kovo-certificate-format.mjs']);
+const signingToolFiles = Object.freeze([workerPath, 'scripts/kovo-certificate-signature.mjs']);
+const typescriptRuntimeFiles = Object.freeze(['package.json', 'lib/typescript.js']);
+
 const expectedStageContracts = {
   analysis: {
     childProcess: 'denied',
     name: 'analysis',
-    reads: ['sealed framework analyzer', 'inert subject snapshot'],
+    reads: ['sealed production certificate analyzer', 'inert published-artifact subject snapshot'],
     secrets: [],
-    writes: ['analysis output'],
+    writes: ['certificate analysis record'],
   },
   'certificate-generation': {
     childProcess: 'denied',
     name: 'certificate-generation',
-    reads: ['sealed certificate generator', 'analysis output'],
+    reads: ['sealed production certificate generator', 'certificate analysis record'],
     secrets: [],
-    writes: ['unsigned certificate'],
+    writes: ['unsigned kovo.certificate/v1'],
   },
   signing: {
     childProcess: 'denied',
     name: 'signing',
-    reads: ['sealed dependency-free signer', 'unsigned certificate', 'signing key'],
+    reads: [
+      'sealed dependency-free Ed25519 certificate signer',
+      'unsigned kovo.certificate/v1',
+      'signing key',
+    ],
     secrets: ['signing key'],
-    writes: ['detached signature'],
+    writes: ['detached kovo.certificate-signature/v1'],
   },
 };
 
@@ -55,13 +86,43 @@ export function readHermeticProofManifest() {
   return JSON.parse(readFileSync(manifestPath, 'utf8'));
 }
 
+export function hermeticProofToolingDigests() {
+  return {
+    analysis: sourceTreeSha256(analysisToolFiles, { includeTypeScript: true }),
+    certificateGeneration: sourceTreeSha256(generationToolFiles),
+    orchestrator: sha256(readFileSync(fileURLToPath(import.meta.url))),
+    signing: sourceTreeSha256(signingToolFiles),
+  };
+}
+
 export function validateHermeticProofContract({ manifest, packageJson, workflow }) {
   const findings = [];
   if (manifest?.schema !== 'kovo.hermetic-proof-stage/v1') {
     findings.push('hermetic proof manifest schema must be kovo.hermetic-proof-stage/v1');
   }
-  if (manifest?.toolingBinding !== 'sandbox-self-test-unbound') {
-    findings.push('hermetic proof tooling binding must honestly remain sandbox-self-test-unbound');
+  if (manifest?.toolingBinding !== 'kovo-certificate-v1-signed') {
+    findings.push(
+      'hermetic proof tooling must be bound to kovo.certificate/v1 analysis, generation, and signing',
+    );
+  }
+  const digests = hermeticProofToolingDigests();
+  const expectedTooling = {
+    analysis: {
+      implementation: 'scripts/kovo-certificate.mjs#analyzeKovoCertificate',
+      sourceTreeSha256: digests.analysis,
+    },
+    certificateGeneration: {
+      implementation: 'scripts/kovo-certificate-format.mjs#generateKovoCertificateFromAnalysis',
+      sourceTreeSha256: digests.certificateGeneration,
+    },
+    orchestratorSha256: digests.orchestrator,
+    signing: {
+      implementation: 'scripts/kovo-certificate-signature.mjs#signKovoCertificate',
+      sourceTreeSha256: digests.signing,
+    },
+  };
+  if (canonicalJson(manifest?.tooling) !== canonicalJson(expectedTooling)) {
+    findings.push('hermetic proof tooling identities differ from the exact sealed source closures');
   }
   const image = manifest?.linuxRunner?.image;
   if (image !== linuxNodeImage) {
@@ -94,15 +155,34 @@ export function validateHermeticProofContract({ manifest, packageJson, workflow 
     findings.push('package.json must expose the exact check:hermetic-proof-stage command');
   }
   if (
-    !workflow.includes('name: Hermetic proof sandbox self-test') ||
+    !workflow.includes('name: Hermetic certificate proof stage') ||
     !workflow.includes(String(image))
   ) {
     findings.push(
-      'CI must run the hermetic proof sandbox self-test with the reviewed pinned image',
+      'CI must run the hermetic certificate proof stage with the reviewed pinned image',
     );
+  }
+  if (!workflow.includes('vp install --frozen-lockfile --ignore-scripts')) {
+    findings.push('CI must install the proof toolchain without lifecycle scripts');
+  }
+  if (
+    !workflow.includes('name: kovo-package-dist') ||
+    !workflow.includes('kovo-package-dist.tgz')
+  ) {
+    findings.push('CI must supply the published dist subject as an inert cross-job artifact');
+  }
+  if (
+    !/hermetic-proof:[\s\S]{0,500}?needs:\s*(?:publish-readiness|\n\s*-\s*publish-readiness)/u.test(
+      workflow,
+    )
+  ) {
+    findings.push('CI hermetic proof job must depend on the separately built publish artifact');
   }
   if (!workflow.includes('vp exec node scripts/hermetic-proof-stage.mjs')) {
     findings.push('CI hermetic proof job must invoke the fixed Node entrypoint directly');
+  }
+  if (!workflow.includes('- hermetic-proof')) {
+    findings.push('CI aggregate check must require the hermetic proof job');
   }
   return findings;
 }
@@ -144,7 +224,7 @@ async function main() {
     }
     verifyOutputs(paths);
     process.stdout.write(
-      'hermetic-proof-stage/v1 sandbox-self-test=closed proof-tooling=UNBOUND OK\n',
+      'hermetic-proof-stage/v1 sandbox=closed proof-tooling=kovo-certificate-v1-signed BOUND OK\n',
     );
   } finally {
     await close(canary);
@@ -153,7 +233,17 @@ async function main() {
 }
 
 function prepareStagePaths(root) {
-  const directories = ['sealed', 'subject', 'analysis', 'unsigned', 'signing', 'signature', 'app'];
+  const directories = [
+    'sealed-analysis',
+    'sealed-generation',
+    'sealed-signing',
+    'subject',
+    'analysis',
+    'unsigned',
+    'signing',
+    'signature',
+    'app',
+  ];
   for (const directory of directories) {
     const fullPath = path.join(root, directory);
     mkdirSync(fullPath, { recursive: true });
@@ -162,31 +252,154 @@ function prepareStagePaths(root) {
   const paths = {
     analysis: path.join(root, 'analysis/analysis.json'),
     appCanary: path.join(root, 'app/node_modules/untrusted-app/canary'),
-    key: path.join(root, 'signing/key.bin'),
+    key: path.join(root, 'signing/key.pkcs8'),
     repoCanary: path.join(repoRoot, 'package.json'),
+    root,
+    sealedAnalysis: path.join(root, 'sealed-analysis'),
+    sealedGeneration: path.join(root, 'sealed-generation'),
+    sealedSigning: path.join(root, 'sealed-signing'),
     signature: path.join(root, 'signature/signature.json'),
     subject: path.join(root, 'subject/subject.json'),
     unsigned: path.join(root, 'unsigned/certificate.json'),
-    worker: path.join(root, 'sealed/worker.mjs'),
   };
   mkdirSync(path.dirname(paths.appCanary), { recursive: true });
-  copyFileSync(workerSourcePath, paths.worker);
-  writeFileSync(paths.subject, '{"app":"inert-source-snapshot"}\n', 'utf8');
   writeFileSync(paths.appCanary, 'untrusted-app-dependency\n', 'utf8');
-  writeFileSync(paths.key, randomBytes(32));
+  copyToolClosure(paths.sealedAnalysis, analysisToolFiles, { includeTypeScript: true });
+  copyToolClosure(paths.sealedGeneration, generationToolFiles);
+  copyToolClosure(paths.sealedSigning, signingToolFiles);
+  prepareHermeticCertificateSubject(path.dirname(paths.subject));
+  const { privateKey } = generateKeyPairSync('ed25519');
+  const privateKeyBytes = privateKey.export({ format: 'der', type: 'pkcs8' });
+  writeFileSync(paths.key, privateKeyBytes, { mode: 0o600 });
+  chmodSync(paths.key, 0o600);
   return paths;
 }
 
+export function prepareHermeticCertificateSubject(subjectRoot) {
+  const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+  const posture = JSON.parse(readFileSync(posturePath, 'utf8'));
+  const internalDoorPosture = JSON.parse(readFileSync(doorPosturePath, 'utf8'));
+  const lexicalAuthority = JSON.parse(readFileSync(lexicalAuthorityPath, 'utf8'));
+  const publicPackages = JSON.parse(readFileSync(publicPackagesPath, 'utf8')).packages;
+  const committedCertificate = JSON.parse(readFileSync(certificatePath, 'utf8'));
+  const packageNames = new Set(
+    committedCertificate.artifacts.map((entry) => entry.path.split('/').slice(0, 2).join('/')),
+  );
+  const packagesByName = new Map(publicPackages.map((entry) => [entry.name, entry]));
+  const packageConfigs = publicPackages
+    .filter((entry) => entry.visibility === 'public' && entry.name.startsWith('@kovojs/'))
+    .map((entry) => {
+      const manifest = JSON.parse(
+        readFileSync(path.join(repoRoot, 'packages', entry.dir, 'package.json'), 'utf8'),
+      );
+      const relativeRoot = `packages/${entry.dir}`;
+      copySubjectFile(`packages/${entry.dir}/package.json`, subjectRoot);
+      return {
+        name: entry.name,
+        publishExports: manifest.publishConfig?.exports,
+        rootDir: relativeRoot,
+      };
+    })
+    .sort((left, right) => compareStrings(left.name, right.name));
+
+  for (const packageName of [...packageNames].sort(compareStrings)) {
+    const entry = packagesByName.get(packageName);
+    const files = snapshot?.packages?.[packageName];
+    if (entry === undefined || !Array.isArray(files)) {
+      throw new Error(`Hermetic certificate subject has no package census for ${packageName}`);
+    }
+    for (const relativePath of files) {
+      if (relativePath === 'package.json') continue;
+      copySubjectFile(`packages/${entry.dir}/${canonicalSubjectPath(relativePath)}`, subjectRoot);
+    }
+  }
+  for (const door of internalDoorPosture.doors ?? []) {
+    const entry = packagesByName.get(door.packageName);
+    if (entry === undefined) {
+      throw new Error(
+        `Hermetic certificate internal door names unknown package ${door.packageName}`,
+      );
+    }
+    copySubjectFile(`packages/${entry.dir}/${canonicalSubjectPath(door.source)}`, subjectRoot);
+  }
+
+  const subject = {
+    internalDoorPosture,
+    lexicalAuthority,
+    packageConfigs,
+    posture,
+    schema: 'kovo.hermetic-certificate-subject/v1',
+    seedPackageNames: ['@kovojs/better-auth', '@kovojs/server'],
+    snapshot,
+  };
+  writeFileSync(path.join(subjectRoot, 'subject.json'), `${JSON.stringify(subject, null, 2)}\n`);
+  return subject;
+}
+
+function copySubjectFile(relativePath, subjectRoot) {
+  const canonical = canonicalSubjectPath(relativePath);
+  const source = path.join(repoRoot, canonical);
+  const target = path.join(subjectRoot, canonical);
+  const resolved = realpathSync(source);
+  if (resolved !== path.resolve(source) || !lstatSync(source).isFile()) {
+    throw new Error(
+      `Hermetic certificate subject source must be a regular non-symlink file: ${canonical}`,
+    );
+  }
+  mkdirSync(path.dirname(target), { recursive: true });
+  copyFileSync(source, target);
+  chmodSync(target, 0o400);
+}
+
+function canonicalSubjectPath(value) {
+  if (
+    typeof value !== 'string' ||
+    value === '' ||
+    value.includes('\\') ||
+    path.posix.isAbsolute(value) ||
+    path.posix.normalize(value) !== value ||
+    value === '..' ||
+    value.startsWith('../')
+  ) {
+    throw new Error(`Hermetic certificate subject path is not canonical: ${String(value)}`);
+  }
+  return value;
+}
+
+function copyToolClosure(targetRoot, files, { includeTypeScript = false } = {}) {
+  for (const relativePath of files) copyToolFile(relativePath, targetRoot);
+  if (includeTypeScript) {
+    const packageRoot = typescriptPackageRoot();
+    for (const relativePath of typescriptRuntimeFiles) {
+      const source = path.join(packageRoot, relativePath);
+      const target = path.join(targetRoot, 'node_modules/typescript', relativePath);
+      mkdirSync(path.dirname(target), { recursive: true });
+      copyFileSync(source, target);
+      chmodSync(target, 0o400);
+    }
+  }
+}
+
+function copyToolFile(relativePath, targetRoot) {
+  const source = path.join(repoRoot, relativePath);
+  const target = path.join(targetRoot, relativePath);
+  if (realpathSync(source) !== path.resolve(source) || !lstatSync(source).isFile()) {
+    throw new Error(`Hermetic proof tool must be a regular non-symlink file: ${relativePath}`);
+  }
+  mkdirSync(path.dirname(target), { recursive: true });
+  copyFileSync(source, target);
+  chmodSync(target, 0o400);
+}
+
 function runDockerStages(paths, image, port, dockerPath) {
-  const root = path.dirname(path.dirname(paths.worker));
   const context = {
     gid: process.getgid(),
     port,
-    root,
+    root: paths.root,
     uid: process.getuid(),
   };
   const common = [
-    `KOVO_HERMETIC_STAGE_ROOT=${root}`,
+    `KOVO_HERMETIC_STAGE_ROOT=${paths.root}`,
     'run',
     '--rm',
     '--pull=never',
@@ -200,23 +413,22 @@ function runDockerStages(paths, image, port, dockerPath) {
     '--entrypoint=/usr/local/bin/node',
     `--env=KOVO_HERMETIC_NETWORK_CANARY=kovo-network-canary:${port}`,
   ];
-  const sealed = mount(path.join(root, 'sealed'), '/sealed', true);
   runDockerStage(
     dockerPath,
     'analysis',
     image,
     common,
     [
-      sealed,
-      mount(path.join(root, 'subject'), '/subject', true),
-      mount(path.join(root, 'analysis'), '/analysis', false),
+      mount(paths.sealedAnalysis, '/sealed', true),
+      mount(path.join(paths.root, 'subject'), '/subject', true),
+      mount(path.join(paths.root, 'analysis'), '/analysis', false),
     ],
     [
-      '/sealed/worker.mjs',
+      '/sealed/scripts/hermetic-proof-stage-worker.mjs',
       'analyze',
       '/subject/subject.json',
       '/analysis/analysis.json',
-      '/key/key.bin',
+      '/key/key.pkcs8',
       '/app/node_modules/untrusted-app/canary',
     ],
     ['/sealed', '/subject'],
@@ -229,16 +441,16 @@ function runDockerStages(paths, image, port, dockerPath) {
     image,
     common,
     [
-      sealed,
-      mount(path.join(root, 'analysis'), '/analysis', true),
-      mount(path.join(root, 'unsigned'), '/unsigned', false),
+      mount(paths.sealedGeneration, '/sealed', true),
+      mount(path.join(paths.root, 'analysis'), '/analysis', true),
+      mount(path.join(paths.root, 'unsigned'), '/unsigned', false),
     ],
     [
-      '/sealed/worker.mjs',
+      '/sealed/scripts/hermetic-proof-stage-worker.mjs',
       'generate',
       '/analysis/analysis.json',
       '/unsigned/certificate.json',
-      '/key/key.bin',
+      '/key/key.pkcs8',
       '/app/node_modules/untrusted-app/canary',
     ],
     ['/sealed', '/analysis'],
@@ -251,16 +463,16 @@ function runDockerStages(paths, image, port, dockerPath) {
     image,
     common,
     [
-      sealed,
-      mount(path.join(root, 'unsigned'), '/unsigned', true),
-      mount(path.join(root, 'signing'), '/key', true),
-      mount(path.join(root, 'signature'), '/signature', false),
+      mount(paths.sealedSigning, '/sealed', true),
+      mount(path.join(paths.root, 'unsigned'), '/unsigned', true),
+      mount(path.join(paths.root, 'signing'), '/key', true),
+      mount(path.join(paths.root, 'signature'), '/signature', false),
     ],
     [
-      '/sealed/worker.mjs',
+      '/sealed/scripts/hermetic-proof-stage-worker.mjs',
       'sign',
       '/unsigned/certificate.json',
-      '/key/key.bin',
+      '/key/key.pkcs8',
       '/signature/signature.json',
       '/repo/package.json',
       '/app/node_modules/untrusted-app/canary',
@@ -282,8 +494,16 @@ function runDockerStage(
   writes,
   context,
 ) {
-  const permissionArgs = permissionFlags(reads, writes);
-  const args = [...common, ...mounts, image, '--permission', ...permissionArgs, ...workerArgs];
+  const args = [
+    ...common,
+    ...mounts,
+    image,
+    '--preserve-symlinks',
+    '--preserve-symlinks-main',
+    '--permission',
+    ...permissionFlags(reads, writes),
+    ...workerArgs,
+  ];
   assertHermeticDockerArgs(args, stage, context);
   execFileSync(dockerPath, args.slice(1), { stdio: 'inherit' });
 }
@@ -293,8 +513,15 @@ function runMacStages(paths, port, sandboxExecPath) {
   runMacStage(
     'analysis',
     paths,
-    [paths.worker, 'analyze', paths.subject, paths.analysis, paths.key, paths.appCanary],
-    [paths.worker, paths.subject],
+    [
+      path.join(paths.sealedAnalysis, workerPath),
+      'analyze',
+      paths.subject,
+      paths.analysis,
+      paths.key,
+      paths.appCanary,
+    ],
+    [paths.sealedAnalysis, path.dirname(paths.subject)],
     [path.dirname(paths.analysis)],
     networkCanary,
     sandboxExecPath,
@@ -302,8 +529,15 @@ function runMacStages(paths, port, sandboxExecPath) {
   runMacStage(
     'certificate-generation',
     paths,
-    [paths.worker, 'generate', paths.analysis, paths.unsigned, paths.key, paths.appCanary],
-    [paths.worker, paths.analysis],
+    [
+      path.join(paths.sealedGeneration, workerPath),
+      'generate',
+      paths.analysis,
+      paths.unsigned,
+      paths.key,
+      paths.appCanary,
+    ],
+    [paths.sealedGeneration, path.dirname(paths.analysis)],
     [path.dirname(paths.unsigned)],
     networkCanary,
     sandboxExecPath,
@@ -312,7 +546,7 @@ function runMacStages(paths, port, sandboxExecPath) {
     'signing',
     paths,
     [
-      paths.worker,
+      path.join(paths.sealedSigning, workerPath),
       'sign',
       paths.unsigned,
       paths.key,
@@ -320,7 +554,7 @@ function runMacStages(paths, port, sandboxExecPath) {
       paths.repoCanary,
       paths.appCanary,
     ],
-    [paths.worker, paths.unsigned, paths.key],
+    [paths.sealedSigning, path.dirname(paths.unsigned), path.dirname(paths.key)],
     [path.dirname(paths.signature)],
     networkCanary,
     sandboxExecPath,
@@ -331,13 +565,17 @@ function runMacStage(stage, paths, workerArgs, reads, writes, networkCanary, san
   if (stage === 'signing' && reads.includes(paths.repoCanary)) {
     throw new Error('signing macOS stage can reach the repository');
   }
-  if (stage !== 'signing' && reads.includes(paths.key)) {
+  if (stage !== 'signing' && reads.some((entry) => paths.key.startsWith(`${entry}${path.sep}`))) {
     throw new Error(`${stage} macOS stage can reach signing material`);
+  }
+  if (reads.some((entry) => paths.appCanary.startsWith(`${entry}${path.sep}`))) {
+    throw new Error(`${stage} macOS stage can reach the app dependency closure`);
   }
   const args = [
     '-p',
     '(version 1)(allow default)(deny network*)',
     process.execPath,
+    '--preserve-symlinks',
     '--preserve-symlinks-main',
     '--permission',
     ...permissionFlags(reads, writes),
@@ -366,17 +604,17 @@ function mount(source, destination, readonly) {
 function dockerStageMounts(root, stage) {
   const stageMounts = {
     analysis: [
-      mount(path.join(root, 'sealed'), '/sealed', true),
+      mount(path.join(root, 'sealed-analysis'), '/sealed', true),
       mount(path.join(root, 'subject'), '/subject', true),
       mount(path.join(root, 'analysis'), '/analysis', false),
     ],
     'certificate-generation': [
-      mount(path.join(root, 'sealed'), '/sealed', true),
+      mount(path.join(root, 'sealed-generation'), '/sealed', true),
       mount(path.join(root, 'analysis'), '/analysis', true),
       mount(path.join(root, 'unsigned'), '/unsigned', false),
     ],
     signing: [
-      mount(path.join(root, 'sealed'), '/sealed', true),
+      mount(path.join(root, 'sealed-signing'), '/sealed', true),
       mount(path.join(root, 'unsigned'), '/unsigned', true),
       mount(path.join(root, 'signing'), '/key', true),
       mount(path.join(root, 'signature'), '/signature', false),
@@ -420,6 +658,8 @@ function expectedDockerArgs(stage, context) {
     `--env=KOVO_HERMETIC_NETWORK_CANARY=kovo-network-canary:${context.port}`,
     ...dockerStageMounts(context.root, stage),
     linuxNodeImage,
+    '--preserve-symlinks',
+    '--preserve-symlinks-main',
     '--permission',
     ...permissionFlags(nodeArgs.reads, nodeArgs.writes),
     ...nodeArgs.workerArgs,
@@ -431,11 +671,11 @@ function dockerStageNodeArgs(stage) {
     analysis: {
       reads: ['/sealed', '/subject'],
       workerArgs: [
-        '/sealed/worker.mjs',
+        '/sealed/scripts/hermetic-proof-stage-worker.mjs',
         'analyze',
         '/subject/subject.json',
         '/analysis/analysis.json',
-        '/key/key.bin',
+        '/key/key.pkcs8',
         '/app/node_modules/untrusted-app/canary',
       ],
       writes: ['/analysis'],
@@ -443,11 +683,11 @@ function dockerStageNodeArgs(stage) {
     'certificate-generation': {
       reads: ['/sealed', '/analysis'],
       workerArgs: [
-        '/sealed/worker.mjs',
+        '/sealed/scripts/hermetic-proof-stage-worker.mjs',
         'generate',
         '/analysis/analysis.json',
         '/unsigned/certificate.json',
-        '/key/key.bin',
+        '/key/key.pkcs8',
         '/app/node_modules/untrusted-app/canary',
       ],
       writes: ['/unsigned'],
@@ -455,10 +695,10 @@ function dockerStageNodeArgs(stage) {
     signing: {
       reads: ['/sealed', '/unsigned', '/key'],
       workerArgs: [
-        '/sealed/worker.mjs',
+        '/sealed/scripts/hermetic-proof-stage-worker.mjs',
         'sign',
         '/unsigned/certificate.json',
-        '/key/key.bin',
+        '/key/key.pkcs8',
         '/signature/signature.json',
         '/repo/package.json',
         '/app/node_modules/untrusted-app/canary',
@@ -491,6 +731,40 @@ function trustedHostLauncher() {
   return resolved;
 }
 
+function sourceTreeSha256(files, { includeTypeScript = false } = {}) {
+  const entries = files.map((relativePath) => ({
+    bytes: readFileSync(path.join(repoRoot, relativePath)),
+    path: relativePath,
+  }));
+  if (includeTypeScript) {
+    const packageRoot = typescriptPackageRoot();
+    for (const relativePath of typescriptRuntimeFiles) {
+      entries.push({
+        bytes: readFileSync(path.join(packageRoot, relativePath)),
+        path: `node_modules/typescript/${relativePath}`,
+      });
+    }
+  }
+  entries.sort((left, right) => compareStrings(left.path, right.path));
+  const hash = createHash('sha256');
+  for (const entry of entries) {
+    hash.update(`${Buffer.byteLength(entry.path)}:`);
+    hash.update(entry.path);
+    hash.update(`${entry.bytes.length}:`);
+    hash.update(entry.bytes);
+  }
+  return hash.digest('hex');
+}
+
+function typescriptPackageRoot() {
+  const require = createRequire(import.meta.url);
+  return realpathSync(path.dirname(require.resolve('typescript/package.json')));
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
   if (value !== null && typeof value === 'object') {
@@ -503,11 +777,30 @@ function canonicalJson(value) {
 }
 
 function verifyOutputs(paths) {
+  const analysis = JSON.parse(readFileSync(paths.analysis, 'utf8'));
+  if (analysis.schema !== 'kovo.certificate-analysis/v1') {
+    throw new Error('Hermetic analyzer did not emit the production analysis schema.');
+  }
   const unsigned = readFileSync(paths.unsigned);
-  const key = readFileSync(paths.key);
+  const committed = readFileSync(certificatePath);
+  if (!unsigned.equals(committed)) {
+    throw new Error('Hermetic generator output differs from the committed kovo.certificate/v1.');
+  }
   const signature = JSON.parse(readFileSync(paths.signature, 'utf8'));
-  const expected = createHmac('sha256', key).update(unsigned).digest('hex');
-  if (signature.signature !== expected) throw new Error('Hermetic signer output did not verify.');
+  if (!verifyKovoCertificateSignature(unsigned, signature)) {
+    throw new Error('Hermetic Ed25519 signer output did not verify.');
+  }
+  const privateKey = createPrivateKey({
+    format: 'der',
+    key: readFileSync(paths.key),
+    type: 'pkcs8',
+  });
+  const expectedPublicKey = createPublicKey(privateKey)
+    .export({ format: 'der', type: 'spki' })
+    .toString('base64url');
+  if (signature.publicKeySpki !== expectedPublicKey) {
+    throw new Error('Hermetic signer substituted a different signing identity.');
+  }
 }
 
 function listen(server) {
@@ -526,6 +819,10 @@ function listen(server) {
 
 function close(server) {
   return new Promise((resolve) => server.close(() => resolve(undefined)));
+}
+
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 const isMain =
