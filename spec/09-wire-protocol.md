@@ -237,6 +237,15 @@ The build MUST compare the evaluated cache declaration with the exact compiler m
 
 The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, unexpected-error shells, CSRF config, the `db` provider, the §6.5 `sessionProvider`, the frozen declared `app.env` projection from §6.6, and a replica-stable `appId` used to distinguish live-target authority between apps with identical render contracts (required when production apps own live-target renderers). Generated route IR and live-target registry artifacts are wired by the compiler/build integration, not by app-authored `createApp({ generated, refresh })` options. The loader MUST establish an app-owned registry scope before evaluating generated modules; concurrent or top-level-await app graphs may not share a process-global pending registry, unscoped late/HMR registration is not runtime authority, and mutation/HMR sinks may not fall back from their closed app inventory to a process registry. Vite/dev integration points at an authored app entry, for example `kovo({ app: '/src/app.tsx' })` from `@kovojs/server/vite`; the entry must default-export a `KovoApp` and must not point into `src/generated/*`. Compiler-owned plugins resolve route IR, live-target registries, and generated client modules internally. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
 
+The same bootstrap-first generated-registry channel carries the §6.6 browser response posture.
+Vite/dev and production build scan the project source snapshot, serialize the exact
+`kovo-browser-posture/v1` manifest into a framework-owned virtual/generated module, and execute its
+registration before the app entry. Document assembly re-witnesses that carrier and derives CSP,
+Permissions Policy, and optional COOP/COEP/CORP from it. App code cannot register, replace, or
+release this boot fact, and a second non-identical registration is a boot error. Direct library
+tests that omit the generated runner retain only the conservative non-isolated response posture;
+they cannot opt into cross-origin isolation without an explicit compiler manifest.
+
 Dispatch order is normative and printable: `/_m/<mutation-key>` mutations, `/_q/<query-key>` typed reads, `/c/__v/<version>/<module>` immutable client modules, declared `endpoint()` exact/prefix mounts, route table, then the 404 shell. There is no user middleware chain in v1. Extension points that can affect control flow are declared surfaces — `sessionProvider`, guards, `endpoint()`, `webhook()` — so audits can print them and no request behavior is registered from a distance.
 
 **Generated Node public authority (normative).** A generated standalone Node entry MUST ignore

@@ -12,13 +12,18 @@
         "id": "D.browser-posture",
         "owner": "compiler browser-posture derivation",
         "authoritativeSource": [
-          "packages/compiler/src/security/operation-kinds.ts",
-          "packages/server/src/document-core.ts"
+          "packages/core/src/internal/security-operation-ir.ts",
+          "packages/compiler/src/browser-posture-manifest.ts",
+          "packages/server/src/browser-response-posture.ts"
         ],
         "applicability": "applicable",
-        "status": "uncovered",
-        "proof": [],
-        "gap": "CSP origins, Permissions-Policy, and optional cross-origin isolation remain authored or duplicated rather than derived from one browser posture manifest.",
+        "status": "derived",
+        "proof": [
+          "pnpm run check:browser-posture-derivation",
+          "tests/integration/specs/browser-response-posture.spec.ts",
+          "tests/integration/specs/browser-response-posture-interoperability.spec.ts"
+        ],
+        "gap": null,
         "reviewedExemption": null
       },
       {
