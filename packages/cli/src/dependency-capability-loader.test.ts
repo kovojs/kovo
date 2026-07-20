@@ -1269,6 +1269,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       '<iframe srcdoc="&lt;script type=\'module\' src=\'data:text/javascript,parent.__KOVO_SRCDOC_PWNED__%3D%27EXECUTED%27\'&gt;&lt;/script&gt;"></iframe>',
       /KV448.*nested HTML document.*immutable approved-source snapshot/u,
     ],
+    [
+      'base URL retarget',
+      '<base href="https://attacker.invalid/">',
+      /KV448.*raw HTML base URL.*immutable approved-source snapshot/u,
+    ],
   ])('rejects raw HTML %s outside compiler-owned closure', async (_label, fragment, error) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-execution-')));
     const appModulePath = join(root, 'src', 'client.ts');
