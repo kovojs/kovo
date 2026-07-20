@@ -4,8 +4,10 @@ import { createSecurityEventCryptoHandle } from './crypto-authority.js';
 import {
   SECURITY_EVENT_INCIDENT_DOORS,
   SECURITY_EVENT_RESOURCE_KIND_BY_DOOR,
+  armSecurityDecisionEventRecorder,
   createSecurityEventJournal,
   securityEvent,
+  securityDecisionEventRecorderArmed,
   type SecurityDecisionEventInput,
 } from './security-event.js';
 
@@ -95,6 +97,24 @@ describe('security-event retrospective answerability (SPEC §§6.6, 11.2)', () =
         principal: { epoch: null, id: 'principal-a', kind: 'principal', tenant: null },
       } as unknown as SecurityDecisionEventInput),
     ).toThrow(/epoch/u);
+    const knownScopeJournal = createSecurityEventJournal({
+      authority,
+      now: () => 1_720_000_000_000,
+    });
+    expect(
+      knownScopeJournal.record({
+        ...valid,
+        principal: {
+          epoch: null,
+          id: 'principal-a',
+          kind: 'unresolved',
+          reason: 'epoch-unavailable',
+          tenant: 'tenant-a',
+        },
+      }),
+    ).toMatchObject({
+      principal: { epoch: null, id: 'principal-a', kind: 'unresolved', tenant: 'tenant-a' },
+    });
     expect(() =>
       journal.record({
         ...valid,
@@ -141,7 +161,11 @@ describe('security-event retrospective answerability (SPEC §§6.6, 11.2)', () =
     });
   });
 
-  it('refuses to let an answerability-bearing decision proceed without an installed journal', () => {
+  it('keeps low-level pre-registration calls outside the claim, then fails closed once armed', () => {
+    expect(securityDecisionEventRecorderArmed()).toBe(false);
+    expect(securityEvent(decision('authorization'))).toBeUndefined();
+    armSecurityDecisionEventRecorder();
+    expect(securityDecisionEventRecorderArmed()).toBe(true);
     expect(() => securityEvent(decision('authorization'))).toThrow(
       /require the journal before the decision can proceed/u,
     );

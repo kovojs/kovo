@@ -5101,6 +5101,11 @@ export function kovoServerHandlerEntrySource(
 export function serializeBuildRuntimeRegistryWireModule(
   registry: RuntimeRegistryWireFacts,
 ): string {
+  if (registry.runtimePosture === undefined) {
+    throw new TypeError(
+      'Production runtime emission requires the generated runtime posture registration boundary.',
+    );
+  }
   return buildJoinStrings(
     [
       `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedRuntimePostureManifest, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
@@ -5119,11 +5124,7 @@ export function serializeBuildRuntimeRegistryWireModule(
         : [
             `registerGeneratedTableSecurityManifest(${stringifyBuildValue(registry.tableSecurity)});`,
           ]),
-      ...(registry.runtimePosture === undefined
-        ? []
-        : [
-            `registerGeneratedRuntimePostureManifest(${stringifyBuildValue(registry.runtimePosture)});`,
-          ]),
+      `registerGeneratedRuntimePostureManifest(${stringifyBuildValue(registry.runtimePosture)});`,
       `registerGeneratedQueryReadRegistry(${stringifyBuildValue(registry.queryReads)});`,
       `registerGeneratedMutationTouchRegistry(${stringifyBuildValue(registry.mutationTouches)});`,
       '',

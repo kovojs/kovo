@@ -10,7 +10,7 @@ import {
   runWithIsolatedFrameworkAsyncContext,
 } from './async-context.js';
 import { activeUndiciFloorDispatcher } from './egress-undici.js';
-import { securityEvent } from './security-event.js';
+import { securityEvent, securityEventResourceIdentity } from './security-event.js';
 
 import {
   egressApply,
@@ -1642,6 +1642,22 @@ function evaluateEgressDecision(
   },
   databaseSocketEndpoint?: string,
 ): EgressBlockedError | null {
+  const result = evaluateEgressDecisionUnrecorded(args, databaseSocketEndpoint);
+  emitEgressDecision(result === null ? 'allow' : 'deny', `${args.host}:${args.port}`);
+  return result;
+}
+
+function evaluateEgressDecisionUnrecorded(
+  args: {
+    host: string;
+    port: number;
+    protocol?: 'http:' | 'https:' | undefined;
+    resolvedIp: string;
+    policy: EgressPolicy;
+    requireDestinationAllowlist?: boolean | undefined;
+  },
+  databaseSocketEndpoint?: string,
+): EgressBlockedError | null {
   const { host, port, protocol, resolvedIp, policy } = args;
   if (args.requireDestinationAllowlist) {
     const blocked = evaluateDestinationAllowlist({ host, port, protocol, resolvedIp, policy });
@@ -1751,11 +1767,36 @@ export function evaluateFrameworkDestinationOrigin(args: {
   policy: EgressPolicy;
 }): EgressBlockedError | null {
   const origin = canonicalHttpOrigin(args.protocol, args.host, args.port);
-  if (origin !== null && egressSetHas(args.policy.allowDestinations, origin)) return null;
-  return new EgressBlockedError({
-    destination: origin ?? `${args.host}:${args.port}`,
-    classification: 'special-use',
-    reason: 'destination-allowlist',
+  const result =
+    origin !== null && egressSetHas(args.policy.allowDestinations, origin)
+      ? null
+      : new EgressBlockedError({
+          destination: origin ?? `${args.host}:${args.port}`,
+          classification: 'special-use',
+          reason: 'destination-allowlist',
+        });
+  emitEgressDecision(result === null ? 'allow' : 'deny', origin ?? `${args.host}:${args.port}`);
+  return result;
+}
+
+function emitEgressDecision(outcome: 'allow' | 'deny', destination: string): void {
+  // @kovo-security-decision egress destination-admission
+  securityEvent({
+    decisionSite: 'framework:egress:destination-admission',
+    door: 'egress',
+    outcome,
+    principal: {
+      epoch: null,
+      id: null,
+      kind: 'unresolved',
+      reason: 'outside-request-context',
+      tenant: null,
+    },
+    resourceScope: {
+      identity: securityEventResourceIdentity(destination),
+      kind: 'destination',
+    },
+    type: 'security-decision',
   });
 }
 
@@ -1772,6 +1813,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
 ): Promise<Response> => {
   const policy = activeEgressPolicy();
   if (!policy) {
+    emitEgressDecision('deny', requestDestination(input));
     throw new EgressBlockedError({
       destination: requestDestination(input),
       classification: 'special-use',
@@ -1792,6 +1834,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       composeCurrentRequestDeadlineSignal(egressRequestSignal(request)),
     );
   } catch {
+    emitEgressDecision('deny', requestDestination(input));
     throw new EgressBlockedError({
       destination: requestDestination(input),
       classification: 'special-use',
@@ -1808,6 +1851,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
   // caller-owned URL/init carriers before yielding, and the security wrapper must do the same.
   const dispatcher = activeUndiciFloorDispatcher();
   if (dispatcher === undefined) {
+    emitEgressDecision('deny', requestUrl);
     throw new EgressBlockedError({
       destination: requestUrl,
       classification: 'special-use',
@@ -1822,6 +1866,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
 
   const protocol = egressUrlProtocol(url);
   if (protocol !== 'http:' && protocol !== 'https:') {
+    emitEgressDecision('deny', requestUrl);
     throw new EgressBlockedError({
       destination: requestUrl,
       classification: 'special-use',
@@ -1847,6 +1892,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
     });
     if (blocked) throw blocked;
   } else if (isNodeAcceptedUnnormalizedIpLiteral(host)) {
+    emitEgressDecision('deny', `${host}:${port}`);
     throw new EgressBlockedError({
       destination: `${host}:${port}`,
       resolvedIp: host,
@@ -1859,6 +1905,7 @@ export const frameworkEgressFetch: typeof globalThis.fetch = (async (
       'egress DNS lookup',
     );
     if (resolved.length === 0) {
+      emitEgressDecision('deny', `${host}:${port}`);
       throw new EgressBlockedError({
         destination: `${host}:${port}`,
         classification: 'special-use',

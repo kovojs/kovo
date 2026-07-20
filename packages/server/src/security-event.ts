@@ -13,6 +13,7 @@ import {
   witnessSetHas,
   witnessStringStartsWith,
 } from './security-witness-intrinsics.js';
+import { securitySha256Hex } from './response-security-intrinsics.js';
 
 export const KOVO_SECURITY_EVENT_SCHEMA = 'kovo-security-event/v1' as const;
 
@@ -81,14 +82,14 @@ export type SecurityEventPrincipalScope =
     }
   | {
       readonly epoch: null;
-      readonly id: null;
+      readonly id: string | null;
       readonly kind: 'unresolved';
       readonly reason:
         | 'epoch-unavailable'
         | 'outside-request-context'
         | 'principal-not-proven'
         | 'tenant-unavailable';
-      readonly tenant: null;
+      readonly tenant: string | null;
     };
 
 export interface SecurityEventResourceScope {
@@ -182,15 +183,21 @@ for (const value of [
 }
 
 let installedJournal: SecurityEventJournal | undefined;
+let decisionRecorderArmed = false;
 let unsealedEventCount = 0;
 
-/** Single framework denial-event door. Callers may provide only closed taxonomy values. */
+/**
+ * Single framework security-event door. Decision calls made before generated runtime registration
+ * are low-level/library calls outside the production completeness claim. Generated production
+ * registration arms this door; from that point onward a missing journal is fatal.
+ */
 export function securityEvent(
   input: SecurityEventInput,
 ): Readonly<SecurityEventRecord> | undefined {
   const normalized = normalizedSecurityEventInput(input);
   if (installedJournal === undefined) {
     if (normalized.type === 'security-decision') {
+      if (!decisionRecorderArmed) return undefined;
       throw new TypeError(
         'Answerability-bearing security decisions require the journal before the decision can proceed.',
       );
@@ -199,6 +206,21 @@ export function securityEvent(
     return undefined;
   }
   return installedJournal.record(normalized);
+}
+
+/** @internal Arm answerability only after the generated production registry is evaluated. */
+export function armSecurityDecisionEventRecorder(): void {
+  decisionRecorderArmed = true;
+}
+
+/** @internal Test/boot witness for the generated-registry ordering contract. */
+export function securityDecisionEventRecorderArmed(): boolean {
+  return decisionRecorderArmed;
+}
+
+/** Hash a bounded decision input into the only accepted no-payload identity shape. @internal */
+export function securityEventResourceIdentity(value: string): `sha256:${string}` {
+  return `sha256:${securitySha256Hex(value)}`;
 }
 
 /** @internal Install the deployment-keyed collector before authored app evaluation. */
@@ -410,17 +432,16 @@ function assertPrincipalScope(value: unknown): asserts value is SecurityEventPri
   }
   if (kind === 'unresolved') {
     const reason = ownDataValue(value, 'reason', 'Unresolved security principal reason');
-    if (
-      id !== null ||
-      epoch !== null ||
-      tenant !== null ||
-      (reason !== 'epoch-unavailable' &&
-        reason !== 'outside-request-context' &&
-        reason !== 'principal-not-proven' &&
-        reason !== 'tenant-unavailable')
-    ) {
+    const knownPrincipalReason = reason === 'epoch-unavailable' || reason === 'tenant-unavailable';
+    const validKnownPrincipal =
+      knownPrincipalReason && boundedIdentity(id) && (tenant === null || boundedIdentity(tenant));
+    const validUnknownPrincipal =
+      (reason === 'outside-request-context' || reason === 'principal-not-proven') &&
+      id === null &&
+      tenant === null;
+    if (epoch !== null || (!validKnownPrincipal && !validUnknownPrincipal)) {
       throw new TypeError(
-        'Unresolved security events require null scope facts and a registered reason.',
+        'Unresolved security events require an honest known-or-unknown principal scope and registered reason.',
       );
     }
     return;
@@ -474,14 +495,16 @@ function normalizedSecurityEventInput(input: SecurityEventInput): SecurityEventI
     principalKind === 'unresolved'
       ? witnessFreeze({
           epoch: ownDataValue(principalInput, 'epoch', 'Security decision principal epoch') as null,
-          id: ownDataValue(principalInput, 'id', 'Security decision principal id') as null,
+          id: ownDataValue(principalInput, 'id', 'Security decision principal id') as string | null,
           kind: 'unresolved' as const,
           reason: ownDataValue(
             principalInput,
             'reason',
             'Unresolved security principal reason',
           ) as Extract<SecurityEventPrincipalScope, { kind: 'unresolved' }>['reason'],
-          tenant: ownDataValue(principalInput, 'tenant', 'Security decision tenant id') as null,
+          tenant: ownDataValue(principalInput, 'tenant', 'Security decision tenant id') as
+            | string
+            | null,
         })
       : witnessFreeze({
           epoch: ownDataValue(principalInput, 'epoch', 'Security decision principal epoch') as

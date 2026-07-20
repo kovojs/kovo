@@ -33,7 +33,7 @@
     "check:csrf-mint-delivery": "node scripts/check-csrf-mint-delivery.mjs",
     "check:crypto-boundary": "node scripts/check-crypto-boundary.mjs && vitest --run scripts/check-crypto-boundary.test.mjs --reporter=dot",
     "check:declassification-census": "node scripts/declassification-census-gate.mjs && vitest --run scripts/declassification-census-gate.test.mjs --reporter=dot",
-    "check:security-event-answerability": "node scripts/check-security-event-answerability.mjs && vitest --run scripts/check-security-event-answerability.test.mjs packages/server/src/security-event-answerability.test.ts packages/cli/src/commands/incident-scope.test.ts --reporter=dot",
+    "check:security-event-answerability": "node scripts/check-security-event-answerability.mjs && vitest --run scripts/check-security-event-answerability.test.mjs packages/server/src/security-event-answerability.test.ts packages/server/src/security-event-emission-coverage.test.ts packages/server/src/generated-runtime-posture-registry.test.ts packages/cli/src/commands/incident-scope.test.ts --reporter=dot",
     "check:protocol-alphabet": "node scripts/check-protocol-alphabet.mjs && vitest --run scripts/check-protocol-alphabet.test.mjs --reporter=dot",
     "check:model-honesty-boundary": "node scripts/check-model-honesty-boundary.mjs && vitest --run scripts/check-model-honesty-boundary.test.mjs packages/cli/src/model-boundaries.test.ts --reporter=dot",
     "check:capability-surface-census": "node scripts/capability-surface-census-gate.mjs",

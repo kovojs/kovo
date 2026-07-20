@@ -1,6 +1,7 @@
 import { createHash, randomUUID as builtinRandomUuid } from 'node:crypto';
 
 import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
+import { emitCoreSecurityDecision } from './internal/security-decision.js';
 import { restoreScopedKey, scopedKeyFactsFor, type ScopedKey } from './scoped-key.js';
 import {
   securityArrayAppend,
@@ -229,10 +230,62 @@ interface StorageKeyIdentity {
 }
 
 function storageKeyIdentity(value: unknown): StorageKeyIdentity {
-  const facts = scopedKeyFactsFor(value);
+  let facts: ReturnType<typeof scopedKeyFactsFor>;
+  try {
+    facts = scopedKeyFactsFor(value);
+  } catch (error) {
+    emitStorageKeyDecision('deny');
+    throw error;
+  }
+  emitStorageKeyDecision('allow', facts);
   return fileSystemFreeze({
     frame: facts.frame,
     logicalKey: normalizeStorageKey(facts.key),
+  });
+}
+
+function emitStorageKeyDecision(
+  outcome: 'allow' | 'deny',
+  facts?: ReturnType<typeof scopedKeyFactsFor>,
+): void {
+  // @kovo-security-decision storage scoped-key-admission
+  emitCoreSecurityDecision({
+    decisionSite: 'framework:storage:scoped-key-admission',
+    door: 'storage',
+    outcome,
+    principal:
+      facts === undefined
+        ? {
+            epoch: null,
+            id: null,
+            kind: 'unresolved',
+            reason: 'principal-not-proven',
+            tenant: null,
+          }
+        : facts.posture === 'public'
+          ? { epoch: null, id: null, kind: 'anonymous', tenant: null }
+          : facts.posture === 'system'
+            ? {
+                epoch: null,
+                id: facts.authority,
+                kind: 'system',
+                tenant: null,
+              }
+            : {
+                epoch: null,
+                id: facts.authority,
+                kind: 'unresolved',
+                reason: 'epoch-unavailable',
+                tenant: null,
+              },
+    resourceScope: {
+      identity:
+        facts === undefined
+          ? 'global'
+          : `sha256:${storageSha256Hex(fileSystemUtf8Encode(facts.frame))}`,
+      kind: 'object',
+    },
+    type: 'security-decision',
   });
 }
 

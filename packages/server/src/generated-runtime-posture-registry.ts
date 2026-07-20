@@ -1,5 +1,9 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { assertRequestSafeRuntimeRealmLocked } from '@kovojs/core/internal/classifier-verdict';
+import {
+  installCoreSecurityDecisionBridge,
+  type CoreSecurityDecisionEvent,
+} from '@kovojs/core/internal/storage';
 
 import { appSystemResponse, type AppSystemResponseSurface } from './app-system-response.js';
 import {
@@ -15,8 +19,10 @@ import {
   type RuntimePostureManifest,
 } from './runtime-attestation.js';
 import {
+  armSecurityDecisionEventRecorder,
   createSecurityEventJournal,
   installSecurityEventJournal,
+  securityEvent,
   securityEventChainHead,
 } from './security-event.js';
 import { requestJson } from './request-body-intrinsics.js';
@@ -28,6 +34,10 @@ export const KOVO_RUNTIME_ATTESTATION_ENDPOINT = '/_kovo/attest' as const;
 let registeredPosture: RuntimePostureManifest | undefined;
 let registeredPostureLiteral: string | undefined;
 let attestor: RuntimePostureAttestor | undefined;
+
+const coreSecurityDecisionBridge = (event: CoreSecurityDecisionEvent): void => {
+  securityEvent(event);
+};
 
 /** Register build-owned posture before authored modules evaluate. @internal */
 export function registerGeneratedRuntimePostureManifest(
@@ -44,6 +54,7 @@ export function registerGeneratedRuntimePostureManifest(
   }
   registeredPosture = snapshot;
   registeredPostureLiteral = literal;
+  installCoreSecurityDecisionBridge(coreSecurityDecisionBridge);
 
   const deploymentId = runtimeEnvironmentValue('KOVO_ATTESTATION_DEPLOYMENT_ID');
   const secret = runtimeEnvironmentValue('KOVO_ATTESTATION_SECRET');
@@ -65,6 +76,9 @@ export function registerGeneratedRuntimePostureManifest(
       posture: snapshot,
     });
   }
+  // Registration is the production completeness boundary. Arm only after the deployment journal
+  // has been installed when configured; every later enrolled decision fails closed if it is absent.
+  armSecurityDecisionEventRecorder();
   return manifest;
 }
 
