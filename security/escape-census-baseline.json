@@ -1,0 +1,78 @@
+{
+  "$comment": "Exact Metric E report plus mandatory negative controls from the representative production build.",
+  "schema": "kovo.escape-census-baseline/v1",
+  "command": "pnpm run check:escape-census:baseline",
+  "gateCommand": "node scripts/escape-census-gate.mjs --config security/escape-census-config.json",
+  "config": "security/escape-census-config.json",
+  "report": {
+    "apps": [
+      {
+        "app": "metric-e-representative",
+        "doors": {
+          "allowControlChars": 1,
+          "csrf:false": 1,
+          "ctx.fetch": 0,
+          "kovoAnalyzerSummary": 0,
+          "trustedHtml": 1,
+          "trustedSql": 0
+        },
+        "package": "@kovojs/security-metric-e-app",
+        "roots": {
+          "allowControlChars": ["app.mjs:17"],
+          "csrf:false": ["mutation:admin/update"],
+          "ctx.fetch": [],
+          "kovoAnalyzerSummary": [],
+          "trustedHtml": ["app.mjs:31"],
+          "trustedSql": []
+        }
+      }
+    ],
+    "packages": [
+      {
+        "doors": {
+          "allowControlChars": 1,
+          "csrf:false": 1,
+          "ctx.fetch": 0,
+          "kovoAnalyzerSummary": 0,
+          "trustedHtml": 1,
+          "trustedSql": 0
+        },
+        "package": "@kovojs/security-metric-e-app",
+        "roots": {
+          "allowControlChars": ["[\"metric-e-representative\",\"app.mjs:17\"]"],
+          "csrf:false": ["[\"metric-e-representative\",\"mutation:admin/update\"]"],
+          "ctx.fetch": [],
+          "kovoAnalyzerSummary": [],
+          "trustedHtml": ["[\"metric-e-representative\",\"app.mjs:31\"]"],
+          "trustedSql": []
+        }
+      }
+    ],
+    "schema": "kovo.escape-census/v1"
+  },
+  "negativeChecks": [
+    {
+      "id": "budget-ceiling",
+      "door": "trustedHtml",
+      "package": "@kovojs/security-metric-e-app",
+      "expectedFindings": [
+        "@kovojs/security-metric-e-app: trustedHtml escaped roots 1 exceed budget 0 ([\"metric-e-representative\",\"app.mjs:31\"])"
+      ]
+    },
+    {
+      "id": "missing-producer-provenance",
+      "app": "metric-e-representative",
+      "expectedFindings": [
+        "metric-e-representative: missing kovo.escape-census-coverage/v1 producer witness"
+      ]
+    },
+    {
+      "id": "wrong-producer-provenance",
+      "app": "metric-e-representative",
+      "door": "trustedHtml",
+      "expectedFindings": [
+        "metric-e-representative: escape-census door trustedHtml must derive from trustEscapes"
+      ]
+    }
+  ]
+}

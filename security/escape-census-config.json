@@ -1,0 +1,13 @@
+{
+  "$comment": "Metric E representative real-app input. Build it with pnpm run check:escape-census:baseline before invoking the gate directly.",
+  "schema": "kovo.escape-census-config/v1",
+  "apps": [
+    {
+      "app": "metric-e-representative",
+      "package": "@kovojs/security-metric-e-app",
+      "graph": "./fixtures/escape-census-real-app/dist/.kovo/graph.json"
+    }
+  ],
+  "budgets": "./escape-budgets.json",
+  "previousBudgets": "./escape-budgets.previous.json"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@kovojs/security-metric-e-app",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@kovojs/server": "workspace:*"
+  }
+}

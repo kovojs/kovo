@@ -1,0 +1,14 @@
+{
+  "$comment": "Frozen predecessor for the first Metric E baseline round; advance only after retaining the prior reviewed ceilings here.",
+  "schema": "kovo.escape-budgets/v1",
+  "packages": {
+    "@kovojs/security-metric-e-app": {
+      "allowControlChars": 1,
+      "csrf:false": 1,
+      "ctx.fetch": 0,
+      "kovoAnalyzerSummary": 0,
+      "trustedHtml": 1,
+      "trustedSql": 0
+    }
+  }
+}
