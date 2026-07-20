@@ -1967,6 +1967,34 @@ describe('server mutation primitives', () => {
     );
   });
 
+  it('closes the author iterator when stream.done terminates before source exhaustion', async () => {
+    let finallyRan = false;
+    const sendMessage = mutation('chat/send-done-cleanup', {
+      input: s.object({ body: s.string() }),
+      handler: (input) => input,
+      *stream() {
+        try {
+          yield stream.text('assistant:a1', 'partial');
+          yield stream.done();
+          yield stream.text('assistant:a1', 'unreachable');
+        } finally {
+          finallyRan = true;
+        }
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Stream': 'true' },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    await readResponseBody(response.body);
+
+    expect(finallyRan).toBe(true);
+  });
+
   it('does not invoke mutation streams for CSRF failures', async () => {
     const streamSpy = vi.fn();
     const sendMessage = defineMutation('chat/send-csrf', {
