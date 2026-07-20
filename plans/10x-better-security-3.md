@@ -204,7 +204,9 @@ maintainers" with no SLA into v1. (~0.5 pm)
 - [ ] Enable GitHub private vulnerability reporting, assign a monitored owner or rotation, and run a
       successful private-report response drill before launch.
   - External evidence gap: `gh api repos/kovojs/kovo/private-vulnerability-reporting` returned
-    `{"enabled":false}` on 2026-07-19.
+    `{"enabled":false}` on 2026-07-20; the corresponding `PUT` returned HTTP 403
+    `Resource not accessible by integration`, so an administrator with repository-administration
+    write authority must enable it and name the monitored responder before the drill can run.
 - [x] `STABILITY.md` supported-version window, stated honestly for technical preview: latest minor
       only, no backports. Add `site/public/.well-known/security.txt` and a `Security response
 readiness` row (status `pending`) to `rules/prelaunch-checklist.md`.
