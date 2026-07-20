@@ -361,18 +361,26 @@ browser portion of D, §4.5 door comparison, and optional isolation posture.
 verified against nothing; Permissions-Policy is a hand-list duplicated in two sites
 (`response.ts:596` + `document-core.ts:744`); COEP is deliberately absent.
 
-- [ ] Compiler emits an external-origin census (static asset-position URLs keyed by CSP directive,
+- [x] Compiler emits an external-origin census (static asset-position URLs keyed by CSP directive,
       with spans) alongside the existing inline hashes; a dynamic/computed external URL in an asset
       position fails closed with a named audited escape, not a silent fallback to the hand allowlist.
-- [ ] Generalize `renderDefaultDocumentCsp` into an assembler consuming only the manifest: census
+  - Evidence: `pnpm run check:browser-posture-derivation` passes 27/27 and binds the compiler census,
+    generated registry, and dynamic-asset rejection fixtures.
+- [x] Generalize `renderDefaultDocumentCsp` into an assembler consuming only the manifest: census
       origins auto-admitted; every authored `CspAllowlist` entry must match a census origin or carry a
       declared rationale; unused entries throw at check time.
-- [ ] Pin Permissions-Policy to the `BrowserSecurityOperationKind` enum via one exhaustive switch
+  - Evidence: `check:browser-posture-derivation` proves exact census-to-CSP assembly and rejects
+    unmatched, unused, inherited, and accessor-backed allowlist entries.
+- [x] Pin Permissions-Policy to the `BrowserSecurityOperationKind` enum via one exhaustive switch
       (owning both render sites), so a new operation kind fails typecheck until its feature grant is decided.
-- [ ] Keep the conservative default COOP posture. Add an explicit `crossOriginIsolation` posture only
+  - Evidence: `check:browser-posture-derivation` proves the generated exhaustive operation-to-feature
+    switch owns both header render paths.
+- [x] Keep the conservative default COOP posture. Add an explicit `crossOriginIsolation` posture only
       when the manifest closes static assets, dynamic fetches, workers, frames, popups, and CORP/CORS
       requirements; prove it in Chromium, Firefox, and WebKit with OAuth/embed negative fixtures.
       `check:browser-posture-derivation` asserts rendered headers match the selected posture byte-for-byte.
+  - Evidence: the focused Playwright posture pair passes 6/6 across Chromium, Firefox, and WebKit;
+    `check:browser-posture-derivation` passes 27/27 for exact headers and fail-closed blockers.
 
 ### 2.4 HTTP shared-cache generality proof
 
@@ -674,23 +682,31 @@ trust-anchor decision. **Produces:** structured denial telemetry plus a nonce-bo
 self-report from one responding instance. **Blocks:** deployed-evidence exit, but cannot establish
 host integrity or fleet-wide identity without a separate remote-attestation/deployment trust anchor.
 
-- [ ] Single `securityEvent()` door (witness-intrinsic style). Its taxonomy must be _built_ as a
+- [x] Single `securityEvent()` door (witness-intrinsic style). Its taxonomy must be _built_ as a
       projection of the Layer-2 security-operation IR / a gate-emitted denial-site census (correction:
       no verdict inventory exists to read yet); then extend `check:classifier-verdict-routing` with an
       emits-event obligation so a floor that doesn't route its denial fails the gate.
-- [ ] Route egress-deny, CSRF-reject, closure-audit refusal, budget-exhaustion, capability-closed
+  - Evidence: `pnpm run check:classifier-verdict-routing` scans 504 source files and validates the
+    generated denial-site taxonomy plus the event-before-close obligation.
+- [x] Route egress-deny, CSRF-reject, closure-audit refusal, budget-exhaustion, capability-closed
       through it; stable `kovo-security-event/v1` schema, `reporting.ts` redaction discipline,
       keyring-HMAC hash-chain (defends exported/at-rest tampering only), bounded ring, export only via
       the declared-egress door. Enroll the sink in C9 + sink-policy.
-- [ ] Build embeds a canonical posture digest of the security facts `kovo explain` already computes
+  - Evidence: the focused runtime-attestation and event-export suite passes 4/4, including bounded
+    HMAC-chain tamper detection, redacted records, and declared-egress-only export.
+- [x] Build embeds a canonical posture digest of the security facts `kovo explain` already computes
       (endpoint auth/CSRF posture, egress allowlist, audited escapes, IR version tokens) into the
       server artifact. A challenge endpoint signs a caller nonce, artifact subject, instance identity,
       boot-witness results, posture digest, issuance/expiry times, and event-chain head with a key bound
       to the reviewed deployment identity; stale or replayed evidence fails verification.
-- [ ] `kovo explain --attest <url>` verifies the challenge and diffs the reported digest against the
+  - Evidence: `runtime-attestation.security.test.ts` and `generated-runtime-posture-registry.test.ts`
+    pass nonce replay, expiry, artifact-subject, posture-digest, boot-witness, and signature cases.
+- [x] `kovo explain --attest <url>` verifies the challenge and diffs the reported digest against the
       reviewed artifact. Its output says exactly what is established: one key-holding responding
       instance reported the reviewed posture at that time. It must not claim executed-code identity,
       uncompromised host state, complete event delivery, or fleet-wide equality without external proof.
+  - Evidence: `packages/cli/src/commands/attest.test.ts` passes trust-anchor, artifact, nonce,
+    stale-response, failed-boot-witness, response-cap, and explicit non-claim cases.
 
 ### 4.4 Response indistinguishability contract
 
@@ -704,20 +720,34 @@ after Layer-3 lands (else it's a second raw-AST analyzer).
 **Produces:** a versioned observation model, uniform-work combinators, and dual-world oracles.
 **Blocks:** response-observation exit; schema confidentiality labels are inputs, not policy by themselves.
 
-- [ ] SPEC §9.2 canonical rejection table + defined indistinguishability classes. Each class names its
+- [x] SPEC §9.2 canonical rejection table + defined indistinguishability classes. Each class names its
       attacker-visible tuple: status, redirect, selected headers, cookies/tokens after normalization,
       body type/length/content relation, connection behavior, work factor, and timing distribution.
-- [ ] Extend `check:wire-output-boundary` with a fail-closed body-content rule over the Layer-3
+  - Evidence: `pnpm run check:response-observation` passes 14/14 and classifies both remotely
+    reachable response-observation surfaces against the versioned tuple registry.
+- [x] Extend `check:wire-output-boundary` with a fail-closed body-content rule over the Layer-3
       provenance IR: no catch-bound error value / `Error` property / request-derived string into a wire
       body outside the audited render door — error redaction becomes inexpressible, not per-handler care.
-- [ ] Explicit surface policy selects the world pairs that must be equivalent (exists-not-owned vs
+  - Evidence: `pnpm run check:wire-output-boundary` proves framework response constructors route
+    through DEC5 and Layer-3 body provenance closes.
+- [x] Explicit surface policy selects the world pairs that must be equivalent (exists-not-owned vs
       absent; account present vs absent). Schema `owner:`/`secret:`/`governed` facts may propose
       candidates but cannot infer product policy; an unclassified remotely reachable surface fails
       closed. The oracle compares the declared observation tuple rather than blindly requiring raw
       byte equality.
-- [ ] Promote the password decoy into a reusable uniform-work combinator, normalize Better Auth
-      signup/forgot-password at the mount door, and run a versioned nightly statistical timing budget
-      with sample size, noise model, effect threshold, and persisted counterexamples.
+  - Evidence: `check:response-observation` fails closed on unclassified surface markers and validates
+    the exact world-pair/tuple policy for each enrolled surface.
+- [x] Promote the password decoy into a reusable uniform-work combinator and route the Kovo-owned
+      Better Auth sign-up mutation through a generic accepted result without forwarding provider
+      body, status, or session-cookie differences.
+  - Evidence: the focused password/Better Auth response-observation suite passes 27/27.
+- [ ] Add a supported forgot-password mutation only with a purpose-closed email-egress contract, then
+      route it through `normalizeBetterAuthPasswordResetResponse`; until then the future-door census
+      must keep the upstream reset API structurally unreachable instead of claiming a mounted flow.
+- [x] Run a versioned nightly statistical timing budget with sample size, noise model, effect
+      threshold, and persisted counterexamples.
+  - Evidence: the explicitly enabled nightly timing oracle passes 2/2 and the response-observation
+    gate verifies its workflow enrollment and stable budget identity.
 
 ### 4.5 Dev-tier door parity + single dev-host door
 
@@ -730,13 +760,17 @@ reactive fixes) and no check gates the dev tier or proves its doors match prod. 
 **Depends on:** §2.1's stable door identities and the prod/dev authority mapping. **Produces:** one
 dev-host door and a tier-aware manifest comparison. **Blocks:** dev-tier W and deployed-evidence exit.
 
-- [ ] One dev-host boot door owning loopback-default binding, an Origin/Host allowlist for both HTTP
+- [x] One dev-host boot door owning loopback-default binding, an Origin/Host allowlist for both HTTP
       and the HMR upgrade (DNS-rebinding fail-closed), and authentication for any dev endpoint that can
       read source or env. Prove real HTTP and websocket rebinding attacks, not only request mocks.
-- [ ] Emit a versioned door manifest for prod boot and dev boot (reuse the capability/door census) and
+  - Evidence: `packages/cli/src/index.kovo-dev.test.ts` passes 12/12, including real HTTP source/env
+    and raw HMR WebSocket Host/Origin/authentication rebinding attacks.
+- [x] Emit a versioned door manifest for prod boot and dev boot (reuse the capability/door census) and
       gate a tier-aware mapping: every prod obligation must be equivalent, stronger, or have a named
       audited dev exception; dev-only HMR/source/module-graph doors carry their own authentication and
       exposure obligations. Do not require byte-identical manifests for intentionally different tiers.
+  - Evidence: `pnpm run check:runtime-tier-door-parity` passes 8/8 over one production and five
+    development doors, including exact obligation relations and authenticated dev-only exposures.
 
 ---
 
