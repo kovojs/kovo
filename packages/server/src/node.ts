@@ -81,6 +81,7 @@ const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
 const NativeAbortController = globalThis.AbortController;
 const NativeAbortSignal = globalThis.AbortSignal;
+const NativeReadableStream = globalThis.ReadableStream;
 const NativeString = globalThis.String;
 const NativeURL = globalThis.URL;
 const nativeHeadersGlobalDescriptor = requiredPropertyDescriptor(globalThis, 'Headers');
@@ -113,6 +114,48 @@ const nativeAbortControllerSignalGetter = stablePrototypeGetter(
 const nativeAbortSignalAbortedGetter = stablePrototypeGetter(
   NativeAbortSignal.prototype,
   'aborted',
+);
+const nativeReadableStreamGetReader = stablePrototypeFunction(
+  NativeReadableStream.prototype,
+  'getReader',
+);
+const readableStreamControl = new NativeReadableStream<Uint8Array>();
+const readableStreamReaderControl = witnessReflectApply<ReadableStreamDefaultReader<Uint8Array>>(
+  nativeReadableStreamGetReader,
+  readableStreamControl,
+  [],
+);
+const readableStreamReaderPrototype = requiredPrototype(
+  readableStreamReaderControl,
+  'ReadableStream reader',
+);
+const nativeStreamReaderRead = stablePrototypeFunction(readableStreamReaderPrototype, 'read');
+const nativeStreamReaderReleaseLock = stablePrototypeFunction(
+  readableStreamReaderPrototype,
+  'releaseLock',
+);
+witnessReflectApply(nativeStreamReaderReleaseLock, readableStreamReaderControl, []);
+let readableStreamControllerControl!: ReadableStreamDefaultController<Uint8Array>;
+new NativeReadableStream<Uint8Array>({
+  start(controller) {
+    readableStreamControllerControl = controller;
+  },
+});
+const readableStreamControllerPrototype = requiredPrototype(
+  readableStreamControllerControl,
+  'ReadableStream controller',
+);
+const nativeReadableStreamControllerClose = stablePrototypeFunction(
+  readableStreamControllerPrototype,
+  'close',
+);
+const nativeReadableStreamControllerEnqueue = stablePrototypeFunction(
+  readableStreamControllerPrototype,
+  'enqueue',
+);
+const nativeReadableStreamControllerError = stablePrototypeFunction(
+  readableStreamControllerPrototype,
+  'error',
 );
 const nativeStringCharCodeAt = NativeString.prototype.charCodeAt;
 const nativeStringFromCharCode = NativeString.fromCharCode;
@@ -270,6 +313,14 @@ function stablePrototypeFunction(value: object, property: PropertyKey): Function
     owner = witnessGetPrototypeOf(owner);
   }
   throw new TypeError('Kovo Node response transport control is unavailable.');
+}
+
+function requiredPrototype(value: object, label: string): object {
+  const prototype = witnessGetPrototypeOf(value);
+  if (prototype === null) {
+    throw new TypeError(`Kovo Node adapter ${label} prototype is unavailable.`);
+  }
+  return prototype;
 }
 
 function stablePrototypeGetter(value: object, property: PropertyKey): Function {
@@ -861,9 +912,7 @@ function nodeRequestToWebRequestFromPrepared(
     ...(witnessSetHas(bodylessMethods, method)
       ? {}
       : {
-          body: witnessReflectApply<ReadableStream<Uint8Array>>(nativeReadableToWeb, Readable, [
-            nodeRequest,
-          ]),
+          body: transportManagedNodeRequestBody(nodeRequest),
           duplex: 'half',
         }),
   };
@@ -881,6 +930,75 @@ function nodeRequestToWebRequestFromPrepared(
     });
   }
   return request;
+}
+
+/**
+ * SPEC §9.5: canceling a Node-backed Web body must not destroy the ingress transport before a
+ * framework 413 can flush. Keep ordinary Web-stream cancellation unchanged; only this private
+ * adapter-owned carrier defers source teardown to armIncompleteNodeRequestClose().
+ */
+function transportManagedNodeRequestBody(nodeRequest: IncomingMessage): ReadableStream<Uint8Array> {
+  const source = witnessReflectApply<ReadableStream<Uint8Array>>(nativeReadableToWeb, Readable, [
+    nodeRequest,
+  ]);
+  const reader = witnessReflectApply<ReadableStreamDefaultReader<Uint8Array>>(
+    nativeReadableStreamGetReader,
+    source,
+    [],
+  );
+  let cancelled = false;
+  let readPending = false;
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    witnessReflectApply(nativeStreamReaderReleaseLock, reader, []);
+  };
+
+  return new NativeReadableStream<Uint8Array>({
+    async pull(controller) {
+      readPending = true;
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await witnessReflectApply<Promise<ReadableStreamReadResult<Uint8Array>>>(
+          nativeStreamReaderRead,
+          reader,
+          [],
+        );
+      } catch (error) {
+        readPending = false;
+        release();
+        if (!cancelled) {
+          witnessReflectApply(nativeReadableStreamControllerError, controller, [error]);
+        }
+        return;
+      }
+      readPending = false;
+      if (cancelled) {
+        release();
+        return;
+      }
+      const done = witnessGetOwnPropertyDescriptor(result, 'done')?.value;
+      if (done === true) {
+        release();
+        witnessReflectApply(nativeReadableStreamControllerClose, controller, []);
+        return;
+      }
+      const value = witnessGetOwnPropertyDescriptor(result, 'value')?.value;
+      if (done !== false || typeof value !== 'object' || value === null) {
+        release();
+        witnessReflectApply(nativeReadableStreamControllerError, controller, [
+          new TypeError('Kovo received an invalid Node request body stream chunk.'),
+        ]);
+        return;
+      }
+      witnessReflectApply(nativeReadableStreamControllerEnqueue, controller, [value as Uint8Array]);
+    },
+    cancel() {
+      cancelled = true;
+      if (!readPending) release();
+    },
+  });
 }
 
 function constructNativeRequest(input: string, init: RequestInit): Request {

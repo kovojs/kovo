@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RequestBodyLimitExceededError, requestWithBodyLimit } from './app-load-shed.js';
 import { pinnedRequestCarrier, pinnedRequestCarrierOwnData } from './request-carrier.js';
@@ -54,6 +54,25 @@ describe('request proxy intrinsics', () => {
     } finally {
       Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);
     }
+  });
+
+  it('immediately cancels an ordinary direct Web body after its byte limit is exceeded', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      cancel,
+      start(controller) {
+        controller.enqueue(new Uint8Array(5));
+      },
+    });
+    const request = new Request('https://kovo.test/direct-body-limit', {
+      body,
+      duplex: 'half',
+      method: 'POST',
+    } as RequestInit & { duplex: 'half' });
+    const limited = requestWithBodyLimit(request, 4);
+
+    await expect(limited.arrayBuffer()).rejects.toBeInstanceOf(RequestBodyLimitExceededError);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('distinguishes framework overrides from raw data, accessors, and Proxy trap output', () => {

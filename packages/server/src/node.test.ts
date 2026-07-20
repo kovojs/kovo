@@ -1425,6 +1425,55 @@ describe('toNodeHandler incomplete request transport closure', () => {
     }
   });
 
+  it('flushes streamed POST and PUT body-limit 413s before Node transport teardown', async () => {
+    const provider = vi.fn(() => ({
+      async query() {
+        return { rowCount: 0, rows: [] };
+      },
+    }));
+    const sessionProvider = vi.fn(() => null);
+    const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
+    const background = task('security/streamed-body-ingress', {
+      input: s.object({}),
+      run() {},
+    });
+    const app = createApp({
+      db: provider,
+      requestLimits: { maxBodyBytes: 4 },
+      routes: [route('/probe', { page })],
+      sessionProvider,
+      tasks: [background],
+    });
+    const webHandler = vi.fn(createRequestHandler(app));
+    const server = await serveWithNode(toNodeHandler(webHandler));
+
+    try {
+      for (const method of ['POST', 'PUT']) {
+        const wireResponse = await rawHttpExchange(
+          server.origin,
+          `${method} /probe HTTP/1.1\r\n` +
+            'Host: 127.0.0.1\r\n' +
+            'Connection: close\r\n' +
+            'Transfer-Encoding: chunked\r\n\r\n' +
+            '5\r\nabcde\r\n0\r\n\r\n',
+        );
+        expect(wireResponse).toContain('HTTP/1.1 413');
+        expect(wireResponse).toMatch(/connection: close/iu);
+        expect(wireResponse).toContain('Payload Too Large');
+        expect(wireResponse).not.toContain('HTTP/1.1 503');
+      }
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(webHandler).toHaveBeenCalledTimes(2);
+      expect(provider).not.toHaveBeenCalled();
+      expect(sessionProvider).not.toHaveBeenCalled();
+      expect(page).not.toHaveBeenCalled();
+    } finally {
+      await server.close();
+    }
+  });
+
   it('keeps a completed request reusable on the same keep-alive connection', async () => {
     const sockets: Socket[] = [];
     const nodeHandler = requestHandler();

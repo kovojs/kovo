@@ -1439,6 +1439,18 @@ const weakenedEmittedNodeBodylessPayloadAdmissionBranch = [
   '  if (!apply(nativeSetHas, bodylessMethods, [request.method])) return false;',
   '  return false;',
 ].join('\n');
+const transportManagedNodeBodyDeferredCancelBranch = [
+  '    cancel() {',
+  '      cancelled = true;',
+  '      if (!readPending) release();',
+  '    },',
+].join('\n');
+const weakenedTransportManagedNodeBodyDeferredCancelBranch = [
+  '    cancel() {',
+  '      cancelled = true;',
+  '      if (!readPending) void reader.cancel();',
+  '    },',
+].join('\n');
 const viteDevPreloadBodylessAdmissionBranch = [
   '      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before',
   '      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.',
@@ -5026,6 +5038,32 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
+    description:
+      'Restores immediate source cancellation for a live Node transport-managed request body before its 413 can flush.',
+    expectedKiller:
+      'live Node streamed POST and PUT body-limit failures must flush complete 413 responses',
+    name: 'server-node/restore-early-transport-body-cancel',
+    replacement: weakenedTransportManagedNodeBodyDeferredCancelBranch,
+    search: transportManagedNodeBodyDeferredCancelBranch,
+    sourceFile: serverNodePath,
+    sourceOnly: true,
+    test: assertNodeStreamedBodyLimitFlushBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Restores immediate source cancellation for emitted Node and Vercel transport-managed request bodies before their 413 can flush.',
+    expectedKiller:
+      'emitted Node and Vercel streamed body-limit failures must flush complete 413 responses',
+    name: 'server-build/restore-emitted-early-transport-body-cancel',
+    replacement: weakenedTransportManagedNodeBodyDeferredCancelBranch,
+    search: transportManagedNodeBodyDeferredCancelBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertEmittedNodeStreamedBodyLimitFlushBehavior,
+  },
+  {
+    baseModule: {},
     description: 'Loads the Vite dev dispatcher module before GET/HEAD payload admission.',
     expectedKiller: 'body-framed requests must be rejected before Vite loads any SSR or app graph',
     name: 'server-vite/drop-preload-bodyless-admission',
@@ -6148,6 +6186,26 @@ function assertEmittedNodeBodylessPayloadAdmissionBehavior(_moduleUnderTest, { s
     testFile: 'packages/server/src/build.test.ts',
     testNamePattern:
       'emits a standalone node server that serves immutable client files before route fallback|emits Vercel Build Output API v3 with static files and a Node function',
+  });
+}
+
+function assertNodeStreamedBodyLimitFlushBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'node.ts',
+    sourceText,
+    testFile: 'packages/server/src/node.test.ts',
+    testNamePattern: 'flushes streamed POST and PUT body-limit 413s before Node transport teardown',
+  });
+}
+
+function assertEmittedNodeStreamedBodyLimitFlushBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'build.ts',
+    sourceText,
+    testFile: 'packages/server/src/build.test.ts',
+    testNamePattern: 'emits Vercel Build Output API v3 with static files and a Node function',
   });
 }
 

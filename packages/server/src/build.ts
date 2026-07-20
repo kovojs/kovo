@@ -1068,6 +1068,7 @@ const NativeArray = globalThis.Array;
 const NativeHeaders = globalThis.Headers;
 const NativeRequest = globalThis.Request;
 const NativeResponse = globalThis.Response;
+const NativeReadableStream = globalThis.ReadableStream;
 const NativeURL = globalThis.URL;
 const NativeWeakMap = globalThis.WeakMap;
 const NativeWeakSet = globalThis.WeakSet;
@@ -1105,6 +1106,23 @@ const nativeReadableToWeb = Readable.toWeb;
 const nativeAbortControllerAbort = stablePrototypeFunction(NativeAbortController.prototype, 'abort');
 const nativeAbortControllerSignalGetter = stablePrototypeGetter(NativeAbortController.prototype, 'signal');
 const nativeAbortSignalAbortedGetter = stablePrototypeGetter(NativeAbortSignal.prototype, 'aborted');
+const nativeReadableStreamGetReader = stablePrototypeFunction(NativeReadableStream.prototype, 'getReader');
+const readableStreamControl = new NativeReadableStream();
+const readableStreamReaderControl = apply(nativeReadableStreamGetReader, readableStreamControl, []);
+const readableStreamReaderPrototype = apply(nativeObjectGetPrototypeOf, Object, [readableStreamReaderControl]);
+const nativeStreamReaderRead = stablePrototypeFunction(readableStreamReaderPrototype, 'read');
+const nativeStreamReaderReleaseLock = stablePrototypeFunction(readableStreamReaderPrototype, 'releaseLock');
+apply(nativeStreamReaderReleaseLock, readableStreamReaderControl, []);
+let readableStreamControllerControl;
+new NativeReadableStream({
+  start(controller) {
+    readableStreamControllerControl = controller;
+  },
+});
+const readableStreamControllerPrototype = apply(nativeObjectGetPrototypeOf, Object, [readableStreamControllerControl]);
+const nativeReadableStreamControllerClose = stablePrototypeFunction(readableStreamControllerPrototype, 'close');
+const nativeReadableStreamControllerEnqueue = stablePrototypeFunction(readableStreamControllerPrototype, 'enqueue');
+const nativeReadableStreamControllerError = stablePrototypeFunction(readableStreamControllerPrototype, 'error');
 const nativeIncomingMessageHeadersGetter = stablePrototypeGetter(IncomingMessage.prototype, 'headers');
 const nativeIncomingMessageOnce = stablePrototypeFunction(IncomingMessage.prototype, 'once');
 const nativeIncomingMessageOff = stablePrototypeFunction(IncomingMessage.prototype, 'off');
@@ -1330,7 +1348,7 @@ export function preparedNodeRequestToWebRequest(prepared, nodeResponse) {
     ...(apply(nativeSetHas, bodylessMethods, [method])
       ? {}
       : {
-          body: apply(nativeReadableToWeb, Readable, [nodeRequest]),
+          body: transportManagedNodeRequestBody(nodeRequest),
           duplex: 'half',
         }),
   };
@@ -1348,6 +1366,61 @@ export function preparedNodeRequestToWebRequest(prepared, nodeResponse) {
     }]);
   }
   return request;
+}
+
+// SPEC §9.5: this private adapter-owned stream keeps a body-limit reader.cancel() from
+// destroying the Node ingress before its 413 flushes. Direct Web Request bodies retain native,
+// immediate cancellation; Node teardown remains owned by armIncompleteNodeRequestClose().
+function transportManagedNodeRequestBody(nodeRequest) {
+  const source = apply(nativeReadableToWeb, Readable, [nodeRequest]);
+  const reader = apply(nativeReadableStreamGetReader, source, []);
+  let cancelled = false;
+  let readPending = false;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    apply(nativeStreamReaderReleaseLock, reader, []);
+  };
+
+  return new NativeReadableStream({
+    async pull(controller) {
+      readPending = true;
+      let result;
+      try {
+        result = await apply(nativeStreamReaderRead, reader, []);
+      } catch (error) {
+        readPending = false;
+        release();
+        if (!cancelled) apply(nativeReadableStreamControllerError, controller, [error]);
+        return;
+      }
+      readPending = false;
+      if (cancelled) {
+        release();
+        return;
+      }
+      const done = apply(nativeObjectGetOwnPropertyDescriptor, Object, [result, 'done'])?.value;
+      if (done === true) {
+        release();
+        apply(nativeReadableStreamControllerClose, controller, []);
+        return;
+      }
+      const value = apply(nativeObjectGetOwnPropertyDescriptor, Object, [result, 'value'])?.value;
+      if (done !== false || typeof value !== 'object' || value === null) {
+        release();
+        apply(nativeReadableStreamControllerError, controller, [
+          new TypeError('Kovo received an invalid Node request body stream chunk.'),
+        ]);
+        return;
+      }
+      apply(nativeReadableStreamControllerEnqueue, controller, [value]);
+    },
+    cancel() {
+      cancelled = true;
+      if (!readPending) release();
+    },
+  });
 }
 
 function snapshotNodeHandlerOptions(options) {

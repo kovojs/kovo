@@ -415,6 +415,7 @@ const app = createApp({
   csrf,
   egress: { enabled: false, justification: 'packed cache fixture performs no outbound I/O' },
   endpoints: [lateRawStreamEndpoint, immediateRawStreamEndpoint],
+  requestLimits: { maxBodyBytes: 4 },
   routes: [tokenRoute, lateStreamRoute, immediateStreamRoute],
 });
 export default createRequestHandler(app);
@@ -477,6 +478,20 @@ export default createRequestHandler(app);
               return response.text();
             }),
           ).rejects.toThrow();
+        }
+        for (const method of ['POST', 'PUT']) {
+          const wireResponse = await rawHttpExchange(
+            server.baseUrl,
+            `${method} /packed-csrf HTTP/1.1\r\n` +
+              'Host: 127.0.0.1\r\n' +
+              'Connection: close\r\n' +
+              'Transfer-Encoding: chunked\r\n\r\n' +
+              '5\r\nabcde\r\n0\r\n\r\n',
+          );
+          expect(wireResponse, server.stderr()).toContain('HTTP/1.1 413');
+          expect(wireResponse).toMatch(/connection: close/iu);
+          expect(wireResponse).toContain('Payload Too Large');
+          expect(wireResponse).not.toContain('HTTP/1.1 503');
         }
       }
     } finally {
@@ -3742,6 +3757,9 @@ export default async function handler(request) {
       expect(vercelAdapter).toContain('export function rejectUnsafeNodeMutationTarget');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
       expect(vercelAdapter).toContain('export function assertSafeTransportResponseHeaderEntries');
+      expect(vercelAdapter).toContain('function transportManagedNodeRequestBody(nodeRequest)');
+      expect(vercelAdapter).toContain('if (!readPending) release();');
+      expect(vercelAdapter).not.toContain('if (!readPending) void reader.cancel();');
       expect(vercelAdapter).toContain('const setCookies = apply(nativeHeadersGetSetCookie');
       expect(vercelAdapter).not.toContain('typeof headers.getSetCookie');
       expect(vercelAdapter).toContain("[nodeHeaders, 'set-cookie', {");
