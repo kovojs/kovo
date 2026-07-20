@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 257,
+    "historicalWitnesses": 262,
     "productions": 12
   },
   "productions": [
@@ -944,6 +944,36 @@
       "corpus": "client-handler-import",
       "production": "module-boundary",
       "reason": "This witness crosses an import, export, package, generated-module, or realm boundary."
+    },
+    {
+      "anchor": "dependency-capability-loader-identity",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "This witness re-resolves an exact censused package import and rejects absent specifiers or installed-identity drift at the supported loader boundary."
+    },
+    {
+      "anchor": "dependency-capability-loader-closed-verdict",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "This witness prevents closed, raw, or request-closed dependency rows from becoming loader authority."
+    },
+    {
+      "anchor": "compiler-generated-wire-abi-provenance",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness distinguishes exact private ABI imports added by reviewed compiler lowering from identical authored spellings and unknown generated names."
+    },
+    {
+      "anchor": "dependency-transitive-bundle-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness rejects uncensused transitive package code before it can enter a supported loader graph, even when a bundler would otherwise inline it."
+    },
+    {
+      "anchor": "dependency-module-initializer-verdict",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires every package import to consume the explicit initializer verdict as well as each requested export verdict."
     },
     {
       "anchor": "capability-mint-symbol-identity-census",

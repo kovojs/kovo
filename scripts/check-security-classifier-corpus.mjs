@@ -2059,9 +2059,31 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           '@kovo-security-certifies C13 compiler-generated-wire-abi-provenance',
           'admits only exact compiler-generated wire ABI edges while authored and unknown variants stay closed',
-          "kind: 'generated-wire-abi'",
+          "kind: 'generated-internal-abi'",
           'does not classify public subpath ./internal/wire',
           'outside the exact compiler-generated @kovojs/server/internal/wire ABI vocabulary',
+        ],
+      },
+      {
+        id: 'dependency-transitive-bundle-closure',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-transitive-bundle-closure',
+          'rejects uncensused transitive packages even when a supported SSR artifact bundles them',
+          "build(['safe-parser'])",
+          'uncensused transitive dependency helper-parser imported by reviewed package safe-parser',
+          'build(true)',
+        ],
+      },
+      {
+        id: 'dependency-module-initializer-verdict',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-module-initializer-verdict',
+          'requires every named package import to consume an explicit module initializer verdict',
+          'does not classify export <module>',
+          'export <module> exposes raw network authority',
+          "toEqual(['<module>', 'parse'])",
         ],
       },
       {

@@ -96,6 +96,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       fileName: files[0]!.fileName,
       loweredSource: `
         import { query, route } from '@kovojs/server';
+        import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';
+        import { renderGeneratedMutationFormFields } from '@kovojs/server/internal/csrf';
+        import { escapeText, kovoSafeJsxSpread } from '@kovojs/server/internal/escape';
+        import { defineCompiledRoutePage } from '@kovojs/server/internal/route';
         import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';
         export const lookup = __kovoAssignDerivedQueryKey(query({ run() { return 'safe'; } }), 'lookup');
         export const page = route('/lookup', { render() { return lookup; } });
@@ -104,8 +108,36 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(compilerDependencies).toEqual([
       {
         importer: 'app.ts',
+        importedNames: ['derive', 'kovoStyleProperty'],
+        kind: 'generated-internal-abi',
+        site: 'app.ts:compiler-lowered',
+        specifier: '@kovojs/browser/internal/output',
+      },
+      {
+        importer: 'app.ts',
+        importedNames: ['renderGeneratedMutationFormFields'],
+        kind: 'generated-internal-abi',
+        site: 'app.ts:compiler-lowered',
+        specifier: '@kovojs/server/internal/csrf',
+      },
+      {
+        importer: 'app.ts',
+        importedNames: ['escapeText', 'kovoSafeJsxSpread'],
+        kind: 'generated-internal-abi',
+        site: 'app.ts:compiler-lowered',
+        specifier: '@kovojs/server/internal/escape',
+      },
+      {
+        importer: 'app.ts',
+        importedNames: ['defineCompiledRoutePage'],
+        kind: 'generated-internal-abi',
+        site: 'app.ts:compiler-lowered',
+        specifier: '@kovojs/server/internal/route',
+      },
+      {
+        importer: 'app.ts',
         importedNames: ['assignDerivedQueryKey'],
-        kind: 'generated-wire-abi',
+        kind: 'generated-internal-abi',
         site: 'app.ts:compiler-lowered',
         specifier: '@kovojs/server/internal/wire',
       },
@@ -832,6 +864,85 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       ],
     });
     expect(reviewed.diagnostics).toEqual([]);
+  });
+
+  // @kovo-security-certifies C13 dependency-module-initializer-verdict
+  it('requires every named package import to consume an explicit module initializer verdict', () => {
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { parse } from 'safe-parser';
+          export const page = route('/initializer', { render() { return parse('ok'); } });
+        `,
+      },
+    ];
+    const packageFact = resolved('safe-parser');
+    const summary: PackageCapabilitySummary = {
+      entries: [
+        {
+          conditions: packageFact.conditions,
+          exports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+          subpath: '.',
+        },
+      ],
+      manifestFingerprint: packageFact.manifestFingerprint,
+      packageName: packageFact.packageName,
+      packageVersion: packageFact.packageVersion,
+      schema: packageCapabilitySummarySchema,
+      source: 'kovo.capabilities.json',
+      summaryVersion: 'safe-parser/initializer-1',
+    };
+    const packages = [resolved('@kovojs/server'), packageFact];
+
+    const omitted = analyze(files, { packages, packageSummaries: [summary] });
+    expect(omitted.diagnostics[0]!.message).toContain('does not classify export <module>');
+
+    const raw = analyze(files, {
+      packages,
+      packageSummaries: [
+        {
+          ...summary,
+          entries: [
+            {
+              ...summary.entries[0]!,
+              exports: [
+                { capabilities: ['network'], disposition: 'raw', name: '<module>' },
+                ...summary.entries[0]!.exports,
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(raw.diagnostics[0]!.message).toContain(
+      'package safe-parser export <module> exposes raw network authority',
+    );
+
+    const pure = analyze(files, {
+      packages,
+      packageSummaries: [
+        {
+          ...summary,
+          entries: [
+            {
+              ...summary.entries[0]!,
+              exports: [
+                { capabilities: [], disposition: 'pure', name: '<module>' },
+                ...summary.entries[0]!.exports,
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(pure.diagnostics).toEqual([]);
+    expect(
+      pure.dependencyManifest.dependencies
+        .find((dependency) => dependency.packageName === 'safe-parser')
+        ?.entries[0]?.imports.map((permission) => permission.name),
+    ).toEqual(['<module>', 'parse']);
   });
 
   it('rejects raw authority and forged framework-door disposition in third-party summaries', () => {
