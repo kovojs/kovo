@@ -103,6 +103,7 @@ const cliDependencyCapabilityLoaderPath = path.join(
   repoRoot,
   'packages/cli/src/dependency-capability-loader.ts',
 );
+const cliDevHostDoorPath = path.join(repoRoot, 'packages/cli/src/commands/dev-host-door.ts');
 const frameworkImplementationDigestPath = path.join(
   repoRoot,
   'packages/compiler/src/security/framework-implementation-digest.ts',
@@ -1549,35 +1550,96 @@ const weakenedTransportManagedNodeBodyDeferredCancelBranch = [
   '    },',
 ].join('\n');
 const viteDevPreloadBodylessAdmissionBranch = [
-  '      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before',
-  '      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.',
+  '      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.',
+  '      // The graph-local dispatcher repeats this internal callable gate.',
   '      if (rejectNodeRequestPreloadIngress(request, response)) return;',
   '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
 ].join('\n');
 const weakenedViteDevPreloadBodylessAdmissionBranch = [
-  '      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before',
-  '      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.',
+  '      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.',
+  '      // The graph-local dispatcher repeats this internal callable gate.',
+  '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
+].join('\n');
+const weakenedViteDevPreloadFullAdmissionBranch = [
+  '      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.',
+  '      // The graph-local dispatcher repeats this internal callable gate.',
+  "      if (request.rawHeaders?.[2] !== 'Host' &&",
+  '          rejectNodeRequestPreloadIngress(request, response)) return;',
   '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
 ].join('\n');
 const viteDevGraphBodylessAdmissionBranch = [
   '  if (rejectNodeRequestPreloadIngress(request, response)) return;',
   '',
+  '  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close',
+  '  // before this graph-local bootstrap or any authored app module can evaluate.',
   '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
 ].join('\n');
 const weakenedViteDevGraphBodylessAdmissionBranch = [
   '',
+  '  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close',
+  '  // before this graph-local bootstrap or any authored app module can evaluate.',
+  '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
+].join('\n');
+const weakenedViteDevGraphFullAdmissionBranch = [
+  "  if (request.rawHeaders?.[2] !== 'Host' &&",
+  '      rejectNodeRequestPreloadIngress(request, response)) return;',
+  '',
+  '  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close',
+  '  // before this graph-local bootstrap or any authored app module can evaluate.',
   '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
 ].join('\n');
 const vitePluginBodylessAdmissionBranch = [
-  '        // SPEC §9.5: Vite must close bodyless-method framing before a custom request filter,',
-  '        // diagnostic renderer, or app handler can observe the request.',
+  '        // SPEC §9.5: Vite must close the complete direct-Node ingress verdict before a custom',
+  '        // request filter, diagnostic renderer, or app handler can observe the request.',
   '        if (rejectNodeRequestPreloadIngress(request, response)) return;',
   '        const shouldHandle =',
 ].join('\n');
 const weakenedVitePluginBodylessAdmissionBranch = [
-  '        // SPEC §9.5: Vite must close bodyless-method framing before a custom request filter,',
-  '        // diagnostic renderer, or app handler can observe the request.',
+  '        // SPEC §9.5: Vite must close the complete direct-Node ingress verdict before a custom',
+  '        // request filter, diagnostic renderer, or app handler can observe the request.',
   '        const shouldHandle =',
+].join('\n');
+const weakenedVitePluginFullAdmissionBranch = [
+  '        // SPEC §9.5: Vite must close the complete direct-Node ingress verdict before a custom',
+  '        // request filter, diagnostic renderer, or app handler can observe the request.',
+  "        if (request.rawHeaders?.[2] !== 'Host' &&",
+  '            rejectNodeRequestPreloadIngress(request, response)) return;',
+  '        const shouldHandle =',
+].join('\n');
+const cliDevHostHttpFullAdmissionBranch = [
+  '    // SPEC §9.5: close the complete finite Node verdict before this outer door parses a URL,',
+  '    // delegates to Vite, or reaches any authored/plugin callback.',
+  '    if (nodeIngress.rejectNodeRequestPreloadIngress(request, response)) return;',
+  '    const authority = devRequestAuthority(request, httpServer, configuredHost, false);',
+].join('\n');
+const weakenedCliDevHostHttpFullAdmissionBranch = [
+  '    // SPEC §9.5: close the complete finite Node verdict before this outer door parses a URL,',
+  '    // delegates to Vite, or reaches any authored/plugin callback.',
+  "    if (request.rawHeaders?.[2] !== 'Host' &&",
+  '        nodeIngress.rejectNodeRequestPreloadIngress(request, response)) return;',
+  '    const authority = devRequestAuthority(request, httpServer, configuredHost, false);',
+].join('\n');
+const cliDevHostWebSocketFullAdmissionBranch = [
+  '    const ingressRejection = nodeIngress.nodeRequestPreloadIngressRejection(request);',
+  '    if (ingressRejection !== undefined) {',
+].join('\n');
+const weakenedCliDevHostWebSocketFullAdmissionBranch = [
+  '    const ingressRejection =',
+  "      request.rawHeaders?.[2] === 'Host'",
+  '        ? undefined',
+  '        : nodeIngress.nodeRequestPreloadIngressRejection(request);',
+  '    if (ingressRejection !== undefined) {',
+].join('\n');
+const cliDevSourceFallbackFullAdmissionBranch = [
+  '    // SPEC §9.5: keep the post-app Vite fallback independently closed before URL parsing.',
+  '    if (nodeIngress.rejectNodeRequestPreloadIngress(request, response)) return;',
+  '    const authority = devRequestAuthority(request, httpServer, configuredHost, false);',
+].join('\n');
+const weakenedCliDevSourceFallbackFullAdmissionBranch = [
+  '    // SPEC §9.5: keep the post-app Vite fallback independently closed before URL parsing.',
+  "    if (request.rawHeaders?.[2] !== 'Host' &&",
+  '        nodeIngress.rejectNodeRequestPreloadIngress(request, response)) return;',
+  '    const authority = devRequestAuthority(request, httpServer, configuredHost, false);',
 ].join('\n');
 const cspReportBeforeDbAdmissionBranch = [
   '        if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {',
@@ -5338,6 +5400,19 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
+    description:
+      'Lets an ambiguous duplicate Host bypass the full Vite dev dispatcher preload verdict while retaining bodyless admission.',
+    expectedKiller:
+      'every full ingress failure must be rejected before Vite loads the dispatcher module',
+    name: 'server-vite/bypass-preload-full-ingress-admission',
+    replacement: weakenedViteDevPreloadFullAdmissionBranch,
+    search: viteDevPreloadBodylessAdmissionBranch,
+    sourceFile: serverViteDevPath,
+    sourceOnly: true,
+    test: assertViteDevPreloadFullAdmissionBehavior,
+  },
+  {
+    baseModule: {},
     description: 'Loads graph-local Vite server/app modules before GET/HEAD payload admission.',
     expectedKiller:
       'the directly callable graph-local dispatcher must reject body framing before SSR or app load',
@@ -5350,6 +5425,19 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
+    description:
+      'Lets an ambiguous duplicate Host bypass the graph-local full ingress verdict while retaining bodyless admission.',
+    expectedKiller:
+      'every full ingress failure must be rejected before graph-local server or app module load',
+    name: 'server-vite/bypass-graph-full-ingress-admission',
+    replacement: weakenedViteDevGraphFullAdmissionBranch,
+    search: viteDevGraphBodylessAdmissionBranch,
+    sourceFile: serverViteDevPath,
+    sourceOnly: true,
+    test: assertViteDevGraphFullAdmissionBehavior,
+  },
+  {
+    baseModule: {},
     description: 'Runs live Vite request filtering before GET/HEAD payload admission.',
     expectedKiller:
       'live Vite must reject body framing before a custom filter, diagnostics, or app code',
@@ -5359,6 +5447,58 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: serverVitePluginPath,
     sourceOnly: true,
     test: assertVitePluginBodylessAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Lets an ambiguous duplicate Host reach live Vite request filtering while retaining bodyless admission.',
+    expectedKiller:
+      'every full ingress failure must be rejected before a live Vite filter or app callback',
+    name: 'server-vite/bypass-live-full-ingress-admission',
+    replacement: weakenedVitePluginFullAdmissionBranch,
+    search: vitePluginBodylessAdmissionBranch,
+    sourceFile: serverVitePluginPath,
+    sourceOnly: true,
+    test: assertVitePluginFullAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Lets an ambiguous duplicate Host bypass the supported dev runner HTTP ingress verdict before its URL parser.',
+    expectedKiller:
+      'the outer dev-host HTTP door must run full ingress admission before URL parsing or downstream callbacks',
+    name: 'cli-dev/bypass-host-http-full-ingress-admission',
+    replacement: weakenedCliDevHostHttpFullAdmissionBranch,
+    search: cliDevHostHttpFullAdmissionBranch,
+    sourceFile: cliDevHostDoorPath,
+    sourceOnly: true,
+    test: assertCliDevHostFullAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Lets an ambiguous duplicate Host bypass the supported dev runner websocket ingress verdict before its URL parser.',
+    expectedKiller:
+      'the dev-host websocket door must run full ingress admission before URL parsing or Vite upgrade callbacks',
+    name: 'cli-dev/bypass-host-websocket-full-ingress-admission',
+    replacement: weakenedCliDevHostWebSocketFullAdmissionBranch,
+    search: cliDevHostWebSocketFullAdmissionBranch,
+    sourceFile: cliDevHostDoorPath,
+    sourceOnly: true,
+    test: assertCliDevHostFullAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Lets an ambiguous duplicate Host bypass the supported dev runner source fallback ingress verdict before its URL parser.',
+    expectedKiller:
+      'the source fallback door must repeat full ingress admission before URL parsing or downstream callbacks',
+    name: 'cli-dev/bypass-source-fallback-full-ingress-admission',
+    replacement: weakenedCliDevSourceFallbackFullAdmissionBranch,
+    search: cliDevSourceFallbackFullAdmissionBranch,
+    sourceFile: cliDevHostDoorPath,
+    sourceOnly: true,
+    test: assertCliDevHostFullAdmissionBehavior,
   },
   {
     baseModule: {},
@@ -6577,6 +6717,16 @@ function assertViteDevPreloadBodylessAdmissionBehavior(_moduleUnderTest, { sourc
   });
 }
 
+function assertViteDevPreloadFullAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'vite-dev.ts',
+    sourceText,
+    testFile: 'packages/server/src/vite-dev-middleware.test.ts',
+    testNamePattern: 'rejects full ingress failures before loading the Vite SSR dispatcher',
+  });
+}
+
 function assertViteDevGraphBodylessAdmissionBehavior(_moduleUnderTest, { sourceText }) {
   runIsolatedPackageVitestMutation({
     packageName: 'server',
@@ -6587,6 +6737,16 @@ function assertViteDevGraphBodylessAdmissionBehavior(_moduleUnderTest, { sourceT
   });
 }
 
+function assertViteDevGraphFullAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'vite-dev.ts',
+    sourceText,
+    testFile: 'packages/server/src/vite-dev-middleware.test.ts',
+    testNamePattern: 'rejects full ingress failures before graph-local Vite SSR or app loading',
+  });
+}
+
 function assertVitePluginBodylessAdmissionBehavior(_moduleUnderTest, { sourceText }) {
   runIsolatedPackageVitestMutation({
     packageName: 'server',
@@ -6594,6 +6754,27 @@ function assertVitePluginBodylessAdmissionBehavior(_moduleUnderTest, { sourceTex
     sourceText,
     testFile: 'packages/server/src/vite-dev-middleware.test.ts',
     testNamePattern: 'rejects body-framed GET before live Vite filtering or app dispatch',
+  });
+}
+
+function assertVitePluginFullAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'vite-plugin.ts',
+    sourceText,
+    testFile: 'packages/server/src/vite-dev-middleware.test.ts',
+    testNamePattern: 'rejects full ingress failures before live Vite filtering or app dispatch',
+  });
+}
+
+function assertCliDevHostFullAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'commands/dev-host-door.ts',
+    sourceText,
+    testFile: 'packages/cli/src/commands/dev-host-door.test.ts',
+    testNamePattern:
+      'runs complete ingress admission before URL parsing or downstream dev callbacks',
   });
 }
 

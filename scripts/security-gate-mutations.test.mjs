@@ -9,8 +9,8 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after enhanced replay delivery closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(307);
+  it('pins the exact forcing denominator after full Vite and dev-host ingress closure', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(320);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
@@ -117,6 +117,30 @@ describe('security-gate-mutations', () => {
     expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
     expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
     expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
+  });
+
+  it('forces full ingress admission at every pre-app Vite door', () => {
+    const names = [
+      'server-vite/bypass-graph-full-ingress-admission',
+      'server-vite/bypass-live-full-ingress-admission',
+      'server-vite/bypass-preload-full-ingress-admission',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
+  });
+
+  it('forces full ingress admission before every supported dev-host URL parser', () => {
+    const names = [
+      'cli-dev/bypass-host-http-full-ingress-admission',
+      'cli-dev/bypass-host-websocket-full-ingress-admission',
+      'cli-dev/bypass-source-fallback-full-ingress-admission',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
   });
 
   it('executes every finite security-IR mutant against a behavioral compiler oracle', () => {

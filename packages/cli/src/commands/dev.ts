@@ -40,6 +40,7 @@ import {
   configureKovoDevHostDoor,
   installKovoDevHostDoor,
   installKovoDevSourceFallbackDoor,
+  type KovoDevNodeIngressProfile,
 } from './dev-host-door.js';
 
 const NativeFunction = globalThis.Function;
@@ -172,7 +173,7 @@ export async function startKovoDevServer(
       await loadAuthoredDevConfig(bootstrapServer, configFile, root, options.mode),
     );
     const authoredPlugins = isolateAuthoredDevPluginOptions(authoredConfig.plugins);
-    const securityProfile = createDevSecurityProfilePlugins(kovoPlugin);
+    const securityProfile = createDevSecurityProfilePlugins(kovoPlugin, profile);
     const livePlugins = fixedDevPluginArray(
       securityProfile.prePlugin,
       kovoPlugin,
@@ -240,7 +241,7 @@ export async function runDevCommand(
   }
 }
 
-interface DevSecurityProfileModule {
+interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
   trustedKovoVitePlugin(options: {
     app: string;
     paranoidStaticAdvisory: boolean;
@@ -310,10 +311,24 @@ async function preloadDevSecurityProfile(
       '@kovojs/server/internal/vite-security-profile must export trustedKovoVitePlugin.',
     );
   }
-  return {
+  const nodeRequestPreloadIngressRejection = module.nodeRequestPreloadIngressRejection;
+  const rejectNodeRequestPreloadIngress = module.rejectNodeRequestPreloadIngress;
+  if (
+    typeof nodeRequestPreloadIngressRejection !== 'function' ||
+    typeof rejectNodeRequestPreloadIngress !== 'function'
+  ) {
+    throw new TypeError(
+      '@kovojs/server/internal/vite-security-profile must export the complete Node preload ingress controls.',
+    );
+  }
+  return nativeObjectFreeze({
+    nodeRequestPreloadIngressRejection:
+      nodeRequestPreloadIngressRejection as DevSecurityProfileModule['nodeRequestPreloadIngressRejection'],
+    rejectNodeRequestPreloadIngress:
+      rejectNodeRequestPreloadIngress as DevSecurityProfileModule['rejectNodeRequestPreloadIngress'],
     trustedKovoVitePlugin:
       trustedKovoVitePlugin as DevSecurityProfileModule['trustedKovoVitePlugin'],
-  };
+  });
 }
 
 async function loadAuthoredDevConfig(
@@ -698,7 +713,10 @@ function snapshotClientPluginHook(value: Record<string, unknown>, hookName: stri
   return freezeFrameworkPlugin(snapshot);
 }
 
-function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
+function createDevSecurityProfilePlugins(
+  kovoPlugin: PluginOption,
+  nodeIngress: KovoDevNodeIngressProfile,
+): {
   postPlugin: Plugin;
   prePlugin: Plugin;
 } {
@@ -714,7 +732,7 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
     configureServer: {
       order: 'pre',
       handler(server) {
-        installKovoDevHostDoor(server);
+        installKovoDevHostDoor(server, nodeIngress);
       },
     },
   });
@@ -757,7 +775,7 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
     configureServer: {
       order: 'post',
       handler(server) {
-        installKovoDevSourceFallbackDoor(server);
+        installKovoDevSourceFallbackDoor(server, nodeIngress);
       },
     },
   };

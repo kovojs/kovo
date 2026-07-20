@@ -55,7 +55,15 @@ interface DevRequestAuthority {
 interface DevRequestRejection {
   message: string;
   ok: false;
-  status: 400 | 401 | 403 | 503;
+  status: 400 | 401 | 403 | 413 | 414 | 503;
+}
+
+/** Bootstrap-captured direct-Node ingress controls for the supported dev host door. */
+export interface KovoDevNodeIngressProfile {
+  nodeRequestPreloadIngressRejection(
+    request: IncomingMessage,
+  ): { readonly message: string; readonly status: 400 | 413 | 414 } | undefined;
+  rejectNodeRequestPreloadIngress(request: IncomingMessage, response: ServerResponse): boolean;
 }
 
 /**
@@ -81,7 +89,10 @@ export function configureKovoDevHostDoor(server: DevServerOptions): void {
  * same token therefore authenticates source/env/module HTTP reads and wraps Vite's real websocket
  * upgrade listener, while exact Host/Origin checks close DNS rebinding before either transport.
  */
-export function installKovoDevHostDoor(server: ViteDevServer): void {
+export function installKovoDevHostDoor(
+  server: ViteDevServer,
+  nodeIngress: KovoDevNodeIngressProfile,
+): void {
   const configuredHost = exactLoopbackHost(server.config.server.host);
   const token = server.config.webSocketToken;
   if (!isBase64UrlToken(token)) {
@@ -94,6 +105,9 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
   }
 
   server.middlewares.use((request, response, next) => {
+    // SPEC §9.5: close the complete finite Node verdict before this outer door parses a URL,
+    // delegates to Vite, or reaches any authored/plugin callback.
+    if (nodeIngress.rejectNodeRequestPreloadIngress(request, response)) return;
     const authority = devRequestAuthority(request, httpServer, configuredHost, false);
     if (!authority.ok) {
       rejectHttpDevRequest(response, authority);
@@ -122,6 +136,15 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
     httpServer.removeListener('upgrade', upgradeListeners[index]!);
   }
   httpServer.on('upgrade', (request, socket, head) => {
+    const ingressRejection = nodeIngress.nodeRequestPreloadIngressRejection(request);
+    if (ingressRejection !== undefined) {
+      rejectWebSocketDevRequest(socket, {
+        message: ingressRejection.message,
+        ok: false,
+        status: ingressRejection.status,
+      });
+      return;
+    }
     const authority = devRequestAuthority(request, httpServer, configuredHost, true);
     if (!authority.ok) {
       rejectWebSocketDevRequest(socket, authority);
@@ -147,7 +170,10 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
  * filename or extension, so this complete fallback—not the suffix classifier—is the source/env
  * authentication boundary.
  */
-export function installKovoDevSourceFallbackDoor(server: ViteDevServer): void {
+export function installKovoDevSourceFallbackDoor(
+  server: ViteDevServer,
+  nodeIngress: KovoDevNodeIngressProfile,
+): void {
   const configuredHost = exactLoopbackHost(server.config.server.host);
   const token = server.config.webSocketToken;
   if (!isBase64UrlToken(token)) {
@@ -159,6 +185,8 @@ export function installKovoDevSourceFallbackDoor(server: ViteDevServer): void {
     throw new TypeError('Kovo dev requires one owned HTTP server for its source fallback door.');
   }
   server.middlewares.use((request, response, next) => {
+    // SPEC §9.5: keep the post-app Vite fallback independently closed before URL parsing.
+    if (nodeIngress.rejectNodeRequestPreloadIngress(request, response)) return;
     const authority = devRequestAuthority(request, httpServer, configuredHost, false);
     if (!authority.ok) {
       rejectHttpDevRequest(response, authority);
@@ -418,7 +446,7 @@ function rejectHttpDevRequest(response: ServerResponse, rejection: DevRequestRej
 function rejectWebSocketDevRequest(socket: Duplex, rejection: DevRequestRejection): void {
   const body = rejection.message;
   socket.end(
-    `HTTP/1.1 ${rejection.status} ${rejection.status === 400 ? 'Bad Request' : rejection.status === 503 ? 'Service Unavailable' : 'Forbidden'}\r\n` +
+    `HTTP/1.1 ${rejection.status} ${devWebSocketStatusText(rejection.status)}\r\n` +
       'Cache-Control: private, no-store\r\n' +
       'Connection: close\r\n' +
       `Content-Length: ${Buffer.byteLength(body)}\r\n` +
@@ -427,6 +455,15 @@ function rejectWebSocketDevRequest(socket: Duplex, rejection: DevRequestRejectio
       '\r\n' +
       body,
   );
+}
+
+function devWebSocketStatusText(status: DevRequestRejection['status']): string {
+  if (status === 400) return 'Bad Request';
+  if (status === 401) return 'Unauthorized';
+  if (status === 413) return 'Payload Too Large';
+  if (status === 414) return 'URI Too Long';
+  if (status === 503) return 'Service Unavailable';
+  return 'Forbidden';
 }
 
 function isBase64UrlToken(value: unknown): value is string {

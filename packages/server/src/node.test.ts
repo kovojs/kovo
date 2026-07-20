@@ -30,7 +30,12 @@ import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { endpoint } from './endpoint.js';
 import { mutation } from './mutation.js';
-import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
+import {
+  nodeRequestPreloadIngressRejection,
+  nodeRequestToWebRequest,
+  toNodeHandler,
+  writeWebResponseToNode,
+} from './node.js';
 import { query } from './query.js';
 import { endpointRequestWithoutSession, resolveKovoLifecycleRequest } from './response-posture.js';
 import { respond, routeOutcomeResponse, routeResponseToWebResponse } from './response.js';
@@ -52,6 +57,28 @@ function nodeRequest(url: string): IncomingMessage {
 }
 
 describe('server node adapter', () => {
+  it('projects the complete preload verdict for response-less adapter doors', () => {
+    const ambiguousAuthority = nodeRequest('/ambiguous-authority');
+    ambiguousAuthority.rawHeaders = ['Host', 'internal.example', 'Host', 'internal.example'];
+    const bodyFramedGet = nodeRequest('/body-framed');
+    bodyFramedGet.headers = { host: 'internal.example', 'transfer-encoding': 'chunked' };
+    const overBudgetTarget = nodeRequest(`/${'x'.repeat(MAX_REQUEST_URL_CHARACTERS)}`);
+
+    expect(nodeRequestPreloadIngressRejection(ambiguousAuthority)).toEqual({
+      message: 'Bad Request',
+      status: 400,
+    });
+    expect(nodeRequestPreloadIngressRejection(bodyFramedGet)).toEqual({
+      message: 'Payload Too Large',
+      status: 413,
+    });
+    expect(nodeRequestPreloadIngressRejection(overBudgetTarget)).toEqual({
+      message: 'URI Too Long',
+      status: 414,
+    });
+    expect(nodeRequestPreloadIngressRejection(nodeRequest('/accepted'))).toBeUndefined();
+  });
+
   it('preserves exact case-sensitive HTTP methods across the Fetch boundary', () => {
     for (const method of [
       'get',

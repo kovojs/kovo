@@ -443,6 +443,8 @@ export async function dispatchKovoAppShellViteDevRequest(
   if (options.devDiagnostics) registerRequestDiagnosticStore(options.devDiagnostics);
   if (rejectNodeRequestPreloadIngress(request, response)) return;
 
+  // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close
+  // before this graph-local bootstrap or any authored app module can evaluate.
   // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app
   // graph. Runtime-specific controls such as command execution remain tree-shakeable in production
   // bundles, but an authored dependency cannot run first and influence their dev-time capture.
@@ -535,8 +537,8 @@ export function kovoAppShellViteDevPlugin(
       ...(server.ws === undefined ? {} : { ws: server.ws }),
     });
     server.middlewares.use((request, response, next) => {
-      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before
-      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.
+      // SPEC §9.5: apply the complete direct-Node ingress verdict before loading the app graph.
+      // The graph-local dispatcher repeats this internal callable gate.
       if (rejectNodeRequestPreloadIngress(request, response)) return;
       const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));
       const dispatched = securityPromiseThen(loaded, (serverModule) => {

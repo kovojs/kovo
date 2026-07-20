@@ -485,6 +485,22 @@ interface PreparedNodeRequestIngress {
 
 type NodeRequestIngressIssue = RequestIngressIssue | 'bodyless-payload';
 
+type NodeRequestPreloadIngressIssue = NodeRequestIngressIssue | 'bodyless-payload' | 'target-limit';
+
+/** @internal Finite rejection projected for non-HTTP-response doors such as websocket upgrade. */
+export interface NodeRequestPreloadIngressRejection {
+  readonly message: 'Bad Request' | 'Payload Too Large' | 'URI Too Long';
+  readonly status: 400 | 413 | 414;
+}
+
+type PreparedNodeRequestPreloadIngress =
+  | { readonly ok: true; readonly request: PinnedNodeRequest }
+  | {
+      readonly issue: NodeRequestPreloadIngressIssue;
+      readonly ok: false;
+      readonly request: PinnedNodeRequest;
+    };
+
 function snapshotNodeHandlerOptions(options: NodeHandlerOptions): PinnedNodeHandlerOptions {
   const compression = optionalOwnDataProperty(options, 'compression');
   const earlyHints = optionalOwnDataProperty(options, 'earlyHints');
@@ -829,14 +845,41 @@ export function nodeRequestToWebRequest(
   return nodeRequestToWebRequestFromPrepared(prepared.value, nodeResponse);
 }
 
-/** @internal Reject raw-target amplification or body erasure before Vite loads an app graph. */
+/**
+ * @internal Apply the complete direct-Node ingress verdict before Vite loads an app graph or calls
+ * authored request filters. This intentionally reuses the same snapshot, finite classifier, and
+ * rejection writer as toNodeHandler(); a smaller Vite-only grammar would drift from SPEC §9.5.
+ */
 export function rejectNodeRequestPreloadIngress(
   nodeRequest: IncomingMessage,
   nodeResponse: ServerResponse,
 ): boolean {
-  const pinnedTarget = snapshotNodeRequestTarget(nodeRequest);
-  if (rejectPinnedNodeRequestTargetLimit(pinnedTarget, nodeResponse)) return true;
-  return rejectPinnedNodeRequestBodylessPayload(snapshotNodeRequest(nodeRequest), nodeResponse);
+  const prepared = prepareNodeRequestPreloadIngress(nodeRequest);
+  if (prepared.ok) return false;
+  if (prepared.issue === 'target-limit') {
+    rejectPinnedNodeRequestTargetLimit(prepared.request, nodeResponse);
+    return true;
+  }
+  rejectPinnedNodeRequestIngress(prepared.request, nodeResponse, prepared.issue);
+  return true;
+}
+
+/**
+ * @internal Project the same complete direct-Node ingress verdict for doors without a
+ * `ServerResponse`, notably the supported dev runner's websocket upgrade door (SPEC §9.5).
+ */
+export function nodeRequestPreloadIngressRejection(
+  nodeRequest: IncomingMessage,
+): NodeRequestPreloadIngressRejection | undefined {
+  const prepared = prepareNodeRequestPreloadIngress(nodeRequest);
+  if (prepared.ok) return undefined;
+  if (prepared.issue === 'target-limit') {
+    return witnessFreeze({ message: 'URI Too Long', status: 414 });
+  }
+  if (prepared.issue === 'bodyless-payload') {
+    return witnessFreeze({ message: 'Payload Too Large', status: 413 });
+  }
+  return witnessFreeze({ message: 'Bad Request', status: 400 });
 }
 
 /** @internal Reject an over-budget raw Node target before any URL construction or handler load. */
@@ -1242,21 +1285,10 @@ function rejectPinnedNodeRequestIngress(
 }
 
 /**
- * SPEC §9.5: Fetch cannot represent GET/HEAD request bodies. Reject every transport witness
- * that could otherwise be erased at that boundary: positive Content-Length, any HTTP/1 transfer
- * coding, or an HTTP/2 stream whose HEADERS did not carry END_STREAM. This is deliberately finite
- * and synchronous, so an incomplete peer cannot hold an adapter-side drain open before Kovo's
- * request deadline exists.
+ * SPEC §9.5: Fetch cannot represent GET/HEAD request bodies. Detect every transport witness that
+ * could otherwise be erased at that boundary: positive Content-Length, any HTTP/1 transfer coding,
+ * or an HTTP/2 stream whose HEADERS did not carry END_STREAM.
  */
-function rejectPinnedNodeRequestBodylessPayload(
-  request: PinnedNodeRequest,
-  response: ServerResponse,
-): boolean {
-  if (!pinnedNodeRequestHasBodylessPayload(request)) return false;
-  rejectPinnedNodeRequestIngress(request, response, 'bodyless-payload');
-  return true;
-}
-
 function pinnedNodeRequestHasBodylessPayload(request: PinnedNodeRequest): boolean {
   if (!witnessSetHas(bodylessMethods, request.method)) return false;
   const contentLength = request.headers['content-length'];
@@ -1637,6 +1669,17 @@ function preparePinnedNodeRequestIngress(
     ok: true,
     value: witnessFreeze({ decision: immutableDecision, options, request }),
   };
+}
+
+function prepareNodeRequestPreloadIngress(
+  nodeRequest: IncomingMessage,
+): PreparedNodeRequestPreloadIngress {
+  const request = snapshotNodeRequest(nodeRequest);
+  if (requestUrlLimitFailure(request.rawTarget) !== undefined) {
+    return { issue: 'target-limit', ok: false, request };
+  }
+  const prepared = preparePinnedNodeRequestIngress(request, snapshotNodeHandlerOptions({}));
+  return prepared.ok ? { ok: true, request } : { issue: prepared.issue, ok: false, request };
 }
 
 function requestIngressFailureMessage(issue: NodeRequestIngressIssue): string {

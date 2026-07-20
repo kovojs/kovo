@@ -19,6 +19,72 @@ import { nodeFetch } from './vite-test-http.js';
 import { renderedHtml } from './html.js';
 import { MAX_REQUEST_QUERY_ENTRIES } from './request-url-limits.js';
 
+interface RejectedVitePreAppIngress {
+  readonly body: 'Bad Request' | 'Payload Too Large' | 'URI Too Long';
+  readonly label: string;
+  readonly request: IncomingMessage;
+  readonly status: 400 | 413 | 414;
+}
+
+function rejectedVitePreAppIngress(): readonly RejectedVitePreAppIngress[] {
+  const base = {
+    __kovoRequestIngressSource: 'node-http1',
+    complete: true,
+    headers: { host: 'app.test' },
+    httpVersion: '1.1',
+    method: 'GET',
+    rawHeaders: ['Host', 'app.test'],
+    socket: { remoteAddress: '203.0.113.7' } as Socket,
+    url: '/cart',
+  } as const;
+  return [
+    {
+      body: 'Bad Request',
+      label: 'duplicate Host',
+      request: {
+        ...base,
+        rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
+      } as IncomingMessage,
+      status: 400,
+    },
+    {
+      body: 'Bad Request',
+      label: 'case-changing method',
+      request: { ...base, method: 'get' } as IncomingMessage,
+      status: 400,
+    },
+    {
+      body: 'Bad Request',
+      label: 'mixed HTTP/2 source posture',
+      request: {
+        ...base,
+        __kovoRequestIngressEndStream: true,
+        __kovoRequestIngressSource: 'node-http2',
+      } as IncomingMessage,
+      status: 400,
+    },
+    {
+      body: 'URI Too Long',
+      label: 'over-breadth target',
+      request: {
+        ...base,
+        url: `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
+      } as IncomingMessage,
+      status: 414,
+    },
+    {
+      body: 'Payload Too Large',
+      label: 'body-framed GET',
+      request: {
+        ...base,
+        headers: { host: 'app.test', 'transfer-encoding': 'chunked' },
+        rawHeaders: ['Host', 'app.test', 'Transfer-Encoding', 'chunked'],
+      } as IncomingMessage,
+      status: 413,
+    },
+  ];
+}
+
 describe('server app shell Vite plugin', () => {
   it('rejects over-breadth targets before loading the Vite SSR or app graph', () => {
     const middlewares: KovoAppShellViteMiddleware[] = [];
@@ -39,10 +105,12 @@ describe('server app shell Vite plugin', () => {
       },
     });
     const request = {
+      __kovoRequestIngressSource: 'node-http1',
       complete: true,
-      headers: {},
+      headers: { host: 'app.test' },
       httpVersion: '1.1',
       method: 'GET',
+      rawHeaders: ['Host', 'app.test'],
       socket: { remoteAddress: '203.0.113.7' } as Socket,
       url: `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
     } as IncomingMessage;
@@ -118,12 +186,10 @@ describe('server app shell Vite plugin', () => {
     expect(nextCalls).toBe(0);
   });
 
-  it('rejects ambiguous authority before loading the Vite SSR dispatcher', () => {
+  it('rejects full ingress failures before loading the Vite SSR dispatcher', () => {
     const middlewares: KovoAppShellViteMiddleware[] = [];
     const loadedModuleIds: string[] = [];
     let nextCalls = 0;
-    let responseBody = '';
-    let responseStatus = 0;
     const plugin = kovoAppShellViteDevPlugin();
     plugin.configureServer({
       middlewares: {
@@ -136,38 +202,32 @@ describe('server app shell Vite plugin', () => {
         return { dispatchKovoAppShellViteDevRequest() {} };
       },
     });
-    const request = {
-      __kovoRequestIngressSource: 'node-http1',
-      complete: true,
-      headers: { host: 'app.test' },
-      httpVersion: '1.1',
-      method: 'GET',
-      rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
-      socket: { remoteAddress: '203.0.113.7' } as Socket,
-      url: '/cart',
-    } as IncomingMessage;
-    const response = {
-      end(body?: string) {
-        responseBody = body ?? '';
-        return this;
-      },
-      headersSent: false,
-      writeHead(status: number) {
-        responseStatus = status;
-        return this;
-      },
-    } as unknown as ServerResponse;
+    for (const ingress of rejectedVitePreAppIngress()) {
+      let responseBody = '';
+      let responseStatus = 0;
+      const response = {
+        end(body?: string) {
+          responseBody = body ?? '';
+          return this;
+        },
+        headersSent: false,
+        writeHead(status: number) {
+          responseStatus = status;
+          return this;
+        },
+      } as unknown as ServerResponse;
 
-    middlewares[0]?.(request, response, () => {
-      nextCalls += 1;
-    });
+      middlewares[0]?.(ingress.request, response, () => {
+        nextCalls += 1;
+      });
 
-    expect(loadedModuleIds).toEqual([]);
-    expect(nextCalls).toBe(0);
-    expect({ body: responseBody, status: responseStatus }).toEqual({
-      body: 'Bad Request',
-      status: 400,
-    });
+      expect(loadedModuleIds, ingress.label).toEqual([]);
+      expect(nextCalls, ingress.label).toBe(0);
+      expect({ body: responseBody, status: responseStatus }, ingress.label).toEqual({
+        body: ingress.body,
+        status: ingress.status,
+      });
+    }
   });
 
   it('rejects body-framed GET before graph-local Vite SSR or app loading', async () => {
@@ -221,60 +281,52 @@ describe('server app shell Vite plugin', () => {
     expect(nextCalls).toBe(0);
   });
 
-  it('rejects ambiguous authority before graph-local Vite SSR or app loading', async () => {
+  it('rejects full ingress failures before graph-local Vite SSR or app loading', async () => {
     const app = createApp({
       routes: [route('/cart', { page: () => trustedHtml('<main>unreachable</main>') })],
     });
     const loadedModuleIds: string[] = [];
     const shouldHandleRequest = vi.fn(() => false);
     let nextCalls = 0;
-    let responseBody = '';
-    let responseStatus = 0;
-    const request = {
-      __kovoRequestIngressSource: 'node-http1',
-      complete: true,
-      headers: { host: 'app.test' },
-      httpVersion: '1.1',
-      method: 'GET',
-      rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
-      socket: { remoteAddress: '203.0.113.7' } as Socket,
-      url: '/cart',
-    } as IncomingMessage;
-    const response = {
-      end(body?: string) {
-        responseBody = body ?? '';
-        return this;
-      },
-      headersSent: false,
-      writeHead(status: number) {
-        responseStatus = status;
-        return this;
-      },
-    } as unknown as ServerResponse;
-
-    await dispatchKovoAppShellViteDevRequest(
-      {
-        middlewares: { use() {} },
-        async ssrLoadModule(id) {
-          loadedModuleIds.push(id);
-          return { default: app };
+    for (const ingress of rejectedVitePreAppIngress()) {
+      let responseBody = '';
+      let responseStatus = 0;
+      const response = {
+        end(body?: string) {
+          responseBody = body ?? '';
+          return this;
         },
-      },
-      { shouldHandleRequest },
-      request,
-      response,
-      () => {
-        nextCalls += 1;
-      },
-    );
+        headersSent: false,
+        writeHead(status: number) {
+          responseStatus = status;
+          return this;
+        },
+      } as unknown as ServerResponse;
 
-    expect(loadedModuleIds).toEqual([]);
-    expect(shouldHandleRequest).not.toHaveBeenCalled();
-    expect(nextCalls).toBe(0);
-    expect({ body: responseBody, status: responseStatus }).toEqual({
-      body: 'Bad Request',
-      status: 400,
-    });
+      await dispatchKovoAppShellViteDevRequest(
+        {
+          middlewares: { use() {} },
+          async ssrLoadModule(id) {
+            loadedModuleIds.push(id);
+            return { default: app };
+          },
+        },
+        { shouldHandleRequest },
+        ingress.request,
+        response,
+        () => {
+          nextCalls += 1;
+        },
+      );
+
+      expect(loadedModuleIds, ingress.label).toEqual([]);
+      expect(shouldHandleRequest, ingress.label).not.toHaveBeenCalled();
+      expect(nextCalls, ingress.label).toBe(0);
+      expect({ body: responseBody, status: responseStatus }, ingress.label).toEqual({
+        body: ingress.body,
+        status: ingress.status,
+      });
+    }
   });
 
   it('rejects body-framed GET before live Vite filtering or app dispatch', () => {
@@ -329,15 +381,13 @@ describe('server app shell Vite plugin', () => {
     expect(nextCalls).toBe(0);
   });
 
-  it('rejects ambiguous authority before live Vite filtering or app dispatch', () => {
+  it('rejects full ingress failures before live Vite filtering or app dispatch', () => {
     const middlewares: KovoAppShellViteMiddleware[] = [];
     const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
     const shouldHandleRequest = vi.fn(() => false);
     const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', { page })] }), {
       shouldHandleRequest,
     });
-    let responseBody = '';
-    let responseStatus = 0;
     let nextCalls = 0;
     plugin.configureServer({
       middlewares: {
@@ -346,39 +396,33 @@ describe('server app shell Vite plugin', () => {
         },
       },
     });
-    const request = {
-      __kovoRequestIngressSource: 'node-http1',
-      complete: true,
-      headers: { host: 'app.test' },
-      httpVersion: '1.1',
-      method: 'GET',
-      rawHeaders: ['Host', 'app.test', 'Host', 'attacker.test'],
-      socket: { remoteAddress: '203.0.113.7' } as Socket,
-      url: '/cart',
-    } as IncomingMessage;
-    const response = {
-      end(body?: string) {
-        responseBody = body ?? '';
-        return this;
-      },
-      headersSent: false,
-      writeHead(status: number) {
-        responseStatus = status;
-        return this;
-      },
-    } as unknown as ServerResponse;
+    for (const ingress of rejectedVitePreAppIngress()) {
+      let responseBody = '';
+      let responseStatus = 0;
+      const response = {
+        end(body?: string) {
+          responseBody = body ?? '';
+          return this;
+        },
+        headersSent: false,
+        writeHead(status: number) {
+          responseStatus = status;
+          return this;
+        },
+      } as unknown as ServerResponse;
 
-    middlewares[0]?.(request, response, () => {
-      nextCalls += 1;
-    });
+      middlewares[0]?.(ingress.request, response, () => {
+        nextCalls += 1;
+      });
 
-    expect(shouldHandleRequest).not.toHaveBeenCalled();
-    expect(page).not.toHaveBeenCalled();
-    expect(nextCalls).toBe(0);
-    expect({ body: responseBody, status: responseStatus }).toEqual({
-      body: 'Bad Request',
-      status: 400,
-    });
+      expect(shouldHandleRequest, ingress.label).not.toHaveBeenCalled();
+      expect(page, ingress.label).not.toHaveBeenCalled();
+      expect(nextCalls, ingress.label).toBe(0);
+      expect({ body: responseBody, status: responseStatus }, ingress.label).toEqual({
+        body: ingress.body,
+        status: ingress.status,
+      });
+    }
   });
 
   it('owns the app-shell dev plugin option matrix for generated module loading', async () => {

@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
@@ -1690,8 +1690,13 @@ function request(
   } = {},
 ): IncomingMessage {
   return {
-    headers: options.headers ?? {},
+    __kovoRequestIngressSource: 'node-http1',
+    complete: true,
+    headers: { host: 'app.test', ...options.headers },
+    httpVersion: '1.1',
     method: options.method ?? 'GET',
+    rawHeaders: ['Host', 'app.test'],
+    socket: { remoteAddress: '203.0.113.7' } as Socket,
     url,
   } as IncomingMessage;
 }

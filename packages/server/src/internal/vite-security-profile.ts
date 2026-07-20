@@ -1,6 +1,7 @@
 import type { KovoVitePlugin, KovoVitePluginOptions } from '../vite.js';
 import { kovo } from '../vite.js';
 import { createKovoAppShellViteDevIntegration } from '../vite-dev.js';
+export { nodeRequestPreloadIngressRejection, rejectNodeRequestPreloadIngress } from '../node.js';
 import {
   trustedViteSecurityProfileIntegrationSentinel,
   trustedViteSecurityProfileParanoidSentinel,

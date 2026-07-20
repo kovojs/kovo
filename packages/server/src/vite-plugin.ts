@@ -56,8 +56,8 @@ export function kovoAppShellVitePlugin(
   return {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        // SPEC §9.5: Vite must close bodyless-method framing before a custom request filter,
-        // diagnostic renderer, or app handler can observe the request.
+        // SPEC §9.5: Vite must close the complete direct-Node ingress verdict before a custom
+        // request filter, diagnostic renderer, or app handler can observe the request.
         if (rejectNodeRequestPreloadIngress(request, response)) return;
         const shouldHandle =
           options.shouldHandleRequest?.(request, app) ??
