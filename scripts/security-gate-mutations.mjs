@@ -127,6 +127,7 @@ const trustedHtmlProvenancePath = path.join(
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
 const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const serverAppPath = path.join(repoRoot, 'packages/server/src/app.ts');
 const appRequestPath = path.join(repoRoot, 'packages/server/src/app-request.ts');
 const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
 const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
@@ -1354,27 +1355,35 @@ const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
-const requestBodyBeforeDbAdmissionBranch = [
-  '        const dispatchRequest =',
-  "          match.kind === 'endpoint' || match.kind === 'mutation'",
-  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
-  '            : deadlineRequest;',
-  "        if (match.kind === 'endpoint' || match.kind === 'mutation') {",
-  '          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);',
+const requestBodyBeforeDbAdmissionBranch =
+  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)';
+const weakenedRequestBodyBeforeDbAdmissionBranch = '            ? deadlineRequest';
+const cspReportBeforeDbAdmissionBranch = [
+  '        if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {',
+  '          return kovoSecurityReportResponse(app, deadlineRequest);',
   '        }',
-  '',
-  '        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);',
 ].join('\n');
-const weakenedRequestBodyBeforeDbAdmissionBranch = [
-  '        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);',
-  '',
-  '        const dispatchRequest =',
-  "          match.kind === 'endpoint' || match.kind === 'mutation'",
-  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
-  '            : deadlineRequest;',
-  "        if (match.kind === 'endpoint' || match.kind === 'mutation') {",
-  '          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);',
+const weakenedCspReportBeforeDbAdmissionBranch = [
+  '        if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {',
+  '          if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);',
+  '          return kovoSecurityReportResponse(app, deadlineRequest);',
   '        }',
+].join('\n');
+const taskStartupAfterRequestAdmissionBranch = [
+  '      if (taskRuntime === undefined) return handleAppRequest(app, dispatchRequest);',
+  '      return handleAppRequest(app, dispatchRequest, {',
+  '        admitted(admittedRequest) {',
+  '          void taskRuntime.ensureStarted(admittedRequest).catch((error: unknown) => {',
+  '            reportAppStartupError(app, admittedRequest, error);',
+  '          });',
+  '        },',
+  '      });',
+].join('\n');
+const weakenedTaskStartupAfterRequestAdmissionBranch = [
+  '      void taskRuntime?.ensureStarted(dispatchRequest).catch((error: unknown) => {',
+  '        reportAppStartupError(app, dispatchRequest, error);',
+  '      });',
+  '      return handleAppRequest(app, dispatchRequest);',
 ].join('\n');
 const taskScheduleSchemaAdmission =
   '  const parsedArgs = await parseSchemaAsync(input.definition.input, input.args);';
@@ -4607,6 +4616,29 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
+      'Starts the durable-task database runtime before coarse request and streamed-body admission.',
+    expectedKiller: 'rejected remote bodies must not resolve or provision the task database',
+    name: 'server-request/move-task-startup-before-body-admission',
+    replacement: weakenedTaskStartupAfterRequestAdmissionBranch,
+    search: taskStartupAfterRequestAdmissionBranch,
+    sourceFile: serverAppPath,
+    sourceOnly: true,
+    test: assertTaskStartupFollowsRequestAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Runs app database admission before the reserved bounded CSP report reader.',
+    expectedKiller: 'reserved audit-only reports must not acquire the application database',
+    name: 'server-request/admit-db-before-csp-report-reader',
+    replacement: weakenedCspReportBeforeDbAdmissionBranch,
+    search: cspReportBeforeDbAdmissionBranch,
+    sourceFile: appRequestPath,
+    sourceOnly: true,
+    test: assertCspReportAvoidsDbAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
       'Persists raw follow-on task arguments before the child schema admits and canonicalizes them.',
     expectedKiller: 'task scheduling must validate child arguments before keyed queue persistence',
     name: 'server-task/drop-follow-on-schema-admission',
@@ -5253,6 +5285,26 @@ function assertRequestBodyPrecedesDbAdmissionBehavior(_moduleUnderTest, { source
     sourceText,
     testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
     testNamePattern: 'rejects an oversized streamed body before managed database admission',
+  });
+}
+
+function assertTaskStartupFollowsRequestAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'app.ts',
+    sourceText,
+    testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
+    testNamePattern: 'rejects an oversized streamed body before managed database admission',
+  });
+}
+
+function assertCspReportAvoidsDbAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'app-request.ts',
+    sourceText,
+    testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
+    testNamePattern: 'keeps the reserved bounded CSP report reader outside app database admission',
   });
 }
 

@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after TASK B routing closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(293);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(295);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
