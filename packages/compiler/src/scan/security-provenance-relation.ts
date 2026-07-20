@@ -56,9 +56,13 @@ export const serverBaseProvenanceStates = [
   'database-relational-table-namespace',
   'database-table-namespace',
   'database-write-namespace',
+  'derived-dataset',
+  'derived-query-call',
+  'derived-upsert-call',
   'headers',
   'global-object',
   'foreign-executable',
+  'governed-data',
   'intrinsic-identity-call',
   'intrinsic-object',
   'local',
@@ -146,10 +150,17 @@ export const serverExpressionProvenanceArmCensus = {
     id: 'fallthrough-containment-oracle',
     implementationWalks: [
       'foreign-executable-containment',
+      'governed-data-containment',
       'unsafe-wire-data-containment',
       'authority-containment',
     ],
-    outcomes: ['local', 'foreign-executable', 'unsafe-wire-data', 'unknown-authority'],
+    outcomes: [
+      'local',
+      'foreign-executable',
+      'governed-data',
+      'unsafe-wire-data',
+      'unknown-authority',
+    ],
   },
   syntaxDependent: ['object-literal-implicit-protocol-shape'],
 } as const;
@@ -170,7 +181,7 @@ export const provenanceDomainHonesty = {
     'browser provenance is censused here but its syntax-dependent transfer relation is not claimed decidable by this table',
   ],
   planSnapshotDrift:
-    'the current compiler has 39 server states: scoped-key-call is explicit and unsafe-wire-data carries request/error body provenance without pretending data is capability authority',
+    'the current compiler has 43 server states: derived-dataset plus its query/upsert call states are explicit authority, governed-data preserves owner/governed read provenance, scoped-key-call is explicit, and unsafe-wire-data carries request/error body provenance without pretending data is capability authority',
 } as const;
 
 /** Static names whose behavior is not represented solely by the two DB-operation predicates. */
@@ -225,6 +236,7 @@ export const serverLiteralMembers = [
   'stream',
   'systemStateKey',
   'tx',
+  'upsert',
   'values',
   'write',
 ] as const;
@@ -443,11 +455,21 @@ const serverBaseMemberRules = {
       'database-write-operation': operation('server.database.write'),
     },
   },
+  'derived-dataset': {
+    default: 'unknown-authority',
+    overrides: {
+      [literal('query')]: 'derived-query-call',
+      [literal('upsert')]: 'derived-upsert-call',
+    },
+  },
+  'derived-query-call': { default: 'unknown-authority' },
+  'derived-upsert-call': { default: 'unknown-authority' },
   'foreign-executable': { default: 'foreign-executable' },
   'global-object': {
     default: 'unknown-authority',
     overrides: { [literal('Response')]: 'response-constructor' },
   },
+  'governed-data': { default: 'governed-data' },
   headers: {
     default: 'unknown-authority',
     overrides: {
@@ -552,8 +574,12 @@ const serverBaseAuthorityRelation = {
   'database-relational-table-namespace': true,
   'database-table-namespace': true,
   'database-write-namespace': true,
+  'derived-dataset': true,
+  'derived-query-call': true,
+  'derived-upsert-call': true,
   'foreign-executable': false,
   'global-object': true,
+  'governed-data': false,
   headers: true,
   'intrinsic-identity-call': false,
   'intrinsic-object': false,

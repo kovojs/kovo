@@ -659,9 +659,13 @@ discharge every `server.helper.call` over `kovo-security-semantic-graph/v2`, a n
 nodes are enrolled handler roots, exact same-file callables, finite operations, and explicit closed
 verdicts. This is not a JavaScript evaluator, SSA optimizer, or type-inference engine. Its complete
 value lattice is: plain local data; request/context authority; managed database, structured-header,
-storage, response-constructor, response-outcome, and principal-scope authority; one exact
-`operation:<securityOperationKind>` terminal; and absorbing unknown authority. The scanner is the
-only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
+storage, response-constructor, response-outcome, principal-scope, and exact module-constant
+`derived()` dataset authority; one exact `operation:<securityOperationKind>` terminal;
+non-authority `governed-data` carried by managed database and derived-dataset reads; and absorbing
+unknown authority. `governed-data` survives reviewed calls, static member projection, containers,
+aliases, destructuring, binary/conditional joins, and same-file helper arguments so a persistent
+non-engine sink cannot erase owner/governed provenance merely by reshaping a value. The scanner is
+the only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
 typed facts (SPEC §5.2 rule 10).
 
 Version 2 is unconditional; consumers MUST reject version 1 rather than enter a compatibility
@@ -686,7 +690,8 @@ authority.
 Transfer semantics are finite. An exact immutable alias preserves its lattice value. Static object
 destructuring applies the reviewed member transition one property at a time. Results of finite
 operations are plain data, except the explicit principal-scope acquisition that returns a scoped
-context. Passing authority to an exact immutable same-file helper maps each positional argument to
+context and managed database/derived-dataset reads that return `governed-data`. Passing authority or
+governed data to an exact immutable same-file helper maps each positional argument to
 that helper's parameter binding and computes a context-sensitive summary keyed by the complete
 authority-input vector. Summaries are computed callee-first and merged back into the caller; nested
 helper operations retain the source root and ordered transfer path. Returning or throwing
@@ -931,8 +936,8 @@ posture inherits that composite-key exception.
 
 The public TypeScript type is ergonomics, not the proof. A module-private runtime witness owns the
 frame and exact posture facts; storage, signed-URL, stored-file-response, durable-task queue,
-mutation-replay, and bounded rate-limit doors MUST authenticate that witness before reading any
-fields or deriving a namespace. Bare strings,
+mutation-replay, bounded rate-limit, and derived-dataset doors MUST authenticate that witness before
+reading any fields or deriving a namespace. Bare strings,
 casts, object literals, copied properties, proxies, malformed/non-canonical persisted frames, and
 unregistered system postures fail **KV450**. A validated key remains opaque to app code; framework
 internals may restore a persisted frame only through the same canonical parser and finite-posture
@@ -945,6 +950,33 @@ the value through the exact `scopedKey`, `publicScopedKey`, task `stateKey`, or 
 `systemStateKey` constructor. Casts, structural lookalikes, runtime-selected options, computed
 properties, and option spreads do not establish provenance. This compile gate is an author-facing
 early closure only; the module-private runtime witness remains the enforcing authority at the sink.
+
+**Derived vector datasets inherit authorization (normative).** The only supported transition from
+managed owner-scoped/governed database data into a persistent non-engine vector/RAG artifact is the
+exact module-constant `derived(adapter, { key: <non-empty static string>, kind: 'vector' })` door.
+Every `query(request, query)` and `upsert(request, records)` operation MUST receive the exact
+framework request carrier. The runtime re-runs `scopedKey(request, 'derived/vector/' + key)` for
+every operation and constructs the physical namespace as
+`kovo-derived-vector-v1/<sha256(complete-canonical-ScopedKey-frame)>`; neither an app call site nor a
+query/write payload can provide or replace that namespace. Query results and upsert arrays are
+dense, bounded, immutable snapshots at the adapter boundary, and adapter callables are pinned at
+construction. Equal logical keys under different principals therefore produce different physical
+artifact identities, while reads under the same principal reconstruct the identity used by writes.
+
+The compiler tracks managed DB and derived reads as `governed-data` and emits **KV452** when that
+provenance reaches storage `put`, framework egress, or a durable-task payload outside the exact
+`derived()` door; transforms, aliases, containers, conditionals, and exact same-file helpers do not
+erase the label. A derived read/write with a missing, forged, or non-request first argument is also
+KV452. A same-spelled local, imported lookalike, alias, dynamic options object, spread, surplus key,
+unsupported kind, or request-time constructor does not acquire derived-dataset authority and remains
+inside the ordinary KV449 fail-closed rules.
+
+The adapter is a deployment boundary, not an authorization proof: Kovo guarantees that it supplies
+only the reconstructed opaque namespace, but the selected adapter/service MUST faithfully isolate
+that namespace. An adapter that ignores, truncates, aliases, or externally broadens the namespace
+invalidates the derived-artifact isolation claim and is a retained deployment obligation. Deliberate
+same-process code that captures the adapter input and performs another raw write remains outside the
+app-level proof per the capability-closure boundary above.
 
 Memory storage keys by the complete frame. Filesystem storage hashes the complete frame with SHA-256
 for its bounded physical slot and atomically records the exact frame in the sidecar, refusing a

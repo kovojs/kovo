@@ -185,6 +185,16 @@ export type {
   PasswordVerifyResult,
 } from './password.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from './access.js';
+// SPEC §6.6 / §10.3 C9: derived datasets inherit the exact request principal through a
+// runtime-witnessed ScopedKey namespace; the vector/RAG adapter cannot accept an app namespace.
+export { derived } from './derived-dataset.js';
+export type {
+  DerivedVectorDataset,
+  DerivedVectorDatasetOptions,
+  DerivedVectorQueryInput,
+  DerivedVectorStoreAdapter,
+  DerivedVectorUpsertInput,
+} from './derived-dataset.js';
 // SPEC §6.6 / §9.1: storage capability constructors are public app wiring surfaces for
 // upload/file schemas and the framework-owned capability download endpoint.
 export {

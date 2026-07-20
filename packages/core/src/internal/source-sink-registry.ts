@@ -360,6 +360,31 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     trust: 'filesystem-and-object-storage-boundary',
   },
   {
+    consumers: [
+      'compiler-governed-data-provenance',
+      'derived-vector-dataset',
+      'vector-store-adapter',
+    ],
+    context: 'owner-scoped.database-to-derived.vector-index',
+    diagnostic: 'KV452',
+    escapeHatch: 'derived(adapter,{key,kind:vector})',
+    firstParser: 'finite-security-ir-governed-data-provenance+derived-options-validator',
+    guard:
+      'exact-derived-constructor+exact-request-principal-binding+governed-data-persistent-sink-gate',
+    runtimeGuard:
+      'request-principal-ScopedKey-reconstruction+complete-frame-hash+adapter-callable-pin+dense-array-snapshot',
+    schema:
+      'DerivedVectorStoreAdapter|DerivedVectorDatasetOptions|DerivedVectorQueryInput|DerivedVectorUpsertInput',
+    sink: 'data.derived.persistence',
+    source: 'managed-database-read-results|owner-scoped-rows|governed-column-values',
+    specAnchor: 'spec/06-type-system.md §6.6;spec/10-data-plane.md §10.3 C9',
+    testEvidence: [
+      'packages/compiler/src/derived-dataset-security.test.ts',
+      'packages/server/src/derived-dataset.test.ts',
+    ],
+    trust: 'principal-scoped-derived-artifact-boundary',
+  },
+  {
     consumers: ['guard-chain', 'query-cache', 'session-provider', 'drizzle-observed-shapes'],
     context: 'auth.idor.session.owner-scope',
     diagnostic: 'KV414',
@@ -1074,28 +1099,33 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     specAnchor: 'spec/09-wire-protocol.md §9.1; spec/11-diagnostics.md KV415',
   },
   {
-    censusFamilies: ['file.storage.static-export'],
+    censusFamilies: ['file.storage.static-export', 'data.derived.persistence'],
     hostileValueEvidence: [
       'packages/core/src/scoped-key.test.ts',
       'packages/core/src/storage.test.ts',
+      'packages/compiler/src/derived-dataset-security.test.ts',
+      'packages/server/src/derived-dataset.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
     keyScoping: 'runtime-opaque-scoped-key',
     mechanism: 'own',
     mechanismDetail:
-      'Storage object keys cross only as runtime-witnessed ScopedKey frames before adapters derive physical namespaces; file paths and static-export outputs additionally cross through framework-owned containment and reserved-reference gates.',
+      'Storage object keys cross only as runtime-witnessed ScopedKey frames before adapters derive physical namespaces; derived vector datasets reconstruct and hash the complete request-principal frame on every read/write; file paths and static-export outputs additionally cross through framework-owned containment and reserved-reference gates.',
     operationKinds: ['server.storage.read', 'server.storage.write'],
     owner: '@kovojs/core/storage',
     proofEvidence: [
       'packages/core/src/scoped-key.test.ts',
       'packages/core/src/storage.test.ts',
+      'packages/compiler/src/derived-dataset-security.test.ts',
+      'packages/server/src/derived-dataset.test.ts',
       'packages/server/src/static-export-output.test.ts',
     ],
     proofGate: 'pnpm run check:filesystem-boundary',
     sink: 'blob/file write',
     soleDoor:
-      'ScopedKey runtime witness + storage adapter frame namespace + static export writer containment checks',
-    specAnchor: 'spec/11-verification.md §11.4; plans/sources-sinks.md Phase 2',
+      'ScopedKey runtime witness + storage/derived adapter frame namespace + static export writer containment checks',
+    specAnchor:
+      'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3 C9; spec/11-verification.md §11.4',
   },
   {
     censusFamilies: ['transport.query.live.broadcast'],

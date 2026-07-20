@@ -27,8 +27,8 @@ import {
 } from './scan/security-provenance-relation.js';
 
 describe('finite security provenance relation (SPEC §2/§6.6)', () => {
-  it('censuses the current 39 server and 20 browser states against operation kinds', () => {
-    expect(serverValueProvenanceStates).toHaveLength(39);
+  it('censuses the current 43 server and 20 browser states against operation kinds', () => {
+    expect(serverValueProvenanceStates).toHaveLength(43);
     expect(browserValueProvenanceStates).toHaveLength(20);
     expect(serverOperationProvenanceStates).toEqual(
       serverSecurityOperationKinds.map((kind) => `operation:${kind}`),
@@ -44,10 +44,17 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
     expect(serverExpressionProvenanceArmCensus.nondeterministicOracle).toMatchObject({
       implementationWalks: [
         'foreign-executable-containment',
+        'governed-data-containment',
         'unsafe-wire-data-containment',
         'authority-containment',
       ],
-      outcomes: ['local', 'foreign-executable', 'unsafe-wire-data', 'unknown-authority'],
+      outcomes: [
+        'local',
+        'foreign-executable',
+        'governed-data',
+        'unsafe-wire-data',
+        'unknown-authority',
+      ],
     });
   });
 
@@ -57,7 +64,7 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
     }
   });
 
-  it('proves the quotient classes and all 2,128 relation pairs match the old classifier', () => {
+  it('proves the quotient classes and all 2,451 relation pairs match the old classifier', () => {
     for (const definition of serverMemberClassDefinitions) {
       expect(classifyServerMember(definition.representative)).toBe(definition.id);
       for (const member of definition.effectiveMembers ?? []) {
@@ -89,7 +96,7 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
       }
     }
     expect(executedPairs).toBe(serverValueProvenanceStates.length * serverMemberClasses.length);
-    expect(executedPairs).toBe(2_184);
+    expect(executedPairs).toBe(2_451);
   });
 
   it('derives authorityTop from the relation while unknown future states fail closed', () => {
@@ -127,6 +134,32 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
     expect(mismatches).toEqual(['context × literal:fetch']);
   });
 
+  it('kills mutations to both derived-dataset authorization-inheritance cells', () => {
+    const mutant = {
+      ...serverMemberProvenanceTable,
+      'derived-dataset': {
+        ...serverMemberProvenanceTable['derived-dataset'],
+        'literal:query': 'local' as const,
+      },
+      'governed-data': {
+        ...serverMemberProvenanceTable['governed-data'],
+        other: 'local' as const,
+      },
+    };
+    const mismatches: string[] = [];
+    for (const state of serverValueProvenanceStates) {
+      for (const definition of serverMemberClassDefinitions) {
+        if (
+          mutant[state][definition.id] !==
+          legacyServerMemberProvenance(state, definition.representative)
+        ) {
+          mismatches.push(`${state} × ${definition.id}`);
+        }
+      }
+    }
+    expect(mismatches).toEqual(['derived-dataset × literal:query', 'governed-data × other']);
+  });
+
   it('computes closure to enrolled doors or the exact closed verdict domain', () => {
     expect(provenanceClosureCounterexamples()).toEqual([]);
   });
@@ -150,7 +183,7 @@ function legacyServerMemberProvenance(
   member: string,
 ): ServerValueProvenance {
   if (receiver === 'unknown-authority' || receiver === 'foreign-executable') return receiver;
-  if (receiver === 'unsafe-wire-data') return receiver;
+  if (receiver === 'governed-data' || receiver === 'unsafe-wire-data') return receiver;
   if (receiver.startsWith('operation:')) return 'unknown-authority';
   if (receiver === 'context') {
     if (member === 'db' || member === 'readonlyAppDb' || member === 'tx') return 'database';
@@ -223,6 +256,14 @@ function legacyServerMemberProvenance(
     return member === 'findFirst' || member === 'findMany'
       ? legacyOperation('server.database.read')
       : 'unknown-authority';
+  }
+  if (receiver === 'derived-dataset') {
+    if (member === 'query') return 'derived-query-call';
+    if (member === 'upsert') return 'derived-upsert-call';
+    return 'unknown-authority';
+  }
+  if (receiver === 'derived-query-call' || receiver === 'derived-upsert-call') {
+    return 'unknown-authority';
   }
   if (receiver === 'headers') {
     if (member === 'append' || member === 'delete' || member === 'set') {
@@ -318,6 +359,7 @@ function legacyServerProvenanceCarriesAuthority(
   return (
     provenance !== undefined &&
     provenance !== 'foreign-executable' &&
+    provenance !== 'governed-data' &&
     provenance !== 'intrinsic-identity-call' &&
     provenance !== 'intrinsic-object' &&
     provenance !== 'local' &&

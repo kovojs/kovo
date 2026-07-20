@@ -126,4 +126,47 @@ export const FiniteSecurityIrBad = component({
 `,
       }).diagnostics,
   },
+  {
+    code: 'KV452',
+    spec: 'SPEC.md §6.6/§10.3',
+    positive: () =>
+      coverageFixtures.compileComponentModule({
+        fileName: 'derived-dataset-ok.tsx',
+        source: `
+import { derived, endpoint } from '@kovojs/server';
+
+const documents = {};
+const vectors = derived(
+  { query: () => [], upsert: () => undefined },
+  { key: 'documents', kind: 'vector' },
+);
+export const persist = endpoint('/persist', {
+  access: { kind: 'public', reason: 'diagnostic coverage' },
+  async handler(_input, ctx) {
+    const rows = await ctx.db.select().from(documents);
+    await vectors.upsert(ctx.request, rows);
+    return { ok: true };
+  },
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      coverageFixtures.compileComponentModule({
+        fileName: 'derived-dataset-bad.tsx',
+        source: `
+import { createFileSystemStorage, endpoint, publicScopedKey } from '@kovojs/server';
+
+const documents = {};
+const storage = createFileSystemStorage({ root: '/srv/kovo-derived-coverage' });
+export const persist = endpoint('/persist', {
+  access: { kind: 'public', reason: 'diagnostic coverage' },
+  async handler(_input, ctx) {
+    const rows = await ctx.db.select().from(documents);
+    await storage.put(publicScopedKey('unsafe-export'), JSON.stringify(rows));
+    return { ok: true };
+  },
+});
+`,
+      }).diagnostics,
+  },
 ]);

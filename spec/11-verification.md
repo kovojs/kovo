@@ -93,14 +93,18 @@ missing, unknown, or duplicate kinds. Terminal-effect rows name their real sink 
 explicitly non-semantic until the latter receives a Phase 2C call summary. Component graph facts and `kovo explain component` render the
 compiler-derived operation rows in stable order so a review can connect authored handlers to those
 owners without reading generated files.
-For engine-door claims the inventory row points at the engine-closure audit; for wire/file/task/log
-surfaces it points at the single framework-owned choke or box, never at a proxy-only wrapper.
+For engine-door claims the inventory row points at the engine-closure audit; for
+wire/file/derived/task/log surfaces it points at the single framework-owned choke or box, never at a
+proxy-only wrapper. The `data.derived.persistence` family is discharged by the storage-operation row
+only when its proof evidence includes both KV452 provenance closure and runtime reconstruction of the
+complete request-principal `ScopedKey` namespace.
 
 **Finite provenance relation (normative proof boundary).** The compiler MUST publish the current
 server/browser provenance vocabularies and the complete server member-projection relation as the
-versioned, diffable `security-provenance-relation/v1.json` artifact. The current denominator is 38
-server states (including the explicit `scoped-key-call` state), 20 browser states, and the quotient
-member alphabet recorded in that artifact. `check:provenance-closure` MUST fail when either operation
+versioned, diffable `security-provenance-relation/v1.json` artifact. The current denominator is 43
+server states (including explicit `derived-dataset`, derived query/upsert call, `governed-data`, and `scoped-key-call` states),
+20 browser states, and the quotient member alphabet recorded in that artifact.
+`check:provenance-closure` MUST fail when either operation
 vocabulary gains a state without a relation row, when any table cell differs from the scanner, or
 when least-fixpoint reachability finds an operation without its C9 door owner. Unknown future states
 default to authority-bearing; `unknown-authority` closes under exactly the declared
@@ -108,8 +112,9 @@ default to authority-bearing; `unknown-authority` closes under exactly the decla
 
 This decidability claim is deliberately narrow. Five `serverExpressionProvenance` arms are
 compositional over child provenance values; identifier lookup is an environment leaf, the implicit
-object-protocol check remains syntax-dependent, and the two fallthrough subtree searches are one
-named nondeterministic oracle edge with outcomes `local`, `foreign-executable`, and
+object-protocol check remains syntax-dependent, and the four fallthrough subtree searches (foreign
+executable, governed data, unsafe wire data, and authority) are one named nondeterministic oracle
+edge with outcomes `local`, `foreign-executable`, `governed-data`, `unsafe-wire-data`, and
 `unknown-authority`. The table does not decide general JavaScript, dynamic properties, Proxy
 behavior, imported executable semantics, or the browser classifier's syntax-dependent transfers.
 The artifact publishes those exclusions, the four semantic-analysis resource bounds, and the

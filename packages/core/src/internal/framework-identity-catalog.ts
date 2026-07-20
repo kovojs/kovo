@@ -58,6 +58,7 @@ const CORE_STORAGE_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
 const serverDataSourceFiles = [
   'agent',
   'api/data',
+  'derived-dataset',
   'domain',
   'index',
   'managed-db',
@@ -305,6 +306,7 @@ appendCatalogFactories(
 );
 appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
 appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
+appendCatalogEntry(catalogEntries, serverData('derived'));
 appendCatalogEntry(catalogEntries, serverData('hashPassword'));
 appendCatalogEntry(catalogEntries, serverWriteGovernance('serverValue'));
 appendCatalogEntry(catalogEntries, serverData('stream'));

@@ -1,6 +1,14 @@
 export type { Secret } from '@kovojs/core';
 export { publicScopedKey } from '@kovojs/core';
 export type { ScopedKey } from '@kovojs/core';
+export { derived } from '../derived-dataset.js';
+export type {
+  DerivedVectorDataset,
+  DerivedVectorDatasetOptions,
+  DerivedVectorQueryInput,
+  DerivedVectorStoreAdapter,
+  DerivedVectorUpsertInput,
+} from '../derived-dataset.js';
 export { publicAccess, verifiedAccess } from '../access.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from '../access.js';
 import {
