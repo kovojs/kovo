@@ -435,6 +435,83 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-bare-bundle-key-artifact-closure
+  it('rejects a retained bare package specifier that collides with a bundle file name', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-bare-bundle-key-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'entry.mjs');
+    const outDir = join(root, 'dist');
+    const source =
+      "export async function run() { return import(/* @vite-ignore */ 'entry.mjs'); }\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.mjs' },
+          name: 'entry.mjs',
+          type: 'module',
+          version: '1.0.0',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        "globalThis.__KOVO_BARE_BUNDLE_KEY__ = 'EXECUTED'; export const value = 'raw';\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('entry.mjs', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: '*' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:38'],
+                specifier: 'entry.mjs',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'entry-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              'build-server',
+              { allowNodeBuiltins: true },
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).rejects.toThrow(/KV448.*entry\.mjs.*escaped the supported build-server artifact/u);
+      expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-transitive-bundle-closure
   it('rejects uncensused transitive packages even when a supported SSR artifact bundles them', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-dependency-transitive-loader-'));
