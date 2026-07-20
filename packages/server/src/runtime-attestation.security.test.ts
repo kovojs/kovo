@@ -7,10 +7,7 @@ import {
   createRuntimeAttestationCryptoHandle,
   createSecurityEventCryptoHandle,
 } from './crypto-authority.js';
-import {
-  createSecurityEventJournal,
-  type SecurityEventRecord,
-} from './security-event.js';
+import { createSecurityEventJournal, type SecurityEventRecord } from './security-event.js';
 import {
   createRuntimePostureAttestor,
   runtimeAttestationPayloadSource,
@@ -21,10 +18,10 @@ const SECRET = 'runtime-attestation-test-secret-0123456789abcdef0123456789abcdef
 describe('security event journal and runtime posture attestation (SPEC §§6.6, 11.2)', () => {
   it('keeps a bounded purpose-separated HMAC chain whose head detects record tampering', () => {
     let now = 1_720_000_000_000;
-    const crypto = createSecurityEventCryptoHandle(SECRET, 'deployment:test');
+    const authority = createSecurityEventCryptoHandle(SECRET, 'deployment:test');
     const journal = createSecurityEventJournal({
+      authority,
       capacity: 2,
-      crypto,
       now: () => now++,
     });
 
@@ -34,10 +31,7 @@ describe('security event journal and runtime posture attestation (SPEC §§6.6, 
 
     const records = journal.snapshot();
     expect(records).toHaveLength(2);
-    expect(records.map((record) => record.type)).toEqual([
-      'csrf-rejected',
-      'budget-exhausted',
-    ]);
+    expect(records.map((record) => record.type)).toEqual(['csrf-rejected', 'budget-exhausted']);
     expect(journal.head()).toMatchObject({ dropped: 1, sequence: 3 });
     expect(records.every((record) => record.schema === 'kovo-security-event/v1')).toBe(true);
     expect(Object.isFrozen(records[0])).toBe(true);
@@ -49,16 +43,27 @@ describe('security event journal and runtime posture attestation (SPEC §§6.6, 
 
   it('signs a fresh caller nonce and closes stale or replayed challenges', () => {
     let now = 1_720_000_000_000;
-    const crypto = createRuntimeAttestationCryptoHandle(SECRET, 'deployment:test');
+    const authority = createRuntimeAttestationCryptoHandle(SECRET, 'deployment:test');
     const attestor = createRuntimePostureAttestor({
-      crypto,
+      authority,
+      bootWitnesses: () => ({
+        cryptoAuthority: true,
+        egressFloor: true,
+        postureRegistered: true,
+        requestSafeRealm: true,
+      }),
       deploymentId: 'deployment:test',
       eventChainHead: () => ({ dropped: 0, keyId: 'current', mac: 'head', sequence: 7 }),
       instanceIdentity: 'instance:test',
       now: () => now,
       posture: {
         artifactSubject: `sha256:${'a'.repeat(64)}`,
-        facts: { endpointAuth: [], egressAllowlist: [], irVersions: ['kovo-security-operation-ir/v1'], trustEscapes: [] },
+        facts: {
+          endpointAuth: [],
+          egressAllowlist: [],
+          irVersions: ['kovo-security-operation-ir/v1'],
+          trustEscapes: [],
+        },
         postureDigest: `sha256:${'b'.repeat(64)}`,
         schema: 'kovo-runtime-posture/v1',
       },
@@ -90,8 +95,8 @@ describe('security event journal and runtime posture attestation (SPEC §§6.6, 
     expect(() => attestor.challenge(nonce)).toThrow(/replayed nonce/u);
     now += 61_000;
     expect(() => attestor.challenge('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB')).not.toThrow();
-    expect(attestor.challenge('CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC').payload.expiresAt).toBe(
-      now + 60_000,
-    );
+    expect(
+      attestor.challenge('CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC').payload.expiresAt,
+    ).toBe(now + 60_000);
   });
 });

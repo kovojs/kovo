@@ -1,4 +1,6 @@
 export { accessDecisionFor } from '../access.js';
+export { appEgressPosture } from '../app.js';
+export { createRuntimeAttestationVerificationHandle } from '../crypto-authority.js';
 export { accessFactsFromApp } from '../access-graph.js';
 export { endpointMatches, runEndpoint, type EndpointRequest } from '../endpoint.js';
 export type { GuardFailureResponseOptions, RequestLifecycleOptions } from '../guards.js';
@@ -13,9 +15,7 @@ export {
   type RunMutationOptions,
 } from '../mutation.js';
 export { invalidate, type MutationTouchSite } from '../change-record.js';
-export {
-  registerGeneratedCacheInfluenceManifest,
-} from '../generated-cache-influence-registry.js';
+export { registerGeneratedCacheInfluenceManifest } from '../generated-cache-influence-registry.js';
 export {
   registerGeneratedMutationTouchRegistry,
   type GeneratedMutationTouchRegistry,
@@ -24,6 +24,12 @@ export {
   registerGeneratedQueryReadRegistry,
   type GeneratedQueryReadRegistry,
 } from '../generated-query-registry.js';
+export {
+  registerGeneratedRuntimePostureManifest,
+  registeredRuntimePostureManifest,
+} from '../generated-runtime-posture-registry.js';
+export { runtimeAttestationPayloadSource } from '../runtime-attestation.js';
+export { exportSecurityEvents } from '../security-event-export.js';
 export {
   extractCompilerBoundKovoRuntimeDbMetadata,
   installGeneratedTableSecurityManifestForCommand,

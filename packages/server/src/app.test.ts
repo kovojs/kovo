@@ -23,6 +23,7 @@ import {
 } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
+import { KOVO_RUNTIME_ATTESTATION_ENDPOINT } from './generated-runtime-posture-registry.js';
 import { guards, resolveLifecycleRequest } from './guards.js';
 import { mutation } from './mutation.js';
 import { assignDerivedQueryKey, query } from './query.js';
@@ -359,6 +360,45 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
     expect(response.status).toBe(405);
     expect(response.headers.get('allow')).toBe('POST');
     expect(await response.text()).toBe('');
+  });
+});
+
+describe('framework-owned runtime posture attestation endpoint', () => {
+  it('cannot be shadowed by an app endpoint and retains a bounded challenge body', async () => {
+    const appHandler = vi.fn(() => new Response('app endpoint should not win'));
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint(KOVO_RUNTIME_ATTESTATION_ENDPOINT, {
+            csrf: false,
+            csrfJustification: 'reserved-path collision fixture',
+            handler: appHandler,
+            method: 'POST',
+            reason: 'reserved runtime attestation path collision fixture',
+            response: rawTextResponse,
+          }),
+        ],
+      }),
+    );
+    const unavailable = await handler(
+      new Request(`https://example.test${KOVO_RUNTIME_ATTESTATION_ENDPOINT}`, {
+        body: JSON.stringify({ nonce: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+    const oversized = await handler(
+      new Request(`https://example.test${KOVO_RUNTIME_ATTESTATION_ENDPOINT}`, {
+        body: 'x'.repeat(4_097),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers.get('cache-control')).toBe('no-store');
+    expect(oversized.status).toBe(413);
+    expect(appHandler).not.toHaveBeenCalled();
   });
 });
 

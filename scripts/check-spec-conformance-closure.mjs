@@ -396,7 +396,7 @@ const diagnosticLiteralExemptions = new Map([
   ],
   [
     'packages/core/src/internal/source-sink-registry.ts',
-    '42ed3b6993876002d822eb2fc150660ea6c197ebc3a810debcf51f5bfa08338a',
+    '6a5146b4a59074fd17af104e09b7acb9375cb56d8149a8721ed4274db821e190',
   ],
 ]);
 

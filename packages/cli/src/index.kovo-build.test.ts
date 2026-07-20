@@ -25,6 +25,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, route } from '@kovojs/server';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
@@ -208,6 +209,12 @@ describe('kovo build', () => {
           schema: string;
           securityGuarantees: { canonicalHash: string; schema: string };
         };
+        runtimePosture?: {
+          artifactSubject: string;
+          facts: unknown;
+          postureDigest: string;
+          schema: string;
+        };
       };
       expect(graph.provenance).toMatchObject({
         frameworkPackages: expect.arrayContaining([
@@ -226,6 +233,18 @@ describe('kovo build', () => {
         },
       });
       expect(JSON.stringify(graph.provenance)).not.toContain(root);
+      expect(graph.runtimePosture).toMatchObject({
+        artifactSubject: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        postureDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        schema: 'kovo-runtime-posture/v1',
+      });
+      const { runtimePosture, ...subjectGraph } = graph;
+      expect(runtimePosture?.artifactSubject).toBe(
+        `sha256:${createHash('sha256').update(canonicalJsonStringify(subjectGraph)).digest('hex')}`,
+      );
+      expect(runtimePosture?.postureDigest).toBe(
+        `sha256:${createHash('sha256').update(canonicalJsonStringify(runtimePosture.facts)).digest('hex')}`,
+      );
       expect(await build()).toBe(first);
     } finally {
       stdout.mockRestore();

@@ -216,6 +216,31 @@ export function buildOwnDataValue(source: unknown, key: PropertyKey, label: stri
   return before.value;
 }
 
+export type BuildOwnDataProperty =
+  | { readonly present: false }
+  | { readonly present: true; readonly value: unknown };
+
+export function buildOwnDataProperty(
+  source: unknown,
+  key: PropertyKey,
+  label: string,
+): BuildOwnDataProperty {
+  assertBuildSecurityIntrinsics();
+  if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
+    throw new NativeTypeError(`${label} must be an object.`);
+  }
+  const before = descriptor(source, key);
+  const after = descriptor(source, key);
+  if (!sameDataDescriptor(before, after)) {
+    throw new NativeTypeError(`${label}.${String(key)} changed while it was inspected.`);
+  }
+  if (before === undefined) return { present: false };
+  if (!('value' in before)) {
+    throw new NativeTypeError(`${label}.${String(key)} must be an own data property.`);
+  }
+  return { present: true, value: before.value };
+}
+
 export function buildSnapshotDenseArray<Value>(value: readonly Value[], label: string): Value[] {
   if (!buildArrayIsArray(value)) throw new NativeTypeError(`${label} must be an array.`);
   const length = buildArrayLength(value, label);

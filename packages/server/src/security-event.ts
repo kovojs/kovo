@@ -12,12 +12,16 @@ import {
 
 export const KOVO_SECURITY_EVENT_SCHEMA = 'kovo-security-event/v1' as const;
 
-export type SecurityEventType =
-  | 'budget-exhausted'
-  | 'capability-closed'
-  | 'closure-audit-refused'
-  | 'csrf-rejected'
-  | 'egress-denied';
+/** Gate-checked projection of the reviewed runtime denial-site census. */
+export const SECURITY_EVENT_TYPES = witnessFreeze([
+  'budget-exhausted',
+  'capability-closed',
+  'closure-audit-refused',
+  'csrf-rejected',
+  'egress-denied',
+] as const);
+
+export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
 export type SecurityEventReason =
   | 'build-capability-closure'
@@ -62,13 +66,7 @@ export interface SecurityEventJournal {
 }
 
 const EVENT_TYPES = createWitnessSet<SecurityEventType>();
-for (const value of [
-  'budget-exhausted',
-  'capability-closed',
-  'closure-audit-refused',
-  'csrf-rejected',
-  'egress-denied',
-] as const) {
+for (const value of SECURITY_EVENT_TYPES) {
   witnessSetAdd(EVENT_TYPES, value);
 }
 const EVENT_REASONS = createWitnessSet<SecurityEventReason>();
@@ -89,10 +87,44 @@ for (const value of [
   witnessSetAdd(EVENT_REASONS, value);
 }
 
+let installedJournal: SecurityEventJournal | undefined;
+let unsealedEventCount = 0;
+
+/** Single framework denial-event door. Callers may provide only closed taxonomy values. */
+export function securityEvent(
+  input: SecurityEventInput,
+): Readonly<SecurityEventRecord> | undefined {
+  assertSecurityEventInput(input);
+  if (installedJournal === undefined) {
+    unsealedEventCount += 1;
+    return undefined;
+  }
+  return installedJournal.record(input);
+}
+
+/** @internal Install the deployment-keyed collector before authored app evaluation. */
+export function installSecurityEventJournal(journal: SecurityEventJournal): void {
+  if (installedJournal !== undefined && installedJournal !== journal) {
+    throw new TypeError('Security-event journal is already installed for this boot.');
+  }
+  installedJournal = journal;
+}
+
+/** @internal Current chain head for signed posture responses. */
+export function securityEventChainHead(): Readonly<SecurityEventChainHead> {
+  if (installedJournal !== undefined) return installedJournal.head();
+  return witnessFreeze({ dropped: unsealedEventCount, keyId: null, mac: null, sequence: 0 });
+}
+
+/** @internal Bounded records for reviewed declared-egress export. */
+export function securityEventSnapshot(): readonly Readonly<SecurityEventRecord>[] {
+  return installedJournal?.snapshot() ?? witnessFreeze([]);
+}
+
 /** Create a bounded append-only view whose MAC chain protects exported/at-rest records only. */
 export function createSecurityEventJournal(options: {
   readonly capacity?: number;
-  readonly crypto: PurposeCryptoHandle;
+  readonly authority: PurposeCryptoHandle;
   readonly now?: () => number;
 }): SecurityEventJournal {
   const capacity = options.capacity ?? 1_024;
@@ -111,7 +143,7 @@ export function createSecurityEventJournal(options: {
     head() {
       return witnessFreeze({
         dropped,
-        keyId: sequence === 0 ? null : options.crypto.currentKeyId,
+        keyId: sequence === 0 ? null : options.authority.currentKeyId,
         mac: previousMac,
         sequence,
       });
@@ -124,7 +156,7 @@ export function createSecurityEventJournal(options: {
       }
       sequence += 1;
       const unsigned = {
-        keyId: options.crypto.currentKeyId,
+        keyId: options.authority.currentKeyId,
         occurredAt,
         previousMac,
         reason: input.reason,
@@ -132,7 +164,7 @@ export function createSecurityEventJournal(options: {
         sequence,
         type: input.type,
       } as const;
-      const signed = options.crypto.sign(canonicalJsonStringify(unsigned));
+      const signed = options.authority.sign(canonicalJsonStringify(unsigned));
       const record = witnessFreeze({ ...unsigned, keyId: signed.keyId, mac: signed.signature });
       previousMac = record.mac;
       if (count < capacity) {
@@ -175,7 +207,7 @@ export function createSecurityEventJournal(options: {
         sequence: record.sequence,
         type: record.type,
       });
-      return options.crypto.verify(source, record.mac, record.keyId).ok;
+      return options.authority.verify(source, record.mac, record.keyId).ok;
     },
   };
   return witnessFreeze(journal);

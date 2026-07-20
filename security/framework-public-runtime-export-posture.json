@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.6",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.9",
   "runtimeSurfaceSha256": "0275585365b32e1ec414b2f068801fd7504466e710735c2af40e33c3cdeec4dc",
   "postureMemberSha256": "cf8239d7662f653b5b551b1ca127a58381a944055078dae888763cae435a1019",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "5cd10e8adacd3113e51f61b060680efd8bb7264fd03c997191530fd4f99315e9",
+      "sourceTreeSha256": "6c015bff7de1aeaf19acf76ba8929da5d8a2950e5298de74c0e642bcb45cc284",
       "manifestVariants": [
         {
           "exports": {
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "285a53cada9f5a58d15189b5a2c6f3b803d28ed6da33226eb896bfd36da7ae7e"
+      "sourceTreeSha256": "fb90cd69b3e81847e782b12dd0fa16fcf98242f2259181927f4f8900dffa524a"
     },
     {
       "manifestVariants": [
@@ -1684,7 +1684,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "7b73c4f463439d04b5abc08eef26da926645252936b54a7a164d960842a7c3e2"
+      "sourceTreeSha256": "292edadce2669d88ee6a1e74df796d5830d0d7e4bcb78d87539de5cf226d8c66"
     },
     {
       "manifestVariants": [
@@ -9643,7 +9643,7 @@
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "0fc3f0be75b55e99b2056f303ffd2cb1dd1be8e628d1063c342c6f6644f58295"
+      "sourceTreeSha256": "37d5d51f01370edcccc093aba35b9e4e2897676d2738fc3afe3a9cdc79043343"
     },
     {
       "manifestVariants": [

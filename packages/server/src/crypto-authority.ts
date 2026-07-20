@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 import {
   createCipheriv as builtinCreateCipheriv,
   createDecipheriv as builtinCreateDecipheriv,
@@ -9,6 +10,7 @@ import {
   randomBytes as builtinRandomBytes,
   sign as builtinSign,
   timingSafeEqual as builtinTimingSafeEqual,
+  verify as builtinVerify,
 } from 'node:crypto';
 
 import {
@@ -120,7 +122,7 @@ export const cryptoPurposeRegistry = witnessFreeze([
   witnessFreeze({
     algorithm: 'ed25519',
     audience: 'bounded-deployment-identity',
-    operations: witnessFreeze(['public-key', 'sign'] as const),
+    operations: witnessFreeze(['instance-id', 'public-key', 'sign'] as const),
     purpose: 'runtime-posture-attestation',
     rootSource: 'deployment-key-ring',
   }),
@@ -186,12 +188,26 @@ export interface BetterAuthRateLimitCryptoHandle {
 /** @internal Purpose-minimal asymmetric handle for externally pinned runtime attestations. */
 export interface RuntimeAttestationCryptoHandle {
   readonly currentKeyId: string;
+  readonly instanceIdentity: string;
   readonly publicKeySpki: string;
   readonly trustAnchorFingerprint: string;
   readonly sign: (payload: string | Uint8Array) => {
     readonly keyId: string;
     readonly signature: string;
   };
+}
+
+/** @internal Purpose-minimal verifier used by the review CLI; no key material is accepted. */
+export interface RuntimeAttestationVerificationHandle {
+  readonly artifactSubject: (canonicalArtifact: string) => `sha256:${string}`;
+  readonly challengeNonce: () => string;
+  readonly postureDigest: (canonicalPosture: string) => `sha256:${string}`;
+  readonly trustAnchorFingerprint: (publicKeySpki: string) => `sha256:${string}`;
+  readonly verifySignedPayload: (
+    payload: string,
+    publicKeySpki: string,
+    signature: string,
+  ) => boolean;
 }
 
 const nativeCreateCipheriv = builtinCreateCipheriv;
@@ -204,6 +220,7 @@ const nativeHkdfSync = builtinHkdfSync;
 const nativeRandomBytes = builtinRandomBytes;
 const nativeSign = builtinSign;
 const nativeTimingSafeEqual = builtinTimingSafeEqual;
+const nativeVerify = builtinVerify;
 const nativeDateNow = Date.now;
 const nativeNumberToString = Number.prototype.toString;
 const HKDF_SALT = securityBufferFrom('kovo-crypto-authority-v1');
@@ -325,6 +342,7 @@ export function createRuntimeAttestationCryptoHandle(
     const fingerprint = witnessReflectApply<string>(nativeHashDigest, fingerprintHash, ['hex']);
     return witnessFreeze({
       currentKeyId: active.id,
+      instanceIdentity: securityBufferToString(nativeRandomBytes(32), 'base64url'),
       publicKeySpki: securityBufferToString(publicKeyDer, 'base64url'),
       sign(payload: string | Uint8Array) {
         const signature = nativeSign(null, payloadBytes(payload), privateKey);
@@ -338,6 +356,41 @@ export function createRuntimeAttestationCryptoHandle(
   } finally {
     bestEffortWipe(seed);
   }
+}
+
+/** @internal Acquire the fixed runtime-attestation review operations from the single crypto door. */
+export function createRuntimeAttestationVerificationHandle(): RuntimeAttestationVerificationHandle {
+  return witnessFreeze({
+    artifactSubject(canonicalArtifact: string) {
+      return sha256Digest(canonicalArtifact);
+    },
+    challengeNonce() {
+      return securityBufferToString(nativeRandomBytes(32), 'base64url');
+    },
+    postureDigest(canonicalPosture: string) {
+      return sha256Digest(canonicalPosture);
+    },
+    trustAnchorFingerprint(publicKeySpki: string) {
+      const publicKeyDer = decodeRuntimeAttestationValue(publicKeySpki, 'public key', 1_024);
+      return sha256Digest(publicKeyDer);
+    },
+    verifySignedPayload(payload: string, publicKeySpki: string, signature: string) {
+      if (typeof payload !== 'string' || payload.length > 8 * 1_024 * 1_024) return false;
+      try {
+        const publicKeyDer = decodeRuntimeAttestationValue(publicKeySpki, 'public key', 1_024);
+        const signatureBytes = decodeRuntimeAttestationValue(signature, 'signature', 128);
+        if (securityUint8ArrayLength(signatureBytes) !== 64) return false;
+        const publicKey = nativeCreatePublicKey({
+          format: 'der',
+          key: publicKeyDer,
+          type: 'spki',
+        });
+        return nativeVerify(null, payloadBytes(payload), publicKey, signatureBytes);
+      } catch {
+        return false;
+      }
+    },
+  });
 }
 
 export function createConfidentialCryptoHandle(
@@ -460,13 +513,15 @@ function createPurposeHandle(
     verify(payload: string | Uint8Array, signature: string, keyId?: string): CryptoVerifyResult {
       if (keyId !== undefined) {
         const matching = keyById(ring, keyId);
-        if (matching === undefined) return witnessFreeze({ ok: false, reason: 'unknown-key' });
+        if (matching === undefined) {
+          return witnessFreeze({ ok: false as const, reason: 'unknown-key' as const });
+        }
         if (!keyIsEligible(matching)) {
-          return witnessFreeze({ ok: false, reason: 'revoked-key' });
+          return witnessFreeze({ ok: false as const, reason: 'revoked-key' as const });
         }
         return signatureMatches(matching, purpose, audience, payload, signature)
           ? witnessFreeze({ keyId: matching.id, ok: true })
-          : witnessFreeze({ ok: false, reason: 'bad-signature' });
+          : witnessFreeze({ ok: false as const, reason: 'bad-signature' as const });
       }
       for (let index = 0; index < ring.keys.length; index += 1) {
         const candidate = ring.keys[index]!;
@@ -475,7 +530,7 @@ function createPurposeHandle(
           return witnessFreeze({ keyId: candidate.id, ok: true });
         }
       }
-      return witnessFreeze({ ok: false, reason: 'bad-signature' });
+      return witnessFreeze({ ok: false as const, reason: 'bad-signature' as const });
     },
   });
 }
@@ -573,6 +628,31 @@ function payloadBytes(payload: string | Uint8Array): Buffer {
   throw new TypeError('Crypto authority payload must be a string or Uint8Array.');
 }
 
+function sha256Digest(value: string | Uint8Array): `sha256:${string}` {
+  const hash = nativeCreateHash('sha256');
+  witnessReflectApply(nativeHashUpdate, hash, [payloadBytes(value)]);
+  return `sha256:${witnessReflectApply<string>(nativeHashDigest, hash, ['hex'])}`;
+}
+
+function decodeRuntimeAttestationValue(value: string, label: string, maximumBytes: number): Buffer {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > maximumBytes * 2 ||
+    !securityRegExpTest(/^[A-Za-z0-9_-]+$/u, value)
+  ) {
+    throw new TypeError(`Runtime attestation ${label} is invalid.`);
+  }
+  const decoded = securityBufferFrom(value, 'base64url');
+  if (
+    securityUint8ArrayLength(decoded) > maximumBytes ||
+    securityBufferToString(decoded, 'base64url') !== value
+  ) {
+    throw new TypeError(`Runtime attestation ${label} is too large.`);
+  }
+  return decoded;
+}
+
 function assertAudience(audience: string): void {
   if (typeof audience !== 'string' || audience.length === 0 || audience.length > 4_096) {
     throw new TypeError('Crypto authority audience must be non-empty bounded text.');
@@ -606,7 +686,7 @@ function keyIsEligible(key: AuthoritySigningKey): boolean {
     return true;
   }
   bestEffortWipe(key.secret);
-  key.secret = undefined;
+  delete key.secret;
   key.state = 'revoked';
   return false;
 }

@@ -33,7 +33,11 @@ export function checkClassifierVerdictRouting(options = {}) {
     findings.push(...classifySourceFile(sourceFile));
   }
 
-  const denialSites = options.denialSites ?? [];
+  const denialSites =
+    options.denialSites ??
+    (options.files === undefined && options.repoRoot === undefined
+      ? loadSecurityEventDenialSites(root, files, readText, findings)
+      : []);
   for (const site of denialSites) {
     findings.push(...classifyDenialSite(site, readText));
   }
@@ -57,6 +61,125 @@ export function checkClassifierVerdictRouting(options = {}) {
     },
     options,
   );
+}
+
+function loadSecurityEventDenialSites(root, files, readText, findings) {
+  const file = path.join(root, 'security/security-event-denial-sites.json');
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8'));
+    if (
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      parsed.schema !== 'kovo-security-event-denial-sites/v1' ||
+      !Array.isArray(parsed.denialSites)
+    ) {
+      findings.push('security/security-event-denial-sites.json: invalid denial-site census');
+      return [];
+    }
+    const runtimeTypes = runtimeSecurityEventTypes(root, findings).sort(compareStrings);
+    findings.push(...securityEventTypeProjectionFindings(parsed.denialSites, runtimeTypes));
+    findings.push(...securityEventDenialMarkerCensusFindings(parsed.denialSites, files, readText));
+    return parsed.denialSites;
+  } catch {
+    findings.push(
+      'security/security-event-denial-sites.json: missing or unreadable denial-site census',
+    );
+    return [];
+  }
+}
+
+export function securityEventTypeProjectionFindings(denialSites, runtimeTypes) {
+  const projected = [...new Set(denialSites.map((site) => site?.eventType))].sort(compareStrings);
+  const declared = [...runtimeTypes].sort(compareStrings);
+  return JSON.stringify(projected) === JSON.stringify(declared)
+    ? []
+    : [
+        'packages/server/src/security-event.ts: SECURITY_EVENT_TYPES must equal the denial-site census projection',
+      ];
+}
+
+function runtimeSecurityEventTypes(root, findings) {
+  const relativePath = 'packages/server/src/security-event.ts';
+  let source;
+  try {
+    source = readFileSync(path.join(root, relativePath), 'utf8');
+  } catch {
+    findings.push(`${relativePath}: runtime security-event taxonomy source is missing`);
+    return [];
+  }
+  const sourceFile = ts.createSourceFile(
+    relativePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== 'SECURITY_EVENT_TYPES') {
+        continue;
+      }
+      let initializer = declaration.initializer;
+      if (initializer === undefined) break;
+      initializer = unwrapExpression(initializer);
+      if (ts.isCallExpression(initializer)) initializer = initializer.arguments[0];
+      if (initializer === undefined) break;
+      initializer = unwrapExpression(initializer);
+      if (!ts.isArrayLiteralExpression(initializer)) break;
+      const values = [];
+      for (const element of initializer.elements) {
+        if (!ts.isStringLiteralLike(element)) {
+          findings.push(`${relativePath}: SECURITY_EVENT_TYPES must contain only string literals`);
+          return [];
+        }
+        values.push(element.text);
+      }
+      return values;
+    }
+  }
+  findings.push(`${relativePath}: SECURITY_EVENT_TYPES literal registry is missing`);
+  return [];
+}
+
+export function securityEventDenialMarkerCensusFindings(denialSites, files, readText) {
+  const findings = [];
+  const reviewed = new Set();
+  for (const site of denialSites) {
+    if (site === null || typeof site !== 'object') continue;
+    if (typeof site.file !== 'string' || typeof site.marker !== 'string') continue;
+    const identity = `${site.file}\0${site.marker}`;
+    if (reviewed.has(identity)) {
+      findings.push(
+        `security/security-event-denial-sites.json: duplicate row ${site.file} ${site.marker}`,
+      );
+    }
+    reviewed.add(identity);
+  }
+
+  const discovered = new Set();
+  const markerPattern = /@kovo-security-denial\s+[a-z0-9-]+\s+[a-z0-9-]+/gu;
+  for (const file of files) {
+    const source = readText(file);
+    for (const match of source.matchAll(markerPattern)) discovered.add(`${file}\0${match[0]}`);
+  }
+  for (const identity of discovered) {
+    if (!reviewed.has(identity)) {
+      const [file, marker] = identity.split('\0');
+      findings.push(`${file}: unreviewed security-event denial marker ${marker}`);
+    }
+  }
+  for (const identity of reviewed) {
+    if (!discovered.has(identity)) {
+      const [file, marker] = identity.split('\0');
+      findings.push(`${file}: stale security-event denial census marker ${marker}`);
+    }
+  }
+  return findings;
+}
+
+function compareStrings(left, right) {
+  return String(left).localeCompare(String(right));
 }
 
 function classifyDenialSite(site, readText) {
@@ -83,10 +206,16 @@ function classifyDenialSite(site, readText) {
     source.lastIndexOf('function ', markerIndex),
     source.lastIndexOf('constructor(', markerIndex),
   );
-  const relevant = source.slice(functionStart < 0 ? Math.max(0, markerIndex - 2_000) : functionStart, markerIndex);
+  const relevant = source.slice(
+    functionStart < 0 ? Math.max(0, markerIndex - 2_000) : functionStart,
+    markerIndex,
+  );
   const singleQuoted = `type: '${site.eventType}'`;
   const doubleQuoted = `type: "${site.eventType}"`;
-  if (relevant.includes('securityEvent(') && (relevant.includes(singleQuoted) || relevant.includes(doubleQuoted))) {
+  if (
+    relevant.includes('securityEvent(') &&
+    (relevant.includes(singleQuoted) || relevant.includes(doubleQuoted))
+  ) {
     return [];
   }
   return [

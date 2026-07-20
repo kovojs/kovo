@@ -444,6 +444,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'redirect-following-transport',
       'durable-task-runtime',
       'webhook-agent-tool-runtime',
+      'security-event-exporter',
     ],
     context: 'network.egress.dns.dial.redirect',
     diagnostic: 'KV424',
@@ -454,10 +455,10 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     runtimeGuard:
       'framework-egress-choke-rejects-undeclared-origin-before-dns-and-classifies-every-selected-dial-address',
     schema:
-      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress',
+      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress|kovo-security-event-export/v1',
     sink: 'network.egress',
     source:
-      'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values',
+      'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values|bounded-redacted-security-event-journal',
     specAnchor: 'spec/06-type-system.md#6.6;spec/10-data-plane.md#10.3',
     testEvidence: [
       'packages/server/src/egress-property-oracle.test.ts',
@@ -466,6 +467,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
       'packages/server/src/webhook.test.ts',
+      'packages/server/src/security-event-export.test.ts',
     ],
     trust: 'remote-and-configuration-derived-network-authority',
   },
@@ -717,6 +719,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'packages/server/src/egress-redirect.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/security-event-export.test.ts',
     ],
     payloads: [
       'undeclared origin',
@@ -736,6 +739,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'packages/server/src/egress-redirect.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/task-runner.test.ts',
+      'packages/server/src/security-event-export.test.ts',
       'packages/server/src/webhook.test.ts',
     ],
   },
@@ -1239,12 +1243,13 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress-undici.test.ts',
+      'packages/server/src/security-event-export.test.ts',
       'packages/server/src/task-runner.test.ts',
     ],
     keyScoping: 'not-stateful-keyed',
     mechanism: 'own',
     mechanismDetail:
-      'Task and verified-webhook code receives the exact non-replaceable ctx.fetch capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
+      'Task, verified-webhook, and security-event export code receives the exact non-replaceable framework egress capability. It canonicalizes a positive origin allowlist at boot, rejects every undeclared initial/redirect origin before DNS, classifies every DNS answer, and leaves selected-address pinning to the exact dial sink.',
     operationKinds: ['server.egress.request'],
     owner: '@kovojs/server/egress',
     proofEvidence: [
@@ -1252,13 +1257,14 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
       'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/egress.test.ts',
+      'packages/server/src/security-event-export.test.ts',
       'packages/server/src/task-runner.test.ts',
       'packages/server/src/webhook.test.ts',
     ],
     proofGate: 'pnpm run check:egress-boundary',
     sink: 'outbound egress request',
     soleDoor:
-      'exact framework-owned ctx.fetch on task/webhook/future agent-tool contexts; exact module-private database socket witness for managed Postgres',
+      'exact framework-owned ctx.fetch on task/webhook/future agent-tool contexts and security-event export; exact module-private database socket witness for managed Postgres',
     specAnchor: 'spec/06-type-system.md §6.6; spec/10-data-plane.md §10.3',
   },
   {

@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { checkClassifierVerdictRouting } from './check-classifier-verdict-routing.mjs';
+import {
+  checkClassifierVerdictRouting,
+  securityEventDenialMarkerCensusFindings,
+  securityEventTypeProjectionFindings,
+} from './check-classifier-verdict-routing.mjs';
 
 function runFixture(files, options = {}) {
   return checkClassifierVerdictRouting({
@@ -16,6 +20,34 @@ function runFixture(files, options = {}) {
 }
 
 describe('classifier verdict routing gate', () => {
+  it('requires the runtime event taxonomy and source markers to equal the denial-site projection', () => {
+    const denialSites = [
+      {
+        eventType: 'csrf-rejected',
+        file: 'packages/server/src/dispatch.ts',
+        marker: '@kovo-security-denial csrf-rejected dispatch-csrf',
+      },
+    ];
+    expect(securityEventTypeProjectionFindings(denialSites, ['csrf-rejected'])).toEqual([]);
+    expect(
+      securityEventTypeProjectionFindings(denialSites, ['csrf-rejected', 'egress-denied']),
+    ).toEqual([expect.stringContaining('must equal the denial-site census projection')]);
+    expect(
+      securityEventDenialMarkerCensusFindings(
+        denialSites,
+        ['packages/server/src/dispatch.ts'],
+        () => '// @kovo-security-denial csrf-rejected dispatch-csrf',
+      ),
+    ).toEqual([]);
+    expect(
+      securityEventDenialMarkerCensusFindings(
+        [],
+        ['packages/server/src/dispatch.ts'],
+        () => '// @kovo-security-denial csrf-rejected dispatch-csrf',
+      ),
+    ).toEqual([expect.stringContaining('unreviewed security-event denial marker')]);
+  });
+
   it('requires every denial-site census row to emit its declared security event', () => {
     const denialSites = [
       {

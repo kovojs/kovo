@@ -32,8 +32,10 @@ export interface RuntimePostureManifest {
 export interface RuntimeAttestationPayload {
   readonly artifactSubject: `sha256:${string}`;
   readonly bootWitnesses: {
-    readonly cryptoAuthority: true;
-    readonly postureRegistered: true;
+    readonly cryptoAuthority: boolean;
+    readonly egressFloor: boolean;
+    readonly postureRegistered: boolean;
+    readonly requestSafeRealm: boolean;
   };
   readonly deploymentId: string;
   readonly eventChainHead: Readonly<SecurityEventChainHead>;
@@ -75,7 +77,8 @@ export function runtimeAttestationPayloadSource(payload: RuntimeAttestationPaylo
  * completeness, or fleet-wide equality.
  */
 export function createRuntimePostureAttestor(options: {
-  readonly crypto: RuntimeAttestationCryptoHandle;
+  readonly authority: RuntimeAttestationCryptoHandle;
+  readonly bootWitnesses: () => RuntimeAttestationPayload['bootWitnesses'];
   readonly deploymentId: string;
   readonly eventChainHead: () => Readonly<SecurityEventChainHead>;
   readonly instanceIdentity: string;
@@ -98,41 +101,66 @@ export function createRuntimePostureAttestor(options: {
       if (witnessSetHas(recent, nonce)) {
         throw new TypeError('Runtime attestation refused a replayed nonce.');
       }
-      rememberNonce(recent, order, nonce, () => cursor, (next) => {
-        cursor = next;
-      });
+      rememberNonce(
+        recent,
+        order,
+        nonce,
+        () => cursor,
+        (next) => {
+          cursor = next;
+        },
+      );
       const issuedAt = now();
       if (!Number.isSafeInteger(issuedAt) || issuedAt < 0) {
         throw new TypeError('Runtime attestation clock must return a non-negative safe integer.');
       }
+      const bootWitnesses = snapshotBootWitnesses(options.bootWitnesses());
       const payload = witnessFreeze({
         artifactSubject: options.posture.artifactSubject,
-        bootWitnesses: witnessFreeze({
-          cryptoAuthority: true as const,
-          postureRegistered: true as const,
-        }),
+        bootWitnesses,
         deploymentId: options.deploymentId,
         eventChainHead: options.eventChainHead(),
         expiresAt: issuedAt + ATTESTATION_LIFETIME_MS,
         instanceIdentity: options.instanceIdentity,
         issuedAt,
-        keyId: options.crypto.currentKeyId,
+        keyId: options.authority.currentKeyId,
         nonce,
         posture: options.posture.facts,
         postureDigest: options.posture.postureDigest,
         schema: KOVO_RUNTIME_ATTESTATION_SCHEMA,
       });
-      const signed = options.crypto.sign(runtimeAttestationPayloadSource(payload));
+      const signed = options.authority.sign(runtimeAttestationPayloadSource(payload));
       if (signed.keyId !== payload.keyId) {
         throw new TypeError('Runtime attestation crypto authority changed keys mid-challenge.');
       }
       return witnessFreeze({
         payload,
-        publicKeySpki: options.crypto.publicKeySpki,
+        publicKeySpki: options.authority.publicKeySpki,
         signature: signed.signature,
-        trustAnchorFingerprint: options.crypto.trustAnchorFingerprint,
+        trustAnchorFingerprint: options.authority.trustAnchorFingerprint,
       });
     },
+  });
+}
+
+function snapshotBootWitnesses(
+  value: RuntimeAttestationPayload['bootWitnesses'],
+): RuntimeAttestationPayload['bootWitnesses'] {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    typeof value.cryptoAuthority !== 'boolean' ||
+    typeof value.egressFloor !== 'boolean' ||
+    typeof value.postureRegistered !== 'boolean' ||
+    typeof value.requestSafeRealm !== 'boolean'
+  ) {
+    throw new TypeError('Runtime attestation boot witnesses must be exact boolean results.');
+  }
+  return witnessFreeze({
+    cryptoAuthority: value.cryptoAuthority,
+    egressFloor: value.egressFloor,
+    postureRegistered: value.postureRegistered,
+    requestSafeRealm: value.requestSafeRealm,
   });
 }
 

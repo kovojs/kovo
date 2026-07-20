@@ -236,9 +236,13 @@
         "createDecipheriv",
         "createHash",
         "createHmac",
+        "createPrivateKey",
+        "createPublicKey",
         "hkdfSync",
         "randomBytes",
-        "timingSafeEqual"
+        "sign",
+        "timingSafeEqual",
+        "verify"
       ],
       "tier": "server-runtime",
       "review": "Boot-pinned, known-answer-tested primitive owner; only closed purpose-minimal handles leave this module."
