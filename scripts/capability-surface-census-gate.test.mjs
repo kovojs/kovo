@@ -333,6 +333,19 @@ it('retains structural closed verdicts for raw exports, internal consumers, and 
   const readText = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
   expect(evaluateCapabilityBoundaryPosture({ readText })).toEqual([]);
 
+  const leakedCredentialAuthority = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/better-auth/src/postgres.ts'
+        ? readText(file).replace(
+            '...(requestPasswordReset === undefined ? {} : { requestPasswordReset }),',
+            'rawAuth,',
+          )
+        : readText(file),
+  });
+  expect(leakedCredentialAuthority).toContain(
+    'Better Auth Postgres constructor must return only the frozen sanitized binding record and opaque mount adapter',
+  );
+
   const rawExport = evaluateCapabilityBoundaryPosture({
     readText: (file) =>
       file === 'packages/create-kovo/templates/src/_kovo/app-runtime-db.ts'

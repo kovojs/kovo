@@ -346,10 +346,7 @@ function readDecisionRecord(value: unknown, index: number): IncidentDecisionReco
   );
   const principal = readPrincipal(record.principal, index);
   const resourceScope = readResourceScope(record.resourceScope, door, index);
-  const previousMac = record.previousMac;
-  if (previousMac !== null && !boundedToken(previousMac)) {
-    throw new Error(`security-event record[${index}] previousMac is invalid`);
-  }
+  const previousMac = record.previousMac === null ? null : boundedToken(record.previousMac);
   return {
     decisionSite: record.decisionSite as string,
     door,
@@ -408,10 +405,7 @@ function readDenialRecord(value: unknown, index: number): IncidentDenialRecord {
     ] as const,
     `security-event record[${index}] denial reason`,
   );
-  const previousMac = record.previousMac;
-  if (previousMac !== null && !boundedToken(previousMac)) {
-    throw new Error(`security-event record[${index}] previousMac is invalid`);
-  }
+  const previousMac = record.previousMac === null ? null : boundedToken(record.previousMac);
   return {
     keyId: boundedToken(record.keyId),
     mac: boundedToken(record.mac),

@@ -2053,6 +2053,15 @@ describe('sink-policy gate', () => {
               message: 'SQL text injection risk.',
             },
           };
+          export function createRegisteredDiagnostic(code) {
+            const definition = diagnosticDefinitions[code];
+            const diagnostic = {
+              code,
+              message: definition.message,
+              severity: definition.severity,
+            };
+            return diagnostic;
+          }
         `,
       ),
     ).toEqual([]);
@@ -2146,13 +2155,48 @@ describe('sink-policy gate', () => {
         `,
       ),
     ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/drizzle/src/static/diagnostics.ts',
+        `
+          import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+          export function drizzleDiagnostic(input) {
+            return createRegisteredDiagnostic(input.code, { site: input.site });
+          }
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('flags SQL-safety invariant drift toward warn or pass-through', () => {
     expect(
       sqlSafetyInvariantFindings(
         'packages/core/src/diagnostics.ts',
-        `export const diagnosticDefinitions = { KV422: { severity: 'warn' } };`,
+        `
+          export const diagnosticDefinitions = { KV422: { severity: 'warn' } };
+          export function createRegisteredDiagnostic(code) {
+            const definition = diagnosticDefinitions[code];
+            const diagnostic = { severity: definition.severity };
+            return diagnostic;
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/core/src/diagnostics.ts: KV422 SQL-safety diagnostic severity must remain error',
+    ]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/core/src/diagnostics.ts',
+        `
+          export const diagnosticDefinitions = { KV422: { severity: 'error' } };
+          export function createRegisteredDiagnostic(code) {
+            const definition = diagnosticDefinitions[code];
+            const diagnostic = { severity: 'warn' };
+            return diagnostic;
+          }
+        `,
       ),
     ).toEqual([
       'packages/core/src/diagnostics.ts: KV422 SQL-safety diagnostic severity must remain error',

@@ -50,6 +50,7 @@ import * as principalEpochApi from '../principal-epoch.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
+import * as delegationApi from '../delegation.js';
 import * as publicApi from '../index.js';
 import * as requestHandlerApi from '../request-handler.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
@@ -628,6 +629,8 @@ describe('server app-shell public API barrels', () => {
       createAgentSession: agentApi.createAgentSession,
       runAgentTurn: agentApi.runAgentTurn,
       tool: agentApi.tool,
+      createDelegationAuthority: delegationApi.createDelegationAuthority,
+      onBehalfOf: delegationApi.onBehalfOf,
       createApp: appApi.createApp,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
       // env/secret validation surface — the typed boot error, its guard, and the
@@ -1118,6 +1121,7 @@ describe('server app-shell public API barrels', () => {
       'createMemoryMutationReplayStore',
       'createRuntimeAttestationVerificationHandle',
       'endpointMatches',
+      'escapeObligationReviewPayload',
       'explainGuard',
       'exportSecurityEvents',
       'extractCompilerBoundKovoRuntimeDbMetadata',
@@ -1138,6 +1142,7 @@ describe('server app-shell public API barrels', () => {
       'runQuery',
       'runRoutePage',
       'runtimeAttestationPayloadSource',
+      'verifyEscapeObligationReviewEnvelope',
     ]);
     expect(packageInternalExecutionApi).not.toHaveProperty('managedDb');
     expect(packageInternalExecutionApi).not.toHaveProperty(

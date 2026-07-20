@@ -966,11 +966,53 @@ function hasFrozenBindingReturn(sourceFile) {
     if (terminalCallName(node.expression.expression) !== 'betterAuthFreezeOwn') return false;
     const object = unwrapExpression(node.expression.arguments[0]);
     if (!object || !ts.isObjectLiteralExpression(object)) return false;
-    const actual = object.properties
-      .map((property) => (property.name === undefined ? '' : propertyNameText(property.name)))
-      .sort(compareStrings);
-    return canonicalJson(actual) === canonicalJson(expected);
+    const actual = [];
+    let hasOptionalPasswordReset = false;
+    for (const property of object.properties) {
+      if (ts.isShorthandPropertyAssignment(property)) {
+        actual.push(property.name.text);
+        continue;
+      }
+      if (
+        !hasOptionalPasswordReset &&
+        ts.isSpreadAssignment(property) &&
+        isExactOptionalBindingSpread(property.expression, 'requestPasswordReset')
+      ) {
+        hasOptionalPasswordReset = true;
+        continue;
+      }
+      return false;
+    }
+    return (
+      hasOptionalPasswordReset &&
+      canonicalJson(actual.sort(compareStrings)) === canonicalJson(expected)
+    );
   });
+}
+
+function isExactOptionalBindingSpread(node, binding) {
+  const expression = unwrapExpression(node);
+  if (!expression || !ts.isConditionalExpression(expression)) return false;
+  const condition = unwrapExpression(expression.condition);
+  const whenMissing = unwrapExpression(expression.whenTrue);
+  const whenPresent = unwrapExpression(expression.whenFalse);
+  if (
+    !condition ||
+    !ts.isBinaryExpression(condition) ||
+    condition.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken ||
+    !isIdentifierText(condition.left, binding) ||
+    !isIdentifierText(condition.right, 'undefined') ||
+    !whenMissing ||
+    !ts.isObjectLiteralExpression(whenMissing) ||
+    whenMissing.properties.length !== 0 ||
+    !whenPresent ||
+    !ts.isObjectLiteralExpression(whenPresent) ||
+    whenPresent.properties.length !== 1
+  ) {
+    return false;
+  }
+  const [property] = whenPresent.properties;
+  return ts.isShorthandPropertyAssignment(property) && property.name.text === binding;
 }
 
 function hasAnyIdentifier(sourceFile, names) {
