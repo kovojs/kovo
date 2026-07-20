@@ -9,6 +9,7 @@ import {
   securityEvent,
   securityDecisionEventRecorderArmed,
   type SecurityDecisionEventInput,
+  type SecurityEventRecord,
 } from './security-event.js';
 
 const authority = createSecurityEventCryptoHandle(
@@ -198,6 +199,44 @@ describe('security-event retrospective answerability (SPEC §§6.6, 11.2)', () =
       principal: { epoch: 7, id: 'principal-authorization', tenant: 'tenant-a' },
       sequence: 4,
     });
+  });
+
+  it('redacts an unrecordable known principal before signing and rejects a raw-id replay', () => {
+    const journal = createSecurityEventJournal({ authority, now: () => 1_720_000_000_000 });
+    const rawPrincipal = 'principal\u0000must-not-enter-the-journal';
+    const record = journal.record({
+      ...decision('storage'),
+      principal: {
+        epoch: null,
+        id: rawPrincipal,
+        kind: 'unresolved',
+        reason: 'epoch-unavailable',
+        tenant: null,
+      },
+    });
+
+    expect(record).toMatchObject({
+      principal: {
+        epoch: null,
+        id: null,
+        kind: 'unresolved',
+        reason: 'principal-unrecordable',
+        tenant: null,
+      },
+    });
+    expect(JSON.stringify(record)).not.toContain(rawPrincipal);
+    expect(
+      journal.verify({
+        ...record,
+        principal: {
+          epoch: null,
+          id: rawPrincipal,
+          kind: 'unresolved',
+          reason: 'epoch-unavailable',
+          tenant: null,
+        },
+      } as SecurityEventRecord),
+    ).toBe(false);
   });
 
   it('keeps low-level pre-registration calls outside the claim, then fails closed once armed', () => {

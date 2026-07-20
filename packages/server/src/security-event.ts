@@ -13,7 +13,7 @@ import {
   witnessSetHas,
   witnessStringStartsWith,
 } from './security-witness-intrinsics.js';
-import { securitySha256Hex } from './response-security-intrinsics.js';
+import { securitySha256Hex, securityStringCharCodeAt } from './response-security-intrinsics.js';
 
 export const KOVO_SECURITY_EVENT_SCHEMA = 'kovo-security-event/v1' as const;
 
@@ -365,6 +365,12 @@ function assertSecurityEventInput(input: SecurityEventInput): void {
 }
 
 function assertSecurityDecisionEventInput(input: SecurityDecisionEventInput): void {
+  assertSecurityDecisionEventEnvelope(input);
+  const principal = ownDataValue(input, 'principal', 'Security decision principal scope');
+  assertPrincipalScope(principal);
+}
+
+function assertSecurityDecisionEventEnvelope(input: SecurityDecisionEventInput): void {
   assertExactOwnDataFields(
     input,
     ['decisionSite', 'door', 'outcome', 'principal', 'resourceScope', 'type'],
@@ -398,8 +404,6 @@ function assertSecurityDecisionEventInput(input: SecurityDecisionEventInput): vo
     throw new TypeError('Security decision site door does not match the event door.');
   }
 
-  const principal = ownDataValue(input, 'principal', 'Security decision principal scope');
-  assertPrincipalScope(principal);
   const resourceScope = ownDataValue(input, 'resourceScope', 'Security decision resource scope');
   assertResourceScope(resourceScope, door);
 }
@@ -491,50 +495,27 @@ function assertResourceScope(
   }
 }
 
-function normalizedSecurityEventInput(input: SecurityEventInput): SecurityEventInput {
-  assertSecurityEventInput(input);
+function normalizedSecurityEventInput(
+  input: SecurityEventInput,
+  redactUnrecordablePrincipal = true,
+): SecurityEventInput {
+  if (input === null || typeof input !== 'object') {
+    assertSecurityEventInput(input);
+  }
   const type = ownDataValue(input, 'type', 'Security event type');
   if (type !== 'security-decision') {
+    assertSecurityEventInput(input);
     return witnessFreeze({
       reason: ownDataValue(input, 'reason', 'Security denial event reason') as SecurityEventReason,
       type: type as SecurityEventType,
     });
   }
-  const principalInput = ownDataValue(
-    input,
-    'principal',
-    'Security decision principal scope',
-  ) as SecurityEventPrincipalScope;
-  const principalKind = ownDataValue(
+  assertSecurityDecisionEventEnvelope(input as SecurityDecisionEventInput);
+  const principalInput = ownDataValue(input, 'principal', 'Security decision principal scope');
+  const principal = normalizedSecurityEventPrincipalScope(
     principalInput,
-    'kind',
-    'Security decision principal scope kind',
+    redactUnrecordablePrincipal,
   );
-  const principal =
-    principalKind === 'unresolved'
-      ? witnessFreeze({
-          epoch: ownDataValue(principalInput, 'epoch', 'Security decision principal epoch') as null,
-          id: ownDataValue(principalInput, 'id', 'Security decision principal id') as string | null,
-          kind: 'unresolved' as const,
-          reason: ownDataValue(
-            principalInput,
-            'reason',
-            'Unresolved security principal reason',
-          ) as Extract<SecurityEventPrincipalScope, { kind: 'unresolved' }>['reason'],
-          tenant: ownDataValue(principalInput, 'tenant', 'Security decision tenant id') as
-            | string
-            | null,
-        })
-      : witnessFreeze({
-          epoch: ownDataValue(principalInput, 'epoch', 'Security decision principal epoch') as
-            | number
-            | null,
-          id: ownDataValue(principalInput, 'id', 'Security decision principal id') as string | null,
-          kind: principalKind as 'anonymous' | 'principal' | 'system',
-          tenant: ownDataValue(principalInput, 'tenant', 'Security decision tenant id') as
-            | string
-            | null,
-        });
   const resourceInput = ownDataValue(
     input,
     'resourceScope',
@@ -544,7 +525,7 @@ function normalizedSecurityEventInput(input: SecurityEventInput): SecurityEventI
     decisionSite: ownDataValue(input, 'decisionSite', 'Security decision site') as string,
     door: ownDataValue(input, 'door', 'Security decision door') as SecurityEventIncidentDoor,
     outcome: ownDataValue(input, 'outcome', 'Security decision outcome') as SecurityDecisionOutcome,
-    principal: principal as SecurityEventPrincipalScope,
+    principal,
     resourceScope: witnessFreeze({
       identity: ownDataValue(
         resourceInput,
@@ -559,6 +540,86 @@ function normalizedSecurityEventInput(input: SecurityEventInput): SecurityEventI
     }),
     type: 'security-decision' as const,
   });
+}
+
+function normalizedSecurityEventPrincipalScope(
+  value: unknown,
+  redactUnrecordablePrincipal: boolean,
+): SecurityEventPrincipalScope {
+  if (redactUnrecordablePrincipal && isUnrecordableKnownPrincipalScope(value)) {
+    // ScopedKey identities are length-framed and deliberately admit arbitrary bounded bytes,
+    // while the no-payload answerability record excludes control-bearing identities. Normalize
+    // that domain mismatch at the single event door so the decision is recorded without copying
+    // the unsafe identity into the journal (SPEC §11.2; plan-3 §5.1).
+    return witnessFreeze({
+      epoch: null,
+      id: null,
+      kind: 'unresolved',
+      reason: 'principal-unrecordable' as const,
+      tenant: null,
+    });
+  }
+  assertPrincipalScope(value);
+  const principalKind = ownDataValue(value, 'kind', 'Security decision principal scope kind');
+  const epoch = ownDataValue(value, 'epoch', 'Security decision principal epoch');
+  const id = ownDataValue(value, 'id', 'Security decision principal id');
+  const tenant = ownDataValue(value, 'tenant', 'Security decision tenant id');
+  if (principalKind === 'unresolved') {
+    return witnessFreeze({
+      epoch: epoch as null,
+      id: id as string | null,
+      kind: 'unresolved' as const,
+      reason: ownDataValue(value, 'reason', 'Unresolved security principal reason') as Extract<
+        SecurityEventPrincipalScope,
+        { kind: 'unresolved' }
+      >['reason'],
+      tenant: tenant as string | null,
+    });
+  }
+  if (principalKind === 'principal') {
+    return witnessFreeze({
+      epoch: epoch as number,
+      id: id as string,
+      kind: 'principal' as const,
+      tenant: tenant as string | null,
+    });
+  }
+  if (principalKind === 'system') {
+    return witnessFreeze({
+      epoch: epoch as null,
+      id: id as string,
+      kind: 'system' as const,
+      tenant: tenant as string | null,
+    });
+  }
+  return witnessFreeze({
+    epoch: epoch as null,
+    id: id as null,
+    kind: 'anonymous' as const,
+    tenant: tenant as null,
+  });
+}
+
+function isUnrecordableKnownPrincipalScope(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const kind = ownDataValue(value, 'kind', 'Security decision principal scope kind');
+  if (kind !== 'unresolved') return false;
+  assertExactOwnDataFields(
+    value,
+    ['epoch', 'id', 'kind', 'reason', 'tenant'],
+    'Security decision principal scope',
+  );
+  const epoch = ownDataValue(value, 'epoch', 'Security decision principal epoch');
+  const id = ownDataValue(value, 'id', 'Security decision principal id');
+  const reason = ownDataValue(value, 'reason', 'Unresolved security principal reason');
+  const tenant = ownDataValue(value, 'tenant', 'Security decision tenant id');
+  return (
+    epoch === null &&
+    typeof id === 'string' &&
+    !securityEventPrincipalIdentityIsRecordable(id) &&
+    (reason === 'epoch-unavailable' || reason === 'tenant-unavailable') &&
+    (tenant === null || boundedIdentity(tenant))
+  );
 }
 
 function securityEventInputFromRecord(record: SecurityEventRecord): SecurityEventInput {
@@ -593,7 +654,7 @@ function securityEventInputFromRecord(record: SecurityEventRecord): SecurityEven
           ) as SecurityEventReason,
           type: type as SecurityEventType,
         };
-  return normalizedSecurityEventInput(input);
+  return normalizedSecurityEventInput(input, false);
 }
 
 function isIncidentDoor(value: unknown): value is SecurityEventIncidentDoor {
@@ -623,15 +684,21 @@ function isSecurityEventUnresolvedReason(
 
 /** @internal Whether a principal identity can enter the bounded no-control event schema. */
 export function securityEventPrincipalIdentityIsRecordable(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length >= 1 &&
+  if (
+    typeof value !== 'string' ||
+    value.length < 1 ||
     // SPEC §9.4: framework principals are valid through 1,024 code units. The answerability
     // record must accept every principal the authorization/replay boundary can prove.
-    value.length <= SECURITY_EVENT_PRINCIPAL_IDENTITY_MAX_LENGTH &&
-    witnessRegExpTest(/^[^\u0000-\u001f\u007f]+$/u, value) &&
-    !witnessRegExpTest(/^\s|\s$/u, value)
-  );
+    value.length > SECURITY_EVENT_PRINCIPAL_IDENTITY_MAX_LENGTH ||
+    witnessRegExpTest(/^\s|\s$/u, value)
+  ) {
+    return false;
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code <= 0x1f || code === 0x7f) return false;
+  }
+  return true;
 }
 
 const boundedIdentity = securityEventPrincipalIdentityIsRecordable;

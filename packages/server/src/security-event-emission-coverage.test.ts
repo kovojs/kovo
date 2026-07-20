@@ -2,6 +2,7 @@ import { DeclassifyPolicy, publicScopedKey, secret } from '@kovojs/core';
 import {
   createMemoryStorage,
   installCoreSecurityDecisionBridge,
+  principalScopedKey,
 } from '@kovojs/core/internal/storage';
 import { describe, expect, it } from 'vitest';
 
@@ -32,6 +33,90 @@ installCoreSecurityDecisionBridge((event) => {
 armSecurityDecisionEventRecorder();
 
 describe('security-decision production emission coverage (SPEC §11.2)', () => {
+  it('records storage decisions with unrecordable principals redacted at the event door', async () => {
+    const storage = createMemoryStorage();
+    const unrecordablePrincipal = 'storage-principal\u0000must-not-leak';
+    const validPrincipal = 'storage-principal-valid';
+    const before = securityEventSnapshot().length;
+
+    await storage.put(principalScopedKey(unrecordablePrincipal, 'object-redacted'), 'value');
+    await storage.put(principalScopedKey(validPrincipal, 'object-recordable'), 'value');
+
+    const records = securityEventSnapshot()
+      .slice(before)
+      .filter(
+        (record) =>
+          record.type === 'security-decision' &&
+          record.decisionSite === 'framework:storage:scoped-key-admission',
+      );
+    expect(records).toHaveLength(2);
+    expect(records[0]).toMatchObject({
+      principal: {
+        epoch: null,
+        id: null,
+        kind: 'unresolved',
+        reason: 'principal-unrecordable',
+        tenant: null,
+      },
+    });
+    expect(records[1]).toMatchObject({
+      principal: {
+        epoch: null,
+        id: validPrincipal,
+        kind: 'unresolved',
+        reason: 'epoch-unavailable',
+        tenant: null,
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain(unrecordablePrincipal);
+  });
+
+  it('records task decisions with unrecordable principals redacted at the event door', async () => {
+    const queue = new MemoryDurableTaskQueue();
+    const unrecordablePrincipal = 'task-principal\u001fmust-not-leak';
+    const validPrincipal = 'task-principal-valid';
+    const before = securityEventSnapshot().length;
+
+    await queue.enqueue({
+      args: {},
+      key: principalScopedKey(unrecordablePrincipal, 'task-redacted'),
+      task: 'email.redacted',
+    });
+    await queue.enqueue({
+      args: {},
+      key: principalScopedKey(validPrincipal, 'task-recordable'),
+      task: 'email.recordable',
+    });
+
+    const records = securityEventSnapshot()
+      .slice(before)
+      .filter(
+        (record) =>
+          record.type === 'security-decision' &&
+          record.decisionSite === 'framework:task:enqueue-scope-admission',
+      );
+    expect(records).toHaveLength(2);
+    expect(records[0]).toMatchObject({
+      principal: {
+        epoch: null,
+        id: null,
+        kind: 'unresolved',
+        reason: 'principal-unrecordable',
+        tenant: null,
+      },
+    });
+    expect(records[1]).toMatchObject({
+      principal: {
+        epoch: null,
+        id: validPrincipal,
+        kind: 'unresolved',
+        reason: 'epoch-unavailable',
+        tenant: null,
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain(unrecordablePrincipal);
+  });
+
   it('records allow and deny at every enrolled choke without payloads', async () => {
     await resolveLifecycleRequest(new Request('https://app.example/'), {
       sessionProvider: () => null,
