@@ -1055,7 +1055,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
   });
 
   // @kovo-security-certifies C13 dependency-reviewed-special-query-closure
-  it('rejects a reviewed package worker query before Vite creates an unreviewed subgraph', async () => {
+  it.each(['direct', 'import.meta.glob injected'] as const)(
+    'rejects a reviewed package %s worker query before Vite creates an unreviewed subgraph',
+    async (kind) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-worker-query-')));
     const appModulePath = join(root, 'client.mjs');
     const packageRoot = join(root, 'node_modules', 'safe-parser');
@@ -1080,7 +1082,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       }
       writeFileSync(
         join(packageRoot, 'index.mjs'),
-        "import WorkerEntry from './worker.mjs?worker'; export const start = () => new WorkerEntry();\n",
+        kind === 'direct'
+          ? "import WorkerEntry from './worker.mjs?worker'; export const start = () => new WorkerEntry();\n"
+          : "const workers = import.meta.glob('./worker.mjs', { eager: true, import: 'default', query: '?worker&url' }); export const start = () => workers['./worker.mjs'];\n",
       );
       writeFileSync(
         join(packageRoot, 'worker.mjs'),
@@ -1139,7 +1143,8 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  });
+    },
+  );
 
   // @kovo-security-certifies C13 dependency-reviewed-worker-constructor-closure
   it.each(['Worker', 'SharedWorker'] as const)(
