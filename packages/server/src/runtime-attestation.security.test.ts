@@ -42,7 +42,7 @@ describe('security event journal and runtime posture attestation (SPEC §§6.6, 
     expect(records.every((record) => record.schema === 'kovo-security-event/v1')).toBe(true);
     expect(Object.isFrozen(records[0])).toBe(true);
 
-    const tampered = { ...records[1], reason: 'allow' } as SecurityEventRecord;
+    const tampered: SecurityEventRecord = { ...records[1]!, mac: 'A'.repeat(43) };
     expect(journal.verify(records[1]!)).toBe(true);
     expect(journal.verify(tampered)).toBe(false);
   });

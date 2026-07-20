@@ -218,6 +218,8 @@ export function authoritySigningKeyRing(
     | 'csrf'
     | 'live-target-attestation'
     | 'rendered-html-coercion'
+    | 'runtime-posture-attestation'
+    | 'security-event-chain'
     | 'session-fingerprint',
   audience: string,
 ): AuthoritySigningKeyRing {

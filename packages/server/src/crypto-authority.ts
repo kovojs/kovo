@@ -3,8 +3,11 @@ import {
   createDecipheriv as builtinCreateDecipheriv,
   createHash as builtinCreateHash,
   createHmac as builtinCreateHmac,
+  createPrivateKey as builtinCreatePrivateKey,
+  createPublicKey as builtinCreatePublicKey,
   hkdfSync as builtinHkdfSync,
   randomBytes as builtinRandomBytes,
+  sign as builtinSign,
   timingSafeEqual as builtinTimingSafeEqual,
 } from 'node:crypto';
 
@@ -46,9 +49,15 @@ type CryptoPurpose =
   | 'csrf'
   | 'live-target-attestation'
   | 'rendered-html-coercion'
+  | 'runtime-posture-attestation'
+  | 'security-event-chain'
   | 'session-fingerprint';
 
-type CryptoAlgorithm = 'aes-256-gcm' | 'hmac-sha256';
+type CryptoAlgorithm = 'aes-256-gcm' | 'ed25519' | 'hmac-sha256';
+type HmacCryptoPurpose = Exclude<
+  CryptoPurpose,
+  'confidential-at-rest' | 'runtime-posture-attestation'
+>;
 
 /** Closed, reviewable derivation registry (SPEC §6.6 C13). */
 export const cryptoPurposeRegistry = witnessFreeze([
@@ -108,6 +117,20 @@ export const cryptoPurposeRegistry = witnessFreeze([
     purpose: 'session-fingerprint',
     rootSource: 'framework-key-ring',
   }),
+  witnessFreeze({
+    algorithm: 'ed25519',
+    audience: 'bounded-deployment-identity',
+    operations: witnessFreeze(['public-key', 'sign'] as const),
+    purpose: 'runtime-posture-attestation',
+    rootSource: 'deployment-key-ring',
+  }),
+  witnessFreeze({
+    algorithm: 'hmac-sha256',
+    audience: 'bounded-deployment-identity',
+    operations: witnessFreeze(['sign', 'verify'] as const),
+    purpose: 'security-event-chain',
+    rootSource: 'deployment-key-ring',
+  }),
 ] as const);
 
 export type CryptoVerifyResult =
@@ -160,17 +183,32 @@ export interface BetterAuthRateLimitCryptoHandle {
   readonly bucket: (frame: string, bucketCount: number) => string;
 }
 
+/** @internal Purpose-minimal asymmetric handle for externally pinned runtime attestations. */
+export interface RuntimeAttestationCryptoHandle {
+  readonly currentKeyId: string;
+  readonly publicKeySpki: string;
+  readonly trustAnchorFingerprint: string;
+  readonly sign: (payload: string | Uint8Array) => {
+    readonly keyId: string;
+    readonly signature: string;
+  };
+}
+
 const nativeCreateCipheriv = builtinCreateCipheriv;
 const nativeCreateDecipheriv = builtinCreateDecipheriv;
 const nativeCreateHash = builtinCreateHash;
 const nativeCreateHmac = builtinCreateHmac;
+const nativeCreatePrivateKey = builtinCreatePrivateKey;
+const nativeCreatePublicKey = builtinCreatePublicKey;
 const nativeHkdfSync = builtinHkdfSync;
 const nativeRandomBytes = builtinRandomBytes;
+const nativeSign = builtinSign;
 const nativeTimingSafeEqual = builtinTimingSafeEqual;
 const nativeDateNow = Date.now;
 const nativeNumberToString = Number.prototype.toString;
 const HKDF_SALT = securityBufferFrom('kovo-crypto-authority-v1');
 const AUTHORITY_VERSION = 'kovo-crypto-authority-v1';
+const ED25519_PKCS8_SEED_PREFIX = securityBufferFrom('302e020100300506032b657004220420', 'hex');
 const IV_REPLAY_WINDOW = 4_096;
 const recentIvs = createWitnessSet<string>();
 const recentIvOrder: string[] = [];
@@ -247,6 +285,59 @@ export function createSessionFingerprintCryptoHandle(secret: SigningSecret): Pur
 
 export function createRenderedHtmlCryptoHandle(secret: SigningSecret): PurposeCryptoHandle {
   return createPurposeHandle(secret, 'rendered-html-coercion', 'server-rendered-html');
+}
+
+/** @internal Mint the fixed security-event chain HMAC authority. */
+export function createSecurityEventCryptoHandle(
+  secret: SigningSecret,
+  deploymentId: string,
+): PurposeCryptoHandle {
+  return createPurposeHandle(secret, 'security-event-chain', deploymentId);
+}
+
+/** @internal Mint a deployment-bound Ed25519 signer without exposing private key material. */
+export function createRuntimeAttestationCryptoHandle(
+  secret: SigningSecret,
+  deploymentId: string,
+): RuntimeAttestationCryptoHandle {
+  assertAudience(deploymentId);
+  const ring = authoritySigningKeyRing(secret, 'runtime-posture-attestation', deploymentId);
+  const active = ring.active;
+  if (active.state !== 'active' || active.secret === undefined) {
+    throw new TypeError('Kovo runtime attestation active deployment key is unavailable.');
+  }
+  const seed = derivePurposeKey(
+    active.secret,
+    'runtime-posture-attestation',
+    deploymentId,
+    'ed25519',
+  );
+  try {
+    const privateKey = nativeCreatePrivateKey({
+      format: 'der',
+      key: securityBufferConcat([ED25519_PKCS8_SEED_PREFIX, seed]),
+      type: 'pkcs8',
+    });
+    const publicKey = nativeCreatePublicKey(privateKey);
+    const publicKeyDer = securityBufferFrom(publicKey.export({ format: 'der', type: 'spki' }));
+    const fingerprintHash = nativeCreateHash('sha256');
+    witnessReflectApply(nativeHashUpdate, fingerprintHash, [publicKeyDer]);
+    const fingerprint = witnessReflectApply<string>(nativeHashDigest, fingerprintHash, ['hex']);
+    return witnessFreeze({
+      currentKeyId: active.id,
+      publicKeySpki: securityBufferToString(publicKeyDer, 'base64url'),
+      sign(payload: string | Uint8Array) {
+        const signature = nativeSign(null, payloadBytes(payload), privateKey);
+        return witnessFreeze({
+          keyId: active.id,
+          signature: securityBufferToString(signature, 'base64url'),
+        });
+      },
+      trustAnchorFingerprint: `sha256:${fingerprint}`,
+    });
+  } finally {
+    bestEffortWipe(seed);
+  }
 }
 
 export function createConfidentialCryptoHandle(
@@ -349,7 +440,7 @@ export function createBetterAuthRateLimitCryptoHandle(
 
 function createPurposeHandle(
   secret: SigningSecret,
-  purpose: Exclude<CryptoPurpose, 'confidential-at-rest'>,
+  purpose: HmacCryptoPurpose,
   audience: string,
 ): PurposeCryptoHandle {
   assertAudience(audience);
@@ -391,7 +482,7 @@ function createPurposeHandle(
 
 function signWithKey(
   key: AuthoritySigningKey,
-  purpose: Exclude<CryptoPurpose, 'confidential-at-rest'>,
+  purpose: HmacCryptoPurpose,
   audience: string,
   payload: string | Uint8Array,
 ): string {
@@ -408,7 +499,7 @@ function signWithKey(
 
 function signatureMatches(
   key: AuthoritySigningKey,
-  purpose: Exclude<CryptoPurpose, 'confidential-at-rest'>,
+  purpose: HmacCryptoPurpose,
   audience: string,
   payload: string | Uint8Array,
   signature: string,

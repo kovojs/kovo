@@ -33,6 +33,11 @@ export function checkClassifierVerdictRouting(options = {}) {
     findings.push(...classifySourceFile(sourceFile));
   }
 
+  const denialSites = options.denialSites ?? [];
+  for (const site of denialSites) {
+    findings.push(...classifyDenialSite(site, readText));
+  }
+
   return staticClassifierGateResult(
     {
       findings,
@@ -52,6 +57,41 @@ export function checkClassifierVerdictRouting(options = {}) {
     },
     options,
   );
+}
+
+function classifyDenialSite(site, readText) {
+  if (
+    site === null ||
+    typeof site !== 'object' ||
+    typeof site.file !== 'string' ||
+    typeof site.marker !== 'string' ||
+    typeof site.eventType !== 'string'
+  ) {
+    return ['security-event denial-site census contains an invalid row'];
+  }
+  let source;
+  try {
+    source = readText(site.file);
+  } catch {
+    return [`${site.file}: security-event denial-site census file is missing`];
+  }
+  const markerIndex = source.indexOf(site.marker);
+  if (markerIndex < 0) {
+    return [`${site.file}: security-event denial-site marker is missing: ${site.marker}`];
+  }
+  const functionStart = Math.max(
+    source.lastIndexOf('function ', markerIndex),
+    source.lastIndexOf('constructor(', markerIndex),
+  );
+  const relevant = source.slice(functionStart < 0 ? Math.max(0, markerIndex - 2_000) : functionStart, markerIndex);
+  const singleQuoted = `type: '${site.eventType}'`;
+  const doubleQuoted = `type: "${site.eventType}"`;
+  if (relevant.includes('securityEvent(') && (relevant.includes(singleQuoted) || relevant.includes(doubleQuoted))) {
+    return [];
+  }
+  return [
+    `${site.file}: denial site must emit securityEvent({ type: "${site.eventType}" }) before closing`,
+  ];
 }
 
 export function main(options = {}) {
