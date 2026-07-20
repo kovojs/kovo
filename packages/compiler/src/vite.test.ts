@@ -96,6 +96,14 @@ describe('kovoVitePlugin', () => {
     const plugin = kovoVitePlugin();
 
     expect(plugin.name).toBe('kovo');
+    expect((plugin as { config?: () => unknown }).config?.()).toEqual({
+      oxc: {
+        jsx: {
+          importSource: '@kovojs/server',
+          runtime: 'automatic',
+        },
+      },
+    });
     expect(await plugin.transform?.(cartBadgeSource, 'cart-badge.tsx')).toMatchObject({
       code: expect.stringContaining('export const CartBadge = component({'),
       map: null,
@@ -122,7 +130,7 @@ import { component } from '@kovojs/core';
 export const ForeignRuntime = component({ render: () => <div /> });
 `;
 
-    await expect(plugin.transform?.(source, 'foreign-runtime.tsx')).rejects.toThrow(
+    expect(() => plugin.transform?.(source, 'foreign-runtime.tsx')).toThrow(
       /JSX import source must be @kovojs\/server/u,
     );
   });
