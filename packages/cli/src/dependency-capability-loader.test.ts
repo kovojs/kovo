@@ -1674,83 +1674,133 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
   );
 
   // @kovo-security-certifies C13 dependency-reviewed-public-worker-closure
-  it('rejects a computed reviewed Worker before Vite copies an unapproved public module', async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-public-worker-')));
-    const appModulePath = join(root, 'client.mjs');
-    const packageRoot = join(root, 'node_modules', 'safe-parser');
-    const publicRoot = join(root, 'public');
-    const outDir = join(root, 'dist');
-    const source = "import { start } from 'safe-parser'; start();\n";
-    try {
-      mkdirSync(packageRoot, { recursive: true });
-      mkdirSync(publicRoot, { recursive: true });
-      writeFileSync(
-        join(packageRoot, 'package.json'),
-        JSON.stringify({
-          exports: { '.': './index.mjs' },
-          name: 'safe-parser',
-          type: 'module',
-          version: '1.2.3',
-        }),
-      );
-      writeFileSync(
-        join(packageRoot, 'index.mjs'),
-        "export const start = () => new globalThis['Worker']('/worker.mjs', { type: 'module' });\n",
-      );
-      writeFileSync(
-        join(publicRoot, 'worker.mjs'),
-        "import 'data:text/javascript,globalThis.__KOVO_PUBLIC_WORKER__%3D%27EXECUTED%27';\n",
-      );
-      writeFileSync(appModulePath, source);
-      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
-      const exactManifest: AppDependencyCapabilityManifest = {
-        dependencies: [
-          {
-            entries: [
-              {
-                conditions: installed.conditions,
-                importers: ['client.mjs'],
-                imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
-                rootKinds: ['route'],
-                sites: ['client.mjs:1:1'],
-                specifier: 'safe-parser',
-              },
-            ],
-            manifestFingerprint: installed.manifestFingerprint,
-            packageName: installed.packageName,
-            packageVersion: installed.packageVersion,
-            summaryVersion: 'safe-parser-review/1',
-            verdict: 'open',
-          },
-        ],
-        schema: 'kovo-app-dependency-capabilities/v1',
-      };
-
-      await expect(
-        viteBuild({
-          build: {
-            emptyOutDir: true,
-            outDir,
-            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
-          },
-          configFile: false,
-          logLevel: 'silent',
-          plugins: [
-            dependencyCapabilityLoaderVitePlugin(
-              appModulePath,
-              [{ fileName: 'client.mjs', source }],
-              exactManifest,
-              'build-client',
-            ),
+  it.each([
+    ['computed Worker', "new globalThis['Worker']('/worker.mjs', { type: 'module' })", 'Worker'],
+    [
+      'nested-global Worker',
+      "new globalThis.window.Worker('/worker.mjs', { type: 'module' })",
+      'Worker',
+    ],
+    [
+      'default-view SharedWorker',
+      "new document.defaultView.SharedWorker('/worker.mjs', { type: 'module' })",
+      'SharedWorker',
+    ],
+    [
+      'reflected Worker',
+      "new (Reflect.get(globalThis, 'Worker'))('/worker.mjs', { type: 'module' })",
+      'Worker',
+    ],
+    [
+      'finite-template Worker',
+      "new globalThis[`Wor${'ker'}`]('/worker.mjs', { type: 'module' })",
+      'Worker',
+    ],
+    [
+      'function-returned global Worker',
+      "new ((() => globalThis)().Worker)('/worker.mjs', { type: 'module' })",
+      'Worker',
+    ],
+    [
+      'opaque identity-callback Worker',
+      "(() => { const id = value => value; return new (id(globalThis).Worker)('/worker.mjs', { type: 'module' }); })()",
+      'Worker',
+    ],
+    [
+      'opaque named-helper Worker',
+      "(() => { const get = () => globalThis; return new (get().Worker)('/worker.mjs', { type: 'module' }); })()",
+      'Worker',
+    ],
+    [
+      'array-aliased global Worker',
+      "new ([globalThis][0].Worker)('/worker.mjs', { type: 'module' })",
+      'Worker',
+    ],
+  ] as const)(
+    'rejects a reviewed package %s before Vite copies an unapproved public module',
+    async (_label, expression, expectedConstructor) => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-public-worker-')));
+      const appModulePath = join(root, 'client.mjs');
+      const packageRoot = join(root, 'node_modules', 'safe-parser');
+      const publicRoot = join(root, 'public');
+      const outDir = join(root, 'dist');
+      const source = "import { start } from 'safe-parser'; start();\n";
+      try {
+        mkdirSync(packageRoot, { recursive: true });
+        mkdirSync(publicRoot, { recursive: true });
+        writeFileSync(
+          join(packageRoot, 'package.json'),
+          JSON.stringify({
+            exports: { '.': './index.mjs' },
+            name: 'safe-parser',
+            type: 'module',
+            version: '1.2.3',
+          }),
+        );
+        writeFileSync(
+          join(packageRoot, 'index.mjs'),
+          `export const start = () => ${expression};\n`,
+        );
+        writeFileSync(
+          join(publicRoot, 'worker.mjs'),
+          "import 'data:text/javascript,globalThis.__KOVO_PUBLIC_WORKER__%3D%27EXECUTED%27';\n",
+        );
+        writeFileSync(appModulePath, source);
+        const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+        const exactManifest: AppDependencyCapabilityManifest = {
+          dependencies: [
+            {
+              entries: [
+                {
+                  conditions: installed.conditions,
+                  importers: ['client.mjs'],
+                  imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
+                  rootKinds: ['route'],
+                  sites: ['client.mjs:1:1'],
+                  specifier: 'safe-parser',
+                },
+              ],
+              manifestFingerprint: installed.manifestFingerprint,
+              packageName: installed.packageName,
+              packageVersion: installed.packageVersion,
+              summaryVersion: 'safe-parser-review/1',
+              verdict: 'open',
+            },
           ],
-          root,
-        }),
-      ).rejects.toThrow(/KV448.*reviewed package safe-parser creates a Worker subgraph/u);
-      expect(() => readFileSync(join(outDir, 'worker.mjs'), 'utf8')).toThrow();
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  });
+          schema: 'kovo-app-dependency-capabilities/v1',
+        };
+
+        await expect(
+          viteBuild({
+            build: {
+              emptyOutDir: true,
+              outDir,
+              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+            },
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [
+              dependencyCapabilityLoaderVitePlugin(
+                appModulePath,
+                [{ fileName: 'client.mjs', source }],
+                exactManifest,
+                'build-client',
+              ),
+            ],
+            root,
+          }),
+        ).rejects.toThrow(
+          new RegExp(
+            `KV448.*reviewed package safe-parser creates a ${expectedConstructor} subgraph`,
+            'u',
+          ),
+        );
+        expect(() => readFileSync(join(outDir, 'worker.mjs'), 'utf8')).toThrow();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   // @kovo-security-certifies C13 dependency-reviewed-executable-asset-closure
   it.each([
@@ -1777,6 +1827,24 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'worklet',
       "(() => { const { audioWorklet: worklet } = context; return worklet.addModule('/payload.mjs'); })()",
+    ],
+    [
+      'service worker',
+      "Reflect.get(navigator, 'serviceWorker').register('/payload.mjs', { type: 'module' })",
+    ],
+    ['paint worklet', "Reflect.get(CSS, 'paintWorklet').addModule('/payload.mjs')"],
+    ['audio worklet', "Reflect.get(context, 'audioWorklet').addModule('/payload.mjs')"],
+    [
+      'service worker',
+      "(() => { const key = 'serviceWorker'; return navigator[key].register('/payload.mjs', { type: 'module' }); })()",
+    ],
+    [
+      'opaque browser executable carrier',
+      "(() => { const key = globalThis.__KOVO_BROWSER_KEY__; return globalThis[key]('/payload.mjs'); })()",
+    ],
+    [
+      'opaque browser executable carrier',
+      "(() => { const key = globalThis.__KOVO_BROWSER_KEY__; const { [key]: Carrier } = globalThis; return new Carrier('/payload.mjs'); })()",
     ],
   ] as const)('rejects a reviewed package %s executable asset', async (carrier, expression) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-executable-asset-')));
@@ -1854,6 +1922,85 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         ),
       );
       expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-reviewed-local-carrier-name-precision
+  it('allows locally bound carrier-shaped names and proven plain-object properties', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-local-carriers-')));
+    const appModulePath = join(root, 'client.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { inspect } from 'safe-parser'; export const value = inspect();\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.mjs' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        [
+          "class Worker { constructor() { this.kind = 'local'; } }",
+          "const settings = { serviceWorker: { state: 'off' }, paintWorklet: { addModule: () => 'local' } };",
+          'const { serviceWorker, paintWorklet } = settings;',
+          "export const inspect = () => [new Worker().kind, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule()].join(':');",
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['client.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'inspect' }],
+                rootKinds: ['route'],
+                sites: ['client.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.mjs', source }],
+              exactManifest,
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).resolves.toBeDefined();
+      expect(readFileSync(join(outDir, 'entry.js'), 'utf8')).toContain('local');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -1958,6 +2105,80 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
               : /KV448.*supported build-client artifact.*retains a Worker constructor/u,
         );
         expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
+
+  // @kovo-security-certifies C13 dependency-retained-browser-carrier-closure
+  it.each([
+    [
+      'nested-global Worker',
+      "new globalThis.window.Worker('/payload.mjs', { type: 'module' })",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'reflected SharedWorker',
+      "new (Reflect.get(globalThis, 'SharedWorker'))('/payload.mjs', { type: 'module' })",
+      /KV448.*supported build-client artifact.*retains a SharedWorker constructor/u,
+    ],
+    [
+      'reflected service worker',
+      "Reflect.get(navigator, 'serviceWorker').register('/payload.mjs', { type: 'module' })",
+      /KV448.*supported build-client artifact.*retains a service worker executable asset/u,
+    ],
+    [
+      'reflected paint worklet',
+      "Reflect.get(CSS, 'paintWorklet').addModule('/payload.mjs')",
+      /KV448.*supported build-client artifact.*retains a paint worklet executable asset/u,
+    ],
+    [
+      'reflected audio worklet',
+      "Reflect.get(globalThis.__KOVO_AUDIO_CONTEXT__, 'audioWorklet').addModule('/payload.mjs')",
+      /KV448.*supported build-client artifact.*retains an? audio worklet executable asset/u,
+    ],
+  ] as const)(
+    'rejects a retained approved-app %s before a public executable module can ship',
+    async (_label, expression, expectedError) => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-retained-carrier-')));
+      const appModulePath = join(root, 'app.mjs');
+      const publicRoot = join(root, 'public');
+      const outDir = join(root, 'dist');
+      const appSource = `${expression};\n`;
+      try {
+        mkdirSync(publicRoot, { recursive: true });
+        writeFileSync(appModulePath, appSource);
+        writeFileSync(
+          join(publicRoot, 'payload.mjs'),
+          "import 'data:text/javascript,globalThis.__KOVO_RETAINED_CARRIER__%3D%27EXECUTED%27';\n",
+        );
+
+        await expect(
+          viteBuild({
+            build: {
+              emptyOutDir: true,
+              outDir,
+              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+            },
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [
+              dependencyCapabilityLoaderVitePlugin(
+                appModulePath,
+                [{ fileName: 'app.mjs', source: appSource }],
+                { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+                'build-client',
+              ),
+            ],
+            root,
+          }),
+        ).rejects.toThrow(expectedError);
+        // Vite copies publicDir before generateBundle. The copied executable is the concrete
+        // secondary graph this retained-artifact backstop prevents from becoming a successful build.
+        expect(readFileSync(join(outDir, 'payload.mjs'), 'utf8')).toContain(
+          '__KOVO_RETAINED_CARRIER__',
+        );
       } finally {
         rmSync(root, { force: true, recursive: true });
       }

@@ -261,13 +261,18 @@ export function dependencyCapabilityLoaderVitePlugin(
             `reviewed package ${reviewedPackage.packageName} aliases CommonJS loader authority before app evaluation`,
           );
         }
-        const workerConstructor = reviewedWorkerConstructor(ast);
-        if (workerConstructor !== undefined) {
+        const browserCarrier = reviewedExecutableBrowserCarrier(ast);
+        if (browserCarrier?.kind === 'worker') {
           throw dependencyCapabilityError(
-            `reviewed package ${reviewedPackage.packageName} creates a ${workerConstructor} subgraph outside the dependency closure plugin`,
+            `reviewed package ${reviewedPackage.packageName} creates a ${browserCarrier.name} subgraph outside the dependency closure plugin`,
           );
         }
-        const executableAssetCarrier = reviewedExecutableAssetCarrier(ast);
+        const executableAssetCarrier =
+          browserCarrier?.kind === 'asset'
+            ? browserCarrier.name
+            : containsImportMetaUrlConstructor(ast)
+              ? 'opaque new-URL'
+              : undefined;
         if (executableAssetCarrier !== undefined) {
           throw dependencyCapabilityError(
             `reviewed package ${reviewedPackage.packageName} creates ${executableAssetCarrier === 'opaque new-URL' ? 'an' : 'a'} ${executableAssetCarrier} executable asset outside the dependency closure plugin`,
@@ -510,13 +515,18 @@ export function dependencyCapabilityLoaderVitePlugin(
             `supported ${lane} artifact ${output.fileName} cannot be parsed for retained module edges`,
           );
         }
-        const workerConstructor = reviewedWorkerConstructor(outputAst);
-        if (workerConstructor !== undefined) {
+        const browserCarrier = reviewedExecutableBrowserCarrier(outputAst);
+        if (browserCarrier?.kind === 'worker') {
           throw dependencyCapabilityError(
-            `supported ${lane} artifact ${output.fileName} retains a ${workerConstructor} constructor outside the dependency closure plugin`,
+            `supported ${lane} artifact ${output.fileName} retains a ${browserCarrier.name} constructor outside the dependency closure plugin`,
           );
         }
-        const executableAssetCarrier = reviewedExecutableAssetCarrier(outputAst);
+        const executableAssetCarrier =
+          browserCarrier?.kind === 'asset'
+            ? browserCarrier.name
+            : containsImportMetaUrlConstructor(outputAst)
+              ? 'opaque new-URL'
+              : undefined;
         if (executableAssetCarrier !== undefined) {
           throw dependencyCapabilityError(
             `supported ${lane} artifact ${output.fileName} retains ${executableAssetCarrier === 'opaque new-URL' ? 'an' : 'a'} ${executableAssetCarrier} executable asset outside the dependency closure plugin`,
@@ -1158,112 +1168,1047 @@ interface ParsedModuleEdge {
   readonly specifier?: string;
 }
 
-function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {
-  const pending: Array<{
-    key?: string;
-    parent?: Record<string, unknown>;
-    value: unknown;
-  }> = [{ value: ast }];
-  const seen = new Set<object>();
-  while (pending.length > 0) {
-    const item = pending.pop()!;
-    const value = item.value;
-    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
-    seen.add(value);
+type ReviewedExecutableAssetCarrier =
+  | 'audio worklet'
+  | 'opaque browser executable carrier'
+  | 'paint worklet'
+  | 'service worker'
+  | 'worklet';
+
+type ReviewedExecutableBrowserCarrier =
+  | { readonly kind: 'asset'; readonly name: ReviewedExecutableAssetCarrier }
+  | { readonly kind: 'worker'; readonly name: 'SharedWorker' | 'Worker' };
+
+type BrowserStaticAtom =
+  | {
+      readonly kind: 'array';
+      readonly node: Record<string, unknown>;
+      readonly scope: BrowserStaticScope;
+    }
+  | { readonly kind: 'css' }
+  | { readonly kind: 'document' }
+  | { readonly kind: 'global' }
+  | { readonly kind: 'local' }
+  | { readonly kind: 'navigator' }
+  | {
+      readonly kind: 'object';
+      readonly node: Record<string, unknown>;
+      readonly scope: BrowserStaticScope;
+    }
+  | { readonly kind: 'reflect' }
+  | { readonly kind: 'reflect-get' }
+  | { readonly kind: 'string'; readonly value: string }
+  | { readonly carrier: ReviewedExecutableAssetCarrier; readonly kind: 'asset' }
+  | { readonly kind: 'worker'; readonly name: 'SharedWorker' | 'Worker' };
+
+interface BrowserBindingProjection {
+  readonly expression?: unknown;
+  readonly property?: string;
+  readonly scope?: BrowserStaticScope;
+}
+
+interface BrowserBindingSource {
+  readonly expression: unknown;
+  readonly projections: readonly BrowserBindingProjection[];
+  readonly scope: BrowserStaticScope;
+}
+
+interface BrowserStaticBinding {
+  readonly sources: BrowserBindingSource[];
+  opaque: boolean;
+}
+
+interface BrowserStaticScope {
+  readonly bindings: Map<string, BrowserStaticBinding>;
+  readonly kind: 'block' | 'function' | 'program';
+  readonly parent?: BrowserStaticScope;
+}
+
+interface BrowserStaticIndex {
+  readonly bindings: BrowserStaticBinding[];
+  readonly bindingIdentifiers: WeakSet<object>;
+  readonly root: BrowserStaticScope;
+  readonly scopeByNode: WeakMap<object, BrowserStaticScope>;
+}
+
+interface BrowserStaticEvaluationState {
+  readonly bindingStack: Set<BrowserStaticBinding>;
+  readonly depth: number;
+}
+
+const browserAstMetadataKeys = new Set(['type', 'start', 'end', 'loc', 'range', 'raw']);
+const maxBrowserFiniteStaticStrings = 32;
+
+/**
+ * Close Vite's executable browser carriers over a small, explicit expression language.
+ *
+ * The language follows lexical bindings through immutable/mutable local aliases, finite string
+ * expressions, object/array projections, nested browser-global aliases, and exact Reflect.get.
+ * Unknown property selection on a proven browser-global receiver closes rather than guessing. This
+ * is a build/runtime floor for the supported subset, not a same-realm JavaScript sandbox (SPEC
+ * §6.6; C13).
+ */
+function reviewedExecutableBrowserCarrier(
+  ast: unknown,
+): ReviewedExecutableBrowserCarrier | undefined {
+  if (!isAstRecord(ast)) return undefined;
+  const index = buildBrowserStaticIndex(ast);
+
+  const visit = (
+    value: unknown,
+    parent?: Readonly<Record<string, unknown>>,
+    key?: string,
+  ): ReviewedExecutableBrowserCarrier | undefined => {
+    if (typeof value !== 'object' || value === null) return undefined;
     if (Array.isArray(value)) {
       for (const child of value) {
-        pending.push({
-          ...(item.key === undefined ? {} : { key: item.key }),
-          ...(item.parent === undefined ? {} : { parent: item.parent }),
-          value: child,
-        });
+        const finding = visit(child, parent, key);
+        if (finding !== undefined) return finding;
       }
-      continue;
+      return undefined;
     }
     const record = value as Record<string, unknown>;
-    const workerName = workerAuthorityReferenceName(record, item.parent, item.key);
-    if (workerName !== undefined) return workerName;
-    for (const [key, child] of Object.entries(record)) {
-      if (
-        key === 'type' ||
-        key === 'start' ||
-        key === 'end' ||
-        key === 'loc' ||
-        key === 'range' ||
-        key === 'raw'
-      ) {
-        continue;
-      }
-      pending.push({ key, parent: record, value: child });
+    const scope = index.scopeByNode.get(record) ?? index.root;
+    if (
+      record.type === 'MemberExpression' ||
+      record.type === 'CallExpression' ||
+      (record.type === 'Identifier' &&
+        browserIdentifierIsValueReference(record, parent, key, index.bindingIdentifiers))
+    ) {
+      const finding = browserCarrierFromAtoms(
+        evaluateBrowserStaticValue(record, scope, index, { bindingStack: new Set(), depth: 0 }),
+      );
+      if (finding !== undefined) return finding;
     }
+    if (record.type === 'NewExpression') {
+      const finding = browserExecutableConstructor(record, scope, index);
+      if (finding !== undefined) return finding;
+    }
+    if (record.type === 'CallExpression') {
+      const finding = browserExecutableMethodCall(record, scope, index);
+      if (finding !== undefined) return finding;
+    }
+    for (const [childKey, child] of Object.entries(record)) {
+      if (browserAstMetadataKeys.has(childKey)) continue;
+      const finding = visit(child, record, childKey);
+      if (finding !== undefined) return finding;
+    }
+    return undefined;
+  };
+
+  const directFinding = visit(ast);
+  if (directFinding !== undefined) return directFinding;
+  // Destructuring can acquire a carrier without spelling a MemberExpression. Re-evaluate every
+  // binding projection so `{ Worker: W } = globalThis` and its finite computed variants close even
+  // when W is otherwise unused, while projections from proven local object literals remain safe.
+  for (const binding of index.bindings) {
+    const finding = browserCarrierFromAtoms(
+      evaluateBrowserBinding(binding, index, { bindingStack: new Set(), depth: 0 }),
+    );
+    if (finding !== undefined) return finding;
   }
   return undefined;
 }
 
-function workerAuthorityReferenceName(
-  record: Readonly<Record<string, unknown>>,
-  parent: Readonly<Record<string, unknown>> | undefined,
-  key: string | undefined,
-): 'SharedWorker' | 'Worker' | undefined {
-  if (record.type === 'Property' && parent?.type === 'ObjectPattern') {
-    const propertyName = staticObjectPropertyName(record);
-    if (propertyName === 'Worker' || propertyName === 'SharedWorker') return propertyName;
-  }
-  if (record.type === 'MemberExpression') {
-    const memberName = staticMemberPropertyName(record);
-    if (
-      (memberName === 'Worker' || memberName === 'SharedWorker') &&
-      memberExpressionHasBrowserGlobalReceiver(record)
-    ) {
-      return memberName;
-    }
-  }
-  if (
-    record.type !== 'Identifier' ||
-    (record.name !== 'Worker' && record.name !== 'SharedWorker') ||
-    workerIdentifierIsDeclarationOrProperty(parent, key)
-  ) {
-    return undefined;
-  }
-  return record.name;
+function browserExecutableConstructor(
+  expression: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): ReviewedExecutableBrowserCarrier | undefined {
+  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+  const callee = expression.callee;
+  const direct = browserCarrierFromAtoms(evaluateBrowserStaticValue(callee, scope, index, state));
+  if (direct?.kind === 'worker') return direct;
+  if (!isAstRecord(callee) || callee.type !== 'MemberExpression') return undefined;
+  const properties = browserStaticPropertyNames(callee, scope, index, state);
+  const workerName = properties?.find(
+    (property): property is 'SharedWorker' | 'Worker' =>
+      property === 'Worker' || property === 'SharedWorker',
+  );
+  if (workerName === undefined) return undefined;
+  const receiver = evaluateBrowserStaticValue(callee.object, scope, index, state);
+  return browserReceiverIsProvenPlain(receiver) ? undefined : { kind: 'worker', name: workerName };
 }
 
-function memberExpressionHasBrowserGlobalReceiver(
-  member: Readonly<Record<string, unknown>>,
+function browserCarrierFromAtoms(
+  atoms: readonly BrowserStaticAtom[],
+): ReviewedExecutableBrowserCarrier | undefined {
+  for (const atom of atoms) {
+    if (atom.kind === 'worker') return { kind: 'worker', name: atom.name };
+    if (atom.kind === 'asset') return { kind: 'asset', name: atom.carrier };
+  }
+  return undefined;
+}
+
+function browserExecutableMethodCall(
+  call: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): ReviewedExecutableBrowserCarrier | undefined {
+  const callee = call.callee;
+  if (!isAstRecord(callee) || callee.type !== 'MemberExpression') return undefined;
+  const properties = browserStaticPropertyNames(callee, scope, index, {
+    bindingStack: new Set(),
+    depth: 0,
+  });
+  if (properties === undefined) return undefined;
+  const receiver = evaluateBrowserStaticValue(callee.object, scope, index, {
+    bindingStack: new Set(),
+    depth: 0,
+  });
+  if (properties.includes('register')) {
+    if (receiver.some((atom) => atom.kind === 'asset' && atom.carrier === 'service worker')) {
+      return { kind: 'asset', name: 'service worker' };
+    }
+    if (
+      browserExpressionAcquiresProperty(callee.object, 'serviceWorker', scope, index) &&
+      !browserReceiverIsProvenPlain(receiver)
+    ) {
+      return { kind: 'asset', name: 'service worker' };
+    }
+    if (
+      receiver.some((atom) => atom.kind === 'local') &&
+      browserExpressionName(callee.object) === 'serviceWorker'
+    ) {
+      return { kind: 'asset', name: 'service worker' };
+    }
+  }
+  if (!properties.includes('addModule')) return undefined;
+  const receiverName = browserExpressionName(callee.object);
+  if (
+    isAstRecord(callee.object) &&
+    callee.object.type === 'Identifier' &&
+    receiver.some((atom) => atom.kind !== 'object' && atom.kind !== 'array') &&
+    receiverName?.toLowerCase().endsWith('worklet') === true
+  ) {
+    return { kind: 'asset', name: 'worklet' };
+  }
+  for (const atom of receiver) {
+    if (atom.kind !== 'asset') continue;
+    if (
+      atom.carrier === 'audio worklet' ||
+      atom.carrier === 'paint worklet' ||
+      atom.carrier === 'worklet'
+    ) {
+      return { kind: 'asset', name: atom.carrier };
+    }
+  }
+  return receiver.some((atom) => atom.kind === 'local') &&
+    receiverName?.toLowerCase().endsWith('worklet') === true
+    ? { kind: 'asset', name: 'worklet' }
+    : undefined;
+}
+
+function browserExpressionAcquiresProperty(
+  value: unknown,
+  expectedProperty: string,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
 ): boolean {
-  const object = member.object;
-  if (typeof object !== 'object' || object === null) return false;
-  const objectRecord = object as Record<string, unknown>;
+  if (!isAstRecord(value)) return false;
+  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+  if (value.type === 'MemberExpression') {
+    return (
+      browserStaticPropertyNames(value, scope, index, state)?.includes(expectedProperty) === true
+    );
+  }
+  if (value.type !== 'CallExpression') return false;
+  const callee = evaluateBrowserStaticValue(value.callee, scope, index, state);
+  if (!callee.some((atom) => atom.kind === 'reflect-get')) return false;
+  const args = Array.isArray(value.arguments) ? value.arguments : [];
   return (
-    objectRecord.type === 'Identifier' &&
-    (objectRecord.name === 'globalThis' ||
-      objectRecord.name === 'self' ||
-      objectRecord.name === 'window')
+    browserFiniteStaticStrings(args[1], scope, index, state)?.includes(expectedProperty) === true
   );
 }
 
-function workerIdentifierIsDeclarationOrProperty(
-  parent: Readonly<Record<string, unknown>> | undefined,
-  key: string | undefined,
-): boolean {
-  if (parent === undefined) return true;
-  if (parent.type === 'MemberExpression' && parent.computed !== true && key === 'property') {
-    return true;
+function browserReceiverIsProvenPlain(receivers: readonly BrowserStaticAtom[]): boolean {
+  return (
+    receivers.length > 0 &&
+    receivers.every((receiver) => receiver.kind === 'array' || receiver.kind === 'object')
+  );
+}
+
+function browserExpressionName(value: unknown): string | undefined {
+  if (!isAstRecord(value)) return undefined;
+  if (value.type === 'Identifier' && typeof value.name === 'string') return value.name;
+  return value.type === 'MemberExpression' ? staticMemberPropertyName(value) : undefined;
+}
+
+function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticIndex {
+  const root: BrowserStaticScope = { bindings: new Map(), kind: 'program' };
+  const index: BrowserStaticIndex = {
+    bindings: [],
+    bindingIdentifiers: new WeakSet(),
+    root,
+    scopeByNode: new WeakMap(),
+  };
+
+  const collect = (value: unknown, scope: BrowserStaticScope): void => {
+    if (typeof value !== 'object' || value === null) return;
+    if (Array.isArray(value)) {
+      for (const child of value) collect(child, scope);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const type = typeof record.type === 'string' ? record.type : undefined;
+    if (type === 'Program') {
+      index.scopeByNode.set(record, scope);
+      collectBrowserAstChildren(record, scope, collect);
+      return;
+    }
+    if (type === 'BlockStatement') {
+      const blockScope: BrowserStaticScope = { bindings: new Map(), kind: 'block', parent: scope };
+      index.scopeByNode.set(record, blockScope);
+      collectBrowserAstChildren(record, blockScope, collect);
+      return;
+    }
+    if (
+      type === 'ForStatement' ||
+      type === 'ForInStatement' ||
+      type === 'ForOfStatement' ||
+      type === 'StaticBlock' ||
+      type === 'SwitchStatement'
+    ) {
+      const controlScope: BrowserStaticScope = {
+        bindings: new Map(),
+        kind: 'block',
+        parent: scope,
+      };
+      index.scopeByNode.set(record, controlScope);
+      collectBrowserAstChildren(record, controlScope, collect);
+      return;
+    }
+    if (browserAstFunctionType(type)) {
+      index.scopeByNode.set(record, scope);
+      if (type === 'FunctionDeclaration') {
+        addOpaqueBrowserPattern(record.id, scope, index);
+      }
+      const functionScope: BrowserStaticScope = {
+        bindings: new Map(),
+        kind: 'function',
+        parent: scope,
+      };
+      if (type === 'FunctionExpression') {
+        addOpaqueBrowserPattern(record.id, functionScope, index);
+      }
+      const parameters = Array.isArray(record.params) ? record.params : [];
+      for (const parameter of parameters) addOpaqueBrowserPattern(parameter, functionScope, index);
+      for (const [childKey, child] of Object.entries(record)) {
+        if (browserAstMetadataKeys.has(childKey) || childKey === 'id') continue;
+        collect(child, functionScope);
+      }
+      return;
+    }
+    if (type === 'CatchClause') {
+      const catchScope: BrowserStaticScope = { bindings: new Map(), kind: 'block', parent: scope };
+      index.scopeByNode.set(record, catchScope);
+      addOpaqueBrowserPattern(record.param, catchScope, index);
+      for (const [childKey, child] of Object.entries(record)) {
+        if (browserAstMetadataKeys.has(childKey) || childKey === 'param') continue;
+        collect(child, catchScope);
+      }
+      return;
+    }
+    if (type === 'ClassExpression') {
+      index.scopeByNode.set(record, scope);
+      const classScope: BrowserStaticScope = { bindings: new Map(), kind: 'block', parent: scope };
+      addOpaqueBrowserPattern(record.id, classScope, index);
+      for (const [childKey, child] of Object.entries(record)) {
+        if (browserAstMetadataKeys.has(childKey) || childKey === 'id') continue;
+        collect(child, classScope);
+      }
+      return;
+    }
+    index.scopeByNode.set(record, scope);
+    if (type === 'VariableDeclaration') {
+      const target = record.kind === 'var' ? nearestBrowserFunctionScope(scope) : scope;
+      const declarations = Array.isArray(record.declarations) ? record.declarations : [];
+      for (const declaration of declarations) {
+        if (!isAstRecord(declaration)) continue;
+        addBrowserPatternBindings(
+          declaration.id,
+          target,
+          declaration.init === null || declaration.init === undefined
+            ? undefined
+            : { expression: declaration.init, projections: [], scope },
+          index,
+        );
+      }
+    } else if (type === 'ClassDeclaration') {
+      addOpaqueBrowserPattern(record.id, scope, index);
+    } else if (
+      type === 'ImportSpecifier' ||
+      type === 'ImportDefaultSpecifier' ||
+      type === 'ImportNamespaceSpecifier'
+    ) {
+      addOpaqueBrowserPattern(record.local, scope, index);
+    }
+    collectBrowserAstChildren(record, scope, collect);
+  };
+
+  collect(ast, root);
+  collectBrowserAssignmentSources(ast, index);
+  return index;
+}
+
+function collectBrowserAstChildren(
+  record: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  collect: (value: unknown, scope: BrowserStaticScope) => void,
+): void {
+  for (const [key, child] of Object.entries(record)) {
+    if (browserAstMetadataKeys.has(key)) continue;
+    collect(child, scope);
+  }
+}
+
+function browserAstFunctionType(type: string | undefined): boolean {
+  return (
+    type === 'ArrowFunctionExpression' ||
+    type === 'FunctionDeclaration' ||
+    type === 'FunctionExpression'
+  );
+}
+
+function nearestBrowserFunctionScope(scope: BrowserStaticScope): BrowserStaticScope {
+  let candidate = scope;
+  while (candidate.kind === 'block' && candidate.parent !== undefined) {
+    candidate = candidate.parent;
+  }
+  return candidate;
+}
+
+function ensureBrowserBinding(
+  name: string,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): BrowserStaticBinding {
+  const existing = scope.bindings.get(name);
+  if (existing !== undefined) return existing;
+  const binding: BrowserStaticBinding = { opaque: false, sources: [] };
+  scope.bindings.set(name, binding);
+  index.bindings.push(binding);
+  return binding;
+}
+
+function addOpaqueBrowserPattern(
+  pattern: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  addBrowserPatternBindings(pattern, scope, undefined, index);
+}
+
+function addBrowserPatternBindings(
+  pattern: unknown,
+  scope: BrowserStaticScope,
+  source: BrowserBindingSource | undefined,
+  index: BrowserStaticIndex,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    index.bindingIdentifiers.add(pattern);
+    const binding = ensureBrowserBinding(pattern.name, scope, index);
+    if (source === undefined) binding.opaque = true;
+    else binding.sources.push(source);
+    return;
+  }
+  if (pattern.type === 'AssignmentPattern') {
+    addBrowserPatternBindings(pattern.left, scope, source, index);
+    addBrowserPatternBindings(
+      pattern.left,
+      scope,
+      pattern.right === undefined
+        ? undefined
+        : { expression: pattern.right, projections: [], scope },
+      index,
+    );
+    return;
+  }
+  if (pattern.type === 'RestElement') {
+    addOpaqueBrowserPattern(pattern.argument, scope, index);
+    return;
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    for (const property of properties) {
+      if (!isAstRecord(property) || property.type !== 'Property') {
+        if (isAstRecord(property)) addOpaqueBrowserPattern(property.argument, scope, index);
+        continue;
+      }
+      const propertyName = staticObjectPropertyName(property);
+      if (source === undefined) {
+        addOpaqueBrowserPattern(property.value, scope, index);
+        continue;
+      }
+      const projection: BrowserBindingProjection =
+        propertyName !== undefined
+          ? { property: propertyName }
+          : property.computed === true && property.key !== undefined
+            ? { expression: property.key, scope }
+            : {};
+      addBrowserPatternBindings(
+        property.value,
+        scope,
+        {
+          expression: source.expression,
+          projections: [...source.projections, projection],
+          scope: source.scope,
+        },
+        index,
+      );
+    }
+    return;
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex];
+      if (element === null || element === undefined) continue;
+      if (source === undefined) addOpaqueBrowserPattern(element, scope, index);
+      else {
+        addBrowserPatternBindings(
+          element,
+          scope,
+          {
+            expression: source.expression,
+            projections: [...source.projections, { property: String(elementIndex) }],
+            scope: source.scope,
+          },
+          index,
+        );
+      }
+    }
+  }
+}
+
+function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex): void {
+  const seen = new Set<object>();
+  const visit = (value: unknown): void => {
+    if (typeof value !== 'object' || value === null || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const scope = index.scopeByNode.get(record) ?? index.root;
+    if (record.type === 'AssignmentExpression') {
+      if (record.operator === '=') {
+        addBrowserAssignmentPattern(record.left, record.right, scope, index);
+      } else {
+        markBrowserAssignmentPatternOpaque(record.left, scope, index);
+      }
+    } else if (record.type === 'UpdateExpression') {
+      markBrowserAssignmentPatternOpaque(record.argument, scope, index);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (!browserAstMetadataKeys.has(key)) visit(child);
+    }
+  };
+  visit(ast);
+}
+
+function addBrowserAssignmentPattern(
+  pattern: unknown,
+  expression: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    const binding = lookupBrowserBinding(pattern.name, scope);
+    if (binding !== undefined) {
+      binding.sources.push({ expression, projections: [], scope });
+    }
+    return;
+  }
+  // Destructuring assignments retain the same finite property projection grammar as declarations.
+  if (pattern.type === 'ObjectPattern' || pattern.type === 'ArrayPattern') {
+    addBrowserAssignmentPatternSource(
+      pattern,
+      { expression, projections: [], scope },
+      scope,
+      index,
+    );
+  }
+}
+
+function addBrowserAssignmentPatternSource(
+  pattern: unknown,
+  source: BrowserBindingSource,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    const binding = lookupBrowserBinding(pattern.name, scope);
+    if (binding !== undefined) binding.sources.push(source);
+    return;
+  }
+  if (pattern.type === 'AssignmentPattern') {
+    addBrowserAssignmentPatternSource(pattern.left, source, scope, index);
+    return;
+  }
+  if (pattern.type === 'RestElement') {
+    markBrowserAssignmentPatternOpaque(pattern.argument, scope, index);
+    return;
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    for (const property of properties) {
+      if (!isAstRecord(property) || property.type !== 'Property') {
+        if (isAstRecord(property)) {
+          markBrowserAssignmentPatternOpaque(property.argument, scope, index);
+        }
+        continue;
+      }
+      const propertyName = staticObjectPropertyName(property);
+      const projection: BrowserBindingProjection =
+        propertyName !== undefined
+          ? { property: propertyName }
+          : property.computed === true && property.key !== undefined
+            ? { expression: property.key, scope }
+            : {};
+      addBrowserAssignmentPatternSource(
+        property.value,
+        {
+          expression: source.expression,
+          projections: [...source.projections, projection],
+          scope: source.scope,
+        },
+        scope,
+        index,
+      );
+    }
+    return;
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+      const element = elements[elementIndex];
+      if (element === null || element === undefined) continue;
+      addBrowserAssignmentPatternSource(
+        element,
+        {
+          expression: source.expression,
+          projections: [...source.projections, { property: String(elementIndex) }],
+          scope: source.scope,
+        },
+        scope,
+        index,
+      );
+    }
+  }
+}
+
+function markBrowserAssignmentPatternOpaque(
+  pattern: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    const binding = lookupBrowserBinding(pattern.name, scope);
+    if (binding !== undefined) binding.opaque = true;
+    return;
+  }
+  addOpaqueBrowserPattern(pattern, scope, index);
+}
+
+function lookupBrowserBinding(
+  name: string,
+  scope: BrowserStaticScope,
+): BrowserStaticBinding | undefined {
+  let candidate: BrowserStaticScope | undefined = scope;
+  while (candidate !== undefined) {
+    const binding = candidate.bindings.get(name);
+    if (binding !== undefined) return binding;
+    candidate = candidate.parent;
+  }
+  return undefined;
+}
+
+function evaluateBrowserBinding(
+  binding: BrowserStaticBinding,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): BrowserStaticAtom[] {
+  if (state.depth > 48 || state.bindingStack.has(binding)) return [{ kind: 'local' }];
+  const bindingStack = new Set(state.bindingStack);
+  bindingStack.add(binding);
+  const nextState = { bindingStack, depth: state.depth + 1 };
+  const atoms: BrowserStaticAtom[] = binding.opaque ? [{ kind: 'local' }] : [];
+  for (const source of binding.sources) {
+    let projected = evaluateBrowserStaticValue(source.expression, source.scope, index, nextState);
+    for (const projection of source.projections) {
+      const properties =
+        projection.property !== undefined
+          ? [projection.property]
+          : projection.expression !== undefined && projection.scope !== undefined
+            ? browserFiniteStaticStrings(projection.expression, projection.scope, index, nextState)
+            : undefined;
+      projected = browserMemberAtoms(projected, properties, index, nextState);
+    }
+    atoms.push(...projected);
+  }
+  return atoms.length === 0 ? [{ kind: 'local' }] : atoms;
+}
+
+function evaluateBrowserStaticValue(
+  value: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): BrowserStaticAtom[] {
+  if (state.depth > 48 || !isAstRecord(value)) return [{ kind: 'local' }];
+  const nextState = { bindingStack: state.bindingStack, depth: state.depth + 1 };
+  if (value.type === 'Identifier' && typeof value.name === 'string') {
+    const binding = lookupBrowserBinding(value.name, scope);
+    if (binding !== undefined) return evaluateBrowserBinding(binding, index, nextState);
+    if (value.name === 'Worker' || value.name === 'SharedWorker') {
+      return [{ kind: 'worker', name: value.name }];
+    }
+    if (
+      value.name === 'globalThis' ||
+      value.name === 'self' ||
+      value.name === 'window' ||
+      value.name === 'top' ||
+      value.name === 'parent' ||
+      value.name === 'frames'
+    ) {
+      return [{ kind: 'global' }];
+    }
+    if (value.name === 'navigator') return [{ kind: 'navigator' }];
+    if (value.name === 'CSS') return [{ kind: 'css' }];
+    if (value.name === 'document') return [{ kind: 'document' }];
+    if (value.name === 'Reflect') return [{ kind: 'reflect' }];
+    if (value.name.toLowerCase().endsWith('worklet')) {
+      return [{ carrier: 'worklet', kind: 'asset' }];
+    }
+    return [{ kind: 'local' }];
+  }
+  const literal = literalAstString(value);
+  if (literal !== undefined) return [{ kind: 'string', value: literal }];
+  if (value.type === 'Literal' && typeof value.value === 'number') {
+    return [{ kind: 'string', value: String(value.value) }];
+  }
+  if (value.type === 'ObjectExpression') return [{ kind: 'object', node: value, scope }];
+  if (value.type === 'ArrayExpression') return [{ kind: 'array', node: value, scope }];
+  if (value.type === 'MemberExpression') {
+    const object = evaluateBrowserStaticValue(value.object, scope, index, nextState);
+    const properties = browserStaticPropertyNames(value, scope, index, nextState);
+    return browserMemberAtoms(object, properties, index, nextState);
+  }
+  if (value.type === 'CallExpression') {
+    const callee = evaluateBrowserStaticValue(value.callee, scope, index, nextState);
+    if (callee.some((atom) => atom.kind === 'reflect-get')) {
+      const args = Array.isArray(value.arguments) ? value.arguments : [];
+      if (args.length < 2) return [{ carrier: 'opaque browser executable carrier', kind: 'asset' }];
+      const receiver = evaluateBrowserStaticValue(args[0], scope, index, nextState);
+      const properties = browserFiniteStaticStrings(args[1], scope, index, nextState);
+      return browserMemberAtoms(receiver, properties, index, nextState);
+    }
+    return [{ kind: 'local' }];
+  }
+  if (value.type === 'ChainExpression') {
+    return evaluateBrowserStaticValue(value.expression, scope, index, nextState);
+  }
+  if (value.type === 'SequenceExpression') {
+    const expressions = Array.isArray(value.expressions) ? value.expressions : [];
+    return expressions.length === 0
+      ? [{ kind: 'local' }]
+      : evaluateBrowserStaticValue(expressions.at(-1), scope, index, nextState);
+  }
+  if (value.type === 'ConditionalExpression') {
+    return [
+      ...evaluateBrowserStaticValue(value.consequent, scope, index, nextState),
+      ...evaluateBrowserStaticValue(value.alternate, scope, index, nextState),
+    ];
+  }
+  if (value.type === 'LogicalExpression') {
+    return [
+      ...evaluateBrowserStaticValue(value.left, scope, index, nextState),
+      ...evaluateBrowserStaticValue(value.right, scope, index, nextState),
+    ];
   }
   if (
-    (parent.type === 'Property' || parent.type === 'MethodDefinition') &&
+    value.type === 'AssignmentExpression' ||
+    value.type === 'AwaitExpression' ||
+    value.type === 'YieldExpression'
+  ) {
+    const expression = value.type === 'AssignmentExpression' ? value.right : value.argument;
+    return evaluateBrowserStaticValue(expression, scope, index, nextState);
+  }
+  if (value.type === 'BinaryExpression' && value.operator === '+') {
+    const strings = browserFiniteStaticStrings(value, scope, index, nextState);
+    return strings === undefined
+      ? [{ kind: 'local' }]
+      : strings.map((stringValue) => ({ kind: 'string', value: stringValue }));
+  }
+  return [{ kind: 'local' }];
+}
+
+function browserMemberAtoms(
+  receivers: readonly BrowserStaticAtom[],
+  properties: readonly string[] | undefined,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): BrowserStaticAtom[] {
+  const atoms: BrowserStaticAtom[] = [];
+  for (const receiver of receivers) {
+    if (properties === undefined) {
+      if (
+        receiver.kind === 'global' ||
+        receiver.kind === 'navigator' ||
+        receiver.kind === 'css' ||
+        receiver.kind === 'reflect'
+      ) {
+        atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
+      } else {
+        atoms.push({ kind: 'local' });
+      }
+      continue;
+    }
+    for (const property of properties) {
+      if (receiver.kind === 'global') {
+        if (property === 'Worker' || property === 'SharedWorker') {
+          atoms.push({ kind: 'worker', name: property });
+        } else if (
+          property === 'globalThis' ||
+          property === 'self' ||
+          property === 'window' ||
+          property === 'top' ||
+          property === 'parent' ||
+          property === 'frames'
+        ) {
+          atoms.push({ kind: 'global' });
+        } else if (property === 'navigator') {
+          atoms.push({ kind: 'navigator' });
+        } else if (property === 'CSS') {
+          atoms.push({ kind: 'css' });
+        } else if (property === 'document') {
+          atoms.push({ kind: 'document' });
+        } else if (property === 'Reflect') {
+          atoms.push({ kind: 'reflect' });
+        } else {
+          atoms.push({ kind: 'local' });
+        }
+      } else if (receiver.kind === 'navigator') {
+        atoms.push(
+          property === 'serviceWorker'
+            ? { carrier: 'service worker', kind: 'asset' }
+            : { kind: 'local' },
+        );
+      } else if (receiver.kind === 'css') {
+        if (property === 'paintWorklet') {
+          atoms.push({ carrier: 'paint worklet', kind: 'asset' });
+        } else if (property.toLowerCase().endsWith('worklet')) {
+          atoms.push({ carrier: 'worklet', kind: 'asset' });
+        } else {
+          atoms.push({ kind: 'local' });
+        }
+      } else if (receiver.kind === 'document') {
+        atoms.push(property === 'defaultView' ? { kind: 'global' } : { kind: 'local' });
+      } else if (receiver.kind === 'reflect') {
+        atoms.push(property === 'get' ? { kind: 'reflect-get' } : { kind: 'local' });
+      } else if (receiver.kind === 'object') {
+        atoms.push(...browserPlainObjectMember(receiver, property, index, state));
+      } else if (receiver.kind === 'array') {
+        atoms.push(...browserPlainArrayMember(receiver, property, index, state));
+      } else if (receiver.kind === 'local') {
+        if (property === 'audioWorklet') {
+          atoms.push({ carrier: 'audio worklet', kind: 'asset' });
+        } else if (property === 'paintWorklet') {
+          atoms.push({ carrier: 'paint worklet', kind: 'asset' });
+        } else if (property.toLowerCase().endsWith('worklet') && property !== 'serviceWorker') {
+          atoms.push({ carrier: 'worklet', kind: 'asset' });
+        } else {
+          atoms.push({ kind: 'local' });
+        }
+      } else {
+        atoms.push({ kind: 'local' });
+      }
+    }
+  }
+  return atoms.length === 0 ? [{ kind: 'local' }] : atoms;
+}
+
+function browserPlainObjectMember(
+  object: Extract<BrowserStaticAtom, { kind: 'object' }>,
+  propertyName: string,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): BrowserStaticAtom[] {
+  const properties = Array.isArray(object.node.properties) ? object.node.properties : [];
+  let selected: Record<string, unknown> | undefined;
+  for (const property of properties) {
+    if (!isAstRecord(property) || property.type !== 'Property' || property.kind !== 'init') {
+      return [{ kind: 'local' }];
+    }
+    const names = browserObjectPropertyNames(property, object.scope, index, state);
+    if (names === undefined) return [{ kind: 'local' }];
+    if (names.includes(propertyName)) selected = property;
+  }
+  return selected === undefined
+    ? [{ kind: 'local' }]
+    : evaluateBrowserStaticValue(selected.value, object.scope, index, state);
+}
+
+function browserPlainArrayMember(
+  array: Extract<BrowserStaticAtom, { kind: 'array' }>,
+  propertyName: string,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): BrowserStaticAtom[] {
+  if (!/^(?:0|[1-9][0-9]*)$/u.test(propertyName)) return [{ kind: 'local' }];
+  const elements = Array.isArray(array.node.elements) ? array.node.elements : [];
+  const element = elements[Number(propertyName)];
+  return element === null || element === undefined
+    ? [{ kind: 'local' }]
+    : evaluateBrowserStaticValue(element, array.scope, index, state);
+}
+
+function browserObjectPropertyNames(
+  property: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): readonly string[] | undefined {
+  const key = property.key;
+  if (!isAstRecord(key)) return undefined;
+  if (property.computed === true) return browserFiniteStaticStrings(key, scope, index, state);
+  if (key.type === 'Identifier' && typeof key.name === 'string') return [key.name];
+  const literal = literalAstString(key);
+  return literal === undefined ? undefined : [literal];
+}
+
+function browserStaticPropertyNames(
+  member: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): readonly string[] | undefined {
+  const property = member.property;
+  if (!isAstRecord(property)) return undefined;
+  if (member.computed === true) return browserFiniteStaticStrings(property, scope, index, state);
+  return property.type === 'Identifier' && typeof property.name === 'string'
+    ? [property.name]
+    : undefined;
+}
+
+function browserFiniteStaticStrings(
+  value: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): readonly string[] | undefined {
+  if (!isAstRecord(value) || state.depth > 48) return undefined;
+  const literal = literalAstString(value);
+  if (literal !== undefined) return [literal];
+  if (value.type === 'Literal' && typeof value.value === 'number') return [String(value.value)];
+  if (value.type === 'Identifier' && typeof value.name === 'string') {
+    const binding = lookupBrowserBinding(value.name, scope);
+    if (binding === undefined) return undefined;
+    const atoms = evaluateBrowserBinding(binding, index, {
+      bindingStack: state.bindingStack,
+      depth: state.depth + 1,
+    });
+    return browserOnlyStaticStrings(atoms);
+  }
+  if (value.type === 'BinaryExpression' && value.operator === '+') {
+    const left = browserFiniteStaticStrings(value.left, scope, index, {
+      bindingStack: state.bindingStack,
+      depth: state.depth + 1,
+    });
+    const right = browserFiniteStaticStrings(value.right, scope, index, {
+      bindingStack: state.bindingStack,
+      depth: state.depth + 1,
+    });
+    if (
+      left === undefined ||
+      right === undefined ||
+      left.length * right.length > maxBrowserFiniteStaticStrings
+    ) {
+      return undefined;
+    }
+    return left.flatMap((leftValue) => right.map((rightValue) => `${leftValue}${rightValue}`));
+  }
+  if (value.type === 'TemplateLiteral') {
+    const expressions = Array.isArray(value.expressions) ? value.expressions : [];
+    const quasis = Array.isArray(value.quasis) ? value.quasis : [];
+    if (quasis.length !== expressions.length + 1) return undefined;
+    let results = [''];
+    for (let indexValue = 0; indexValue < quasis.length; indexValue += 1) {
+      const quasi = quasis[indexValue];
+      const cooked = isAstRecord(quasi)
+        ? (quasi.value as { cooked?: unknown } | undefined)?.cooked
+        : undefined;
+      if (typeof cooked !== 'string') return undefined;
+      results = results.map((result) => `${result}${cooked}`);
+      if (indexValue >= expressions.length) continue;
+      const expressionStrings = browserFiniteStaticStrings(expressions[indexValue], scope, index, {
+        bindingStack: state.bindingStack,
+        depth: state.depth + 1,
+      });
+      if (expressionStrings === undefined) return undefined;
+      if (results.length * expressionStrings.length > maxBrowserFiniteStaticStrings) {
+        return undefined;
+      }
+      results = results.flatMap((result) =>
+        expressionStrings.map((expression) => `${result}${expression}`),
+      );
+    }
+    return results;
+  }
+  if (value.type === 'ConditionalExpression') {
+    const consequent = browserFiniteStaticStrings(value.consequent, scope, index, state);
+    const alternate = browserFiniteStaticStrings(value.alternate, scope, index, state);
+    if (
+      consequent === undefined ||
+      alternate === undefined ||
+      consequent.length + alternate.length > maxBrowserFiniteStaticStrings
+    ) {
+      return undefined;
+    }
+    return [...consequent, ...alternate];
+  }
+  return undefined;
+}
+
+function browserOnlyStaticStrings(
+  atoms: readonly BrowserStaticAtom[],
+): readonly string[] | undefined {
+  if (
+    atoms.length === 0 ||
+    atoms.length > maxBrowserFiniteStaticStrings ||
+    atoms.some((atom) => atom.kind !== 'string')
+  ) {
+    return undefined;
+  }
+  return [...new Set(atoms.map((atom) => (atom.kind === 'string' ? atom.value : '')))];
+}
+
+function browserIdentifierIsValueReference(
+  identifier: Readonly<Record<string, unknown>>,
+  parent: Readonly<Record<string, unknown>> | undefined,
+  key: string | undefined,
+  bindingIdentifiers: WeakSet<object>,
+): boolean {
+  if (bindingIdentifiers.has(identifier as object) || parent === undefined) return false;
+  if (parent.type === 'MemberExpression' && parent.computed !== true && key === 'property') {
+    return false;
+  }
+  if (
+    (parent.type === 'Property' ||
+      parent.type === 'MethodDefinition' ||
+      parent.type === 'PropertyDefinition') &&
     parent.computed !== true &&
     key === 'key'
   ) {
-    return true;
+    return false;
   }
   if (
-    (parent.type === 'VariableDeclarator' && key === 'id') ||
-    ((parent.type === 'FunctionDeclaration' ||
-      parent.type === 'FunctionExpression' ||
-      parent.type === 'ClassDeclaration' ||
-      parent.type === 'ClassExpression') &&
-      key === 'id') ||
     ((parent.type === 'ImportSpecifier' ||
       parent.type === 'ImportDefaultSpecifier' ||
       parent.type === 'ImportNamespaceSpecifier' ||
@@ -1272,84 +2217,13 @@ function workerIdentifierIsDeclarationOrProperty(
     (parent.type === 'LabeledStatement' && key === 'label') ||
     ((parent.type === 'BreakStatement' || parent.type === 'ContinueStatement') && key === 'label')
   ) {
-    return true;
+    return false;
   }
-  if (
-    (parent.type === 'FunctionDeclaration' ||
-      parent.type === 'FunctionExpression' ||
-      parent.type === 'ArrowFunctionExpression') &&
-    key === 'params'
-  ) {
-    return true;
-  }
-  return false;
+  return true;
 }
 
-function reviewedExecutableAssetCarrier(
-  ast: unknown,
-): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {
-  const pending: Array<{
-    key?: string;
-    parent?: Record<string, unknown>;
-    value: unknown;
-  }> = [{ value: ast }];
-  const seen = new Set<object>();
-  while (pending.length > 0) {
-    const item = pending.pop()!;
-    const value = item.value;
-    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      for (const child of value) {
-        pending.push({
-          ...(item.key === undefined ? {} : { key: item.key }),
-          ...(item.parent === undefined ? {} : { parent: item.parent }),
-          value: child,
-        });
-      }
-      continue;
-    }
-    const record = value as Record<string, unknown>;
-    const carrier = reviewedExecutableAssetMember(record, item.parent);
-    if (carrier !== undefined) return carrier;
-    for (const [key, child] of Object.entries(record)) {
-      if (
-        key === 'type' ||
-        key === 'start' ||
-        key === 'end' ||
-        key === 'loc' ||
-        key === 'range' ||
-        key === 'raw'
-      ) {
-        continue;
-      }
-      pending.push({ key, parent: record, value: child });
-    }
-  }
-  return containsImportMetaUrlConstructor(ast) ? 'opaque new-URL' : undefined;
-}
-
-function reviewedExecutableAssetMember(
-  record: Readonly<Record<string, unknown>>,
-  parent: Readonly<Record<string, unknown>> | undefined,
-): 'audio worklet' | 'paint worklet' | 'service worker' | 'worklet' | undefined {
-  if (record.type === 'Property' && parent?.type === 'ObjectPattern') {
-    const property = staticObjectPropertyName(record);
-    if (property === 'serviceWorker') return 'service worker';
-    if (property === 'paintWorklet') return 'paint worklet';
-    if (property === 'audioWorklet') return 'audio worklet';
-  }
-  if (record.type !== 'MemberExpression') return undefined;
-  const property = staticMemberPropertyName(record);
-  if (property === 'serviceWorker') return 'service worker';
-  if (property === 'paintWorklet') return 'paint worklet';
-  if (property === 'audioWorklet') return 'audio worklet';
-  const receiver = staticMemberReceiverName(record);
-  if (property === 'register' && receiver === 'serviceWorker') return 'service worker';
-  if (property !== 'addModule' || receiver === undefined) return undefined;
-  if (receiver === 'paintWorklet') return 'paint worklet';
-  if (receiver === 'audioWorklet') return 'audio worklet';
-  return receiver.toLowerCase().endsWith('worklet') ? 'worklet' : undefined;
+function isAstRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function containsImportMetaUrlConstructor(value: unknown): boolean {
@@ -1420,14 +2294,6 @@ function staticObjectPropertyName(property: Readonly<Record<string, unknown>>): 
   const record = key as Record<string, unknown>;
   if (property.computed === true) return finiteStaticMemberString(record);
   return record.type === 'Identifier' && typeof record.name === 'string' ? record.name : undefined;
-}
-
-function staticMemberReceiverName(member: Readonly<Record<string, unknown>>): string | undefined {
-  const object = member.object;
-  if (typeof object !== 'object' || object === null) return undefined;
-  const record = object as Record<string, unknown>;
-  if (record.type === 'Identifier' && typeof record.name === 'string') return record.name;
-  return staticMemberPropertyName(record);
 }
 
 function finiteStaticMemberString(value: unknown): string | undefined {
