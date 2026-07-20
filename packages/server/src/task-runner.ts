@@ -506,11 +506,8 @@ export class DurableTaskRunner {
     // The type is readonly for authors, but the runtime invariant must survive JavaScript and
     // casts too. Close the delivered capability property itself after constructing the context;
     // task code cannot swap in ambient fetch or a proxy dispatcher (SPEC §6.6).
-    return taskDefineDataProperty(
-      taskDefineDataProperty(context, 'signal', signal),
-      'fetch',
-      frameworkEgressFetch,
-    );
+    taskDefineDataProperty(context, 'signal', signal);
+    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);
   }
 
   private createPrincipalScope(
