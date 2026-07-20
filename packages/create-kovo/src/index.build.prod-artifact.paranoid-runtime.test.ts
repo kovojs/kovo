@@ -21,6 +21,7 @@ import {
   fieldValue,
   formHtmlByAction,
   pruneParanoidPhase5SqliteReadSet,
+  productionArtifactAttestationEnv,
   signInDemoUser,
 } from './index.build.test-support.js';
 import {
@@ -193,6 +194,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
+            ...productionArtifactAttestationEnv('paranoid-authorization-matrix'),
             BETTER_AUTH_URL: publicOrigin,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
@@ -309,6 +311,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          ...productionArtifactAttestationEnv('paranoid-sqlite-refusal'),
           BETTER_AUTH_URL: 'https://127.0.0.1',
           HOST: '127.0.0.1',
           KOVO_PARANOID: '1',
@@ -448,6 +451,7 @@ describeIfPostgres(
           detached: process.platform !== 'win32',
           env: {
             ...withRepoBinOnPath(),
+            ...productionArtifactAttestationEnv('paranoid-external-postgres'),
             BETTER_AUTH_URL: publicOrigin,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,

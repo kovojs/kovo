@@ -26,6 +26,7 @@ import {
   buildReusableProductionArtifact,
   fieldValue,
   formHtmlByAction,
+  productionArtifactAttestationEnv,
   waitForTcpPort,
 } from './index.build.test-support.js';
 
@@ -50,6 +51,7 @@ describe('create-kovo starter (build integration: production Postgres driver flo
 
       const env = {
         ...withRepoBinOnPath(),
+        ...productionArtifactAttestationEnv('postgres-pglite-refusal'),
         HOST: '127.0.0.1',
         NODE_ENV: 'production',
         PORT: String(await reservePort()),
@@ -165,6 +167,7 @@ describeIfPostgres(
         delete baseEnvironment.KOVO_NODE_ORIGIN;
         delete baseEnvironment.KOVO_NODE_TRUSTED_PROXY;
         Object.assign(baseEnvironment, {
+          ...productionArtifactAttestationEnv('postgres-external-runtime'),
           BETTER_AUTH_URL: publicOrigin,
           HOST: '127.0.0.1',
           KOVO_DATABASE_URL: runtimeUrl,

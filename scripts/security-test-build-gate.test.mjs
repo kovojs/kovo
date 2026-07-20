@@ -646,8 +646,7 @@ describe('security-test-build-gate', () => {
   });
 
   it('keeps the honest Postgres floor and explicit Secret proofs enrolled after retiring unreachable read-boundary claims', () => {
-    const testName =
-      'distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance';
+    const testName = 'distinguishes Postgres reader-role denials from runtime Secret wire refusal';
     const proofsByClaim = new Map(SECURITY_BUILD_PROOFS.map((proof) => [proof.claimId, proof]));
 
     expect(proofsByClaim.get('postgres-reader-role-secret-grant-floor')).toMatchObject({
@@ -682,47 +681,43 @@ describe('security-test-build-gate', () => {
       ]),
       testName,
     });
-    expect(proofsByClaim.get('runtime-secret-audited-reveal-acceptance')).toMatchObject({
+    expect(proofsByClaim.get('runtime-secret-request-closed-reveal-denial')).toMatchObject({
       buildInvocation: 'starter-build-production-artifact',
-      code: 'KV435',
+      code: 'KV448',
       requiredNeedles: expect.arrayContaining([
+        'addRequestClosedDeclassificationProof(root)',
+        'captureBuildFailure(() => buildParanoidProductionArtifact(root))',
         "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
         "door: 'trustedReveal'",
         "ownerScope: 'application'",
         "purpose: 'public-projection'",
-        "readFileSync(join(root, 'dist/.kovo/graph.json'), 'utf8')",
-        'expect(builtGraph.revealed).toContainEqual({',
-        "justification: 'public-projection:trustedReveal:application'",
-        "method: 'server-projection'",
-        'site: revealSite',
-        'queries/runtime-secret-reveal-acceptance-query',
-        'expect(revealResponse.status, revealBody).toBe(200)',
-        "expect(output().slice(revealOutputOffset)).not.toContain('KV435')",
+        "expect(output).toContain('KV448')",
+        '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+        "expect(output).not.toContain('runtime-secret-value')",
       ]),
-      testName,
+      testName:
+        'rejects request-reachable audited reveal imports before production artifact emission',
     });
 
-    const revealProof = proofsByClaim.get('runtime-secret-audited-reveal-acceptance');
-    if (revealProof === undefined) throw new Error('audited reveal proof is not enrolled');
+    const revealProof = proofsByClaim.get('runtime-secret-request-closed-reveal-denial');
+    if (revealProof === undefined) throw new Error('request-closed reveal proof is not enrolled');
     withTempRepo((repoRoot) => {
       writeStarterProofFile(
         repoRoot,
         [
-          '// @kovo-security-certifies KV435 runtime-secret-audited-reveal-acceptance',
-          `it('${testName}', async () => {`,
+          '// @kovo-security-certifies KV448 runtime-secret-request-closed-reveal-denial',
+          "it('rejects request-reachable audited reveal imports before production artifact emission', () => {",
           "  const posture = { KOVO_PARANOID: '1' };",
           '  void posture;',
-          '  addRuntimeSecretBoundaryProof(root);',
-          '  buildParanoidProductionArtifact(root);',
+          '  addRequestClosedDeclassificationProof(root);',
+          '  const output = captureBuildFailure(() => buildParanoidProductionArtifact(root));',
           "  trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
           "    door: 'trustedReveal',",
           "    ownerScope: 'application',",
           "    purpose: 'public-projection',",
           '  }));',
-          "  await fetch('queries/runtime-secret-reveal-acceptance-query');",
-          '  expect(revealResponse.status, revealBody).toBe(200);',
-          "  expect(revealBody).toContain('runtime-secret-value');",
-          "  expect(output().slice(revealOutputOffset)).not.toContain('KV435');",
+          "  expect(output).toContain('KV448');",
+          "  expect(output).not.toContain('runtime-secret-value');",
           '});',
         ].join('\n'),
       );
@@ -733,7 +728,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'audited reveal enrollment mutation canary',
+              description: 'request-closed reveal mutation canary',
               file: revealProof.sourceFile,
             },
           ],
@@ -743,7 +738,7 @@ describe('security-test-build-gate', () => {
       ).toEqual(
         expect.arrayContaining([
           expect.stringContaining(
-            'proof test is missing required evidence "expect(builtGraph.revealed).toContainEqual({"',
+            'proof test is missing required evidence "@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules"',
           ),
         ]),
       );

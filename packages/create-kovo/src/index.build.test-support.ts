@@ -20,6 +20,18 @@ import {
 // local feedback while still bounding a genuinely stuck build.
 export const PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS = process.env.CI ? 600_000 : 180_000;
 
+/** Supply the deployment-bound journal authority required by production boots (SPEC §7.4). */
+export function productionArtifactAttestationEnv(label: string): Readonly<{
+  KOVO_ATTESTATION_DEPLOYMENT_ID: string;
+  KOVO_ATTESTATION_SECRET: string;
+}> {
+  return {
+    KOVO_ATTESTATION_DEPLOYMENT_ID: `deployment:test:${label}`,
+    KOVO_ATTESTATION_SECRET:
+      'production-artifact-test-secret-0123456789abcdef0123456789abcdef',
+  };
+}
+
 /** Mint the production wire grammar from SPEC §10.3 with a full 128 random nonce bits. */
 export function freshProductionArtifactIdempotencyToken(): string {
   return `v1_${Date.now()}_${randomBytes(16).toString('hex')}`;
@@ -2457,6 +2469,57 @@ export function addSecretViewEgressProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+/**
+ * Add an exact typed declassification call beneath a registered query root. SPEC §6.6 makes the
+ * policy constructor and reveal door request-closed capabilities, so a production build must
+ * reject this graph with KV448 before it can emit a runnable artifact.
+ */
+export function addRequestClosedDeclassificationProof(root: string): void {
+  const queriesPath = join(root, 'src/queries.ts');
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    [
+      "import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';",
+      "import { query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    ].join('\n'),
+    'request-closed declassification proof imports',
+  );
+  queries = `${queries}\n\n${[
+    'export const requestClosedRevealQuery = query({',
+    '  access: [appAuthed],',
+    '  output: s.object({ value: s.string() }),',
+    '  reads: [],',
+    '  load() {',
+    "    const value = trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
+    "      door: 'trustedReveal',",
+    "      ownerScope: 'application',",
+    "      purpose: 'public-projection',",
+    '    }));',
+    '    return { value };',
+    '  },',
+    '});',
+  ].join('\n')}\n`;
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, requestClosedRevealQuery } from './queries.js';",
+    'request-closed declassification app import',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, requestClosedRevealQuery],',
+    'request-closed declassification app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addRuntimeSecretBoundaryProof(root: string): void {
   const schemaPath = join(root, 'src/schema.ts');
   const schemaSource = readFileSync(schemaPath, 'utf8');
@@ -2537,7 +2600,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
     queries,
     "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
-      "import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';",
+      "import { secret } from '@kovojs/core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { sql as drizzleSql } from 'drizzle-orm';",
       "import { domain, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
@@ -2568,27 +2631,10 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  items: RuntimeSecretBoundaryRow[];',
       '}',
       '',
-      'export interface RuntimeSecretRevealRow {',
-      '  readonly [key: string]: JsonValue;',
-      '  id: string;',
-      '  reviewed: string;',
-      '}',
-      '',
-      'export interface RuntimeSecretRevealResult {',
-      '  readonly [key: string]: JsonValue;',
-      '  items: RuntimeSecretRevealRow[];',
-      '}',
-      '',
       'const runtimeSecretBoundaryRowSchema = s.object({',
       '  id: s.string(),',
       '  label: s.string().optional(),',
       '  leaked: s.string().optional(),',
-      '});',
-      'const runtimeSecretRevealOutput = s.object({',
-      '  items: s.array(s.object({',
-      '    id: s.string(),',
-      '    reviewed: s.string(),',
-      '  })),',
       '});',
       "const runtimeSecretProofDomain = domain('runtime-secret-proof');",
       "const runtimeSecretFunctionProofDomain = domain('runtime-secret-function-proof');",
@@ -2761,20 +2807,6 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       "    return { items: [{ id: 'runtime-secret-box', leaked: boxed as unknown as string }] };",
       '  },',
       '});',
-      '',
-      'export const runtimeSecretRevealAcceptanceQuery = query({',
-      '  access: [appAuthed],',
-      '  output: runtimeSecretRevealOutput,',
-      '  reads: [],',
-      '  async load(_input: unknown, _context?: AppQueryLoadContext): Promise<RuntimeSecretRevealResult> {',
-      "    const reviewed = trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
-      "      door: 'trustedReveal',",
-      "      ownerScope: 'application',",
-      "      purpose: 'public-projection',",
-      '    }));',
-      "    return { items: [{ id: 'runtime-secret-reveal', reviewed }] };",
-      '  },',
-      '});',
     ].join('\n'),
     'runtime secret proof queries',
   );
@@ -2791,7 +2823,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   app = replaceRequired(
     app,
     "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, runtimeSecretColumnEngineDenialQuery, runtimeSecretComputedEngineDenialQuery, runtimeSecretDefaultRawPublicQuery, runtimeSecretExplicitBoxEgressQuery, runtimeSecretFunctionEngineDenialQuery, runtimeSecretOpaqueRawEngineDenialQuery, runtimeSecretRawEngineDenialQuery, runtimeSecretReaderRoleProofQuery, runtimeSecretRevealAcceptanceQuery, runtimeSecretViewEngineDenialQuery, runtimeSecretWholeTableEngineDenialQuery } from './queries.js';",
+    "import { contactsQuery, runtimeSecretColumnEngineDenialQuery, runtimeSecretComputedEngineDenialQuery, runtimeSecretDefaultRawPublicQuery, runtimeSecretExplicitBoxEgressQuery, runtimeSecretFunctionEngineDenialQuery, runtimeSecretOpaqueRawEngineDenialQuery, runtimeSecretRawEngineDenialQuery, runtimeSecretReaderRoleProofQuery, runtimeSecretViewEngineDenialQuery, runtimeSecretWholeTableEngineDenialQuery } from './queries.js';",
     'runtime secret proof app import',
   );
   app = replaceRequired(
@@ -2806,7 +2838,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   app = replaceRequired(
     app,
     '  queries: [contactsQuery],',
-    '  queries: [contactsQuery, runtimeSecretColumnEngineDenialQuery, runtimeSecretComputedEngineDenialQuery, runtimeSecretDefaultRawPublicQuery, runtimeSecretExplicitBoxEgressQuery, runtimeSecretFunctionEngineDenialQuery, runtimeSecretOpaqueRawEngineDenialQuery, runtimeSecretRawEngineDenialQuery, runtimeSecretReaderRoleProofQuery, runtimeSecretRevealAcceptanceQuery, runtimeSecretViewEngineDenialQuery, runtimeSecretWholeTableEngineDenialQuery],',
+    '  queries: [contactsQuery, runtimeSecretColumnEngineDenialQuery, runtimeSecretComputedEngineDenialQuery, runtimeSecretDefaultRawPublicQuery, runtimeSecretExplicitBoxEgressQuery, runtimeSecretFunctionEngineDenialQuery, runtimeSecretOpaqueRawEngineDenialQuery, runtimeSecretRawEngineDenialQuery, runtimeSecretReaderRoleProofQuery, runtimeSecretViewEngineDenialQuery, runtimeSecretWholeTableEngineDenialQuery],',
     'runtime secret proof app registration',
   );
   writeFileSync(appPath, app, 'utf8');
@@ -2900,11 +2932,10 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
     queries,
     "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
-      "import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';",
       "import { count, eq, sql as drizzleSql } from 'drizzle-orm';",
       "import { alias } from 'drizzle-orm/sqlite-core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { declareSecretReadCapability, domain, endpoint, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { declareSecretReadCapability, domain, endpoint, publicAccess, query, s, type EndpointDbContext, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     ].join('\n'),
     'sqlite runtime secret provenance query imports',
   );
@@ -2912,7 +2943,6 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
     queries,
     "import { contacts } from './schema.js';",
     [
-      "import { readonlyAppDb } from './db.js';",
       "import { contact } from './model.js';",
       "import { contacts, runtimeSecretJoinProof, runtimeSecretProof } from './schema.js';",
     ].join('\n'),
@@ -2946,7 +2976,6 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '});',
       'const sqliteSecretRowsSchema = s.object({ items: s.array(sqliteSecretRowSchema) });',
       'const sqliteSecretPublicRowsSchema = s.object({ items: s.array(s.object({ id: s.string(), label: s.string() })) });',
-      'const sqliteSecretRevealRowsSchema = s.object({ items: s.array(s.object({ company: s.string(), id: s.string() })) });',
       "const sqliteRuntimeSecretProofDomain = domain('runtime-secret-proof');",
       '',
       "const sqliteSecretAggregatePublicProof = publicAccess('public SQLite non-secret aggregate proof');",
@@ -2958,8 +2987,10 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       "  auth: { justification: 'public SQLite non-secret aggregate proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only SQLite non-secret aggregate proof',",
-      '  async handler() {',
-      '    const rows = await readonlyAppDb',
+      '  db: true,',
+      '  async handler(_request, context: EndpointDbContext<AppDb>) {',
+      "    const scoped = await context.actAs('public-sqlite-non-secret-aggregate-proof');",
+      '    const rows = await scoped.db.read',
       '      .select({ label: runtimeSecretJoinProof.label, total: count() })',
       '      .from(runtimeSecretJoinProof);',
       "    return Response.json({ rows }, { headers: { 'Cache-Control': 'no-store' } });",
@@ -2974,8 +3005,10 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       "  auth: { justification: 'public SQLite safe raw-expression proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only SQLite safe raw-expression proof',",
-      '  async handler() {',
-      '    const rows = await readonlyAppDb',
+      '  db: true,',
+      '  async handler(_request, context: EndpointDbContext<AppDb>) {',
+      "    const scoped = await context.actAs('public-sqlite-safe-expression-proof');",
+      '    const rows = await scoped.db.read',
       '      .select({ id: contacts.id, label: drizzleSql<string>`upper(${contacts.name})` })',
       '      .from(contacts);',
       "    return Response.json({ rows }, { headers: { 'Cache-Control': 'no-store' } });",
@@ -2990,8 +3023,10 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       "  auth: { justification: 'public SQLite hidden raw-expression proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only SQLite hidden raw-expression proof',",
-      '  async handler() {',
-      '    const rows = await readonlyAppDb',
+      '  db: true,',
+      '  async handler(_request, context: EndpointDbContext<AppDb>) {',
+      "    const scoped = await context.actAs('public-sqlite-hidden-expression-proof');",
+      '    const rows = await scoped.db.read',
       '      .select({',
       '        id: contacts.id,',
       '        leaked: drizzleSql<string>`upper(${contacts.name}) || (select classified from runtime_secret_proof)`,',
@@ -3009,8 +3044,10 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       "  auth: { justification: 'public SQLite declared rawRead proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only SQLite declared rawRead proof',",
-      '  async handler() {',
-      '    const rows = await readonlyAppDb.rawRead<{ id: string; label: string }>(',
+      '  db: true,',
+      '  async handler(_request, context: EndpointDbContext<AppDb>) {',
+      "    const scoped = await context.actAs('public-sqlite-declared-raw-read-proof');",
+      '    const rows = await scoped.db.read.rawRead<{ id: string; label: string }>(',
       "      trustedSql(sql.raw<{ id: string; label: string }>('select id, name as label from contacts'), {",
       "        justification: 'declared SQLite rawRead served proof',",
       '      }),',
@@ -3028,8 +3065,10 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       "  auth: { justification: 'public SQLite underdeclared rawRead proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only SQLite underdeclared rawRead proof',",
-      '  async handler() {',
-      '    const rows = await readonlyAppDb.rawRead<{ id: string; label: string }>(',
+      '  db: true,',
+      '  async handler(_request, context: EndpointDbContext<AppDb>) {',
+      "    const scoped = await context.actAs('public-sqlite-underdeclared-raw-read-proof');",
+      '    const rows = await scoped.db.read.rawRead<{ id: string; label: string }>(',
       '      trustedSql(',
       "        sql.raw<{ id: string; label: string }>('select contacts.id, runtime_secret_join_proof.label from contacts join runtime_secret_join_proof on 1 = 1'),",
       "        { justification: 'underdeclared SQLite rawRead served proof' },",
@@ -3224,31 +3263,6 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '  },',
       '});',
       '',
-      'export const sqliteSecretRevealQuery = query({',
-      '  access: [appAuthed],',
-      '  output: sqliteSecretRevealRowsSchema,',
-      '  reads: [],',
-      '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<SqliteSecretRows> {',
-      '    const db: Reader<AppDb> | undefined = context?.db;',
-      '    if (!db) throw new Error("query requires framework-provided context.db");',
-      "    const proof = alias(runtimeSecretProof, 'runtime_secret_reveal_alias');",
-      '    const rows = await db.select({ id: proof.id, company: proof.classified }).from(proof);',
-      '    return {',
-      '      items: rows.map((row) => {',
-      '        const reviewedCompany = trustedReveal(',
-      '          row.company,',
-      '          DeclassifyPolicy.create({',
-      "            door: 'trustedReveal',",
-      "            ownerScope: 'application',",
-      "            purpose: 'public-projection',",
-      '          }),',
-      '        );',
-      '        return { id: row.id, company: `${reviewedCompany}:revealed` };',
-      '      }),',
-      '    };',
-      '  },',
-      '});',
-      '',
       'export const sqliteSecretComputedPublicQuery = query({',
       '  access: [appAuthed],',
       '  output: sqliteSecretPublicRowsSchema,',
@@ -3306,6 +3320,22 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   );
   writeFileSync(queriesPath, queries, 'utf8');
 
+  const mutationsPath = join(root, 'src/mutations.ts');
+  let mutations = readFileSync(mutationsPath, 'utf8');
+  mutations = replaceRequired(
+    mutations,
+    "import { contactsQuery, type ContactListResult } from './queries.js';",
+    "import { contactsQuery, sqliteSecretMixedChunkBuilderQuery, type ContactListResult } from './queries.js';",
+    'sqlite runtime secret provenance mutation query import',
+  );
+  mutations = replaceRequired(
+    mutations,
+    '  optimistic: {\n    [contactsQuery.key](draft: ContactListResult, $input: AddContactInput) {',
+    "  optimistic: {\n    [sqliteSecretMixedChunkBuilderQuery.key]: 'await-fragment',\n    [contactsQuery.key](draft: ContactListResult, $input: AddContactInput) {",
+    'sqlite runtime secret provenance optimistic coverage',
+  );
+  writeFileSync(mutationsPath, mutations, 'utf8');
+
   const appPath = join(root, 'src/app.tsx');
   let app = readFileSync(appPath, 'utf8');
   app = replaceRequired(
@@ -3328,7 +3358,6 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '  sqliteSecretNonSecretProjectionQuery,',
       '  sqliteRawReadDeclaredEndpoint,',
       '  sqliteRawReadUnderdeclaredEndpoint,',
-      '  sqliteSecretRevealQuery,',
       '  sqliteSecretSafeBuilderExpressionEndpoint,',
       '  sqliteSecretSubqueryPublicQuery,',
       '  sqliteSecretSubqueryQuery,',
@@ -3353,7 +3382,6 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
       '    sqliteSecretMixedChunkQuery,',
       '    sqliteSecretMixedChunkBuilderQuery,',
       '    sqliteSecretNonSecretProjectionQuery,',
-      '    sqliteSecretRevealQuery,',
       '    sqliteSecretSubqueryPublicQuery,',
       '    sqliteSecretSubqueryQuery,',
       '    sqliteSecretUnionQuery,',

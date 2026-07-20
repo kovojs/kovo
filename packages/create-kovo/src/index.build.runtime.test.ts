@@ -20,6 +20,7 @@ import {
 import {
   buildReusableProductionArtifact,
   fieldValue,
+  productionArtifactAttestationEnv,
   waitForTcpPort,
 } from './index.build.test-support.js';
 
@@ -54,6 +55,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         detached: process.platform !== 'win32',
         env: {
           ...withRepoBinOnPath(),
+          ...productionArtifactAttestationEnv('sqlite-production-refusal'),
           BETTER_AUTH_URL: 'https://app.example.com',
           HOST: '127.0.0.1',
           KOVO_NODE_ORIGIN: 'https://app.example.com',

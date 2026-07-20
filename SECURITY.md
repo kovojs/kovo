@@ -93,9 +93,12 @@ Kovo's current published confidentiality guarantees have two distinct floors. Po
 secret-column and security-invoker-view shapes are denied at the database engine under
 the least-privilege reader role in the PGlite-backed test posture. Those two guarantees
 are deliberately not external-Postgres execution claims. Separately, an explicit
-runtime `Secret` is refused at the framework query-wire unless it passes through the
-audited reveal path. The production-artifact proofs keep those claims separate so an
-engine denial cannot be misreported as runtime value boxing.
+runtime `Secret` is refused at the framework query-wire. Modules reachable from an
+untrusted-data request root cannot import the declassification policy or reveal doors;
+the production build rejects that graph with `KV448` before emitting an artifact.
+Declassification remains available only outside those request-reachable graphs for
+reviewed server and credential computations. The production-artifact proofs keep these
+claims separate so an engine denial cannot be misreported as runtime value boxing.
 
 Broader plan language such as "secure by construction", "one choke per property", or
 "runtime chokes close the class" is architectural direction unless and until a precise

@@ -15,6 +15,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV433',
   'KV435',
   'KV438',
+  'KV448',
   'KV449',
   'KV406',
   'KV311',
@@ -305,7 +306,9 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
 ];
 
 const RUNTIME_SECRET_ENGINE_FLOOR_TEST_NAME =
-  'distinguishes Postgres reader-role denials from runtime Secret wire refusal and audited reveal acceptance';
+  'distinguishes Postgres reader-role denials from runtime Secret wire refusal';
+const REQUEST_CLOSED_REVEAL_TEST_NAME =
+  'rejects request-reachable audited reveal imports before production artifact emission';
 
 export const SECURITY_BUILD_PROOFS = [
   {
@@ -610,29 +613,23 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
-    claimId: 'runtime-secret-audited-reveal-acceptance',
-    code: 'KV435',
+    claimId: 'runtime-secret-request-closed-reveal-denial',
+    code: 'KV448',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     requiredNeedles: [
-      'addRuntimeSecretBoundaryProof(root)',
-      'buildParanoidProductionArtifact(root)',
+      'addRequestClosedDeclassificationProof(root)',
+      'captureBuildFailure(() => buildParanoidProductionArtifact(root))',
       "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
       "door: 'trustedReveal'",
       "ownerScope: 'application'",
       "purpose: 'public-projection'",
-      "readFileSync(join(root, 'dist/.kovo/graph.json'), 'utf8')",
-      'expect(builtGraph.revealed).toContainEqual({',
-      "justification: 'public-projection:trustedReveal:application'",
-      "method: 'server-projection'",
-      'site: revealSite',
-      'queries/runtime-secret-reveal-acceptance-query',
-      'expect(revealResponse.status, revealBody).toBe(200)',
-      "expect(revealBody).toContain('runtime-secret-value')",
-      "expect(output().slice(revealOutputOffset)).not.toContain('KV435')",
+      "expect(output).toContain('KV448')",
+      '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+      "expect(output).not.toContain('runtime-secret-value')",
     ],
     requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
-    testName: RUNTIME_SECRET_ENGINE_FLOOR_TEST_NAME,
+    testName: REQUEST_CLOSED_REVEAL_TEST_NAME,
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -686,12 +683,6 @@ export const SECURITY_BUILD_PROOFS = [
       'expect(response.status',
       "expect(body).not.toContain('runtime-secret-value')",
       'queries/sqlite-secret-non-secret-projection-query',
-      'queries/sqlite-secret-reveal-query',
-      'expect(builtGraph.revealed).toContainEqual({',
-      "justification: 'public-projection:trustedReveal:application'",
-      "method: 'server-projection'",
-      "path: 'row.company'",
-      'site: revealSite',
     ],
     requiredProofFileNeedles: [
       "KOVO_PARANOID: '1'",
@@ -713,10 +704,6 @@ export const SECURITY_BUILD_PROOFS = [
       'buildParanoidProductionArtifact(root)',
       'queries/sqlite-secret-derivation-query',
       'queries/sqlite-secret-non-secret-projection-query',
-      'queries/sqlite-secret-reveal-query',
-      'expect(builtGraph.revealed).toContainEqual({',
-      "path: 'row.company'",
-      'runtime-secret-value:revealed',
     ],
     requiredProofFileNeedles: [
       "KOVO_PARANOID: '1'",
