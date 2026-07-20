@@ -39,6 +39,7 @@ import {
 } from './targets.js';
 import { isEnhancedReplayResponse, type MutationLifecycleOutcome } from './replay-policy.js';
 import { renderDefaultFailureFragmentContent } from './failure-html.js';
+import { abortFailedMutationReplay } from './replay-abort.js';
 import type { MutationDefinition, MutationFail, MutationSuccess } from './definition.js';
 import {
   securityArrayJoin,
@@ -161,18 +162,24 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
     if (lifecycle.kind === 'mutation-failure') {
       const result = lifecycle.result;
       let responseRequest: MutationWireRequest<Request>;
+      const failureDiagnosticContext = {
+        mutationKey: definition.key,
+        operation: 'mutation-response-policy' as const,
+        request: wireRequest.request,
+        ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+      };
       try {
         responseRequest = await resolvePostLifecycleWireRequest(wireRequest, {
           kind: 'failure',
           result,
         });
       } catch (error) {
-        await lifecycle.reservation?.abort?.();
-        reportServerError(wireRequest.onError, error, {
-          mutationKey: definition.key,
-          operation: 'mutation-response-policy',
-          request: wireRequest.request,
-        });
+        await abortFailedMutationReplay(
+          lifecycle.reservation,
+          wireRequest.onError,
+          failureDiagnosticContext,
+        );
+        reportServerError(wireRequest.onError, error, failureDiagnosticContext);
         return mutationServerErrorResponse(wireRequest);
       }
       if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
@@ -186,14 +193,24 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
         };
       }
 
-      return commitReservedMutationReplay(lifecycle.reservation, async () => ({
-        body: frameworkWireBody(await renderFailureFragment(result, responseRequest)),
-        headers: mergeResponseHeaders(
-          mutationWireResponseHeaders(responseRequest),
-          retryAfterHeaders(result),
-        ),
-        status: result.status,
-      }));
+      try {
+        return await commitReservedMutationReplay(lifecycle.reservation, async () => ({
+          body: frameworkWireBody(await renderFailureFragment(result, responseRequest)),
+          headers: mergeResponseHeaders(
+            mutationWireResponseHeaders(responseRequest),
+            retryAfterHeaders(result),
+          ),
+          status: result.status,
+        }));
+      } catch (error) {
+        await abortFailedMutationReplay(
+          lifecycle.reservation,
+          wireRequest.onError,
+          failureDiagnosticContext,
+        );
+        reportServerError(wireRequest.onError, error, failureDiagnosticContext);
+        return mutationServerErrorResponse(wireRequest);
+      }
     }
 
     const { reservation, result } = lifecycle;

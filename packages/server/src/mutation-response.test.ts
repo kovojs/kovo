@@ -13,7 +13,7 @@ import {
 import { renderComponentMutationFailure } from './component-render.js';
 import { domain } from './domain.js';
 import { renderedHtml } from './html.js';
-import { csrfToken, mintIdemToken } from './csrf.js';
+import { csrfToken, KOVO_IDEM_FIELD_NAME, mintIdemToken } from './csrf.js';
 import { createMemoryMutationReplayStore } from './replay.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -2212,21 +2212,9 @@ describe('server mutation primitives', () => {
     expect(handlerSpy).toHaveBeenCalledOnce();
   });
 
-  it('aborts a deterministic enhanced-failure claim when failure rendering throws', async () => {
-    const abort = vi.fn();
+  it('releases a deterministic enhanced-failure claim when failure rendering throws', async () => {
     const handlerSpy = vi.fn();
-    const replayStore = {
-      get() {
-        return undefined;
-      },
-      reserve() {
-        return {
-          abort,
-          commit() {},
-        };
-      },
-      set() {},
-    };
+    const replayStore = createMemoryMutationReplayStore();
     const rejectWrite = mutation('settings/enhanced-render-failure', {
       errors: { DENIED: s.object({}) },
       handler(_input, _request, context) {
@@ -2252,18 +2240,100 @@ describe('server mutation primitives', () => {
       request: {},
     });
     expect(failed.status).toBe(500);
-    expect(abort).toHaveBeenCalledOnce();
 
-    const retry = await renderMutationEndpointResponse(rejectWrite, {
-      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
-      rawInput: { value: 'same-body' },
-      redirectTo: '/done',
-      replayStore,
-      request: {},
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+    const retry = await Promise.race([
+      renderMutationEndpointResponse(rejectWrite, {
+        headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
+        rawInput: { value: 'same-body' },
+        redirectTo: '/done',
+        replayStore,
+        request: {},
+      }).then((response) => ({ kind: 'response' as const, response })),
+      new Promise<{ kind: 'timeout' }>((resolve) => {
+        retryTimeout = setTimeout(() => resolve({ kind: 'timeout' }), 500);
+      }),
+    ]).finally(() => {
+      if (retryTimeout !== undefined) clearTimeout(retryTimeout);
     });
-    expect(retry.status).toBe(422);
+    expect(retry.kind).toBe('response');
+    if (retry.kind === 'response') expect(retry.response.status).toBe(422);
     expect(handlerSpy).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    ['enhanced', 'render'],
+    ['enhanced', 'settlement'],
+    ['no-js', 'render'],
+    ['no-js', 'settlement'],
+  ] as const)(
+    'keeps %s deterministic-failure responses closed when %s and abort both reject',
+    async (delivery, failureMode) => {
+      const abortError = new Error(`${delivery} abort secret`);
+      const primaryError = new Error(`${delivery} ${failureMode} secret`);
+      const abort = vi.fn(() => {
+        if (failureMode === 'render') throw abortError;
+        return Promise.reject(abortError);
+      });
+      const commit = vi.fn(async () => {
+        if (failureMode === 'settlement') throw primaryError;
+      });
+      const replayStore = {
+        get() {
+          return undefined;
+        },
+        reserve() {
+          return { abort, commit };
+        },
+        set() {},
+      };
+      const onError = vi.fn();
+      const key = `settings/${delivery}-${failureMode}-abort-rejection`;
+      const rejectWrite = mutation(key, {
+        errors: { DENIED: s.object({}) },
+        handler(_input, _request, context) {
+          return context.fail('DENIED', {});
+        },
+        input: s.object({ value: s.string() }),
+      });
+      const idem = mintIdemToken();
+      const renderFailure = () => {
+        if (failureMode === 'render') throw primaryError;
+        return '<output>UNRELEASED_FAILURE_BYTES</output>';
+      };
+
+      const response = await renderMutationEndpointResponse(rejectWrite, {
+        headers: delivery === 'enhanced' ? { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem } : {},
+        onError,
+        rawInput: {
+          ...(delivery === 'no-js' ? { [KOVO_IDEM_FIELD_NAME]: idem } : {}),
+          value: 'same-body',
+        },
+        redirectTo: '/done',
+        ...(delivery === 'enhanced'
+          ? { renderFailureFragment: renderFailure }
+          : { renderFailurePage: renderFailure }),
+        replayStore,
+        request: {},
+      });
+
+      expect(response.status).toBe(500);
+      expect(String(response.body)).not.toContain('UNRELEASED_FAILURE_BYTES');
+      expect(abort).toHaveBeenCalledOnce();
+      expect(commit).toHaveBeenCalledTimes(failureMode === 'settlement' ? 1 : 0);
+      expect(onError).toHaveBeenCalledTimes(2);
+      expect(onError.mock.calls.map(([error]) => (error as Error).message)).toEqual([
+        abortError.message,
+        primaryError.message,
+      ]);
+      for (const [, context] of onError.mock.calls) {
+        expect(context).toMatchObject({
+          mutationKey: key,
+          operation: 'mutation-response-policy',
+        });
+      }
+    },
+  );
 
   it('M7: streaming duplicates stay joined after replay ttl until the stream commits', async () => {
     const replayStore = createMemoryMutationReplayStore({ ttlMs: 1 });

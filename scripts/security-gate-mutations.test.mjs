@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after enhanced replay delivery closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(306);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(307);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
@@ -91,6 +91,7 @@ describe('security-gate-mutations', () => {
       'mutation-replay/drop-rejected-selector-promise-drain',
       'mutation-replay/drop-enhanced-delivery-marker-seal',
       'mutation-replay/drop-enhanced-delivery-match',
+      'mutation-replay/drop-enhanced-failure-abort-boundary',
       'mutation-replay/hash-machine-principal-as-utf8',
       'mutation-replay/restore-machine-wide-principal-fallback',
       'mutation-replay/restore-nojs-prefixed-namespace',

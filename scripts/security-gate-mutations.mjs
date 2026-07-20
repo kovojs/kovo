@@ -155,6 +155,10 @@ const serverMutationReplayPolicyPath = path.join(
 );
 const serverMutationPath = path.join(repoRoot, 'packages/server/src/mutation.ts');
 const serverMutationNoJsPath = path.join(repoRoot, 'packages/server/src/mutation/no-js.ts');
+const serverMutationWireResponsePath = path.join(
+  repoRoot,
+  'packages/server/src/mutation/wire-response.ts',
+);
 const serverResponseSecurityIntrinsicsPath = path.join(
   repoRoot,
   'packages/server/src/response-security-intrinsics.ts',
@@ -206,6 +210,12 @@ const mutationReplayPolicyBehavioralInstrumentation = [
 const mutationEnhancedReplayBehavioralInstrumentation = [
   '',
   "export { s as __securityMutationEnhancedSchema } from './schema.js';",
+].join('\n');
+const mutationEnhancedFailureReplayBehavioralInstrumentation = [
+  '',
+  "export { mutation as __securityMutationEnhancedFailureMutation, renderMutationResponse as __securityMutationRenderEnhancedFailure } from '../mutation.js';",
+  "export { mintMutationIdemToken as __securityMutationEnhancedFailureMintIdem } from '../mutation-idem.js';",
+  "export { s as __securityMutationEnhancedFailureSchema } from '../schema.js';",
 ].join('\n');
 const mutationNoJsBehavioralInstrumentation = [
   '',
@@ -1551,6 +1561,36 @@ const deterministicNoJsFailureReplayCommit =
 const abortedDeterministicNoJsFailureReplay = [
   '      await lifecycle.reservation?.abort?.();',
   '      return render();',
+].join('\n');
+const deterministicEnhancedFailureReplayBoundary = [
+  '      try {',
+  '        return await commitReservedMutationReplay(lifecycle.reservation, async () => ({',
+  '          body: frameworkWireBody(await renderFailureFragment(result, responseRequest)),',
+  '          headers: mergeResponseHeaders(',
+  '            mutationWireResponseHeaders(responseRequest),',
+  '            retryAfterHeaders(result),',
+  '          ),',
+  '          status: result.status,',
+  '        }));',
+  '      } catch (error) {',
+  '        await abortFailedMutationReplay(',
+  '          lifecycle.reservation,',
+  '          wireRequest.onError,',
+  '          failureDiagnosticContext,',
+  '        );',
+  '        reportServerError(wireRequest.onError, error, failureDiagnosticContext);',
+  '        return mutationServerErrorResponse(wireRequest);',
+  '      }',
+].join('\n');
+const removedDeterministicEnhancedFailureReplayBoundary = [
+  '      return commitReservedMutationReplay(lifecycle.reservation, async () => ({',
+  '        body: frameworkWireBody(await renderFailureFragment(result, responseRequest)),',
+  '        headers: mergeResponseHeaders(',
+  '          mutationWireResponseHeaders(responseRequest),',
+  '          retryAfterHeaders(result),',
+  '        ),',
+  '        status: result.status,',
+  '      }));',
 ].join('\n');
 const exactUtf16MachinePrincipalHash =
   "  const bytes = apply<Buffer>(nativeBufferFrom, NativeBuffer, [value, 'utf16le']);";
@@ -4853,6 +4893,19 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertDeterministicNoJsFailureReplayBehavior,
   },
   {
+    behavioralInstrumentation: mutationEnhancedFailureReplayBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Removes the abort-and-sanitize boundary around deterministic enhanced failure rendering.',
+    expectedKiller:
+      'enhanced failure-render errors must abort replay truth and return framework-owned 500 bytes',
+    name: 'mutation-replay/drop-enhanced-failure-abort-boundary',
+    replacement: removedDeterministicEnhancedFailureReplayBoundary,
+    search: deterministicEnhancedFailureReplayBoundary,
+    sourceFile: serverMutationWireResponsePath,
+    test: assertDeterministicEnhancedFailureAbortBehavior,
+  },
+  {
     behavioralTypeScript: true,
     description:
       'Hashes machine principals through UTF-8 replacement semantics instead of exact UTF-16 code units.',
@@ -5269,6 +5322,61 @@ async function assertDeterministicNoJsFailureReplayBehavior(moduleUnderTest) {
   if (first.status !== 422 || replayed.status !== 422 || handlerCalls !== 1) {
     throw new Error(
       `deterministic no-JS failure was not replayed exactly once: statuses=${first.status}/${replayed.status} calls=${handlerCalls}`,
+    );
+  }
+}
+
+async function assertDeterministicEnhancedFailureAbortBehavior(moduleUnderTest) {
+  let abortCalls = 0;
+  let handlerCalls = 0;
+  const definition = moduleUnderTest.__securityMutationEnhancedFailureMutation(
+    'security/deterministic-enhanced-render-failure',
+    {
+      csrf: false,
+      csrfJustification: 'forcing fixture uses an explicit machine replay principal',
+      errors: { DENIED: moduleUnderTest.__securityMutationEnhancedFailureSchema.object({}) },
+      handler(_input, _request, context) {
+        handlerCalls += 1;
+        return context.fail('DENIED', {});
+      },
+      input: moduleUnderTest.__securityMutationEnhancedFailureSchema.object({
+        value: moduleUnderTest.__securityMutationEnhancedFailureSchema.string(),
+      }),
+      machineReplayPrincipal: () => 'tenant-a',
+    },
+  );
+  const response = await moduleUnderTest.__securityMutationRenderEnhancedFailure(definition, {
+    buildToken: 'security-mutation-build',
+    idem: moduleUnderTest.__securityMutationEnhancedFailureMintIdem(),
+    onError() {},
+    rawInput: { value: 'same-body' },
+    renderFailureFragment() {
+      throw new Error('forcing failure renderer secret');
+    },
+    replayStore: {
+      get() {
+        return undefined;
+      },
+      reserve() {
+        return {
+          abort() {
+            abortCalls += 1;
+          },
+          commit() {},
+        };
+      },
+      set() {},
+    },
+    request: {},
+  });
+  if (
+    response.status !== 500 ||
+    abortCalls !== 1 ||
+    handlerCalls !== 1 ||
+    String(response.body).includes('forcing failure renderer secret')
+  ) {
+    throw new Error(
+      `enhanced failure abort boundary opened: status=${response.status} aborts=${abortCalls} handlers=${handlerCalls}`,
     );
   }
 }

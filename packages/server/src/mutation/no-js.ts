@@ -22,6 +22,7 @@ import { renderDefaultFailurePage } from './failure-html.js';
 import { reportServerError } from '../diagnostics.js';
 import { isFrameworkMutationFailurePageRenderer } from '../mutation-failure-renderer-authority.js';
 import { commitReservedMutationReplay } from '../replay.js';
+import { abortFailedMutationReplay } from './replay-abort.js';
 import {
   requestStateIsSingleLeadingSlashPath,
   requestStateLocationWithQuery,
@@ -117,12 +118,17 @@ export async function renderNoJsMutationLifecycleResponse<
       }
       return await commitReservedMutationReplay(lifecycle.reservation, render);
     } catch (error) {
-      await lifecycle.reservation?.abort?.();
-      reportServerError(noJsRequest.onError, error, {
+      const failureDiagnosticContext = {
         mutationKey: definition.key,
-        operation: 'mutation-response-policy',
+        operation: 'mutation-response-policy' as const,
         request: noJsRequest.request,
-      });
+      };
+      await abortFailedMutationReplay(
+        lifecycle.reservation,
+        noJsRequest.onError,
+        failureDiagnosticContext,
+      );
+      reportServerError(noJsRequest.onError, error, failureDiagnosticContext);
       return noJsMutationServerErrorResponse();
     }
   }
