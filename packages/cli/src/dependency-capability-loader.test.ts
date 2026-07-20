@@ -1990,6 +1990,46 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-deep-structured-argument-written Worker',
       deepStructuredArgumentCarrierExpression('/worker.mjs'),
+      'opaque',
+    ],
+    [
+      'audit-object-rest-target-written Worker',
+      "(() => { const box = {}; const source = { platform: globalThis }; ({ ...box.value } = source); return new box.value.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-array-rest-target-written Worker',
+      "(() => { const box = {}; const source = [globalThis]; [...box.value] = source; return new box.value[0].Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-arrow-captured-arguments-written Worker',
+      "(() => { function prepare() { return () => { arguments[0].platform = globalThis; }; } const box = {}; prepare(box)(); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-for-of-member-target-written Worker',
+      "(() => { const box = {}; for (box.platform of [globalThis]) { break; } return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-for-of-nested-target-written Worker',
+      "(() => { const box = {}; for ({ value: box.platform } of [{ value: globalThis }]) { break; } return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-defineProperties-prototype-setter-written Worker',
+      "(() => { function Holder() {} Object.defineProperties(Holder.prototype, { target: { set(value) { value.platform = globalThis; } } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-Reflect-defineProperty-prototype-setter-written Worker',
+      "(() => { function Holder() {} Reflect.defineProperty(Holder.prototype, 'target', { set(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-setPrototypeOf-prototype-setter-written Worker',
+      "(() => { function Holder() {} Object.setPrototypeOf(Holder.prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
     ['depth-budget-helper-written Worker', depthBudgetCarrierExpression('/worker.mjs'), 'Worker'],
@@ -2676,6 +2716,46 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-deep-structured-argument-written Worker',
       deepStructuredArgumentCarrierExpression('/payload.mjs'),
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'audit-object-rest-target-written Worker',
+      "(() => { const box = {}; const source = { platform: globalThis }; ({ ...box.value } = source); return new box.value.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-array-rest-target-written Worker',
+      "(() => { const box = {}; const source = [globalThis]; [...box.value] = source; return new box.value[0].Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-arrow-captured-arguments-written Worker',
+      "(() => { function prepare() { return () => { arguments[0].platform = globalThis; }; } const box = {}; prepare(box)(); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-for-of-member-target-written Worker',
+      "(() => { const box = {}; for (box.platform of [globalThis]) { break; } return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-for-of-nested-target-written Worker',
+      "(() => { const box = {}; for ({ value: box.platform } of [{ value: globalThis }]) { break; } return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-defineProperties-prototype-setter-written Worker',
+      "(() => { function Holder() {} Object.defineProperties(Holder.prototype, { target: { set(value) { value.platform = globalThis; } } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-Reflect-defineProperty-prototype-setter-written Worker',
+      "(() => { function Holder() {} Reflect.defineProperty(Holder.prototype, 'target', { set(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-setPrototypeOf-prototype-setter-written Worker',
+      "(() => { function Holder() {} Object.setPrototypeOf(Holder.prototype, { set target(value) { value.platform = globalThis; } }); const holder = new Holder(); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
