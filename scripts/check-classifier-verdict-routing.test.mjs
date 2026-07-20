@@ -16,6 +16,45 @@ function runFixture(files, options = {}) {
 }
 
 describe('classifier verdict routing gate', () => {
+  it('requires every denial-site census row to emit its declared security event', () => {
+    const denialSites = [
+      {
+        eventType: 'csrf-rejected',
+        file: 'packages/server/src/dispatch.ts',
+        marker: 'return forbiddenResponse();',
+      },
+    ];
+    const accepted = runFixture(
+      {
+        'packages/server/src/dispatch.ts': `
+export function dispatch() {
+  securityEvent({ type: 'csrf-rejected' });
+  return forbiddenResponse();
+}
+`,
+      },
+      { denialSites },
+    );
+    expect(accepted.findings).toEqual([]);
+
+    const missingEvent = runFixture(
+      {
+        'packages/server/src/dispatch.ts': `
+export function dispatch() {
+  return forbiddenResponse();
+}
+`,
+      },
+      { denialSites },
+    );
+    expect(missingEvent.findings).toEqual([
+      expect.stringContaining(
+        'denial site must emit securityEvent({ type: "csrf-rejected" }) before closing',
+      ),
+    ]);
+    expect(missingEvent.ok).toBe(false);
+  });
+
   it('accepts branches that close proven-unsafe and unproven together', () => {
     const result = runFixture({
       'packages/server/src/verdict.ts': `
