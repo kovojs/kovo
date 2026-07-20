@@ -1,5 +1,7 @@
 export type {
   AccessDecisionFact,
+  AgentExplainFact,
+  AgentToolExplainFact,
   AccessDerivationInput,
   AccessExplainFact,
   AuthorizationCorrespondenceExplainFact,

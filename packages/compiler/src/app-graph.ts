@@ -101,6 +101,16 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
       ),
     ),
   );
+  const agents = mergeAgentExplainFacts(
+    concatDense(
+      graphInput?.agents ?? [],
+      flattenFactProperty<CoreGraph.AgentExplainFact>(
+        componentInputs,
+        'agentGraphFacts',
+        'Agent graph facts',
+      ),
+    ),
+  );
   const cacheInfluence = mergeCacheInfluenceManifest(
     graphInput?.cacheInfluence,
     flattenFactProperty<CacheInfluenceManifestEntry>(
@@ -190,6 +200,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   );
   const graph: RegistryGraphInput = {
     ...graphInput,
+    ...(agents.length > 0 ? { agents } : {}),
     ...(access.length > 0 ? { access } : {}),
     ...(authPosture.length > 0 ? { authPosture } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
@@ -242,6 +253,21 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     },
     'Compile app graph result',
   );
+}
+
+function mergeAgentExplainFacts(
+  source: readonly CoreGraph.AgentExplainFact[],
+): CoreGraph.AgentExplainFact[] {
+  const agents = compilerSnapshotDenseArray(source, 'Agent explain facts');
+  const names = compilerCreateSet<string>();
+  for (let index = 0; index < agents.length; index += 1) {
+    const name = agents[index]!.name;
+    if (compilerSetHas(names, name)) {
+      throw new TypeError(`Duplicate capability-bounded agent name ${name}.`);
+    }
+    compilerSetAdd(names, name);
+  }
+  return agents;
 }
 
 function mergeCacheInfluenceManifest(

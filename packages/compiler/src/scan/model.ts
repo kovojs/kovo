@@ -46,7 +46,23 @@ export interface StaticJsxWireAttributeEntry {
 }
 
 export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
-export type SecurityOperationSurface = HandlerWriteSinkSurface | 'query';
+export type SecurityOperationSurface = HandlerWriteSinkSurface | 'agent' | 'query';
+
+export interface AgentToolModel {
+  binding: string;
+  callSpan: SourceSpan;
+  mutationBinding?: string;
+  name?: string;
+  resultIntegrity: 'retrieved' | 'untrusted';
+  violations?: readonly SecurityOperationViolationModel[];
+}
+
+export interface AgentDefinitionModel {
+  binding?: string;
+  modelHandler: MutationHandlerModel;
+  name: string;
+  toolBindings: readonly string[];
+}
 
 export type HandlerWriteSinkOperationKind =
   | 'batch'
@@ -204,7 +220,7 @@ export interface CallExpressionModel {
   end: number;
   exportedConstName?: string;
   /** Parser-owned exact framework factory identity; a same-named local function never receives it. */
-  frameworkFactory?: 'endpoint' | 'mutation' | 'task' | 'webhook';
+  frameworkFactory?: 'agent' | 'endpoint' | 'mutation' | 'query' | 'task' | 'tool' | 'webhook';
   /** Exact framework identity for a security helper whose call shape participates in finite IR. */
   frameworkSecurityOperation?: 'csrf-field' | 'csrf-token';
   /** Exact compiler JSX-runtime constructor identity; app source may not call this emitted ABI. */
@@ -452,6 +468,9 @@ export interface ModuleScopeBindingModel {
 }
 
 export interface ComponentModuleModel {
+  agentDefinitions: readonly AgentDefinitionModel[];
+  agentHandlers: readonly MutationHandlerModel[];
+  agentTools: readonly AgentToolModel[];
   calls: readonly CallExpressionModel[];
   compilerJsxRuntimeImports: readonly CompilerJsxRuntimeImportModel[];
   componentIdentityAssignments: readonly ComponentIdentityAssignmentModel[];

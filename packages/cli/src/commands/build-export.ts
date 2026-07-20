@@ -1193,6 +1193,7 @@ interface KovoBuildCheckArtifacts {
 
 type SourceComponentGraphFacts = Pick<
   CompileResult,
+  | 'agentGraphFacts'
   | 'componentGraphFacts'
   | 'diagnostics'
   | 'handlerWriteSinkFacts'
@@ -2163,6 +2164,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     );
     if (
       component.componentGraphFacts.length > 0 ||
+      component.agentGraphFacts.length > 0 ||
       component.diagnostics.length > 0 ||
       component.handlerWriteSinkFacts.length > 0 ||
       component.publishToClientFacts.length > 0 ||

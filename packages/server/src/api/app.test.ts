@@ -28,6 +28,7 @@ import * as packageInternalRouteApi from '@kovojs/server/internal/route';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
+import * as agentApi from '../agent.js';
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
 import * as writeGovernanceApi from '../write-governance.js';
@@ -622,6 +623,11 @@ describe('server app-shell public API barrels', () => {
     const packageRootValues = packageRootApi as Record<string, unknown>;
     const renderingSubpathOnlyValues = new Set<string>(['meta']);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
+      agent: agentApi.agent,
+      agentContent: agentApi.agentContent,
+      createAgentSession: agentApi.createAgentSession,
+      runAgentTurn: agentApi.runAgentTurn,
+      tool: agentApi.tool,
       createApp: appApi.createApp,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
       // env/secret validation surface — the typed boot error, its guard, and the
@@ -695,6 +701,11 @@ describe('server app-shell public API barrels', () => {
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
     expect(publicApi.createApp).toBe(appApi.createApp);
+    expect(publicApi.agent).toBe(agentApi.agent);
+    expect(publicApi.agentContent).toBe(agentApi.agentContent);
+    expect(publicApi.createAgentSession).toBe(agentApi.createAgentSession);
+    expect(publicApi.runAgentTurn).toBe(agentApi.runAgentTurn);
+    expect(publicApi.tool).toBe(agentApi.tool);
     expect(publicApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
     expect(publicApi.createRequestHandler).not.toBe(appApi.createRequestHandler);
     expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);

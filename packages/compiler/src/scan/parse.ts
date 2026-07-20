@@ -76,6 +76,8 @@ import {
 } from './ast.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
+  AgentDefinitionModel,
+  AgentToolModel,
   ArrowFunctionPartsModel,
   CallExpressionModel,
   ConditionalExpressionModel,
@@ -148,12 +150,14 @@ interface ModuleScopeStaticStringBinding {
 }
 
 const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const AGENT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'agent');
 const DOMAIN_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const PUBLIC_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'publicAccess');
 const QUERY_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
+const TOOL_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'tool');
 const VERIFIED_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'verifiedAccess');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 const CSRF_FIELD_IDENTITIES: readonly FrameworkExportIdentity[] = [
@@ -172,10 +176,12 @@ const JSX_RUNTIME_FACTORY_IDENTITIES = {
 } as const;
 const TRUSTED_URL_IDENTITY = frameworkExport('@kovojs/browser', 'trustedUrl');
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
+  AGENT_FACTORY_IDENTITY,
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
   QUERY_FACTORY_IDENTITY,
   TASK_FACTORY_IDENTITY,
+  TOOL_FACTORY_IDENTITY,
   WEBHOOK_FACTORY_IDENTITY,
 ];
 const HANDLER_WRITE_SINK_OPERATIONS = compilerCreateSet<HandlerWriteSinkOperationKind>();
@@ -339,6 +345,9 @@ export function parseComponentModule(
   }
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
+  const agentDefinitions: AgentDefinitionModel[] = [];
+  const agentHandlers: MutationHandlerModel[] = [];
+  const agentTools: AgentToolModel[] = [];
   const compilerJsxRuntimeImports: CompilerJsxRuntimeImportModel[] = [];
   const componentIdentityAssignments: ComponentIdentityAssignmentModel[] = [];
   const components: ComponentModel[] = [];
@@ -443,13 +452,19 @@ export function parseComponentModule(
       );
       const frameworkFactory = frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)
         ? 'endpoint'
-        : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
-          ? 'mutation'
-          : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
-            ? 'task'
-            : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
-              ? 'webhook'
-              : undefined;
+        : frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)
+          ? 'agent'
+          : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
+            ? 'mutation'
+            : frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)
+              ? 'query'
+              : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
+                ? 'task'
+                : frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)
+                  ? 'tool'
+                  : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
+                    ? 'webhook'
+                    : undefined;
       const frameworkSecurityOperation = frameworkIdentityIn(factoryIdentity, CSRF_FIELD_IDENTITIES)
         ? 'csrf-field'
         : frameworkIdentityIn(factoryIdentity, CSRF_TOKEN_IDENTITIES)
@@ -475,6 +490,11 @@ export function parseComponentModule(
           'Endpoint handler models',
         );
       }
+      if (frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)) {
+        const definition = agentDefinitionModel(sourceFile, source, node);
+        compilerArrayAppend(agentDefinitions, definition, 'Agent definition models');
+        compilerArrayAppend(agentHandlers, definition.modelHandler, 'Agent model handlers');
+      }
       if (frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)) {
         appendDenseValues(
           mutationHandlers,
@@ -495,6 +515,9 @@ export function parseComponentModule(
           taskRunHandlerModels(sourceFile, source, node),
           'Task run handler models',
         );
+      }
+      if (frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)) {
+        compilerArrayAppend(agentTools, agentToolModel(sourceFile, node), 'Agent tool models');
       }
       if (frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)) {
         appendDenseValues(
@@ -518,6 +541,9 @@ export function parseComponentModule(
   visit(sourceFile);
 
   const model: ComponentModuleModel = {
+    agentDefinitions,
+    agentHandlers,
+    agentTools,
     calls,
     compilerJsxRuntimeImports,
     componentIdentityAssignments,
@@ -2532,6 +2558,356 @@ function mutationHandlerModels(
     inspection.violations,
   );
   return result;
+}
+
+function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): AgentToolModel {
+  const violations: SecurityOperationViolationModel[] = [];
+  const binding = localConstInitializerName(call) ?? `UNRESOLVED@${call.getStart(sourceFile)}`;
+  const nameArgument = callArgument(call, 0);
+  const name =
+    nameArgument && ts.isStringLiteralLike(nameArgument) && isStaticAgentName(nameArgument.text)
+      ? nameArgument.text
+      : undefined;
+  if (name === undefined) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        nameArgument ?? call,
+        'tool name must be one exact 1..128 character stable token',
+      ),
+      'Agent tool violations',
+    );
+  }
+  const optionsArgument = callArgument(call, 1);
+  const options = optionsArgument && unwrapExpression(optionsArgument);
+  let mutationBinding: string | undefined;
+  let resultIntegrity: AgentToolModel['resultIntegrity'] = 'untrusted';
+  if (!options || !ts.isObjectLiteralExpression(options)) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        optionsArgument ?? call,
+        'tool options must be one inline object literal',
+      ),
+      'Agent tool violations',
+    );
+  } else {
+    let mutationCount = 0;
+    let integrityCount = 0;
+    const properties = compilerSnapshotDenseArray(options.properties, 'Agent tool properties');
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (
+        ts.isSpreadAssignment(property) ||
+        (property.name && ts.isComputedPropertyName(property.name))
+      ) {
+        compilerArrayAppend(
+          violations,
+          agentConfigurationViolation(
+            sourceFile,
+            property,
+            'tool definition cannot use spread or computed properties',
+          ),
+          'Agent tool violations',
+        );
+        continue;
+      }
+      const propertyName = propertyNameText(property.name);
+      if (propertyName === 'mutation') {
+        mutationCount += 1;
+        const initializer = ts.isPropertyAssignment(property)
+          ? unwrapExpression(property.initializer)
+          : ts.isShorthandPropertyAssignment(property)
+            ? property.name
+            : undefined;
+        if (initializer && ts.isIdentifier(initializer)) mutationBinding = initializer.text;
+        else {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'tool mutation must be an exact same-file mutation identifier',
+            ),
+            'Agent tool violations',
+          );
+        }
+      }
+      if (propertyName === 'resultIntegrity') {
+        integrityCount += 1;
+        const initializer = ts.isPropertyAssignment(property)
+          ? unwrapExpression(property.initializer)
+          : undefined;
+        if (
+          initializer &&
+          ts.isStringLiteralLike(initializer) &&
+          (initializer.text === 'untrusted' || initializer.text === 'retrieved')
+        ) {
+          resultIntegrity = initializer.text;
+        } else {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'tool resultIntegrity must be the literal untrusted or retrieved',
+            ),
+            'Agent tool violations',
+          );
+        }
+      }
+    }
+    if (mutationCount !== 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(
+          sourceFile,
+          options,
+          'tool must declare exactly one mutation property',
+        ),
+        'Agent tool violations',
+      );
+    }
+    if (integrityCount > 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(
+          sourceFile,
+          options,
+          'tool declares competing resultIntegrity properties',
+        ),
+        'Agent tool violations',
+      );
+    }
+  }
+  return {
+    binding,
+    callSpan: { end: call.getEnd(), start: call.getStart(sourceFile) },
+    ...(mutationBinding === undefined ? {} : { mutationBinding }),
+    ...(name === undefined ? {} : { name }),
+    resultIntegrity,
+    ...(violations.length === 0 ? {} : { violations }),
+  };
+}
+
+function agentDefinitionModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): AgentDefinitionModel {
+  const violations: SecurityOperationViolationModel[] = [];
+  const binding = localConstInitializerName(call);
+  const nameArgument = callArgument(call, 0);
+  const name =
+    nameArgument && ts.isStringLiteralLike(nameArgument) && isStaticAgentName(nameArgument.text)
+      ? nameArgument.text
+      : `UNRESOLVED@${call.getStart(sourceFile)}`;
+  if (compilerStringStartsWith(name, 'UNRESOLVED@')) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        nameArgument ?? call,
+        'agent name must be one exact 1..128 character stable token',
+      ),
+      'Agent definition violations',
+    );
+  }
+  const optionsArgument = callArgument(call, 1);
+  const options = optionsArgument && unwrapExpression(optionsArgument);
+  let model: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration | undefined;
+  const toolBindings: string[] = [];
+  if (!options || !ts.isObjectLiteralExpression(options)) {
+    compilerArrayAppend(
+      violations,
+      agentConfigurationViolation(
+        sourceFile,
+        optionsArgument ?? call,
+        'agent options must be one inline object literal',
+      ),
+      'Agent definition violations',
+    );
+  } else {
+    let modelCount = 0;
+    let toolsCount = 0;
+    const properties = compilerSnapshotDenseArray(
+      options.properties,
+      'Agent definition properties',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (
+        ts.isSpreadAssignment(property) ||
+        (property.name && ts.isComputedPropertyName(property.name))
+      ) {
+        compilerArrayAppend(
+          violations,
+          agentConfigurationViolation(
+            sourceFile,
+            property,
+            'agent definition cannot use spread or computed properties',
+          ),
+          'Agent definition violations',
+        );
+        continue;
+      }
+      const propertyName = propertyNameText(property.name);
+      if (propertyName === 'model') {
+        modelCount += 1;
+        if (ts.isMethodDeclaration(property) && property.body) model = property;
+        else if (ts.isPropertyAssignment(property)) {
+          const initializer = unwrapExpression(property.initializer);
+          if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+            model = initializer;
+          else {
+            compilerArrayAppend(
+              violations,
+              agentConfigurationViolation(
+                sourceFile,
+                property.initializer,
+                'agent model must be an inline function inside the mediation door',
+              ),
+              'Agent definition violations',
+            );
+          }
+        } else {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'agent model must be an inline callable data property',
+            ),
+            'Agent definition violations',
+          );
+        }
+      }
+      if (propertyName === 'tools') {
+        toolsCount += 1;
+        const initializer = ts.isPropertyAssignment(property)
+          ? unwrapExpression(property.initializer)
+          : undefined;
+        if (!initializer || !ts.isArrayLiteralExpression(initializer)) {
+          compilerArrayAppend(
+            violations,
+            agentConfigurationViolation(
+              sourceFile,
+              property,
+              'agent tools must be one dense inline identifier array',
+            ),
+            'Agent definition violations',
+          );
+        } else {
+          const elements = compilerSnapshotDenseArray(
+            initializer.elements,
+            'Agent tool references',
+          );
+          for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+            const element = unwrapExpression(elements[elementIndex]! as ts.Expression);
+            if (ts.isIdentifier(element)) {
+              compilerArrayAppend(toolBindings, element.text, 'Agent tool bindings');
+            } else {
+              compilerArrayAppend(
+                violations,
+                agentConfigurationViolation(
+                  sourceFile,
+                  element,
+                  'agent tools must contain only exact same-file tool identifiers',
+                ),
+                'Agent definition violations',
+              );
+            }
+          }
+        }
+      }
+    }
+    if (modelCount !== 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(sourceFile, options, 'agent must declare exactly one model'),
+        'Agent definition violations',
+      );
+    }
+    if (toolsCount !== 1) {
+      compilerArrayAppend(
+        violations,
+        agentConfigurationViolation(
+          sourceFile,
+          options,
+          'agent must declare exactly one tools array',
+        ),
+        'Agent definition violations',
+      );
+    }
+  }
+
+  let modelHandler: MutationHandlerModel;
+  if (model?.body) {
+    const scanned = serverSecurityOperationModel(
+      sourceFile,
+      model.body,
+      'agent',
+      model.parameters,
+      `agent:${name}`,
+      model,
+      call,
+    );
+    const operationViolations = [...(scanned.securityOperationViolations ?? []), ...violations];
+    modelHandler = {
+      ...functionBodyModel(sourceFile, source, model.body, model.parameters),
+      ...scanned,
+      ...(operationViolations.length === 0
+        ? {}
+        : { securityOperationViolations: operationViolations }),
+    };
+  } else {
+    const opaque: MutationHandlerModel[] = [];
+    appendOpaqueHandlerRootModel(opaque, sourceFile, source, call, `agent:${name}`, violations);
+    modelHandler = opaque[0] ?? {
+      body: '',
+      bodyEnd: call.getEnd(),
+      bodyPropertyAccesses: [],
+      bodyStart: call.getStart(sourceFile),
+      paramNames: [],
+      params: [],
+      paramSpans: [],
+      securityOperationViolations: violations,
+    };
+  }
+  return {
+    ...(binding === undefined ? {} : { binding }),
+    modelHandler,
+    name,
+    toolBindings,
+  };
+}
+
+function agentConfigurationViolation(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  detail: string,
+): SecurityOperationViolationModel {
+  return {
+    detail,
+    kind: 'computed-security-operation',
+    span: { end: node.getEnd(), start: node.getStart(sourceFile) },
+    surface: 'agent',
+  };
+}
+
+function isStaticAgentName(value: string): boolean {
+  return compilerRegExpTest(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u, value);
+}
+
+function localConstInitializerName(call: ts.CallExpression): string | undefined {
+  const declaration = call.parent;
+  return ts.isVariableDeclaration(declaration) &&
+    declaration.initializer === call &&
+    ts.isIdentifier(declaration.name)
+    ? declaration.name.text
+    : undefined;
 }
 
 /**
@@ -5263,7 +5639,14 @@ function serverSecurityOperationModel(
   'securityOperations' | 'securityOperationViolations' | 'securitySemanticRoot'
 > {
   const facts = scanServerSecurityOperations(sourceFile, body, surface, parameters, root, {
-    callback: surface === 'query' ? 'load' : surface === 'task' ? 'run' : 'handler',
+    callback:
+      surface === 'query'
+        ? 'load'
+        : surface === 'task'
+          ? 'run'
+          : surface === 'agent'
+            ? 'model'
+            : 'handler',
     callableSpan: { end: handler.getEnd(), start: handler.getStart(sourceFile) },
     factory: surface,
     factoryCallSpan: { end: factoryCall.getEnd(), start: factoryCall.getStart(sourceFile) },

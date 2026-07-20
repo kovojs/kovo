@@ -80,6 +80,7 @@ export type {
   ExplainKind,
   KovoAuditOptions,
   KovoAccessExplainOptions,
+  KovoAgentExplainOptions,
   KovoAuthLifecycleExplainOptions,
   KovoAuthorizationExplainOptions,
   KovoCheckFamily,

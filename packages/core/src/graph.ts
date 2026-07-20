@@ -238,6 +238,7 @@ export interface AuthorizationCorrespondenceExplainFact {
 /** @internal */
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
+  agents?: readonly AgentExplainFact[];
   authorizationCorrespondence?: readonly AuthorizationCorrespondenceExplainFact[];
   authPosture?: readonly AuthPostureFact[];
   capabilities?: readonly CapabilityExplain[];
@@ -290,6 +291,25 @@ export interface KovoExplainInput extends KovoCheckInput {
   mutations?: readonly MutationExplain[];
   packageComponentPrefixes?: readonly PackageComponentPrefixExplain[];
   pages?: readonly PageExplain[];
+}
+
+/** @internal Compiler-owned exact tool closure consumed by `kovo explain --agent`. */
+export interface AgentToolExplainFact {
+  minimumIntegrity: import('./internal/security-operation-ir.js').AgentIntegrity;
+  mutation: string;
+  name: string;
+  operations: readonly import('./internal/security-operation-ir.js').ServerSecurityOperationFact[];
+  resultIntegrity: Extract<
+    import('./internal/security-operation-ir.js').AgentIntegrity,
+    'retrieved' | 'untrusted'
+  >;
+}
+
+/** @internal One capability-bounded model root and its compiler-derived finite tools. */
+export interface AgentExplainFact {
+  modelOperations: readonly import('./internal/security-operation-ir.js').ServerSecurityOperationFact[];
+  name: string;
+  tools: readonly AgentToolExplainFact[];
 }
 
 /** @internal */
@@ -2074,6 +2094,7 @@ function compareOwnershipPostureFact(
 
 const arrayFields = [
   'access',
+  'agents',
   'authorizationCorrespondence',
   'authPosture',
   'capabilities',

@@ -67,6 +67,7 @@ export {
 export type { GeneratedOutputWriteFact, OutputContext } from './output-context-facts.js';
 export type {
   CompileArtifactFileNames,
+  AgentGraphFact,
   CompileComponentOptions,
   CompileDependencyFootprint,
   CompileResult,
@@ -131,7 +132,10 @@ export {
   outputSchemaQueryShapeFactsFromSource,
 } from './scan/query-shape-source.js';
 export { collectMinifierReservedNames } from './compile.js';
-export { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
+export {
+  lowerStandaloneServerSource,
+  lowerStandaloneSourceDerivedRegistryDeclarations,
+} from './source-derived-lowering.js';
 export { viteFrameworkIdentityFiles } from './vite.js';
 export type {
   KovoHmrEventName,

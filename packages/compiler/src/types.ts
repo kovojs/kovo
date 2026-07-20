@@ -97,6 +97,9 @@ export type ComponentGraphFact = Pick<
 /** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
 export type TaskGraphFact = CoreGraph.TaskExplain;
 
+/** @internal Capability-bounded agent graph fact emitted from exact compiler roots. */
+export type AgentGraphFact = CoreGraph.AgentExplainFact;
+
 /** @internal Compiler-owned handler write-sink fact (SPEC §10.3/§11). */
 export type HandlerWriteSinkFact = CoreGraph.HandlerWriteSinkExplain;
 
@@ -239,6 +242,7 @@ export interface CompileDependencyReads {
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
   | 'access'
+  | 'agents'
   | 'authPosture'
   | 'capabilities'
   | 'capabilityClosure'
@@ -273,6 +277,7 @@ export interface RegistryTypeFactOptions {
 
 export interface CompileAppGraphOptions {
   components?: readonly {
+    agentGraphFacts?: readonly AgentGraphFact[];
     componentGraphFacts: readonly ComponentGraphFact[];
     endpointGraphFacts?: readonly EndpointGraphFact[];
     handlerWriteSinkFacts?: readonly HandlerWriteSinkFact[];
@@ -419,6 +424,7 @@ export interface CompileArtifactFileNames {
  * hand-write these lowered artifacts (SPEC.md §5.2).
  */
 export interface CompileResult {
+  agentGraphFacts: readonly AgentGraphFact[];
   /** Compiler-derived browser fetch/effect posture consumed by generated response assembly. */
   browserPostureManifest: BrowserPostureManifest;
   clientModuleImportManifest: readonly ClientModuleImportManifestEntry[];
@@ -657,6 +663,7 @@ export function elementParamNameFromAttribute(attributeName: string): string {
  */
 export function createEmptyCompileResult(): CompileResult {
   return {
+    agentGraphFacts: [],
     browserPostureManifest: {
       externalOrigins: [],
       isolationBlockers: [],

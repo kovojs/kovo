@@ -32,6 +32,7 @@ export { compileRouteModule } from './scan/route-pages.js';
 export type {
   CompileComponentOptions,
   CompileResult,
+  AgentGraphFact,
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
   EndpointGraphFact,

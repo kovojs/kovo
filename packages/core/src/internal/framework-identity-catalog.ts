@@ -56,6 +56,7 @@ const SERVER_COMMAND_SPECIFIERS = ['@kovojs/server'] as const;
 const CORE_STORAGE_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
 
 const serverDataSourceFiles = [
+  'agent',
   'api/data',
   'domain',
   'index',
@@ -252,6 +253,7 @@ appendCatalogEntry(catalogEntries, serverApp('createApp'));
 appendCatalogFactories(
   catalogEntries,
   [
+    'agent',
     'declareSecretReadCapability',
     'domain',
     'mutation',
@@ -261,6 +263,7 @@ appendCatalogFactories(
     'scopedKey',
     'tag',
     'task',
+    'tool',
     'write',
   ],
   serverData,
@@ -490,8 +493,4 @@ export function frameworkCatalogExportsForModule(
     });
   }
   return snapshot;
-}
-
-function catalogIdentity(entry: FrameworkExportIdentity): FrameworkExportIdentity {
-  return freezeSecurityValue({ exportName: entry.exportName, module: entry.module });
 }

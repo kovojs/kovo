@@ -6,6 +6,11 @@ import {
 } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import {
+  agentIntegrityAllows,
+  agentMinimumIntegrityForOperations,
+  type AgentIntegrity,
+} from '@kovojs/core/internal/security-operation-ir';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 
 import type { KovoCheckFamily, KovoExplainOptions } from './graph-args.js';
@@ -107,6 +112,7 @@ import {
 export type {
   ExplainKind,
   KovoAccessExplainOptions,
+  KovoAgentExplainOptions,
   KovoAuthLifecycleExplainOptions,
   KovoAuthorizationExplainOptions,
   KovoDocumentExplainOptions,
@@ -141,6 +147,10 @@ import {
 export const outputVersion = 'kovo-check/v1';
 export const explainOutputVersion = 'kovo-explain/v1';
 export const auditOutputVersion = 'kovo-audit/v1';
+
+function operationKinds(operations: readonly { kind: string }[]): string[] {
+  return [...new Set(operations.map((operation) => operation.kind))].sort();
+}
 
 /**
  * Opaque graph input accepted by `kovoCheck`.
@@ -189,6 +199,50 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
 
   if ('modelBoundaries' in options) {
     return modelBoundariesExplainResult(explainOutputVersion);
+  }
+
+  if ('agent' in options) {
+    const agents = [...(graph.agents ?? [])].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    const integrityLevels: readonly AgentIntegrity[] = [
+      'principal',
+      'validated',
+      'retrieved',
+      'untrusted',
+    ];
+    for (const agent of agents) {
+      const modelEffects = operationKinds(agent.modelOperations);
+      lines.push(`AGENT ${agent.name} model-effects=${list(modelEffects)}`);
+      const tools = [...agent.tools].sort((left, right) => left.name.localeCompare(right.name));
+      for (const tool of tools) {
+        const minimumIntegrity = agentMinimumIntegrityForOperations(tool.operations);
+        if (minimumIntegrity !== tool.minimumIntegrity) {
+          return invalidGraphInputResult(explainOutputVersion, [
+            {
+              message: `minimum integrity must be ${minimumIntegrity} for the compiler-derived operations`,
+              path: `agents.${agent.name}.tools.${tool.name}.minimumIntegrity`,
+            },
+          ]);
+        }
+        lines.push(
+          `TOOL ${tool.name} mutation=${tool.mutation} minimum-integrity=${minimumIntegrity} result-integrity=${tool.resultIntegrity} effects=${list(operationKinds(tool.operations))}`,
+        );
+      }
+      for (const integrity of integrityLevels) {
+        const retained = tools.filter((tool) =>
+          agentIntegrityAllows(integrity, agentMinimumIntegrityForOperations(tool.operations)),
+        );
+        const effects = new Set(modelEffects);
+        for (const tool of retained) {
+          for (const effect of operationKinds(tool.operations)) effects.add(effect);
+        }
+        lines.push(
+          `CLOSURE integrity=${integrity} tools=${list(retained.map((tool) => tool.name))} effects=${list([...effects].sort())}`,
+        );
+      }
+    }
+    return ok(lines);
   }
 
   if ('authorization' in options) {

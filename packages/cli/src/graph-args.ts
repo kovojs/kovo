@@ -25,6 +25,7 @@ export type KovoExplainOptions =
   | KovoAccessExplainOptions
   | KovoAuthLifecycleExplainOptions
   | KovoAuthorizationExplainOptions
+  | KovoAgentExplainOptions
   | { capabilities: true }
   | { cookies: true }
   | KovoDocumentExplainOptions
@@ -55,6 +56,11 @@ export interface KovoAuthLifecycleExplainOptions {
 /** `kovo explain --authorization`: print honest guard/RLS non-correspondence records. */
 export interface KovoAuthorizationExplainOptions {
   authorization: true;
+}
+
+/** `kovo explain --agent`: print compiler-derived model/tool effect closures by integrity. */
+export interface KovoAgentExplainOptions {
+  agent: true;
 }
 
 /**
@@ -227,6 +233,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   const positional = parsed.value.positionals;
   const modeFlags = [
     '--access',
+    '--agent',
     '--auth-lifecycle',
     '--authorization',
     '--capabilities',
@@ -252,6 +259,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: undefined, ok: true, options: { authLifecycle: true } };
+  }
+
+  if (flags.has('--agent')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { agent: true } };
   }
 
   if (flags.has('--authorization')) {

@@ -547,6 +547,59 @@ async function mutationPrincipalEpochAdmission(
   return witnessFreeze({ epoch: state.epoch, principal, store });
 }
 
+/**
+ * Execute a compiler-witnessed agent tool through the ordinary mutation parse → managed-DB/RLS →
+ * guard → transaction path without pretending the server-to-server invocation is a browser form.
+ * The caller must supply a request whose session principal was already pinned by the framework
+ * lifecycle; this function is intentionally reachable only from the private agent witness
+ * (SPEC §6.6 and §10.3).
+ *
+ * @internal
+ */
+export async function runAgentToolMutation<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  rawInput: unknown,
+  pinnedRequest: Request,
+  options: Omit<
+    RunMutationOptions<Request>,
+    'csrf' | 'guardResolved' | 'preParsedInput' | 'principalPosture' | 'sessionProvider'
+  > = {},
+): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
+  const inputResult = await parseMutationInput(definition.input, rawInput);
+  if (!inputResult.ok) return inputResult.failure;
+
+  const input = snapshotGuardArgsReceipt(inputResult.value as InferSchema<InputSchema>);
+  const lifecycleRequest = withGuardArgs(
+    await resolveLifecycleRequest(
+      pinnedRequest,
+      mutationLifecycleOptionsWithSqlPolicy(definition, options),
+    ),
+    input,
+  );
+  const guardFailure = await runAccessDecisionGuards(
+    accessDecisionFor(definition),
+    definition.guard,
+    lifecycleRequest,
+  );
+  if (guardFailure) return mutationGuardFailureToResult(guardFailure);
+
+  return runWithRequestInputProvenance(input, (trackedInput) =>
+    runMutationWithTrackedInput(
+      definition,
+      trackedInput as InferSchema<InputSchema>,
+      lifecycleRequest,
+      options,
+    ),
+  );
+}
+
 async function runMutationWithTrackedInput<
   const Key extends string,
   InputSchema extends Schema<unknown>,

@@ -3,9 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { parseExplainArgs } from './graph-args.js';
 import { kovoExplain } from './index.js';
 
+// @kovo-security-classifier-corpus finite-security-operation-ir
 describe('kovo explain --agent', () => {
   it('prints the exact per-integrity effect closure', () => {
-    expect(parseExplainArgs(['--agent'])).toEqual({ agent: true, ok: true });
+    expect(parseExplainArgs(['--agent'])).toEqual({
+      inputPath: undefined,
+      ok: true,
+      options: { agent: true },
+    });
     expect(
       kovoExplain(
         {
@@ -21,7 +26,7 @@ describe('kovo explain --agent', () => {
                   mutation: 'documents/read',
                   name: 'read-document',
                   operations: [
-                    { door: 'managed-db-read', kind: 'server.database.read', target: 'documents' },
+                    { door: 'managed-db', kind: 'server.database.read', target: 'documents' },
                   ],
                   resultIntegrity: 'retrieved',
                 },
@@ -30,7 +35,7 @@ describe('kovo explain --agent', () => {
                   mutation: 'documents/write',
                   name: 'write-document',
                   operations: [
-                    { door: 'managed-db-write', kind: 'server.database.write', target: 'documents' },
+                    { door: 'managed-db', kind: 'server.database.write', target: 'documents' },
                   ],
                   resultIntegrity: 'untrusted',
                 },
@@ -52,7 +57,37 @@ describe('kovo explain --agent', () => {
         'CLOSURE integrity=retrieved tools=read-document effects=server.database.read,server.egress.request',
         'CLOSURE integrity=untrusted tools=- effects=server.egress.request',
         '',
-      ].join('\\n'),
+      ].join('\n'),
+    });
+  });
+
+  it('fails closed when redundant graph metadata disagrees with the finite operations', () => {
+    expect(
+      kovoExplain(
+        {
+          agents: [
+            {
+              modelOperations: [],
+              name: 'tampered',
+              tools: [
+                {
+                  minimumIntegrity: 'untrusted',
+                  mutation: 'documents/write',
+                  name: 'write',
+                  operations: [
+                    { door: 'managed-db', kind: 'server.database.write', target: 'documents' },
+                  ],
+                  resultIntegrity: 'untrusted',
+                },
+              ],
+            },
+          ],
+        },
+        { agent: true },
+      ),
+    ).toMatchObject({
+      exitCode: 1,
+      output: expect.stringContaining('minimum integrity must be principal'),
     });
   });
 });

@@ -4,6 +4,7 @@ export {
   type ComponentLiveTargetRendererOptions,
 } from '../live-target-renderer.js';
 export { assignDerivedComponentName } from '../component-root-stamps.js';
+export { assignDerivedAgentModelOperations, assignDerivedAgentToolOperations } from '../agent.js';
 export { assignDerivedDomainKey } from '../domain.js';
 export {
   collectGeneratedLiveTargetRenderers,

@@ -119,6 +119,7 @@ import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import { componentCacheInfluenceFacts } from './cache-influence-facts.js';
+import { agentGraphFactsFromModel } from './agent-tool-facts.js';
 import {
   componentSecurityOperationFacts,
   componentSecuritySemanticGraphFacts,
@@ -987,6 +988,7 @@ function assembleCompileResult(
   assertEmittedTranslation(lowered, client, registryCss, files, confidentialityClosed);
 
   return {
+    agentGraphFacts: agentGraphFactsFromModel(parsed.originalModel),
     browserPostureManifest: compileBrowserPostureManifest(lowered, validated.handlers),
     clientModuleImportManifest: client.clientModuleImportManifest,
     componentGraphFacts: facts.componentGraphFacts,

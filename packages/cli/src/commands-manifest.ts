@@ -30,6 +30,7 @@ export const EXPLAIN_USAGE = [
   '       kovo explain document [graph.json]',
   '       kovo explain --sources-sinks',
   '       kovo explain --tasks [graph.json]',
+  '       kovo explain --agent [graph.json]',
   '       kovo explain --endpoints [graph.json]',
   '       kovo explain --revealed [graph.json]',
   '       kovo explain --trust [graph.json]',
@@ -50,7 +51,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --auth-lifecycle | kovo explain --model-boundaries | kovo explain --authorization [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json] | kovo explain --attest <url> --artifact <graph.json> --trust-anchor <sha256:fingerprint>';
+  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --agent [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --auth-lifecycle | kovo explain --model-boundaries | kovo explain --authorization [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json] | kovo explain --attest <url> --artifact <graph.json> --trust-anchor <sha256:fingerprint>';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
@@ -148,6 +149,7 @@ export const AUDIT_ARGV_SPEC = {
 export const EXPLAIN_ARGV_SPEC = {
   options: [
     { flag: '--access', kind: 'boolean' },
+    { flag: '--agent', kind: 'boolean' },
     {
       flag: '--artifact',
       kind: 'value',
@@ -557,6 +559,10 @@ export const COMMANDS_MANIFEST = [
         description: 'List durable task registry facts and static composition edges.',
       },
       {
+        flag: '--agent',
+        description: 'Print exact model/tool effects and retained tools at every integrity level.',
+      },
+      {
         flag: '--revealed',
         description:
           'List confidentiality reveals, distinguishing proof-grade projections from audit-grade arbitrary functions.',
@@ -605,6 +611,7 @@ export const COMMANDS_MANIFEST = [
       'kovo explain document',
       'kovo explain --sources-sinks',
       'kovo explain --tasks',
+      'kovo explain --agent',
       'kovo explain --endpoints',
       'kovo explain --revealed',
       'kovo explain --trust',

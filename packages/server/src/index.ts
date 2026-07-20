@@ -4,6 +4,27 @@ import { sealManagedSqlParserAuthorityRegistry } from './sql-write-allowlist.js'
 
 export { createApp } from './app.js';
 export { createRequestHandler } from './request-handler.js';
+// SPEC §6.6: the model sees only a finite descriptor set; every executable tool is an exact
+// compiler-witnessed mutation and runs under the invoking request's pinned guard/RLS authority.
+export { agent, agentContent, createAgentSession, runAgentTurn, tool } from './agent.js';
+export type {
+  AgentContent,
+  AgentDefinition,
+  AgentIntegrity,
+  AgentModelContext,
+  AgentModelDecision,
+  AgentOptions,
+  AgentSession,
+  AgentToolDefinition,
+  AgentToolDescriptor,
+  AgentToolFailure,
+  AgentToolMutation,
+  AgentToolOptions,
+  AgentToolOutcome,
+  AgentToolSuccess,
+  AgentTurnResult,
+  CreateAgentSessionOptions,
+} from './agent.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for

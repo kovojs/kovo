@@ -126,6 +126,94 @@ export const serverSecurityOperationKinds = freezeSecurityValue([
 /** @internal */
 export type ServerSecurityOperationKind = (typeof serverSecurityOperationKinds)[number];
 
+/** One compiler-derived server operation accepted by the generated agent-tool witness. */
+export type ServerSecurityOperationFact = SecurityOperationIr & {
+  readonly kind: ServerSecurityOperationKind;
+};
+
+/**
+ * Closed integrity lattice for capability-bounded agent sessions (SPEC §6.6).
+ * Ordering is low to high; runtime transitions may only move left.
+ */
+export const agentIntegrityLevels = freezeSecurityValue([
+  'untrusted',
+  'retrieved',
+  'validated',
+  'principal',
+] as const);
+
+/** Integrity carried by one agent turn and its retained tool closure. */
+export type AgentIntegrity = (typeof agentIntegrityLevels)[number];
+
+/** Return true when `actual` retains authority requiring `minimum`. */
+export function agentIntegrityAllows(actual: AgentIntegrity, minimum: AgentIntegrity): boolean {
+  return agentIntegrityRank(actual) >= agentIntegrityRank(minimum);
+}
+
+/** Meet operation for monotone integrity attenuation. */
+export function attenuateAgentIntegrity(
+  current: AgentIntegrity,
+  incoming: AgentIntegrity,
+): AgentIntegrity {
+  return agentIntegrityRank(current) <= agentIntegrityRank(incoming) ? current : incoming;
+}
+
+/**
+ * Derive the minimum integrity for an exact finite operation closure. Unknown kinds fail closed to
+ * `principal`; app-authored metadata never participates in this authority decision.
+ */
+export function agentMinimumIntegrityForOperations(
+  operations: readonly ServerSecurityOperationFact[],
+): AgentIntegrity {
+  let minimum: AgentIntegrity = 'untrusted';
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    if (operation === undefined) return 'principal';
+    const required = agentMinimumIntegrityForOperation(operation.kind);
+    if (agentIntegrityRank(required) > agentIntegrityRank(minimum)) minimum = required;
+  }
+  return minimum;
+}
+
+function agentMinimumIntegrityForOperation(kind: ServerSecurityOperationKind): AgentIntegrity {
+  switch (kind) {
+    case 'server.handler.root':
+    case 'server.helper.call':
+      return 'untrusted';
+    case 'server.database.read':
+    case 'server.storage.read':
+      return 'retrieved';
+    case 'server.authority.scope':
+    case 'server.database.trusted-sql':
+    case 'server.database.write':
+    case 'server.egress.request':
+    case 'server.output.trusted-html':
+    case 'server.response.cookie':
+    case 'server.response.header':
+    case 'server.response.outcome':
+    case 'server.response.raw':
+    case 'server.response.redirect':
+    case 'server.storage.write':
+    case 'server.task.compose':
+      return 'principal';
+    default:
+      return 'principal';
+  }
+}
+
+function agentIntegrityRank(integrity: AgentIntegrity): number {
+  switch (integrity) {
+    case 'untrusted':
+      return 0;
+    case 'retrieved':
+      return 1;
+    case 'validated':
+      return 2;
+    case 'principal':
+      return 3;
+  }
+}
+
 /** @internal */
 export type SecurityOperationKind = BrowserSecurityOperationKind | ServerSecurityOperationKind;
 
@@ -252,10 +340,10 @@ export interface SecuritySemanticSummary {
 
 /** @internal Exact authored factory/callback identity that owns one semantic root. */
 export interface SecuritySemanticRootBinding {
-  readonly callback: 'handler' | 'load' | 'run';
+  readonly callback: 'handler' | 'load' | 'model' | 'run';
   /** Exact authored callback identity within the root's immutable source snapshot. */
   readonly callableSpan: { readonly end: number; readonly start: number };
-  readonly factory: 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook';
+  readonly factory: 'agent' | 'endpoint' | 'mutation' | 'query' | 'task' | 'webhook';
   /** Exact enrolled factory invocation within the same immutable source snapshot. */
   readonly factoryCallSpan: { readonly end: number; readonly start: number };
   readonly root: string;
