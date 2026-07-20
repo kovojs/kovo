@@ -10,11 +10,13 @@ const unsupportedDirectives = [
 ] as const;
 
 function jsxRuntimeOverrideSinks(fileName: string, source: string) {
-  return collectStaticBuildTrustFactsFromProject({ files: [{ fileName, source }] }).unregisteredSinks
-    .filter((fact) => fact.sink === 'compiler.jsx-runtime-override');
+  return collectStaticBuildTrustFactsFromProject({
+    files: [{ fileName, source }],
+  }).unregisteredSinks.filter((fact) => fact.sink === 'compiler.jsx-runtime-override');
 }
 
 describe('static JSX pragma authority closure', () => {
+  // @kovo-security-classifier-corpus kv424-request-process
   // @kovo-security-certifies C13 static-build-jsx-pragma-closure
   // SPEC §5.2/§6.6: the pre-evaluation project analysis must close every comment-borne
   // runtime override before Vite can turn authored JSX into an unanalyzed custom factory call.
@@ -51,13 +53,24 @@ const examples = [
   '/** @jsx h */',
   '/** @jsxFrag Fragment */',
   '/** @jsxImportSource react */',
+  \`/** @jsxRuntime classic */\`,
 ];
-export const Safe = <div>{examples.length}</div>;
+const pattern = /\\/\\*\\* @jsx h \\*\\//u;
+export const Safe = <div>{examples.length + pattern.source.length}</div>;
 `;
 
       expect(jsxRuntimeOverrideSinks(`src/safe.${extension}`, source)).toEqual([]);
     },
   );
+
+  it('ignores pragma-shaped comments in a non-JSX helper module', () => {
+    expect(
+      jsxRuntimeOverrideSinks(
+        'src/docs.ts',
+        `/** Example only: @jsx h */\nexport const documentation = true;\n`,
+      ),
+    ).toEqual([]);
+  });
 
   it.each(['tsx', 'jsx'])(
     'accepts only the exact framework JSX import source throughout authored .%s comments',

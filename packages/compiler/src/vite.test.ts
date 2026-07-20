@@ -135,6 +135,7 @@ export const ForeignRuntime = component({ render: () => <div /> });
     );
   });
 
+  // @kovo-security-classifier-corpus capability-closure
   // @kovo-security-certifies C13 vite-authored-jsx-pragma-closure
   // SPEC §5.2/§6.6: authored comments cannot replace the compiler-owned JSX runtime, even
   // when a transform hoists a pragma that TypeScript would not classify as source-leading trivia.
@@ -186,8 +187,10 @@ const examples = [
   '/** @jsx h */',
   '/** @jsxFrag Fragment */',
   '/** @jsxImportSource react */',
+  \`/** @jsxRuntime classic */\`,
 ];
-export const Safe = component({ render: () => <div>{examples.length}</div> });
+const pattern = /\\/\\*\\* @jsx h \\*\\//u;
+export const Safe = component({ render: () => <div>{examples.length + pattern.source.length}</div> });
 `;
 
       await expect(plugin.transform(source, `src/safe.${extension}`)).resolves.toEqual({

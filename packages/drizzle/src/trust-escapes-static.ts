@@ -134,6 +134,81 @@ function syntacticFileName(fileName: string): string {
   return `${fileName}.tsx`;
 }
 
+interface StaticJsxPragmaFact {
+  kind: 'jsx' | 'jsxFrag' | 'jsxImportSource' | 'jsxRuntime';
+  start: number;
+  value?: string;
+}
+
+/**
+ * Parse JSX transform directives only from parser-classified comment trivia. Walking every AST
+ * token closes comments beyond source-leading trivia while strings and regular expressions never
+ * become candidates (SPEC §5.2 rule 10 / §6.6).
+ */
+function staticJsxPragmaFacts(sourceFile: SourceFile, source: string): StaticJsxPragmaFact[] {
+  const compilerSourceFile = sourceFile.compilerNode;
+  const ranges: ts.CommentRange[] = [];
+  const seen = new Set<string>();
+
+  const appendRanges = (candidates: readonly ts.CommentRange[] | undefined): void => {
+    if (!candidates) return;
+    for (const range of candidates) {
+      const key = `${range.pos}:${range.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ranges.push(range);
+    }
+  };
+  const visit = (node: ts.Node): void => {
+    appendRanges(ts.getLeadingCommentRanges(source, node.getFullStart()));
+    appendRanges(ts.getTrailingCommentRanges(source, node.getEnd()));
+    for (const child of node.getChildren(compilerSourceFile)) visit(child);
+  };
+  visit(compilerSourceFile);
+
+  const facts: StaticJsxPragmaFact[] = [];
+  for (const range of ranges) {
+    const comment = source.slice(range.pos, range.end);
+    const pattern = /@(jsxruntime|jsximportsource|jsxfrag|jsx)\b(?:[ \t]+([^\s*]+))?/giu;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(comment)) !== null) {
+      const rawKind = match[1]?.toLowerCase();
+      const kind: StaticJsxPragmaFact['kind'] =
+        rawKind === 'jsx'
+          ? 'jsx'
+          : rawKind === 'jsxfrag'
+            ? 'jsxFrag'
+            : rawKind === 'jsximportsource'
+              ? 'jsxImportSource'
+              : 'jsxRuntime';
+      facts.push({
+        kind,
+        start: range.pos + match.index,
+        ...(match[2] === undefined ? {} : { value: match[2] }),
+      });
+    }
+  }
+  return facts;
+}
+
+function staticJsxPragmaOverrideSinks(
+  file: TrustEscapeSourceFileInput,
+  sourceFile: SourceFile,
+): UnregisteredSinkFact[] {
+  if (!/\.[cm]?[jt]sx$/iu.test(file.fileName)) return [];
+  const facts: UnregisteredSinkFact[] = [];
+  for (const pragma of staticJsxPragmaFacts(sourceFile, file.source)) {
+    if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    facts.push({
+      safePath: 'use the compiler-owned automatic @kovojs/server JSX runtime',
+      sink: 'compiler.jsx-runtime-override',
+      site: `${file.fileName}:${lineForIndex(file.source, pragma.start)}`,
+      source: `@${pragma.kind}${pragma.value === undefined ? '' : ` ${pragma.value}`}`,
+    });
+  }
+  return facts;
+}
+
 // =====================================================================================
 // TASK A — KV426 trust-escape collector (SPEC §6.6, AUDIT-ONLY)
 // =====================================================================================
@@ -1596,6 +1671,11 @@ function requestProcessSinksForProject(
     scanned: new Set(),
   };
   let requestRootCount = 0;
+
+  for (const [index, sourceFile] of sourceFiles.entries()) {
+    const file = files[index];
+    if (file) context.facts.push(...staticJsxPragmaOverrideSinks(file, sourceFile));
+  }
 
   scanRequestModuleInitializers(sourceFiles, context);
 

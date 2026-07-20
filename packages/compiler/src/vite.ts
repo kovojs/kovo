@@ -39,7 +39,6 @@ import {
   compilerOwnDataValue,
   compilerPromiseIsPromise,
   compilerPromiseThen,
-  compilerRegExpExec,
   compilerRegExpReplace,
   compilerRegExpTest,
   compilerSnapshotDenseArray,
@@ -670,7 +669,7 @@ function createBoundKovoVitePlugin(
           finish();
           return null;
         }
-        if (isAuthoredSource) assertKovoViteJsxImportSource(fileName, source);
+        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
         if (!isCurrent()) {
           finish();
           return null;
@@ -774,7 +773,7 @@ function createBoundKovoVitePlugin(
         if (!isCurrent()) return [];
         const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
         if (!isCurrent()) return [];
-        if (isAuthoredSource) assertKovoViteJsxImportSource(fileName, source);
+        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
         if (!isCurrent()) return [];
         const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
         if (!isCurrent()) return [];
@@ -942,42 +941,40 @@ function transformViteCompileResult(
 
 const kovoJsxImportSourcePragma = '/** @jsxImportSource @kovojs/server */';
 
-function assertKovoViteJsxImportSource(fileName: string, source: string): void {
+function assertKovoViteJsxPragmas(fileName: string, source: string): void {
   if (!compilerRegExpTest(/\.[cm]?[jt]sx$/u, fileName)) return;
+  assertKovoViteJsxPragmaModels(parseComponentModule(fileName, source));
+}
 
-  let offset = 0;
-  while (offset < source.length) {
-    const leading = compilerRegExpExec(/^\s*/u, compilerStringSlice(source, offset));
-    offset += leading?.[0].length ?? 0;
-    const comment = compilerRegExpExec(
-      /^(?:\/\/[^\r\n]*(?:\r?\n|$)|\/\*[\s\S]*?\*\/)/u,
-      compilerStringSlice(source, offset),
+function assertKovoViteJsxPragmaModels(model: ReturnType<typeof parseComponentModule>): void {
+  const length = compilerArrayLength(model.jsxPragmas, 'Vite authored JSX pragma facts');
+  for (let index = 0; index < length; index += 1) {
+    const pragma = compilerOwnDataValue(
+      model.jsxPragmas,
+      index,
+      'Vite authored JSX pragma facts',
+    ) as (typeof model.jsxPragmas)[number] | undefined;
+    if (!pragma) throw new TypeError(`Vite authored JSX pragma facts[${index}] must be own data.`);
+    if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    const rendered = `@${pragma.kind}${pragma.value === undefined ? '' : ` ${pragma.value}`}`;
+    const importSourceHelp =
+      pragma.kind === 'jsxImportSource' ? ' JSX import source must be @kovojs/server.' : '';
+    throw new TypeError(
+      `Kovo Vite JSX pragma ${rendered} cannot override the compiler-owned automatic runtime.${importSourceHelp} SPEC.md §5.2/§6.6 requires authored JSX to use the framework runtime.`,
     );
-    if (comment === null) break;
-
-    const importSource = compilerRegExpExec(
-      /@jsxImportSource[ \t]+([^\s*]+)/u,
-      comment[0],
-    )?.[1];
-    if (importSource !== undefined && importSource !== '@kovojs/server') {
-      throw new TypeError(
-        'Kovo Vite JSX import source must be @kovojs/server (SPEC.md §5.2).',
-      );
-    }
-    offset += comment[0].length;
   }
 }
 
 function bindViteEmittedJsxRuntime(fileName: string, source: string): string {
   if (!compilerRegExpTest(/\.[cm]?[jt]sx$/u, fileName)) return source;
   const model = parseComponentModule(fileName, source);
+  assertKovoViteJsxPragmaModels(model);
   const containsJsx =
     compilerArrayLength(model.jsxElements, 'Vite emitted JSX elements') > 0 ||
     compilerArrayLength(model.jsxExpressions, 'Vite emitted JSX expressions') > 0 ||
     compilerRegExpTest(/<>[\s\S]*?<\/>/u, source);
   if (!containsJsx) return source;
 
-  assertKovoViteJsxImportSource(fileName, source);
   if (
     compilerRegExpTest(
       /^\s*\/\*\*?\s*@jsxImportSource[ \t]+@kovojs\/server(?:\s|\*\/)/u,
