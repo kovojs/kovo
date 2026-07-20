@@ -135,6 +135,72 @@ export const ForeignRuntime = component({ render: () => <div /> });
     );
   });
 
+  // @kovo-security-classifier-corpus capability-closure
+  // @kovo-security-certifies C13 vite-authored-jsx-pragma-closure
+  // SPEC §5.2/§6.6: authored comments cannot replace the compiler-owned JSX runtime, even
+  // when a transform hoists a pragma that TypeScript would not classify as source-leading trivia.
+  it.each(['tsx', 'jsx'])(
+    'rejects classic and custom JSX pragma authority throughout authored .%s comments',
+    (extension) => {
+      const compileComponentModule = vi.fn(() => ({
+        diagnostics: [],
+        files: [{ kind: 'server', source: 'export const compiled = true;' }],
+      }));
+      const plugin = createKovoVitePlugin(compileComponentModule);
+      const directives = [
+        '/** @jsxRuntime classic */',
+        '/** @jsx h */',
+        '/** @jsxFrag Fragment */',
+        '/** @jsxImportSource react */',
+      ];
+      const placeDirective = [
+        (directive: string) => `${directive}\n`,
+        (directive: string) => `'use strict';\n${directive}\n`,
+        (directive: string) => `const marker = 0; ${directive}\n`,
+      ];
+
+      for (const directive of directives) {
+        for (const place of placeDirective) {
+          const source = `${place(directive)}
+export const Unsafe = component({ render: () => <div /> });
+`;
+          expect(() => plugin.transform(source, `src/unsafe.${extension}`)).toThrow(
+            /Kovo Vite JSX pragma/u,
+          );
+        }
+      }
+      expect(compileComponentModule).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['tsx', 'jsx'])(
+    'does not classify JSX pragma spellings inside authored .%s string literals as comments',
+    async (extension) => {
+      const compileComponentModule = vi.fn(() => ({
+        diagnostics: [],
+        files: [{ kind: 'server', source: 'export const compiled = true;' }],
+      }));
+      const plugin = createKovoVitePlugin(compileComponentModule);
+      const source = `
+const examples = [
+  '/** @jsxRuntime classic */',
+  '/** @jsx h */',
+  '/** @jsxFrag Fragment */',
+  '/** @jsxImportSource react */',
+  \`/** @jsxRuntime classic */\`,
+];
+const pattern = /\\/\\*\\* @jsx h \\*\\//u;
+export const Safe = component({ render: () => <div>{examples.length + pattern.source.length}</div> });
+`;
+
+      await expect(plugin.transform(source, `src/safe.${extension}`)).resolves.toEqual({
+        code: 'export const compiled = true;',
+        map: null,
+      });
+      expect(compileComponentModule).toHaveBeenCalledOnce();
+    },
+  );
+
   it('compiles SPEC-supported JSX modules instead of delegating them past Kovo diagnostics', async () => {
     const plugin = kovoVitePlugin();
     const source = `

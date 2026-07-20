@@ -1112,6 +1112,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
       'packages/drizzle/src/capability-escapes-static.test.ts',
+      'packages/drizzle/src/jsx-pragma-static.test.ts',
       'packages/drizzle/src/trust-escapes-static.test.ts',
       'packages/drizzle/src/trust-escapes-static-temporal-integration.test.ts',
       'packages/drizzle/src/index.toctou-readonly.test.ts',
@@ -2023,6 +2024,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus capability-closure',
     testFiles: [
       'packages/compiler/src/capability-closure.security.test.ts',
+      'packages/compiler/src/vite.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
       'packages/cli/src/dependency-capability-loader.test.ts',
       'scripts/capability-surface-census-gate.test.mjs',
