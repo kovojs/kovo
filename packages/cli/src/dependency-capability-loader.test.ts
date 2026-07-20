@@ -1054,6 +1054,93 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-reviewed-special-query-closure
+  it('rejects a reviewed package worker query before Vite creates an unreviewed subgraph', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-worker-query-')));
+    const appModulePath = join(root, 'client.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const helperRoot = join(root, 'node_modules', 'helper-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { start } from 'safe-parser'; start();\n";
+    try {
+      for (const [directory, packageName] of [
+        [packageRoot, 'safe-parser'],
+        [helperRoot, 'helper-parser'],
+      ] as const) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          join(directory, 'package.json'),
+          JSON.stringify({
+            exports: { '.': './index.mjs' },
+            name: packageName,
+            type: 'module',
+            version: packageName === 'safe-parser' ? '1.2.3' : '1.0.0',
+          }),
+        );
+      }
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        "import WorkerEntry from './worker.mjs?worker'; export const start = () => new WorkerEntry();\n",
+      );
+      writeFileSync(
+        join(packageRoot, 'worker.mjs'),
+        "import 'helper-parser'; globalThis.__KOVO_WORKER_QUERY__ = 'EXECUTED';\n",
+      );
+      writeFileSync(
+        join(helperRoot, 'index.mjs'),
+        "globalThis.__KOVO_WORKER_QUERY_HELPER__ = 'EXECUTED';\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['client.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
+                rootKinds: ['route'],
+                sites: ['client.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.mjs', source }],
+              exactManifest,
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*reviewed package safe-parser child edge.*query or fragment/u);
+      expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
   it.each([
     ['manifest-owned', true, 'node_modules', false, false],
