@@ -4,6 +4,7 @@ import {
   analyzeSqlSafetyFromProject,
   diagnosticsForQueryFacts,
   directSummaryForFunction,
+  extractGrantGraphFactsFromProject,
   extractMassAssignmentFromProject,
   extractOwnerAuditFromProject,
   extractQueryFactsFromProject,
@@ -63,6 +64,7 @@ describe('@kovojs/drizzle static analysis context', () => {
     const ownerAudit = extractOwnerAuditFromProject(project);
 
     expect(extractStaticBuildAnalysisFactsFromProject(project)).toEqual({
+      grants: extractGrantGraphFactsFromProject(project),
       massAssignmentFacts: extractMassAssignmentFromProject(project),
       ownerDomains: ownerAudit.ownerDomains,
       queries,
