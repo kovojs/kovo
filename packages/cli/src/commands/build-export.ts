@@ -4330,12 +4330,16 @@ function approvedBuildSourcesVitePlugin(
 }
 
 function isBuildBareModuleSpecifier(specifier: string): boolean {
+  if (buildStringStartsWith(specifier, 'node:')) return true;
   return (
     specifier.length > 0 &&
     specifier[0] !== '\0' &&
+    specifier[0] !== '#' &&
+    specifier[0] !== '\\' &&
     !buildStringStartsWith(specifier, './') &&
     !buildStringStartsWith(specifier, '../') &&
     !buildStringStartsWith(specifier, 'file:') &&
+    !buildStringIncludes(specifier, ':') &&
     !isAbsolute(specifier)
   );
 }

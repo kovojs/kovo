@@ -162,6 +162,37 @@ async function viteBuildPackedFramework(
 }
 
 describe('Kovo framework source roots', () => {
+  it('rejects a config data URL module outside the immutable source snapshot', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-config-data-source-closure-')));
+    const configPath = join(root, 'kovo.config.mjs');
+    const outDir = join(root, 'dist');
+    const source =
+      "import 'data:text/javascript,globalThis.__KOVO_CONFIG_DATA_MODULE__%3Dtrue'; export default {};\n";
+    try {
+      writeFileSync(configPath, source, 'utf8');
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir, rollupOptions: { input: configPath }, ssr: true },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            approvedBuildSourcesVitePluginForTesting(
+              configPath,
+              root,
+              [{ fileName: 'kovo.config.mjs', source }],
+              'config',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/config module edge.*security-preflight snapshot/u);
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('rejects a config module /@fs edge outside the immutable source snapshot', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-config-source-closure-')));
     const configPath = join(root, 'kovo.config.mjs');
