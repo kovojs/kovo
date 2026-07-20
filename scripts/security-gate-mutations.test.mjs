@@ -1,14 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE,
   SECURITY_GATE_MUTANTS,
   applyExactMutation,
+  planSecurityGateBehavioralMutationBatches,
   runSecurityGateMutationHarness,
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after TASK B routing closure', () => {
     expect(SECURITY_GATE_MUTANTS).toHaveLength(290);
+  });
+
+  it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
+    const expected = SECURITY_GATE_MUTANTS.filter((mutant) => mutant.behavioralTypeScript === true);
+    const batches = planSecurityGateBehavioralMutationBatches(SECURITY_GATE_MUTANTS);
+    const planned = batches.flat();
+
+    expect(
+      batches.every((batch) => batch.length <= SECURITY_GATE_BEHAVIORAL_MUTANT_BATCH_SIZE),
+    ).toBe(true);
+    expect(planned).toEqual(expected);
+    expect(new Set(planned.map((mutant) => mutant.name)).size).toBe(expected.length);
   });
 
   it('enrolls the dependency-loader graph, HTML, and artifact closure mutants', () => {
