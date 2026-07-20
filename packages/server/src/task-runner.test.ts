@@ -1,8 +1,9 @@
 // @kovo-security-classifier-corpus egress-ip
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { PGlite } from '@electric-sql/pglite';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
-import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
+import { frameworkScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import './sql-parser-authority-bootstrap.js';
@@ -18,9 +19,70 @@ import {
   DurableTaskLeaseLostError,
   DurableTaskLeaseSettlementDiscardedError,
 } from './task-runner.js';
-import { MemoryDurableTaskQueue, type DurableTaskQueueStore } from './task-queue.js';
+import {
+  MemoryDurableTaskQueue,
+  PostgresDurableTaskQueue,
+  createDurableTaskSqlExecutor,
+  ensureDurableTaskSchema,
+  type DurableTaskQueueStore,
+} from './task-queue.js';
 import { assertNonRequestPrincipalPosture } from './auth-principal.js';
 import { registerFrameworkManagedDbHooks } from './managed-db.js';
+
+interface ChildScheduleJobProbe {
+  readonly args: unknown;
+  readonly runAt: Date;
+  readonly status: string;
+  readonly task: string;
+}
+
+interface ChildScheduleHarness {
+  readonly store: DurableTaskQueueStore;
+  close(): Promise<void>;
+  jobs(): Promise<readonly ChildScheduleJobProbe[]>;
+}
+
+async function createMemoryChildScheduleHarness(): Promise<ChildScheduleHarness> {
+  const store = new MemoryDurableTaskQueue();
+  return {
+    store,
+    async close() {},
+    async jobs() {
+      return store.snapshot().map((job) => ({
+        args: job.args,
+        runAt: job.runAt,
+        status: job.status,
+        task: job.task,
+      }));
+    },
+  };
+}
+
+async function createPostgresChildScheduleHarness(): Promise<ChildScheduleHarness> {
+  const client = new PGlite();
+  const executor = createDurableTaskSqlExecutor(client);
+  await ensureDurableTaskSchema(executor);
+  return {
+    store: new PostgresDurableTaskQueue(executor),
+    async close() {
+      await client.close();
+    },
+    async jobs() {
+      const result = await client.query<{
+        args: unknown;
+        run_at: Date | string;
+        status: string;
+        task_key: string;
+      }>('select args, run_at, status, task_key from _kovo_jobs order by created_at, task_key');
+      return result.rows.map((row) => ({
+        args: row.args,
+        runAt: new Date(row.run_at),
+        status: row.status,
+        task: row.task_key,
+      }));
+    },
+  };
+}
 
 describe('durable task runner (SPEC §9.6)', () => {
   let uninstallEgressFloor: (() => void) | undefined;
@@ -313,6 +375,93 @@ describe('durable task runner (SPEC §9.6)', () => {
       posture: 'principal',
     });
   });
+
+  it('persists the child schema parsed output instead of the raw ctx.schedule args', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const email = s.object({ email: s.string().email() });
+    const child = task('child.normalized', {
+      input: {
+        parse(input: unknown) {
+          const parsed = email.parse(input);
+          return { email: parsed.email.toLowerCase() };
+        },
+      },
+      run() {},
+    });
+    const parent = task('parent.normalized', {
+      input: s.object({ email: s.string() }),
+      run: (args, ctx) => ctx.schedule(child, { email: args.email }),
+    });
+    await store.enqueue({ args: { email: 'USER@EXAMPLE.COM' }, task: parent.key });
+
+    await createDurableTaskRunner({ store, tasks: [parent, child] }).runOnce(new Date());
+
+    expect(store.snapshot().find((job) => job.task === child.key)).toMatchObject({
+      args: { email: 'user@example.com' },
+      status: 'ready',
+    });
+  });
+
+  it.each([
+    ['memory', createMemoryChildScheduleHarness],
+    ['Postgres/PGlite', createPostgresChildScheduleHarness],
+  ] as const)(
+    'validates follow-on args before keyed persistence through the %s queue',
+    async (_name, createHarness) => {
+      const harness = await createHarness();
+      try {
+        const key = frameworkScopedKey('durable-task-system', 'singleton-confirmation');
+        const child = task('child.schema-admission', {
+          input: s.object({ email: s.string().email() }),
+          run() {},
+        });
+        const parent = task('parent.schema-admission', {
+          input: s.object({ email: s.string() }),
+          async run(args, ctx) {
+            // Both values are `string` to TypeScript. SPEC §9.6 still requires the child's
+            // runtime refinement before its default debounce can replace the pending row.
+            await ctx.schedule(
+              child,
+              { email: args.email },
+              { key: ctx.systemStateKey('singleton-confirmation') },
+            );
+          },
+        });
+        await harness.store.enqueue({
+          args: { email: 'legitimate@example.com' },
+          key,
+          runAt: new Date('2100-01-01T00:00:00.000Z'),
+          task: child.key,
+        });
+        await harness.store.enqueue({
+          args: { email: 'attacker-controlled-not-an-email' },
+          runAt: new Date('2090-01-01T00:00:00.000Z'),
+          task: parent.key,
+        });
+
+        await createDurableTaskRunner({
+          batchSize: 1,
+          store: harness.store,
+          tasks: [parent, child],
+        }).runOnce(new Date('2099-01-01T00:00:00.000Z'));
+
+        const jobs = await harness.jobs();
+        expect(jobs.filter((job) => job.task === child.key)).toEqual([
+          {
+            args: { email: 'legitimate@example.com' },
+            runAt: new Date('2100-01-01T00:00:00.000Z'),
+            status: 'ready',
+            task: child.key,
+          },
+        ]);
+        expect(jobs.find((job) => job.task === parent.key)).toMatchObject({
+          status: 'dead',
+        });
+      } finally {
+        await harness.close();
+      }
+    },
+  );
 
   it('exposes stable job idempotency keys and retries with backoff until success', async () => {
     const store = new MemoryDurableTaskQueue();
@@ -641,6 +790,64 @@ describe('durable task runner (SPEC §9.6)', () => {
       await Promise.resolve();
       await expect(runner.runOnce(new Date('2026-06-30T10:00:01.000Z'))).resolves.toHaveLength(1);
       expect(runs).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not enqueue after async child validation outlives the parent lease', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-30T10:00:00.000Z'));
+      const store = new MemoryDurableTaskQueue();
+      let releaseParse!: () => void;
+      let markParseStarted!: () => void;
+      const parseStarted = new Promise<void>((resolve) => {
+        markParseStarted = resolve;
+      });
+      const parseGate = new Promise<void>((resolve) => {
+        releaseParse = resolve;
+      });
+      const childInput = s.object({ value: s.string() });
+      const child = task('child.slow-admission', {
+        input: {
+          parse: (input: unknown) => childInput.parse(input),
+          async parseAsync(input: unknown) {
+            markParseStarted();
+            await parseGate;
+            return childInput.parse(input);
+          },
+        },
+        run() {},
+      });
+      const parent = task('parent.expired-during-admission', {
+        input: s.object({}),
+        timeoutMs: 100,
+        run: (_args, ctx) => ctx.schedule(child, { value: 'late' }),
+      });
+      await store.enqueue({ args: {}, task: parent.key });
+      const runner = createDurableTaskRunner({
+        hardTimeoutMs: 100,
+        leaseMs: 1_000,
+        store,
+        tasks: [parent, child],
+      });
+
+      const run = runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+      await parseStarted;
+      await vi.advanceTimersByTimeAsync(125);
+      await run;
+      releaseParse();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(store.snapshot()).toEqual([
+        expect.objectContaining({
+          status: 'dead',
+          task: parent.key,
+        }),
+      ]);
     } finally {
       vi.useRealTimers();
     }
