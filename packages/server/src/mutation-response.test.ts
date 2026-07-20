@@ -2098,6 +2098,52 @@ describe('server mutation primitives', () => {
     expect(streamSpy).toHaveBeenCalledOnce();
   });
 
+  it('does not signal successful stream completion before replay settlement succeeds', async () => {
+    let releaseSettlement!: () => void;
+    const settlement = new Promise<void>((resolve) => {
+      releaseSettlement = resolve;
+    });
+    const commit = vi.fn(() => settlement);
+    const replayStore = {
+      get() {
+        return undefined;
+      },
+      reserve() {
+        return { commit };
+      },
+      set() {},
+    };
+    const sendMessage = mutation('chat/stream-settlement-failure', {
+      input: s.object({ body: s.string() }),
+      handler: (input) => input,
+      *stream() {
+        yield stream.text('assistant:a1', 'progressive response');
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': mintIdemToken(),
+        'Kovo-Stream': 'true',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      replayStore,
+      request: { sessionId: 's1' },
+    });
+    const body = readResponseBody(response.body);
+    const beforeSettlement = await Promise.race([
+      body.then(() => 'completed' as const),
+      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 25)),
+    ]);
+    releaseSettlement();
+    await body;
+
+    expect(commit).toHaveBeenCalledOnce();
+    expect(beforeSettlement).toBe('pending');
+  });
+
   it.each(['buffered', 'stream'] as const)(
     'conflicts when an idempotency retry changes from %s enhanced delivery vocabulary',
     async (firstMode) => {
