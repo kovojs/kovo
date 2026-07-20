@@ -4,6 +4,11 @@
   "command": "pnpm run check:escape-census:baseline",
   "gateCommand": "node scripts/escape-census-gate.mjs --config security/escape-census-config.json",
   "config": "security/escape-census-config.json",
+  "predecessor": {
+    "path": "./escape-budgets.previous.json",
+    "reviewedCommit": "53f5a607441ed5fee6d4fa7277c38644a08ce566",
+    "sha256": "73e0d4f816d9188c7cce5c3725f56d3e628544c896af0879ca5e919e8f101a99"
+  },
   "report": {
     "apps": [
       {
@@ -18,11 +23,11 @@
         },
         "package": "@kovojs/security-metric-e-app",
         "roots": {
-          "allowControlChars": ["app.mjs:17"],
-          "csrf:false": ["mutation:admin/update"],
+          "allowControlChars": ["app.tsx:19"],
+          "csrf:false": ["mutation:app/admin-mutation"],
           "ctx.fetch": [],
           "kovoAnalyzerSummary": [],
-          "trustedHtml": ["app.mjs:31"],
+          "trustedHtml": ["app.tsx:32"],
           "trustedSql": []
         }
       }
@@ -39,11 +44,11 @@
         },
         "package": "@kovojs/security-metric-e-app",
         "roots": {
-          "allowControlChars": ["[\"metric-e-representative\",\"app.mjs:17\"]"],
-          "csrf:false": ["[\"metric-e-representative\",\"mutation:admin/update\"]"],
+          "allowControlChars": ["[\"metric-e-representative\",\"app.tsx:19\"]"],
+          "csrf:false": ["[\"metric-e-representative\",\"mutation:app/admin-mutation\"]"],
           "ctx.fetch": [],
           "kovoAnalyzerSummary": [],
-          "trustedHtml": ["[\"metric-e-representative\",\"app.mjs:31\"]"],
+          "trustedHtml": ["[\"metric-e-representative\",\"app.tsx:32\"]"],
           "trustedSql": []
         }
       }
@@ -56,7 +61,7 @@
       "door": "trustedHtml",
       "package": "@kovojs/security-metric-e-app",
       "expectedFindings": [
-        "@kovojs/security-metric-e-app: trustedHtml escaped roots 1 exceed budget 0 ([\"metric-e-representative\",\"app.mjs:31\"])"
+        "@kovojs/security-metric-e-app: trustedHtml escaped roots 1 exceed budget 0 ([\"metric-e-representative\",\"app.tsx:32\"])"
       ]
     },
     {

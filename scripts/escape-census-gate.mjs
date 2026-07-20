@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,18 @@ export const ESCAPE_CENSUS_DOORS = Object.freeze([
   'trustedHtml',
   'trustedSql',
 ]);
+
+/**
+ * Immutable review anchor for the prior Metric E round. The predecessor artifact stays available
+ * in shallow CI checkouts, while this digest prevents a same-tip edit from raising both the current
+ * and alleged previous ceilings. Advancing the round therefore requires an explicit code-review
+ * change to this anchor as well as the retained artifact.
+ */
+export const ESCAPE_CENSUS_PREDECESSOR = Object.freeze({
+  path: './escape-budgets.previous.json',
+  reviewedCommit: '53f5a607441ed5fee6d4fa7277c38644a08ce566',
+  sha256: '73e0d4f816d9188c7cce5c3725f56d3e628544c896af0879ca5e919e8f101a99',
+});
 
 const escapeCensusDoorSet = new Set(ESCAPE_CENSUS_DOORS);
 const trustKindToDoor = Object.freeze({
@@ -183,6 +196,7 @@ function inspectGraph(graph, app, roots, findings) {
   validateCoverage(graph.escapeCensus, app, findings);
 
   const trustKinds = new Set();
+  const declaredCsrfRoots = new Set();
   const trustEscapes = graph.trustEscapes;
   if (!Array.isArray(trustEscapes)) {
     findings.push(`${app}: authoritative trustEscapes array is absent`);
@@ -203,6 +217,13 @@ function inspectGraph(graph, app, roots, findings) {
       if (!nonBlank(escape.site)) findings.push(`${label} must carry a non-blank site`);
       if (!nonBlank(escape.root)) {
         findings.push(`${label} must carry a source-derived escape root`);
+        continue;
+      }
+      // TSX compilation emits both source-binding and generated-registry witnesses for csrf:false.
+      // Metric E counts the reachable mutation authority once, using the registry key that the
+      // runtime executes, rather than treating provenance fanout as two distinct escape doors.
+      if (door === 'csrf:false') {
+        declaredCsrfRoots.add(escape.root);
         continue;
       }
       roots.get(door).add(escape.root);
@@ -245,11 +266,13 @@ function inspectGraph(graph, app, roots, findings) {
         continue;
       }
       const expectedRoot = `mutation:${mutation.key}`;
-      if (!roots.get('csrf:false').has(expectedRoot)) {
+      if (!declaredCsrfRoots.has(expectedRoot)) {
         findings.push(
           `${app}: csrf-exempt mutation ${mutation.key} has no csrfFalse trust-escape root`,
         );
+        continue;
       }
+      roots.get('csrf:false').add(expectedRoot);
     }
   }
 }
@@ -489,24 +512,7 @@ export function runEscapeCensusCli(argv, io = process) {
     return 1;
   }
   try {
-    const absoluteConfig = resolve(configPath);
-    const config = JSON.parse(readFileSync(absoluteConfig, 'utf8'));
-    if (!record(config) || config.schema !== 'kovo.escape-census-config/v1') {
-      throw new TypeError('config must use kovo.escape-census-config/v1');
-    }
-    const base = dirname(absoluteConfig);
-    const budgets = readJsonRelative(base, config.budgets, 'budgets');
-    const previousBudgets = readJsonRelative(base, config.previousBudgets, 'previousBudgets');
-    if (!Array.isArray(config.apps)) throw new TypeError('config.apps must be an array');
-    const apps = config.apps.map((entry, index) => {
-      if (!record(entry)) throw new TypeError(`config.apps[${index}] must be an object`);
-      return {
-        app: entry.app,
-        graph: readJsonRelative(base, entry.graph, `apps[${index}].graph`),
-        package: entry.package,
-      };
-    });
-    const result = evaluateEscapeCensus({ apps, budgets, previousBudgets });
+    const result = evaluateEscapeCensus(loadEscapeCensusConfig(configPath));
     io.stdout.write(formatEscapeCensusReport(result.report));
     if (result.findings.length === 0) return 0;
     io.stderr.write(
@@ -524,6 +530,56 @@ export function runEscapeCensusCli(argv, io = process) {
 function readJsonRelative(base, value, label) {
   if (!nonBlank(value)) throw new TypeError(`${label} path must be a non-blank string`);
   return JSON.parse(readFileSync(resolve(base, value), 'utf8'));
+}
+
+function requireExactPredecessor(value) {
+  if (!record(value)) {
+    throw new TypeError('previousBudgets must be the pinned predecessor descriptor');
+  }
+  const keys = Object.keys(value).sort();
+  const expectedKeys = Object.keys(ESCAPE_CENSUS_PREDECESSOR).sort();
+  if (
+    JSON.stringify(keys) !== JSON.stringify(expectedKeys) ||
+    expectedKeys.some((key) => value[key] !== ESCAPE_CENSUS_PREDECESSOR[key])
+  ) {
+    throw new Error(
+      `previousBudgets anchor drifted\nexpected=${JSON.stringify(ESCAPE_CENSUS_PREDECESSOR)}\nactual=${JSON.stringify(value)}`,
+    );
+  }
+}
+
+function readPinnedPreviousBudgets(base, value) {
+  requireExactPredecessor(value);
+  const bytes = readFileSync(resolve(base, value.path));
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  if (digest !== ESCAPE_CENSUS_PREDECESSOR.sha256) {
+    throw new Error(
+      `previousBudgets digest drifted; reviewedCommit=${ESCAPE_CENSUS_PREDECESSOR.reviewedCommit} expected=${ESCAPE_CENSUS_PREDECESSOR.sha256} actual=${digest}`,
+    );
+  }
+  return JSON.parse(bytes.toString('utf8'));
+}
+
+export function loadEscapeCensusConfig(configPath) {
+  const absoluteConfig = resolve(configPath);
+  const config = JSON.parse(readFileSync(absoluteConfig, 'utf8'));
+  if (!record(config) || config.schema !== 'kovo.escape-census-config/v1') {
+    throw new TypeError('config must use kovo.escape-census-config/v1');
+  }
+  const base = dirname(absoluteConfig);
+  if (!Array.isArray(config.apps)) throw new TypeError('config.apps must be an array');
+  return {
+    apps: config.apps.map((entry, index) => {
+      if (!record(entry)) throw new TypeError(`config.apps[${index}] must be an object`);
+      return {
+        app: entry.app,
+        graph: readJsonRelative(base, entry.graph, `apps[${index}].graph`),
+        package: entry.package,
+      };
+    }),
+    budgets: readJsonRelative(base, config.budgets, 'budgets'),
+    previousBudgets: readPinnedPreviousBudgets(base, config.previousBudgets),
+  };
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : undefined;

@@ -9,5 +9,9 @@
     }
   ],
   "budgets": "./escape-budgets.json",
-  "previousBudgets": "./escape-budgets.previous.json"
+  "previousBudgets": {
+    "path": "./escape-budgets.previous.json",
+    "reviewedCommit": "53f5a607441ed5fee6d4fa7277c38644a08ce566",
+    "sha256": "73e0d4f816d9188c7cce5c3725f56d3e628544c896af0879ca5e919e8f101a99"
+  }
 }

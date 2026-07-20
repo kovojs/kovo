@@ -1,11 +1,12 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import {
   ESCAPE_CENSUS_DOORS,
+  ESCAPE_CENSUS_PREDECESSOR,
   evaluateEscapeCensus,
   formatEscapeCensusReport,
   runEscapeCensusCli,
@@ -111,6 +112,7 @@ describe('escape census gate (C13 anchor)', () => {
           trustEscapes: [
             { kind: 'trustedHtml', root: 'app.tsx:4', site: 'app.tsx:4' },
             { kind: 'trustedSql', root: 'db.ts:8', site: 'db.ts:8' },
+            { kind: 'csrfFalse', root: 'mutation:machineWrite', site: 'app.ts:11' },
             { kind: 'csrfFalse', root: 'mutation:machine/write', site: 'app.ts:12' },
             { kind: 'kovoAnalyzerSummary', root: 'scope.ts:7', site: 'scope.ts:7' },
             { kind: 'allowControlChars', root: 'schema.ts:3', site: 'schema.ts:3' },
@@ -239,7 +241,10 @@ describe('escape census gate (C13 anchor)', () => {
     try {
       writeFileSync(join(root, 'graph.json'), JSON.stringify(graph()), 'utf8');
       writeFileSync(join(root, 'budgets.json'), JSON.stringify(budgets()), 'utf8');
-      writeFileSync(join(root, 'previous.json'), JSON.stringify(budgets()), 'utf8');
+      writeFileSync(
+        join(root, 'escape-budgets.previous.json'),
+        readFileSync(resolve('security/escape-budgets.previous.json')),
+      );
       writeFileSync(
         join(root, 'config.json'),
         JSON.stringify({
@@ -251,7 +256,7 @@ describe('escape census gate (C13 anchor)', () => {
             },
           ],
           budgets: './budgets.json',
-          previousBudgets: './previous.json',
+          previousBudgets: ESCAPE_CENSUS_PREDECESSOR,
           schema: 'kovo.escape-census-config/v1',
         }),
         'utf8',
@@ -261,6 +266,52 @@ describe('escape census gate (C13 anchor)', () => {
       expect(output.stderr).toBe('');
       expect(output.stdout).toContain('kovo.escape-census/v1');
       expect(output.stdout).toContain('PACKAGE package=@fixture/app total=0');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects same-tip current/predecessor ceiling co-edits and forged anchor metadata', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-escape-census-ratchet-'));
+    const output = { stderr: '', stdout: '' };
+    const io = {
+      stderr: { write: (chunk) => (output.stderr += String(chunk)) },
+      stdout: { write: (chunk) => (output.stdout += String(chunk)) },
+    };
+    const raised = budgets({ trustedHtml: 2 });
+    const configPath = join(root, 'config.json');
+
+    try {
+      writeFileSync(join(root, 'graph.json'), JSON.stringify(graph()), 'utf8');
+      writeFileSync(join(root, 'budgets.json'), JSON.stringify(raised), 'utf8');
+      writeFileSync(join(root, 'escape-budgets.previous.json'), JSON.stringify(raised), 'utf8');
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          apps: [{ app: 'fixture', graph: './graph.json', package: '@fixture/app' }],
+          budgets: './budgets.json',
+          previousBudgets: ESCAPE_CENSUS_PREDECESSOR,
+          schema: 'kovo.escape-census-config/v1',
+        }),
+        'utf8',
+      );
+
+      expect(runEscapeCensusCli(['--config', configPath], io)).toBe(1);
+      expect(output.stderr).toContain('previousBudgets digest drifted');
+
+      output.stderr = '';
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          apps: [{ app: 'fixture', graph: './graph.json', package: '@fixture/app' }],
+          budgets: './budgets.json',
+          previousBudgets: { ...ESCAPE_CENSUS_PREDECESSOR, sha256: '0'.repeat(64) },
+          schema: 'kovo.escape-census-config/v1',
+        }),
+        'utf8',
+      );
+      expect(runEscapeCensusCli(['--config', configPath], io)).toBe(1);
+      expect(output.stderr).toContain('previousBudgets anchor drifted');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

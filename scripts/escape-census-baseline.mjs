@@ -6,14 +6,17 @@ import { spawnSync } from 'node:child_process';
 
 import {
   ESCAPE_CENSUS_DOORS,
+  ESCAPE_CENSUS_PREDECESSOR,
   evaluateEscapeCensus,
   formatEscapeCensusReport,
+  loadEscapeCensusConfig,
   runEscapeCensusCli,
 } from './escape-census-gate.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'security/fixtures/escape-census-real-app');
-const fixtureApp = resolve(fixtureRoot, 'app.mjs');
+const fixtureApp = resolve(fixtureRoot, 'app.tsx');
+const fixtureCache = resolve(fixtureRoot, '.kovo');
 const fixtureOut = resolve(fixtureRoot, 'dist');
 
 export const ESCAPE_CENSUS_BASELINE_COMMAND = 'pnpm run check:escape-census:baseline';
@@ -47,33 +50,12 @@ function readJson(path, label) {
   }
 }
 
-function readRelativeJson(base, value, label) {
-  if (!nonBlank(value)) throw new TypeError(`${label} path must be a non-blank string`);
-  return readJson(resolve(base, value), label);
-}
-
 export function loadEscapeCensusInputs(configPath = defaultConfigPath) {
-  const absoluteConfig = resolve(configPath);
-  const config = readJson(absoluteConfig, 'escape census config');
-  if (!record(config) || config.schema !== 'kovo.escape-census-config/v1') {
-    throw new TypeError('escape census config must use kovo.escape-census-config/v1');
-  }
-  if (!Array.isArray(config.apps) || config.apps.length === 0) {
+  const inputs = loadEscapeCensusConfig(configPath);
+  if (inputs.apps.length === 0) {
     throw new TypeError('escape census config must declare at least one app');
   }
-  const base = dirname(absoluteConfig);
-  return {
-    apps: config.apps.map((entry, index) => {
-      if (!record(entry)) throw new TypeError(`config.apps[${index}] must be an object`);
-      return {
-        app: entry.app,
-        graph: readRelativeJson(base, entry.graph, `config.apps[${index}].graph`),
-        package: entry.package,
-      };
-    }),
-    budgets: readRelativeJson(base, config.budgets, 'config.budgets'),
-    previousBudgets: readRelativeJson(base, config.previousBudgets, 'config.previousBudgets'),
-  };
+  return inputs;
 }
 
 function exactJson(left, right) {
@@ -141,6 +123,7 @@ export function verifyEscapeCensusBaseline({ baseline, inputs }) {
   requireExact(baseline.command, ESCAPE_CENSUS_BASELINE_COMMAND, 'baseline command');
   requireExact(baseline.gateCommand, ESCAPE_CENSUS_GATE_COMMAND, 'baseline gate command');
   requireExact(baseline.config, ESCAPE_CENSUS_BASELINE_CONFIG, 'baseline config path');
+  requireExact(baseline.predecessor, ESCAPE_CENSUS_PREDECESSOR, 'baseline predecessor anchor');
 
   const result = evaluateEscapeCensus(inputs);
   if (result.findings.length > 0) {
@@ -170,10 +153,13 @@ export function verifyEscapeCensusBaseline({ baseline, inputs }) {
 }
 
 export function buildEscapeCensusRepresentativeApp() {
+  rmSync(fixtureCache, { force: true, recursive: true });
   rmSync(fixtureOut, { force: true, recursive: true });
   const frameworkModules = resolve(fixtureRoot, 'node_modules/@kovojs');
   rmSync(resolve(fixtureRoot, 'node_modules'), { force: true, recursive: true });
   mkdirSync(frameworkModules, { recursive: true });
+  symlinkSync(resolve(repoRoot, 'packages/browser'), resolve(frameworkModules, 'browser'));
+  symlinkSync(resolve(repoRoot, 'packages/core'), resolve(frameworkModules, 'core'));
   symlinkSync(resolve(repoRoot, 'packages/server'), resolve(frameworkModules, 'server'));
   const cli = resolve(repoRoot, 'packages/cli/src/bin.ts');
   const result = spawnSync(
@@ -199,6 +185,9 @@ export function buildEscapeCensusRepresentativeApp() {
     throw new Error(
       `representative kovo build failed${result.error ? `: ${result.error.message}` : ''}${detail ? `\n${detail}` : ''}`,
     );
+  }
+  if (!existsSync(resolve(fixtureCache, 'cache/tsc-preflight.tsbuildinfo'))) {
+    throw new Error('representative kovo build did not execute its local TypeScript preflight');
   }
   const graphPath = resolve(fixtureOut, '.kovo/graph.json');
   if (!existsSync(graphPath)) throw new Error('representative kovo build emitted no graph.json');

@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "jsxImportSource": "@kovojs/server",
+    "types": ["node"]
+  },
+  "include": ["app.tsx", "src/**/*.ts"]
+}

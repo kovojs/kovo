@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ESCAPE_CENSUS_DOORS } from './escape-census-gate.mjs';
+import { ESCAPE_CENSUS_DOORS, ESCAPE_CENSUS_PREDECESSOR } from './escape-census-gate.mjs';
 import {
   ESCAPE_CENSUS_BASELINE_COMMAND,
   verifyEscapeCensusBaseline,
@@ -37,13 +37,18 @@ function representativeGraph() {
       {
         csrf: 'exempt',
         csrfJustification: 'non-browser Metric E representative app',
-        key: 'admin/update',
+        key: 'app/admin-mutation',
       },
     ],
     trustEscapes: [
-      { kind: 'allowControlChars', root: 'app.mjs:17', site: 'app.mjs:17' },
-      { kind: 'csrfFalse', root: 'mutation:admin/update', site: 'app.mjs:14' },
-      { kind: 'trustedHtml', root: 'app.mjs:31', site: 'app.mjs:31' },
+      { kind: 'allowControlChars', root: 'app.tsx:19', site: 'app.tsx:19' },
+      { kind: 'csrfFalse', root: 'mutation:adminMutation', site: 'app.tsx:15' },
+      {
+        kind: 'csrfFalse',
+        root: 'mutation:app/admin-mutation',
+        site: 'app-registry:app/admin-mutation',
+      },
+      { kind: 'trustedHtml', root: 'app.tsx:32', site: 'app.tsx:32' },
     ],
   };
 }
@@ -65,6 +70,7 @@ function representativeInputs() {
 describe('persisted Metric E real-app baseline', () => {
   it('pins the exact command, report, and mandatory negative-control membership', () => {
     expect(baseline.command).toBe(ESCAPE_CENSUS_BASELINE_COMMAND);
+    expect(baseline.predecessor).toEqual(ESCAPE_CENSUS_PREDECESSOR);
     expect(() =>
       verifyEscapeCensusBaseline({ baseline, inputs: representativeInputs() }),
     ).not.toThrow();
@@ -106,5 +112,15 @@ describe('persisted Metric E real-app baseline', () => {
     expect(() =>
       verifyEscapeCensusBaseline({ baseline: weakened, inputs: representativeInputs() }),
     ).toThrow('negative check budget-ceiling drifted');
+
+    expect(() =>
+      verifyEscapeCensusBaseline({
+        baseline: {
+          ...baseline,
+          predecessor: { ...ESCAPE_CENSUS_PREDECESSOR, sha256: '0'.repeat(64) },
+        },
+        inputs: representativeInputs(),
+      }),
+    ).toThrow('baseline predecessor anchor drifted');
   });
 });

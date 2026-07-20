@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
+    "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
   }
 }
