@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-20.1",
-  "runtimeSurfaceSha256": "67345c9170353227603894b1e6769e77e0487f6f4de2b3e705263d357976bf2f",
-  "postureMemberSha256": "0aaf44933c12bbc39f67c16a907f5b5d5e9c37cf7056d0fae1b119770b243419",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-20.2",
+  "runtimeSurfaceSha256": "50027f2b64f4e9e90e70d6899438cdb7e1c09dceb8c3c3ee1e2e17f6a33666b8",
+  "postureMemberSha256": "6f786a38e33894fe8bcf1884c667606794d04cacef1ecc2e6acaf6d317dbcacf",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "d9b0a1ec299061a7741256b6225445a1a783cef66cd73f6f6709d56c747f635d",
+      "sourceTreeSha256": "92d1aa340d1d08cab6f49b83499e253b5d207d372942a28ed327fe388226ae57",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "cca31828cf884523cec8da7ef8bbd1db88980f6452bba783debc0001c2efadce",
+      "sourceTreeSha256": "07f99be78a44fd3714d3921a9dc5b852040e29ec67a7cca90bc91dec0f2cd163",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -777,14 +777,14 @@
               "default": "./dist/index.mjs"
             }
           },
-          "fingerprint": "sha256:2f6be87a0d9d861df2342b86e0bfa0406e3d129f632fc09a32ad822e86f40e0f"
+          "fingerprint": "sha256:4789f0153f9776182b7638025a5e3dd33e2dc969a5f1e22cce8f1644f36159ec"
         },
         {
           "exports": {
             ".": "./src/api.ts",
             "./internal": "./src/index.ts"
           },
-          "fingerprint": "sha256:a499679d6b57716824c70ad6956d834e04fd75204e0b37e5f6b142f4d1724b55"
+          "fingerprint": "sha256:88d1f38c0b2c0fe0bfc36368e05fc443450f2362f4a5c04fdf04f3a7792dc10f"
         }
       ],
       "packageName": "@kovojs/cli",
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "a2b27520f6ad88a20ef5708626ab02a5928afadcd2dfc79a0daab2e62e2e6f69"
+      "sourceTreeSha256": "7bf739bd7e8ebc379f1ab81666b9b8830e66fb0cb37f5131bb03d6491f62f801"
     },
     {
       "manifestVariants": [
@@ -1043,32 +1043,32 @@
         },
         {
           "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-capability-escape-runtime-infra-40271ae4dc",
+          "disposition": "request-closed",
+          "id": "request-closed-declassification-runtime-infra-v1",
           "matrix": {
             "cells": {
-              "A": "capability-escape-audit",
-              "Au": "capability-escape-audit",
-              "C": "capability-escape-audit",
-              "I": "capability-escape-audit"
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
             },
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["trustedReveal"]
+            ".": ["DeclassifyPolicy", "revealSecret", "revealUntrusted", "trustedReveal"]
           },
           "review": {
-            "basis": "trustedReveal exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
+            "basis": "SPEC §6.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
-              "packages/core/src/storage.ts",
-              "packages/core/src/verifier.ts"
+              "spec/06-type-system.md"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-20-declassification-l1"
           },
           "rootKind": "none",
-          "securityRole": "capability-escape"
+          "securityRole": "request-closed",
+          "reason": "Declassification policy construction and reveal doors are unavailable to every untrusted-data-reachable module (SPEC §6.6)."
         },
         {
           "capabilities": [],
@@ -1169,35 +1169,6 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
-          "id": "authority-free-secret-flow-runtime-infra-297470e597",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["revealSecret"]
-          },
-          "review": {
-            "basis": "revealSecret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
-            "evidence": [
-              "packages/core/src/index.ts",
-              "packages/core/src/secret.ts",
-              "packages/core/src/storage.ts",
-              "packages/core/src/verifier.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "secret-flow"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
           "id": "authority-free-secret-flow-runtime-infra-34e5a7242f",
           "matrix": {
             "cells": {
@@ -1242,35 +1213,6 @@
           },
           "review": {
             "basis": "revealRedacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
-            "evidence": [
-              "packages/core/src/index.ts",
-              "packages/core/src/secret.ts",
-              "packages/core/src/storage.ts",
-              "packages/core/src/verifier.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "secret-flow"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-secret-flow-runtime-infra-63908edb9e",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["revealUntrusted"]
-          },
-          "review": {
-            "basis": "revealUntrusted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
             "evidence": [
               "packages/core/src/index.ts",
               "packages/core/src/secret.ts",
@@ -1718,7 +1660,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "568c9d946870c66a49691083f444fb6adfd4a24ae90792246017689e400a1356"
+      "sourceTreeSha256": "a5d8c77fc8f49c788c38ee1da81e5db803dd46732db4f35717cad37110e43bf1"
     },
     {
       "manifestVariants": [
@@ -1986,7 +1928,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "3201efc37d965e77802e11704145f9d45bbf74172e809ca85310e2a313c19949"
+      "sourceTreeSha256": "8edf91bf5a24de0be2452110475f7d3fbba9e31c997d70d592ac3dfda277a031"
     },
     {
       "manifestVariants": [
@@ -9751,6 +9693,99 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
+          "id": "authority-free-security-control-principal-erasure-error-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "runtime-infra"
+          },
+          "members": {
+            ".": ["PrincipalErasureIncompleteError"]
+          },
+          "review": {
+            "basis": "PrincipalErasureIncompleteError is a fail-closed result carrier and exposes no raw platform capability.",
+            "evidence": [
+              "packages/server/src/index.ts",
+              "packages/server/src/principal-erasure.ts",
+              "packages/server/src/principal-erasure.test.ts",
+              "spec/10-data-plane.md"
+            ],
+            "id": "first-party-runtime-posture/2026-07-20-principal-erasure"
+          },
+          "rootKind": "none",
+          "securityRole": "security-control"
+        },
+        {
+          "capabilities": [
+            "crypto-acquisition",
+            "database-driver",
+            "digest",
+            "filesystem",
+            "network"
+          ],
+          "disposition": "framework-door",
+          "id": "framework-door-principal-erasure-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "runtime-infra"
+          },
+          "members": {
+            ".": ["erasePrincipal"]
+          },
+          "review": {
+            "basis": "erasePrincipal is the fixed SPEC §10.3 erasure door over an exact managed Postgres runtime, a fixed-purpose signing key ring, and every supplied enumerable storage adapter. It exposes no raw SQL, storage enumeration, network, filesystem, digest, or signing primitive.",
+            "evidence": [
+              "packages/server/src/index.ts",
+              "packages/server/src/principal-erasure.ts",
+              "packages/server/src/principal-erasure.test.ts",
+              "spec/10-data-plane.md"
+            ],
+            "id": "first-party-runtime-posture/2026-07-20-principal-erasure"
+          },
+          "rootKind": "none",
+          "securityRole": "framework-door"
+        },
+        {
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "framework-door",
+          "id": "framework-door-principal-erasure-receipt-verification-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "runtime-infra"
+          },
+          "members": {
+            ".": ["verifyPrincipalErasureReceipt"]
+          },
+          "review": {
+            "basis": "verifyPrincipalErasureReceipt enters only the fixed principal-erasure receipt verification purpose and exposes neither signing nor raw key authority.",
+            "evidence": [
+              "packages/server/src/index.ts",
+              "packages/server/src/principal-erasure.ts",
+              "packages/server/src/principal-erasure.test.ts",
+              "spec/10-data-plane.md"
+            ],
+            "id": "first-party-runtime-posture/2026-07-20-principal-erasure"
+          },
+          "rootKind": "none",
+          "securityRole": "security-control"
+        },
+        {
+          "capabilities": [],
+          "disposition": "authority-free",
           "id": "authority-free-security-control-runtime-infra-derived-dataset-v1",
           "matrix": {
             "cells": {
@@ -9778,7 +9813,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "5ab90c23bc5903ecaf16f12c59a8a19ce60db80a51e4632932a36aafaa797881"
+      "sourceTreeSha256": "24d0ec9976d524b228c39e2e23392199486cc966e3f2e7f588305b2a41894129"
     },
     {
       "manifestVariants": [
@@ -10713,8 +10748,8 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "f1eb5b00692a02930c7d4df48daf61d64de4102fddfdfef0a07de10bf73cce40"
+      "sourceTreeSha256": "e730059f5fffb9fe9c5f1745187e17cd75c877e7beafd8a54634278f405994ca"
     }
   ],
-  "classificationSha256": "f8ef3c97e923fabd0a5cdc128bdf041dba33ced686da1a07c9e4d301ecce8e06"
+  "classificationSha256": "7a9192f52ba589d0cbb1d6da01f55c46daedc7974a30e255abcfc57943df0fad"
 }
