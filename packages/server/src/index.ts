@@ -552,6 +552,7 @@ export type {
   ForbiddenContext,
   ForbiddenDenial,
   ForbiddenRenderer,
+  FrameworkPostgresOwnerKeyColumn,
   Guard,
   GuardArgsRequest,
   GuardDenial,

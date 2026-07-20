@@ -1,18 +1,21 @@
 // @kovo-security-classifier-corpus postgres-identity-posture
 import { describe, expect, it } from 'vitest';
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
 
 import { guards } from './guards.js';
+import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
 import { authorizationCorrespondenceFactsFromApp } from './postgres-authorization-explain.js';
 
 describe('Postgres authorization production explain facts', () => {
   it('pairs each exact surface guard with its table policy without aggregating unrelated guards', () => {
-    const ownsDocuments = guards.owns<{
+    const ownsDocuments = guards.unprovenOwns<{
       args: { id: string };
       session?: { user?: { id?: string } };
     }>(
       (request) => request.args.id,
       async () => true,
-      { resourceKey: 'args.id' },
+      { justification: 'Legacy document predicate under explicit review.', resourceKey: 'args.id' },
     );
     const billingRole = guards.role('billing');
     const app = {
@@ -37,6 +40,7 @@ describe('Postgres authorization production explain facts', () => {
             dialect: 'postgres',
             domain: 'document',
             governedColumnKeys: ['id', 'ownerId'],
+            key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
             name: 'documents',
             owner: { columnKey: 'ownerId', columnName: 'owner_id' },
             secretColumnKeys: [],
@@ -52,6 +56,7 @@ describe('Postgres authorization production explain facts', () => {
             dialect: 'postgres',
             domain: 'invoice',
             governedColumnKeys: ['id'],
+            key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
             name: 'invoices',
             secretColumnKeys: [],
             secretDeclared: false,
@@ -126,5 +131,69 @@ describe('Postgres authorization production explain facts', () => {
     expect(facts[0]?.correspondence.roleGuc.warning).toContain(
       'no generated RLS predicate reads it',
     );
+  });
+
+  it('serializes a proved surface only for an exact framework-witnessed owner binding', () => {
+    type Request = {
+      args: { id: string };
+      session?: { user?: { id?: string } };
+    };
+    const documents = pgTable(
+      'documents',
+      { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
+      kovo({ domain: 'document', key: 'id', owner: 'ownerId' }),
+    );
+    const tableSecurity = {
+      tables: [
+        {
+          authorizationClassifications: ['owned'] as const,
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          dialect: 'postgres' as const,
+          domain: 'document',
+          governedColumnKeys: ['id', 'ownerId'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' as const },
+          name: 'documents',
+          owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    };
+    const release = installGeneratedTableSecurityManifestForCommand(tableSecurity);
+    try {
+      const ownsDocuments = guards.owns<Request, Request, string>(
+        (request) => request.args.id,
+        documents.id,
+        { resourceKey: 'args.id' },
+      );
+      const facts = authorizationCorrespondenceFactsFromApp({
+        app: {
+          mutations: [],
+          queries: [{ guard: ownsDocuments, key: 'document/read' }],
+          routes: [],
+        },
+        mutations: [],
+        pages: [],
+        queries: [{ domains: ['document'], query: 'document/read' }],
+        tableSecurity,
+      });
+
+      expect(
+        facts.find(
+          (fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read',
+        ),
+      ).toMatchObject({
+        correspondence: {
+          decision: { checkedModels: 3, expectedModels: 3, status: 'proved' },
+          guard: { semantics: 'framework-derived-owner-column' },
+          status: 'proved',
+        },
+      });
+    } finally {
+      release();
+    }
   });
 });

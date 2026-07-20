@@ -4,7 +4,13 @@ import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
-import { explainPostgresGuardCorrespondence, guards } from './guards.js';
+import {
+  explainGuard,
+  explainPostgresGuardCorrespondence,
+  guard as namedGuard,
+  guardAuditName,
+  guards,
+} from './guards.js';
 import {
   POSTGRES_OWNER_POLICY_MAX_OWNER_VIA_DEPTH,
   POSTGRES_RLS_SQL_EMISSION_SITES,
@@ -22,6 +28,7 @@ import {
   type PostgresOwnerPolicyParentLookup,
   type PostgresOwnerPolicyTerm,
 } from './postgres-authorization-correspondence.js';
+import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
 import { __testPostgresRuntimeInternals } from './postgres-runtime.js';
 
 describe('finite Postgres authorization correspondence', () => {
@@ -269,10 +276,13 @@ describe('finite Postgres authorization correspondence', () => {
       tableName: 'documents',
     });
     const predicate = renderPostgresOwnerPolicyPredicate(term);
-    const arbitraryGuard = guards.owns(
+    const arbitraryGuard = guards.unprovenOwns(
       (request: { args: { id: string }; session?: { user?: { id?: string } } }) => request.args.id,
       async () => true,
-      { resourceKey: 'args.id' },
+      {
+        justification: 'Legacy application predicate under explicit review.',
+        resourceKey: 'args.id',
+      },
     );
     const ownerPolicy = {
       emissionSite: 'owner' as const,
@@ -343,6 +353,232 @@ describe('finite Postgres authorization correspondence', () => {
         }).status,
       ).toBe('unproven');
     }
+  });
+
+  it('accepts only the compiler-declared key column on the proven guards.owns path', () => {
+    type Request = {
+      args: { id: string };
+      session?: { user?: { id?: string } };
+    };
+    const documents = pgTable(
+      'documents',
+      {
+        id: text('id').primaryKey(),
+        ownerId: text('owner_id').notNull(),
+      },
+      kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
+    );
+    const term = postgresOwnerColumnPolicyTerm({
+      columnName: 'owner_id',
+      tableName: 'documents',
+    });
+    const release = installGeneratedTableSecurityManifestForCommand({
+      tables: [
+        {
+          authorizationClassifications: ['owned'],
+          columns: [
+            { key: 'id', name: 'id' },
+            { key: 'ownerId', name: 'owner_id' },
+          ],
+          dialect: 'postgres',
+          domain: 'document:tenant',
+          governedColumnKeys: ['id', 'ownerId'],
+          key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
+          name: 'documents',
+          owner: { columnKey: 'ownerId', columnName: 'owner_id' },
+          secretColumnKeys: [],
+          secretDeclared: false,
+        },
+      ],
+    });
+    try {
+      const guard = guards.owns<Request, Request, string>(
+        (request) => request.args.id,
+        documents.id,
+        { name: 'document-owner', resourceKey: 'args.id' },
+      );
+      expect(guardAuditName(guard)).toBe('owns#document%3Atenant#id#owner_id');
+
+      for (const forged of [
+        (async () => true) as never,
+        Object.freeze({}) as never,
+        documents.ownerId as never,
+      ]) {
+        expect(() =>
+          guards.owns<Request, Request, string>((request) => request.args.id, forged),
+        ).toThrow(/exact declared key column/u);
+      }
+
+      const correspondence = explainPostgresGuardCorrespondence({
+        guard,
+        policy: {
+          emissionSite: 'owner',
+          predicate: renderPostgresOwnerPolicyPredicate(term),
+          tableName: 'documents',
+          term,
+        },
+      });
+      expect(correspondence).toMatchObject({
+        decision: { checkedModels: 3, expectedModels: 3, status: 'proved' },
+        guard: {
+          facts: [
+            {
+              kind: 'owns',
+              name: 'owns#document%3Atenant#id#owner_id',
+              ownerPolicy: {
+                columnName: 'owner_id',
+                domain: 'document:tenant',
+                emissionSite: 'owner',
+                keyColumnName: 'id',
+                predicate: renderPostgresOwnerPolicyPredicate(term),
+                tableName: 'documents',
+              },
+              staticProof: 'framework-derived-owner-column',
+            },
+          ],
+          semantics: 'framework-derived-owner-column',
+        },
+        status: 'proved',
+      });
+
+      for (const extra of [
+        namedGuard<Request>('opaque-extra', () => true),
+        guards.rateLimit<Request>({ max: 1 }),
+      ]) {
+        expect(
+          explainPostgresGuardCorrespondence({
+            guard: guards.all(guard, extra),
+            policy: {
+              emissionSite: 'owner',
+              predicate: renderPostgresOwnerPolicyPredicate(term),
+              tableName: 'documents',
+              term,
+            },
+          }),
+        ).toMatchObject({
+          reason: expect.stringContaining('Additional executable guard semantics'),
+          status: 'unproven',
+        });
+      }
+
+      expect(
+        explainPostgresGuardCorrespondence({
+          guard: guards.all(guard, guard),
+          policy: {
+            emissionSite: 'owner',
+            predicate: renderPostgresOwnerPolicyPredicate(term),
+            tableName: 'documents',
+            term,
+          },
+        }),
+      ).toMatchObject({
+        reason: expect.stringContaining('Additional executable guard semantics'),
+        status: 'unproven',
+      });
+
+      const inconsistentTerm = postgresOwnerColumnPolicyTerm({
+        columnName: 'tenant_id',
+        tableName: 'documents',
+      });
+      expect(
+        explainPostgresGuardCorrespondence({
+          guard,
+          policy: {
+            emissionSite: 'owner',
+            predicate: renderPostgresOwnerPolicyPredicate(term),
+            tableName: 'documents',
+            term: inconsistentTerm,
+          },
+        }),
+      ).toMatchObject({
+        reason: expect.stringContaining('different generated Postgres owner policy'),
+        status: 'divergent',
+      });
+
+      const otherTerm = postgresOwnerColumnPolicyTerm({
+        columnName: 'owner_id',
+        tableName: 'invoices',
+      });
+      expect(
+        explainPostgresGuardCorrespondence({
+          guard,
+          policy: {
+            emissionSite: 'owner',
+            predicate: renderPostgresOwnerPolicyPredicate(otherTerm),
+            tableName: 'invoices',
+            term: otherTerm,
+          },
+        }),
+      ).toMatchObject({
+        guard: { semantics: 'framework-derived-owner-column' },
+        reason: expect.stringContaining('different generated Postgres owner policy'),
+        status: 'divergent',
+      });
+
+      const unprovenGuard = guards.unprovenOwns<Request, Request, string>(
+        (request) => request.args.id,
+        async () => true,
+        { justification: 'Legacy application predicate under explicit review.' },
+      );
+      expect(
+        explainPostgresGuardCorrespondence({
+          guard: unprovenGuard,
+          policy: {
+            emissionSite: 'owner',
+            predicate: renderPostgresOwnerPolicyPredicate(term),
+            tableName: 'documents',
+            term,
+          },
+        }),
+      ).toMatchObject({
+        guard: { semantics: 'arbitrary-app-callback' },
+        status: 'unproven',
+      });
+    } finally {
+      release();
+    }
+  });
+
+  it('keeps ownerVia behind the justified unproven escape until parent lookup is framework-owned', async () => {
+    type Request = {
+      args: { id: string };
+      session?: { user?: { id?: string } };
+    };
+    const accounts = postgresOwnerColumnPolicyTerm({
+      columnName: 'owner_id',
+      tableName: 'accounts',
+    });
+    const entries = postgresOwnerViaPolicyTerm({
+      fkColumnName: 'account_id',
+      parent: accounts,
+      parentKeyColumnName: 'id',
+      tableName: 'entries',
+    });
+    const guard = guards.unprovenOwns<Request, Request, string>(
+      (request) => request.args.id,
+      async (_request, key) => key === 'entry-1',
+      { justification: 'ownerVia traversal is pending a framework-owned parent lookup.' },
+    );
+    expect(explainGuard(guard)).toMatchObject([
+      {
+        justification: 'ownerVia traversal is pending a framework-owned parent lookup.',
+        staticProof: 'not-claimed',
+      },
+    ]);
+    expect(
+      explainPostgresGuardCorrespondence({
+        guard,
+        policy: {
+          emissionSite: 'ownerVia',
+          predicate: renderPostgresOwnerPolicyPredicate(entries),
+          tableName: 'entries',
+          term: entries,
+        },
+      }),
+    ).toMatchObject({
+      guard: { semantics: 'arbitrary-app-callback' },
+      status: 'unproven',
+    });
   });
 });
 

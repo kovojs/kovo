@@ -19,7 +19,7 @@ describe('kovo explain --authorization', () => {
     expect(result.output).toContain('predicate="organization_id = 1\\nFORGED"');
     expect(result.output).not.toContain('\nFORGED\n');
     expect(result.output).toContain(
-      'SUMMARY total=1 unproven=1 divergent=0 environmentUnchecked=1',
+      'SUMMARY total=1 proved=0 unproven=1 divergent=0 environmentUnchecked=1',
     );
   });
 

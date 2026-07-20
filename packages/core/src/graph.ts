@@ -13,7 +13,9 @@ import { snapshotAuditText } from './internal/audit-text.js';
 import {
   freezeSecurityValue,
   securityArrayAppend,
+  securityDecodeURIComponent,
   securityDefineProperty,
+  securityEncodeURIComponent,
   securityGetOwnPropertyDescriptor,
   securityIsArray,
   securityJsonStringify,
@@ -152,10 +154,27 @@ export type AuthorizationGuardAuditFact =
   | {
       auth: 'session-user';
       kind: 'owns';
+      justification: string;
       name: string;
       principal: AuthorizationGuardPrincipalKeyAudit;
       resourceKey?: AuthorizationGuardResourceKeyAudit;
       staticProof: 'not-claimed';
+    }
+  | {
+      auth: 'session-user';
+      kind: 'owns';
+      name: string;
+      ownerPolicy: {
+        columnName: string;
+        domain: string;
+        emissionSite: 'owner';
+        keyColumnName: string;
+        predicate: string;
+        tableName: string;
+      };
+      principal: AuthorizationGuardPrincipalKeyAudit;
+      resourceKey?: AuthorizationGuardResourceKeyAudit;
+      staticProof: 'framework-derived-owner-column';
     }
   | {
       kind: 'rateLimit';
@@ -206,7 +225,7 @@ export interface AuthorizationCorrespondenceExplainFact {
     };
     guard: {
       facts: readonly AuthorizationGuardAuditFact[];
-      semantics: 'arbitrary-app-callback' | 'none';
+      semantics: 'arbitrary-app-callback' | 'framework-derived-owner-column' | 'none';
     };
     reason: string;
     rls: {
@@ -221,7 +240,7 @@ export interface AuthorizationCorrespondenceExplainFact {
       writers: 1;
     };
     schema: 'kovo.postgres.authorization-correspondence/v1';
-    status: 'divergent' | 'unproven';
+    status: 'divergent' | 'proved' | 'unproven';
   };
   schema: 'kovo.postgres.authorization-surface/v1';
   surface: {
@@ -2143,6 +2162,10 @@ function appendOwnershipPostureFacts<Entry extends QueryReadSet | MutationExplai
 }
 
 function ownsGuardFact(guard: string): Pick<OwnershipPostureFact, 'domain' | 'key'> | undefined {
+  const generated = frameworkDerivedOwnerGuardFact(guard);
+  if (generated !== undefined) {
+    return { domain: generated.domain, key: `column:${generated.keyColumnName}` };
+  }
   if (securityStringStartsWith(guard, 'owns:')) {
     const parts = securityStringSplit(securityStringSlice(guard, 'owns:'.length), ':');
     const domain = parts[0] === undefined ? undefined : securityStringTrim(parts[0]);
@@ -2160,6 +2183,50 @@ function ownsGuardFact(guard: string): Pick<OwnershipPostureFact, 'domain' | 'ke
     return key ? { domain, key } : { domain };
   }
   return undefined;
+}
+
+interface FrameworkDerivedOwnerGuardFact {
+  readonly domain: string;
+  readonly keyColumnName: string;
+  readonly ownerColumnName: string;
+}
+
+function frameworkDerivedOwnerGuardFact(guard: string): FrameworkDerivedOwnerGuardFact | undefined {
+  if (!securityStringStartsWith(guard, 'owns#')) return undefined;
+  const parts = securityStringSplit(securityStringSlice(guard, 'owns#'.length), '#');
+  if (parts.length !== 3) return undefined;
+  try {
+    const encodedDomain = parts[0];
+    const encodedKey = parts[1];
+    const encodedOwner = parts[2];
+    if (encodedDomain === undefined || encodedKey === undefined || encodedOwner === undefined) {
+      return undefined;
+    }
+    const domain = securityDecodeURIComponent(encodedDomain);
+    const keyColumnName = securityDecodeURIComponent(encodedKey);
+    const ownerColumnName = securityDecodeURIComponent(encodedOwner);
+    if (
+      domain === '' ||
+      keyColumnName === '' ||
+      ownerColumnName === '' ||
+      securityEncodeURIComponent(domain) !== encodedDomain ||
+      securityEncodeURIComponent(keyColumnName) !== encodedKey ||
+      securityEncodeURIComponent(ownerColumnName) !== encodedOwner
+    ) {
+      return undefined;
+    }
+    return { domain, keyColumnName, ownerColumnName };
+  } catch {
+    return undefined;
+  }
+}
+
+function frameworkDerivedOwnerGuardName(
+  domain: string,
+  keyColumnName: string,
+  ownerColumnName: string,
+): string {
+  return `owns#${securityEncodeURIComponent(domain)}#${securityEncodeURIComponent(keyColumnName)}#${securityEncodeURIComponent(ownerColumnName)}`;
 }
 
 function endpointHasAuth(endpoint: EndpointExplain): boolean {
@@ -2715,7 +2782,7 @@ function validateAuthorizationCorrespondence(
     ownGraphData(correspondence, 'status', `${path}.status`),
     `${path}.status`,
     'correspondence.status',
-    ['divergent', 'unproven'],
+    ['divergent', 'proved', 'unproven'],
     errors,
   );
   validateRequiredGraphString(
@@ -2730,7 +2797,7 @@ function validateAuthorizationCorrespondence(
       ownGraphData(guard, 'semantics', `${path}.guard.semantics`),
       `${path}.guard.semantics`,
       'guard.semantics',
-      ['arbitrary-app-callback', 'none'],
+      ['arbitrary-app-callback', 'framework-derived-owner-column', 'none'],
       errors,
     );
     validateAuthorizationGuardFacts(
@@ -2800,6 +2867,93 @@ function validateAuthorizationCorrespondence(
       validateAuthorizationDecision(decision, `${path}.decision`, errors, budget);
     }
   }
+  if (
+    ownGraphData(correspondence, 'status', `${path}.status`) === 'proved' &&
+    !provedAuthorizationCorrespondenceIsCoherent(guard, rls, decision, path, budget)
+  ) {
+    appendGraphValidationError(
+      errors,
+      `${path}.status`,
+      'proved correspondence requires one exact framework-derived owner-column fact, matching owner RLS, and a 3/3 proved decision',
+    );
+  }
+}
+
+function provedAuthorizationCorrespondenceIsCoherent(
+  guard: Record<string, unknown> | undefined,
+  rls: Record<string, unknown> | undefined,
+  decision: unknown,
+  path: string,
+  budget: GraphTraversalBudget,
+): boolean {
+  if (guard === undefined || rls === undefined || !isRecord(decision)) return false;
+  if (
+    ownGraphData(guard, 'semantics', `${path}.guard.semantics`) !==
+      'framework-derived-owner-column' ||
+    ownGraphData(rls, 'emissionSite', `${path}.rls.emissionSite`) !== 'owner' ||
+    ownGraphData(decision, 'status', `${path}.decision.status`) !== 'proved' ||
+    ownGraphData(decision, 'checkedModels', `${path}.decision.checkedModels`) !== 3 ||
+    ownGraphData(decision, 'expectedModels', `${path}.decision.expectedModels`) !== 3 ||
+    ownGraphData(decision, 'counterexample', `${path}.decision.counterexample`) !== undefined
+  ) {
+    return false;
+  }
+
+  const facts = ownGraphData(guard, 'facts', `${path}.guard.facts`);
+  if (!securityIsArray(facts)) return false;
+  const length = snapshotGraphArrayLength(facts, `${path}.guard.facts`, budget);
+  let provedOwnerFact: Record<string, unknown> | undefined;
+  let provedOwnerPolicy: Record<string, unknown> | undefined;
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(facts, index);
+    if (!entry.ok || !isRecord(entry.value)) return false;
+    const fact = entry.value;
+    const kind = ownGraphData(fact, 'kind', `${path}.guard.facts[${index}].kind`);
+    if (kind === 'authed' || kind === 'named') continue;
+    if (
+      kind !== 'owns' ||
+      ownGraphData(fact, 'staticProof', `${path}.guard.facts[${index}].staticProof`) !==
+        'framework-derived-owner-column' ||
+      provedOwnerPolicy !== undefined
+    ) {
+      return false;
+    }
+    const ownerPolicy = ownGraphData(
+      fact,
+      'ownerPolicy',
+      `${path}.guard.facts[${index}].ownerPolicy`,
+    );
+    if (!isRecord(ownerPolicy)) return false;
+    provedOwnerFact = fact;
+    provedOwnerPolicy = ownerPolicy;
+  }
+  const domain =
+    provedOwnerPolicy === undefined
+      ? undefined
+      : ownGraphData(provedOwnerPolicy, 'domain', `${path}.guard.ownerPolicy.domain`);
+  const keyColumnName =
+    provedOwnerPolicy === undefined
+      ? undefined
+      : ownGraphData(provedOwnerPolicy, 'keyColumnName', `${path}.guard.ownerPolicy.keyColumnName`);
+  const ownerColumnName =
+    provedOwnerPolicy === undefined
+      ? undefined
+      : ownGraphData(provedOwnerPolicy, 'columnName', `${path}.guard.ownerPolicy.columnName`);
+  return (
+    provedOwnerFact !== undefined &&
+    provedOwnerPolicy !== undefined &&
+    typeof domain === 'string' &&
+    typeof keyColumnName === 'string' &&
+    typeof ownerColumnName === 'string' &&
+    ownGraphData(provedOwnerFact, 'name', `${path}.guard.fact.name`) ===
+      frameworkDerivedOwnerGuardName(domain, keyColumnName, ownerColumnName) &&
+    ownGraphData(provedOwnerPolicy, 'emissionSite', `${path}.guard.ownerPolicy.emissionSite`) ===
+      'owner' &&
+    ownGraphData(provedOwnerPolicy, 'predicate', `${path}.guard.ownerPolicy.predicate`) ===
+      ownGraphData(rls, 'predicate', `${path}.rls.predicate`) &&
+    ownGraphData(provedOwnerPolicy, 'tableName', `${path}.guard.ownerPolicy.tableName`) ===
+      ownGraphData(rls, 'tableName', `${path}.rls.tableName`)
+  );
 }
 
 function validateAuthorizationGuardFacts(
@@ -2850,13 +3004,57 @@ function validateAuthorizationGuardFacts(
         ['session-user'],
         errors,
       );
+      const staticProof = ownGraphData(fact, 'staticProof', `${factPath}.staticProof`);
       validateExactGraphString(
-        ownGraphData(fact, 'staticProof', `${factPath}.staticProof`),
+        staticProof,
         `${factPath}.staticProof`,
         'guard fact staticProof',
-        ['not-claimed'],
+        ['framework-derived-owner-column', 'not-claimed'],
         errors,
       );
+      if (staticProof === 'framework-derived-owner-column') {
+        const ownerPolicy = requiredGraphRecord(fact, 'ownerPolicy', factPath, errors);
+        if (ownerPolicy !== undefined) {
+          validateExactGraphString(
+            ownGraphData(ownerPolicy, 'emissionSite', `${factPath}.ownerPolicy.emissionSite`),
+            `${factPath}.ownerPolicy.emissionSite`,
+            'guard ownerPolicy emissionSite',
+            ['owner'],
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'columnName', `${factPath}.ownerPolicy.columnName`),
+            `${factPath}.ownerPolicy.columnName`,
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'domain', `${factPath}.ownerPolicy.domain`),
+            `${factPath}.ownerPolicy.domain`,
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'keyColumnName', `${factPath}.ownerPolicy.keyColumnName`),
+            `${factPath}.ownerPolicy.keyColumnName`,
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'predicate', `${factPath}.ownerPolicy.predicate`),
+            `${factPath}.ownerPolicy.predicate`,
+            errors,
+          );
+          validateRequiredGraphString(
+            ownGraphData(ownerPolicy, 'tableName', `${factPath}.ownerPolicy.tableName`),
+            `${factPath}.ownerPolicy.tableName`,
+            errors,
+          );
+        }
+      } else if (staticProof === 'not-claimed') {
+        validateRequiredGraphString(
+          ownGraphData(fact, 'justification', `${factPath}.justification`),
+          `${factPath}.justification`,
+          errors,
+        );
+      }
       validateAuthorizationGuardKey(
         requiredGraphRecord(fact, 'principal', factPath, errors),
         `${factPath}.principal`,

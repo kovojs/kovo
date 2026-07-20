@@ -619,7 +619,7 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
       `registerGeneratedMutationTouchRegistry({"addContact":[{"domain":"contact","keys":null}]});`,
     );
     expect(registrySource).toContain(
-      `registerGeneratedTableSecurityManifest({"tables":[{"authzPolicy":{"kind":"sql","sql":"TRUE"},"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"governedColumnKeys":["id"],"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
+      `registerGeneratedTableSecurityManifest({"tables":[{"authzPolicy":{"kind":"sql","sql":"TRUE"},"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"dialect":"postgres","domain":"contact","governedColumnKeys":["id"],"key":{"columnKey":"id","columnName":"id","uniqueness":"primary"},"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
     );
   });
 

@@ -54,6 +54,13 @@ export interface KovoRuntimeTableSecurityManifestColumn {
   name: string;
 }
 
+/** @internal Compiler-derived declared row-key source used to bind runtime schema facts. */
+export interface KovoRuntimeTableSecurityManifestKey {
+  columnKey: string;
+  columnName: string;
+  uniqueness: 'none' | 'primary' | 'unique';
+}
+
 /** @internal Compiler-derived direct-owner source used to bind runtime schema facts. */
 export interface KovoRuntimeTableSecurityManifestOwner {
   columnKey: string;
@@ -86,6 +93,7 @@ export interface KovoRuntimeTableSecurityManifestTable {
   authorizationClassifications: readonly KovoRuntimeAuthorizationClassification[];
   columns: readonly KovoRuntimeTableSecurityManifestColumn[];
   governedColumnKeys: readonly string[];
+  key?: KovoRuntimeTableSecurityManifestKey;
   name: string;
   owner?: KovoRuntimeTableSecurityManifestOwner;
   ownerVia?: KovoRuntimeTableSecurityManifestOwnerVia;
@@ -186,6 +194,18 @@ export interface KovoRuntimeOwnerSource {
   table: string;
 }
 
+/** Declared row-key metadata for one physical database table. */
+export interface KovoRuntimeKeySource {
+  /** Drizzle selection key for the declared row-key column. */
+  columnKey: string;
+  /** Physical database row-key column name. */
+  columnName: string;
+  /** Physical database table name. */
+  table: string;
+  /** Runtime column-builder constraint syntax, compared to compiler-owned source facts. */
+  uniqueness: 'none' | 'primary' | 'unique';
+}
+
 /** Transitive owner metadata for one child table whose owner comes from a parent table. */
 export interface KovoRuntimeOwnerViaSource {
   /** Drizzle selection key for the child foreign-key column. */
@@ -229,6 +249,8 @@ export interface KovoRuntimeDbMetadata {
   governedColumnKeysByTable: ReadonlyMap<string, ReadonlySet<string>>;
   /** Governed physical column names grouped by physical table. */
   governedColumnNamesByTable: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Declared single-column row-key facts grouped by physical table. */
+  keySourcesByTable: ReadonlyMap<string, KovoRuntimeKeySource>;
   /** Owner-column facts grouped by physical table. */
   ownerSourcesByTable: ReadonlyMap<string, KovoRuntimeOwnerSource>;
   /** Transitive owner facts grouped by physical child table. */
@@ -323,6 +345,7 @@ function extractKovoRuntimeDbMetadataWithManifest(
   const columnSources = runtimeMap<object, KovoRuntimeDbColumnSource>();
   const governedColumnKeysByTable = runtimeMap<string, ReadonlySet<string>>();
   const governedColumnNamesByTable = runtimeMap<string, ReadonlySet<string>>();
+  const keySourcesByTable = runtimeMap<string, KovoRuntimeKeySource>();
   const ownerSourcesByTable = runtimeMap<string, KovoRuntimeOwnerSource>();
   const ownerViaSourcesByTable = runtimeMap<string, KovoRuntimeOwnerViaSource>();
   const schemaTableNames = runtimeSet<string>();
@@ -343,6 +366,8 @@ function extractKovoRuntimeDbMetadataWithManifest(
     }
     const ownerSource = ownerSourceForTable(domainAnnotation, facts, config.name);
     if (ownerSource !== undefined) runtimeMapSet(ownerSourcesByTable, config.name, ownerSource);
+    const keySource = keySourceForTable(domainAnnotation, facts, config.name);
+    if (keySource !== undefined) runtimeMapSet(keySourcesByTable, config.name, keySource);
     const ownerViaSource = ownerViaSourceForTable(
       domainAnnotation,
       facts,
@@ -403,6 +428,7 @@ function extractKovoRuntimeDbMetadataWithManifest(
         authzPolicy,
         classifications,
         governedColumnKeys: tableGovernedColumnKeys,
+        key: keySource,
         owner: ownerSource,
         ownerVia: ownerViaSource,
         secretColumnKeys: tableSecretColumnKeys,
@@ -443,6 +469,7 @@ function extractKovoRuntimeDbMetadataWithManifest(
     columnSources: runtimeSealMap(columnSources),
     governedColumnKeysByTable: runtimeSealMap(governedColumnKeysByTable),
     governedColumnNamesByTable: runtimeSealMap(governedColumnNamesByTable),
+    keySourcesByTable: runtimeSealMap(keySourcesByTable),
     ownerSourcesByTable: runtimeSealMap(ownerSourcesByTable),
     ownerViaSourcesByTable: runtimeSealMap(ownerViaSourcesByTable),
     schemaTableNames: runtimeSealSet(schemaTableNames),
@@ -564,6 +591,7 @@ function snapshotRuntimeTableSecurityManifestTable(
   }
   const ownerValue = optionalRuntimeManifestValue(value, 'owner');
   const ownerViaValue = optionalRuntimeManifestValue(value, 'ownerVia');
+  const keyValue = optionalRuntimeManifestValue(value, 'key');
   return runtimeFreeze({
     ...(authzPolicy === undefined ? {} : { authzPolicy }),
     authorizationClassifications: runtimeFreeze(authorizationClassifications),
@@ -572,6 +600,9 @@ function snapshotRuntimeTableSecurityManifestTable(
       governedValue,
       `${label}.governedColumnKeys`,
     ),
+    ...(keyValue === undefined
+      ? {}
+      : { key: snapshotRuntimeManifestKey(keyValue, `${label}.key`) }),
     name,
     ...(ownerValue === undefined
       ? {}
@@ -582,6 +613,26 @@ function snapshotRuntimeTableSecurityManifestTable(
     secretColumnKeys: snapshotRuntimeManifestStrings(secretValue, `${label}.secretColumnKeys`),
     secretDeclared,
   });
+}
+
+function snapshotRuntimeManifestKey(
+  value: unknown,
+  label: string,
+): KovoRuntimeTableSecurityManifestKey {
+  if (typeof value !== 'object' || value === null || runtimeArrayIsArray(value)) {
+    throw new TypeError(`Kovo compiler table-security ${label} must be an own-data record.`);
+  }
+  const columnKey = requiredRuntimeManifestValue(value, 'columnKey', label);
+  const columnName = requiredRuntimeManifestValue(value, 'columnName', label);
+  const uniqueness = requiredRuntimeManifestValue(value, 'uniqueness', label);
+  if (
+    typeof columnKey !== 'string' ||
+    typeof columnName !== 'string' ||
+    (uniqueness !== 'none' && uniqueness !== 'primary' && uniqueness !== 'unique')
+  ) {
+    throw new TypeError(`Kovo compiler table-security ${label} contains invalid facts.`);
+  }
+  return runtimeFreeze({ columnKey, columnName, uniqueness });
 }
 
 function snapshotRuntimeManifestAuthzPolicy(
@@ -720,6 +771,7 @@ function assertRuntimeTableSecurityFacts(
     authzPolicy: KovoRuntimeTableSecurityManifestAuthzPolicy | undefined;
     classifications: readonly KovoRuntimeAuthorizationClassification[];
     governedColumnKeys: ReadonlySet<string>;
+    key: KovoRuntimeKeySource | undefined;
     owner: KovoRuntimeOwnerSource | undefined;
     ownerVia: KovoRuntimeOwnerViaSource | undefined;
     secretColumnKeys: ReadonlySet<string>;
@@ -735,6 +787,7 @@ function assertRuntimeTableSecurityFacts(
     !runtimeManifestSetEquals(expected.governedColumnKeys, actual.governedColumnKeys) ||
     !runtimeManifestSetEquals(expected.secretColumnKeys, actual.secretColumnKeys) ||
     expected.secretDeclared !== actual.secretDeclared ||
+    !runtimeManifestKeyEquals(expected.key, actual.key) ||
     !runtimeManifestOwnerEquals(expected.owner, actual.owner) ||
     !runtimeManifestOwnerViaEquals(expected.ownerVia, actual.ownerVia)
   ) {
@@ -791,6 +844,18 @@ function runtimeManifestSetEquals(
     }
   }
   return true;
+}
+
+function runtimeManifestKeyEquals(
+  expected: KovoRuntimeTableSecurityManifestKey | undefined,
+  actual: KovoRuntimeKeySource | undefined,
+): boolean {
+  if (expected === undefined || actual === undefined) return expected === actual;
+  return (
+    expected.columnKey === actual.columnKey &&
+    expected.columnName === actual.columnName &&
+    expected.uniqueness === actual.uniqueness
+  );
 }
 
 function runtimeManifestOwnerEquals(
@@ -1044,6 +1109,35 @@ function ownerSourceForTable(
     columnKey,
     columnName: dbNameForColumnKey(facts, columnKey),
     table: tableName,
+  });
+}
+
+function keySourceForTable(
+  annotation: KovoRuntimeDomainAnnotation | undefined,
+  facts: KovoRuntimeTableFacts,
+  tableName: string,
+): KovoRuntimeKeySource | undefined {
+  const key = annotationValue(annotation, 'key');
+  if (key === undefined) return undefined;
+  const columnKey = columnKeyForRef(key, facts);
+  const column =
+    columnKey === undefined ? undefined : runtimeMapGet(facts.columnObjectsByKey, columnKey);
+  if (columnKey === undefined || column === undefined) {
+    return undefined;
+  }
+  const primary = runtimeOwnDataValue(column, 'primary');
+  const unique = runtimeOwnDataValue(column, 'isUnique');
+  const uniqueness =
+    primary.found && primary.value === true
+      ? ('primary' as const)
+      : unique.found && unique.value === true
+        ? ('unique' as const)
+        : ('none' as const);
+  return runtimeFreeze({
+    columnKey,
+    columnName: dbNameForColumnKey(facts, columnKey),
+    table: tableName,
+    uniqueness,
   });
 }
 

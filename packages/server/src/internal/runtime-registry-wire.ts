@@ -47,6 +47,13 @@ export interface RuntimeTableSecurityWireColumn {
   name: string;
 }
 
+/** @internal Compiler-derived declared row-key source. */
+export interface RuntimeTableSecurityWireKey {
+  columnKey: string;
+  columnName: string;
+  uniqueness: 'none' | 'primary' | 'unique';
+}
+
 /** @internal Compiler-derived direct owner source. */
 export interface RuntimeTableSecurityWireOwner {
   columnKey: string;
@@ -81,6 +88,7 @@ export interface RuntimeTableSecurityWireTable {
   dialect?: 'postgres' | 'sqlite';
   domain?: string;
   governedColumnKeys: readonly string[];
+  key?: RuntimeTableSecurityWireKey;
   name: string;
   owner?: RuntimeTableSecurityWireOwner;
   ownerVia?: RuntimeTableSecurityWireOwnerVia;
@@ -465,6 +473,7 @@ function snapshotRuntimeTableSecurityTable(
   }
   const ownerValue = optionalRuntimeTableSecurityValue(value, 'owner', label);
   const ownerViaValue = optionalRuntimeTableSecurityValue(value, 'ownerVia', label);
+  const keyValue = optionalRuntimeTableSecurityValue(value, 'key', label);
   const dialectValue = optionalRuntimeTableSecurityValue(value, 'dialect', label);
   const domainValue = optionalRuntimeTableSecurityValue(value, 'domain', label);
   if (dialectValue !== undefined && dialectValue !== 'postgres' && dialectValue !== 'sqlite') {
@@ -483,6 +492,7 @@ function snapshotRuntimeTableSecurityTable(
       governedValue,
       `${label}.governedColumnKeys`,
     ),
+    ...(keyValue === undefined ? {} : { key: snapshotRuntimeTableSecurityKey(keyValue, label) }),
     name,
     ...(ownerValue === undefined
       ? {}
@@ -493,6 +503,26 @@ function snapshotRuntimeTableSecurityTable(
     secretColumnKeys: snapshotRuntimeTableSecurityStrings(secretValue, `${label}.secretColumnKeys`),
     secretDeclared,
   });
+}
+
+function snapshotRuntimeTableSecurityKey(
+  value: unknown,
+  label: string,
+): RuntimeTableSecurityWireKey {
+  if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
+    throw new TypeError(`Runtime table-security ${label}.key must be an own-data record.`);
+  }
+  const columnKey = requiredRuntimeTableSecurityValue(value, 'columnKey', `${label}.key`);
+  const columnName = requiredRuntimeTableSecurityValue(value, 'columnName', `${label}.key`);
+  const uniqueness = requiredRuntimeTableSecurityValue(value, 'uniqueness', `${label}.key`);
+  if (
+    typeof columnKey !== 'string' ||
+    typeof columnName !== 'string' ||
+    (uniqueness !== 'none' && uniqueness !== 'primary' && uniqueness !== 'unique')
+  ) {
+    throw new TypeError(`Runtime table-security ${label}.key contains invalid facts.`);
+  }
+  return freezeBuildSecurityValue({ columnKey, columnName, uniqueness });
 }
 
 function snapshotRuntimeTableSecurityAuthzPolicy(

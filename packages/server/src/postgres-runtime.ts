@@ -71,6 +71,10 @@ import {
   type PostgresRlsSqlEmissionSite,
 } from './postgres-authorization-correspondence.js';
 import {
+  registerFrameworkPostgresOwnerGuardRequestDb,
+  registerFrameworkPostgresOwnerGuardSchema,
+} from './postgres-owner-guard.js';
+import {
   createPostgresCapabilityReplayStoreFromExecutor,
   createPostgresMutationReplayStoreFromExecutor,
   createPostgresWebhookReplayStoreFromExecutor,
@@ -621,6 +625,10 @@ function snapshotExtractedKovoRuntimeDbMetadata(
       'Kovo runtime governed column names',
       (names, tableName) =>
         snapshotExtractedReadonlySet(names, `Kovo runtime governed column names for ${tableName}`),
+    ),
+    keySourcesByTable: snapshotExtractedReadonlyMap(
+      metadata.keySourcesByTable,
+      'Kovo runtime declared row-key sources',
     ),
     ownerSourcesByTable: snapshotExtractedReadonlyMap(
       metadata.ownerSourcesByTable,
@@ -1695,6 +1703,7 @@ export function createPostgresAppRuntimeDb(
     extractCompilerBoundKovoRuntimeDbMetadata(schemaTables),
   );
   assertPostgresRuntimeSchemaSupported(schemaTables, metadata);
+  registerFrameworkPostgresOwnerGuardSchema(metadata, schemaTables);
   const ddl = schemaDdl(schemaTables);
   const client = createRuntimeClient(config);
   let initializedPosture: InitializedRuntimePosture | undefined;
@@ -1737,14 +1746,11 @@ export function createPostgresAppRuntimeDb(
 
   const dbForRequest = (request?: unknown): KovoPostgresRuntimeDb => {
     const scope = postgresRequestScope(request, config);
-    return createRequestScopedDb(
-      client.drizzleRequestDb(scope.principal, scope.roleSetting),
-      client,
-      config,
-      metadata,
-      scope,
-      request,
-    );
+    const requestDb = client.drizzleRequestDb(scope.principal, scope.roleSetting);
+    registerFrameworkPostgresOwnerGuardRequestDb(requestDb, metadata, scope);
+    const scopedDb = createRequestScopedDb(requestDb, client, config, metadata, scope, request);
+    registerFrameworkPostgresOwnerGuardRequestDb(scopedDb, metadata, scope, requestDb);
+    return scopedDb;
   };
   const durableReplaySqlExecutor = (): ReturnType<typeof createDurableTaskSqlExecutor> => {
     replaySqlExecutor ??= createDurableTaskSqlExecutor(
@@ -5957,6 +5963,7 @@ function createRequestScopedReadonlyDb(
   request?: unknown,
 ): Reader<KovoPostgresRuntimeDb> {
   const readDb = client.drizzleReadonlyDb(scope.principal, config.readerRole, scope.roleSetting);
+  registerFrameworkPostgresOwnerGuardRequestDb(readDb, metadata, scope);
   const privilegedReadDb = client.drizzleReadonlyDb(scope.principal, false, scope.roleSetting);
   const readSql = client.readonlySql(scope.principal, config.readerRole, scope.roleSetting);
   const privilegedReadSql = client.readonlySql(scope.principal, false, scope.roleSetting);
@@ -6005,12 +6012,14 @@ function createRequestScopedReadonlyDb(
     ownerTables: postgresOwnerScopedTableNames(metadata),
   };
   const readOptions = crossOwnerRead === undefined ? { rawRead } : { crossOwnerRead, rawRead };
-  return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
+  const guardedReadDb = createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
     executeSql: async (statement) =>
       (await readSql.query(statement.text, postgresSecretReadParams(statement.params))).rows,
     privilegedDb: readonlyDb(privilegedReadDb, { rawRead: privilegedRawRead }),
     rawSecretTableRead: 'engine',
   });
+  registerFrameworkPostgresOwnerGuardRequestDb(guardedReadDb, metadata, scope, readDb);
+  return guardedReadDb;
 }
 
 function postgresSecretReadParams(values: readonly unknown[]): unknown[] {

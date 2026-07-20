@@ -5,6 +5,7 @@ export type {
   KovoRuntimeTableSecurityManifestAuthzPolicy,
   KovoRuntimeTableSecurityManifest,
   KovoRuntimeTableSecurityManifestColumn,
+  KovoRuntimeTableSecurityManifestKey,
   KovoRuntimeTableSecurityManifestOwner,
   KovoRuntimeTableSecurityManifestOwnerVia,
   KovoRuntimeTableSecurityManifestTable,

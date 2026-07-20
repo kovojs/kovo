@@ -135,6 +135,7 @@ describe('@kovojs/drizzle static analysis context', () => {
           dialect: 'postgres',
           domain: 'session',
           governedColumnKeys: ['id', 'token'],
+          key: { columnKey: 'id', columnName: 'session_id', uniqueness: 'primary' },
           name: 'session',
           ownerVia: {
             fkColumnKey: 'userId',
@@ -155,6 +156,7 @@ describe('@kovojs/drizzle static analysis context', () => {
           dialect: 'postgres',
           domain: 'user',
           governedColumnKeys: ['id', 'passwordHash'],
+          key: { columnKey: 'id', columnName: 'user_id', uniqueness: 'primary' },
           name: 'user',
           owner: { columnKey: 'id', columnName: 'user_id' },
           secretColumnKeys: ['passwordHash'],
@@ -202,10 +204,44 @@ describe('@kovojs/drizzle static analysis context', () => {
         dialect: 'postgres',
         domain: 'share',
         governedColumnKeys: ['id'],
+        key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
         name: 'shares',
         secretColumnKeys: [],
         secretDeclared: false,
       },
+    ]);
+  });
+
+  it('binds declared key uniqueness only from direct column-builder syntax', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/keys.ts',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const primaryRows = pgTable("primary_rows", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "primary", key: "id", public: true }));',
+            'export const uniqueRows = pgTable("unique_rows", {',
+            '  id: text("row_id").notNull().unique(),',
+            '}, kovo({ domain: "unique", key: "id", public: true }));',
+            'export const nonuniqueRows = pgTable("nonunique_rows", {',
+            '  id: text("id").notNull(),',
+            '}, kovo({ domain: "nonunique", key: "id", public: true }));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(
+      facts.runtimeTableSecurityManifest.tables.map((table) => [table.name, table.key]),
+    ).toEqual([
+      ['nonunique_rows', { columnKey: 'id', columnName: 'id', uniqueness: 'none' }],
+      ['primary_rows', { columnKey: 'id', columnName: 'id', uniqueness: 'primary' }],
+      ['unique_rows', { columnKey: 'id', columnName: 'row_id', uniqueness: 'unique' }],
     ]);
   });
 

@@ -127,31 +127,62 @@ describe('server audited text floor (SPEC §6.6)', () => {
     expect(() => guard(forged, () => true)).toThrow(/control characters/u);
     expect(() => guards.role(forged)).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
-        { name: forged },
+        {} as never,
+      ),
+    ).toThrow(/requires justification/u);
+    expect(() =>
+      guards.unprovenOwns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { justification: forged },
+      ),
+    ).toThrow(/control characters/u);
+    let justificationReads = 0;
+    const accessorAudit = {} as { justification: string };
+    Object.defineProperty(accessorAudit, 'justification', {
+      get() {
+        justificationReads += 1;
+        return 'Forged getter justification.';
+      },
+    });
+    expect(() =>
+      guards.unprovenOwns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        accessorAudit,
+      ),
+    ).toThrow(/justification must be a stable own-data property/u);
+    expect(justificationReads).toBe(0);
+    expect(() =>
+      guards.unprovenOwns(
+        (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
+        () => true,
+        { justification: 'Reviewed legacy ownership predicate.', name: forged },
       ),
     ).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
-        { principal: forged },
+        { justification: 'Reviewed legacy ownership predicate.', principal: forged },
       ),
     ).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
-        { resourceKey: forged },
+        { justification: 'Reviewed legacy ownership predicate.', resourceKey: forged },
       ),
     ).toThrow(/control characters/u);
     expect(() =>
-      guards.owns(
+      guards.unprovenOwns(
         (request: { id: string; session?: { user?: { id?: string } | null } | null }) => request.id,
         () => true,
         {
+          justification: 'Reviewed legacy ownership predicate.',
           principal: { expression: 'session.user.id', path: forged, source: 'session' },
         },
       ),

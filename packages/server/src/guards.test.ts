@@ -15,6 +15,7 @@ import { csrfToken } from './csrf.js';
 import {
   explainGuard,
   guard,
+  guardAuditName,
   guards,
   requestPassedRoleGuard,
   renderHttpGuardFailureResponse,
@@ -22,6 +23,7 @@ import {
   sanitizeNext,
   session,
   withGuardArgs,
+  type Guard,
   type GuardArgsRequest,
   type GuardParamsRequest,
 } from './guards.js';
@@ -273,7 +275,11 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
 
     type OwnsReq = GuardArgsRequest<Req, { id: string }>;
     const ownsRow = vi.fn(() => true);
-    const ownsGuard = guards.owns<OwnsReq, OwnsReq, string>((request) => request.args.id, ownsRow);
+    const ownsGuard = guards.unprovenOwns<OwnsReq, OwnsReq, string>(
+      (request) => request.args.id,
+      ownsRow,
+      { justification: 'Guard principal regression uses a legacy ownership predicate.' },
+    );
     await expect(
       ownsGuard({ session: { user: { id: 'unresolved' } }, args: { id: 'r1' } }),
     ).resolves.toEqual({ kind: 'unauthenticated', payload: {} });
@@ -308,8 +314,8 @@ describe('server guard and session primitives', () => {
     const originalIterator = Array.prototype[Symbol.iterator];
     const originalSlice = String.prototype.slice;
     const originalStartsWith = String.prototype.startsWith;
-    let named: ReturnType<typeof guard> | undefined;
-    let owns: ReturnType<typeof guards.owns> | undefined;
+    let named: Guard<any> | undefined;
+    let owns: Guard<any> | undefined;
     try {
       Array.prototype.find = () => undefined;
       Array.prototype[Symbol.iterator] = function () {
@@ -322,10 +328,17 @@ describe('server guard and session primitives', () => {
       String.prototype.slice = () => 'forged.path';
       String.prototype.startsWith = () => false;
       named = guard('admin-only', roleGuard);
-      owns = guards.owns(
-        (request: GuardArgsRequest<{ session?: unknown }, { id: string }>) => request.args.id,
+      type AuditRequest = GuardArgsRequest<
+        { session?: { user?: { id?: string } | null } | null },
+        { id: string }
+      >;
+      owns = guards.unprovenOwns<AuditRequest, AuditRequest, string>(
+        (request) => request.args.id,
         () => true,
-        { resourceKey: 'args.id' },
+        {
+          justification: 'Guard audit regression uses a legacy ownership predicate.',
+          resourceKey: 'args.id',
+        },
       );
     } finally {
       Array.prototype.find = originalFind;
@@ -351,6 +364,7 @@ describe('server guard and session primitives', () => {
     expect(explainGuard(owns)).toEqual([
       {
         auth: 'session-user',
+        justification: 'Guard audit regression uses a legacy ownership predicate.',
         kind: 'owns',
         name: 'owns',
         principal: {
@@ -1612,7 +1626,7 @@ describe('server guard and session primitives', () => {
   });
 });
 
-describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
+describe('guards.unprovenOwns (explicit arbitrary ownership escape)', () => {
   // GuardArgsRequest types the framework-merged `req.args` so `keyOf` reads it without a cast
   // (SPEC §10.3:1155-1157, §9.4).
   type Req = GuardArgsRequest<
@@ -1620,25 +1634,31 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
     { id: string }
   >;
   const ownsRow = (req: Req, key: string) => req.session?.user?.id === `owner-of-${key}`;
+  const justification = 'Unit test exercises the explicit legacy ownership escape.';
 
   it('passes when the authenticated principal owns the row', async () => {
-    const guard = guards.owns<Req, Req, string>((req) => req.args.id, ownsRow);
+    const guard = guards.unprovenOwns<Req, Req, string>((req) => req.args.id, ownsRow, {
+      justification,
+    });
     await expect(
       guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
     ).resolves.toBe(true);
   });
 
   it('forbids when the principal does not own the row (IDOR)', async () => {
-    const guard = guards.owns<Req, Req, string>((req) => req.args.id, ownsRow);
+    const guard = guards.unprovenOwns<Req, Req, string>((req) => req.args.id, ownsRow, {
+      justification,
+    });
     await expect(
       guard({ session: { user: { id: 'someone-else' } }, args: { id: 'r1' } }),
     ).resolves.toEqual({ kind: 'forbidden', payload: {} });
   });
 
   it('requires exact boolean true from an ownership predicate', async () => {
-    const guard = guards.owns<Req, Req, string>(
+    const guard = guards.unprovenOwns<Req, Req, string>(
       (req) => req.args.id,
       (() => 'truthy-forgery') as unknown as (request: Req, key: string) => boolean,
+      { justification },
     );
 
     await expect(
@@ -1648,12 +1668,13 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
 
   it('rejects an unauthenticated caller before consulting the ownership check', async () => {
     const consulted: string[] = [];
-    const guard = guards.owns<Req, Req, string>(
+    const guard = guards.unprovenOwns<Req, Req, string>(
       (req) => req.args.id,
       (_req, key) => {
         consulted.push(key);
         return true;
       },
+      { justification },
     );
     await expect(guard({ session: null, args: { id: 'r1' } })).resolves.toEqual({
       kind: 'unauthenticated',
@@ -1665,7 +1686,8 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   it('composes with all(authed, owns(...))', async () => {
     const guard = guards.all<Req>(
       guards.authed<Req>(),
-      guards.owns<Req, Req, string>((req) => req.args.id, ownsRow, {
+      guards.unprovenOwns<Req, Req, string>((req) => req.args.id, ownsRow, {
+        justification,
         resourceKey: 'args.id',
       }),
     );
@@ -1677,6 +1699,7 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
       },
       {
         auth: 'session-user',
+        justification,
         kind: 'owns',
         name: 'owns',
         principal: {
@@ -1701,9 +1724,10 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   });
 
   it('awaits an async ownership predicate', async () => {
-    const guard = guards.owns<Req, Req, string>(
+    const guard = guards.unprovenOwns<Req, Req, string>(
       (req) => req.args.id,
       async (req, key) => Promise.resolve(req.session?.user?.id === `owner-of-${key}`),
+      { justification },
     );
     await expect(
       guard({ session: { user: { id: 'owner-of-r9' } }, args: { id: 'r9' } }),
@@ -1711,7 +1735,8 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
   });
 
   it('exposes ownership principal/key audit metadata without claiming static proof', async () => {
-    const guard = guards.owns<Req, Req, string>((req) => req.args.id, ownsRow, {
+    const guard = guards.unprovenOwns<Req, Req, string>((req) => req.args.id, ownsRow, {
+      justification,
       name: 'order-owner',
       principal: 'session.user.id',
       resourceKey: 'args.id',
@@ -1720,6 +1745,7 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
     expect(explainGuard(guard)).toEqual([
       {
         auth: 'session-user',
+        justification,
         kind: 'owns',
         name: 'order-owner',
         principal: {
@@ -1741,9 +1767,31 @@ describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
       guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
     ).resolves.toBe(true);
   });
+
+  it('pins the unproven escape justification at guard construction', () => {
+    const audit = { justification: 'Initial reviewed ownership exception.' };
+    const escapedGuard = guards.unprovenOwns<Req, Req, string>(
+      (req) => req.args.id,
+      ownsRow,
+      audit,
+    );
+    audit.justification = 'Mutated after guard construction.';
+
+    expect(explainGuard(escapedGuard)).toMatchObject([
+      {
+        justification: 'Initial reviewed ownership exception.',
+        staticProof: 'not-claimed',
+      },
+    ]);
+    expect(guardAuditName(escapedGuard)).toBe('unprovenOwns');
+    expect(guardAuditName(guard('owns', escapedGuard))).toBe('unprovenOwns');
+    expect(guardAuditName(guard('owns#order#id#owner_id', () => true))).toBe('opaque');
+    expect(guardAuditName(guard('owns:order:arg:id', () => true))).toBe('opaque');
+    expect(guardAuditName(guard('owns(order,arg:id)', () => true))).toBe('opaque');
+  });
 });
 
-describe('guards.owns production-path: runners thread validated args/params (SPEC §10.3:1155-1157, §9.4)', () => {
+describe('guards.unprovenOwns production-path: runners thread validated args/params', () => {
   // Drives the REAL runners end-to-end (NOT the synthetic `{ args }` object the unit tests pass),
   // so a regression where a runner fails to merge the validated args/params onto the guard request
   // — the latent KV414 IDOR — is caught. The request value passed to each runner carries NO
@@ -1759,10 +1807,11 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
   const orderQuery = query('order', {
     args: s.object({ id: s.string() }),
     // `owns` returns a Guard<AppReq>; only keyOf/ownsRow see the merged GuardArgsRequest, so no cast.
-    guard: guards.owns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
+    guard: guards.unprovenOwns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
       (req) => req.args.id,
       ownsRowById,
       {
+        justification: 'Runner regression uses a legacy ownership predicate.',
         name: 'order-query-owner',
         resourceKey: 'args.id',
       },
@@ -1790,10 +1839,11 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
 
   const orderRoute = route('/orders/:id', {
     params: s.object({ id: s.string() }),
-    guard: guards.owns<AppReq, GuardParamsRequest<AppReq, { id: string }>, string>(
+    guard: guards.unprovenOwns<AppReq, GuardParamsRequest<AppReq, { id: string }>, string>(
       (req) => req.params.id,
       ownsRouteRow,
       {
+        justification: 'Runner regression uses a legacy ownership predicate.',
         name: 'order-route-owner',
         resourceKey: 'params.id',
       },
@@ -1818,10 +1868,11 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
   });
 
   const orderMutation = mutation('order/touch', {
-    guard: guards.owns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
+    guard: guards.unprovenOwns<AppReq, GuardArgsRequest<AppReq, { id: string }>, string>(
       (req) => req.args.id,
       ownsRowById,
       {
+        justification: 'Runner regression uses a legacy ownership predicate.',
         name: 'order-mutation-owner',
         resourceKey: 'args.id',
       },
@@ -1840,6 +1891,7 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     expect(explainGuard(orderQuery.guard)).toEqual([
       {
         auth: 'session-user',
+        justification: 'Runner regression uses a legacy ownership predicate.',
         kind: 'owns',
         name: 'order-query-owner',
         principal: expectedPrincipal,
@@ -1854,6 +1906,7 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     expect(explainGuard(orderRoute.guard)).toEqual([
       {
         auth: 'session-user',
+        justification: 'Runner regression uses a legacy ownership predicate.',
         kind: 'owns',
         name: 'order-route-owner',
         principal: expectedPrincipal,
@@ -1868,6 +1921,7 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     expect(explainGuard(orderMutation.guard)).toEqual([
       {
         auth: 'session-user',
+        justification: 'Runner regression uses a legacy ownership predicate.',
         kind: 'owns',
         name: 'order-mutation-owner',
         principal: expectedPrincipal,
