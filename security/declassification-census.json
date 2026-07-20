@@ -2,16 +2,9 @@
   "$comment": "Syntax-derived closed census of authored non-test declassification calls. It closes site/code/capability identity drift; it does not prove declassification semantics or justification quality.",
   "schema": "kovo-declassification-census/v1",
   "scope": {
-    "excluded": [
-      "docs",
-      "generated-output",
-      "tests"
-    ],
+    "excluded": ["docs", "generated-output", "tests"],
     "policy": "kovo-authored-production-js-source/v1",
-    "roots": [
-      "examples",
-      "packages"
-    ]
+    "roots": ["examples", "packages"]
   },
   "doors": [
     ".reveal",
@@ -60,7 +53,7 @@
     {
       "site": "packages/core/src/secret.ts#site-0001",
       "file": "packages/core/src/secret.ts",
-      "line": 777,
+      "line": 793,
       "column": 30,
       "owner": "revealRedacted",
       "door": ".reveal",
@@ -115,7 +108,7 @@
     {
       "site": "packages/server/src/replay.ts#site-0001",
       "file": "packages/server/src/replay.ts",
-      "line": 926,
+      "line": 970,
       "column": 26,
       "owner": "canonicalJson",
       "door": "revealUntrusted",

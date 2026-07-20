@@ -166,9 +166,7 @@
         "conditional-expression",
         "static-member"
       ],
-      "leaf": [
-        "identifier-environment-lookup"
-      ],
+      "leaf": ["identifier-environment-lookup"],
       "nondeterministicOracle": {
         "id": "fallthrough-containment-oracle",
         "implementationWalks": [
@@ -185,9 +183,7 @@
           "unknown-authority"
         ]
       },
-      "syntaxDependent": [
-        "object-literal-implicit-protocol-shape"
-      ]
+      "syntaxDependent": ["object-literal-implicit-protocol-shape"]
     },
     "extractedOrder": [
       "identifier-environment-lookup",
@@ -470,10 +466,7 @@
       "representative": "write"
     },
     {
-      "effectiveMembers": [
-        "select",
-        "rawRead"
-      ],
+      "effectiveMembers": ["select", "rawRead"],
       "id": "database-read-operation",
       "kind": "predicate-domain",
       "predicateMembers": [
@@ -490,14 +483,7 @@
       "representative": "select"
     },
     {
-      "effectiveMembers": [
-        "batch",
-        "execute",
-        "insert",
-        "run",
-        "transaction",
-        "update"
-      ],
+      "effectiveMembers": ["batch", "execute", "insert", "run", "transaction", "update"],
       "id": "database-write-operation",
       "kind": "predicate-domain",
       "predicateMembers": [
@@ -514,22 +500,10 @@
       "representative": "execute"
     },
     {
-      "effectiveMembers": [
-        "$client",
-        "client",
-        "pglite",
-        "session",
-        "sqlite"
-      ],
+      "effectiveMembers": ["$client", "client", "pglite", "session", "sqlite"],
       "id": "raw-database-capability",
       "kind": "predicate-domain",
-      "predicateMembers": [
-        "$client",
-        "client",
-        "pglite",
-        "session",
-        "sqlite"
-      ],
+      "predicateMembers": ["$client", "client", "pglite", "session", "sqlite"],
       "representative": "$client"
     },
     {
@@ -3222,189 +3196,127 @@
     },
     {
       "from": "context",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "context",
-      "path": [
-        "literal:actAs"
-      ],
+      "path": ["literal:actAs"],
       "to": "scope-call"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db"
-      ],
+      "path": ["literal:db"],
       "to": "database"
     },
     {
       "from": "context",
-      "path": [
-        "literal:fail"
-      ],
+      "path": ["literal:fail"],
       "to": "operation:server.response.outcome"
     },
     {
       "from": "context",
-      "path": [
-        "literal:fetch"
-      ],
+      "path": ["literal:fetch"],
       "to": "operation:server.egress.request"
     },
     {
       "from": "context",
-      "path": [
-        "literal:forwardSetCookie"
-      ],
+      "path": ["literal:forwardSetCookie"],
       "to": "operation:server.response.cookie"
     },
     {
       "from": "context",
-      "path": [
-        "literal:header"
-      ],
+      "path": ["literal:header"],
       "to": "safe-call"
     },
     {
       "from": "context",
-      "path": [
-        "literal:headers"
-      ],
+      "path": ["literal:headers"],
       "to": "headers"
     },
     {
       "from": "context",
-      "path": [
-        "literal:invalidate"
-      ],
+      "path": ["literal:invalidate"],
       "to": "operation:server.task.compose"
     },
     {
       "from": "context",
-      "path": [
-        "literal:request"
-      ],
+      "path": ["literal:request"],
       "to": "request"
     },
     {
       "from": "context",
-      "path": [
-        "literal:respond"
-      ],
+      "path": ["literal:respond"],
       "to": "respond"
     },
     {
       "from": "context",
-      "path": [
-        "literal:signUrl"
-      ],
+      "path": ["literal:signUrl"],
       "to": "operation:server.storage.read"
     },
     {
       "from": "context",
-      "path": [
-        "literal:stateKey"
-      ],
+      "path": ["literal:stateKey"],
       "to": "scoped-key-call"
     },
     {
       "from": "context",
-      "path": [
-        "literal:storage"
-      ],
+      "path": ["literal:storage"],
       "to": "storage"
     },
     {
       "from": "context",
-      "path": [
-        "literal:actAs",
-        "literal:Response"
-      ],
+      "path": ["literal:actAs", "literal:Response"],
       "to": "local"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:Response"
-      ],
+      "path": ["literal:db", "literal:Response"],
       "to": "database-table-namespace"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:all"
-      ],
+      "path": ["literal:db", "literal:all"],
       "to": "operation:server.database.read"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:delete"
-      ],
+      "path": ["literal:db", "literal:delete"],
       "to": "operation:server.database.write"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:query"
-      ],
+      "path": ["literal:db", "literal:query"],
       "to": "database-relational-query-namespace"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:read"
-      ],
+      "path": ["literal:db", "literal:read"],
       "to": "database-read-namespace"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:write"
-      ],
+      "path": ["literal:db", "literal:write"],
       "to": "database-write-namespace"
     },
     {
       "from": "context",
-      "path": [
-        "literal:headers",
-        "literal:append"
-      ],
+      "path": ["literal:headers", "literal:append"],
       "to": "operation:server.response.header"
     },
     {
       "from": "context",
-      "path": [
-        "literal:request",
-        "literal:Response"
-      ],
+      "path": ["literal:request", "literal:Response"],
       "to": "unsafe-wire-data"
     },
     {
       "from": "context",
-      "path": [
-        "literal:storage",
-        "literal:delete"
-      ],
+      "path": ["literal:storage", "literal:delete"],
       "to": "operation:server.storage.write"
     },
     {
       "from": "context",
-      "path": [
-        "literal:db",
-        "literal:query",
-        "literal:Response"
-      ],
+      "path": ["literal:db", "literal:query", "literal:Response"],
       "to": "database-relational-table-namespace"
     },
     {
@@ -3414,59 +3326,42 @@
     },
     {
       "from": "database",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "database-table-namespace"
     },
     {
       "from": "database",
-      "path": [
-        "literal:all"
-      ],
+      "path": ["literal:all"],
       "to": "operation:server.database.read"
     },
     {
       "from": "database",
-      "path": [
-        "literal:delete"
-      ],
+      "path": ["literal:delete"],
       "to": "operation:server.database.write"
     },
     {
       "from": "database",
-      "path": [
-        "literal:query"
-      ],
+      "path": ["literal:query"],
       "to": "database-relational-query-namespace"
     },
     {
       "from": "database",
-      "path": [
-        "literal:read"
-      ],
+      "path": ["literal:read"],
       "to": "database-read-namespace"
     },
     {
       "from": "database",
-      "path": [
-        "literal:write"
-      ],
+      "path": ["literal:write"],
       "to": "database-write-namespace"
     },
     {
       "from": "database",
-      "path": [
-        "raw-database-capability"
-      ],
+      "path": ["raw-database-capability"],
       "to": "unknown-authority"
     },
     {
       "from": "database",
-      "path": [
-        "literal:query",
-        "literal:Response"
-      ],
+      "path": ["literal:query", "literal:Response"],
       "to": "database-relational-table-namespace"
     },
     {
@@ -3476,31 +3371,22 @@
     },
     {
       "from": "database-read-namespace",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "database-read-namespace",
-      "path": [
-        "literal:all"
-      ],
+      "path": ["literal:all"],
       "to": "operation:server.database.read"
     },
     {
       "from": "database-read-namespace",
-      "path": [
-        "literal:query"
-      ],
+      "path": ["literal:query"],
       "to": "database-relational-query-namespace"
     },
     {
       "from": "database-read-namespace",
-      "path": [
-        "literal:query",
-        "literal:Response"
-      ],
+      "path": ["literal:query", "literal:Response"],
       "to": "database-relational-table-namespace"
     },
     {
@@ -3510,25 +3396,17 @@
     },
     {
       "from": "database-relational-query-namespace",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "database-relational-table-namespace"
     },
     {
       "from": "database-relational-query-namespace",
-      "path": [
-        "literal:Response",
-        "literal:Response"
-      ],
+      "path": ["literal:Response", "literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "database-relational-query-namespace",
-      "path": [
-        "literal:Response",
-        "literal:findFirst"
-      ],
+      "path": ["literal:Response", "literal:findFirst"],
       "to": "operation:server.database.read"
     },
     {
@@ -3538,16 +3416,12 @@
     },
     {
       "from": "database-relational-table-namespace",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "database-relational-table-namespace",
-      "path": [
-        "literal:findFirst"
-      ],
+      "path": ["literal:findFirst"],
       "to": "operation:server.database.read"
     },
     {
@@ -3557,16 +3431,12 @@
     },
     {
       "from": "database-table-namespace",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "database-table-namespace",
-      "path": [
-        "literal:all"
-      ],
+      "path": ["literal:all"],
       "to": "operation:server.database.read"
     },
     {
@@ -3576,16 +3446,12 @@
     },
     {
       "from": "database-write-namespace",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "database-write-namespace",
-      "path": [
-        "literal:delete"
-      ],
+      "path": ["literal:delete"],
       "to": "operation:server.database.write"
     },
     {
@@ -3595,23 +3461,17 @@
     },
     {
       "from": "derived-dataset",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "derived-dataset",
-      "path": [
-        "literal:query"
-      ],
+      "path": ["literal:query"],
       "to": "derived-query-call"
     },
     {
       "from": "derived-dataset",
-      "path": [
-        "literal:upsert"
-      ],
+      "path": ["literal:upsert"],
       "to": "derived-upsert-call"
     },
     {
@@ -3621,9 +3481,7 @@
     },
     {
       "from": "derived-query-call",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3633,9 +3491,7 @@
     },
     {
       "from": "derived-upsert-call",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3645,31 +3501,22 @@
     },
     {
       "from": "headers",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "headers",
-      "path": [
-        "literal:append"
-      ],
+      "path": ["literal:append"],
       "to": "operation:server.response.header"
     },
     {
       "from": "headers",
-      "path": [
-        "literal:entries"
-      ],
+      "path": ["literal:entries"],
       "to": "safe-call"
     },
     {
       "from": "headers",
-      "path": [
-        "literal:entries",
-        "literal:Response"
-      ],
+      "path": ["literal:entries", "literal:Response"],
       "to": "local"
     },
     {
@@ -3679,24 +3526,17 @@
     },
     {
       "from": "global-object",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "response-constructor"
     },
     {
       "from": "global-object",
-      "path": [
-        "literal:actAs"
-      ],
+      "path": ["literal:actAs"],
       "to": "unknown-authority"
     },
     {
       "from": "global-object",
-      "path": [
-        "literal:Response",
-        "literal:error"
-      ],
+      "path": ["literal:Response", "literal:error"],
       "to": "operation:server.response.raw"
     },
     {
@@ -3706,16 +3546,12 @@
     },
     {
       "from": "respond",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "respond",
-      "path": [
-        "literal:file"
-      ],
+      "path": ["literal:file"],
       "to": "operation:server.response.outcome"
     },
     {
@@ -3725,88 +3561,57 @@
     },
     {
       "from": "request",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unsafe-wire-data"
     },
     {
       "from": "request",
-      "path": [
-        "literal:cancel"
-      ],
+      "path": ["literal:cancel"],
       "to": "operation:server.task.compose"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db"
-      ],
+      "path": ["literal:db"],
       "to": "database"
     },
     {
       "from": "request",
-      "path": [
-        "literal:cancel",
-        "literal:Response"
-      ],
+      "path": ["literal:cancel", "literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:Response"
-      ],
+      "path": ["literal:db", "literal:Response"],
       "to": "database-table-namespace"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:all"
-      ],
+      "path": ["literal:db", "literal:all"],
       "to": "operation:server.database.read"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:delete"
-      ],
+      "path": ["literal:db", "literal:delete"],
       "to": "operation:server.database.write"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:query"
-      ],
+      "path": ["literal:db", "literal:query"],
       "to": "database-relational-query-namespace"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:read"
-      ],
+      "path": ["literal:db", "literal:read"],
       "to": "database-read-namespace"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:write"
-      ],
+      "path": ["literal:db", "literal:write"],
       "to": "database-write-namespace"
     },
     {
       "from": "request",
-      "path": [
-        "literal:db",
-        "literal:query",
-        "literal:Response"
-      ],
+      "path": ["literal:db", "literal:query", "literal:Response"],
       "to": "database-relational-table-namespace"
     },
     {
@@ -3816,16 +3621,12 @@
     },
     {
       "from": "response-constructor",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "response-constructor",
-      "path": [
-        "literal:error"
-      ],
+      "path": ["literal:error"],
       "to": "operation:server.response.raw"
     },
     {
@@ -3835,9 +3636,7 @@
     },
     {
       "from": "response-outcome",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3847,9 +3646,7 @@
     },
     {
       "from": "scoped-key-call",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "local"
     },
     {
@@ -3859,9 +3656,7 @@
     },
     {
       "from": "scope-call",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "local"
     },
     {
@@ -3871,23 +3666,17 @@
     },
     {
       "from": "storage",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
       "from": "storage",
-      "path": [
-        "literal:delete"
-      ],
+      "path": ["literal:delete"],
       "to": "operation:server.storage.write"
     },
     {
       "from": "storage",
-      "path": [
-        "literal:get"
-      ],
+      "path": ["literal:get"],
       "to": "operation:server.storage.read"
     },
     {
@@ -3902,9 +3691,7 @@
     },
     {
       "from": "operation:server.authority.scope",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3914,9 +3701,7 @@
     },
     {
       "from": "operation:server.data.declassify",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3926,9 +3711,7 @@
     },
     {
       "from": "operation:server.database.read",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3938,9 +3721,7 @@
     },
     {
       "from": "operation:server.database.trusted-sql",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3950,9 +3731,7 @@
     },
     {
       "from": "operation:server.database.write",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3962,9 +3741,7 @@
     },
     {
       "from": "operation:server.egress.request",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3974,9 +3751,7 @@
     },
     {
       "from": "operation:server.handler.root",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3986,9 +3761,7 @@
     },
     {
       "from": "operation:server.helper.call",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -3998,9 +3771,7 @@
     },
     {
       "from": "operation:server.output.trusted-html",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4010,9 +3781,7 @@
     },
     {
       "from": "operation:server.response.cookie",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4022,9 +3791,7 @@
     },
     {
       "from": "operation:server.response.header",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4034,9 +3801,7 @@
     },
     {
       "from": "operation:server.response.outcome",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4046,9 +3811,7 @@
     },
     {
       "from": "operation:server.response.raw",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4058,9 +3821,7 @@
     },
     {
       "from": "operation:server.response.redirect",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4070,9 +3831,7 @@
     },
     {
       "from": "operation:server.storage.read",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4082,9 +3841,7 @@
     },
     {
       "from": "operation:server.storage.write",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     },
     {
@@ -4094,9 +3851,7 @@
     },
     {
       "from": "operation:server.task.compose",
-      "path": [
-        "literal:Response"
-      ],
+      "path": ["literal:Response"],
       "to": "unknown-authority"
     }
   ]
