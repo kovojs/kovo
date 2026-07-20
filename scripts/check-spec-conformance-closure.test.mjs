@@ -1849,6 +1849,82 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     );
   });
 
+  it('C13 canaries: transferred diagnostic authority keeps its code and severity guards', () => {
+    const fileName = 'packages/server/src/internal/data-plane-static-analysis.ts';
+    const source = productionText(fileName);
+    const mutations = [
+      [
+        'code guard',
+        source.replace(
+          "if (!isDiagnosticCode(code) || typeof message !== 'string' || typeof site !== 'string')",
+          "if (typeof message !== 'string' || typeof site !== 'string')",
+        ),
+      ],
+      [
+        'registry severity guard',
+        source.replace('if (severity !== diagnostic.severity)', 'if (false)'),
+      ],
+    ];
+    for (const [name, mutated] of mutations) {
+      expect(mutated, name).not.toBe(source);
+      expect(
+        validateDiagnosticEmissionDoorBindings(diagnosticDoorFiles({ [fileName]: mutated })).join(
+          '\n',
+        ),
+        name,
+      ).toContain('transferred diagnostic constructor capability drifted');
+    }
+  });
+
+  it('C13 canary: transferred diagnostic authority cannot escape its exact registrar slot', () => {
+    const fileName = 'packages/server/src/internal/data-plane-static-analysis.ts';
+    const source = productionText(fileName);
+    const mutated = source.replace(
+      'extractStaticBuildAnalysisFactsFromProject({ files }, registerTransferredSqlSafetyDiagnostic)',
+      'extractStaticBuildAnalysisFactsFromProject({ files }, (registerTransferredSqlSafetyDiagnostic))',
+    );
+    expect(mutated).not.toBe(source);
+    expect(
+      scanDiagnosticProductionSources([{ path: fileName, text: mutated }]).findings.join('\n'),
+    ).toContain('may only appear as the direct callee');
+    const bindingFindings = validateDiagnosticEmissionDoorBindings(
+      diagnosticDoorFiles({ [fileName]: mutated }),
+    ).join('\n');
+    expect(bindingFindings).toContain('constructor capability transfer owner drifted');
+  });
+
+  it('C13 canaries: the transferred diagnostic recipient cannot forge or retain authority', () => {
+    const fileName = 'packages/drizzle/src/static.ts';
+    const source = productionText(fileName);
+    const mutations = [
+      [
+        'substituted registry fields',
+        source.replace(
+          'registrar(diagnostic.code, diagnostic.message, diagnostic.severity, diagnostic.site)',
+          "registrar('KV201', 'forged', 'error', diagnostic.site)",
+        ),
+        'transferStaticBuildDiagnostics',
+      ],
+      [
+        'retained callback',
+        source.replace(
+          'const facts = extractStaticBuildAnalysisFactsFromAnalysisContext(',
+          'globalThis.__kovoRegistrar = diagnosticRegistrar;\n      const facts = extractStaticBuildAnalysisFactsFromAnalysisContext(',
+        ),
+        'extractStaticBuildAnalysisFactsFromProject',
+      ],
+    ];
+    for (const [name, mutated, recipient] of mutations) {
+      expect(mutated, name).not.toBe(source);
+      expect(
+        validateDiagnosticEmissionDoorBindings(diagnosticDoorFiles({ [fileName]: mutated })).join(
+          '\n',
+        ),
+        name,
+      ).toContain(`${recipient}: transferred diagnostic capability recipient drifted`);
+    }
+  });
+
   it('C13 mutation: a wrapper-local root lookalike cannot satisfy the reviewed call graph', () => {
     const productionFiles = replaceProductionFile(
       'packages/compiler/src/diagnostics.ts',
@@ -2133,18 +2209,25 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
   it('C13 canary: serialized SQL-safety diagnostics retain exact registry rehydration', () => {
     const fileName = 'packages/server/src/internal/data-plane-static-analysis.ts';
     const canaries = [
-      (text) => text.replace('if (!isDiagnosticCode(code)', "if (typeof code !== 'string'"),
       (text) =>
         text.replace(
-          'if (severity !== diagnostic.severity)',
-          'if (false && severity !== diagnostic.severity)',
+          "if (!isDiagnosticCode(code) || typeof message !== 'string' || typeof site !== 'string') {\n    throw new TypeError('Serialized SQL-safety diagnostic has malformed authority fields.');",
+          "if (typeof code !== 'string' || typeof message !== 'string' || typeof site !== 'string') {\n    throw new TypeError('Serialized SQL-safety diagnostic has malformed authority fields.');",
+        ),
+      (text) =>
+        text.replace(
+          "if (severity !== diagnostic.severity) {\n    throw new TypeError('Serialized SQL-safety diagnostic severity does not match the registry.');",
+          "if (false && severity !== diagnostic.severity) {\n    throw new TypeError('Serialized SQL-safety diagnostic severity does not match the registry.');",
         ),
     ];
     for (const mutate of canaries) {
+      const source = productionText(fileName);
+      const mutated = mutate(source);
+      expect(mutated).not.toBe(source);
       expect(
-        validateDiagnosticEmissionDoorBindings(
-          diagnosticDoorFiles({ [fileName]: mutate(productionText(fileName)) }),
-        ).join('\n'),
+        validateDiagnosticEmissionDoorBindings(diagnosticDoorFiles({ [fileName]: mutated })).join(
+          '\n',
+        ),
       ).toContain(
         'serialized SQL-safety diagnostic rehydration door drifted from its reviewed exact body',
       );

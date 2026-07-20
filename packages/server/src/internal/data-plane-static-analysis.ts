@@ -601,10 +601,7 @@ async function runStaticBuildAnalysisFacts(
       );
     }
     const facts = snapshotStaticBuildAnalysisFacts(
-      extractStaticBuildAnalysisFactsFromProject({
-        diagnosticRegistrar: registerTransferredSqlSafetyDiagnostic,
-        files,
-      }),
+      extractStaticBuildAnalysisFactsFromProject({ files }, registerTransferredSqlSafetyDiagnostic),
       { diagnosticCarrier: 'registered' },
     );
     if (facts === undefined) {

@@ -28,17 +28,15 @@ let analyzerDiagnosticFactory:
   | (typeof import('@kovojs/core/internal/diagnostics'))['createRegisteredDiagnostic']
   | undefined;
 
-interface MockAnalyzerOptions {
-  diagnosticRegistrar?: (
-    code: 'KV422' | 'KV447',
-    message: string,
-    severity: 'error' | 'warn',
-    site: string,
-  ) => unknown;
-}
+type MockDiagnosticRegistrar = (
+  code: 'KV422' | 'KV447',
+  message: string,
+  severity: 'error' | 'warn',
+  site: string,
+) => unknown;
 
 function analyzerDiagnostic(
-  options: MockAnalyzerOptions,
+  diagnosticRegistrar: MockDiagnosticRegistrar | undefined,
   code: 'KV422' | 'KV447',
   message: string,
   site: string,
@@ -48,7 +46,7 @@ function analyzerDiagnostic(
   }
   const diagnostic = analyzerDiagnosticFactory(code, { site }, { message });
   return (
-    options.diagnosticRegistrar?.(
+    diagnosticRegistrar?.(
       diagnostic.code,
       diagnostic.message,
       diagnostic.severity,
@@ -321,19 +319,21 @@ export const status = query({
   });
 
   it('does not let an author-forgeable UI-copy marker suppress aggregate security analysis', async () => {
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn((options: MockAnalyzerOptions) => ({
-      queries: [],
-      sqlSafetyDiagnostics: [
-        analyzerDiagnostic(
-          options,
-          'KV422',
-          'wrapper SQL text reaches a managed sink',
-          'src/search.js:5',
-        ),
-      ],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(
+      (_options: unknown, diagnosticRegistrar: MockDiagnosticRegistrar) => ({
+        queries: [],
+        sqlSafetyDiagnostics: [
+          analyzerDiagnostic(
+            diagnosticRegistrar,
+            'KV422',
+            'wrapper SQL text reaches a managed sink',
+            'src/search.js:5',
+          ),
+        ],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    );
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
       deriveMutationTouchRegistry: () => ({}),
       extractStaticBuildAnalysisFactsFromProject,
@@ -357,14 +357,16 @@ export const status = query({
       { cache: false },
     );
 
-    expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledWith({
-      diagnosticRegistrar: expect.any(Function),
-      files: [
-        expect.objectContaining({
-          fileName: 'src/search.js',
-        }),
-      ],
-    });
+    expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledWith(
+      {
+        files: [
+          expect.objectContaining({
+            fileName: 'src/search.js',
+          }),
+        ],
+      },
+      expect.any(Function),
+    );
     expect(facts.sqlSafetyDiagnostics).toEqual([
       expect.objectContaining({ code: 'KV422', site: 'src/search.js:5' }),
     ]);
@@ -373,11 +375,14 @@ export const status = query({
   it('preserves core diagnostic severities from the aggregate analyzer', async () => {
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
       deriveMutationTouchRegistry: () => ({}),
-      extractStaticBuildAnalysisFactsFromProject: (options: MockAnalyzerOptions) => ({
+      extractStaticBuildAnalysisFactsFromProject: (
+        _options: unknown,
+        diagnosticRegistrar: MockDiagnosticRegistrar,
+      ) => ({
         queries: [],
         sqlSafetyDiagnostics: [
           analyzerDiagnostic(
-            options,
+            diagnosticRegistrar,
             'KV447',
             'SQLite owner annotations are advisory only.',
             'src/schema.ts:5',
@@ -406,19 +411,21 @@ export const status = query({
   it('cannot drop discovered unsafe sources through a selective late Array.filter replacement', async () => {
     // SPEC §2/§11.4: evaluated app code shares the build realm. The complete source census
     // must be snapshotted before relevance classification, not handed to a mutable Array filter.
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn((options: MockAnalyzerOptions) => ({
-      queries: [],
-      sqlSafetyDiagnostics: [
-        analyzerDiagnostic(
-          options,
-          'KV422',
-          'raw SQL input reaches the managed sink',
-          'src/schema.ts:4',
-        ),
-      ],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(
+      (_options: unknown, diagnosticRegistrar: MockDiagnosticRegistrar) => ({
+        queries: [],
+        sqlSafetyDiagnostics: [
+          analyzerDiagnostic(
+            diagnosticRegistrar,
+            'KV422',
+            'raw SQL input reaches the managed sink',
+            'src/schema.ts:4',
+          ),
+        ],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    );
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
       deriveMutationTouchRegistry: () => ({}),
       extractStaticBuildAnalysisFactsFromProject,
@@ -456,15 +463,15 @@ export const status = query({
   it('keys the process-local cache by exact source and never creates disk cache state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-process-cache-'));
     const extractStaticBuildAnalysisFactsFromProject = vi.fn(
-      ({
-        diagnosticRegistrar,
-        files,
-      }: MockAnalyzerOptions & { files: readonly { source: string }[] }) => ({
+      (
+        { files }: { files: readonly { source: string }[] },
+        diagnosticRegistrar: MockDiagnosticRegistrar,
+      ) => ({
         queries: [],
         sqlSafetyDiagnostics: files[0]?.source.includes('sql.raw')
           ? [
               analyzerDiagnostic(
-                { diagnosticRegistrar },
+                diagnosticRegistrar,
                 'KV422',
                 'raw SQL input reaches the managed sink',
                 'src/schema.ts:4',
@@ -502,19 +509,21 @@ export const status = query({
   });
 
   it('returns a fresh canonical snapshot for every process-cache hit', async () => {
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn((options: MockAnalyzerOptions) => ({
-      queries: [],
-      sqlSafetyDiagnostics: [
-        analyzerDiagnostic(
-          options,
-          'KV422',
-          'raw SQL input reaches the managed sink',
-          'src/schema.ts:4',
-        ),
-      ],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(
+      (_options: unknown, diagnosticRegistrar: MockDiagnosticRegistrar) => ({
+        queries: [],
+        sqlSafetyDiagnostics: [
+          analyzerDiagnostic(
+            diagnosticRegistrar,
+            'KV422',
+            'raw SQL input reaches the managed sink',
+            'src/schema.ts:4',
+          ),
+        ],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    );
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
       deriveMutationTouchRegistry: () => ({}),
       extractStaticBuildAnalysisFactsFromProject,
@@ -535,19 +544,21 @@ export const status = query({
     const srcDir = join(root, 'src');
     await mkdir(srcDir, { recursive: true });
     await writeFile(join(srcDir, 'schema.ts'), RELEVANT_DRIZZLE_SOURCE.source, 'utf8');
-    const extractStaticBuildAnalysisFactsFromProject = vi.fn((options: MockAnalyzerOptions) => ({
-      queries: [],
-      sqlSafetyDiagnostics: [
-        analyzerDiagnostic(
-          options,
-          'KV422',
-          'raw SQL input reaches the managed sink',
-          'src/schema.ts:4',
-        ),
-      ],
-      toctouFacts: [],
-      touchGraph: {},
-    }));
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(
+      (_options: unknown, diagnosticRegistrar: MockDiagnosticRegistrar) => ({
+        queries: [],
+        sqlSafetyDiagnostics: [
+          analyzerDiagnostic(
+            diagnosticRegistrar,
+            'KV422',
+            'raw SQL input reaches the managed sink',
+            'src/schema.ts:4',
+          ),
+        ],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    );
     vi.doMock('@kovojs/drizzle/internal/static', () => ({
       deriveMutationTouchRegistry: () => ({}),
       extractStaticBuildAnalysisFactsFromProject,

@@ -97,15 +97,15 @@ describe('@kovojs/drizzle static analysis context', () => {
 
   it('mints analyzer diagnostics through the consumer registry capability', () => {
     const transferred: ReturnType<typeof createRegisteredDiagnostic>[] = [];
-    const facts = extractStaticBuildAnalysisFactsFromProject({
-      ...fixtureProject(),
-      diagnosticRegistrar(code, message, severity, site) {
+    const facts = extractStaticBuildAnalysisFactsFromProject(
+      fixtureProject(),
+      (code, message, severity, site) => {
         const diagnostic = createRegisteredDiagnostic(code, { site }, { message });
         expect(diagnostic.severity).toBe(severity);
         transferred.push(diagnostic);
         return diagnostic;
       },
-    });
+    );
 
     expect(transferred.length).toBeGreaterThan(0);
     expect(facts.sqlSafetyDiagnostics).toHaveLength(transferred.length);

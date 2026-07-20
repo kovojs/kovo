@@ -4190,10 +4190,6 @@ export type StaticBuildDiagnosticRegistrar = (
 ) => TouchGraphDiagnostic;
 
 /** @internal */
-export interface StaticBuildAnalysisProjectOptions extends TouchGraphProjectOptions {
-  diagnosticRegistrar?: StaticBuildDiagnosticRegistrar;
-}
-
 type AuthzCensusClassification = 'authzPolicy' | 'owned' | 'ownedVia' | 'public' | 'reference';
 
 /** @internal Compiler-owned runtime security facts for one physical Drizzle column. */
@@ -5402,7 +5398,8 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
  * @internal
  */
 /** @internal */ export function extractStaticBuildAnalysisFactsFromProject(
-  options: StaticBuildAnalysisProjectOptions,
+  options: TouchGraphProjectOptions,
+  diagnosticRegistrar?: StaticBuildDiagnosticRegistrar,
 ): StaticBuildAnalysisFacts {
   // SPEC §11.1: share one syntactic parse cache across every project-mode pass in this
   // build-facing run so the same ~14/7 app files are parsed once, not re-parsed per pass.
@@ -5412,9 +5409,9 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
       const facts = extractStaticBuildAnalysisFactsFromAnalysisContext(
         createDrizzleAnalysisContext(extraction),
       );
-      return options.diagnosticRegistrar === undefined
+      return diagnosticRegistrar === undefined
         ? facts
-        : transferStaticBuildDiagnostics(facts, options.diagnosticRegistrar);
+        : transferStaticBuildDiagnostics(facts, diagnosticRegistrar);
     } finally {
       extraction.dispose();
     }

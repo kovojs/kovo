@@ -37,6 +37,7 @@ const generatedDiagnosticRegistryModulePath =
 const compilerDiagnosticsPath = 'packages/compiler/src/diagnostics.ts';
 const compilerCompilePath = 'packages/compiler/src/compile.ts';
 const compilerValidatorPipelinePath = 'packages/compiler/src/validate/pipeline.ts';
+const drizzleStaticPath = 'packages/drizzle/src/static.ts';
 const serverBuildSecurityIntrinsicsPath = 'packages/server/src/build-security-intrinsics.ts';
 const serverSecurityWitnessIntrinsicsPath = 'packages/server/src/security-witness-intrinsics.ts';
 const verifierDiagnosticsPath = 'packages/test/src/verifier-diagnostics.ts';
@@ -47,10 +48,12 @@ const staticExportDiagnosticRehydrationDoor =
   'packages/server/src/static-export-diagnostics.ts#rehydrateStaticExportCompileDiagnostic';
 const sqlSafetyDiagnosticRehydrationDoor =
   'packages/server/src/internal/data-plane-static-analysis.ts#rehydrateSerializedSqlSafetyDiagnostic';
+const transferredSqlSafetyDiagnosticRegistrarDoor =
+  'packages/server/src/internal/data-plane-static-analysis.ts#registerTransferredSqlSafetyDiagnostic';
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'd00668d42cf859015b93c86d51b19176bd28a7204127bc628b7ac93bb8daec20';
+  '26b1b7277a896c3d488d76a3d63b9558bf462ac35b0169ae1459b334a6bc6aa7';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -63,6 +66,16 @@ const expectedStaticExportDiagnosticRehydrationDoorDigest =
   '38e9f176edf8a6520ec7884e2e05d0d86c6a44938fd11c2a370a789f84ce704c';
 const expectedSqlSafetyDiagnosticRehydrationDoorDigest =
   'a57280e38f41d9b9de108369fc46f7ec0b25c829f8178657106d5e7446662e90';
+const expectedTransferredSqlSafetyDiagnosticRegistrarDigest =
+  '2cdea2713c1c594bb2a1453d69505a98bab9a45b1d5e0a9cb87b557a3482f4c1';
+const expectedTransferredSqlSafetyDiagnosticRegistrarCallDigest =
+  '40914c794a78158a415efd98b93aed57383ec92753537c2bcdd89a017a37dc34';
+const expectedStaticBuildAnalysisFactsOwnerDigest =
+  '131a460c49b2a17ee1264f59ea8f574d416adcc0c0570915bca2fa7d06074605';
+const expectedStaticBuildAnalysisProjectExtractorDigest =
+  '4126691cecf0b02b425bd79694915ae62a0534c5d4a5915cd3d71d5815b341f9';
+const expectedStaticBuildDiagnosticTransferDigest =
+  '0295dddea131bc81b2522d0891ee17be4847d0bd65f0b78f77a46b9ffd8813fb';
 const expectedRegisteredDiagnosticDefinitionFactoryDigest =
   'e8dd153b51da2c8f22bc81bfe190d872c63bca35acf4a10ddef4db6f511f6a97';
 const expectedDiagnosticFactoryConstructorDigest =
@@ -72,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   'f13c6210b08259959c03ae1942ee0cdf6846fd079c4ad37c2650dbcd3ba3993d';
 const expectedDiagnosticActualLayerReviewDigest =
-  'f2e0a86a4e6d0097496cf153b7fbed007aab49f1995b50e28994746a9e056f41';
+  'bec1f270221aa9b8f8b9ea4bc02597ffe21f41fe218d473fd89487a8f4e53704';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -119,7 +132,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '1d98e30c50e8fd8ce2bbe489d56fcbd0df3042d49c1a38d03dcfdd635a77a088'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'd18f549af2fd8959198884b543623970ff32b8f4a8c8c0a3f9499843776d4af5',
+    'c48db7d20de2963aea983c58322879ba5a8f4347f07e3b9d9eb622bce86049c3',
   ],
   [
     'packages/cli/src/commands/compile.ts',
@@ -131,7 +144,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    'b0a97f773b9d2c7fb9f7d623618c4d270421a734004f0d704fcb72efc516a930',
+    'a258370a90113a34b117f908307284d3766c47186871a1ae938684572f143e62',
   ],
   [
     'packages/compiler/src/ts-api.ts',
@@ -294,10 +307,6 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived SQL-safety diagnostic projection for data-plane analysis.',
   ],
   [
-    'packages/server/src/internal/data-plane-static-analysis.ts#literal#c84de7c7f12dde57b3f69b9420957a880b1a8acb66fba7e7da2cc60bc8cdb460#c01575de27970b5060015a9f89ed0f20a5dcd508b5c8c923044e9554eaa89cd0',
-    'Registry-derived SQL-safety diagnostic projection for data-plane analysis.',
-  ],
-  [
     'packages/test/src/integration/fixture-compiler-plugin.ts#literal#6d68b0cf359673b8aaa9738ba0e6082092fc51a98d943d841017256b72d1078a#305fc1bbeefe4be138b486fa15164dd12d8bdaf6b9390faccc71188226f48cab',
     'Registry-derived compiler diagnostic projection for integration fixtures.',
   ],
@@ -332,6 +341,10 @@ const reviewedDiagnosticWrappers = new Map([
   [
     sqlSafetyDiagnosticRehydrationDoor,
     { exported: false, name: 'rehydrateSerializedSqlSafetyDiagnostic' },
+  ],
+  [
+    transferredSqlSafetyDiagnosticRegistrarDoor,
+    { exported: false, name: 'registerTransferredSqlSafetyDiagnostic' },
   ],
   [
     'packages/cli/src/commands/build-export.ts#rehydrateStaticExportDiagnostic',
@@ -381,6 +394,7 @@ const reviewedDiagnosticEmitterNames = new Set([
   'rehydrateStaticExportDiagnostic',
   'rehydrateStaticExportCompileDiagnostic',
   'rehydrateSerializedSqlSafetyDiagnostic',
+  'registerTransferredSqlSafetyDiagnostic',
   'staticExportDiagnostic',
   'blockingStaticExportDiagnostic',
 ]);
@@ -403,6 +417,7 @@ const diagnosticEmitterCodePositions = new Map([
     'packages/server/src/static-export-diagnostics.ts#blockingStaticExportDiagnostic',
     { argument: 0, property: 'code' },
   ],
+  [transferredSqlSafetyDiagnosticRegistrarDoor, { argument: 0 }],
   [`${verifierDiagnosticsPath}#diagnosticMessage`, { argument: 0 }],
 ]);
 const aliasSensitiveDiagnosticBindings = new Set([
@@ -430,7 +445,7 @@ const diagnosticLiteralExemptions = new Map([
   ],
   [
     'packages/core/src/internal/source-sink-registry.ts',
-    'c83459d29021dea2f761b8b7500a4e67d3ecd73094738dee03a435eae64c3671',
+    '4704211efbac9b6e7a1467cc43128168aee53afa36c84742c97b7e3f5a95f833',
   ],
 ]);
 
@@ -1742,6 +1757,12 @@ function diagnosticEmitterValueEscapeFinding(node, context) {
     const target = directDiagnosticEmitterTarget(node, context);
     if (target !== undefined) {
       if (ts.isCallExpression(node.parent) && node.parent.expression === node) return undefined;
+      if (
+        target === transferredSqlSafetyDiagnosticRegistrarDoor &&
+        isExactTransferredSqlSafetyDiagnosticRegistrarUse(node, context)
+      ) {
+        return undefined;
+      }
       return `diagnostic emitter ${node.text} may only appear as the direct callee of its reviewed call`;
     }
     if (isExactFactoryCreatorBinding(node, context)) {
@@ -1773,6 +1794,49 @@ function diagnosticEmitterValueEscapeFinding(node, context) {
     return `generated diagnostic constructor ${node.getText(context.sourceFile)} may not escape its exact call position`;
   }
   return undefined;
+}
+
+function isExactTransferredSqlSafetyDiagnosticRegistrarUse(identifier, context) {
+  if (
+    context.fileName !== 'packages/server/src/internal/data-plane-static-analysis.ts' ||
+    identifier.text !== 'registerTransferredSqlSafetyDiagnostic'
+  ) {
+    return false;
+  }
+  const call = identifier.parent;
+  if (
+    !ts.isCallExpression(call) ||
+    call.arguments.length !== 2 ||
+    call.arguments[1] !== identifier ||
+    !ts.isIdentifier(call.expression) ||
+    !isExactImportedOrLocalBinding(
+      call.expression,
+      '@kovojs/drizzle/internal/static',
+      'extractStaticBuildAnalysisFactsFromProject',
+      context,
+    ) ||
+    sourceNodeDigest(call, context.sourceFile) !==
+      expectedTransferredSqlSafetyDiagnosticRegistrarCallDigest
+  ) {
+    return false;
+  }
+  const options = call.arguments[0];
+  if (
+    !ts.isObjectLiteralExpression(options) ||
+    options.properties.length !== 1 ||
+    !ts.isShorthandPropertyAssignment(options.properties[0]) ||
+    options.properties[0].name.text !== 'files'
+  ) {
+    return false;
+  }
+  let owner = call.parent;
+  while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent;
+  return (
+    owner !== undefined &&
+    owner.parent === context.sourceFile &&
+    owner.name?.text === 'runStaticBuildAnalysisFacts' &&
+    sourceNodeDigest(owner, context.sourceFile) === expectedStaticBuildAnalysisFactsOwnerDigest
+  );
 }
 
 function identifierIsDeclarationName(identifier) {
@@ -4216,6 +4280,51 @@ function validateRegisteredDiagnosticProvenance(sourceFile, analysis) {
     findings.push(
       `${sqlSafetyDiagnosticRehydrationDoor}: serialized SQL-safety diagnostic rehydration door drifted from its reviewed exact body (received ${sqlSafetyDigest})`,
     );
+  }
+  const transferredRegistrar =
+    sqlSafetySource === undefined
+      ? undefined
+      : findTopLevelFunction(sqlSafetySource, 'registerTransferredSqlSafetyDiagnostic');
+  const transferredRegistrarDigest = sourceNodeDigest(transferredRegistrar, sqlSafetySource);
+  if (transferredRegistrarDigest !== expectedTransferredSqlSafetyDiagnosticRegistrarDigest) {
+    findings.push(
+      `${transferredSqlSafetyDiagnosticRegistrarDoor}: transferred diagnostic constructor capability drifted from its reviewed exact body (received ${transferredRegistrarDigest})`,
+    );
+  }
+  const staticBuildAnalysisOwner =
+    sqlSafetySource === undefined
+      ? undefined
+      : findTopLevelFunction(sqlSafetySource, 'runStaticBuildAnalysisFacts');
+  const staticBuildAnalysisOwnerDigest = sourceNodeDigest(
+    staticBuildAnalysisOwner,
+    sqlSafetySource,
+  );
+  if (staticBuildAnalysisOwnerDigest !== expectedStaticBuildAnalysisFactsOwnerDigest) {
+    findings.push(
+      `${transferredSqlSafetyDiagnosticRegistrarDoor}: constructor capability transfer owner drifted from its reviewed exact body (received ${staticBuildAnalysisOwnerDigest})`,
+    );
+  }
+  // The consumer-side grant above is only half of the capability boundary. Pin the exact Drizzle
+  // recipient and loop so the callback cannot be retained, duplicated, or invoked with substituted
+  // registry fields while still minting a server-trusted diagnostic (SPEC §2/§11).
+  const drizzleStaticSource = analysis.sourceFiles.get(drizzleStaticPath);
+  for (const [name, expectedDigest] of [
+    [
+      'extractStaticBuildAnalysisFactsFromProject',
+      expectedStaticBuildAnalysisProjectExtractorDigest,
+    ],
+    ['transferStaticBuildDiagnostics', expectedStaticBuildDiagnosticTransferDigest],
+  ]) {
+    const declaration =
+      drizzleStaticSource === undefined
+        ? undefined
+        : findTopLevelFunction(drizzleStaticSource, name);
+    const digest = sourceNodeDigest(declaration, drizzleStaticSource);
+    if (digest !== expectedDigest) {
+      findings.push(
+        `${drizzleStaticPath}#${name}: transferred diagnostic capability recipient drifted from its reviewed exact body (received ${digest})`,
+      );
+    }
   }
   return findings;
 }
