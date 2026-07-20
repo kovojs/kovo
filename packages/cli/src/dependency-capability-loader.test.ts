@@ -710,6 +710,92 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-relative-alias-retarget-closure
+  it('rejects a Vite alias that retargets a reviewed package child edge', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-relative-alias-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.mjs' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        "import { helper } from './safe-helper.js'; export const parse = helper;\n",
+      );
+      writeFileSync(join(packageRoot, 'safe-helper.js'), 'export const helper = value => value;\n');
+      writeFileSync(
+        join(packageRoot, 'raw-helper.js'),
+        "globalThis.__KOVO_RELATIVE_ALIAS_RETARGET__ = 'EXECUTED'; export const helper = value => value;\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              'build-server',
+              { allowNodeBuiltins: true },
+            ),
+          ],
+          resolve: {
+            alias: {
+              './safe-helper.js': join(packageRoot, 'raw-helper.js'),
+            },
+          },
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).rejects.toThrow(/KV448.*Vite alias.*reviewed package safe-parser child edge/u);
+      expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
   it.each([
     ['manifest-owned', true, 'node_modules', false, false],
