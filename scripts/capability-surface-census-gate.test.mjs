@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   discoverCapabilityMintSites,
   evaluateCapabilityBoundaryPosture,
+  evaluatePrincipalEpochCredentialDoors,
   evaluateRequestDeadlineEffectDoors,
   evaluateCapabilitySurfaceCensus,
 } from './capability-surface-census-gate.mjs';
@@ -60,6 +61,109 @@ it('discovers witness registries and systemDb mints by TypeScript symbol identit
       symbol: 'runtime.ts#Runtime.systemDb',
     },
   ]);
+});
+
+// @kovo-security-certifies C13 principal-epoch-credential-door-census
+it('closes principal-epoch freshness over capability URL and mutation replay credential doors', () => {
+  const credentialSources = new Map([
+    [
+      'principal-epoch.ts',
+      `export function currentPrincipalEpoch() {}
+       export function assertPrincipalEpochFresh() {}`,
+    ],
+    [
+      'capability.ts',
+      `import { currentPrincipalEpoch as current } from './principal-epoch.js';
+       import { assertPrincipalEpochFresh as fresh } from './principal-epoch.js';
+       export const mintCapability = () => current();
+       export const verifyCapability = () => fresh();`,
+    ],
+    [
+      'replay.ts',
+      `import { currentPrincipalEpoch as current } from './principal-epoch.js';
+       import { assertPrincipalEpochFresh as fresh } from './principal-epoch.js';
+       export const reserveReplayReceipt = () => current();
+       export const readReplayReceipt = () => fresh();`,
+    ],
+    [
+      'continuation.ts',
+      `export const runInFrameContinuation = () => undefined;`,
+    ],
+  ]);
+  const rows = [
+    {
+      consumes: 'currentPrincipalEpoch',
+      credential: 'capability-url',
+      id: 'capability-url.mint',
+      owner: 'mintCapability',
+      path: 'capability.ts',
+      phase: 'mint',
+      reason: 'Every principal-bound capability URL embeds the authoritative current epoch.',
+    },
+    {
+      consumes: 'assertPrincipalEpochFresh',
+      credential: 'capability-url',
+      id: 'capability-url.verify',
+      owner: 'verifyCapability',
+      path: 'capability.ts',
+      phase: 'verify',
+      reason: 'The storage read stays unreachable until authoritative epoch freshness passes.',
+    },
+    {
+      consumes: 'currentPrincipalEpoch',
+      credential: 'mutation-replay-receipt',
+      id: 'mutation-replay-receipt.mint',
+      owner: 'reserveReplayReceipt',
+      path: 'replay.ts',
+      phase: 'mint',
+      reason: 'Replay reservation identity embeds the authoritative current principal epoch.',
+    },
+    {
+      consumes: 'assertPrincipalEpochFresh',
+      credential: 'mutation-replay-receipt',
+      id: 'mutation-replay-receipt.verify',
+      owner: 'readReplayReceipt',
+      path: 'replay.ts',
+      phase: 'verify',
+      reason: 'A replay response is released only while its embedded epoch remains current.',
+    },
+    {
+      credential: 'continuation',
+      id: 'continuation.in-frame',
+      owner: 'runInFrameContinuation',
+      path: 'continuation.ts',
+      phase: 'inapplicable',
+      reason: 'This continuation is closed before its adapter frame returns and is never a durable credential.',
+    },
+  ];
+
+  expect(
+    evaluatePrincipalEpochCredentialDoors({
+      canonicalModule: 'principal-epoch.ts',
+      requiredIds: rows.map((row) => row.id),
+      rows,
+      sources: credentialSources,
+    }),
+  ).toMatchObject({ ok: true, summary: { inapplicable: 1, mint: 2, verify: 2 } });
+
+  credentialSources.set(
+    'capability.ts',
+    `import { currentPrincipalEpoch as current } from './principal-epoch.js';
+     import { assertPrincipalEpochFresh as fresh } from './principal-epoch.js';
+     const lookalike = () => undefined;
+     export const mintCapability = () => lookalike();
+     export const verifyCapability = () => fresh();`,
+  );
+  expect(
+    evaluatePrincipalEpochCredentialDoors({
+      canonicalModule: 'principal-epoch.ts',
+      requiredIds: rows.map((row) => row.id),
+      rows,
+      sources: credentialSources,
+    }).findings,
+  ).toContain(
+    'capability-url.mint: mintCapability does not consume currentPrincipalEpoch from principal-epoch',
+  );
 });
 
 // @kovo-security-certifies C13 request-deadline-effect-door-census
