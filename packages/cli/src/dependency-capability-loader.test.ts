@@ -2018,8 +2018,23 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'audit-for-of-identifier-written Worker',
+      "(() => { let platform = {}; for (platform of [globalThis]) { break; } return new platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-for-of-nested-identifier-written Worker',
+      "(() => { let platform = {}; for ({ value: platform } of [{ value: globalThis }]) { break; } return new platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'audit-for-await-member-target-written Worker',
       "(async () => { const box = {}; for await (box.platform of [globalThis]) { break; } return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-for-await-identifier-written Worker',
+      "(async () => { let platform = {}; for await (platform of [globalThis]) { break; } return new platform.Worker('/worker.mjs'); })()",
       'Worker',
     ],
     [
@@ -2749,8 +2764,23 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
+      'audit-for-of-identifier-written Worker',
+      "(() => { let platform = {}; for (platform of [globalThis]) { break; } return new platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-for-of-nested-identifier-written Worker',
+      "(() => { let platform = {}; for ({ value: platform } of [{ value: globalThis }]) { break; } return new platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
       'audit-for-await-member-target-written Worker',
       "(async () => { const box = {}; for await (box.platform of [globalThis]) { break; } return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-for-await-identifier-written Worker',
+      "(async () => { let platform = {}; for await (platform of [globalThis]) { break; } return new platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
