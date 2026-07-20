@@ -749,15 +749,15 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 - [x] `kovo.security.advisory/v1` (id, severity, affectedRange, fixedIn, `retracts[]` naming the
       falsified `SECURITY.md` guarantees, `tcbChokes[]`, graphSchemaVersion) — **version ranges only**,
       no applicability predicates (see kill list).
-  - Evidence: `pnpm run check:advisory-feed` passes 38/38 over the exact feed/advisory/state schemas,
+  - Evidence: `pnpm run check:advisory-feed` passes 42/42 over the exact feed/advisory/state schemas,
     canonical live feed, guarantee/TCB bindings, finite SemVer range grammar, and 90-day ceiling.
 - [x] `kovo check advisories` returning AFFECTED / NOT-AFFECTED / UNKNOWN, exiting non-zero on
       AFFECTED-at-or-above-floor **and on every UNKNOWN condition** (unreachable feed, stale beyond
       `maxFeedAge`, epoch rollback, unverifiable signature).
-  - Evidence: the 50-test CLI/workflow suite proves exact artifact matching, Sigstore plus DSSE
-    binding to the pinned main release workflow, freshness/rollback/equivocation state, exit 1/2
-    routing, and release-job authority isolation; `check:vp`, TCB, dependency-closure, and
-    supply-chain gates pass.
+  - Evidence: the integrated 49-test advisory/workflow/graph suite proves real Sigstore policy and
+    negative controls, exact DSSE/artifact binding, first-parent feed monotonicity, multiprocess
+    rollback/equivocation serialization, ambiguous-graph UNKNOWN, exit 1/2 routing, and the exact
+    two-action release signer job; crypto, VP, TCB, dependency-closure, and supply-chain gates pass.
 - [ ] Fire drill: publish a test advisory, confirm a real example app reports AFFECTED, ship the fix,
       confirm NOT-AFFECTED, delete the feed and confirm UNKNOWN **fails closed**. Record all three exit
       codes. Do not start before the key-custody answer exists — OIDC/Sigstore keyless bound to the
