@@ -115,6 +115,18 @@ describe('kovoVitePlugin', () => {
     },
   );
 
+  it('rejects a non-framework JSX import source before Vite can select its runtime', async () => {
+    const plugin = kovoVitePlugin();
+    const source = `/** @jsxImportSource react */
+import { component } from '@kovojs/core';
+export const ForeignRuntime = component({ render: () => <div /> });
+`;
+
+    await expect(plugin.transform?.(source, 'foreign-runtime.tsx')).rejects.toThrow(
+      /JSX import source must be @kovojs\/server/u,
+    );
+  });
+
   it('compiles SPEC-supported JSX modules instead of delegating them past Kovo diagnostics', async () => {
     const plugin = kovoVitePlugin();
     const source = `
