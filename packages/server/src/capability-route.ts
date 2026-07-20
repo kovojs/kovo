@@ -379,6 +379,8 @@ function snapshotStoredFileOptions(source: unknown): RouteStoredFileOptions {
  * MUST NOT leak WHY it failed (malformed vs bad-signature vs expired vs claim-mismatch vs replayed)
  * — every rejection is an indistinguishable 404 so the route is not an oracle. The 404 (not 403)
  * also hides whether the object exists at all.
+ *
+ * @kovo-response-observation-candidate server.storage-download
  */
 function downloadRejected(method = 'GET'): Response {
   return serverResponseToWebResponse(

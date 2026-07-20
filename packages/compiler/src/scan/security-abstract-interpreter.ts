@@ -197,11 +197,7 @@ export function serverAliasDeclarationTransfer(
   authority: ServerValueProvenance,
   immutable: boolean,
 ): ServerValueProvenance {
-  if (
-    immutable ||
-    authority === 'foreign-executable' ||
-    authority === 'unsafe-wire-data'
-  ) {
+  if (immutable || authority === 'foreign-executable' || authority === 'unsafe-wire-data') {
     securityAbstractTransfer('alias.const-preserve');
     return authority;
   }
@@ -227,11 +223,12 @@ export function serverAliasJoinTransfer(
   if (previous === undefined) return incoming;
   if (previous === 'unsafe-wire-data' || incoming === 'unsafe-wire-data') {
     const other = previous === 'unsafe-wire-data' ? incoming : previous;
-    const joined = other === 'foreign-executable'
-      ? 'foreign-executable'
-      : serverProvenanceAtOrBelowAuthorityTop(other)
-      ? 'unknown-authority'
-      : 'unsafe-wire-data';
+    const joined =
+      other === 'foreign-executable'
+        ? 'foreign-executable'
+        : serverProvenanceAtOrBelowAuthorityTop(other)
+          ? 'unknown-authority'
+          : 'unsafe-wire-data';
     return joined === previous ? undefined : joined;
   }
   return 'unknown-authority';
@@ -282,9 +279,7 @@ export function serverBinaryTransfer(
   if (left === 'foreign-executable' || right === 'foreign-executable') {
     return 'foreign-executable';
   }
-  return left === 'unsafe-wire-data' || right === 'unsafe-wire-data'
-    ? 'unsafe-wire-data'
-    : 'local';
+  return left === 'unsafe-wire-data' || right === 'unsafe-wire-data' ? 'unsafe-wire-data' : 'local';
 }
 
 export function serverConditionalTransfer(

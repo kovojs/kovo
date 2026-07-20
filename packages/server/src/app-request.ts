@@ -143,6 +143,8 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       },
     );
   } catch (error) {
+    // @kovo-response-observation-candidate server.unexpected-failure
+    // SPEC §9.2: every unexpected cause crosses one of the stable sanitized bodies below.
     completeAppRequestDeadline(limitedRequest);
     if (error instanceof RequestBodyLimitExceededError) {
       return appSystemResponse('Payload Too Large', {

@@ -260,8 +260,10 @@ function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex
     for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
       const statement = statements[statementIndex]!;
       if (ts.isFunctionDeclaration(statement) && statement.name) {
-        securityIrIndexDeclaration(declarations, statement.name.text, {
-          ...(statement.body
+        securityIrIndexDeclaration(
+          declarations,
+          statement.name.text,
+          statement.body
             ? {
                 callable: {
                   body: statement.body,
@@ -270,8 +272,8 @@ function securityIrSourceIndex(sourceFile: ts.SourceFile): SecurityIrSourceIndex
                   parameters: statement.parameters,
                 },
               }
-            : {}),
-        });
+            : {},
+        );
         continue;
       }
       if ((ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {

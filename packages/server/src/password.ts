@@ -57,7 +57,47 @@ export interface CredentialVerifyResult {
   needsRehash: boolean;
 }
 
+type UniformWorkWorld = 'decoy' | 'primary';
+
+/** @internal One shared expensive operation with a lazily selected cost-compatible decoy. */
+export interface UniformWorkOptions<Candidate, Result, Output> {
+  /** Present-world candidate. `undefined` selects the decoy factory. */
+  candidate: Candidate | undefined;
+  /** Lazily constructs a cost-compatible candidate for the absent/rejected world. */
+  decoy(): Candidate | Promise<Candidate>;
+  /** The single reviewed expensive operation used by both worlds. */
+  work(candidate: Candidate): Result | Promise<Result>;
+  /** Erases the private world marker before the result crosses the boundary. */
+  normalize(result: Result, world: UniformWorkWorld): Output | Promise<Output>;
+}
+
+/**
+ * Execute one cost-compatible candidate through one shared work sink, then erase which world won.
+ * The nightly response timing oracle independently checks that candidates remain cost-compatible.
+ *
+ * @internal
+ */
+export async function runUniformWork<Candidate, Result, Output>(
+  options: UniformWorkOptions<Candidate, Result, Output>,
+): Promise<Output> {
+  if (typeof options !== 'object' || options === null || nativeArrayIsArray(options)) {
+    throw new NativeTypeError('runUniformWork() requires a stable own-data options record.');
+  }
+  if (
+    typeof options.decoy !== 'function' ||
+    typeof options.work !== 'function' ||
+    typeof options.normalize !== 'function'
+  ) {
+    throw new NativeTypeError('runUniformWork() requires decoy, work, and normalize functions.');
+  }
+  const world: UniformWorkWorld = options.candidate === undefined ? 'decoy' : 'primary';
+  const candidate = options.candidate ?? (await options.decoy());
+  const result = await options.work(candidate);
+  return await options.normalize(result, world);
+}
+
 const NativeError = globalThis.Error;
+const nativeArrayIsArray = globalThis.Array.isArray;
 const NativeMap = globalThis.Map;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
@@ -339,22 +379,39 @@ export async function verifyCredential(
       ? undefined
       : parseArgon2idPasswordDigest(storedDigest);
 
-  // When no valid digest is present, derive the decoy from the call's resolved params so the
-  // argon2 library reads the correct m/t/p from the PHC header and does equivalent work.
-  // A decoy pinned to the compile-time floor would be faster than a present-account digest
-  // hashed with stronger params, leaking existence through timing (bugz M3).
-  const decoy = parsed === undefined ? await getDecoyDigest(params) : undefined;
-  const digest = decoy ?? storedDigest!;
-  const result = await verifyParsedPasswordDigest(
-    secret,
-    digest,
-    parsed ?? parseArgon2idPasswordDigest(decoy!)!,
-    params,
-    options.signal ?? null,
-  );
-
-  if (parsed === undefined) return { ok: false, needsRehash: false };
-  return result;
+  // SPEC §9.2: both worlds enter one reviewed Argon verification work sink. The decoy factory is
+  // lazy (present accounts never hash it), while the normalizer erases the private world marker.
+  // A decoy pinned to the compile-time floor would still be faster than a stronger stored digest;
+  // getDecoyDigest therefore keys it by the exact resolved parameter set (bugz M3).
+  return await runUniformWork({
+    candidate:
+      parsed === undefined
+        ? undefined
+        : {
+            digest: storedDigest!,
+            parsed,
+          },
+    async decoy() {
+      const digest = await getDecoyDigest(params);
+      const parsedDecoy = parseArgon2idPasswordDigest(digest);
+      if (parsedDecoy === undefined) {
+        throw new NativeError('Kovo credential decoy must be an argon2id PHC digest.');
+      }
+      return { digest, parsed: parsedDecoy };
+    },
+    async work(candidate) {
+      return await verifyParsedPasswordDigest(
+        secret,
+        candidate.digest,
+        candidate.parsed,
+        params,
+        options.signal ?? null,
+      );
+    },
+    normalize(result, world) {
+      return world === 'decoy' ? { ok: false, needsRehash: false } : result;
+    },
+  });
 }
 
 async function verifyParsedPasswordDigest(

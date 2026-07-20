@@ -10,8 +10,7 @@ export const repoRoot = findRepoRoot();
 
 export const defaultSourceRoots = ['packages/server/src'];
 export const wireChokeFile = 'packages/server/src/response-posture.ts';
-export const wireBodyProvenanceFile =
-  'packages/compiler/src/scan/security-operation-ir.ts';
+export const wireBodyProvenanceFile = 'packages/compiler/src/scan/security-operation-ir.ts';
 export const wireBodyProvenanceRelationFile =
   'packages/compiler/src/scan/security-provenance-relation.ts';
 export const wireBodyProvenanceOracleFile =
@@ -103,7 +102,8 @@ function checkWireBodyProvenanceClosure({ exists, findings, readText }) {
     wireBodyProvenanceOracleFile,
   ];
   for (const filePath of required) {
-    if (!exists(filePath)) findings.push(`${filePath}: response-body provenance artifact is missing`);
+    if (!exists(filePath))
+      findings.push(`${filePath}: response-body provenance artifact is missing`);
   }
   if (required.some((filePath) => !exists(filePath))) return;
 
