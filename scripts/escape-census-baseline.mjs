@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -171,6 +171,10 @@ export function verifyEscapeCensusBaseline({ baseline, inputs }) {
 
 export function buildEscapeCensusRepresentativeApp() {
   rmSync(fixtureOut, { force: true, recursive: true });
+  const frameworkModules = resolve(fixtureRoot, 'node_modules/@kovojs');
+  rmSync(resolve(fixtureRoot, 'node_modules'), { force: true, recursive: true });
+  mkdirSync(frameworkModules, { recursive: true });
+  symlinkSync(resolve(repoRoot, 'packages/server'), resolve(frameworkModules, 'server'));
   const cli = resolve(repoRoot, 'packages/cli/src/bin.ts');
   const result = spawnSync(
     process.execPath,
