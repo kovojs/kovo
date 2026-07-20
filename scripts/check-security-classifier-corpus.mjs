@@ -2110,6 +2110,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'static-export-diagnostic-origin-provenance',
+        file: 'packages/cli/src/index.kovo-export.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 static-export-diagnostic-origin-provenance',
+          'ignores app-exported structural diagnostic lookalikes without blocking static output',
+          "code: 'KV201'",
+          "expect(output).toContain('diagnostics=0')",
+          "expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain('<main>Home</main>')",
+        ],
+      },
+      {
         id: 'dependency-inline-html-module-closure',
         file: 'packages/cli/src/dependency-capability-loader.test.ts',
         snippets: [

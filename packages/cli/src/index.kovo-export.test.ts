@@ -304,7 +304,8 @@ describe('kovo export', () => {
     }
   });
 
-  it('prints compile diagnostics exported by app modules before writing static output', async () => {
+  // @kovo-security-certifies C13 static-export-diagnostic-origin-provenance
+  it('ignores app-exported structural diagnostic lookalikes without blocking static output', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -331,13 +332,13 @@ describe('kovo export', () => {
         'utf8',
       );
 
-      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(1);
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
 
-      expect(stdout).not.toHaveBeenCalled();
-      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(output).toContain('kovo-export/v1\nERROR KV201 route=src/cart.tsx');
-      expect(output).toContain('Static export refused error diagnostic KV201 at src/cart.tsx:4:12');
-      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo-export/v1\nHTML /index.html');
+      expect(output).toContain('diagnostics=0');
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain('<main>Home</main>');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

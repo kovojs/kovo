@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 267,
+    "historicalWitnesses": 268,
     "productions": 12
   },
   "productions": [
@@ -986,6 +986,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness keeps every relative, absolute, or symlinked child of a reviewed third-party entry inside the exact installed package root."
+    },
+    {
+      "anchor": "static-export-diagnostic-origin-provenance",
+      "corpus": "capability-closure",
+      "production": "realm-boundary",
+      "reason": "This witness prevents app-authored structural diagnostic lookalikes from being reminted as framework diagnostics across the SSR realm boundary."
     },
     {
       "anchor": "dependency-inline-html-module-closure",
