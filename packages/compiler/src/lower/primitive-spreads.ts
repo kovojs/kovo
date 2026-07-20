@@ -5,7 +5,11 @@ import {
   type JsxIrElement,
 } from '../jsx-ir.js';
 import { literalStringValue } from '../scan/object.js';
-import { parserFactHasFrameworkTrustedUrl, type ObjectLiteralEntry } from '../scan/parse.js';
+import {
+  parserFactFrameworkTrustedUrlReason,
+  parserFactHasFrameworkTrustedUrl,
+  type ObjectLiteralEntry,
+} from '../scan/parse.js';
 import {
   compilerArrayLength,
   compilerDefineOwnDataProperty,
@@ -121,7 +125,11 @@ function spreadObjectAttributes(entries: readonly ObjectLiteralEntry[]): JsxIrAt
       index,
       'Static spread object entries',
     ) as (typeof entries)[number];
-    const value = spreadObjectAttributeValue(entry.value, parserFactHasFrameworkTrustedUrl(entry));
+    const value = spreadObjectAttributeValue(
+      entry.value,
+      parserFactHasFrameworkTrustedUrl(entry),
+      parserFactFrameworkTrustedUrlReason(entry),
+    );
     if (value === null) return null;
     if (!value) continue;
     appendSpreadFact(
@@ -145,6 +153,7 @@ function spreadObjectAttributes(entries: readonly ObjectLiteralEntry[]): JsxIrAt
 function spreadObjectAttributeValue(
   value: string | undefined,
   frameworkTrustedUrl = false,
+  trustedUrlReason?: string,
 ): JsxIrAttributeValue | null | undefined {
   if (value === undefined) return null;
   const trimmed = compilerStringTrim(value);
@@ -160,6 +169,7 @@ function spreadObjectAttributeValue(
     kind: 'expression',
     source: trimmed,
     ...(frameworkTrustedUrl ? { trustedUrl: true as const } : {}),
+    ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
   };
 }
 

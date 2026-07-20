@@ -88,6 +88,7 @@ import type {
   KovoBuildPresetDiagnostic,
 } from '@kovojs/server/internal/build-preset';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
+import { assertDocumentCspConfigMatchesBrowserPosture } from '@kovojs/server/internal/csp';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import {
   buildCheckSourceGraphFiles,
@@ -694,6 +695,12 @@ export async function runBuildCommand(
       appSourceDir: dirname(resolvedAppModulePath),
       root: invocationRoot,
     });
+    if (app.document.csp !== undefined) {
+      assertDocumentCspConfigMatchesBrowserPosture(
+        app.document.csp,
+        staticRuntimeRegistry.browserPosture,
+      );
+    }
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
       clientRoot,
@@ -718,6 +725,9 @@ export async function runBuildCommand(
       runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
         ...runtimeRegistryWireFactsFromGraph(checkGraph),
+        ...(staticRuntimeRegistry.browserPosture === undefined
+          ? {}
+          : { browserPosture: staticRuntimeRegistry.browserPosture }),
         ...(staticRuntimeRegistry.tableSecurity === undefined
           ? {}
           : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
@@ -1376,7 +1386,9 @@ export function assertBuildCacheGenerality(
       `endpoint:${path}.response`,
     );
     if (response === undefined) {
-      throw new Error(`Kovo cache generality check failed: endpoint:${path} has no response posture.`);
+      throw new Error(
+        `Kovo cache generality check failed: endpoint:${path} has no response posture.`,
+      );
     }
     const cacheControl = requiredBuildCacheText(
       buildOwnDataValue(response, 'cache', `Build cache endpoint ${path} response`),
@@ -1437,11 +1449,7 @@ function buildCacheDeclarationIntent(
 ): Pick<BuildCacheIntent, 'auditedEscape' | 'externalDataVersions'> {
   const declaration = optionalBuildCacheRecord(value, `${root}.cacheInfluence`);
   if (declaration === undefined) return { externalDataVersions: [] };
-  const auditedValue = buildOwnDataValue(
-    declaration,
-    'auditedEscape',
-    `${root}.cacheInfluence`,
-  );
+  const auditedValue = buildOwnDataValue(declaration, 'auditedEscape', `${root}.cacheInfluence`);
   const audited = optionalBuildCacheRecord(auditedValue, `${root}.cacheInfluence.auditedEscape`);
   const auditedEscape =
     audited === undefined
@@ -1479,14 +1487,12 @@ function buildCacheDeclarationIntent(
       `${root}.cacheInfluence.externalDataVersions[${index}]`,
     );
     if (version === undefined) {
-      throw new Error(`Kovo cache generality check failed: ${root} has an invalid external version.`);
+      throw new Error(
+        `Kovo cache generality check failed: ${root} has an invalid external version.`,
+      );
     }
     const key = optionalBuildCacheRecord(
-      buildOwnDataValue(
-        version,
-        'key',
-        `${root}.cacheInfluence.externalDataVersions[${index}]`,
-      ),
+      buildOwnDataValue(version, 'key', `${root}.cacheInfluence.externalDataVersions[${index}]`),
       `${root}.cacheInfluence.externalDataVersions[${index}].key`,
     );
     if (key === undefined) {
@@ -2896,8 +2902,8 @@ async function loadBuildAppModule(
     );
     const trustedInternalBuild =
       serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'];
-    const appModule = await trustedInternalBuild.runWithUnavailableBuildAppEnvironment(
-      () => server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
+    const appModule = await trustedInternalBuild.runWithUnavailableBuildAppEnvironment(() =>
+      server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
     );
     return {
       appModule,
@@ -4832,7 +4838,12 @@ export function serializeBuildRuntimeRegistryWireModule(
 ): string {
   return buildJoinStrings(
     [
-      `import { registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      ...(registry.browserPosture === undefined
+        ? []
+        : [
+            `registerGeneratedBrowserPostureManifest(${stringifyBuildValue(registry.browserPosture)});`,
+          ]),
       ...(registry.cacheInfluence === undefined
         ? []
         : [

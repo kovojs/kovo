@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 249,
+    "historicalWitnesses": 253,
     "productions": 12
   },
   "productions": [
@@ -1016,6 +1016,30 @@
       "corpus": "capability-closure",
       "production": "root-registration",
       "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "browser-posture-source-and-runtime-closure",
+      "corpus": "browser-posture",
+      "production": "module-boundary",
+      "reason": "This witness carries exact compiler facts through generated runtime registration and closes opaque browser authority."
+    },
+    {
+      "anchor": "browser-posture-header-and-carrier-closure",
+      "corpus": "browser-posture",
+      "production": "runtime-floor",
+      "reason": "This witness reconstructs generated carriers and rejects weaker or contradictory response posture at the runtime door."
+    },
+    {
+      "anchor": "browser-posture-permissions-exhaustiveness",
+      "corpus": "browser-posture",
+      "production": "structural-closure",
+      "reason": "This witness closes the finite browser-operation vocabulary against one exhaustive Permissions-Policy decision table."
+    },
+    {
+      "anchor": "browser-posture-generated-wiring",
+      "corpus": "browser-posture",
+      "production": "module-boundary",
+      "reason": "This witness binds compiler production, generated registry transport, and document response consumption across package boundaries."
     },
     {
       "anchor": "cache-influence-static-closure",

@@ -17,6 +17,13 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
+import {
+  browserPostureManifestSchema,
+  browserSecurityOperationKinds,
+  isBrowserSecurityOperationKind,
+  type BrowserPostureManifest,
+  type BrowserSecurityOperationKind,
+} from '@kovojs/core/internal/security-operation-ir';
 import { verifyEmittedTranslation } from '@kovojs/verify/internal/translation';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
@@ -980,6 +987,7 @@ function assembleCompileResult(
   assertEmittedTranslation(lowered, client, registryCss, files, confidentialityClosed);
 
   return {
+    browserPostureManifest: compileBrowserPostureManifest(lowered, validated.handlers),
     clientModuleImportManifest: client.clientModuleImportManifest,
     componentGraphFacts: facts.componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
@@ -1048,6 +1056,90 @@ function assembleCompileResult(
     taskGraphFacts: facts.taskGraphFacts,
     updateCoverage: facts.queryUpdateCoverage,
     viewTransitions: facts.viewTransitions,
+  };
+}
+
+function compileBrowserPostureManifest(
+  lowered: LowerComponentPhaseResult,
+  handlers: readonly HandlerLowering[],
+): BrowserPostureManifest {
+  const seen = compilerCreateSet<BrowserSecurityOperationKind>();
+  let hasUnclosedBrowserAuthority = false;
+  const handlerLength = compilerArrayLength(handlers, 'Browser posture handlers');
+  for (let handlerIndex = 0; handlerIndex < handlerLength; handlerIndex += 1) {
+    const handler = compilerOwnDataValue(
+      handlers,
+      handlerIndex,
+      'Browser posture handlers',
+    ) as HandlerLowering;
+    const operations = handler.securityOperations;
+    const operationLength = compilerArrayLength(operations, 'Browser posture operation facts');
+    for (let operationIndex = 0; operationIndex < operationLength; operationIndex += 1) {
+      const operation = compilerOwnDataValue(
+        operations,
+        operationIndex,
+        'Browser posture operation facts',
+      ) as (typeof operations)[number];
+      if (isBrowserSecurityOperationKind(operation.kind)) compilerSetAdd(seen, operation.kind);
+    }
+    const diagnostics =
+      handler.diagnostics ?? (handler.diagnostic === undefined ? [] : [handler.diagnostic]);
+    const diagnosticLength = compilerArrayLength(
+      diagnostics,
+      'Browser posture handler diagnostics',
+    );
+    for (let diagnosticIndex = 0; diagnosticIndex < diagnosticLength; diagnosticIndex += 1) {
+      const diagnostic = compilerOwnDataValue(
+        diagnostics,
+        diagnosticIndex,
+        'Browser posture handler diagnostics',
+      ) as CompilerDiagnostic;
+      if (diagnostic.code === 'KV201') hasUnclosedBrowserAuthority = true;
+    }
+  }
+  const operations: BrowserSecurityOperationKind[] = [];
+  const operationKindLength = compilerArrayLength(
+    browserSecurityOperationKinds,
+    'Browser security operation kinds',
+  );
+  for (let index = 0; index < operationKindLength; index += 1) {
+    const kind = compilerOwnDataValue(
+      browserSecurityOperationKinds,
+      index,
+      'Browser security operation kinds',
+    ) as BrowserSecurityOperationKind;
+    if (compilerSetHas(seen, kind)) {
+      compilerArrayAppend(operations, kind, 'Browser posture operations');
+    }
+  }
+  const posture = lowered.lowering.structuralLowering.browserPosture;
+  const isolationBlockers = compilerSnapshotDenseArray(
+    posture.isolationBlockers,
+    'Browser posture isolation blockers',
+  );
+  if (compilerSetHas(seen, 'browser.framework.call') || hasUnclosedBrowserAuthority) {
+    compilerArrayAppend(
+      isolationBlockers,
+      {
+        fileName: lowered.lowering.terminalState.fileName,
+        kind: 'dynamic-fetch-or-worker',
+        site: 'browser.framework.call',
+      },
+      'Browser posture isolation blockers',
+    );
+  }
+  return {
+    externalOrigins: compilerSnapshotDenseArray(
+      posture.externalOrigins,
+      'Browser posture external origins',
+    ),
+    isolationBlockers,
+    opaqueExternalUrls: compilerSnapshotDenseArray(
+      posture.opaqueExternalUrls,
+      'Browser posture opaque URLs',
+    ),
+    operations,
+    schema: browserPostureManifestSchema,
   };
 }
 

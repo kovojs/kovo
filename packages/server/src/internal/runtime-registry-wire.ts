@@ -1,4 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type { BrowserPostureManifest } from '@kovojs/core/internal/security-operation-ir';
 import { snapshotCacheInfluenceManifest } from '@kovojs/core/internal/cache-influence';
 import {
   buildOwnDataProperty,
@@ -94,6 +95,7 @@ export interface RuntimeTableSecurityWireManifest {
 
 /** @internal Runtime registry wire schema shared by Vite dev and CLI build/export. */
 export interface RuntimeRegistryWireFacts {
+  browserPosture?: BrowserPostureManifest;
   cacheInfluence?: NonNullable<CoreGraph.KovoCheckInput['cacheInfluence']>;
   mutationTouches: Readonly<Record<string, readonly RuntimeRegistryMutationTouchSite[]>>;
   queryReads: readonly RuntimeRegistryQueryReadFact[];
@@ -352,11 +354,7 @@ function snapshotRuntimeTableSecurityTable(
   const ownerViaValue = optionalRuntimeTableSecurityValue(value, 'ownerVia', label);
   const dialectValue = optionalRuntimeTableSecurityValue(value, 'dialect', label);
   const domainValue = optionalRuntimeTableSecurityValue(value, 'domain', label);
-  if (
-    dialectValue !== undefined &&
-    dialectValue !== 'postgres' &&
-    dialectValue !== 'sqlite'
-  ) {
+  if (dialectValue !== undefined && dialectValue !== 'postgres' && dialectValue !== 'sqlite') {
     throw new TypeError(`Runtime table-security ${label}.dialect must be postgres or sqlite.`);
   }
   if (domainValue !== undefined && (typeof domainValue !== 'string' || domainValue.length === 0)) {
@@ -559,6 +557,10 @@ export function runtimeRegistryWireFactsFromGraph(
 
 /** @internal Serialize the runtime registry virtual module consumed by dev and production. */
 export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWireFacts): string {
+  const browserPosture =
+    registry.browserPosture === undefined
+      ? ''
+      : `registerGeneratedBrowserPostureManifest(${buildSecuritySourceLiteral(registry.browserPosture)});\n`;
   const cacheInfluence =
     registry.cacheInfluence === undefined
       ? ''
@@ -569,7 +571,7 @@ export function serializeRuntimeRegistryWireModule(registry: RuntimeRegistryWire
     registry.tableSecurity === undefined
       ? ''
       : `registerGeneratedTableSecurityManifest(${buildSecuritySourceLiteral(registry.tableSecurity)});\n`;
-  return `import { registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${cacheInfluence}${tableSecurity}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
+  return `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';\n${browserPosture}${cacheInfluence}${tableSecurity}registerGeneratedQueryReadRegistry(${queryReads});\nregisterGeneratedMutationTouchRegistry(${mutationTouches});\n`;
 }
 
 function snapshotRuntimeTouch(

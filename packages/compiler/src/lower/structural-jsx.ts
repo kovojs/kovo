@@ -40,6 +40,7 @@ import {
 } from '../jsx-ir.js';
 import {
   parseComponentModule,
+  parserFactFrameworkTrustedUrlReason,
   parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -131,6 +132,10 @@ import {
 import { lowerHrefAttributes, lowerNavigationLinks } from './navigation-lowering.js';
 import { lowerPrimitiveComposition } from './primitive-composition.js';
 import { lowerPrimitiveSpreads } from './primitive-spreads.js';
+import {
+  deriveBrowserPostureFacts,
+  type DerivedBrowserPostureFacts,
+} from '../browser-posture-manifest.js';
 
 export type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
@@ -181,6 +186,7 @@ interface MixedTextExpressionChild {
 }
 
 export interface StructuralJsxLowering {
+  browserPosture: DerivedBrowserPostureFacts;
   diagnostics: readonly CompilerDiagnostic[];
   outputContexts: readonly GeneratedOutputWriteFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
@@ -236,6 +242,12 @@ export function lowerStructuralJsx(
     diagnostics,
     lowerPrimitiveComposition(tree.elements, options),
     'Primitive composition diagnostics',
+  );
+  const browserPosture = deriveBrowserPostureFacts(tree.roots, options);
+  appendCompilerFacts(
+    diagnostics,
+    browserPosture.diagnostics,
+    'Browser posture derivation diagnostics',
   );
   const effectiveElementContexts = validateEffectiveElementContextSecurity(options, tree.roots);
   appendCompilerFacts(
@@ -369,6 +381,7 @@ export function lowerStructuralJsx(
   }
 
   return {
+    browserPosture,
     diagnostics,
     outputContexts,
     platformSubstitutions,
@@ -4821,6 +4834,7 @@ function sourceAttributeToIr(
   attribute: JsxAttributeModel,
   options: StructuralJsxLoweringOptions,
 ): JsxIrAttribute {
+  const trustedUrlReason = parserFactFrameworkTrustedUrlReason(attribute);
   const value: JsxIrAttributeValue =
     attribute.value !== undefined
       ? { kind: 'string', value: attribute.value }
@@ -4829,6 +4843,7 @@ function sourceAttributeToIr(
             kind: 'expression',
             source: attribute.expression,
             ...(parserFactHasFrameworkTrustedUrl(attribute) ? { trustedUrl: true as const } : {}),
+            ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
           }
         : { kind: 'boolean', value: true };
   return generatedJsxIrAttribute(

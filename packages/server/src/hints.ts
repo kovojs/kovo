@@ -413,6 +413,37 @@ export function renderPageHints(
   };
 }
 
+/**
+ * Refuse the optional cross-origin-isolated posture when framework-rendered page hints carry an
+ * absolute network resource. Build-generated hints are same-origin paths; an authored absolute
+ * stylesheet, modulepreload, or bootstrap URL needs CORP/CORS evidence that Kovo cannot prove.
+ *
+ * @internal
+ */
+export function assertPageHintsCrossOriginIsolationEligible(options: PageHintOptions): void {
+  const snapshot = snapshotPageHintOptions(options);
+  if (
+    snapshot.bootstrapScript !== undefined &&
+    isAbsoluteHttpHintResource(snapshot.bootstrapScript)
+  ) {
+    throw new TypeError('crossOriginIsolation is not closed: external bootstrap script page hint.');
+  }
+  const modulepreloads = snapshot.modulepreloads ?? [];
+  for (let index = 0; index < modulepreloads.length; index += 1) {
+    if (isAbsoluteHttpHintResource(modulepreloads[index]!)) {
+      throw new TypeError('crossOriginIsolation is not closed: external modulepreload page hint.');
+    }
+  }
+  const stylesheets = snapshot.stylesheets ?? [];
+  for (let index = 0; index < stylesheets.length; index += 1) {
+    const stylesheet = stylesheets[index]!;
+    const href = typeof stylesheet === 'string' ? stylesheet : stylesheet.href;
+    if (isAbsoluteHttpHintResource(href)) {
+      throw new TypeError('crossOriginIsolation is not closed: external stylesheet page hint.');
+    }
+  }
+}
+
 export function renderStylesheetLinks(stylesheets: readonly (string | StylesheetAsset)[]): string {
   const assets = dedupeStylesheets(snapshotHintArray(stylesheets, 'stylesheet links'));
   const links: string[] = [];
@@ -1403,6 +1434,17 @@ function safeHintUrl(value: string, label: string): string {
     }
   }
   return value;
+}
+
+function isAbsoluteHttpHintResource(value: string): boolean {
+  const safe = safeHintUrl(value, 'cross-origin isolation');
+  if (!securityRegExpTest(/^[a-zA-Z][a-zA-Z\d+.-]*:/, safe)) return false;
+  try {
+    const parsed = securityUrlSnapshot(safe);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function hasHintControlCharacter(value: string): boolean {

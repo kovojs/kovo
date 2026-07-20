@@ -427,6 +427,48 @@ verdict is rooted in the registration's reachable authority, not in a deny-list 
 the callback body; adding or renaming a dangerous browser API therefore cannot reopen the raw
 registration path. Compiler-owned JSX handlers remain governed by KV449 and the finite operation IR.
 
+**Compiler-derived browser response posture (normative).** Supported build and dev runners MUST
+derive one `kovo-browser-posture/v1` manifest from the immutable project source snapshot and
+register its reconstructed generated carrier before authored app evaluation. The compiler census
+uses the final effective intrinsic element/attribute tuple after static spread and primitive
+composition lowering. It records canonical absolute HTTP(S) origins, CSP directive, file, and
+source span for `script[src]`, sandboxed `iframe[src]`, `img[src|srcset]`, SVG
+`image[href|xlink:href]` and `feImage[href|xlink:href]`, `audio[src]`, `video[src|poster]`,
+`source[src|srcset]`, `track[src]`, `input[type=image][src]`, and fetch-bearing `link[href]` relations
+(`stylesheet`, `modulepreload`, icons, and typed preloads). Relative/path-only and fragment URLs
+remain same-origin and add no origin. A computed URL at one of those positions is KV236 unless it
+is the exact framework `trustedUrl(value, auditedReason)` call with a non-empty static reason. That
+escape is recorded as opaque audit evidence; it does not invent an origin or establish isolation.
+A computed `link[rel]`, opaque spread that could introduce an asset position, unclassifiable
+external URL, raw browser fetch/worker authority, frame, or popup likewise prevents a positive
+isolation verdict. Local spelling, structural copies, missing reasons, and self-consistent manifest
+fields cannot mint compiler provenance.
+
+Framework-rendered page hints are re-witnessed at the document sink. An absolute HTTP(S)
+stylesheet, modulepreload, or bootstrap-script hint prevents the optional isolation posture because
+the compiler cannot establish the remote response's CORP/CORS behavior; build-generated
+same-origin hint paths remain eligible.
+
+Document CSP assembly consumes that registered manifest. Census origins are admitted only to their
+derived fetch directive. An authored `CspAllowlist` string MUST be a canonical origin already in
+the same directive's census; a non-static origin requires the structured `{ origin, rationale }`
+escape with a non-empty audited rationale. An unused unmatched string is a build/check error, not a
+silent widening. The manifest and authored config are snapshotted from stable own data before use,
+and generated registry reconstruction rejects unknown kinds, malformed spans, noncanonical origins,
+accessors, sparse arrays, and schema drift.
+
+`Permissions-Policy` has exactly one response assembler with one exhaustive decision for every
+`BrowserSecurityOperationKind`; adding an operation without a decision fails the build. Both normal
+and reporting header bytes come from that assembler. The default document posture remains
+`Cross-Origin-Opener-Policy: same-origin-allow-popups` and makes no cross-origin-isolation claim.
+`document.csp.crossOriginIsolation: true` is accepted only with the exact generated manifest and no
+external or opaque resource, dynamic/opaque browser call, frame, popup, or authored origin whose
+CORP/CORS behavior is unproved. The isolated response is exact: COOP `same-origin`, COEP
+`require-corp`, and document CORP `same-origin`, plus the derived CSP and Permissions Policy. A
+route response cannot replace or weaken those selected headers. Missing or contradictory evidence
+fails before a deployable artifact or document response; Kovo never silently weakens isolation to
+preserve OAuth, popup, embed, or third-party-resource compatibility.
+
 **Finite operation closure (normative, supported-subset static gate).** Capability closure answers
 which code and reviewed doors are reachable; the finite security-operation IR answers which
 security-relevant effects a supported handler can perform. Its browser vocabulary is closed in

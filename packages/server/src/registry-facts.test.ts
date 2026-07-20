@@ -4,6 +4,7 @@ import {
   createCacheInfluenceManifest,
   deriveCacheInfluenceManifestEntry,
 } from '@kovojs/core/internal/cache-influence';
+import { browserPostureManifestSchema } from '@kovojs/core/internal/security-operation-ir';
 
 import { domain } from './domain.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
@@ -339,6 +340,20 @@ describe('runtimeRegistryFacts', () => {
     );
     expect(serializeRuntimeRegistryWireModule(facts)).toContain(
       'registerGeneratedCacheInfluenceManifest({"entries":[',
+    );
+    expect(
+      serializeRuntimeRegistryWireModule({
+        ...facts,
+        browserPosture: {
+          externalOrigins: [],
+          isolationBlockers: [],
+          opaqueExternalUrls: [],
+          operations: ['browser.form.submit'],
+          schema: browserPostureManifestSchema,
+        },
+      }),
+    ).toContain(
+      'registerGeneratedBrowserPostureManifest({"externalOrigins":[],"isolationBlockers":[],"opaqueExternalUrls":[],"operations":["browser.form.submit"],"schema":"kovo-browser-posture/v1"});',
     );
   });
 

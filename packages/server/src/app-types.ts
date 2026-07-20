@@ -118,14 +118,10 @@ export type ErrorShellRenderer = (context: { request: Request; status: 403 | 404
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {
   /**
-   * SF (secure-framework Tier 3, SPEC §6.6 runtime DiD, cross-browser floor — NOT a
-   * by-construction proof): app-facing third-party CSP allowlist + Trusted Types opt-in
-   * threaded into the auto-attached strict document CSP. The `allowlist` APPENDS origins
-   * to the overridable per-fetch directives (`script-src`/`style-src`/`frame-src`/
-   * `connect-src`/`img-src`) so analytics/Stripe/Sentry embeds — denied by default since
-   * there is no report-only ramp — can be declared. The non-overridable hardening
-   * directives (`base-uri`/`object-src`/`form-action`/`frame-ancestors`) stay locked and
-   * are unreachable from here (see {@link DocumentCspConfig} / `csp.ts`).
+   * SPEC §6.6 browser defense-in-depth: compiler-derived CSP origins, reviewed non-static
+   * origins, reporting/Trusted Types posture, and optional closed cross-origin isolation.
+   * String allowlist origins must match the compiler census; a non-static integration needs
+   * the explicit `{ origin, rationale }` escape. Hardening directives remain framework-owned.
    */
   csp?: DocumentCspConfig;
   structured?: DocumentConfig;

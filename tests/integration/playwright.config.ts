@@ -14,6 +14,8 @@ import { defineConfig, devices } from '@playwright/test';
 // engines before promoting (a flaky cross-engine spec breaks CI on the slow path).
 const CROSS_ENGINE = [
   /browser-engine-degradation-matrix\.spec\.ts/,
+  /browser-response-posture-interoperability\.spec\.ts/,
+  /browser-response-posture\.spec\.ts/,
   /counter\.spec\.ts/,
   /binding-text-attr\.spec\.ts/,
   /meta-refresh-sink\.spec\.ts/,

@@ -201,6 +201,13 @@ describe('build/export security bootstrap ordering', () => {
         routes: {},
       });
       const registry = serializeBuildRuntimeRegistryWireModule({
+        browserPosture: {
+          externalOrigins: [],
+          isolationBlockers: [],
+          opaqueExternalUrls: [],
+          operations: ['browser.form.submit'],
+          schema: 'kovo-browser-posture/v1',
+        },
         mutationTouches: {
           save: [{ domain: 'accounts', keys: 'id' }],
         },
@@ -212,6 +219,8 @@ describe('build/export security bootstrap ordering', () => {
       expect(registry).not.toContain(marker);
       expect(registry).toContain('"query":"account"');
       expect(registry).toContain('"domain":"accounts"');
+      expect(registry).toContain('registerGeneratedBrowserPostureManifest(');
+      expect(registry).toContain('"operations":["browser.form.submit"]');
     } finally {
       JSON.stringify = nativeStringify;
     }

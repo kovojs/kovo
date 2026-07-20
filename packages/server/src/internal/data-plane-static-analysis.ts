@@ -8,6 +8,7 @@ import {
 } from 'node:path';
 
 import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
+import { deriveBrowserPostureManifestFromSourceFiles } from '@kovojs/compiler/internal';
 import {
   compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
@@ -309,9 +310,16 @@ export async function collectRuntimeRegistryFacts(options: {
   root: string;
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
-  if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
+  if (analysis.files.length === 0) {
+    return {
+      browserPosture: deriveBrowserPostureManifestFromSourceFiles([]),
+      mutationTouches: {},
+      queryReads: [],
+    };
+  }
 
   return {
+    browserPosture: deriveBrowserPostureManifestFromSourceFiles(analysis.files),
     mutationTouches: runtimeRegistryMutationTouchesFromGraph(
       analysis.staticFacts.touchGraph === undefined
         ? {}

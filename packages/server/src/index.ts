@@ -215,11 +215,13 @@ export type {
 // type without exposing its module-private mint/resolve controls (rules/api-surface.md; SPEC
 // §6.6/§10.3 C9).
 export type { FrameworkManagedDbProvider } from './guards.js';
-// CSP allowlist config named by `createApp({ document: { csp } })` (recursive publicness,
-// rules/api-surface.md): an app declares third-party analytics/Stripe origins through these.
-// SPEC §6.6: a cross-browser runtime DiD floor, not a by-construction proof.
+// Browser posture config named by `createApp({ document: { csp } })` (recursive publicness,
+// rules/api-surface.md). SPEC §6.6: compiler-censused origins are automatic; non-static origins
+// require a reviewed rationale, and explicit isolation remains a runtime defense-in-depth floor.
 export type {
   CspAllowlist,
+  CspAllowlistEntry,
+  CspAllowlistOrigin,
   CspInlineMetadata,
   CspReportingConfig,
   DocumentCspConfig,

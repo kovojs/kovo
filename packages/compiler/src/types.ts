@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type {
+  BrowserPostureManifest,
   BrowserSecurityOperationKind,
   SecurityOperationDoor,
 } from '@kovojs/core/internal/security-operation-ir';
@@ -418,6 +419,8 @@ export interface CompileArtifactFileNames {
  * hand-write these lowered artifacts (SPEC.md §5.2).
  */
 export interface CompileResult {
+  /** Compiler-derived browser fetch/effect posture consumed by generated response assembly. */
+  browserPostureManifest: BrowserPostureManifest;
   clientModuleImportManifest: readonly ClientModuleImportManifestEntry[];
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
@@ -654,6 +657,13 @@ export function elementParamNameFromAttribute(attributeName: string): string {
  */
 export function createEmptyCompileResult(): CompileResult {
   return {
+    browserPostureManifest: {
+      externalOrigins: [],
+      isolationBlockers: [],
+      opaqueExternalUrls: [],
+      operations: [],
+      schema: 'kovo-browser-posture/v1',
+    },
     clientModuleImportManifest: [],
     clientExports: [],
     componentGraphFacts: [],

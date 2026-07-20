@@ -13,9 +13,8 @@ export {
   type RunMutationOptions,
 } from '../mutation.js';
 export { invalidate, type MutationTouchSite } from '../change-record.js';
-export {
-  registerGeneratedCacheInfluenceManifest,
-} from '../generated-cache-influence-registry.js';
+export { registerGeneratedCacheInfluenceManifest } from '../generated-cache-influence-registry.js';
+export { registerGeneratedBrowserPostureManifest } from '../generated-browser-posture-registry.js';
 export {
   registerGeneratedMutationTouchRegistry,
   type GeneratedMutationTouchRegistry,

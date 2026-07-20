@@ -2162,6 +2162,55 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     ],
   },
   {
+    id: 'browser-posture',
+    marker: '@kovo-security-classifier-corpus browser-posture',
+    testFiles: [
+      'packages/compiler/src/browser-posture-manifest.security.test.ts',
+      'packages/server/src/browser-response-posture.security.test.ts',
+      'scripts/browser-posture-derivation-gate.test.mjs',
+    ],
+    verdictAnchors: [
+      {
+        id: 'browser-posture-source-and-runtime-closure',
+        file: 'packages/compiler/src/browser-posture-manifest.security.test.ts',
+        snippets: [
+          'compiler-derived browser response posture',
+          'fails closed for a computed asset URL unless the exact trustedUrl export is used',
+          'keeps raw dynamic browser fetches and workers outside an isolation-positive build',
+          'merges project manifests deterministically and closes a dynamic asset before boot',
+        ],
+      },
+      {
+        id: 'browser-posture-header-and-carrier-closure',
+        file: 'packages/server/src/browser-response-posture.security.test.ts',
+        snippets: [
+          'owns normal/reporting Permissions-Policy bytes through one operation switch',
+          'stamps exact isolation bytes on documents and rejects route-level weakening',
+          'rejects contradictory generated isolation evidence instead of trusting blocker omission',
+          're-witnesses generated manifest arrays and rejects mutable accessor entries',
+        ],
+      },
+      {
+        id: 'browser-posture-permissions-exhaustiveness',
+        file: 'scripts/browser-posture-derivation-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 browser-posture-permissions-exhaustiveness',
+          'Permissions-Policy switch is missing browser.dialog.open',
+          'a document response site duplicates the Permissions-Policy feature list',
+        ],
+      },
+      {
+        id: 'browser-posture-generated-wiring',
+        file: 'scripts/browser-posture-derivation-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 browser-posture-generated-wiring',
+          'registerGeneratedBrowserPostureManifest',
+          'browserResponsePostureHeaders',
+        ],
+      },
+    ],
+  },
+  {
     id: 'finite-security-operation-ir',
     marker: '@kovo-security-classifier-corpus finite-security-operation-ir',
     testFiles: [

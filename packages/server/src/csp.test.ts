@@ -9,6 +9,8 @@ import {
   styleAttributeCspInlineMetadata,
 } from './csp.js';
 
+const reviewedOrigin = (origin: string) => ({ origin, rationale: 'security test fixture' });
+
 describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
   // bugz-3 L18: `directive()` joins source-list values with spaces and the directives with
   // `; `. A value carrying `;`/whitespace/newline can smuggle a NEW directive that, by CSP
@@ -20,16 +22,16 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
 
     expect(() =>
       renderDefaultDocumentCsp(emptyCspInlineMetadata(), {
-        allowlist: { scriptSrc: [smuggled] },
+        allowlist: { scriptSrc: [reviewedOrigin(smuggled)] },
       }),
-    ).toThrow(/directive separator/);
+    ).toThrow(/invalid absolute origin/);
 
     // The exploit is gone: no assembled policy string is ever produced that contains the
     // smuggled `script-src 'unsafe-inline'` override — the builder throws instead.
     let assembled: string | undefined;
     try {
       assembled = renderDefaultDocumentCsp(emptyCspInlineMetadata(), {
-        allowlist: { scriptSrc: [smuggled] },
+        allowlist: { scriptSrc: [reviewedOrigin(smuggled)] },
       });
     } catch {
       assembled = undefined;
@@ -56,18 +58,20 @@ describe('CSP source-list value validation (bugz-3 L18, SPEC §6.6)', () => {
     const metadata = emptyCspInlineMetadata();
     expect(() =>
       renderDefaultDocumentCsp(metadata, {
-        allowlist: { connectSrc: ['https://api.example.com; base-uri https://evil.example'] },
+        allowlist: {
+          connectSrc: [reviewedOrigin('https://api.example.com; base-uri https://evil.example')],
+        },
       }),
-    ).toThrow(/directive separator/);
+    ).toThrow(/invalid absolute origin/);
   });
 
   it('accepts legitimate single source expressions (no false positives)', () => {
     const policy = renderDefaultDocumentCsp(emptyCspInlineMetadata(), {
       allowlist: {
-        connectSrc: ['https://api.example.com'],
-        imgSrc: ['https://cdn.example.com'],
-        scriptSrc: ['https://js.stripe.com'],
-        styleSrc: ['https://fonts.example.com'],
+        connectSrc: [reviewedOrigin('https://api.example.com')],
+        imgSrc: [reviewedOrigin('https://cdn.example.com')],
+        scriptSrc: [reviewedOrigin('https://js.stripe.com')],
+        styleSrc: [reviewedOrigin('https://fonts.example.com')],
       },
     });
 
