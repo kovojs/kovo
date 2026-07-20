@@ -1395,8 +1395,13 @@ const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
 const requestBodyBeforeDbAdmissionBranch =
-  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)';
-const weakenedRequestBodyBeforeDbAdmissionBranch = '            ? deadlineRequest';
+  '        const dispatchRequest = await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes);';
+const weakenedRequestBodyBeforeDbAdmissionBranch = [
+  '        const dispatchRequest =',
+  "          match.kind === 'endpoint' || match.kind === 'mutation'",
+  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
+  '            : deadlineRequest;',
+].join('\n');
 const cspReportBeforeDbAdmissionBranch = [
   '        if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {',
   '          return kovoSecurityReportResponse(app, deadlineRequest);',
@@ -1411,16 +1416,16 @@ const weakenedCspReportBeforeDbAdmissionBranch = [
 const taskStartupAfterRequestAdmissionBranch = [
   '      if (taskRuntime === undefined) return handleAppRequest(app, dispatchRequest);',
   '      return handleAppRequest(app, dispatchRequest, {',
-  '        admitted(admittedRequest) {',
-  '          void taskRuntime.ensureStarted(admittedRequest).catch((error: unknown) => {',
-  '            reportAppStartupError(app, admittedRequest, error);',
+  '        admitted() {',
+  '          void taskRuntime.ensureStarted().catch((error: unknown) => {',
+  '            reportAppStartupError(app, taskInternalRequest(), error);',
   '          });',
   '        },',
   '      });',
 ].join('\n');
 const weakenedTaskStartupAfterRequestAdmissionBranch = [
-  '      void taskRuntime?.ensureStarted(dispatchRequest).catch((error: unknown) => {',
-  '        reportAppStartupError(app, dispatchRequest, error);',
+  '      void taskRuntime?.ensureStarted().catch((error: unknown) => {',
+  '        reportAppStartupError(app, taskInternalRequest(), error);',
   '      });',
   '      return handleAppRequest(app, dispatchRequest);',
 ].join('\n');
@@ -4821,8 +4826,8 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
-      'Runs managed database posture admission before the streamed endpoint or mutation body ceiling.',
-    expectedKiller: 'remote streamed bodies must be rejected before managed database work',
+      'Restores body admission only for endpoint and mutation dispatch, allowing other request kinds to reach managed database posture first.',
+    expectedKiller: 'every remote streamed body must be rejected before managed database work',
     name: 'server-request/move-db-admission-before-body-limit',
     replacement: weakenedRequestBodyBeforeDbAdmissionBranch,
     search: requestBodyBeforeDbAdmissionBranch,
@@ -5759,7 +5764,8 @@ function assertRequestBodyPrecedesDbAdmissionBehavior(_moduleUnderTest, { source
     relativeSourcePath: 'app-request.ts',
     sourceText,
     testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
-    testNamePattern: 'rejects an oversized streamed body before managed database admission',
+    testNamePattern:
+      'rejects oversized method-mismatch route bodies before managed database admission',
   });
 }
 
