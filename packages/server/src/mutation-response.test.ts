@@ -1995,6 +1995,39 @@ describe('server mutation primitives', () => {
     expect(finallyRan).toBe(true);
   });
 
+  it('converts explicit stream.done cleanup failures into the sanitized error terminal', async () => {
+    const cleanupError = new Error('stream cleanup failed');
+    const onError = vi.fn();
+    const sendMessage = mutation('chat/send-done-cleanup-failure', {
+      input: s.object({ body: s.string() }),
+      handler: (input) => input,
+      *stream() {
+        try {
+          yield stream.text('assistant:a1', 'partial');
+          yield stream.done();
+        } finally {
+          throw cleanupError;
+        }
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Stream': 'true' },
+      onError,
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+    const body = await readResponseBody(response.body);
+
+    expect(onError).toHaveBeenCalledWith(
+      cleanupError,
+      expect.objectContaining({ operation: 'mutation-stream' }),
+    );
+    expect(body).toContain('<kovo-done reason="error"></kovo-done>');
+    expect(body).not.toContain('<kovo-done></kovo-done>');
+  });
+
   it('does not invoke mutation streams for CSRF failures', async () => {
     const streamSpy = vi.fn();
     const sendMessage = defineMutation('chat/send-csrf', {

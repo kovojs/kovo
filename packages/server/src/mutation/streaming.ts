@@ -196,13 +196,9 @@ export const renderStreamingMutationWireResponse = wireEmitter(
         sourceIteratorClosePromise = securityPromiseThen(
           securityPromiseResolve(sourceIterator.return?.()),
           () => undefined,
-          (error) => {
-            reportStreamingError(error);
-          },
         );
       } catch (error) {
-        reportStreamingError(error);
-        sourceIteratorClosePromise = securityPromiseResolve(undefined);
+        sourceIteratorClosePromise = createSecurityPromise((_resolve, reject) => reject(error));
       }
       return sourceIteratorClosePromise;
     };
@@ -290,7 +286,13 @@ export const renderStreamingMutationWireResponse = wireEmitter(
           // coalesced iterator) because the coalesce layer holds a pending .next() call
           // that won't resolve until the source yields — the return() must reach the
           // source generator directly to interrupt it.
-          return closeSourceIterator();
+          return securityPromiseThen(
+            closeSourceIterator(),
+            () => undefined,
+            (error) => {
+              reportStreamingError(error);
+            },
+          );
         },
       }),
       headers: finalResponse.headers,
