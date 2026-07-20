@@ -86,6 +86,7 @@ function inputWithSemanticInfluences(
         break;
       case 'server.handler.root':
       case 'server.helper.call':
+      case 'server.data.declassify':
       case 'server.output.trusted-html':
       case 'server.response.header':
       case 'server.response.outcome':

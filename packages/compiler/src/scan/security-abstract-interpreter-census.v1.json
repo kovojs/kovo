@@ -33,6 +33,7 @@
       "unsafe-wire-data",
       "unknown-authority",
       "operation:server.authority.scope",
+      "operation:server.data.declassify",
       "operation:server.database.read",
       "operation:server.database.trusted-sql",
       "operation:server.database.write",

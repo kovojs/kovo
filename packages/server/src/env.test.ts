@@ -19,6 +19,7 @@ import {
 import { withKovoBuildContext } from './internal/build-context.js';
 import { createSigningKeyRing } from './keyring.js';
 import { s, SchemaValidationError } from './schema.js';
+import { testTrustedRevealPolicy } from './declassification-policy.test-support.js';
 
 // A real, length-clearing secret (~43 base64url chars ≈ 192 bits), matching what the
 // anonymous-CSRF path mints with `randomBytes(32).toString('base64url')`.
@@ -512,11 +513,7 @@ describe('createApp boot integration (the chokepoint)', () => {
     expect(isSecret(app.env.API_TOKEN)).toBe(true);
     expect(isSecret(app.env.PUBLIC_ORIGIN)).toBe(true);
 
-    const unavailable = trustedReveal(app.env.API_TOKEN, {
-      justification: 'prove the build sentinel cannot become an artifact value',
-      method: 'arbitrary-fn',
-      source: 'app.env.API_TOKEN',
-    }) as unknown;
+    const unavailable = trustedReveal(app.env.API_TOKEN, testTrustedRevealPolicy) as unknown;
     expect(() => JSON.stringify(unavailable)).toThrow(/unavailable while kovo build/u);
     expect(() => String(unavailable)).toThrow(/unavailable while kovo build/u);
     expect(() => ({ ...(unavailable as object) })).toThrow(/unavailable while kovo build/u);
@@ -540,11 +537,7 @@ describe('createApp boot integration (the chokepoint)', () => {
     });
 
     function createCredentialClient(apiToken: SecretValue<string>) {
-      const rawToken = trustedReveal(apiToken, {
-        justification: 'initialize the payment SDK credential once at boot',
-        method: 'arbitrary-fn',
-        source: 'app.env.API_TOKEN',
-      });
+      const rawToken = trustedReveal(apiToken, testTrustedRevealPolicy);
       return Object.freeze({ credentialLength: () => rawToken.length });
     }
 
@@ -552,8 +545,10 @@ describe('createApp boot integration (the chokepoint)', () => {
     expect(client.credentialLength()).toBe('sk_live_dependency_bootstrap'.length);
     expect(drainSecretRevealAuditFacts()).toMatchObject([
       {
+        door: 'trustedReveal',
         kind: 'secret-reveal',
-        reason: 'initialize the payment SDK credential once at boot',
+        ownerScope: 'application',
+        purpose: 'public-projection',
       },
     ]);
   });

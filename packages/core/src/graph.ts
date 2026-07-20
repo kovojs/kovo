@@ -1024,6 +1024,7 @@ export interface CapabilityClosureExplainFact {
   capability?:
     | 'crypto-acquisition'
     | 'database-driver'
+    | 'declassification'
     | 'digest'
     | 'dynamic-loader'
     | 'filesystem'
@@ -1066,6 +1067,7 @@ export interface AppDependencyCapabilityImport {
   capabilities: readonly (
     | 'crypto-acquisition'
     | 'database-driver'
+    | 'declassification'
     | 'digest'
     | 'dynamic-loader'
     | 'filesystem'

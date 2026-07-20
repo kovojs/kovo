@@ -1448,7 +1448,7 @@ function mutationSecretReturnDiagnostic(
 ): TouchGraphDiagnostic {
   return drizzleDiagnostic({
     code: 'KV435',
-    detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+    detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire or select explicit non-secret columns; declassification doors are request-closed.`,
     site: site ?? `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
   });
 }
@@ -5645,18 +5645,16 @@ function secretProjectionBackstopDiagnostics(
   readProvenance: readonly QueryReadProvenance[],
   shape: QueryShape,
 ): TouchGraphDiagnostic[] {
-  const revealedPaths = revealedQueryShapePaths(shape);
   const diagnostics: TouchGraphDiagnostic[] = [];
 
   for (const read of readProvenance) {
     for (const column of read.columns) {
-      if (revealedPaths.has(column.path)) continue;
       if (column.classification !== 'secret' && column.classification !== 'unresolved') continue;
 
       diagnostics.push(
         drizzleDiagnostic({
           code: 'KV435',
-          detail: `Query projection ${query}.${column.path} reads a secret-classified column or unresolved projection from secret-classified table(s): ${column.table}. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+          detail: `Query projection ${query}.${column.path} reads a secret-classified column or unresolved projection from secret-classified table(s): ${column.table}. Prove that only public columns cross the query wire; declassification doors are request-closed.`,
           site: column.site || read.site,
         }),
       );
@@ -7438,7 +7436,6 @@ import {
   revealFactsFromQueryShape,
   receiverMethodAliasQueryDiagnostics,
   referencedQueryCallbackFunction,
-  revealedQueryShapePaths,
   relationalQueryDiagnostics,
   relationalShapeFromQueryBody,
   scalarProjectionTable,

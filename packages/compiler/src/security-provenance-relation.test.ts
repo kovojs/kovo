@@ -27,8 +27,8 @@ import {
 } from './scan/security-provenance-relation.js';
 
 describe('finite security provenance relation (SPEC §2/§6.6)', () => {
-  it('censuses the current 43 server and 20 browser states against operation kinds', () => {
-    expect(serverValueProvenanceStates).toHaveLength(43);
+  it('censuses the current 44 server and 20 browser states against operation kinds', () => {
+    expect(serverValueProvenanceStates).toHaveLength(44);
     expect(browserValueProvenanceStates).toHaveLength(20);
     expect(serverOperationProvenanceStates).toEqual(
       serverSecurityOperationKinds.map((kind) => `operation:${kind}`),
@@ -64,7 +64,7 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
     }
   });
 
-  it('proves the quotient classes and all 2,451 relation pairs match the old classifier', () => {
+  it('proves the quotient classes and all 2,508 relation pairs match the old classifier', () => {
     for (const definition of serverMemberClassDefinitions) {
       expect(classifyServerMember(definition.representative)).toBe(definition.id);
       for (const member of definition.effectiveMembers ?? []) {
@@ -96,7 +96,7 @@ describe('finite security provenance relation (SPEC §2/§6.6)', () => {
       }
     }
     expect(executedPairs).toBe(serverValueProvenanceStates.length * serverMemberClasses.length);
-    expect(executedPairs).toBe(2_451);
+    expect(executedPairs).toBe(2_508);
   });
 
   it('derives authorityTop from the relation while unknown future states fail closed', () => {

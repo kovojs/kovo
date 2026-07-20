@@ -1280,10 +1280,10 @@ export const save = mutation('cart/save', {
     );
   });
 
-  // SPEC §6.6 (audit-only): a boot-time app.env credential reveal uses the existing reveal-fact
-  // graph. `--capabilities` may fold the same fact for a combined audit, but there is no parallel
-  // capability producer for trustedReveal.
-  it('surfaces a config-secret credential-factory reveal end-to-end through --revealed', async () => {
+  // SPEC §6.6 (audit-only): a typed boot credential reveal uses the existing reveal-fact graph.
+  // `--capabilities` may fold the same fact for a combined audit, but there is no parallel
+  // capability producer for the declassification call.
+  it('surfaces a typed declassification policy end-to-end through --revealed', async () => {
     const { collectRuntimeRevealFactsFromProject } =
       await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
@@ -1293,9 +1293,9 @@ export const save = mutation('cart/save', {
         {
           fileName: 'payment.ts',
           source: [
-            `import { trustedReveal, type SecretValue } from '@kovojs/core';`,
+            `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core';`,
             `export function createPaymentClient(key: SecretValue<string>) {`,
-            `  const raw = trustedReveal(key, { justification: 'initialize payment SDK once at boot', method: 'arbitrary-fn', source: 'app.env.PAYMENT_API_KEY' });`,
+            `  const raw = revealSecret(key, DeclassifyPolicy.create({ door: 'revealSecret', ownerScope: 'application', purpose: 'credential-use' }));`,
             `  return new PaymentClient(raw);`,
             `}`,
           ].join('\n'),
@@ -1306,13 +1306,13 @@ export const save = mutation('cart/save', {
     expect(revealed).toMatchObject([
       {
         grade: 'audit',
-        justification: 'initialize payment SDK once at boot',
+        justification: 'credential-use:revealSecret:application',
         method: 'arbitrary-fn',
-        path: 'app.env.PAYMENT_API_KEY',
+        path: 'key',
         query: 'runtime',
         selectedSecret: true,
         site: 'payment.ts:3',
-        source: 'app.env.PAYMENT_API_KEY',
+        source: 'key',
       },
     ]);
 
@@ -1324,7 +1324,7 @@ export const save = mutation('cart/save', {
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(
-      'REVEAL grade=audit method=arbitrary-fn query=runtime path=app.env.PAYMENT_API_KEY site=payment.ts:3 source=app.env.PAYMENT_API_KEY selectedSecret=yes justification="initialize payment SDK once at boot"',
+      'REVEAL grade=audit method=arbitrary-fn query=runtime path=key site=payment.ts:3 source=key selectedSecret=yes justification="credential-use:revealSecret:application"',
     );
   });
 

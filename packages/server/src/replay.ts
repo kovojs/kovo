@@ -14,6 +14,7 @@ import {
   type ServerResponseBase,
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import { parseMutationIdemToken } from './mutation-idem.js';
 import { formLikeToRecord } from './schema.js';
 import {
@@ -922,7 +923,7 @@ async function canonicalJson(value: unknown): Promise<string> {
   // fingerprint compares the validated wire value, so reveal wrappers at this internal choke
   // before structural canonicalization.
   if (isUntrusted(value)) {
-    return canonicalJson(revealUntrusted(value, 'validated request-derived replay fingerprint'));
+    return canonicalJson(revealUntrusted(value, frameworkRevealUntrustedPolicy));
   }
   if (value instanceof ReplayFormDataFingerprintInput) {
     return canonicalFormDataEntries(value.entries);

@@ -14,6 +14,7 @@ import {
   type QueryFactory,
 } from './query.js';
 import { s, type Schema } from './schema.js';
+import { testTrustedRevealPolicy } from './declassification-policy.test-support.js';
 
 describe('query endpoints', () => {
   it('ignores inherited query access/reads and refuses definition accessors', () => {
@@ -175,9 +176,10 @@ describe('query endpoints', () => {
     });
     const revealedSecretQuery = query('revealed-secret-query', {
       load: () => ({
-        passwordDigest: trustedReveal('hash-1' as unknown as Secret<string>, {
-          justification: 'one-way digest shown to admins',
-        }),
+        passwordDigest: trustedReveal(
+          'hash-1' as unknown as Secret<string>,
+          testTrustedRevealPolicy,
+        ),
       }),
       reads: [],
     });

@@ -79,6 +79,7 @@ const browserOperationKinds = new Set([
 
 const serverOperationKinds = new Set([
   'server.authority.scope',
+  'server.data.declassify',
   'server.database.read',
   'server.database.trusted-sql',
   'server.database.write',
@@ -110,6 +111,7 @@ const operationDoorByKind = new Map<string, string>([
   ['browser.timer.cancel', 'framework-timer'],
   ['browser.timer.schedule', 'framework-timer'],
   ['server.authority.scope', 'principal-scope'],
+  ['server.data.declassify', 'declassify'],
   ['server.database.read', 'managed-db'],
   ['server.database.trusted-sql', 'trustedSql'],
   ['server.database.write', 'managed-db'],

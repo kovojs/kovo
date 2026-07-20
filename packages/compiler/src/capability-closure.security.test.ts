@@ -402,6 +402,136 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics[0]!.message).toContain('import:./lifecycle.js@app.ts');
   });
 
+  // @kovo-security-classifier-corpus C13 declassification-capability-closure
+  it('closes declassification policy construction and reveal doors from request-reachable modules', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
+          import { route } from '@kovojs/server';
+          export const page = route('/closed-declassification', { render() {
+            return [DeclassifyPolicy, trustedReveal];
+          } });
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics.every((diagnostic) => diagnostic.code === 'KV448')).toBe(true);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'declassification policy and reveal doors are unavailable',
+    );
+    expect(
+      result.facts.filter(
+        (fact) => fact.kind === 'closed' && fact.capability === 'declassification',
+      ),
+    ).toHaveLength(1);
+  });
+
+  // @kovo-security-classifier-corpus C13 declassification-capability-closure
+  it('transitively closes a declassification policy imported through a reachable helper', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { publicProjectionPolicy } from './projection.js';
+          export const page = route('/transitive-declassification', {
+            render() { return publicProjectionPolicy; },
+          });
+        `,
+      },
+      {
+        fileName: 'projection.ts',
+        source: `
+          import { DeclassifyPolicy } from '@kovojs/core';
+          export const publicProjectionPolicy = DeclassifyPolicy.create({
+            door: 'trustedReveal',
+            ownerScope: 'application',
+            purpose: 'public-projection',
+          });
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({ code: 'KV448', fileName: 'projection.ts' });
+    expect(result.diagnostics[0]!.message).toContain('root=route:/transitive-declassification');
+    expect(result.diagnostics[0]!.message).toContain('import:./projection.js@app.ts');
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'declassification', kind: 'closed' }),
+    );
+  });
+
+  it('does not invent an untrusted root for an unreachable declassification helper', () => {
+    const result = analyze([
+      {
+        fileName: 'projection.ts',
+        source: `
+          import { DeclassifyPolicy } from '@kovojs/core';
+          export const publicProjectionPolicy = DeclassifyPolicy.create({
+            door: 'trustedReveal',
+            ownerScope: 'application',
+            purpose: 'public-projection',
+          });
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.facts.some((fact) => fact.kind === 'root')).toBe(false);
+  });
+
+  it('closes every functional reveal door and namespace access from reachable code', () => {
+    for (const source of [
+      `
+        import { revealSecret, revealUntrusted } from '@kovojs/core';
+        import { route } from '@kovojs/server';
+        export const page = route('/functional-declassification', {
+          render() { return [revealSecret, revealUntrusted]; },
+        });
+      `,
+      `
+        import * as core from '@kovojs/core';
+        import { route } from '@kovojs/server';
+        export const page = route('/namespace-declassification', {
+          render() { return core.trustedReveal; },
+        });
+      `,
+    ]) {
+      const result = analyze([{ fileName: 'app.ts', source }]);
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({ code: 'KV448', fileName: 'app.ts' });
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({ capability: 'declassification', kind: 'closed' }),
+      );
+    }
+  });
+
+  it('closes a reveal door carried through a reachable re-export', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { reveal } from './projection.js';
+          import { route } from '@kovojs/server';
+          export const page = route('/reexported-declassification', {
+            render() { return reveal; },
+          });
+        `,
+      },
+      {
+        fileName: 'projection.ts',
+        source: `export { revealSecret as reveal } from '@kovojs/core';`,
+      },
+    ]);
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({ code: 'KV448', fileName: 'projection.ts' });
+    expect(result.diagnostics[0]!.message).toContain('import:./projection.js@app.ts');
+  });
+
   it('closes raw authority through wrappers, re-exports, literal dynamic import, and require', () => {
     const files = [
       {

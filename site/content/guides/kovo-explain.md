@@ -224,8 +224,8 @@ can't land quietly.
 - `--endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for webhooks
   the write→domain chain — so "what can reach this app and what can it touch?" is answerable without
   executing anything.
-- `--revealed` lists confidential data reveals, including `trustedReveal(...)` rows that need human
-  review.
+- `--revealed` lists confidential data reveals, including exact typed declassification-policy rows
+  that need human review.
 - `--trust` lists trusted HTML, SQL, URL, and similar escape hatches with the evidence that made them
   reviewable.
 - `--capabilities` lists held dangerous capabilities and the static external-Postgres posture-lease

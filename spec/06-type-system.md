@@ -616,7 +616,8 @@ security-relevant effects a supported handler can perform. Its browser vocabular
 §4.3. Its structured-server vocabulary is exactly: principal-scope acquisition; managed database
 read/write; justified trusted SQL; framework egress; justified trusted HTML; cookie/header/outcome,
 raw-response, and redirect response effects; storage read/write; task composition; plus the
-compiler-control records `server.handler.root` and `server.helper.call`. The root record enrolls each
+typed `server.data.declassify` effect; plus the compiler-control records `server.handler.root` and
+`server.helper.call`. The root record enrolls each
 supported query, mutation, endpoint, webhook, and task body even when it has no terminal effects.
 The helper-call record names an exact immutable same-file callable that received authority and
 carries the source-derived handler root on the edge. The normalized interpreter below MUST
@@ -641,6 +642,31 @@ Namespace and named imports of the three exceptional operations preserve exact
 framework identity: `trustedSql` and `trustedHtml` require a static justification, and raw
 `Response` use is admitted only where the declared endpoint posture supplies the compiler-owned
 justification. App spelling, a same-named local, a cast, or a generated manifest cannot mint a door.
+
+**Typed declassification door (normative).** A secret or untrusted value may be unboxed only with an
+exact nominal `DeclassifyPolicy` constructed by `DeclassifyPolicy.create({ door, purpose,
+ownerScope })`. The policy vocabulary is closed. `door` is one of `revealSecret`,
+`revealUntrusted`, `secret.reveal`, `trustedReveal`, or `untrusted.reveal`; `ownerScope` is one of
+`application`, `current-principal`, `current-tenant`, or `framework`; and `purpose` is constrained
+by the door: `request-validation` only for the two untrusted-value doors, `public-projection` only
+for `trustedReveal`, and `credential-use` or `server-computation` only for the two secret-value
+doors. Free-form strings, structural object literals, copied fields, casts, subclasses, an unknown
+tuple, or a policy created for another door MUST NOT authorize release. TypeScript's nominal shape
+is an author-time guardrail; the module-private constructor token, exact runtime registry membership,
+closed tuple validation, and exact-door check own the runtime floor.
+
+The finite compiler IR admits `trustedReveal` as `server.data.declassify` only for its exact direct
+named framework import and an inline exact `DeclassifyPolicy.create` tuple. The released expression
+and every finite enclosing enabling condition MUST both have integrity strictly above request input.
+If either is request-derived, foreign executable, unresolved, or otherwise unknown, the operation
+MUST fail closed with KV449; an attacker-chosen condition may not select release of an otherwise
+constant secret. This is a robustness judgment over the existing normalized provenance relation,
+not a claim to interpret general JavaScript. Independently, declassification is an L1 capability:
+`DeclassifyPolicy`, `revealSecret`, `revealUntrusted`, and `trustedReveal` are request-closed public
+exports. A module reachable from any untrusted-data root, including through a transitive helper or
+re-export, MUST fail capability closure with KV448 if it imports the constructor or a reveal door.
+Closing policy construction also closes `.reveal(policy)` use without prohibiting creation of a
+poison box. A module with no such root does not gain a trusted root merely by importing the door.
 
 This layer deliberately does not claim general JavaScript interpretation or same-realm isolation.
 The emitted operation lists are immutable, inspectable audit evidence consumed by component graphs
@@ -804,13 +830,14 @@ type-only `Secret<T>` cast, so interpolation, template/string coercion, JSON and
 structured cloning, SSR output, and artifact capture encounter the existing fail-closed
 confidentiality doors. The box's module-private runtime registration owns this invariant; its type
 is author-time ergonomics only. A dependency credential should be revealed exactly once inside its
-boot-time credential factory through `trustedReveal(..., { justification, method:
-'arbitrary-fn', source })`; the static call site remains an audit-grade row in the existing
+boot-time credential factory through `revealSecret(value, DeclassifyPolicy.create({ door:
+'revealSecret', purpose: 'credential-use', ownerScope: 'application' }))`; the static call site
+remains an audit-grade row in the existing
 `kovo explain --revealed` fact graph (and therefore also in its folded `--capabilities` view), while
 the bounded runtime reveal collector is observational evidence, not a complete process-lifetime
-proof. The audit collector MUST recognize a direct `@kovojs/core` named import even when locally
-aliased, and MUST accept those literal option fields in any order. A call with dynamic or otherwise
-unrecordable options MUST emit error-severity KV426 instead of disappearing from the audit. When
+proof. The audit collector MUST recognize direct `@kovojs/core` named imports, bind each reveal to
+its exact policy tuple, and accept those literal policy fields in any order. A call with dynamic or
+otherwise unrecordable policy MUST emit error-severity KV426 instead of disappearing from the audit. When
 the typed query analyzer and runtime audit analyzer observe the same reveal, their facts may be
 deduplicated only by the exact call span/AST identity; a shared `file:line` label is insufficient.
 These audit rules do not relax the request security classifier's stricter exact matcher. This

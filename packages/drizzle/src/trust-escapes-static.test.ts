@@ -9768,14 +9768,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
   it('keeps exact trustedReveal audited without laundering its input authority', () => {
     const safe = sinksFor(`
-      import { secret, trustedReveal } from '@kovojs/core';
+      import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
       import { query } from '@kovojs/server';
       export const revealed = query({ load() {
-        const value = trustedReveal(secret('classified'), {
-          justification: 'publish the reviewed fixture value',
-          method: 'arbitrary-fn',
-          source: 'fixture.classified',
-        });
+        const value = trustedReveal(secret('classified'), DeclassifyPolicy.create({
+          door: 'trustedReveal',
+          ownerScope: 'application',
+          purpose: 'public-projection',
+        }));
         return { value: \`${'${value}'}:reviewed\` };
       } });
     `);
@@ -9785,10 +9785,10 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       [
         'aliased import',
         `
-          import { trustedReveal as reveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal as reveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return reveal(input.value, { justification: 'reviewed' });
+            return reveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));
           } });
         `,
       ],
@@ -9798,47 +9798,48 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           import * as core from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return core.trustedReveal(input.value, { justification: 'reviewed' });
+            return core.trustedReveal(input.value, core.DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));
           } });
         `,
       ],
       [
-        'dynamic justification',
+        'dynamic policy',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
+          const policy = DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' });
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { justification: input.reason });
+            return trustedReveal(input.value, policy);
           } });
         `,
       ],
       [
         'spread options',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { ...{ justification: 'reviewed' } });
+            return trustedReveal(input.value, DeclassifyPolicy.create({ ...{ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' } }));
           } });
         `,
       ],
       [
-        'invalid method',
+        'invalid purpose',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { justification: 'reviewed', method: 'identity' });
+            return trustedReveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'server-computation' }));
           } });
         `,
       ],
       [
         'extra option',
         `
-          import { trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
           import { query } from '@kovojs/server';
           export const exposed = query({ load(input) {
-            return trustedReveal(input.value, { justification: 'reviewed', reason: 'forged' });
+            return trustedReveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection', reason: 'forged' }));
           } });
         `,
       ],
@@ -9861,13 +9862,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       ['secret-wrapped context authority', 'secret(context)'],
     ] as const) {
       const facts = sinksFor(`
-        import { secret, trustedReveal, type Secret } from '@kovojs/core';
+        import { DeclassifyPolicy, secret, trustedReveal, type Secret } from '@kovojs/core';
         import { query } from '@kovojs/server';
         export const exposed = query({ load(_input, context) {
-          return trustedReveal(${value} as unknown as Secret<unknown>, {
-            justification: 'attempted authority laundering proof',
-            method: 'arbitrary-fn',
-          });
+          return trustedReveal(${value} as unknown as Secret<unknown>, DeclassifyPolicy.create({
+            door: 'trustedReveal',
+            ownerScope: 'application',
+            purpose: 'public-projection',
+          }));
         } });
       `);
       expect(
@@ -9880,14 +9882,14 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     }
 
     const hostileProtocol = sinksFor(`
-      import { trustedReveal, type Secret } from '@kovojs/core';
+      import { DeclassifyPolicy, trustedReveal, type Secret } from '@kovojs/core';
       import { query } from '@kovojs/server';
       export const exposed = query({ load() {
         const hostile = {
           [Symbol.toPrimitive]() { eval('owned'); return 'value'; },
           then() { eval('assimilated'); },
         };
-        return \`${"${trustedReveal(hostile as unknown as Secret<string>, { justification: 'reviewed' })}"}\`;
+        return \`${"${trustedReveal(hostile as unknown as Secret<string>, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }))}"}\`;
       } });
     `);
     expect(hostileProtocol).toEqual(

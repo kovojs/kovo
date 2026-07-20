@@ -318,7 +318,16 @@ appendCatalogFactories(
 );
 appendCatalogFactories(
   catalogEntries,
-  ['component', 'declareOffWire', 'publishToClient', 'secret', 'trustedReveal'],
+  [
+    'component',
+    'DeclassifyPolicy',
+    'declareOffWire',
+    'publishToClient',
+    'revealSecret',
+    'revealUntrusted',
+    'secret',
+    'trustedReveal',
+  ],
   coreAuthoring,
 );
 for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; index += 1) {

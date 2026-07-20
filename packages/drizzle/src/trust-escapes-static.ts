@@ -24878,6 +24878,11 @@ function requestCallIsKnownSafe(
     return true;
   }
 
+  if (requestCallIsExactTrustedRevealPolicyConstructor(call)) {
+    scanRequestFunctionArguments(call, context);
+    return true;
+  }
+
   if (requestCallIsExactTrustedReveal(call)) {
     scanRequestFunctionArguments(call, context);
     return true;
@@ -33038,36 +33043,91 @@ function requestCallIsExactTrustedReveal(call: Node): boolean {
   ) {
     return false;
   }
-  const options = unwrapStaticExpression(call.getArguments()[1]!);
-  if (!Node.isObjectLiteralExpression(options)) return false;
+  return requestExactTrustedRevealPolicy(call.getArguments()[1]!, true) !== undefined;
+}
+
+function requestCallIsExactTrustedRevealPolicyConstructor(call: Node): boolean {
+  return requestExactTrustedRevealPolicy(call, true) !== undefined;
+}
+
+interface RequestExactDeclassifyPolicy {
+  readonly label: string;
+  readonly ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
+}
+
+function requestExactTrustedRevealPolicy(
+  expression: Node,
+  requireExactPristineName: boolean,
+): RequestExactDeclassifyPolicy | undefined {
+  return requestExactDeclassifyPolicy(expression, 'trustedReveal', requireExactPristineName);
+}
+
+type RequestExactDeclassifyDoor = 'revealSecret' | 'trustedReveal';
+
+function requestExactDeclassifyPolicy(
+  expression: Node,
+  expectedDoor: RequestExactDeclassifyDoor,
+  requireExactPristineName: boolean,
+): RequestExactDeclassifyPolicy | undefined {
+  const call = unwrapStaticExpression(expression);
+  if (!Node.isCallExpression(call) || call.getArguments().length !== 1) return undefined;
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    !Node.isPropertyAccessExpression(callee) ||
+    staticMemberName(callee.getNameNode()) !== 'create'
+  ) {
+    return undefined;
+  }
+  const receiver = unwrapStaticExpression(callee.getExpression());
+  const exactIdentity = requireExactPristineName
+    ? requestExactPristineDirectImport(receiver, '@kovojs/core', 'DeclassifyPolicy') !== undefined
+    : requestExpressionIsDirectImportedExport(receiver, '@kovojs/core', 'DeclassifyPolicy');
+  if (!exactIdentity) return undefined;
+
+  const options = unwrapStaticExpression(call.getArguments()[0]!);
+  if (!Node.isObjectLiteralExpression(options)) return undefined;
   const properties = options.getProperties();
-  if (properties.length === 0 || properties.length > 3) return false;
-  const expected = ['justification', 'method', 'source'] as const;
-  let next = 0;
-  let sawJustification = false;
+  if (properties.length !== 3) return undefined;
+  const fields = new Map<string, string>();
   for (const property of properties) {
     if (
       !Node.isPropertyAssignment(property) ||
       Node.isComputedPropertyName(property.getNameNode())
     ) {
-      return false;
+      return undefined;
     }
     const name = staticMemberName(property.getNameNode());
     const value = property.getInitializer();
-    if (!name || !value) return false;
-    const index = expected.indexOf(name as (typeof expected)[number]);
-    if (index < next || index === -1 || !isStringLiteralLike(value)) return false;
-    next = index + 1;
-    if (name === 'justification') {
-      if (index !== 0 || !runtimeRegExpTest(/\S/u, value.getLiteralText())) return false;
-      sawJustification = true;
-    } else if (name === 'method') {
-      if (!['arbitrary-fn', 'server-projection'].includes(value.getLiteralText())) return false;
-    } else if (!runtimeRegExpTest(/\S/u, value.getLiteralText())) {
-      return false;
+    if (
+      !name ||
+      !value ||
+      !['door', 'ownerScope', 'purpose'].includes(name) ||
+      fields.has(name) ||
+      !isStringLiteralLike(value)
+    ) {
+      return undefined;
     }
+    fields.set(name, value.getLiteralText());
   }
-  return sawJustification;
+  const door = fields.get('door');
+  const purpose = fields.get('purpose');
+  const ownerScope = fields.get('ownerScope');
+  if (
+    door !== expectedDoor ||
+    (expectedDoor === 'trustedReveal'
+      ? purpose !== 'public-projection'
+      : purpose !== 'credential-use' && purpose !== 'server-computation') ||
+    (ownerScope !== 'application' &&
+      ownerScope !== 'current-principal' &&
+      ownerScope !== 'current-tenant' &&
+      ownerScope !== 'framework')
+  ) {
+    return undefined;
+  }
+  return {
+    label: `${purpose}:${door}:${ownerScope}`,
+    ownerScope,
+  };
 }
 
 function requestExactTrustedRevealOutput(
@@ -39145,7 +39205,8 @@ export function collectCapabilityEscapesFromProject(
 }
 
 /**
- * Collect exact runtime `trustedReveal(...)` calls into the existing reveal-fact graph
+ * Collect exact runtime `revealSecret(...)` and `trustedReveal(...)` calls into the existing
+ * reveal-fact graph
  * (SPEC §6.6, audit-only). Query projection reveals remain owned by the typed query-shape
  * analyzer; callers merge only when both passes report the exact same AST call identity, so its
  * richer proof/audit verdict wins without dropping a second call on the same source line. A runtime
@@ -39216,23 +39277,22 @@ function runtimeRevealAuditForCall(
   file: TrustEscapeSourceFileInput,
   call: import('ts-morph').CallExpression,
 ): RuntimeRevealAuditCallResult | undefined {
-  if (!runtimeRevealCallUsesDirectCoreImport(call)) return undefined;
+  const door = runtimeRevealCallDoor(call);
+  if (!door) return undefined;
   const value = call.getArguments()[0];
-  const optionsArgument = call.getArguments()[1];
-  if (!value || !optionsArgument || call.getArguments().length !== 2) {
-    return { diagnostic: runtimeRevealAuditDiagnostic(file, call) };
+  const policyArgument = call.getArguments()[1];
+  if (!value || !policyArgument || call.getArguments().length !== 2) {
+    return { diagnostic: runtimeRevealAuditDiagnostic(file, call, door) };
   }
-  const fields = runtimeRevealAuditFields(optionsArgument);
-  if (!fields) return { diagnostic: runtimeRevealAuditDiagnostic(file, call) };
-  const requestedMethod = fields.method;
-  const method = requestedMethod === 'server-projection' ? requestedMethod : 'arbitrary-fn';
-  const source = fields.source ?? shortSource(value);
+  const policy = requestExactDeclassifyPolicy(policyArgument, door, false);
+  if (!policy) return { diagnostic: runtimeRevealAuditDiagnostic(file, call, door) };
+  const source = shortSource(value);
   return {
     fact: {
       callIdentity: runtimeRevealCallIdentity(file, call),
       grade: 'audit',
-      justification: fields.justification,
-      method,
+      justification: policy.label,
+      method: door === 'trustedReveal' ? 'server-projection' : 'arbitrary-fn',
       path: source,
       query: 'runtime',
       selectedSecret: true,
@@ -39242,70 +39302,31 @@ function runtimeRevealAuditForCall(
   };
 }
 
-function runtimeRevealCallUsesDirectCoreImport(call: import('ts-morph').CallExpression): boolean {
+function runtimeRevealCallDoor(
+  call: import('ts-morph').CallExpression,
+): RequestExactDeclassifyDoor | undefined {
   const callee = unwrapStaticExpression(call.getExpression());
-  return requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'trustedReveal');
-}
-
-function runtimeRevealAuditFields(expression: Node):
-  | {
-      justification: string;
-      method?: 'arbitrary-fn' | 'server-projection';
-      source?: string;
-    }
-  | undefined {
-  const object = unwrapStaticExpression(expression);
-  if (!Node.isObjectLiteralExpression(object)) return undefined;
-  const fields = new Map<string, string>();
-  const properties = object.getProperties();
-  if (properties.length === 0 || properties.length > 3) return undefined;
-  for (const property of properties) {
-    if (
-      !Node.isPropertyAssignment(property) ||
-      Node.isComputedPropertyName(property.getNameNode())
-    ) {
-      return undefined;
-    }
-    const name = staticMemberName(property.getNameNode());
-    const value = unwrapStaticExpression(property.getInitializer()!);
-    if (
-      !name ||
-      !['justification', 'method', 'source'].includes(name) ||
-      fields.has(name) ||
-      !isStringLiteralLike(value)
-    ) {
-      return undefined;
-    }
-    fields.set(name, value.getLiteralText());
+  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'revealSecret')) {
+    return 'revealSecret';
   }
-  const justification = fields.get('justification');
-  const method = fields.get('method');
-  const source = fields.get('source');
-  if (
-    justification === undefined ||
-    !runtimeRegExpTest(/\S/u, justification) ||
-    (method !== undefined && method !== 'arbitrary-fn' && method !== 'server-projection') ||
-    (source !== undefined && !runtimeRegExpTest(/\S/u, source))
-  ) {
-    return undefined;
+  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'trustedReveal')) {
+    return 'trustedReveal';
   }
-  return {
-    justification,
-    ...(method === undefined ? {} : { method }),
-    ...(source === undefined ? {} : { source }),
-  };
+  return undefined;
 }
 
 function runtimeRevealAuditDiagnostic(
   file: TrustEscapeSourceFileInput,
   call: import('ts-morph').CallExpression,
+  door: RequestExactDeclassifyDoor,
 ): StaticDiagnosticFact {
+  const purposes =
+    door === 'trustedReveal' ? 'public-projection' : 'credential-use or server-computation';
   return createRegisteredDiagnostic(
     'KV426',
     { site: siteFor(file, call) },
     {
-      detail:
-        'trustedReveal(...) must use exactly two arguments and an inline object literal with a non-empty literal justification plus optional literal method/source fields; dynamic options cannot be recorded by kovo explain --revealed (SPEC §6.6).',
+      detail: `${door}(...) must use exactly two arguments and an inline validated DeclassifyPolicy.create tuple for the ${door}/${purposes} door; dynamic policy cannot be recorded by kovo explain --revealed (SPEC §6.6).`,
     },
   );
 }

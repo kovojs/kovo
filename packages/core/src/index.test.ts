@@ -5,6 +5,7 @@ import {
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
+  DeclassifyPolicy,
   declareOffWire,
   FieldError,
   form,
@@ -343,17 +344,20 @@ describe('core authoring APIs', () => {
   });
 
   it('requires an explicit audited reveal before a Secret can cross JsonValue boundaries', () => {
-    const revealed = trustedReveal('hash-1' as unknown as Secret<string>, {
-      justification: 'one-way digest shown to admins',
+    const policy = DeclassifyPolicy.create({
+      door: 'trustedReveal',
+      ownerScope: 'current-principal',
+      purpose: 'public-projection',
     });
+    const revealed = trustedReveal('hash-1' as unknown as Secret<string>, policy);
     const assertRevealedString = (value: TrustedRevealValue<Secret<string>>) => value;
     const jsonValue: JsonValue = revealed;
 
     expect(assertRevealedString(revealed)).toBe('hash-1');
     expect(jsonValue).toBe('hash-1');
-    expect(() =>
-      trustedReveal('hash-1' as unknown as Secret<string>, { justification: '   ' }),
-    ).toThrow('trustedReveal requires a non-empty justification.');
+    expect(() => trustedReveal('hash-1' as unknown as Secret<string>, {} as never)).toThrow(
+      /validated DeclassifyPolicy/u,
+    );
   });
 
   it('preserves queryRef and form keys as typed authoring facts', () => {
