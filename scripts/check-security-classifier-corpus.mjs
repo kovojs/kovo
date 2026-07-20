@@ -2024,12 +2024,35 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     testFiles: [
       'packages/compiler/src/capability-closure.security.test.ts',
       'packages/cli/src/capability-closure-packages.test.ts',
+      'packages/cli/src/dependency-capability-loader.test.ts',
       'scripts/capability-surface-census-gate.test.mjs',
       'scripts/wire-input-boundary-gate.test.mjs',
       'scripts/framework-export-posture-gate.test.mjs',
       'scripts/check-crypto-boundary.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'dependency-capability-loader-identity',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-capability-loader-identity',
+          'admits only the exact censused dependency import and installed identity',
+          'safe-parser/hidden',
+          'surprise-loader',
+          'identity drifted after capability census',
+        ],
+      },
+      {
+        id: 'dependency-capability-loader-closed-verdict',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-capability-loader-closed-verdict',
+          'never turns a raw or closed manifest row into loader authority',
+          "['network']",
+          "disposition: 'pure'",
+          'does not carry an open least-authority verdict',
+        ],
+      },
       {
         id: 'capability-mint-symbol-identity-census',
         file: 'scripts/capability-surface-census-gate.test.mjs',
