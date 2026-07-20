@@ -3316,6 +3316,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'rawDevWebSocketHandshake',
           "origin: 'http://attacker.example'",
+          "protocol: 'vite-hmr'",
           ').resolves.toBe(403)',
           '101',
         ],

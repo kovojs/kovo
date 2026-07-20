@@ -19,6 +19,22 @@ const REQUIRED_DEV_ONLY_DOORS = new Map([
   ['dev.http.source-env', 'source-env'],
   ['dev.websocket.hmr', 'hmr-websocket'],
 ]);
+const REQUIRED_PRODUCTION_DOORS = new Map([
+  [
+    'prod.http.request-shell',
+    {
+      capabilityCensusDoorRefs: ['server.node-response-transport'],
+      kind: 'request-shell',
+      obligations: [
+        'access-policy-enforced',
+        'request-authority-canonical',
+        'request-target-bounded',
+        'response-posture-enforced',
+        'stateful-origin-bound',
+      ],
+    },
+  ],
+]);
 const MAPPING_VERDICTS = new Set(['audited-exception', 'equivalent', 'stronger']);
 
 export function checkRuntimeTierDoorParity(options = {}) {
@@ -52,6 +68,7 @@ export function evaluateRuntimeTierDoorParity({ census, development, production,
   if (!prod || !dev) return findings;
 
   const coverage = new Map(prod.doors.map((door) => [door.id, new Set()]));
+  validateRequiredProductionDoors(prod, findings);
   for (const door of dev.doors) {
     if (door.devOnly === true) {
       if (door.prodMapping !== undefined) {
@@ -119,8 +136,30 @@ export function evaluateRuntimeTierDoorParity({ census, development, production,
     if (!door) findings.push(`development manifest is missing required dev-only door ${id}`);
     else if (door.kind !== kind) findings.push(`${id}: kind must remain ${kind}`);
   }
+  const devRequestShell = dev.byId.get('dev.http.request-shell');
+  if (!devRequestShell) findings.push('development manifest is missing dev.http.request-shell');
+  else if (devRequestShell.prodMapping?.door !== 'prod.http.request-shell') {
+    findings.push('dev.http.request-shell must map the production request shell');
+  }
   validateDevHostSourcePins(readText, findings);
   return findings;
+}
+
+function validateRequiredProductionDoors(prod, findings) {
+  for (const [id, required] of REQUIRED_PRODUCTION_DOORS) {
+    const door = prod.byId.get(id);
+    if (!door) {
+      findings.push(`production manifest is missing required door ${id}`);
+      continue;
+    }
+    if (door.kind !== required.kind) findings.push(`${id}: kind must remain ${required.kind}`);
+    if (!sameStringSet(door.obligations, required.obligations)) {
+      findings.push(`${id}: obligations drifted from the frozen production denominator`);
+    }
+    if (!sameStringSet(door.capabilityCensusDoorRefs, required.capabilityCensusDoorRefs)) {
+      findings.push(`${id}: capability-census door references drifted`);
+    }
+  }
 }
 
 function validateManifest(document, tier, censusIds, readText, findings) {
@@ -168,6 +207,7 @@ function validateManifest(document, tier, censusIds, readText, findings) {
       findings,
       false,
     );
+    door.capabilityCensusDoorRefs = refs;
     for (const ref of refs) {
       if (!censusIds.has(ref)) findings.push(`${door.id}: unknown capability census door ${ref}`);
     }

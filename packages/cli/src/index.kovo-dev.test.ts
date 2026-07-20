@@ -299,13 +299,25 @@ throw new Error('undeclared Vite config executed');
       await expect(
         rawDevWebSocketHandshake({
           authority,
+          cookie,
           origin: 'http://attacker.example',
           port,
         }),
       ).resolves.toBe(403);
+      await expect(rawDevWebSocketHandshake({ authority, origin, port })).resolves.toBe(403);
       await expect(rawDevWebSocketHandshake({ authority, cookie, origin, port })).resolves.toBe(
         101,
       );
+      await expect(
+        rawDevWebSocketHandshake({
+          authority,
+          cookie,
+          origin,
+          path: `/?token=${cookie.slice(cookie.indexOf('=') + 1)}`,
+          port,
+          protocol: 'vite-hmr',
+        }),
+      ).resolves.toBe(101);
     } finally {
       await stopChild(child);
     }
@@ -834,7 +846,10 @@ async function rawDevHttpRequest(options: RawDevRequestOptions): Promise<{
 }
 
 async function rawDevWebSocketHandshake(
-  options: Omit<RawDevRequestOptions, 'path'>,
+  options: Omit<RawDevRequestOptions, 'path'> & {
+    path?: string;
+    protocol?: 'vite-hmr' | 'vite-ping';
+  },
 ): Promise<number> {
   return await new Promise((resolve, reject) => {
     const socket = createConnection({ host: '127.0.0.1', port: options.port });
@@ -863,13 +878,13 @@ async function rawDevWebSocketHandshake(
     });
     socket.once('connect', () => {
       const headers = [
-        'GET / HTTP/1.1',
+        `GET ${options.path ?? '/'} HTTP/1.1`,
         `Host: ${options.authority}`,
         'Connection: Upgrade',
         'Upgrade: websocket',
         'Sec-WebSocket-Version: 13',
         'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
-        'Sec-WebSocket-Protocol: vite-ping',
+        `Sec-WebSocket-Protocol: ${options.protocol ?? 'vite-ping'}`,
         ...(options.origin === undefined ? [] : [`Origin: ${options.origin}`]),
         ...(options.cookie === undefined ? [] : [`Cookie: ${options.cookie}`]),
         '',

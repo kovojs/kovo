@@ -28,6 +28,18 @@ describe('runtime tier door parity gate', () => {
     );
   });
 
+  it('freezes the production door denominator before comparing tiers', () => {
+    expect(
+      evaluate(({ production }) => {
+        production.doors[0].obligations = production.doors[0].obligations.filter(
+          (obligation) => obligation !== 'stateful-origin-bound',
+        );
+      }),
+    ).toContain(
+      'prod.http.request-shell: obligations drifted from the frozen production denominator',
+    );
+  });
+
   it('rejects equivalent or stronger labels that do not match their obligation relation', () => {
     expect(
       evaluate(({ development }) => {
