@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 import { repoRoot } from './lib/repo-root.mjs';
 import {
+  buildSecurityFuzzSuccessRecord,
   classifySecurityFuzzFailure,
   createSecurityFuzzChildEnvironment,
+  currentCodeSubjectSha,
   loadSecurityFuzzCampaign,
   parseMutationOutcome,
   parseMutationScore,
@@ -14,6 +16,7 @@ import {
   validateSecurityFuzzCampaignDocument,
   validateSecurityFuzzPackageScripts,
   validateSecurityFuzzReleaseWorkflowSource,
+  validateSecurityFuzzSuccessRecord,
   validateSecurityFuzzWorkflowSource,
 } from './security-fuzz-campaign.mjs';
 
@@ -51,6 +54,14 @@ describe('deterministic security fuzz campaign contract', () => {
     policyDrift.verdictPolicy.crossImplementationDisagreement = 'unsafe';
     expect(validateSecurityFuzzCampaignDocument(policyDrift, { rootDir }).findings).toEqual(
       expect.arrayContaining([expect.stringContaining('triage-only')]),
+    );
+
+    const successArtifactDrift = structuredClone(source);
+    successArtifactDrift.successArtifacts.qualification = 'campaign command passed';
+    expect(
+      validateSecurityFuzzCampaignDocument(successArtifactDrift, { rootDir }).findings,
+    ).toContain(
+      'successArtifacts must pin the 30-day terminal-workflow qualification and durable evidence schema',
     );
   });
 
@@ -160,6 +171,12 @@ describe('deterministic security fuzz campaign contract', () => {
         'through vp',
       ],
       ['if: failure()', 'if: success()', 'if: failure()'],
+      ['if: success()', 'if: always()', 'if: success()'],
+      [
+        'path: .kovo/security-evidence/security-fuzz-campaign/*.json',
+        'path: /tmp/success.json',
+        'security-evidence',
+      ],
       ['path: .kovo/security-failures/**', 'path: /tmp/logs', 'security-failures'],
       ['timeout-minutes: 150', 'timeout-minutes: 120', 'timeout-minutes: 150'],
       ['- release', '- quick', '- release'],
@@ -175,6 +192,95 @@ describe('deterministic security fuzz campaign contract', () => {
     );
     expect(validateSecurityFuzzWorkflowSource(commentedSchedule).findings).toContain(
       "workflow must include line - cron: '37 8 * * *'",
+    );
+  });
+
+  it('builds digest-bound success evidence that still requires a terminal-green workflow', () => {
+    const campaign = loadSecurityFuzzCampaign({ rootDir });
+    const executions = campaign.families.flatMap((family) =>
+      family.cases.map((testCase) => ({
+        caseId: testCase.id,
+        covers: [...testCase.covers],
+        decisionRole: testCase.decisionRole,
+        familyId: family.id,
+        status: 'passed',
+      })),
+    );
+    const record = buildSecurityFuzzSuccessRecord({
+      campaign,
+      codeSubjectSha: '0123456789abcdef0123456789abcdef01234567',
+      endedAt: '2026-07-20T12:05:00Z',
+      environment: {
+        GITHUB_EVENT_NAME: 'schedule',
+        GITHUB_REF: 'refs/heads/main',
+        GITHUB_RUN_ATTEMPT: '1',
+        GITHUB_RUN_ID: '1234',
+        GITHUB_WORKFLOW: 'Security Fuzz Campaign',
+      },
+      executions,
+      mutationScore: {
+        killed: campaign.mutationHarness.expectedMutants,
+        percentage: 100,
+        survivors: 0,
+        total: campaign.mutationHarness.expectedMutants,
+      },
+      profileName: 'nightly',
+      rootDir,
+      startedAt: '2026-07-20T12:00:00Z',
+    });
+    expect(validateSecurityFuzzSuccessRecord(record, { campaign, rootDir })).toEqual({
+      findings: [],
+      ok: true,
+      summary: {},
+    });
+    expect(record).toMatchObject({
+      analyzerSoundness: {
+        canaryRecall: { detected: 2, total: 2 },
+        semanticCoverage: { passed: 5, total: 5 },
+        unresolvedObservedOutsidePredicted: 0,
+      },
+      execution: { casesExecuted: 21 },
+      normativePropertyViolations: 0,
+      qualification: expect.stringContaining('GitHub Actions run concludes success'),
+      workflow: { eventName: 'schedule', runId: '1234' },
+    });
+
+    for (const mutate of [
+      (document) => (document.campaign.sha256 = '0'.repeat(64)),
+      (document) => (document.analyzerSoundness.canaryRecall.detected = 1),
+      (document) => (document.mutation.survivors = 1),
+      (document) => (document.qualification = 'command-only'),
+      (document) => document.execution.cases.pop(),
+      (document) => document.execution.cases.push(document.execution.cases[0]),
+    ]) {
+      const mutant = structuredClone(record);
+      mutate(mutant);
+      expect(validateSecurityFuzzSuccessRecord(mutant, { campaign, rootDir }).ok).toBe(false);
+    }
+    expect(() =>
+      buildSecurityFuzzSuccessRecord({
+        campaign,
+        codeSubjectSha: '0123456789abcdef0123456789abcdef01234567',
+        endedAt: '2026-07-20T12:05:00Z',
+        executions: executions.slice(1),
+        mutationScore: {
+          killed: campaign.mutationHarness.expectedMutants,
+          percentage: 100,
+          survivors: 0,
+          total: campaign.mutationHarness.expectedMutants,
+        },
+        profileName: 'nightly',
+        rootDir,
+        startedAt: '2026-07-20T12:00:00Z',
+      }),
+    ).toThrow('every declared security fuzz case must execute exactly once');
+  });
+
+  it('cross-checks GITHUB_SHA against the checked-out commit', () => {
+    const actual = currentCodeSubjectSha(rootDir, {});
+    expect(actual).toMatch(/^[0-9a-f]{40}$/u);
+    expect(() => currentCodeSubjectSha(rootDir, { GITHUB_SHA: '0'.repeat(40) })).toThrow(
+      'does not equal checked-out code subject',
     );
   });
 

@@ -13,6 +13,7 @@ import {
   measureProductionPredicateObligations,
   measureStaticPredicateObligations,
   parsePeakRss,
+  updateSecurityConvergenceRecord,
 } from './security-convergence-baseline.mjs';
 
 describe('security convergence baseline', () => {
@@ -38,6 +39,41 @@ describe('security convergence baseline', () => {
         },
       },
     });
+    expect(baseline.subjectProtocol).toMatchObject({
+      schema: 'kovo.security-evidence-subject/v1',
+    });
+  });
+
+  it('mechanically separates the clean code subject from its later evidence commit', () => {
+    const baseline = JSON.parse(
+      readFileSync(path.join(repoRoot(), 'security/security-convergence-baseline.json'), 'utf8'),
+    );
+    const snapshot = collectSecurityConvergenceSnapshot();
+    const updated = updateSecurityConvergenceRecord({
+      baseline,
+      codeSubjectSha: '0123456789abcdef0123456789abcdef01234567',
+      reason: 'exact test refresh',
+      snapshot,
+    });
+    expect(updated).toMatchObject({
+      currentSnapshot: {
+        measuredCodeSha: '0123456789abcdef0123456789abcdef01234567',
+        reason: 'exact test refresh',
+        snapshot,
+      },
+      subjectProtocol: {
+        evidenceCommit: expect.stringContaining('self-referential'),
+      },
+    });
+    expect(updated).not.toHaveProperty('evidenceCommitSha');
+    expect(() =>
+      updateSecurityConvergenceRecord({
+        baseline,
+        codeSubjectSha: 'HEAD',
+        reason: 'bad subject',
+        snapshot,
+      }),
+    ).toThrow('full lowercase Git commit SHA');
   });
 
   it('reports absolute D and W denominator counts from the validated inventories', () => {

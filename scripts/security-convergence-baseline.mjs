@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import ts from 'typescript';
@@ -11,6 +11,13 @@ import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.
 import { loadSecurityDenominatorInventories } from './derivation-rewitness-inventory.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import {
+  assertCleanCurrentCodeSubject,
+  canonicalJson,
+  parseExactCliArguments,
+  SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
+  validateCodeSubjectSha,
+} from './lib/security-evidence-subject.mjs';
 import {
   SECURITY_GATE_MUTANTS,
   runSecurityGateMutationHarness,
@@ -425,14 +432,59 @@ export function compareSnapshot(expected, actual) {
   return expectedText === actualText ? [] : ['deterministic convergence snapshot drifted'];
 }
 
+/**
+ * Refresh the current structural row after the measured code is committed. The caller then commits
+ * this evidence update separately; embedding that later evidence-commit SHA would be self-referential.
+ */
+export function updateSecurityConvergenceRecord({ baseline, codeSubjectSha, reason, snapshot }) {
+  const subjectSha = validateCodeSubjectSha(codeSubjectSha);
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    throw new TypeError('convergence refresh reason must be non-empty');
+  }
+  if (baseline?.schema !== 'kovo-security-convergence-record/v2') {
+    throw new TypeError('convergence record schema is unsupported');
+  }
+  return {
+    ...baseline,
+    subjectProtocol: SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
+    currentSnapshot: {
+      measuredCodeSha: subjectSha,
+      reason,
+      snapshot,
+    },
+  };
+}
+
 export async function main(options = {}) {
   const root = options.repoRoot ?? findRepoRoot();
   const baselinePath = path.join(root, options.baselineFile ?? DEFAULT_BASELINE_FILE);
-  const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  let baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   const actual = collectSecurityConvergenceSnapshot({ repoRoot: root });
+  const args = options.args ?? process.argv.slice(2);
+  if (args.length > 0) {
+    const writeOptions = parseExactCliArguments(args, {
+      command: '--write',
+      valueFlags: ['--subject-sha', '--reason'],
+    });
+    const codeSubjectSha = writeOptions['subject-sha'];
+    const reason = writeOptions.reason;
+    assertCleanCurrentCodeSubject({ repoRoot: root, subjectSha: codeSubjectSha });
+    baseline = updateSecurityConvergenceRecord({
+      baseline,
+      codeSubjectSha,
+      reason,
+      snapshot: actual,
+    });
+    writeFileSync(baselinePath, canonicalJson(baseline), 'utf8');
+  }
   const findings = compareSnapshot(baseline.currentSnapshot?.snapshot, actual);
   if (baseline.schema !== 'kovo-security-convergence-record/v2') {
     findings.push('committed convergence record schema is unsupported');
+  }
+  if (
+    JSON.stringify(baseline.subjectProtocol) !== JSON.stringify(SECURITY_EVIDENCE_SUBJECT_PROTOCOL)
+  ) {
+    findings.push('convergence code-subject/evidence-commit protocol drifted');
   }
   if (!/^[0-9a-f]{40}$/u.test(baseline.currentSnapshot?.measuredCodeSha ?? '')) {
     findings.push('current structural snapshot is missing its exact measured code SHA');

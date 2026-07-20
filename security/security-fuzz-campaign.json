@@ -12,6 +12,12 @@
     "minimizationUnit": "one independently replayable manifest case",
     "retentionDays": 30
   },
+  "successArtifacts": {
+    "directory": ".kovo/security-evidence/security-fuzz-campaign",
+    "schema": "kovo.security-fuzz-success/v1",
+    "qualification": "the artifact counts toward a duration exit only when the enclosing GitHub Actions run concludes success",
+    "retentionDays": 30
+  },
   "mutationHarness": {
     "command": ["node", "scripts/security-gate-mutations.mjs"],
     "expectedMutants": 289,

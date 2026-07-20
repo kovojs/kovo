@@ -46,6 +46,14 @@ jobs:
       - name: Run release-budget deterministic campaign
         if: github.event_name == 'workflow_dispatch' && inputs.profile == 'release'
         run: vp exec pnpm run test:security-fuzz-release
+      - name: Archive successful campaign evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-security-fuzz-success-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .kovo/security-evidence/security-fuzz-campaign/*.json
+          retention-days: 30
       - name: Archive replayable minimized counterexamples
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

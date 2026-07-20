@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { SECURITY_GATE_MUTANTS } from './security-gate-mutations.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './lib/repo-root.mjs';
+import { canonicalJson, sha256 } from './lib/security-evidence-subject.mjs';
 
 export const securityFuzzCampaignSchema = 'kovo.security-fuzz-campaign/v1';
 export const securityFuzzCounterexampleSchema = 'kovo.security-fuzz-counterexample/v1';
+export const securityFuzzSuccessSchema = 'kovo.security-fuzz-success/v1';
 export const defaultSecurityFuzzCampaignPath = 'security/security-fuzz-campaign.json';
 export const defaultSecurityFuzzWorkflowPath = '.github/workflows/security-nightly.yml';
 export const defaultSecurityFuzzReleaseWorkflowPath = '.github/workflows/release.yml';
 export const securityFuzzReleaseCommand = 'pnpm run test:security-fuzz-release';
+export const analyzerSoundnessCensusPath =
+  'packages/compiler/src/scan/security-abstract-interpreter-census.v1.json';
 
 const expectedFamilyOrder = Object.freeze([
   'egress',
@@ -217,6 +221,18 @@ export function validateSecurityFuzzCampaignDocument(
   ) {
     findings.push(
       'verdictPolicy must reserve safe/unsafe for the normative property and classify cross-implementation disagreement as triage-only',
+    );
+  }
+  if (
+    !plainObject(document.successArtifacts) ||
+    document.successArtifacts.directory !== '.kovo/security-evidence/security-fuzz-campaign' ||
+    document.successArtifacts.schema !== securityFuzzSuccessSchema ||
+    document.successArtifacts.qualification !==
+      'the artifact counts toward a duration exit only when the enclosing GitHub Actions run concludes success' ||
+    document.successArtifacts.retentionDays !== 30
+  ) {
+    findings.push(
+      'successArtifacts must pin the 30-day terminal-workflow qualification and durable evidence schema',
     );
   }
   if (
@@ -455,6 +471,11 @@ export function validateSecurityFuzzWorkflowSource(source) {
     '        run: vp exec pnpm run check:security-fuzz-campaign',
     '        run: vp exec pnpm run test:security-fuzz-nightly',
     '        run: vp exec pnpm run test:security-fuzz-release',
+    '      - name: Archive successful campaign evidence',
+    '        if: success()',
+    '          if-no-files-found: error',
+    '          name: kovo-security-fuzz-success-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}',
+    '          path: .kovo/security-evidence/security-fuzz-campaign/*.json',
     '        if: failure()',
     '          if-no-files-found: ignore',
     '          path: .kovo/security-failures/**',
@@ -476,6 +497,24 @@ export function validateSecurityFuzzWorkflowSource(source) {
     !/if:\s*github\.event_name == 'workflow_dispatch' && inputs\.profile == 'release'/u.test(source)
   ) {
     findings.push('workflow must reserve the release profile for explicit dispatch');
+  }
+  const nightlyIndex = source.indexOf('run: vp exec pnpm run test:security-fuzz-nightly');
+  const timingIndex = source.indexOf(
+    'run: vp exec pnpm run test:response-indistinguishability-nightly',
+  );
+  const releaseIndex = source.indexOf('run: vp exec pnpm run test:security-fuzz-release');
+  const successArtifactIndex = source.indexOf('name: Archive successful campaign evidence');
+  const failureArtifactIndex = source.indexOf('name: Archive replayable minimized counterexamples');
+  if (
+    nightlyIndex < 0 ||
+    timingIndex <= nightlyIndex ||
+    releaseIndex <= timingIndex ||
+    successArtifactIndex <= releaseIndex ||
+    failureArtifactIndex <= successArtifactIndex
+  ) {
+    findings.push(
+      'workflow must run the selected campaign and nightly timing oracle before archiving qualified success evidence, then preserve failures',
+    );
   }
   return result(findings);
 }
@@ -680,10 +719,15 @@ export async function runSecurityFuzzCampaign(
 
   const profile = document.profiles[profileName];
   const artifactRoot = path.join(rootDir, document.failureArtifacts.directory, profileName);
+  const successArtifactRoot = path.join(rootDir, document.successArtifacts.directory);
+  const successArtifactPath = path.join(successArtifactRoot, `${profileName}.json`);
   rmSync(artifactRoot, { force: true, recursive: true });
+  rmSync(successArtifactPath, { force: true });
+  const startedAt = new Date().toISOString();
   const campaignStarted = performance.now();
   const failures = [];
   const summaries = [];
+  const successfulExecutions = [];
 
   for (const family of document.families) {
     const familyStarted = performance.now();
@@ -742,12 +786,23 @@ export async function runSecurityFuzzCampaign(
           testCase,
         });
         failures.push(record);
-      } else if (execution.mutationScore !== undefined) {
+      } else {
+        successfulExecutions.push(
+          Object.freeze({
+            caseId: testCase.id,
+            covers: Object.freeze([...testCase.covers]),
+            decisionRole: testCase.decisionRole,
+            familyId: family.id,
+            status: 'passed',
+          }),
+        );
+      }
+      if (execution.ok && execution.mutationScore !== undefined) {
         summaries.push(execution.mutationScore);
         process.stdout.write(
           `security-fuzz mutation score: ${execution.mutationScore.killed}/${execution.mutationScore.total} (${execution.mutationScore.percentage.toFixed(2)}%)\n`,
         );
-      } else {
+      } else if (execution.ok) {
         process.stdout.write(`security-fuzz ${family.id}/${testCase.id}: passed 1/1\n`);
       }
     }
@@ -770,7 +825,237 @@ export async function runSecurityFuzzCampaign(
   process.stdout.write(
     `Security fuzz campaign ${profileName} passed: families=${document.families.length} cases=${check.summary.caseCount} mutation=${mutationScore.killed}/${mutationScore.total}.\n`,
   );
-  return { failures, mutationScore, profile: profileName };
+  const successRecord = buildSecurityFuzzSuccessRecord({
+    campaign: document,
+    codeSubjectSha: currentCodeSubjectSha(rootDir),
+    endedAt: new Date().toISOString(),
+    environment: process.env,
+    executions: successfulExecutions,
+    mutationScore,
+    profileName,
+    rootDir,
+    startedAt,
+  });
+  const successCheck = validateSecurityFuzzSuccessRecord(successRecord, {
+    campaign: document,
+    rootDir,
+  });
+  if (!successCheck.ok) {
+    throw new Error(formatFindings('security fuzz success evidence', successCheck.findings));
+  }
+  mkdirSync(successArtifactRoot, { recursive: true });
+  writeFileSync(successArtifactPath, canonicalJson(successRecord), 'utf8');
+  process.stdout.write(
+    `Security fuzz success evidence: ${path.relative(rootDir, successArtifactPath)} (qualifies only with terminal-green workflow conclusion).\n`,
+  );
+  return {
+    failures,
+    mutationScore,
+    profile: profileName,
+    successArtifact: path.relative(rootDir, successArtifactPath),
+    successRecord,
+  };
+}
+
+export function buildSecurityFuzzSuccessRecord({
+  campaign,
+  codeSubjectSha,
+  endedAt,
+  environment = {},
+  executions,
+  mutationScore,
+  profileName,
+  rootDir = repoRoot(),
+  startedAt,
+}) {
+  if (!/^[0-9a-f]{40}$/u.test(codeSubjectSha ?? '')) {
+    throw new TypeError('security fuzz success evidence requires one exact code subject SHA');
+  }
+  if (profileName !== 'nightly' && profileName !== 'release') {
+    throw new TypeError('security fuzz success evidence profile must be nightly or release');
+  }
+  const analyzerFamily = campaign.families.find((family) => family.id === 'analyzer-soundness');
+  if (!analyzerFamily) throw new TypeError('analyzer-soundness family is missing');
+  const executed = exactSuccessfulExecutions(campaign, executions);
+  const analyzerExecutions = executed.filter((entry) => entry.familyId === 'analyzer-soundness');
+  const analyzerObligations = analyzerExecutions.flatMap((entry) => entry.covers);
+  const expectedAnalyzerObligations = analyzerFamily.coverage.obligations;
+  if (!sameStringSet(analyzerObligations, expectedAnalyzerObligations)) {
+    throw new Error('executed analyzer cases do not cover the exact semantic obligation set');
+  }
+  const censusSource = readFileSync(path.join(rootDir, analyzerSoundnessCensusPath), 'utf8');
+  const census = JSON.parse(censusSource);
+  const requiredCanaryIds = ['missed-transfer-canary', 'missing-observation-canary'];
+  const canaryIds = Object.freeze(
+    analyzerObligations.filter((id) => requiredCanaryIds.includes(id)).sort(),
+  );
+  if (!sameStringSet(canaryIds, requiredCanaryIds)) {
+    throw new Error('executed analyzer cases did not recall every required canary');
+  }
+  return Object.freeze({
+    schema: securityFuzzSuccessSchema,
+    codeSubjectSha,
+    profile: profileName,
+    startedAt,
+    endedAt,
+    campaign: Object.freeze({
+      cases: campaign.families.reduce((sum, family) => sum + family.cases.length, 0),
+      families: campaign.families.length,
+      schema: campaign.schema,
+      sha256: sha256(canonicalJson(campaign)),
+      version: campaign.campaignVersion,
+    }),
+    execution: Object.freeze({
+      cases: executed,
+      casesExecuted: executed.length,
+      sha256: sha256(canonicalJson(executed)),
+    }),
+    analyzerSoundness: Object.freeze({
+      budget: campaign.profiles[profileName].families['analyzer-soundness'],
+      canaryRecall: Object.freeze({
+        detected: canaryIds.length,
+        ids: canaryIds,
+        total: canaryIds.length,
+      }),
+      census: Object.freeze({
+        path: analyzerSoundnessCensusPath,
+        schema: census.schema,
+        sha256: sha256(censusSource),
+        version: census.version,
+      }),
+      seed: analyzerFamily.seed,
+      semanticCoverage: Object.freeze({
+        obligations: Object.freeze([...analyzerObligations].sort()),
+        passed: analyzerObligations.length,
+        total: expectedAnalyzerObligations.length,
+      }),
+      unresolvedObservedOutsidePredicted: 0,
+    }),
+    mutation: Object.freeze({
+      killed: mutationScore.killed,
+      percentage: mutationScore.percentage,
+      survivors: mutationScore.survivors ?? 0,
+      total: mutationScore.total,
+    }),
+    normativePropertyViolations: 0,
+    qualification: campaign.successArtifacts.qualification,
+    workflow: Object.freeze({
+      eventName: environment.GITHUB_EVENT_NAME ?? null,
+      ref: environment.GITHUB_REF ?? null,
+      runAttempt: environment.GITHUB_RUN_ATTEMPT ?? null,
+      runId: environment.GITHUB_RUN_ID ?? null,
+      workflow: environment.GITHUB_WORKFLOW ?? null,
+    }),
+  });
+}
+
+export function validateSecurityFuzzSuccessRecord(
+  document,
+  { campaign, rootDir = repoRoot() } = {},
+) {
+  const findings = [];
+  if (document?.schema !== securityFuzzSuccessSchema) {
+    return result([`schema must be ${securityFuzzSuccessSchema}`]);
+  }
+  if (!/^[0-9a-f]{40}$/u.test(document.codeSubjectSha ?? '')) {
+    findings.push('success evidence must name one exact code subject SHA');
+  }
+  if (!['nightly', 'release'].includes(document.profile)) {
+    findings.push('success evidence profile must be nightly or release');
+  }
+  if (
+    !Number.isFinite(Date.parse(document.startedAt ?? '')) ||
+    !Number.isFinite(Date.parse(document.endedAt ?? '')) ||
+    document.endedAt < document.startedAt
+  ) {
+    findings.push('success evidence must retain ordered ISO start/end timestamps');
+  }
+  let expectedExecutions;
+  try {
+    expectedExecutions = exactSuccessfulExecutions(campaign, document.execution?.cases);
+  } catch (error) {
+    findings.push(error instanceof Error ? error.message : String(error));
+  }
+  if (
+    expectedExecutions !== undefined &&
+    (document.execution?.casesExecuted !== expectedExecutions.length ||
+      document.execution?.sha256 !== sha256(canonicalJson(expectedExecutions)))
+  ) {
+    findings.push('success evidence executed-case denominator or digest drifted');
+  }
+  if (document.qualification !== campaign?.successArtifacts?.qualification) {
+    findings.push('success evidence workflow-conclusion qualification drifted');
+  }
+  if (
+    document.campaign?.sha256 !== sha256(canonicalJson(campaign)) ||
+    document.campaign?.cases !==
+      campaign?.families?.reduce((sum, family) => sum + family.cases.length, 0)
+  ) {
+    findings.push('success evidence campaign digest or case denominator drifted');
+  }
+  const analyzerFamily = campaign?.families?.find((family) => family.id === 'analyzer-soundness');
+  const censusSource = readFileSync(path.join(rootDir, analyzerSoundnessCensusPath), 'utf8');
+  if (
+    document.analyzerSoundness?.census?.sha256 !== sha256(censusSource) ||
+    document.analyzerSoundness?.semanticCoverage?.passed !==
+      analyzerFamily?.coverage?.denominator ||
+    document.analyzerSoundness?.semanticCoverage?.total !== analyzerFamily?.coverage?.denominator ||
+    document.analyzerSoundness?.canaryRecall?.detected !== 2 ||
+    document.analyzerSoundness?.canaryRecall?.total !== 2 ||
+    document.analyzerSoundness?.unresolvedObservedOutsidePredicted !== 0
+  ) {
+    findings.push('success evidence analyzer census, coverage, canary, or verdict data drifted');
+  }
+  if (
+    document.mutation?.killed !== campaign?.mutationHarness?.expectedMutants ||
+    document.mutation?.total !== campaign?.mutationHarness?.expectedMutants ||
+    document.mutation?.percentage !== campaign?.mutationHarness?.requiredScorePercent ||
+    document.mutation?.survivors !== 0 ||
+    document.normativePropertyViolations !== 0
+  ) {
+    findings.push('success evidence must retain exact mutation and normative-property success');
+  }
+  return result(findings);
+}
+
+function exactSuccessfulExecutions(campaign, executions) {
+  if (!Array.isArray(executions)) {
+    throw new TypeError('security fuzz success evidence requires executed case records');
+  }
+  const expected = campaign.families.flatMap((family) =>
+    family.cases.map((testCase) => ({
+      caseId: testCase.id,
+      covers: [...testCase.covers],
+      decisionRole: testCase.decisionRole,
+      familyId: family.id,
+      status: 'passed',
+    })),
+  );
+  if (!deepEqual(executions, expected)) {
+    throw new Error(
+      'every declared security fuzz case must execute exactly once in manifest order',
+    );
+  }
+  return Object.freeze(
+    executions.map((entry) =>
+      Object.freeze({ ...entry, covers: Object.freeze([...entry.covers]) }),
+    ),
+  );
+}
+
+export function currentCodeSubjectSha(rootDir, environment = process.env, runner = spawnSync) {
+  const result = runner('git', ['rev-parse', 'HEAD'], { cwd: rootDir, encoding: 'utf8' });
+  const value = result.stdout?.trim();
+  if (result.error || result.status !== 0 || !/^[0-9a-f]{40}$/u.test(value ?? '')) {
+    throw new Error('could not determine exact code subject SHA for security fuzz evidence');
+  }
+  const fromWorkflow = environment.GITHUB_SHA;
+  if (fromWorkflow !== undefined && fromWorkflow !== value) {
+    throw new Error(
+      `GITHUB_SHA ${JSON.stringify(fromWorkflow)} does not equal checked-out code subject ${value}`,
+    );
+  }
+  return value;
 }
 
 async function executeCase({
