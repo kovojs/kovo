@@ -117,11 +117,14 @@ or served artifact.
   | §4.4    | Implemented and policy denominator current                                               | response-observation gate green for 3 remotely reachable surfaces                                           |
   | §4.5    | Implemented and tier mapping current                                                     | runtime-tier parity green for 1 production and 5 development doors                                          |
 
-- [ ] Repair the four exact-tip Plan-2 forcing-gate drifts exposed by this reconciliation before
+- [x] Repair the four exact-tip Plan-2 forcing-gate drifts exposed by this reconciliation before
       final acceptance: diagnostic conformance bindings (including KV452), the stale TCB
       `validateRevealReason` row, the missing `server.data.declassify` coverage cell/summary, and the
       five crypto-boundary acquisition/ratchet/ceiling findings. This premise-only checkpoint does
       not rewrite their generated or reviewed ledgers.
+  - Evidence: the merged coverage gate reports 48/47/1 with 277 anchors; crypto reports 58 reviewed
+    rows with a high-authority ceiling of 30; conformance reports 92 codes, 72 errors, 200 sites, and
+    37 evidence files / 108 witnesses / six mandatory executions.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
   - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
