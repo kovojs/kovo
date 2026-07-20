@@ -1,5 +1,6 @@
 import { createBoundedRuntimeAuditCollector } from './internal/security-markers.js';
 import { snapshotAuditText } from './internal/audit-text.js';
+import { emitCoreSecurityDecision } from './internal/security-decision.js';
 import {
   freezeSecurityValue,
   securityApply,
@@ -697,12 +698,27 @@ function validateDeclassifyPolicy(
   policy: DeclassifyPolicy | undefined,
   door: DeclassifyDoorId,
 ): DeclassifyPolicy {
-  if (
-    policy === undefined ||
-    typeof policy !== 'object' ||
-    !securityWeakSetHas(declassifyPolicies, policy) ||
-    policy.door !== door
-  ) {
+  const admitted =
+    policy !== undefined &&
+    typeof policy === 'object' &&
+    securityWeakSetHas(declassifyPolicies, policy) &&
+    policy.door === door;
+  // @kovo-security-decision declassification policy-admission
+  emitCoreSecurityDecision({
+    decisionSite: 'framework:declassification:policy-admission',
+    door: 'declassification',
+    outcome: admitted ? 'allow' : 'deny',
+    principal: {
+      epoch: null,
+      id: null,
+      kind: 'unresolved',
+      reason: 'outside-request-context',
+      tenant: null,
+    },
+    resourceScope: { identity: 'global', kind: 'secret' },
+    type: 'security-decision',
+  });
+  if (!admitted) {
     throw new TypeError(`${door} requires a validated DeclassifyPolicy for that exact door.`);
   }
   return policy;

@@ -1,4 +1,4 @@
-import { publicScopedKey } from '@kovojs/core';
+import { DeclassifyPolicy, publicScopedKey, secret } from '@kovojs/core';
 import {
   createMemoryStorage,
   installCoreSecurityDecisionBridge,
@@ -32,7 +32,7 @@ installCoreSecurityDecisionBridge((event) => {
 armSecurityDecisionEventRecorder();
 
 describe('security-decision production emission coverage (SPEC §11.2)', () => {
-  it('records allow and deny at every enrolled non-declassification choke without payloads', async () => {
+  it('records allow and deny at every enrolled choke without payloads', async () => {
     await resolveLifecycleRequest(new Request('https://app.example/'), {
       sessionProvider: () => null,
     });
@@ -42,6 +42,22 @@ describe('security-decision production emission coverage (SPEC §11.2)', () => {
 
     await runAccessDecisionGuards(publicAccess('emission coverage test'), undefined, {});
     await runAccessDecisionGuards([() => false], undefined, {});
+
+    const declassifyPolicy = DeclassifyPolicy.create({
+      door: 'secret.reveal',
+      ownerScope: 'framework',
+      purpose: 'server-computation',
+    });
+    expect(secret('server-owned').reveal(declassifyPolicy)).toBe('server-owned');
+    expect(() =>
+      secret('server-owned').reveal(
+        DeclassifyPolicy.create({
+          door: 'trustedReveal',
+          ownerScope: 'framework',
+          purpose: 'public-projection',
+        }) as never,
+      ),
+    ).toThrow(/exact door/u);
 
     const egressPolicy = resolveEgressPolicy(undefined, () => {}, { databaseUrls: [] });
     expect(
@@ -83,7 +99,15 @@ describe('security-decision production emission coverage (SPEC §11.2)', () => {
     ).resolves.toEqual({ kind: 'unavailable' });
 
     const records = securityEventSnapshot().filter((record) => record.type === 'security-decision');
-    for (const door of ['auth', 'authorization', 'egress', 'storage', 'task', 'replay'] as const) {
+    for (const door of [
+      'auth',
+      'authorization',
+      'declassification',
+      'egress',
+      'storage',
+      'task',
+      'replay',
+    ] as const) {
       const outcomes = records
         .filter((record) => record.type === 'security-decision' && record.door === door)
         .map((record) => record.outcome);
