@@ -158,40 +158,25 @@ export async function handleAppRequest(
           });
         }
 
-        // SPEC §9.2/§9.5: the streamed byte ceiling is an ingress admission gate, not work the
-        // database posture path may run ahead of. Content-Length is only a hint, so fully verify
-        // endpoint/mutation bodies before lease renewal, catalog probes, or provider acquisition.
-        // Reserved reporting keeps its independently bounded body reader below; attestation has
-        // already returned through its dedicated 4 KiB branch above.
-        const dispatchRequest =
-          match.kind === 'endpoint' || match.kind === 'mutation'
-            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)
-            : deadlineRequest;
-        if (match.kind === 'endpoint' || match.kind === 'mutation') {
-          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
-        }
-
         if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
           return kovoSecurityReportResponse(app, deadlineRequest);
         }
 
+        // SPEC §9.2/§9.5: the streamed byte ceiling is one ingress admission gate for every
+        // ordinary dispatch kind, including method mismatches, queries, routes, client modules,
+        // and not-found shells. Content-Length is only a hint, so fully verify the stream before
+        // lease renewal, catalog probes, provider acquisition, or durable-task startup. Reserved
+        // reporting keeps its independently bounded reader above; attestation already returned
+        // through its dedicated 4 KiB branch.
+        const dispatchRequest = await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes);
+        limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
+
         // Durable-task startup may resolve/provision its own database. Keep that background work
-        // behind the same pre-dispatch admission boundary as the app database: a rejected streamed
-        // request must not be able to trigger either provider (SPEC §9.5/§9.6).
-        let admittedRequest = dispatchRequest;
-        if (
-          hooks.admitted !== undefined &&
-          match.kind !== 'endpoint' &&
-          match.kind !== 'mutation'
-        ) {
-          admittedRequest = await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes);
-        }
+        // behind the same pre-dispatch admission boundary as the app database: rejected streamed
+        // traffic must not be able to trigger either provider (SPEC §9.5/§9.6).
         if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
         hooks.admitted?.();
 
-        if (match.kind !== 'endpoint' && match.kind !== 'mutation') {
-          limitedRequest = requestWithBodyLimit(admittedRequest, maxBodyBytes);
-        }
         return dispatchMatchedAppRequest({
           app,
           match,
