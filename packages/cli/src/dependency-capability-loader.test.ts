@@ -1,5 +1,5 @@
 // @kovo-security-classifier-corpus dependency-capability-loader
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -448,6 +448,60 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         );
       }
       expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-inline-html-module-closure
+  it('rejects inline HTML module proxies outside the immutable approved-source snapshot', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-inline-html-')));
+    const appModulePath = join(root, 'src', 'app.ts');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(appModulePath, 'export const app = true;\n');
+      writeFileSync(
+        join(root, 'index.html'),
+        [
+          '<!doctype html>',
+          '<script type="module">',
+          "import { parse } from 'safe-parser';",
+          "document.body.textContent = parse('uncensused');",
+          '</script>',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.js' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(join(packageRoot, 'index.js'), 'export const parse = value => value;\n');
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir: join(root, 'dist') },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.ts', source: 'export const app = true;\n' }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(
+        /KV448.*inline HTML module is outside the immutable approved-source snapshot/u,
+      );
+      expect(() => readFileSync(join(root, 'dist', 'index.html'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

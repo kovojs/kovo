@@ -2087,6 +2087,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'dependency-inline-html-module-closure',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-inline-html-module-closure',
+          'rejects inline HTML module proxies outside the immutable approved-source snapshot',
+          '<script type="module">',
+          'inline HTML module is outside the immutable approved-source snapshot',
+          "readFileSync(join(root, 'dist', 'index.html')",
+        ],
+      },
+      {
         id: 'capability-mint-symbol-identity-census',
         file: 'scripts/capability-surface-census-gate.test.mjs',
         snippets: [

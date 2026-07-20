@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 262,
+    "historicalWitnesses": 263,
     "productions": 12
   },
   "productions": [
@@ -974,6 +974,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness requires every package import to consume the explicit initializer verdict as well as each requested export verdict."
+    },
+    {
+      "anchor": "dependency-inline-html-module-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness rejects a Vite inline HTML module proxy because its JavaScript bytes are absent from the immutable approved-source snapshot."
     },
     {
       "anchor": "capability-mint-symbol-identity-census",
