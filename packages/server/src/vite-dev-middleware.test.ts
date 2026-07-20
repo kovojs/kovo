@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
@@ -528,13 +529,15 @@ describe('server app shell Vite plugin', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/cart.tsx',
-          length: 7,
-          message: 'JSX nesting violates the HTML content model.',
-          start: { column: 11, line: 2 },
-        },
+        createRegisteredDiagnostic(
+          'KV225',
+          {
+            fileName: 'src/components/cart.tsx',
+            length: 7,
+            start: { column: 11, line: 2 },
+          },
+          { message: 'JSX nesting violates the HTML content model.' },
+        ),
       ],
       fileName: 'src/components/cart.tsx',
       source: ['export const Cart = component({', '  render: () => <p><div /></p>', '});'].join(
