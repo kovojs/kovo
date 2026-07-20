@@ -74,11 +74,27 @@ that closure.
   "securityRatchet": {
     "schema": "kovo.security.tcb-ratchet/v1",
     "limits": {
-      "analysisClosureSize": 359,
+      "analysisClosureSize": 381,
       "entryCount": 134,
       "totalTcbMaxLines": 2000
     },
-    "reviewedRaises": []
+    "reviewedRaises": [
+      {
+        "from": {
+          "analysisClosureSize": 359,
+          "entryCount": 134,
+          "totalTcbMaxLines": 2000
+        },
+        "id": "SEC-HTML-PARSE5-2026-07-19",
+        "reason": "The raw HTML execution gate now depends on exact-pinned parse5 and its entities decoder, and the compile closure now reaches the existing Better Auth trusted surface through framework package analysis.",
+        "review": "plans/10x-better-security-3.md §3.5 app-dependency authority attenuation",
+        "to": {
+          "analysisClosureSize": 381,
+          "entryCount": 134,
+          "totalTcbMaxLines": 2000
+        }
+      }
+    ]
   },
   "analysisToolchain": [
     {
@@ -192,8 +208,10 @@ that closure.
       "analysis.vite-plus",
       "analysis.vitest",
       "dep.argon2.password-hashing",
+      "dep.better-auth.password-hashing",
       "dep.drizzle.sql-generation-parameterization",
       "dep.node-pg.query-parameterization",
+      "dep.parse5.html-execution-classification",
       "dep.pglite.set-local-role-rls",
       "dep.pgsql-ast-parser.sql-boundary-classification",
       "dep.undici.egress-transport-dispatch"
@@ -220,30 +238,6 @@ that closure.
         "reason": "Capability closure resolves a normalized request derived from the statically extracted app package import; the target is application dependency input."
       },
       {
-        "id": "packages/cli/src/commands/build-export.ts#import#import( pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/build')).href )",
-        "reason": "The export path imports the fixed first-party server build export resolved from the app's installed Kovo server package."
-      },
-      {
-        "id": "packages/cli/src/commands/build-export.ts#import#import( pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis')) .href )",
-        "reason": "The export path imports the fixed first-party data-plane analyzer export resolved from the app's installed Kovo server package."
-      },
-      {
-        "id": "packages/cli/src/commands/build-export.ts#import#import( pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/static-export')).href )",
-        "reason": "The export path imports the fixed first-party static-export implementation resolved from the app's installed Kovo server package."
-      },
-      {
-        "id": "packages/cli/src/commands/build-export.ts#import#import( pathToFileURL(requireFromServer.resolve('@kovojs/compiler/internal/security-bootstrap')).href )",
-        "reason": "The build path preloads the fixed first-party compiler security bootstrap resolved from the app's installed Kovo server package."
-      },
-      {
-        "id": "packages/cli/src/commands/build-export.ts#import#import(pathToFileURL(requireFromServer.resolve('@kovojs/compiler')).href)",
-        "reason": "The build path imports the fixed first-party compiler entry resolved from the app's installed Kovo server package."
-      },
-      {
-        "id": "packages/cli/src/commands/build-export.ts#import#import(pathToFileURL(resolvedAppModulePath).href)",
-        "reason": "The build/export command imports the author-selected app entry after CLI path resolution; it is application input, not an undeclared third-party package edge."
-      },
-      {
         "id": "packages/cli/src/commands/build-export.ts#require.resolve#context.resolver.resolve(packageName)",
         "reason": "The source-root proof resolves only names from Kovo's finite first-party framework package inventory through a resolver captured before app evaluation."
       },
@@ -268,6 +262,10 @@ that closure.
         "reason": "The adversarial production-artifact test resolves the already enrolled pg root to copy a controlled dependency fixture."
       },
       {
+        "id": "packages/drizzle/src/derive-codegen.test.ts#import#import(join(root, 'src', 'generated.mjs'))",
+        "reason": "The Drizzle code-generation test imports its own freshly generated local fixture to verify emitted runtime behavior."
+      },
+      {
         "id": "packages/server/src/egress-undici-runtime.ts#require#requireUndici(undiciPackageName)",
         "reason": "The egress runtime loads only the fixed enrolled undici package name through its captured module loader."
       },
@@ -288,8 +286,17 @@ that closure.
         "reason": "The docs gate imports the fixed repository diagnostics source URL used to derive the published diagnostic reference."
       }
     ],
-    "maxPackageCount": 359,
+    "maxPackageCount": 381,
     "subjects": [
+      "@better-auth/core@1.6.17 sha512-ithzeL/IKsBEYeCDJs9r1KE2nwYC/6ni8oMA8NCCtP18RoCOiWErFSjrnL+XLaN6zxrB0ko7QxREjyzTNBtusQ==",
+      "@better-auth/drizzle-adapter@1.6.17 sha512-Dq52cdZ0vREalUwbP8GXBbpk7XTSw5rZtY8n3nTTwrU09RELsXTi0oYQRW62MFYaUqw0mCHIT4H0emAH/5hy5Q==",
+      "@better-auth/kysely-adapter@1.6.17 sha512-rhDrpzyGtogEDrJ3Id+nbOUVtT1DxMF9OFl2EwyktUuvTFyCrefClBdvVbmeYZPva9+ERuOsbjma+E9E0SJ0RA==",
+      "@better-auth/memory-adapter@1.6.17 sha512-7oU+Gkve7RivIfQkclIet8+qJON6tbbRINihmgGoi67uGPTeEdTy2UixF8R8+lv91gI/Aqea2oNg/MKIalhlIA==",
+      "@better-auth/mongo-adapter@1.6.17 sha512-nSmolHUVR2/AIKg6WijrSxdF9DCAybbiswulw9ph4FghuCuWl9DDzfTKvG/z+/FpRaYuY+KYFitNbeRiTonn1A==",
+      "@better-auth/prisma-adapter@1.6.17 sha512-DW1eEXw39Hv/z34ctfoR6lB3rZRt/+X/m7j74dYTsSUt7TjaIjfhQkN01mYN7+GeLSqzGxJ132N93L7iGutKuA==",
+      "@better-auth/telemetry@1.6.17 sha512-ik7gC4UgdR3Jyb0x7yVzLTfc04x5kfjFbSdOraUbhZUXkOF+/7Ee57SuB2QgfffGEr8xhGHp46sqzF9u2D4qoQ==",
+      "@better-auth/utils@0.4.1 sha512-SZBPRPF3z0nBvE5ygOkxae35wnnXPRShmqFo78S+qslLeFoPu/pMgnXAuNKFMMybac3tiLaVg1e3MQW5MC+1iA==",
+      "@better-fetch/fetch@1.3.0 sha512-Lgkl18IrUURFqa1nE38GNDWXf7XGzfxXQDCE/alCQV0yZ98YrPGtlmW61ch1T4YRt3lxrSAGA+Ft73FzuWWb3A==",
       "@blazediff/core@1.9.1 sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA==",
       "@electric-sql/pglite@0.5.1 sha512-h2Vc+qkQqsEL5kvyN5nBAxn3Vbyvka7QfDW7Io+CdcwU1+X8JbCAN2og+5dI11S3eJuDfroUCxzJaap6k+ezEw==",
       "@emnapi/core@1.10.0 sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==",
@@ -327,6 +334,8 @@ that closure.
       "@modelcontextprotocol/sdk@1.29.0 sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==",
       "@napi-rs/wasm-runtime@0.2.12 sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==",
       "@napi-rs/wasm-runtime@1.1.5 sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q==",
+      "@noble/ciphers@2.2.0 sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA==",
+      "@noble/hashes@2.2.0 sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==",
       "@node-rs/argon2-android-arm-eabi@2.0.2 sha512-DV/H8p/jt40lrao5z5g6nM9dPNPGEHL+aK6Iy/og+dbL503Uj0AHLqj1Hk9aVUSCNnsDdUEKp4TVMi0YakDYKw==",
       "@node-rs/argon2-android-arm64@2.0.2 sha512-1LKwskau+8O1ktKx7TbK7jx1oMOMt4YEXZOdSNIar1TQKxm6isZ0cRXgHLibPHEcNHgYRsJWDE9zvDGBB17QDg==",
       "@node-rs/argon2-darwin-arm64@2.0.2 sha512-3TTNL/7wbcpNju5YcqUrCgXnXUSbD7ogeAKatzBVHsbpjZQbNb1NDxDjqqrWoTt6XL3z9mJUMGwbAk7zQltHtA==",
@@ -342,6 +351,7 @@ that closure.
       "@node-rs/argon2-win32-ia32-msvc@2.0.2 sha512-GsE2ezwAYwh72f9gIjbGTZOf4HxEksb5M2eCaj+Y5rGYVwAdt7C12Q2e9H5LRYxWcFvLH4m4jiSZpQQ4upnPAQ==",
       "@node-rs/argon2-win32-x64-msvc@2.0.2 sha512-cJxWXanH4Ew9CfuZ4IAEiafpOBCe97bzoKowHCGk5lG/7kR4WF/eknnBlHW9m8q7t10mKq75kruPLtbSDqgRTw==",
       "@node-rs/argon2@2.0.2 sha512-t64wIsPEtNd4aUPuTAyeL2ubxATCBGmeluaKXEMAFk/8w6AJIVVkeLKMBpgLW6LU2t5cQxT+env/c6jxbtTQBg==",
+      "@opentelemetry/semantic-conventions@1.41.1 sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA==",
       "@oxc-project/runtime@0.133.0 sha512-PkvjA1Lq5++V5S1E6Patr92ZVcieE6EalDr1VJTqv4BnjZdOUC4W3p8k1wMXSd5/2aFP4b/A6N5sg2Bkzcr9vQ==",
       "@oxc-project/types@0.133.0 sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==",
       "@oxfmt/binding-android-arm-eabi@0.52.0 sha512-17EMSJnQ9g+upVHrAUYDMfH5lvRKQ9Nvg8WtEoH72oDr1VpWz+7/o3tD97U1EToen2YAQ/68JmtDYkQUi20dfQ==",
@@ -440,6 +450,8 @@ that closure.
       "assertion-error@2.0.1 sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==",
       "balanced-match@4.0.4 sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
       "base64-js@1.5.1 sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==",
+      "better-auth@1.6.17 sha512-M0XMJ9/KE9hlmuN2Zha1VayShZW5CQifAMPaoz41gtao2la6YpT5KrnL5MAeIAM/3d4DkdYA2BVMY1Gt4iEzHw==",
+      "better-call@1.3.6 sha512-no1jI+h6Bkxs1NVBo4rONbVIzsPjZ8IUu7IHaJBiFwVX1XEQGN8KpHots5fSWmXe9nNyLuLIcgx6WEUcE6EDaA==",
       "better-sqlite3@12.11.1 sha512-dq9AtApgg5PGFtBzPFSBl3HZQjHok5gaQCM6zh2Yk0aSmDCs1CbnVI8/HgASQkNKsWFpseIO9beg5xxpYhbIfA==",
       "bindings@1.5.0 sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==",
       "bl@4.1.0 sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==",
@@ -464,14 +476,17 @@ that closure.
       "debug@4.4.3 sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
       "decompress-response@6.0.0 sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ==",
       "deep-extend@0.6.0 sha512-LOHxIOaPYdHlJRtCQfDIVZtfw/ufM8+rVj649RIHzcm/vGwQRXFt6OPqIFWsm2XEMrNIEtWR64sY1LEKD2vAOA==",
+      "defu@6.1.7 sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==",
       "depd@2.0.0 sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==",
       "detect-libc@2.1.2 sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==",
       "discontinuous-range@1.0.0 sha512-c68LpLbO+7kP/b1Hr1qs8/BJ09F5khZGTxqxZuhzxpmwJKOgRFHJWIb9/KmqnqHhLdO55aOxFH/EGBvUQbL/RQ==",
+      "drizzle-orm@0.45.2 sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
       "drizzle-orm@1.0.0-rc.4 sha512-BT+pf+qoiYHqltoA88Jmf6ilGMXPlpfE0hEJKc2adRtMCAl25Swk/t5gXcWxZNAwdtf3F5gCd2FpeOyP/pT0Hw==",
       "dunder-proto@1.0.1 sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==",
       "ee-first@1.1.1 sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==",
       "encodeurl@2.0.0 sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==",
       "end-of-stream@1.4.5 sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==",
+      "entities@8.0.0 sha512-zwfzJecQ/Uej6tusMqwAqU/6KL2XaB2VZ2Jg54Je6ahNBGNH6Ek6g3jjNCF0fG9EWQKGZNddNjU5F1ZQn/sBnA==",
       "es-define-property@1.0.1 sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==",
       "es-errors@1.3.0 sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==",
       "es-module-lexer@1.7.0 sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==",
@@ -518,6 +533,7 @@ that closure.
       "jose@6.2.3 sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==",
       "json-schema-traverse@1.0.0 sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
       "json-schema-typed@8.0.2 sha512-fQhoXdcvc3V28x7C7BMs4P5+kNlgUURe2jmUT1T//oBRMDrqy1QPelJimwZGo7Hg9VPV3EQV5Bnq4hbFy2vetA==",
+      "kysely@0.29.2 sha512-s6WVJyEZrbm6jhBpiKHsGHyePMrVQKJ85wZCFCr9W4QHv6WTjWIrdvTmO9hDEA3bNK0xkrE2DqrHsXMLWuZpQg==",
       "lightningcss-android-arm64@1.32.0 sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==",
       "lightningcss-darwin-arm64@1.32.0 sha512-RzeG9Ju5bag2Bv1/lwlVJvBE3q6TtXskdZLLCyfg5pt+HLz9BqlICO7LZM7VHNTTn/5PRhHFBSjk5lc4cmscPQ==",
       "lightningcss-darwin-x64@1.32.0 sha512-U+QsBp2m/s2wqpUYT/6wnlagdZbtZdndSmut/NJqlCcMLTWp5muCrID+K5UJ6jqD2BFshejCYXniPDbNh73V8w==",
@@ -545,6 +561,7 @@ that closure.
       "mrmime@2.0.1 sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==",
       "ms@2.1.3 sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
       "nanoid@3.3.12 sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==",
+      "nanostores@1.3.0 sha512-XPUa/jz+P1oJvN9VBxw4L9MtdFfaH3DAryqPssqhb2kXjmb9npz0dly6rCsgFWOPr4Yg9mTfM3MDZgZZ+7A3lA==",
       "napi-build-utils@2.0.0 sha512-GEbrYkbfF7MoNaoh2iGG84Mnf/WZfB0GdGEsM8wz7Expx/LlWf5U8t9nvJKXSp3qr5IsEbK04cBGhol/KwOsWA==",
       "nearley@2.20.1 sha512-+Mc8UaAebFzgV+KpI5n7DasuuQCHA89dmwm7JXw3TV43ukfNQ9DnBH3Mdb2g/I4Fdxc26pwimBWvjIw0UAILSQ==",
       "negotiator@1.0.0 sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==",
@@ -557,6 +574,7 @@ that closure.
       "oxfmt@0.52.0 sha512-nJlYM35F64zTDMecCNhoHNkf+D/eHv7xcjj9XDSj+bFAVtN93m7v8DQMdHd6nDG6Akf/kEYYHmDUBs2Dz27Sug==",
       "oxlint-tsgolint@0.23.0 sha512-3mBv3CoPbh8dFbzfDGIWa2ytZjn2v+3EX4aKRXjIhsoGFzG8GCjfRirz3rwZf1wYbZzsNLTSgpw8VjQuWdp/jA==",
       "oxlint@1.67.0 sha512-blwwaHPdoH8piQ5/z0KHeoHFR7FZgl12WluKJfu4qFLPkZl6mK04PkLE45Fw1NxfBRSlh40Gu7MkxHUw++ociQ==",
+      "parse5@8.0.1 sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==",
       "parseurl@1.3.3 sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==",
       "path-browserify@1.0.1 sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==",
       "path-key@3.1.1 sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==",
@@ -596,12 +614,14 @@ that closure.
       "require-from-string@2.0.2 sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==",
       "ret@0.1.15 sha512-TTlYpa+OL+vMMNG24xSlQGEJ3B/RzEfUlLct7b5G/ytav+wPrplCpVMFuwzXbkecJrb6IYo1iFb0S9v37754mg==",
       "rolldown@1.0.3 sha512-i00lAJ2ks1BYr7rjNjKC7BcqAS7nVfiT3QX1SI5aY+AFHblCmaUf9OE9dbdzDvW6dJxbi2ZCZiy9v3CcwOiX3g==",
+      "rou3@0.7.12 sha512-iFE4hLDuloSWcD7mjdCDhx2bKcIsYbtOTpfH5MHHLSKMOUyjqQXTeZVa289uuwEGEKFoE/BAPbhaU4B774nceg==",
       "router@2.2.0 sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==",
       "safe-buffer@5.2.1 sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ==",
       "safer-buffer@2.1.2 sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==",
       "semver@7.8.5 sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
       "send@1.2.1 sha512-1gnZf7DFcoIcajTjTwjwuDjzuz4PPcY2StKPlsGAQ1+YH20IRVrBaXSWmdjowTJ6u8Rc01PoYOGHXfP1mYcZNQ==",
       "serve-static@2.2.1 sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==",
+      "set-cookie-parser@3.1.0 sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw==",
       "setprototypeof@1.2.0 sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==",
       "shebang-command@2.0.0 sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
       "shebang-regex@3.0.0 sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==",
@@ -652,6 +672,16 @@ that closure.
     ]
   },
   "trustedDependencySurfaces": [
+    {
+      "id": "dep.parse5.html-execution-classification",
+      "surface": "parse5 HTML tokenizer and tree construction",
+      "dependency": "parse5",
+      "packageJson": "packages/cli/package.json",
+      "pinnedVersion": "8.0.1",
+      "integrity": "sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==",
+      "guarantee": "The build-client dependency floor classifies raw HTML execution using standards-compatible scripting-enabled and scripting-disabled trees, so tokenizer states, character references, namespaces, SMIL, opener and meta-refresh controls, and embedded documents cannot hide executable authority from the immutable app-source and finite element-control checks (SPEC §6.6).",
+      "reviewTrigger": "Any parse5 bump must re-run browser differential witnesses for comments, RCDATA/RAWTEXT, quoted attributes, SVG scripts and SMIL, embedded documents, event attributes, URL character references, target/rel opener controls, meta refresh, and Vite HTML resolution, and re-confirm the parsed tree agrees with the pinned Vite HTML parser on every admitted module edge."
+    },
     {
       "id": "dep.node-pg.query-parameterization",
       "surface": "node-pg query parameterization",

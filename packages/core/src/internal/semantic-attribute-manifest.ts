@@ -53,7 +53,13 @@ const generatedOnlyAttributes = [
   'popovertargetaction',
 ] as const;
 
-const generatedOnlyPrefixes = ['data-bind:', 'data-bind-prop:', 'data-p-', 'on:'] as const;
+const generatedOnlyPrefixes = [
+  'data-bind:',
+  'data-bind-prop:',
+  'data-kovo-trusted-url:',
+  'data-p-',
+  'on:',
+] as const;
 
 // Browser-native command/popover attributes and the typed `enhance` JSX flag are intentionally
 // absent: dynamic values cannot retarget them, but authored literal/typed forms remain valid.

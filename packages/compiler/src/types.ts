@@ -788,6 +788,8 @@ export interface QueryStampFact {
   derive: QueryDeriveFact;
   outputContext: GeneratedOutputWriteFact;
   selector: string;
+  /** Exact compiler-owned sink verdict; never inferred from query/wire value shape. */
+  trustedUrl?: true;
 }
 
 /**

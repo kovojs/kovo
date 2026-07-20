@@ -299,6 +299,28 @@ export const Raw = component({
   );
 
   it.each([
+    ['direct trusted-URL derivation marker', 'data-kovo-trusted-url:src=""'],
+    ['static-spread trusted-URL derivation marker', "{...{ 'data-kovo-trusted-url:src': '' }}"],
+  ])('closes app-authored %s', (_label, attributes) => {
+    const source = `
+import { component } from '@kovojs/core';
+export const Raw = component({
+  render: () => <img ${attributes} alt="" />,
+});
+`;
+
+    expect(kv235(source)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining(
+            'App source hand-authors framework control-plane lowered IR',
+          ),
+        }),
+      ]),
+    );
+  });
+
+  it.each([
     ['handler ref', "'on:click': '/c/other.client.js#privileged'"],
     ['derive ref', "'data-bind:hidden': '/c/other.client.js#privileged'"],
     ['text binding path', "'data-bind': 'cart.count'"],

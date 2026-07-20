@@ -41,6 +41,7 @@ import {
 import {
   parseComponentModule,
   parserFactFrameworkTrustedUrlReason,
+  parserFactFrameworkTrustedUrlValue,
   parserFactHasFrameworkTrustedUrl,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -3068,10 +3069,12 @@ function lowerAttributeDerive(
   effectiveElementContextDerives?: EffectiveElementContextDeriveFact[],
   forceQueryBinding = false,
 ): void {
+  const trustedUrlValue = parserFactFrameworkTrustedUrlValue(candidate.attribute);
   const expression = executableJavaScriptExpression(
-    candidate.source === 'state'
-      ? deriveExpression(candidate.attribute, candidate.expression)
-      : compilerStringTrim(candidate.expression),
+    trustedUrlValue ??
+      (candidate.source === 'state'
+        ? deriveExpression(candidate.attribute, candidate.expression)
+        : compilerStringTrim(candidate.expression)),
   );
   const deriveInputs = candidate.inputs ?? [candidate.query];
   const deriveParams = candidate.params ?? [deriveParam(candidate)];
@@ -3149,6 +3152,18 @@ function lowerAttributeDerive(
       ),
     );
   };
+
+  if (trustedUrlValue !== undefined) {
+    setJsxIrAttribute(
+      candidate.element,
+      generatedJsxIrAttribute(
+        trustedUrlMarkerAttributeName(candidate.targetAttr),
+        { kind: 'boolean', value: true },
+        'compiler-reviewed reactive trusted URL',
+        options,
+      ),
+    );
+  }
 
   removeJsxIrAttribute(candidate.element, candidate.attribute.name);
   if (candidate.source === 'state') {
@@ -5124,6 +5139,10 @@ function nextExportName(baseName: string, nameCounts: Map<string, number>): stri
 
 function stateBindingAttributeName(name: string): string {
   return `data-bind:${name}`;
+}
+
+function trustedUrlMarkerAttributeName(name: string): string {
+  return `data-kovo-trusted-url:${compilerStringToLowerCase(name)}`;
 }
 
 function derivePrefixInsertionOffset(source: string): number {

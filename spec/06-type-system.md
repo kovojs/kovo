@@ -436,12 +436,42 @@ import and reject an absent/duplicate or malformed row, identity drift, a closed
 retained `raw` or `request-closed` export. Pre-evaluation SSR MUST force complete dependency
 traversal and parse every admitted third-party module before execution; every bare child edge,
 including a Node builtin, and every non-literal module edge fails closed before Vite can externalize
-it. An external module edge from a loaded HTML entry MUST resolve to the immutable approved-source
+it. A relative child edge from a reviewed package MUST retain that package's exact nearest owning
+package root; physical containment does not admit a nested `package.json` or `node_modules` package
+identity, including one reached through a symlink or package-main redirect. Application aliases MUST
+NOT match a reviewed package child edge, and reviewed dependencies require Kovo's fixed Vite
+extension-resolution order; same-root retargeting invalidates the reviewed summary just as an escape
+does. Every direct reviewed export and resolved relative child MUST have one exact case-sensitive
+JavaScript/TypeScript module suffix — `.cjs`, `.cts`, `.js`, `.jsx`, `.mjs`, `.mts`, `.ts`, or
+`.tsx` — in both its lexical resolver identity and canonical realpath. Extensionless modules, JSON,
+CSS, SVG/HTML, WASM/native modules, and image/font/media resources remain closed until a separate
+pinned semantic and provenance lane admits them; Vite cannot reinterpret reviewed bytes as an
+asset, stylesheet, executable document, or worker payload. Query/fragment variants, direct
+`Worker`/`SharedWorker` construction, and every `new URL(..., import.meta.url)` asset carrier from a
+reviewed package likewise fail closed before Vite can create a secondary module/resource graph. An
+external module edge from a loaded HTML entry MUST resolve to the immutable approved-source
 snapshot or one exact framework-owned Vite bootstrap virtual; inline HTML module proxies remain
-outside the supported source graph. An exact framework host-tool external is permitted only when no
+outside the supported source graph. Before Vite resolution, Kovo MUST parse raw HTML with one
+exact-pinned standards-compatible parser in both the build tool's scripting-disabled state and the
+browser's ordinary scripting-enabled state. Every script source must be an exact HTML-namespace
+module URL in the immutable approved-source snapshot; inline scripts other than explicit JSON data
+blocks, foreign-namespace scripts, raw `on*` event attributes, JavaScript URL attributes, SVG SMIL
+execution primitives, and any `iframe`/`frame`/`frameset`/`object`/`embed` carrier fail closed with
+KV448. Raw element controls consume §4.8's finite static-value policy, including target-keyword,
+no-opener, and `meta[http-equiv=refresh]` automatic-navigation rules. Raw `<base href>` and
+`<base target>` also fail closed because they can retarget emitted modules or later navigation at
+browser consumption. Public-asset shadows, `vite-ignore`, browser-only module-type spellings, and
+post-resolution aliases cannot weaken the same approved-file binding. An exact
+framework host-tool external is permitted only when no
 app dependency manifest row overlaps that package or subpath. Artifact checks distinguish
 bundle-owned chunk filenames from true unresolved externals without weakening the earlier source
-and module-graph checks. The same manifest is emitted in `graph.json`; an explicit empty manifest
+and module-graph checks: only a relative runtime specifier normalized from its importing chunk may
+bind a bundle-owned file, while Rollup file-name metadata is checked separately and cannot bless a
+bare runtime specifier. Retained non-literal module edges fail closed. Relative artifact specifiers
+with percent encoding, query/fragment syntax, backslashes, ASCII whitespace/control bytes, or empty
+path segments fail closed before ownership comparison because browser/Node URL resolution can map
+those spellings to a different file. Only `OutputChunk` names — never `OutputAsset` names — satisfy
+executable bundle ownership. The same manifest is emitted in `graph.json`; an explicit empty manifest
 means the compiler proved that the app graph has no dependency edge. This loader check turns the
 pre-evaluation census into a fail-closed runtime/build bound for supported production artifacts, but
 it is defense-in-depth under rule (3): it does not sandbox deliberately hostile same-realm package

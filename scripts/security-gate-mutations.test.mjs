@@ -8,7 +8,41 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after lifecycle private-scope closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(259);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(284);
+  });
+
+  it('enrolls the dependency-loader graph, HTML, and artifact closure mutants', () => {
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
+      mutant.name.startsWith('dependency-loader/'),
+    );
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(
+      [
+        'dependency-loader/allow-bare-bundle-key-collision',
+        'dependency-loader/drop-artifact-url-ambiguity-closure',
+        'dependency-loader/drop-cjs-loader-alias-closure',
+        'dependency-loader/drop-direct-export-ownership-closure',
+        'dependency-loader/drop-direct-ssr-external-overlap-closure',
+        'dependency-loader/drop-executable-asset-carrier-closure',
+        'dependency-loader/drop-external-html-module-closure',
+        'dependency-loader/drop-html-base-target-closure',
+        'dependency-loader/drop-html-element-control-closure',
+        'dependency-loader/drop-html-nested-document-closure',
+        'dependency-loader/drop-html-public-shadow-closure',
+        'dependency-loader/drop-html-smil-closure',
+        'dependency-loader/drop-nested-package-boundary-closure',
+        'dependency-loader/drop-nonliteral-artifact-closure',
+        'dependency-loader/drop-retained-artifact-target-closure',
+        'dependency-loader/drop-reviewed-child-alias-closure',
+        'dependency-loader/drop-reviewed-extension-order-closure',
+        'dependency-loader/drop-reviewed-module-suffix-closure',
+        'dependency-loader/drop-reviewed-worker-constructor-closure',
+        'dependency-loader/drop-ssr-pre-evaluation-module-census',
+        'dependency-loader/drop-unsupported-subgraph-suffix-closure',
+        'dependency-loader/widen-bundle-owned-chunk-kind',
+      ].sort(),
+    );
+    expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
   });
 
   it('executes the lifecycle private-scope pin mutant against a behavioral runtime oracle', () => {
@@ -182,6 +216,7 @@ describe('security-gate-mutations', () => {
       'image[crossorigin]',
       'feimage[crossorigin]',
       'meta[name]',
+      'meta[http-equiv]',
     ];
     const tupleNames = tupleKeys.map(
       (key) =>
@@ -201,7 +236,7 @@ describe('security-gate-mutations', () => {
     const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => behavioralNames.includes(mutant.name));
 
     expect(mutants.map((mutant) => mutant.name).sort()).toEqual(behavioralNames.sort());
-    expect(tupleNames).toHaveLength(66);
+    expect(tupleNames).toHaveLength(67);
     expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
     expect(mutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
     const inline = SECURITY_GATE_MUTANTS.find(

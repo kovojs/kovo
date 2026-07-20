@@ -305,6 +305,9 @@ function installInlineKovoLoader(im) {
     if (control.staticPolicy === 'meta-referrer-name') {
       return normalized === 'referrer' ? control.reason : undefined;
     }
+    if (control.staticPolicy === 'meta-refresh-http-equiv') {
+      return normalized === 'refresh' ? control.reason : undefined;
+    }
     if (control.staticPolicy === 'referrer-policy') {
       return normalized === 'no-referrer' || normalized === 'same-origin' ||
         normalized === 'strict-origin' || normalized === 'strict-origin-when-cross-origin'
@@ -632,7 +635,7 @@ function installInlineKovoLoader(im) {
     if (sandbox !== null) bns.removeElementAttribute(el, 'sandbox');
     return true;
   };
-  const blockElementContextWrite = (el, name, val) => {
+  const blockElementContextWrite = (el, name, val, trustedUrlWrite) => {
     const tag = bns.lower(bns.readElementTagName(el) || '');
     if (tag === 'base') {
       const attributes = bns.snapshotElementAttributes(el);
@@ -663,6 +666,7 @@ function installInlineKovoLoader(im) {
       if (control.staticPolicy === 'disabled') {
         bns.removeElementAttribute(el, name);
       }
+      if (trustedUrlWrite && control.acceptsTrustedUrl) return false;
       // Preserve the compiler-reviewed live value. Removing iframe[sandbox] is privilege
       // elevation, so blocked context writes must never share the ordinary remove action.
       return true;
@@ -671,6 +675,8 @@ function installInlineKovoLoader(im) {
   };
   const wa = (el, name, val) => {
     const n = bns.lower(name);
+    const trustedUrlWrite =
+      bns.readAttribute(el, 'data-kovo-trusted-url:' + n) !== null;
     if (stripDeclarativeShadowControls(el) && isDeclarativeShadowControl(n, val)) return;
     if (inertBlockedActiveElement(el)) return;
     inertUnsafeLiveIframeSource(el);
@@ -678,7 +684,7 @@ function installInlineKovoLoader(im) {
       bns.removeElementAttribute(el, name);
       return;
     }
-    if (blockElementContextWrite(el, n, val)) return;
+    if (blockElementContextWrite(el, n, val, trustedUrlWrite)) return;
     // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
     // lives in the top layer. Toggling its open attribute alone never exits the
     // top layer (it stays :modal with an inert backdrop intercepting every
@@ -723,7 +729,7 @@ function installInlineKovoLoader(im) {
           if (a) bns.setElementAttribute(el, name, a);
           else bns.removeElementAttribute(el, name);
         } else {
-          if (ia(name) && uu(r)) r = '#';
+          if (ia(name) && !trustedUrlWrite && uu(r)) r = '#';
           bns.setElementAttribute(el, name, r);
         }
       }

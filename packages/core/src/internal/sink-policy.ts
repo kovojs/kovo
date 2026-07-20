@@ -154,6 +154,7 @@ export interface ElementContextSecurityControl {
     | 'allow'
     | 'disabled'
     | 'iframe-sandbox-tokens'
+    | 'meta-refresh-http-equiv'
     | 'meta-referrer-name'
     | 'referrer-policy'
     | 'rel-no-opener'
@@ -628,6 +629,13 @@ export const ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES = freezeSecurityValue([
     'meta-referrer-name',
     'meta referrer policy is disabled because it can weaken the document response header',
   ] as const),
+  freezeSecurityValue([
+    'meta',
+    'http-equiv',
+    false,
+    'meta-refresh-http-equiv',
+    'meta refresh automatic navigation is disabled because it can navigate before framework controls install',
+  ] as const),
 ] as const);
 
 /**
@@ -641,7 +649,12 @@ export function elementContextSecurityControl(
   attributeName: string,
 ): ElementContextSecurityControl | undefined {
   const tag = securityStringToLowerCase(elementName);
-  const attribute = securityStringToLowerCase(attributeName);
+  const foldedAttribute = securityStringToLowerCase(attributeName);
+  // JSX uses the DOM property spelling `httpEquiv`; emitted HTML and browser matching use
+  // `http-equiv`. Keep the alias inside the shared classifier so compiler and runtime consumers
+  // cannot disagree about the same meta-refresh control (SPEC §4.8 / §5.2 rule 10).
+  const attribute =
+    tag === 'meta' && foldedAttribute === 'httpequiv' ? 'http-equiv' : foldedAttribute;
   for (let index = 0; index < ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.length; index += 1) {
     const control = ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES[index];
     if (control === undefined || control[0] !== tag || control[1] !== attribute) continue;
@@ -680,6 +693,9 @@ export function elementContextSecurityStaticValueIssue(
   }
   if (control.staticPolicy === 'meta-referrer-name') {
     return normalized === 'referrer' ? control.reason : undefined;
+  }
+  if (control.staticPolicy === 'meta-refresh-http-equiv') {
+    return normalized === 'refresh' ? control.reason : undefined;
   }
   if (control.staticPolicy === 'referrer-policy') {
     return normalized === 'no-referrer' ||

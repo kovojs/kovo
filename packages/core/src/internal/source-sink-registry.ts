@@ -517,7 +517,7 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
       'srcdoc',
       'event attributes',
       'ASCII-case duplicate meta refresh navigation',
-      'exact 66-tuple element-context browser-control denominator',
+      'exact 67-tuple element-context browser-control denominator',
       'disabled geolocation, attribution, browsing-topics, shared-storage, payment, and CSP nonce capabilities',
       'reviewed style activation, fullscreen, form browsing-context, and HTML/SVG credential-mode controls',
       'iframe source without a reviewed sandbox',

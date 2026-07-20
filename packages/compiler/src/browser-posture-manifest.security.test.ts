@@ -357,7 +357,7 @@ export const DynamicLink = component({
       expect.arrayContaining([
         expect.objectContaining({
           code: 'KV236',
-          message: expect.stringContaining('computed rel'),
+          message: expect.stringContaining('dynamic link relationship'),
         }),
       ]),
     );
@@ -412,6 +412,6 @@ import { component } from '@kovojs/core';
 export const Dynamic = component({ render: ({ src }) => <script src={src} /> });`,
         },
       ]),
-    ).toThrow(/Browser posture derivation failed closed.*KV236.*external asset URL/);
+    ).toThrow(/Browser posture derivation failed closed.*KV236.*dynamic script source/);
   });
 });

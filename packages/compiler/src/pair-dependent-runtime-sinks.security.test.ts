@@ -168,8 +168,8 @@ export const ReviewedNewBrowserControls = component({
   });
 
   // @kovo-security-certifies C13 compiler-finite-browser-control-tuples
-  it('rejects a direct dynamic write for every one of the 66 finite browser controls', () => {
-    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(66);
+  it('rejects a direct dynamic write for every one of the 67 finite browser controls', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(67);
     for (const [tag, attribute] of ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES) {
       const markup = `<${tag} ${attribute}={state.value} />`;
       expect(
@@ -633,9 +633,12 @@ export const TrustedLiveContext = component({
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
-    expect(clientSource).toContain("trustedUrl(state.script, 'reviewed script')");
-    expect(clientSource).toContain("trustedUrl(state.stylesheet, 'reviewed stylesheet')");
-    expect(clientSource).toContain("trustedUrl(state.frame, 'reviewed frame')");
+    expect(clientSource).toContain('(state) => state.script');
+    expect(clientSource).toContain('(state) => state.stylesheet');
+    expect(clientSource).toContain('(state) => state.frame');
+    expect(clientSource).not.toContain('trustedUrl(');
+    expect(serverSource).toContain('data-kovo-trusted-url:src');
+    expect(serverSource).toContain('data-kovo-trusted-url:href');
     expect(serverSource).toContain('data-bind:src=');
     expect(() => assertFixpoint(result)).not.toThrow();
   });

@@ -136,7 +136,7 @@ export function capabilityPackageResolvedTargetRoot(
   if (ownValue(manifest, 'name') !== packageName) return undefined;
   const cleanResolvedId = resolvedId.split(/[?#]/u, 1)[0] ?? resolvedId;
   if (!builtinIsAbsolute(cleanResolvedId)) return undefined;
-  const actualManifestPath = findOwningPackageManifest(cleanResolvedId, packageName);
+  const actualManifestPath = findNearestPackageManifest(cleanResolvedId);
   if (actualManifestPath === undefined) return undefined;
   let canonicalManifestPath: string;
   let canonicalActualManifestPath: string;
@@ -325,6 +325,23 @@ function findOwningPackageManifest(start: string, packageName: string): string |
         // Keep walking: a nested malformed manifest cannot authorize the requested package.
       }
     }
+    if (current === root) return undefined;
+    current = builtinDirname(current);
+  }
+  return undefined;
+}
+
+function findNearestPackageManifest(start: string): string | undefined {
+  let current: string;
+  try {
+    current = builtinDirname(builtinRealpathSync(start));
+  } catch {
+    return undefined;
+  }
+  const root = builtinParsePath(current).root;
+  for (let depth = 0; depth < 64; depth += 1) {
+    const candidate = builtinJoin(current, 'package.json');
+    if (builtinExistsSync(candidate)) return candidate;
     if (current === root) return undefined;
     current = builtinDirname(current);
   }

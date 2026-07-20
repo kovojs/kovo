@@ -127,6 +127,7 @@ ensureTypescriptRuntime(ts);
 
 const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
 const frameworkTrustedUrlReasonFacts = compilerCreateWeakMap<object, string>();
+const frameworkTrustedUrlValueFacts = compilerCreateWeakMap<object, string>();
 
 /** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
 export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
@@ -136,6 +137,11 @@ export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
 /** @internal Static audited reason carried by an exact framework trustedUrl call, when present. */
 export function parserFactFrameworkTrustedUrlReason(fact: object): string | undefined {
   return compilerWeakMapGet(frameworkTrustedUrlReasonFacts, fact);
+}
+
+/** @internal Exact first-argument source carried by a parser-proven trustedUrl call. */
+export function parserFactFrameworkTrustedUrlValue(fact: object): string | undefined {
+  return compilerWeakMapGet(frameworkTrustedUrlValueFacts, fact);
 }
 
 interface ComponentFactoryBindings {
@@ -6881,6 +6887,16 @@ function recordFrameworkTrustedUrlFact(
   )
     return;
   compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
+  const rawValue = candidate.arguments[0];
+  if (rawValue !== undefined) {
+    compilerWeakMapSet(
+      frameworkTrustedUrlValueFacts,
+      fact,
+      compilerStringTrim(
+        compilerStringSlice(sourceFile.text, rawValue.getStart(sourceFile), rawValue.getEnd()),
+      ),
+    );
+  }
   const rawReason = candidate.arguments[1];
   if (rawReason === undefined) return;
   const reason = unwrapExpression(rawReason);

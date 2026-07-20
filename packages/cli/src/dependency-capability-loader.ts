@@ -1,6 +1,6 @@
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { builtinModules } from 'node:module';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type {
@@ -8,6 +8,8 @@ import type {
   AppDependencyCapabilityManifest,
   ResolvedCapabilityPackage,
 } from '@kovojs/compiler/internal';
+import { elementContextSecurityStaticValueIssue } from '@kovojs/core/internal/sink-policy';
+import { parse, type DefaultTreeAdapterTypes } from 'parse5';
 import type { Plugin } from 'vite-plus';
 
 import {
@@ -48,6 +50,49 @@ const dependencyRootKinds = new Set([
   'scheduled-task',
   'serialized-browser-handler',
   'webhook',
+]);
+const htmlExecutableUrlAttributes = new Set([
+  'action',
+  'archive',
+  'background',
+  'cite',
+  'classid',
+  'codebase',
+  'data',
+  'formaction',
+  'href',
+  'longdesc',
+  'manifest',
+  'poster',
+  'src',
+  'usemap',
+]);
+const htmlSvgSmilExecutionElements = new Set([
+  'animate',
+  'animatecolor',
+  'animatemotion',
+  'animatetransform',
+  'discard',
+  'set',
+]);
+const reviewedPackageResolveExtensions = [
+  '.mjs',
+  '.js',
+  '.mts',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.json',
+] as const;
+const reviewedPackageModuleSuffixes = new Set([
+  '.cjs',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.mts',
+  '.ts',
+  '.tsx',
 ]);
 
 interface ApprovedDependencySource {
@@ -98,6 +143,9 @@ export function dependencyCapabilityLoaderVitePlugin(
   );
   const reviewedThirdPartyRoots = new Map<string, string>();
   const loadedHtmlPaths = new Set<string>();
+  let configuredRoot = sourceRoot;
+  let configuredPublicDir: string | undefined;
+  let configuredAliases: readonly { find: string | RegExp; replacement: string }[] = [];
 
   const rememberLoadedHtml = (id: string): void => {
     const sourcePath = viteSourcePath(id);
@@ -108,6 +156,21 @@ export function dependencyCapabilityLoaderVitePlugin(
 
   return {
     configResolved(config) {
+      configuredRoot = canonicalSourcePath(config.root);
+      configuredPublicDir =
+        typeof config.publicDir === 'string' ? canonicalSourcePath(config.publicDir) : undefined;
+      configuredAliases = config.resolve.alias;
+      if (
+        admittedSpecifiers.size > 0 &&
+        (config.resolve.extensions.length !== reviewedPackageResolveExtensions.length ||
+          config.resolve.extensions.some(
+            (extension, index) => extension !== reviewedPackageResolveExtensions[index],
+          ))
+      ) {
+        throw dependencyCapabilityError(
+          'custom Vite resolve extensions can retarget reviewed package child identity',
+        );
+      }
       for (const specifier of admittedSpecifiers) {
         if (
           config.ssr.external === true ||
@@ -147,6 +210,15 @@ export function dependencyCapabilityLoaderVitePlugin(
         );
       }
       const sourcePath = viteSourcePath(id);
+      if (lane === 'build-client' && sourcePath !== undefined && isHtmlSourcePath(sourcePath)) {
+        assertHtmlExecutableSources(
+          source,
+          sourcePath,
+          configuredRoot,
+          configuredPublicDir,
+          approvedPaths,
+        );
+      }
       const reviewedPackage =
         sourcePath === undefined
           ? undefined
@@ -160,10 +232,42 @@ export function dependencyCapabilityLoaderVitePlugin(
             `reviewed package ${reviewedPackage.packageName} contains source the pre-evaluation module-edge census cannot parse`,
           );
         }
+        if (aliasesCommonJsLoaderAuthority(ast)) {
+          throw dependencyCapabilityError(
+            `reviewed package ${reviewedPackage.packageName} aliases CommonJS loader authority before app evaluation`,
+          );
+        }
+        const workerConstructor = reviewedWorkerConstructor(ast);
+        if (workerConstructor !== undefined) {
+          throw dependencyCapabilityError(
+            `reviewed package ${reviewedPackage.packageName} creates a ${workerConstructor} subgraph outside the dependency closure plugin`,
+          );
+        }
+        const executableAssetCarrier = reviewedExecutableAssetCarrier(ast);
+        if (executableAssetCarrier !== undefined) {
+          throw dependencyCapabilityError(
+            `reviewed package ${reviewedPackage.packageName} creates ${executableAssetCarrier === 'opaque new-URL' ? 'an' : 'a'} ${executableAssetCarrier} executable asset outside the dependency closure plugin`,
+          );
+        }
         for (const edge of parsedModuleEdges(ast)) {
           if (edge.specifier === undefined) {
             throw dependencyCapabilityError(
               `reviewed package ${reviewedPackage.packageName} contains a non-literal module edge before app evaluation`,
+            );
+          }
+          if (specifierHasUnsupportedSubgraphSuffix(edge.specifier)) {
+            throw dependencyCapabilityError(
+              `reviewed package ${reviewedPackage.packageName} child edge ${edge.specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
+            );
+          }
+          if (
+            configuredAliases.some(
+              (alias) =>
+                aliasReplacementFor(edge.specifier!, alias.find, alias.replacement) !== undefined,
+            )
+          ) {
+            throw dependencyCapabilityError(
+              `Vite alias matches reviewed package ${reviewedPackage.packageName} child edge ${edge.specifier}`,
             );
           }
           if (isBareDependencySpecifier(edge.specifier)) {
@@ -193,7 +297,7 @@ export function dependencyCapabilityLoaderVitePlugin(
           resolved === null || resolved.external === true ? undefined : viteSourcePath(resolved.id);
         if (resolvedPath === undefined || !approvedPaths.has(resolvedPath)) {
           throw dependencyCapabilityError(
-            `external HTML module ${specifier} is outside the immutable approved-source snapshot in ${lane}`,
+            `HTML module ${specifier} resolves outside the immutable approved-source snapshot in ${lane}`,
           );
         }
         return resolved;
@@ -203,15 +307,65 @@ export function dependencyCapabilityLoaderVitePlugin(
         importerPath === undefined
           ? undefined
           : packageOwnerForSource(importerPath, reviewedThirdPartyRoots);
+      if (importerName !== undefined && specifierHasUnsupportedSubgraphSuffix(specifier)) {
+        throw dependencyCapabilityError(
+          `approved app source ${importerName} edge ${specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
+        );
+      }
+      if (reviewedPackage !== undefined && specifierHasUnsupportedSubgraphSuffix(specifier)) {
+        throw dependencyCapabilityError(
+          `reviewed package ${reviewedPackage.packageName} child edge ${specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
+        );
+      }
       if (reviewedPackage !== undefined && !isBareDependencySpecifier(specifier)) {
+        if (
+          configuredAliases.some(
+            (alias) => aliasReplacementFor(specifier, alias.find, alias.replacement) !== undefined,
+          )
+        ) {
+          throw dependencyCapabilityError(
+            `Vite alias matches reviewed package ${reviewedPackage.packageName} child edge ${specifier}`,
+          );
+        }
         const resolved = await this.resolve(specifier, importer, { skipSelf: true });
+        const resolvedLexicalPath =
+          resolved === null || resolved.external === true
+            ? undefined
+            : viteLexicalSourcePath(resolved.id);
         const resolvedPath =
           resolved === null || resolved.external === true ? undefined : viteSourcePath(resolved.id);
+        if (
+          resolvedLexicalPath !== undefined &&
+          !isReviewedPackageCodeModule(resolvedLexicalPath)
+        ) {
+          throw dependencyCapabilityError(
+            `reviewed package ${reviewedPackage.packageName} resolved lexical module path ${relative(reviewedPackage.root, resolvedLexicalPath)} outside the closed module suffix set`,
+          );
+        }
+        if (resolvedPath !== undefined && !isReviewedPackageCodeModule(resolvedPath)) {
+          throw dependencyCapabilityError(
+            `reviewed package ${reviewedPackage.packageName} resolved non-code resource ${relative(reviewedPackage.root, resolvedPath)} outside the closed module suffix set`,
+          );
+        }
+        if (
+          relativePackageImportCrossesNestedBoundary(
+            reviewedPackage.root,
+            importerPath,
+            specifier,
+          ) ||
+          (resolvedPath !== undefined &&
+            sourceIsWithinRoot(reviewedPackage.root, resolvedPath) &&
+            !sourceBelongsToPackageRoot(reviewedPackage.root, resolvedPath))
+        ) {
+          throw dependencyCapabilityError(
+            `relative import crosses a nested package boundary inside reviewed package ${reviewedPackage.packageName}`,
+          );
+        }
         if (
           resolved === null ||
           resolved.external === true ||
           resolvedPath === undefined ||
-          !sourceIsWithinRoot(reviewedPackage.root, resolvedPath)
+          !sourceBelongsToPackageRoot(reviewedPackage.root, resolvedPath)
         ) {
           const escapeKind = packageImportEscapeKind(specifier, importerPath, reviewedPackage.root);
           throw dependencyCapabilityError(
@@ -238,11 +392,41 @@ export function dependencyCapabilityLoaderVitePlugin(
       const installed = resolveCapabilityPackageImport(specifier, importerPath);
       assertDependencyCapabilityImport(manifest, specifier, installed, importerName);
       const resolved = await this.resolve(specifier, importer, { skipSelf: true });
+      const resolvedLexicalPath =
+        resolved === null || resolved.external === true
+          ? undefined
+          : viteLexicalSourcePath(resolved.id);
+      const resolvedPath =
+        resolved === null || resolved.external === true ? undefined : viteSourcePath(resolved.id);
       const packageRoot =
         resolved === null || resolved.external === true
           ? undefined
           : capabilityPackageResolvedTargetRoot(specifier, importerPath, resolved.id);
-      if (resolved === null || resolved.external === true || packageRoot === undefined) {
+      if (
+        resolvedLexicalPath !== undefined &&
+        packageRoot !== undefined &&
+        !isReviewedPackageCodeModule(resolvedLexicalPath)
+      ) {
+        throw dependencyCapabilityError(
+          `reviewed package ${specifier} direct export lexical module path ${relative(packageRoot, resolvedLexicalPath)} is outside the closed module suffix set`,
+        );
+      }
+      if (
+        resolvedPath !== undefined &&
+        packageRoot !== undefined &&
+        !isReviewedPackageCodeModule(resolvedPath)
+      ) {
+        throw dependencyCapabilityError(
+          `reviewed package ${specifier} direct export target ${relative(packageRoot, resolvedPath)} is outside the closed module suffix set`,
+        );
+      }
+      if (
+        resolved === null ||
+        resolved.external === true ||
+        resolvedPath === undefined ||
+        packageRoot === undefined ||
+        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)
+      ) {
         throw dependencyCapabilityError(
           `${specifier} resolved outside its exact package export target in ${lane}`,
         );
@@ -255,15 +439,78 @@ export function dependencyCapabilityLoaderVitePlugin(
       return resolved;
     },
     generateBundle(_options, bundle) {
-      const bundleOwnedFileNames = new Set(Object.keys(bundle));
+      const bundleOwnedChunkFileNames = new Set(
+        Object.values(bundle).flatMap((output) =>
+          output.type === 'chunk' ? [output.fileName] : [],
+        ),
+      );
+      const bundleOwnedAssetFileNames = new Set(
+        Object.values(bundle).flatMap((output) =>
+          output.type === 'asset' ? [output.fileName] : [],
+        ),
+      );
       for (const output of Object.values(bundle)) {
         if (output.type !== 'chunk') continue;
-        for (const specifier of [...output.imports, ...output.dynamicImports]) {
-          if (bundleOwnedFileNames.has(specifier)) continue;
-          assertSupportedArtifactExternal(specifier, lane, options, 'bare import');
+        let outputAst: unknown;
+        try {
+          outputAst = this.parse(output.code);
+        } catch {
+          throw dependencyCapabilityError(
+            `supported ${lane} artifact ${output.fileName} cannot be parsed for retained module edges`,
+          );
         }
-        for (const specifier of literalRequireSpecifiers(output.code)) {
-          assertSupportedArtifactExternal(specifier, lane, options, 'literal require');
+        const workerConstructor = reviewedWorkerConstructor(outputAst);
+        if (workerConstructor !== undefined) {
+          throw dependencyCapabilityError(
+            `supported ${lane} artifact ${output.fileName} retains a ${workerConstructor} constructor outside the dependency closure plugin`,
+          );
+        }
+        const executableAssetCarrier = reviewedExecutableAssetCarrier(outputAst);
+        if (executableAssetCarrier !== undefined) {
+          throw dependencyCapabilityError(
+            `supported ${lane} artifact ${output.fileName} retains ${executableAssetCarrier === 'opaque new-URL' ? 'an' : 'a'} ${executableAssetCarrier} executable asset outside the dependency closure plugin`,
+          );
+        }
+        const artifactModuleEdges = parsedModuleEdges(outputAst);
+        if (artifactModuleEdges.some((edge) => edge.specifier === undefined)) {
+          throw dependencyCapabilityError(
+            `supported ${lane} artifact ${output.fileName} retains a non-literal module edge outside the immutable dependency closure`,
+          );
+        }
+        const retainedSpecifiers = new Set([
+          ...literalRequireSpecifiers(output.code),
+          ...artifactModuleEdges.flatMap((edge) =>
+            edge.specifier === undefined ? [] : [edge.specifier],
+          ),
+        ]);
+        for (const specifier of retainedSpecifiers) {
+          if (artifactRelativeSpecifierHasRuntimeUrlAmbiguity(specifier)) {
+            throw dependencyCapabilityError(
+              `ambiguous runtime URL module target ${specifier} remains in supported ${lane} artifact ${output.fileName}`,
+            );
+          }
+          if (
+            artifactSpecifierIsBundleOwned(output.fileName, specifier, bundleOwnedChunkFileNames)
+          ) {
+            continue;
+          }
+          if (
+            artifactSpecifierIsBundleOwned(output.fileName, specifier, bundleOwnedAssetFileNames)
+          ) {
+            throw dependencyCapabilityError(
+              `module import ${specifier} from ${output.fileName} resolves to a bundle-owned non-chunk asset outside the executable module closure`,
+            );
+          }
+          assertSupportedArtifactExternal(specifier, lane, options, 'module import');
+        }
+        for (const importedFileName of [...output.imports, ...output.dynamicImports]) {
+          if (bundleOwnedChunkFileNames.has(importedFileName)) continue;
+          if (bundleOwnedAssetFileNames.has(importedFileName)) {
+            throw dependencyCapabilityError(
+              `module import ${importedFileName} from ${output.fileName} resolves to a bundle-owned non-chunk asset outside the executable module closure`,
+            );
+          }
+          assertSupportedArtifactExternal(importedFileName, lane, options, 'module import');
         }
       }
       for (const id of this.getModuleIds()) {
@@ -282,7 +529,7 @@ export function dependencyCapabilityLoaderVitePlugin(
             if (
               reviewedPackage !== undefined &&
               (importedPath === undefined ||
-                !sourceIsWithinRoot(reviewedPackage.root, importedPath))
+                !sourceBelongsToPackageRoot(reviewedPackage.root, importedPath))
             ) {
               throw dependencyCapabilityError(
                 `reviewed package ${reviewedPackage.packageName} resolved import escapes its exact package root`,
@@ -493,11 +740,24 @@ function isBareDependencySpecifier(specifier: string): boolean {
   );
 }
 
+function specifierHasUnsupportedSubgraphSuffix(specifier: string): boolean {
+  return specifier.includes('?') || specifier.includes('#');
+}
+
+function isReviewedPackageCodeModule(sourcePath: string): boolean {
+  return reviewedPackageModuleSuffixes.has(extname(sourcePath));
+}
+
 function dependencySpecifierMatches(specifier: string, packageName: string): boolean {
   return specifier === packageName || specifier.startsWith(`${packageName}/`);
 }
 
 function viteSourcePath(id: string): string | undefined {
+  const lexicalPath = viteLexicalSourcePath(id);
+  return lexicalPath === undefined ? undefined : canonicalSourcePath(lexicalPath);
+}
+
+function viteLexicalSourcePath(id: string): string | undefined {
   let value = id.split(/[?#]/u, 1)[0] ?? id;
   if (value.startsWith('/@fs/')) value = value.slice('/@fs'.length);
   if (value.startsWith('file:')) {
@@ -507,7 +767,7 @@ function viteSourcePath(id: string): string | undefined {
       return undefined;
     }
   }
-  return isAbsolute(value) ? canonicalSourcePath(value) : undefined;
+  return isAbsolute(value) ? resolve(value) : undefined;
 }
 
 function canonicalSourcePath(value: string): string {
@@ -523,7 +783,7 @@ function packageOwnerForSource(
   reviewedRoots: ReadonlyMap<string, string>,
 ): { packageName: string; root: string } | undefined {
   for (const [root, packageName] of reviewedRoots) {
-    if (sourceIsWithinRoot(root, sourcePath)) return { packageName, root };
+    if (sourceBelongsToPackageRoot(root, sourcePath)) return { packageName, root };
   }
   return undefined;
 }
@@ -533,6 +793,59 @@ function sourceIsWithinRoot(root: string, sourcePath: string): boolean {
   return (
     candidate !== '' && candidate !== '..' && !candidate.startsWith('../') && !isAbsolute(candidate)
   );
+}
+
+function sourceBelongsToPackageRoot(root: string, sourcePath: string): boolean {
+  if (
+    !sourceIsWithinRoot(root, sourcePath) ||
+    sourceCrossesNestedNodeModulesBoundary(root, sourcePath)
+  ) {
+    return false;
+  }
+  const canonicalRoot = canonicalSourcePath(root);
+  let directory = dirname(sourcePath);
+  while (true) {
+    if (existsSync(resolve(directory, 'package.json'))) {
+      return canonicalSourcePath(directory) === canonicalRoot;
+    }
+    if (canonicalSourcePath(directory) === canonicalRoot) return false;
+    const parent = dirname(directory);
+    if (parent === directory || !sourceIsWithinRoot(canonicalRoot, directory)) return false;
+    directory = parent;
+  }
+}
+
+function sourceCrossesNestedNodeModulesBoundary(root: string, sourcePath: string): boolean {
+  return relative(root, sourcePath)
+    .replaceAll('\\', '/')
+    .split('/')
+    .some((part) => part.toLowerCase() === 'node_modules');
+}
+
+function relativePackageImportCrossesNestedBoundary(
+  root: string,
+  importerPath: string,
+  specifier: string,
+): boolean {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;
+  const lexicalTarget = resolve(dirname(importerPath), specifier.split(/[?#]/u, 1)[0] ?? specifier);
+  return (
+    sourceIsWithinRoot(root, lexicalTarget) &&
+    (sourceCrossesNestedNodeModulesBoundary(root, lexicalTarget) ||
+      lexicalTargetCrossesNestedPackageManifest(root, lexicalTarget))
+  );
+}
+
+function lexicalTargetCrossesNestedPackageManifest(root: string, lexicalTarget: string): boolean {
+  const normalizedRoot = resolve(root);
+  let candidate = resolve(lexicalTarget);
+  while (candidate !== normalizedRoot && sourceIsWithinRoot(normalizedRoot, candidate)) {
+    if (existsSync(resolve(candidate, 'package.json'))) return true;
+    const parent = dirname(candidate);
+    if (parent === candidate) return false;
+    candidate = parent;
+  }
+  return false;
 }
 
 function packageImportEscapeKind(
@@ -558,6 +871,209 @@ function isHtmlSourcePath(value: string): boolean {
   return value.toLowerCase().endsWith('.html');
 }
 
+function assertHtmlExecutableSources(
+  source: string,
+  htmlPath: string,
+  root: string,
+  publicDir: string | undefined,
+  approvedPaths: ReadonlyMap<string, string>,
+): void {
+  // Parse in both Vite's scripting-disabled state and the browser's ordinary scripting-enabled
+  // state. The union closes tokenizer-state differences such as <noscript>, RCDATA/RAWTEXT, SVG,
+  // quoted attributes, and browser-valid non-canonical comments without maintaining a second HTML
+  // grammar beside the exact pinned parser used by the build tool (SPEC §6.6).
+  for (const scriptingEnabled of [false, true]) {
+    const document = parse(source, { scriptingEnabled });
+    for (const element of htmlElements(document)) {
+      assertHtmlElementExecution(element, htmlPath, root, publicDir, approvedPaths);
+    }
+  }
+}
+
+function assertHtmlElementExecution(
+  element: DefaultTreeAdapterTypes.Element,
+  htmlPath: string,
+  root: string,
+  publicDir: string | undefined,
+  approvedPaths: ReadonlyMap<string, string>,
+): void {
+  if (
+    element.namespaceURI === 'http://www.w3.org/2000/svg' &&
+    htmlSvgSmilExecutionElements.has(element.tagName.toLowerCase())
+  ) {
+    throw dependencyCapabilityError(
+      'raw SVG SMIL execution transfer is outside compiler-owned JSX lowering',
+    );
+  }
+  for (const attribute of element.attrs) {
+    if (htmlExecutableUrlAttributes.has(attribute.name) && htmlJavascriptUrl(attribute.value)) {
+      throw dependencyCapabilityError(
+        `raw HTML javascript URL in ${attribute.name} is outside compiler-owned JSX lowering`,
+      );
+    }
+    if (attribute.name.toLowerCase().startsWith('on')) {
+      throw dependencyCapabilityError(
+        `raw HTML event handler ${attribute.name} is outside compiler-owned JSX lowering`,
+      );
+    }
+    const contextIssue = elementContextSecurityStaticValueIssue(
+      element.tagName,
+      attribute.name,
+      attribute.value,
+    );
+    if (contextIssue !== undefined) {
+      throw dependencyCapabilityError(
+        `raw HTML element control ${element.tagName}[${attribute.name}] is outside compiler-owned JSX lowering: ${contextIssue}`,
+      );
+    }
+  }
+
+  if (element.tagName === 'base') {
+    if (htmlAttribute(element, 'href') !== undefined) {
+      throw dependencyCapabilityError(
+        'raw HTML base URL can retarget emitted modules outside the immutable approved-source snapshot',
+      );
+    }
+    if (htmlAttribute(element, 'target') !== undefined) {
+      throw dependencyCapabilityError(
+        'raw HTML base target can retarget browsing contexts outside the immutable approved-source snapshot',
+      );
+    }
+  }
+
+  if (
+    element.tagName === 'iframe' ||
+    element.tagName === 'frame' ||
+    element.tagName === 'frameset' ||
+    element.tagName === 'object' ||
+    element.tagName === 'embed'
+  ) {
+    throw dependencyCapabilityError(
+      `raw ${element.tagName} nested HTML document is outside the immutable approved-source snapshot`,
+    );
+  }
+
+  if (element.tagName !== 'script') return;
+  if (element.namespaceURI !== 'http://www.w3.org/1999/xhtml') {
+    throw dependencyCapabilityError(
+      'foreign-namespace HTML script is outside the immutable approved-source snapshot',
+    );
+  }
+
+  const src = htmlAttribute(element, 'src');
+  const rawType = htmlAttribute(element, 'type');
+  const type = rawType?.trim().toLowerCase();
+  const moduleScript = type === 'module';
+  if (src !== undefined) {
+    if (moduleScript) {
+      const target = htmlApprovedModuleTarget(src, htmlPath, root);
+      if (target === undefined || !approvedPaths.has(target)) {
+        throw dependencyCapabilityError(
+          `HTML module URL ${src} is outside the immutable approved-source snapshot`,
+        );
+      }
+      const publicTarget = htmlPublicModuleTarget(src, htmlPath, root, publicDir);
+      if (publicTarget !== undefined && existsSync(publicTarget)) {
+        throw dependencyCapabilityError(
+          `public asset shadows approved HTML module ${src} before Vite resolution`,
+        );
+      }
+      if (rawType !== 'module') {
+        throw dependencyCapabilityError(
+          'browser-recognized HTML module type is not the exact lowercase module spelling Vite resolves',
+        );
+      }
+      if (htmlAttribute(element, 'vite-ignore') !== undefined) {
+        throw dependencyCapabilityError(
+          'vite-ignore cannot suppress immutable approved-source resolution for an HTML module',
+        );
+      }
+    } else {
+      throw dependencyCapabilityError(
+        'HTML script source is outside the immutable approved-source snapshot unless it is an exact approved module',
+      );
+    }
+  } else if (type !== 'application/json' && type !== 'application/ld+json') {
+    throw dependencyCapabilityError(
+      moduleScript
+        ? 'inline HTML module is outside the immutable approved-source snapshot'
+        : 'inline HTML script is outside the immutable approved-source snapshot unless it is an explicit JSON data block',
+    );
+  }
+}
+
+function htmlJavascriptUrl(value: string): boolean {
+  return value
+    .replace(/[\u0000-\u0020\u007f]/gu, '')
+    .toLowerCase()
+    .startsWith('javascript:');
+}
+
+function htmlElements(
+  document: DefaultTreeAdapterTypes.Document,
+): DefaultTreeAdapterTypes.Element[] {
+  const elements: DefaultTreeAdapterTypes.Element[] = [];
+  const pending: DefaultTreeAdapterTypes.Node[] = [document];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if ('tagName' in node) {
+      elements.push(node);
+      if (node.tagName === 'template') pending.push(node.content);
+    }
+    if ('childNodes' in node) pending.push(...node.childNodes);
+  }
+  return elements;
+}
+
+function htmlAttribute(element: DefaultTreeAdapterTypes.Element, name: string): string | undefined {
+  return element.attrs.find(
+    (attribute) =>
+      attribute.name === name &&
+      attribute.namespace === undefined &&
+      attribute.prefix === undefined,
+  )?.value;
+}
+
+function htmlApprovedModuleTarget(
+  value: string,
+  htmlPath: string,
+  root: string,
+): string | undefined {
+  const source = value.trim();
+  if (
+    source.length === 0 ||
+    source.includes('&') ||
+    source.includes('%') ||
+    source.includes('\\') ||
+    source.startsWith('//') ||
+    source.startsWith('#') ||
+    source.startsWith('?') ||
+    source.includes('#') ||
+    source.includes('?') ||
+    /[\u0000-\u0020\u007f]/u.test(source)
+  ) {
+    return undefined;
+  }
+  if (source.includes(':')) return undefined;
+  return canonicalSourcePath(
+    source.startsWith('/') ? resolve(root, `.${source}`) : resolve(dirname(htmlPath), source),
+  );
+}
+
+function htmlPublicModuleTarget(
+  value: string,
+  htmlPath: string,
+  root: string,
+  publicDir: string | undefined,
+): string | undefined {
+  if (publicDir === undefined) return undefined;
+  const source = value.trim();
+  const target = source.startsWith('/')
+    ? resolve(publicDir, `.${source}`)
+    : resolve(publicDir, relative(root, dirname(htmlPath)), source);
+  return sourceIsWithinRoot(publicDir, target) ? canonicalSourcePath(target) : undefined;
+}
+
 function isReviewedViteHtmlVirtualSpecifier(specifier: string): boolean {
   return (
     specifier === 'vite/modulepreload-polyfill' || specifier === '\0vite/modulepreload-polyfill.js'
@@ -575,6 +1091,133 @@ function literalRequireSpecifiers(source: string): string[] {
 
 interface ParsedModuleEdge {
   readonly specifier?: string;
+}
+
+function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {
+  const pending: unknown[] = [ast];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) pending.push(item);
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    if (record.type === 'NewExpression') {
+      const callee = record.callee;
+      if (typeof callee === 'object' && callee !== null) {
+        const calleeRecord = callee as Record<string, unknown>;
+        if (
+          calleeRecord.type === 'Identifier' &&
+          (calleeRecord.name === 'Worker' || calleeRecord.name === 'SharedWorker')
+        ) {
+          return calleeRecord.name;
+        }
+      }
+    }
+    for (const child of Object.values(record)) pending.push(child);
+  }
+  return undefined;
+}
+
+function reviewedExecutableAssetCarrier(
+  ast: unknown,
+): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {
+  const pending: unknown[] = [ast];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) pending.push(item);
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    if (record.type === 'CallExpression' && callContainsImportMetaUrl(record)) {
+      const callee = record.callee;
+      if (typeof callee === 'object' && callee !== null) {
+        const calleeRecord = callee as Record<string, unknown>;
+        const method = staticMemberPropertyName(calleeRecord);
+        const receiver =
+          typeof calleeRecord.object === 'object' && calleeRecord.object !== null
+            ? staticMemberPropertyName(calleeRecord.object as Record<string, unknown>)
+            : undefined;
+        if (method === 'register' && receiver === 'serviceWorker') return 'service worker';
+        if (method === 'addModule' && receiver === 'paintWorklet') return 'paint worklet';
+        if (method === 'addModule' && receiver === 'audioWorklet') return 'audio worklet';
+        if (method === 'addModule') return 'worklet';
+      }
+    }
+    for (const child of Object.values(record)) pending.push(child);
+  }
+  return containsImportMetaUrlConstructor(ast) ? 'opaque new-URL' : undefined;
+}
+
+function callContainsImportMetaUrl(call: Readonly<Record<string, unknown>>): boolean {
+  return containsImportMetaUrlConstructor(call.arguments);
+}
+
+function containsImportMetaUrlConstructor(value: unknown): boolean {
+  const pending: unknown[] = [value];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) pending.push(item);
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    if (
+      record.type === 'NewExpression' &&
+      typeof record.callee === 'object' &&
+      record.callee !== null &&
+      (record.callee as Record<string, unknown>).type === 'Identifier' &&
+      (record.callee as Record<string, unknown>).name === 'URL' &&
+      objectContainsImportMeta(record)
+    ) {
+      return true;
+    }
+    for (const child of Object.values(record)) pending.push(child);
+  }
+  return false;
+}
+
+function objectContainsImportMeta(value: object): boolean {
+  const pending: unknown[] = [value];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const candidate = pending.pop();
+    if (typeof candidate !== 'object' || candidate === null || seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) pending.push(item);
+      continue;
+    }
+    const record = candidate as Record<string, unknown>;
+    if (
+      record.type === 'MetaProperty' &&
+      typeof record.meta === 'object' &&
+      record.meta !== null &&
+      (record.meta as Record<string, unknown>).name === 'import'
+    ) {
+      return true;
+    }
+    for (const child of Object.values(record)) pending.push(child);
+  }
+  return false;
+}
+
+function staticMemberPropertyName(member: Readonly<Record<string, unknown>>): string | undefined {
+  if (member.type !== 'MemberExpression' || member.computed === true) return undefined;
+  const property = member.property;
+  if (typeof property !== 'object' || property === null) return undefined;
+  const record = property as Record<string, unknown>;
+  return record.type === 'Identifier' && typeof record.name === 'string' ? record.name : undefined;
 }
 
 /**
@@ -629,6 +1272,86 @@ function parsedModuleEdges(ast: unknown): ParsedModuleEdge[] {
   return edges;
 }
 
+function aliasesCommonJsLoaderAuthority(ast: unknown): boolean {
+  const pending: Array<{
+    key?: string;
+    parent?: Record<string, unknown>;
+    value: unknown;
+  }> = [{ value: ast }];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const item = pending.pop()!;
+    const value = item.value;
+    if (typeof value !== 'object' || value === null || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const child of value) pending.push({ value: child });
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    if (isCommonJsLoaderMember(record)) {
+      if (!isDirectCallCallee(item.parent, item.key, record)) return true;
+    } else if (
+      record.type === 'Identifier' &&
+      (record.name === 'require' || record.name === '__require') &&
+      !isNonComputedMemberProperty(item.parent, item.key) &&
+      !isDirectCallCallee(item.parent, item.key, record)
+    ) {
+      return true;
+    }
+
+    for (const [key, child] of Object.entries(record)) {
+      if (
+        key === 'type' ||
+        key === 'start' ||
+        key === 'end' ||
+        key === 'loc' ||
+        key === 'range' ||
+        key === 'raw'
+      ) {
+        continue;
+      }
+      pending.push({ key, parent: record, value: child });
+    }
+  }
+  return false;
+}
+
+function isDirectCallCallee(
+  parent: Record<string, unknown> | undefined,
+  key: string | undefined,
+  value: Record<string, unknown>,
+): boolean {
+  return parent?.type === 'CallExpression' && key === 'callee' && parent.callee === value;
+}
+
+function isNonComputedMemberProperty(
+  parent: Record<string, unknown> | undefined,
+  key: string | undefined,
+): boolean {
+  return parent?.type === 'MemberExpression' && parent.computed !== true && key === 'property';
+}
+
+function isCommonJsLoaderMember(record: Record<string, unknown>): boolean {
+  if (record.type !== 'MemberExpression') return false;
+  const object = record.object;
+  const property = record.property;
+  if (
+    typeof object !== 'object' ||
+    object === null ||
+    (object as Record<string, unknown>).type !== 'Identifier' ||
+    (object as Record<string, unknown>).name !== 'module' ||
+    typeof property !== 'object' ||
+    property === null
+  ) {
+    return false;
+  }
+  const propertyRecord = property as Record<string, unknown>;
+  return record.computed === true
+    ? propertyRecord.type === 'Literal' && propertyRecord.value === 'require'
+    : propertyRecord.type === 'Identifier' && propertyRecord.name === 'require';
+}
+
 function literalAstString(value: unknown): string | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const record = value as Record<string, unknown>;
@@ -655,33 +1378,53 @@ function isModuleLoaderCall(callee: unknown): boolean {
   if (record.type === 'Identifier') {
     return record.name === 'require' || record.name === '__require';
   }
-  if (record.type !== 'MemberExpression' || record.computed === true) return false;
-  const object = record.object;
-  const property = record.property;
-  return (
-    typeof object === 'object' &&
-    object !== null &&
-    (object as Record<string, unknown>).type === 'Identifier' &&
-    (object as Record<string, unknown>).name === 'module' &&
-    typeof property === 'object' &&
-    property !== null &&
-    (property as Record<string, unknown>).type === 'Identifier' &&
-    (property as Record<string, unknown>).name === 'require'
-  );
+  return isCommonJsLoaderMember(record);
 }
 
 function assertSupportedArtifactExternal(
   specifier: string,
   lane: DependencyCapabilityLoaderLane,
   options: DependencyCapabilityLoaderOptions,
-  form: 'bare import' | 'literal require',
+  form: 'module import',
 ): void {
-  if (!isBareDependencySpecifier(specifier)) return;
-  if (options.allowNodeBuiltins === true && isNodeBuiltinSpecifier(specifier)) return;
-  if (options.allowRuntimeExternal?.(specifier) === true) return;
+  if (isBareDependencySpecifier(specifier)) {
+    if (options.allowNodeBuiltins === true && isNodeBuiltinSpecifier(specifier)) return;
+    if (options.allowRuntimeExternal?.(specifier) === true) return;
+    throw dependencyCapabilityError(
+      `uncensused dependency ${specifier} escaped the supported ${lane} artifact as a ${form}`,
+    );
+  }
   throw dependencyCapabilityError(
-    `uncensused dependency ${specifier} escaped the supported ${lane} artifact as a ${form}`,
+    `unresolved module target ${specifier} escaped the supported ${lane} bundle-owned artifact`,
   );
+}
+
+function artifactSpecifierIsBundleOwned(
+  importerFileName: string,
+  specifier: string,
+  bundleOwnedFileNames: ReadonlySet<string>,
+): boolean {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;
+  const target = normalizeModuleName(`${dirname(importerFileName)}/${specifier}`);
+  return bundleOwnedFileNames.has(target);
+}
+
+function artifactRelativeSpecifierHasRuntimeUrlAmbiguity(specifier: string): boolean {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return false;
+  if (
+    specifier.includes('%') ||
+    specifier.includes('\\') ||
+    specifier.includes('?') ||
+    specifier.includes('#') ||
+    specifier.includes('//')
+  ) {
+    return true;
+  }
+  for (let index = 0; index < specifier.length; index += 1) {
+    const code = specifier.charCodeAt(index);
+    if (code <= 0x20 || code === 0x7f) return true;
+  }
+  return false;
 }
 
 function isNodeBuiltinSpecifier(specifier: string): boolean {

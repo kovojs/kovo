@@ -513,7 +513,7 @@ export const DynamicUrlPayloads = component({
 
       export const DynamicUrlPayloads$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", trustedUrl: true, select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "diagnostics": [],

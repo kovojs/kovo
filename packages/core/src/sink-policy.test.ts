@@ -320,12 +320,12 @@ describe('shared runtime sink policy', () => {
   });
 
   // @kovo-security-certifies C13 finite-browser-control-tuple-denominator
-  it('owns one exact non-vacuous 66-tuple browser-control denominator', () => {
-    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(66);
+  it('owns one exact non-vacuous 67-tuple browser-control denominator', () => {
+    expect(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES).toHaveLength(67);
     const keys = new Set(
       ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES.map(([tag, attribute]) => `${tag}[${attribute}]`),
     );
-    expect(keys.size).toBe(66);
+    expect(keys.size).toBe(67);
     for (const witness of [
       'script[integrity]',
       'script[nonce]',
@@ -362,6 +362,7 @@ describe('shared runtime sink policy', () => {
       'image[crossorigin]',
       'feimage[crossorigin]',
       'meta[name]',
+      'meta[http-equiv]',
     ]) {
       expect(keys.has(witness), witness).toBe(true);
     }
@@ -516,7 +517,9 @@ describe('shared runtime sink policy', () => {
     expect(elementContextSecurityStaticValueIssue('meta', 'http-equiv', ' refresh ')).toContain(
       'automatic navigation',
     );
-    expect(elementContextSecurityStaticValueIssue('meta', 'http-equiv', 'content-type')).toBeUndefined();
+    expect(
+      elementContextSecurityStaticValueIssue('meta', 'http-equiv', 'content-type'),
+    ).toBeUndefined();
   });
 
   it('keeps iframe sources behind a finite sandbox token set and a mandatory boundary', () => {
