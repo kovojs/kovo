@@ -2083,6 +2083,51 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'audit-parameter-object-getter-written Worker',
+      "(() => { function inspect({ trigger }) {} const target = {}; const holder = { target, get trigger() { this.target.platform = globalThis; return 1; } }; inspect(holder); return new target.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-helper-destructuring-member-written Worker',
+      "(() => { function install(box) { ({ value: box.platform } = { value: globalThis }); } const box = {}; install(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-helper-for-of-member-written Worker',
+      "(() => { function install(box) { for (box.platform of [globalThis]) { break; } } const box = {}; install(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-template-coercion-receiver-written Worker',
+      "(() => { const box = { toString() { this.platform = globalThis; return ''; } }; `${box}`; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-instanceof-has-instance-written Worker',
+      "(() => { const target = {}; class Matcher { static target = target; static [Symbol.hasInstance]() { this.target.platform = globalThis; return false; } } ({} instanceof Matcher); return new target.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-argument-spread-iterator-written Worker',
+      "(() => { function consume() {} const target = {}; const iterable = { target, *[Symbol.iterator]() { this.target.platform = globalThis; yield 1; } }; consume(...iterable); return new target.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-object-spread-getter-written Worker',
+      "(() => { const target = {}; const holder = { target, get trigger() { this.target.platform = globalThis; return 1; } }; ({ ...holder }); return new target.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-await-thenable-receiver-written Worker',
+      "(async () => { const box = { then(resolve) { this.platform = globalThis; resolve(); } }; await box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'audit-helper-reflect-get-nested-receiver-written Worker',
+      "(() => { function inspect(value) { Reflect.get(value, 'trigger'); } const target = {}; const holder = { target, get trigger() { this.target.platform = globalThis; return 1; } }; inspect(holder); return new target.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
       'audit-array-callback-written Worker',
       "(() => { const box = {}; [box].forEach(value => { value.platform = globalThis; }); return new box.platform.Worker('/worker.mjs'); })()",
       'Worker',
@@ -2391,7 +2436,10 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           "const safeSetterBox = { Worker: class LocalWorker { constructor() { this.kind = 'safe-setter'; } } }; const safeHolder = { set target(unused) { const local = {}; local.platform = 'local-only'; } }; const safeHolderAlias = { holder: safeHolder }.holder; safeHolderAlias['tar' + 'get'] = safeSetterBox; class SafeClassHolder { set target(unused) { const local = {}; local.platform = 'local-only'; } } const safeClassHolder = new SafeClassHolder(); safeClassHolder.target = safeSetterBox; function SafePrototypeHolder() {} Object.defineProperty(SafePrototypeHolder.prototype, 'safe', { value: 'local-only' }); const safePrototypeHolder = new SafePrototypeHolder(); safePrototypeHolder.other = safeSetterBox; const safeSetterWorker = new safeSetterBox.Worker().kind;",
           "const describedLocal = (() => { const Object = { getOwnPropertyDescriptor: () => ({ value: class LocalWorker { constructor() { this.kind = 'local-object'; } } }) }; const Local = Object.getOwnPropertyDescriptor({}, 'Worker').value; return new Local().kind; })();",
           "const reflectedLocal = (() => { const Reflect = { get: (object, key) => object[key] }; const Local = Reflect.get({ Worker: class LocalWorker { constructor() { this.kind = 'local-reflect'; } } }, 'Worker'); return new Local().kind; })();",
-          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, safeConstructorWorker, safeSetterWorker, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
+          "const safePatternBox = { Worker: class LocalWorker { constructor() { this.kind = 'safe-pattern'; } } }; function runSafePatterns(unused) { const local = {}; ({ value: local.platform } = { value: 'local-only' }); for (local.platform of ['local-only']) { break; } return local.platform; } const safePatternResult = runSafePatterns(safePatternBox); const safePatternWorker = new safePatternBox.Worker().kind;",
+          "const safeProtocolBox = { Worker: class LocalWorker { constructor() { this.kind = 'safe-protocol'; } }, toString() { return 'local-key'; }, valueOf() { return 0; }, then(resolve) { resolve('local-only'); } }; const safeTemplate = `${safeProtocolBox}`; const safeUnary = +safeProtocolBox; const safeComputed = { [safeProtocolBox]: 'local-only' }; const safeAwait = (async () => { await safeProtocolBox; return new safeProtocolBox.Worker().kind; })();",
+          "const safeSpreadTarget = { Worker: class LocalWorker { constructor() { this.kind = 'safe-spread'; } } }; const safeIterable = { target: safeSpreadTarget, *[Symbol.iterator]() { yield 1; } }; const safeSpread = [...safeIterable]; const safeSpreadWorker = new safeSpreadTarget.Worker().kind;",
+          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, safeConstructorWorker, safeSetterWorker, reflectedLocal, describedLocal, safePatternResult, safePatternWorker, safeTemplate, safeUnary, safeComputed['local-key'], typeof safeAwait, safeSpread.length, safeSpreadWorker, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
           '',
         ].join('\n'),
       );
@@ -2871,6 +2919,51 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-array-join-coercion-written Worker',
       "(() => { const box = { toString() { this.platform = globalThis; return ''; } }; [box].join(':'); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-parameter-object-getter-written Worker',
+      "(() => { function inspect({ trigger }) {} const target = {}; const holder = { target, get trigger() { this.target.platform = globalThis; return 1; } }; inspect(holder); return new target.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-helper-destructuring-member-written Worker',
+      "(() => { function install(box) { ({ value: box.platform } = { value: globalThis }); } const box = {}; install(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-helper-for-of-member-written Worker',
+      "(() => { function install(box) { for (box.platform of [globalThis]) { break; } } const box = {}; install(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-template-coercion-receiver-written Worker',
+      "(() => { const box = { toString() { this.platform = globalThis; return ''; } }; `${box}`; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-instanceof-has-instance-written Worker',
+      "(() => { const target = {}; class Matcher { static target = target; static [Symbol.hasInstance]() { this.target.platform = globalThis; return false; } } ({} instanceof Matcher); return new target.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-argument-spread-iterator-written Worker',
+      "(() => { function consume() {} const target = {}; const iterable = { target, *[Symbol.iterator]() { this.target.platform = globalThis; yield 1; } }; consume(...iterable); return new target.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-object-spread-getter-written Worker',
+      "(() => { const target = {}; const holder = { target, get trigger() { this.target.platform = globalThis; return 1; } }; ({ ...holder }); return new target.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-await-thenable-receiver-written Worker',
+      "(async () => { const box = { then(resolve) { this.platform = globalThis; resolve(); } }; await box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'audit-helper-reflect-get-nested-receiver-written Worker',
+      "(() => { function inspect(value) { Reflect.get(value, 'trigger'); } const target = {}; const holder = { target, get trigger() { this.target.platform = globalThis; return 1; } }; inspect(holder); return new target.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
