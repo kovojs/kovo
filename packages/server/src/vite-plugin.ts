@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import { isKovoApp } from './app-guards.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
-import { toNodeHandler, writeWebResponseToNode } from './node.js';
+import { rejectNodeRequestPreloadIngress, toNodeHandler, writeWebResponseToNode } from './node.js';
 import { routeResponseToWebResponse } from './response.js';
 import {
   renderKovoAppShellViteDevDiagnosticResponse,
@@ -56,6 +56,9 @@ export function kovoAppShellVitePlugin(
   return {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        // SPEC §9.5: Vite must close bodyless-method framing before a custom request filter,
+        // diagnostic renderer, or app handler can observe the request.
+        if (rejectNodeRequestPreloadIngress(request, response)) return;
         const shouldHandle =
           options.shouldHandleRequest?.(request, app) ??
           shouldHandleKovoAppShellViteRequest(request, app);

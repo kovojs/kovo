@@ -129,6 +129,7 @@ const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts'
 const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
 const serverAppPath = path.join(repoRoot, 'packages/server/src/app.ts');
 const appRequestPath = path.join(repoRoot, 'packages/server/src/app-request.ts');
+const serverNodePath = path.join(repoRoot, 'packages/server/src/node.ts');
 const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
 const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
 const betterAuthCredentialRuntimeGatePath = path.join(
@@ -161,6 +162,8 @@ const serverResponseSecurityIntrinsicsPath = path.join(
 const serverGuardsPath = path.join(repoRoot, 'packages/server/src/guards.ts');
 const serverGuardArgsReceiptPath = path.join(repoRoot, 'packages/server/src/guard-args-receipt.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
+const serverViteDevPath = path.join(repoRoot, 'packages/server/src/vite-dev.ts');
+const serverVitePluginPath = path.join(repoRoot, 'packages/server/src/vite-plugin.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
 const serverPostgresAuthorizationCorrespondencePath = path.join(
@@ -1406,6 +1409,56 @@ const weakenedRequestBodyBeforeDbAdmissionBranch = [
   "          match.kind === 'endpoint' || match.kind === 'mutation'",
   '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
   '            : deadlineRequest;',
+].join('\n');
+const nodeBodylessPayloadAdmissionBranch = [
+  '  if (pinnedNodeRequestHasBodylessPayload(request)) {',
+  "    return { issue: 'bodyless-payload', ok: false };",
+  '  }',
+].join('\n');
+const weakenedNodeBodylessPayloadAdmissionBranch = [
+  '  if (false && pinnedNodeRequestHasBodylessPayload(request)) {',
+  "    return { issue: 'bodyless-payload', ok: false };",
+  '  }',
+].join('\n');
+const emittedNodeBodylessPayloadAdmissionBranch = [
+  'function pinnedNodeRequestHasBodylessPayload(request) {',
+  '  if (!apply(nativeSetHas, bodylessMethods, [request.method])) return false;',
+].join('\n');
+const weakenedEmittedNodeBodylessPayloadAdmissionBranch = [
+  'function pinnedNodeRequestHasBodylessPayload(request) {',
+  '  if (!apply(nativeSetHas, bodylessMethods, [request.method])) return false;',
+  '  return false;',
+].join('\n');
+const viteDevPreloadBodylessAdmissionBranch = [
+  '      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before',
+  '      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.',
+  '      if (rejectNodeRequestPreloadIngress(request, response)) return;',
+  '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
+].join('\n');
+const weakenedViteDevPreloadBodylessAdmissionBranch = [
+  '      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before',
+  '      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.',
+  '      const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));',
+].join('\n');
+const viteDevGraphBodylessAdmissionBranch = [
+  '  if (rejectNodeRequestPreloadIngress(request, response)) return;',
+  '',
+  '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
+].join('\n');
+const weakenedViteDevGraphBodylessAdmissionBranch = [
+  '',
+  '  // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app',
+].join('\n');
+const vitePluginBodylessAdmissionBranch = [
+  '        // SPEC §9.5: Vite must close bodyless-method framing before a custom request filter,',
+  '        // diagnostic renderer, or app handler can observe the request.',
+  '        if (rejectNodeRequestPreloadIngress(request, response)) return;',
+  '        const shouldHandle =',
+].join('\n');
+const weakenedVitePluginBodylessAdmissionBranch = [
+  '        // SPEC §9.5: Vite must close bodyless-method framing before a custom request filter,',
+  '        // diagnostic renderer, or app handler can observe the request.',
+  '        const shouldHandle =',
 ].join('\n');
 const cspReportBeforeDbAdmissionBranch = [
   '        if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {',
@@ -4895,6 +4948,67 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
+      'Drops Node GET/HEAD payload-framing admission before the Web Request body-erasure boundary.',
+    expectedKiller:
+      'body-framed GET and HEAD must be rejected before handler, app database, task startup, or app code',
+    name: 'server-node/drop-bodyless-payload-admission',
+    replacement: weakenedNodeBodylessPayloadAdmissionBranch,
+    search: nodeBodylessPayloadAdmissionBranch,
+    sourceFile: serverNodePath,
+    sourceOnly: true,
+    test: assertNodeBodylessPayloadAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Drops GET/HEAD payload-framing admission from the shared emitted Node and Vercel adapter.',
+    expectedKiller:
+      'generated Node and Vercel adapters must reject body framing before static or app dispatch',
+    name: 'server-build/drop-emitted-node-vercel-bodyless-admission',
+    replacement: weakenedEmittedNodeBodylessPayloadAdmissionBranch,
+    search: emittedNodeBodylessPayloadAdmissionBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertEmittedNodeBodylessPayloadAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Loads the Vite dev dispatcher module before GET/HEAD payload admission.',
+    expectedKiller: 'body-framed requests must be rejected before Vite loads any SSR or app graph',
+    name: 'server-vite/drop-preload-bodyless-admission',
+    replacement: weakenedViteDevPreloadBodylessAdmissionBranch,
+    search: viteDevPreloadBodylessAdmissionBranch,
+    sourceFile: serverViteDevPath,
+    sourceOnly: true,
+    test: assertViteDevPreloadBodylessAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Loads graph-local Vite server/app modules before GET/HEAD payload admission.',
+    expectedKiller:
+      'the directly callable graph-local dispatcher must reject body framing before SSR or app load',
+    name: 'server-vite/drop-graph-bodyless-admission',
+    replacement: weakenedViteDevGraphBodylessAdmissionBranch,
+    search: viteDevGraphBodylessAdmissionBranch,
+    sourceFile: serverViteDevPath,
+    sourceOnly: true,
+    test: assertViteDevGraphBodylessAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Runs live Vite request filtering before GET/HEAD payload admission.',
+    expectedKiller:
+      'live Vite must reject body framing before a custom filter, diagnostics, or app code',
+    name: 'server-vite/drop-live-bodyless-admission',
+    replacement: weakenedVitePluginBodylessAdmissionBranch,
+    search: vitePluginBodylessAdmissionBranch,
+    sourceFile: serverVitePluginPath,
+    sourceOnly: true,
+    test: assertVitePluginBodylessAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
       'Starts the durable-task database runtime before coarse request and streamed-body admission.',
     expectedKiller: 'rejected remote bodies must not resolve or provision the task database',
     name: 'server-request/move-task-startup-before-body-admission',
@@ -5904,6 +6018,58 @@ function assertRequestBodyPrecedesDbAdmissionBehavior(_moduleUnderTest, { source
     testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
     testNamePattern:
       'rejects oversized method-mismatch route bodies before managed database admission',
+  });
+}
+
+function assertNodeBodylessPayloadAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'node.ts',
+    sourceText,
+    testFile: 'packages/server/src/node.test.ts',
+    testNamePattern:
+      'rejects body-framed GET and HEAD before handler, app DB, task startup, or app code',
+  });
+}
+
+function assertEmittedNodeBodylessPayloadAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'build.ts',
+    sourceText,
+    testFile: 'packages/server/src/build.test.ts',
+    testNamePattern:
+      'emits a standalone node server that serves immutable client files before route fallback|emits Vercel Build Output API v3 with static files and a Node function',
+  });
+}
+
+function assertViteDevPreloadBodylessAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'vite-dev.ts',
+    sourceText,
+    testFile: 'packages/server/src/vite-dev-middleware.test.ts',
+    testNamePattern: 'rejects body-framed GET before loading the Vite SSR or app graph',
+  });
+}
+
+function assertViteDevGraphBodylessAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'vite-dev.ts',
+    sourceText,
+    testFile: 'packages/server/src/vite-dev-middleware.test.ts',
+    testNamePattern: 'rejects body-framed GET before graph-local Vite SSR or app loading',
+  });
+}
+
+function assertVitePluginBodylessAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'vite-plugin.ts',
+    sourceText,
+    testFile: 'packages/server/src/vite-dev-middleware.test.ts',
+    testNamePattern: 'rejects body-framed GET before live Vite filtering or app dispatch',
   });
 }
 

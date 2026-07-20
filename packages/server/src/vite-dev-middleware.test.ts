@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
@@ -64,6 +64,159 @@ describe('server app shell Vite plugin', () => {
     expect(responseStatus).toBe(414);
     expect(responseBody).toBe('URI Too Long');
     expect(loadedModuleIds).toEqual([]);
+    expect(nextCalls).toBe(0);
+  });
+
+  it('rejects body-framed GET before loading the Vite SSR or app graph', () => {
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    const loadedModuleIds: string[] = [];
+    let nextCalls = 0;
+    let responseBody = '';
+    let responseStatus = 0;
+    const plugin = kovoAppShellViteDevPlugin();
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        loadedModuleIds.push(id);
+        return {};
+      },
+    });
+    const request = {
+      __kovoRequestIngressSource: 'node-http1',
+      complete: true,
+      headers: { host: 'app.test', 'transfer-encoding': 'chunked' },
+      httpVersion: '1.1',
+      method: 'GET',
+      rawHeaders: ['Host', 'app.test', 'Transfer-Encoding', 'chunked'],
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: '/cart',
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    middlewares[0]?.(request, response, () => {
+      nextCalls += 1;
+    });
+
+    expect(responseStatus).toBe(413);
+    expect(responseBody).toBe('Payload Too Large');
+    expect(loadedModuleIds).toEqual([]);
+    expect(nextCalls).toBe(0);
+  });
+
+  it('rejects body-framed GET before graph-local Vite SSR or app loading', async () => {
+    const loadedModuleIds: string[] = [];
+    let nextCalls = 0;
+    let responseBody = '';
+    let responseStatus = 0;
+    const request = {
+      __kovoRequestIngressSource: 'node-http1',
+      complete: true,
+      headers: { host: 'app.test', 'transfer-encoding': 'chunked' },
+      httpVersion: '1.1',
+      method: 'GET',
+      rawHeaders: ['Host', 'app.test', 'Transfer-Encoding', 'chunked'],
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: '/cart',
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    await dispatchKovoAppShellViteDevRequest(
+      {
+        middlewares: { use() {} },
+        async ssrLoadModule(id) {
+          loadedModuleIds.push(id);
+          return {};
+        },
+      },
+      {},
+      request,
+      response,
+      () => {
+        nextCalls += 1;
+      },
+    );
+
+    expect({ body: responseBody, status: responseStatus }).toEqual({
+      body: 'Payload Too Large',
+      status: 413,
+    });
+    expect(loadedModuleIds).toEqual([]);
+    expect(nextCalls).toBe(0);
+  });
+
+  it('rejects body-framed GET before live Vite filtering or app dispatch', () => {
+    const middlewares: KovoAppShellViteMiddleware[] = [];
+    const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
+    const shouldHandleRequest = vi.fn(() => true);
+    const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', { page })] }), {
+      shouldHandleRequest,
+    });
+    let responseBody = '';
+    let responseStatus = 0;
+    let nextCalls = 0;
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+    const request = {
+      __kovoRequestIngressSource: 'node-http1',
+      complete: true,
+      headers: { 'content-length': '1', host: 'app.test' },
+      httpVersion: '1.1',
+      method: 'GET',
+      rawHeaders: ['Host', 'app.test', 'Content-Length', '1'],
+      socket: { remoteAddress: '203.0.113.7' } as Socket,
+      url: '/cart',
+    } as IncomingMessage;
+    const response = {
+      end(body?: string) {
+        responseBody = body ?? '';
+        return this;
+      },
+      headersSent: false,
+      writeHead(status: number) {
+        responseStatus = status;
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    middlewares[0]?.(request, response, () => {
+      nextCalls += 1;
+    });
+
+    expect({ body: responseBody, status: responseStatus }).toEqual({
+      body: 'Payload Too Large',
+      status: 413,
+    });
+    expect(shouldHandleRequest).not.toHaveBeenCalled();
+    expect(page).not.toHaveBeenCalled();
     expect(nextCalls).toBe(0);
   });
 

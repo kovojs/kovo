@@ -245,6 +245,7 @@ function http2Carrier(
     remoteAddress: '203.0.113.9',
   }) as Socket & { encrypted: boolean };
   return Object.assign(new EventEmitter(), {
+    __kovoRequestIngressEndStream: true,
     __kovoRequestIngressSource: 'node-http2',
     complete: true,
     headers: options.headers ?? {

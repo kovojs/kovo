@@ -2266,9 +2266,18 @@ export default async function handler(request) {
           baseUrl,
           'GET /assets/cart.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 1000000\r\n\r\n',
         );
-        expect(incompleteStatic).toContain('HTTP/1.1 200');
+        expect(incompleteStatic).toContain('HTTP/1.1 413');
         expect(incompleteStatic).toMatch(/connection: close/i);
-        expect(incompleteStatic).toContain('body { color: navy; }');
+        expect(incompleteStatic).toContain('Payload Too Large');
+        expect(incompleteStatic).not.toContain('body { color: navy; }');
+
+        const chunkedStatic = await rawHttpExchange(
+          baseUrl,
+          'GET /assets/cart.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n0\r\n\r\n',
+        );
+        expect(chunkedStatic).toContain('HTTP/1.1 413');
+        expect(chunkedStatic).toContain('Payload Too Large');
+        expect(chunkedStatic).not.toContain('body { color: navy; }');
 
         const routeResponse = await fetch(`${baseUrl}/hello?cart=1`, {
           headers: {
@@ -3880,6 +3889,21 @@ export default async function handler(request) {
         expect(aliasResponse).toContain('HTTP/1.1 400');
         expect(aliasResponse).toContain('Bad Request');
         expect(aliasResponse).not.toContain('VERCEL_ALIAS_CREDENTIAL');
+        const declaredBodyless = await rawHttpExchange(
+          baseUrl,
+          'GET /hello HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 1\r\n\r\n',
+        );
+        expect(declaredBodyless).toContain('HTTP/1.1 413');
+        expect(declaredBodyless).toMatch(/connection: close/iu);
+        expect(declaredBodyless).toContain('Payload Too Large');
+        expect(declaredBodyless).not.toContain('vercel:/hello:');
+        const chunkedBodyless = await rawHttpExchange(
+          baseUrl,
+          'HEAD /hello HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx\r\n0\r\n\r\n',
+        );
+        expect(chunkedBodyless).toContain('HTTP/1.1 413');
+        expect(chunkedBodyless.split('\r\n\r\n', 2)[1]).toBe('');
+        expect(chunkedBodyless).not.toContain('vercel:/hello:');
         const spoofedPlatformScheme = await rawHttpExchange(
           baseUrl,
           'GET /hello HTTP/1.1\r\n' +
@@ -5418,6 +5442,65 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     );
   }
 
+  for (const framing of [
+    { name: 'content-length', value: '1' },
+    { name: 'transfer-encoding', value: 'chunked' },
+  ]) {
+    const liveBodyless = adapterParityRequest();
+    liveBodyless.headers[framing.name] = framing.value;
+    const emittedBodyless = adapterParityRequest();
+    emittedBodyless.headers[framing.name] = framing.value;
+    for (const convert of [
+      () => liveNodeRequestToWebRequest(liveBodyless),
+      () => adapter.nodeRequestToWebRequest(emittedBodyless),
+    ]) {
+      expect(convert).toThrow(
+        'Kovo Node adapter requires GET and HEAD requests to be payload-free (SPEC §9.5).',
+      );
+    }
+  }
+
+  for (const convert of [
+    () => {
+      const request = adapterParityHttp2Request();
+      delete (request as IncomingMessage & { __kovoRequestIngressEndStream?: boolean })
+        .__kovoRequestIngressEndStream;
+      return liveNodeRequestToWebRequest(request);
+    },
+    () => {
+      const request = adapterParityHttp2Request();
+      delete (request as IncomingMessage & { __kovoRequestIngressEndStream?: boolean })
+        .__kovoRequestIngressEndStream;
+      return adapter.nodeRequestToWebRequest(request);
+    },
+  ]) {
+    expect(convert).toThrow(
+      'Kovo Node adapter requires GET and HEAD requests to be payload-free (SPEC §9.5).',
+    );
+  }
+
+  const rejectedBodyless = adapterParityRequest();
+  Object.assign(rejectedBodyless, { complete: true });
+  rejectedBodyless.headers['transfer-encoding'] = 'chunked';
+  let bodylessBody = '';
+  let bodylessStatus = 0;
+  const bodylessResponse = Object.assign(new EventEmitter(), {
+    end(value?: string) {
+      bodylessBody = value ?? '';
+      return this;
+    },
+    headersSent: false,
+    writeHead(value: number) {
+      bodylessStatus = value;
+      return this;
+    },
+  }) as unknown as ServerResponse;
+  expect(adapter.rejectInvalidNodeRequestIngress(rejectedBodyless, bodylessResponse)).toBe(true);
+  expect({ body: bodylessBody, status: bodylessStatus }).toEqual({
+    body: 'Payload Too Large',
+    status: 413,
+  });
+
   const rejectedMethod = adapterParityRequest();
   rejectedMethod.method = 'post';
   let methodBody = '';
@@ -5836,6 +5919,7 @@ function adapterParityHttp2Request(): IncomingMessage {
     remoteAddress: '203.0.113.9',
   }) as Socket & { encrypted?: boolean };
   return Object.assign(new EventEmitter(), {
+    __kovoRequestIngressEndStream: true,
     __kovoRequestIngressSource: 'node-http2',
     headers: {
       ':authority': 'h2.example.test',

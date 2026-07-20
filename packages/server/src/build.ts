@@ -1115,6 +1115,7 @@ const nativeHttp2ServerRequestMethodGetter = stablePrototypeGetter(Http2ServerRe
 const nativeHttp2ServerRequestUrlGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'url');
 const nativeHttp2ServerRequestHttpVersionGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'httpVersion');
 const nativeHttp2ServerRequestSocketGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'socket');
+const nativeHttp2ServerRequestStreamGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'stream');
 const nativeHttp2ServerRequestCompleteGetter = stablePrototypeGetter(Http2ServerRequest.prototype, 'complete');
 const nativeSocketOnce = stablePrototypeFunction(Socket.prototype, 'once');
 const nativeSocketOff = stablePrototypeFunction(Socket.prototype, 'off');
@@ -1199,10 +1200,12 @@ export function prepareNodeRequestIngress(nodeRequest, options = {}) {
     return preparedFailure(pinnedNodeRequest, 'target', 414, 'URI Too Long');
   }
   const pinnedOptions = snapshotNodeHandlerOptions(options);
+  if (pinnedNodeRequestHasBodylessPayload(pinnedNodeRequest)) {
+    return preparedFailure(pinnedNodeRequest, 'bodyless-payload', 413, 'Payload Too Large');
+  }
   const decision = classifyPinnedNodeRequestIngress(pinnedNodeRequest, pinnedOptions);
-  return decision.ok
-    ? preparedAccepted(pinnedNodeRequest, pinnedOptions, decision, pinnedNodeRequest.peerAddress)
-    : preparedFailure(pinnedNodeRequest, decision.issue, 400, 'Bad Request');
+  if (!decision.ok) return preparedFailure(pinnedNodeRequest, decision.issue, 400, 'Bad Request');
+  return preparedAccepted(pinnedNodeRequest, pinnedOptions, decision, pinnedNodeRequest.peerAddress);
 }
 
 // Vercel overwrites both fields at its edge. They are mandatory facts in this distinct posture;
@@ -1211,6 +1214,9 @@ export function prepareVercelRequestIngress(nodeRequest) {
   const pinnedNodeRequest = snapshotNodeRequest(nodeRequest, 'vercel-node');
   if (requestUrlLimitFailure(pinnedNodeRequest.rawTarget) !== undefined) {
     return preparedFailure(pinnedNodeRequest, 'target', 414, 'URI Too Long');
+  }
+  if (pinnedNodeRequestHasBodylessPayload(pinnedNodeRequest)) {
+    return preparedFailure(pinnedNodeRequest, 'bodyless-payload', 413, 'Payload Too Large');
   }
   const decision = requestIngressClassifier.classify({
     host: pinnedNodeRequest.headers.host,
@@ -1225,9 +1231,8 @@ export function prepareVercelRequestIngress(nodeRequest) {
     rawTarget: pinnedNodeRequest.rawTarget,
     source: 'vercel-node',
   });
-  return decision.ok
-    ? preparedAccepted(pinnedNodeRequest, {}, decision, decision.clientIp)
-    : preparedFailure(pinnedNodeRequest, decision.issue, 400, 'Bad Request');
+  if (!decision.ok) return preparedFailure(pinnedNodeRequest, decision.issue, 400, 'Bad Request');
+  return preparedAccepted(pinnedNodeRequest, {}, decision, decision.clientIp);
 }
 
 function preparedAccepted(pinnedNodeRequest, pinnedOptions, decision, clientIp) {
@@ -1401,6 +1406,7 @@ function snapshotNodeRequest(nodeRequest, sourceOverride) {
   if (existing !== undefined) return existing;
   const isHttp2 = hasPrototype(nodeRequest, Http2ServerRequest.prototype);
   const source = sourceOverride ?? nodeRequestTransportSource(nodeRequest, isHttp2);
+  const http2EndStream = snapshotNodeRequestHttp2EndStream(nodeRequest, isHttp2, source);
   const rawTarget = requestStringProperty(
     nodeRequest,
     'url',
@@ -1452,6 +1458,7 @@ function snapshotNodeRequest(nodeRequest, sourceOverride) {
       'value' in encryptedDescriptor &&
       encryptedDescriptor.value === true,
     headers: snapshotNodeHeaders(nodeRequest),
+    ...(http2EndStream === undefined ? {} : { http2EndStream }),
     httpVersion,
     method,
     ...(peerAddress ? { peerAddress } : {}),
@@ -1470,6 +1477,36 @@ function snapshotNodeRequest(nodeRequest, sourceOverride) {
   return immutableSnapshot;
 }
 
+function snapshotNodeRequestHttp2EndStream(nodeRequest, isHttp2, source) {
+  if (source !== 'node-http2') return undefined;
+  if (!isHttp2) {
+    const explicit = apply(nativeObjectGetOwnPropertyDescriptor, Object, [
+      nodeRequest,
+      '__kovoRequestIngressEndStream',
+    ]);
+    if (explicit === undefined) return undefined;
+    if (!('value' in explicit) || typeof explicit.value !== 'boolean') {
+      throw new TypeError('Kovo custom HTTP/2 carriers require an own boolean END_STREAM witness.');
+    }
+    return explicit.value;
+  }
+
+  const stream = apply(nativeHttp2ServerRequestStreamGetter, nodeRequest, []);
+  if (!stream || typeof stream !== 'object') {
+    throw new TypeError('Kovo Node adapter requires an HTTP/2 request stream.');
+  }
+  const streamPrototype = apply(nativeObjectGetPrototypeOf, NativeObject, [stream]);
+  if (streamPrototype === null) {
+    throw new TypeError('Kovo Node adapter requires an HTTP/2 request stream prototype.');
+  }
+  const endAfterHeaders = stablePrototypeGetter(streamPrototype, 'endAfterHeaders');
+  const witness = apply(endAfterHeaders, stream, []);
+  if (typeof witness !== 'boolean') {
+    throw new TypeError('Kovo Node adapter requires a boolean HTTP/2 END_STREAM witness.');
+  }
+  return witness;
+}
+
 function nodeRequestTransportSource(nodeRequest, isHttp2) {
   if (isHttp2) return 'node-http2';
   if (hasPrototype(nodeRequest, IncomingMessage.prototype)) return 'node-http1';
@@ -1482,6 +1519,27 @@ function nodeRequestTransportSource(nodeRequest, isHttp2) {
     return explicit.value;
   }
   throw new TypeError('Kovo Node adapter received an unsupported request carrier posture.');
+}
+
+// SPEC §9.5: Fetch erases GET/HEAD bodies. Close every finite Node transport witness before
+// Web Request construction, static routing, app loading, database admission, or task startup.
+function pinnedNodeRequestHasBodylessPayload(request) {
+  if (!apply(nativeSetHas, bodylessMethods, [request.method])) return false;
+  const contentLength = request.headers['content-length'];
+  if (contentLength !== undefined && !bodylessContentLengthIsZero(contentLength)) return true;
+  if (request.headers['transfer-encoding'] !== undefined) return true;
+  if (request.source !== 'node-http2') return false;
+  return request.http2EndStream !== true;
+}
+
+function bodylessContentLengthIsZero(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = apply(nativeStringTrim, value, []);
+  if (trimmed.length === 0) return false;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (apply(nativeStringCharCodeAt, trimmed, [index]) !== 0x30) return false;
+  }
+  return true;
 }
 
 function requestStringProperty(value, property, fallback, nativeGetter) {
@@ -1784,6 +1842,9 @@ function classifyPinnedNodeRequestIngress(nodeRequest, options) {
 }
 
 function requestIngressFailureMessage(issue) {
+  if (issue === 'bodyless-payload') {
+    return 'Kovo Node adapter requires GET and HEAD requests to be payload-free (SPEC §9.5).';
+  }
   if (issue === 'method') {
     return 'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.';
   }

@@ -34,7 +34,7 @@ import {
 import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
 import {
   nodeRequestToWebRequest,
-  rejectNodeRequestTargetLimit,
+  rejectNodeRequestPreloadIngress,
   toNodeHandler,
   writeWebResponseToNode,
   type NodeRequestHandler,
@@ -441,7 +441,7 @@ export async function dispatchKovoAppShellViteDevRequest(
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   const appExportName = options.appExportName ?? 'default';
   if (options.devDiagnostics) registerRequestDiagnosticStore(options.devDiagnostics);
-  if (rejectNodeRequestTargetLimit(request, response)) return;
+  if (rejectNodeRequestPreloadIngress(request, response)) return;
 
   // SPEC §6.6 rule 6: preload the complete server root in this exact SSR graph before the app
   // graph. Runtime-specific controls such as command execution remain tree-shakeable in production
@@ -535,9 +535,9 @@ export function kovoAppShellViteDevPlugin(
       ...(server.ws === undefined ? {} : { ws: server.ws }),
     });
     server.middlewares.use((request, response, next) => {
-      // SPEC §9.5: reject separator/target amplification before even loading the app graph. The
-      // graph-local dispatcher repeats this check because it is also an internal callable entry.
-      if (rejectNodeRequestTargetLimit(request, response)) return;
+      // SPEC §9.5: reject separator/target amplification and body-erasing GET/HEAD framing before
+      // loading the app graph. The graph-local dispatcher repeats this internal callable gate.
+      if (rejectNodeRequestPreloadIngress(request, response)) return;
       const loaded = securityPromiseResolve(ssrLoadModule(kovoAppShellViteDevModuleId));
       const dispatched = securityPromiseThen(loaded, (serverModule) => {
         const dispatch = viteDevModuleExportValue(

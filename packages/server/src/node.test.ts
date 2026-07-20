@@ -36,6 +36,7 @@ import { endpointRequestWithoutSession, resolveKovoLifecycleRequest } from './re
 import { respond, routeOutcomeResponse, routeResponseToWebResponse } from './response.js';
 import { route } from './route.js';
 import { s } from './schema.js';
+import { task } from './task.js';
 import { MAX_REQUEST_QUERY_ENTRIES, MAX_REQUEST_URL_CHARACTERS } from './request-url-limits.js';
 
 function nodeRequest(url: string): IncomingMessage {
@@ -85,6 +86,37 @@ describe('server node adapter', () => {
               url: '/method-identity',
             }) as IncomingMessage);
       request.method = method;
+      expect(nodeRequestToWebRequest(request).method).toBe(method);
+    }
+  });
+
+  it('requires a pinned END_STREAM witness for custom HTTP/2 GET carriers', () => {
+    const customHttp2 = (endStream?: boolean): IncomingMessage => {
+      const request = nodeRequest('/custom-http2');
+      Object.assign(request, {
+        ...(endStream === undefined ? {} : { __kovoRequestIngressEndStream: endStream }),
+        __kovoRequestIngressSource: 'node-http2',
+      });
+      request.headers = { ':authority': 'app.example', ':scheme': 'http' };
+      request.httpVersion = '2.0';
+      request.rawHeaders = [];
+      return request;
+    };
+
+    for (const request of [customHttp2(), customHttp2(false)]) {
+      expect(() => nodeRequestToWebRequest(request)).toThrow(
+        'Kovo Node adapter requires GET and HEAD requests to be payload-free (SPEC §9.5).',
+      );
+    }
+    expect(nodeRequestToWebRequest(customHttp2(true)).url).toBe('http://app.example/custom-http2');
+  });
+
+  it('keeps Content-Length zero payload-free for GET and HEAD', () => {
+    for (const method of ['GET', 'HEAD']) {
+      const request = nodeRequest('/bodyless-zero');
+      request.headers = { 'content-length': '0', host: 'internal.example' };
+      request.method = method;
+      request.rawHeaders = ['Host', 'internal.example', 'Content-Length', '0'];
       expect(nodeRequestToWebRequest(request).method).toBe(method);
     }
   });
@@ -253,7 +285,10 @@ describe('server node adapter', () => {
     );
 
     const cleartextHttp2 = nodeRequest('/h2-cleartext');
-    Object.assign(cleartextHttp2, { __kovoRequestIngressSource: 'node-http2' });
+    Object.assign(cleartextHttp2, {
+      __kovoRequestIngressEndStream: true,
+      __kovoRequestIngressSource: 'node-http2',
+    });
     cleartextHttp2.headers = {
       ':authority': 'app.example',
       ':scheme': 'https',
@@ -267,7 +302,10 @@ describe('server node adapter', () => {
     );
 
     const encryptedHttp2 = nodeRequest('/h2-encrypted');
-    Object.assign(encryptedHttp2, { __kovoRequestIngressSource: 'node-http2' });
+    Object.assign(encryptedHttp2, {
+      __kovoRequestIngressEndStream: true,
+      __kovoRequestIngressSource: 'node-http2',
+    });
     encryptedHttp2.headers = {
       ':authority': 'app.example',
       ':scheme': 'http',
@@ -342,7 +380,10 @@ describe('server node adapter', () => {
 
     for (const invalid of ['', 'javascript', 'https, http', ['https']] as const) {
       const invalidPseudoScheme = nodeRequest('/pseudo-invalid');
-      Object.assign(invalidPseudoScheme, { __kovoRequestIngressSource: 'node-http2' });
+      Object.assign(invalidPseudoScheme, {
+        __kovoRequestIngressEndStream: true,
+        __kovoRequestIngressSource: 'node-http2',
+      });
       invalidPseudoScheme.headers = {
         ':authority': 'app.example',
         ':scheme': invalid,
@@ -356,7 +397,10 @@ describe('server node adapter', () => {
     }
 
     const forwardedPrecedence = nodeRequest('/forwarded-precedence');
-    Object.assign(forwardedPrecedence, { __kovoRequestIngressSource: 'node-http2' });
+    Object.assign(forwardedPrecedence, {
+      __kovoRequestIngressEndStream: true,
+      __kovoRequestIngressSource: 'node-http2',
+    });
     forwardedPrecedence.headers = {
       ':authority': 'app.example',
       ':scheme': 'javascript',
@@ -369,7 +413,10 @@ describe('server node adapter', () => {
     );
 
     const uppercasePseudoScheme = nodeRequest('/pseudo-uppercase');
-    Object.assign(uppercasePseudoScheme, { __kovoRequestIngressSource: 'node-http2' });
+    Object.assign(uppercasePseudoScheme, {
+      __kovoRequestIngressEndStream: true,
+      __kovoRequestIngressSource: 'node-http2',
+    });
     uppercasePseudoScheme.headers = { ':authority': 'app.example', ':scheme': 'HTTPS' };
     uppercasePseudoScheme.httpVersion = '2.0';
     uppercasePseudoScheme.rawHeaders = [];
@@ -1323,6 +1370,61 @@ describe('toNodeHandler incomplete request transport closure', () => {
     }
   });
 
+  it('rejects body-framed GET and HEAD before handler, app DB, task startup, or app code', async () => {
+    const provider = vi.fn(() => ({
+      async query() {
+        return { rowCount: 0, rows: [] };
+      },
+    }));
+    const sessionProvider = vi.fn(() => null);
+    const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
+    const background = task('security/bodyless-ingress', {
+      input: s.object({}),
+      run() {},
+    });
+    const app = createApp({
+      db: provider,
+      routes: [route('/probe', { page })],
+      sessionProvider,
+      tasks: [background],
+    });
+    const webHandler = vi.fn(createRequestHandler(app));
+    const server = await serveWithNode(toNodeHandler(webHandler));
+
+    try {
+      const declaredGet = await rawHttpExchange(
+        server.origin,
+        'GET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nContent-Length: 4\r\n\r\n',
+      );
+      const chunkedGet = await rawHttpExchange(
+        server.origin,
+        'GET /probe HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n0\r\n\r\n',
+      );
+      const chunkedHead = await rawHttpExchange(
+        server.origin,
+        'HEAD /probe HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabcde\r\n0\r\n\r\n',
+      );
+
+      for (const response of [declaredGet, chunkedGet]) {
+        expect(response).toContain('HTTP/1.1 413');
+        expect(response).toMatch(/connection: close/iu);
+        expect(response).toContain('Payload Too Large');
+      }
+      expect(chunkedHead).toContain('HTTP/1.1 413');
+      expect(chunkedHead).toMatch(/connection: close/iu);
+      expect(chunkedHead.split('\r\n\r\n', 2)[1]).toBe('');
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(webHandler).not.toHaveBeenCalled();
+      expect(provider).not.toHaveBeenCalled();
+      expect(sessionProvider).not.toHaveBeenCalled();
+      expect(page).not.toHaveBeenCalled();
+    } finally {
+      await server.close();
+    }
+  });
+
   it('keeps a completed request reusable on the same keep-alive connection', async () => {
     const sockets: Socket[] = [];
     const nodeHandler = requestHandler();
@@ -1904,6 +2006,46 @@ describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
 
       expect(status).toBe(200);
       expect(body).toBe('ok /h2-path');
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
+  it('rejects HTTP/2 DATA framing on GET before the Web handler', async () => {
+    const webHandler = vi.fn(async () => new Response('handler reached'));
+    const nodeHandler = toNodeHandler(webHandler);
+    const server = createHttp2Server((request, response) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const outcome = await new Promise<{ body: string; status: number }>((resolve, reject) => {
+        const request = client.request(
+          { ':method': 'GET', ':path': '/bodyless-data' },
+          { endStream: false },
+        );
+        let body = '';
+        let status = 0;
+        request.on('response', (headers) => {
+          status = Number(headers[':status'] ?? 0);
+        });
+        request.setEncoding('utf8');
+        request.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        request.on('end', () => resolve({ body, status }));
+        request.on('error', reject);
+        request.end('x');
+      });
+
+      expect(outcome).toEqual({ body: 'Payload Too Large', status: 413 });
+      expect(webHandler).not.toHaveBeenCalled();
     } finally {
       client.close();
       await new Promise<void>((resolve, reject) =>

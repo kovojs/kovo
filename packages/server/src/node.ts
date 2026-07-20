@@ -153,6 +153,10 @@ const nativeHttp2ServerRequestSocketGetter = stablePrototypeGetter(
   NativeHttp2ServerRequest.prototype,
   'socket',
 );
+const nativeHttp2ServerRequestStreamGetter = stablePrototypeGetter(
+  NativeHttp2ServerRequest.prototype,
+  'stream',
+);
 const nativeHttp2ServerRequestCompleteGetter = stablePrototypeGetter(
   NativeHttp2ServerRequest.prototype,
   'complete',
@@ -405,6 +409,7 @@ interface PinnedNodeRequest {
   readonly carrier: IncomingMessage;
   readonly encrypted: boolean;
   readonly headers: Record<string, string | string[] | undefined>;
+  readonly http2EndStream?: boolean;
   readonly httpVersion: string;
   readonly method: string;
   readonly peerAddress?: string;
@@ -426,6 +431,8 @@ interface PreparedNodeRequestIngress {
   readonly options: PinnedNodeHandlerOptions;
   readonly request: PinnedNodeRequest;
 }
+
+type NodeRequestIngressIssue = RequestIngressIssue | 'bodyless-payload';
 
 function snapshotNodeHandlerOptions(options: NodeHandlerOptions): PinnedNodeHandlerOptions {
   const compression = optionalOwnDataProperty(options, 'compression');
@@ -468,6 +475,7 @@ function optionalOwnDataProperty(value: object, property: PropertyKey): unknown 
 function snapshotNodeRequest(nodeRequest: IncomingMessage): PinnedNodeRequest {
   const isHttp2 = hasPrototype(nodeRequest, NativeHttp2ServerRequest.prototype);
   const source = nodeRequestTransportSource(nodeRequest, isHttp2);
+  const http2EndStream = snapshotNodeRequestHttp2EndStream(nodeRequest, isHttp2, source);
   const rawTarget = requestStringProperty(
     nodeRequest,
     'url',
@@ -523,6 +531,7 @@ function snapshotNodeRequest(nodeRequest: IncomingMessage): PinnedNodeRequest {
     carrier: nodeRequest,
     encrypted,
     headers: snapshotNodeHeaders(nodeRequest),
+    ...(http2EndStream === undefined ? {} : { http2EndStream }),
     httpVersion,
     method,
     ...(peerAddress ? { peerAddress } : {}),
@@ -536,6 +545,41 @@ function snapshotNodeRequest(nodeRequest: IncomingMessage): PinnedNodeRequest {
     socket,
     source,
   });
+}
+
+function snapshotNodeRequestHttp2EndStream(
+  nodeRequest: IncomingMessage,
+  isHttp2: boolean,
+  source: 'node-http1' | 'node-http2',
+): boolean | undefined {
+  if (source !== 'node-http2') return undefined;
+  if (!isHttp2) {
+    const explicit = witnessGetOwnPropertyDescriptor(nodeRequest, '__kovoRequestIngressEndStream');
+    if (explicit === undefined) return undefined;
+    if (!('value' in explicit) || typeof explicit.value !== 'boolean') {
+      throw new TypeError('Kovo custom HTTP/2 carriers require an own boolean END_STREAM witness.');
+    }
+    return explicit.value;
+  }
+
+  const stream = witnessReflectApply<unknown>(
+    nativeHttp2ServerRequestStreamGetter,
+    nodeRequest,
+    [],
+  );
+  if (typeof stream !== 'object' || stream === null) {
+    throw new TypeError('Kovo Node adapter requires an HTTP/2 request stream.');
+  }
+  const streamPrototype = witnessGetPrototypeOf(stream);
+  if (streamPrototype === null) {
+    throw new TypeError('Kovo Node adapter requires an HTTP/2 request stream prototype.');
+  }
+  const endAfterHeaders = stablePrototypeGetter(streamPrototype, 'endAfterHeaders');
+  const witness = witnessReflectApply<unknown>(endAfterHeaders, stream, []);
+  if (typeof witness !== 'boolean') {
+    throw new TypeError('Kovo Node adapter requires a boolean HTTP/2 END_STREAM witness.');
+  }
+  return witness;
 }
 
 function nodeRequestTransportSource(
@@ -659,7 +703,7 @@ export function toNodeHandler(
       if (rejectPinnedNodeRequestTargetLimit(pinnedNodeRequest, nodeResponse)) return;
       const prepared = preparePinnedNodeRequestIngress(pinnedNodeRequest, pinnedOptions);
       if (!prepared.ok) {
-        rejectPinnedNodeRequestIngress(pinnedNodeRequest, nodeResponse);
+        rejectPinnedNodeRequestIngress(pinnedNodeRequest, nodeResponse, prepared.issue);
         return;
       }
       const request = nodeRequestToWebRequestFromPrepared(prepared.value, nodeResponse);
@@ -732,6 +776,16 @@ export function nodeRequestToWebRequest(
   );
   if (!prepared.ok) throw new TypeError(requestIngressFailureMessage(prepared.issue));
   return nodeRequestToWebRequestFromPrepared(prepared.value, nodeResponse);
+}
+
+/** @internal Reject raw-target amplification or body erasure before Vite loads an app graph. */
+export function rejectNodeRequestPreloadIngress(
+  nodeRequest: IncomingMessage,
+  nodeResponse: ServerResponse,
+): boolean {
+  const pinnedTarget = snapshotNodeRequestTarget(nodeRequest);
+  if (rejectPinnedNodeRequestTargetLimit(pinnedTarget, nodeResponse)) return true;
+  return rejectPinnedNodeRequestBodylessPayload(snapshotNodeRequest(nodeRequest), nodeResponse);
 }
 
 /** @internal Reject an over-budget raw Node target before any URL construction or handler load. */
@@ -1047,11 +1101,13 @@ function nodeResponseShouldKeepAlive(nodeResponse: ServerResponse): boolean | un
 function rejectPinnedNodeRequestIngress(
   pinnedNodeRequest: PinnedNodeRequest,
   nodeResponse: ServerResponse,
+  issue: NodeRequestIngressIssue,
 ): void {
   const responseTransport = pinNodeResponseTransport(nodeResponse);
   armIncompleteNodeRequestClose(pinnedNodeRequest.carrier, nodeResponse);
+  const bodylessPayload = issue === 'bodyless-payload';
   witnessReflectApply(responseTransport.writeHead, nodeResponse, [
-    400,
+    bodylessPayload ? 413 : 400,
     {
       'Cache-Control': 'no-store',
       'Content-Type': 'text/plain; charset=utf-8',
@@ -1061,8 +1117,46 @@ function rejectPinnedNodeRequestIngress(
   witnessReflectApply(
     responseTransport.end,
     nodeResponse,
-    pinnedNodeRequest.method === 'HEAD' ? [] : ['Bad Request'],
+    pinnedNodeRequest.method === 'HEAD'
+      ? []
+      : [bodylessPayload ? 'Payload Too Large' : 'Bad Request'],
   );
+}
+
+/**
+ * SPEC §9.5: Fetch cannot represent GET/HEAD request bodies. Reject every transport witness
+ * that could otherwise be erased at that boundary: positive Content-Length, any HTTP/1 transfer
+ * coding, or an HTTP/2 stream whose HEADERS did not carry END_STREAM. This is deliberately finite
+ * and synchronous, so an incomplete peer cannot hold an adapter-side drain open before Kovo's
+ * request deadline exists.
+ */
+function rejectPinnedNodeRequestBodylessPayload(
+  request: PinnedNodeRequest,
+  response: ServerResponse,
+): boolean {
+  if (!pinnedNodeRequestHasBodylessPayload(request)) return false;
+  rejectPinnedNodeRequestIngress(request, response, 'bodyless-payload');
+  return true;
+}
+
+function pinnedNodeRequestHasBodylessPayload(request: PinnedNodeRequest): boolean {
+  if (!witnessSetHas(bodylessMethods, request.method)) return false;
+  const contentLength = request.headers['content-length'];
+  if (contentLength !== undefined && !bodylessContentLengthIsZero(contentLength)) return true;
+  if (request.headers['transfer-encoding'] !== undefined) return true;
+  if (request.source !== 'node-http2') return false;
+  return request.http2EndStream !== true;
+}
+
+function bodylessContentLengthIsZero(value: string | readonly string[]): boolean {
+  if (typeof value !== 'string') return false;
+  const trimmed = witnessReflectApply<string>(nativeStringTrim, value, []);
+  if (trimmed.length === 0) return false;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (witnessReflectApply<number>(nativeStringCharCodeAt, trimmed, [index]) !== 0x30)
+      return false;
+  }
+  return true;
 }
 
 /** Reject before URL construction, static routing, or authored adapter callbacks. */
@@ -1413,8 +1507,11 @@ function preparePinnedNodeRequestIngress(
   request: PinnedNodeRequest,
   options: PinnedNodeHandlerOptions,
 ):
-  | { readonly issue: RequestIngressIssue; readonly ok: false }
+  | { readonly issue: NodeRequestIngressIssue; readonly ok: false }
   | { readonly ok: true; readonly value: PreparedNodeRequestIngress } {
+  if (pinnedNodeRequestHasBodylessPayload(request)) {
+    return { issue: 'bodyless-payload', ok: false };
+  }
   const decision = classifyPinnedNodeRequestIngress(request, options);
   if (!decision.ok) return decision;
   const immutableDecision = witnessFreeze(decision);
@@ -1424,7 +1521,10 @@ function preparePinnedNodeRequestIngress(
   };
 }
 
-function requestIngressFailureMessage(issue: RequestIngressIssue): string {
+function requestIngressFailureMessage(issue: NodeRequestIngressIssue): string {
+  if (issue === 'bodyless-payload') {
+    return 'Kovo Node adapter requires GET and HEAD requests to be payload-free (SPEC §9.5).';
+  }
   if (issue === 'method') {
     return 'Kovo Node adapter cannot preserve this HTTP method through the Web Request boundary.';
   }
