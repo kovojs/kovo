@@ -1,9 +1,9 @@
 {
   "schema": "kovo-capability-surface-census/v2",
   "summary": {
-    "internalRegistries": 102,
+    "internalRegistries": 112,
     "mints": 4,
-    "sites": 106
+    "sites": 116
   },
   "rows": [
     {
@@ -288,6 +288,38 @@
     },
     {
       "api": "createWitnessWeakMap",
+      "file": "packages/server/src/agent.ts",
+      "id": "packages/server/src/agent.ts#toolRecords",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Tracks framework-issued agent tool identities in a private witness registry; no caller receives a capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/agent.ts",
+      "id": "packages/server/src/agent.ts#agentRecords",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Tracks framework-issued agent identities in a private witness registry; no caller receives a capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/agent.ts",
+      "id": "packages/server/src/agent.ts#sessionRecords",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Tracks framework-issued agent session identities in a private witness registry; no caller receives a capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/agent.ts",
+      "id": "packages/server/src/agent.ts#contentRecords",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Tracks framework-issued agent content identities in a private witness registry; no caller receives a capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
       "file": "packages/server/src/app-load-shed.ts",
       "id": "packages/server/src/app-load-shed.ts#frameworkLoadShedErrors",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
@@ -360,6 +392,14 @@
     },
     {
       "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app.ts",
+      "id": "packages/server/src/app.ts#appEgressPostures",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates each app snapshot with its validated egress posture in a private witness registry; no capability leaves the framework."
+    },
+    {
+      "api": "createWitnessWeakMap",
       "file": "packages/server/src/async-context.ts",
       "id": "packages/server/src/async-context.ts#frameworkAsyncContextCellStates",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
@@ -413,6 +453,22 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/delegation.ts",
+      "id": "packages/server/src/delegation.ts#receipts",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates opaque delegated authorities with framework-only provenance receipts; callers cannot manufacture or unwrap a receipt."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/derived-dataset.ts",
+      "id": "packages/server/src/derived-dataset.ts#derivedVectorDatasetWitnesses",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates derived vector datasets with inherited containment witnesses inside the framework; it does not mint outward authority."
     },
     {
       "api": "createWitnessWeakMap",
@@ -605,6 +661,30 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/postgres-owner-guard.ts",
+      "id": "packages/server/src/postgres-owner-guard.ts#frameworkPostgresOwnerGuardSchemas",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates compiler-bound Postgres schemas with framework provenance in a private registry; it does not mint database authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/postgres-owner-guard.ts",
+      "id": "packages/server/src/postgres-owner-guard.ts#frameworkPostgresOwnerGuardRequestDbs",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates request database facades with validated Postgres owner-guard state in a private registry; it does not mint authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/postgres-owner-guard.ts",
+      "id": "packages/server/src/postgres-owner-guard.ts#bindingsByKeyColumn",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Indexes validated direct-owner key bindings by compiler-owned column identity inside a private registry; no capability is exported."
     },
     {
       "api": "createWitnessWeakMap",

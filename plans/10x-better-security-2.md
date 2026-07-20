@@ -550,16 +550,25 @@ TCB door routes verification through one runtime but does not own identity _life
 census. **Produces:** a persistent monotone revocation version and bounded-staleness verifier door.
 **Blocks:** principal-freshness W coverage.
 
-- [ ] The authoritative identity provider or auth store exposes a persistent per-principal epoch
+- [x] The authoritative identity provider or auth store exposes a persistent per-principal epoch
       independent of any one session. Password changes, role/tenant changes, administrative actions,
       external-provider revocation, and account deletion update or tombstone it monotonically.
-- [ ] Every credential-derived mint door (capability URLs, replay receipts, continuations — enumerable
+  - Evidence: the 11-file, 252-test principal-epoch integration suite proves durable Postgres
+    persistence/tombstones, Better Auth initialization, finite lifecycle transitions, and
+    out-of-band/provider revocation across the framework bindings.
+- [x] Every credential-derived mint door (capability URLs, replay receipts, continuations — enumerable
       from the existing mint-site census) embeds the epoch at mint; every verifier compares embedded vs
       current, fail-closed. Specify lookup caching, maximum revocation staleness, outage behavior, and
       the latency/availability budget; expiry remains defense-in-depth.
-- [ ] Privilege-changing Kovo mutations route through the epoch door, with the mutation registry used
+  - Evidence: `pnpm run check:capability-surface-census` closes all eight credential doors, while
+    `principal-epoch.test.ts` proves capability/replay release, handler, transaction, settlement,
+    outage, and stale-epoch failures under the uncached 1,000 ms SPEC §6.6 contract.
+- [x] Privilege-changing Kovo mutations route through the epoch door, with the mutation registry used
       as a completeness check—not as the authority that infers semantic privilege changes from table
       names. Prove out-of-band/provider changes invalidate existing artifacts too.
+  - Evidence: `principal-epoch.test.ts` proves explicit finite mutation declarations, rollback on a
+    racing provider transition, and invalidation of old durable replay receipts after an out-of-band
+    epoch advance.
 
 ### 3.4 Async-context authority confinement + non-interference oracle
 
