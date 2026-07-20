@@ -2573,7 +2573,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unsupported check family "optimstic". expected optimistic, coverage, endpoint-posture, or sources-sinks.\n',
+      'kovo: unsupported check family "optimstic". expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n',
     );
   });
 
@@ -2591,7 +2591,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json]\n',
+      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json]\n',
     );
   });
 

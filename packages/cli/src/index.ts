@@ -51,6 +51,7 @@ import {
   writeCheckUsageError,
 } from './graph-output.js';
 import { writeCommandResult, writeUsageError } from './shared.js';
+import { runDeploymentEnvironmentCheck } from './deployment-environment-contract.js';
 import {
   scanSourceSinkDrift,
   sourcesSinksCheckResult,
@@ -122,6 +123,15 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   check(args, security) {
     const parsed = parseCheckArgs(args);
     if (!parsed.ok) return writeCheckUsageError(parsed);
+    if ('environment' in parsed) {
+      return writeCommandResult(
+        runDeploymentEnvironmentCheck(
+          parsed.inputPath,
+          security.invocationCwd,
+          security.invocationEnv,
+        ),
+      );
+    }
     const { family, inputPath } = parsed;
     if (family === 'sources-sinks') {
       if (inputPath) {

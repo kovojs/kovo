@@ -163,6 +163,36 @@ For a Kovo app, the following are checkable **without executing a browser**:
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 
+**Deployment assume-guarantee contract (normative).** Every current `SECURITY.md` guarantee MUST
+carry a machine-readable `antecedents` list. That list is derived, never independently authored:
+the versioned `kovo.deployment-environment-doors/v1` registry binds each environment fact to the
+exact framework door that consumes it, the door's source anchors, and the affected published or
+normative conditional guarantee IDs. The security-guarantee gate MUST reject an unknown fact or
+guarantee, a missing consumer anchor, a current guarantee absent from the registry, or any
+`SECURITY.md` antecedent list that differs from the door-derived relation. A prose assumption or an
+operator-authored success verdict is not evidence.
+
+`kovo check env [deployment.json]` consumes `kovo.deployment-environment/v1`, probes only facts
+observable from its pinned command-entry environment, and prints every remaining fact as a
+`RETAINED` obligation with the exact guarantees it suspends. A canonical `KOVO_NODE_ORIGIN`
+discharges only the zero-forwarded-hop proxy-chain fact; it does not authenticate the TLS
+terminator. `KOVO_NODE_TRUSTED_PROXY=1` retains the edge-identity/hop obligation, a host preload
+cannot be disproved from an absent `NODE_OPTIONS`, and database writers, shared-cache behavior,
+registrable-domain occupancy, and TLS edge identity remain retained unless a future framework-owned
+probe owns corresponding evidence. Contradicted, retained, or posture-withheld antecedents produce
+a non-zero result. The command reports conditional status; it is not a deployment-integrity proof.
+
+The composition domain has exactly three input shapes. `single-kovo` retains external occupancy
+facts. `shared-registrable-domain` requires at least two unique canonical HTTPS Kovo origins under
+one explicitly declared DNS suffix and contradicts `sole-registrable-domain-occupant`; the command
+therefore withholds the CSRF principal-binding claim because another app can compete for browser
+cookie namespace. This declaration is not a Public Suffix List proof. `foreign-host` is accepted
+only with posture `mounted` and one canonical non-root mount path made of non-empty RFC 3986
+unreserved segments, excluding `.` and `..`. Mounted posture unconditionally
+withholds the host-owned CSRF, request-origin, and browser-state-cache claims; an author cannot turn
+them back on with a flag or asserted verdict. All other composition/posture pairings fail input
+validation.
+
 `kovo explain --attest` is the deployment-review composition surface. It first recomputes the
 reviewed graph's artifact subject and posture digest. If the graph contains a `trustedAssign`
 capability, `--escape-reviews <reviews.json>` is mandatory. The detached file has schema

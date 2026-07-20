@@ -68,7 +68,7 @@ describe('assume-guarantee deployment environment contract', () => {
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain('COMPOSITION shared-registrable-domain');
     expect(result.output).toContain(
-      'CONTRADICTED antecedent=sole-registrable-domain-occupant guarantees=csrf-principal-binding',
+      'CONTRADICTED antecedent=sole-registrable-domain-occupant probe=known-kovo-members:2 guarantees=csrf-principal-binding',
     );
     expect(result.output).toContain(
       'GUARANTEE csrf-principal-binding WITHHELD antecedents=sole-registrable-domain-occupant',
@@ -107,12 +107,8 @@ describe('assume-guarantee deployment environment contract', () => {
     );
     expect(mounted.exitCode).toBe(1);
     expect(mounted.output).toContain('POSTURE mounted');
-    expect(mounted.output).toContain(
-      'GUARANTEE csrf-principal-binding WITHHELD posture=mounted',
-    );
-    expect(mounted.output).toContain(
-      'GUARANTEE request-origin-binding WITHHELD posture=mounted',
-    );
+    expect(mounted.output).toContain('GUARANTEE csrf-principal-binding WITHHELD posture=mounted');
+    expect(mounted.output).toContain('GUARANTEE request-origin-binding WITHHELD posture=mounted');
     expect(mounted.output).not.toContain('posture=mounted proof=');
   });
 
@@ -146,6 +142,21 @@ describe('assume-guarantee deployment environment contract', () => {
         {},
       ).output,
     ).toContain('ERROR INPUT $.composition.members[1].origin is outside example.test');
+
+    expect(
+      checkDeploymentEnvironment(
+        {
+          composition: {
+            hostOrigin: 'https://host.example.test',
+            kind: 'foreign-host',
+            mountPath: '/kovo/../admin',
+          },
+          posture: 'mounted',
+          schema: DEPLOYMENT_ENVIRONMENT_INPUT_SCHEMA,
+        },
+        {},
+      ).output,
+    ).toContain('ERROR INPUT $.composition.mountPath must be one canonical non-root path prefix');
 
     const ambiguous = checkDeploymentEnvironment(
       {
