@@ -1,7 +1,7 @@
 {
   "$comment": "SPEC §6.6 exact-path crypto acquisition ratchet. Existing IDs may retire; a new or widened row requires an explicit reviewed architecture change.",
   "schema": "kovo-crypto-acquisition-doors/v1",
-  "maximumCryptoAcquisitionFiles": 31,
+  "maximumCryptoAcquisitionFiles": 30,
   "entries": [
     {
       "id": "crypto-door-001",
@@ -196,14 +196,6 @@
       "review": "Standalone certificate verification hashes artifact bytes only; it never acquires secret-key or random authority."
     },
     {
-      "id": "crypto-door-025",
-      "file": "packages/create-kovo/templates/src/mutations.ts",
-      "kind": "crypto-acquisition",
-      "operations": ["randomUUID"],
-      "tier": "example-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
-    },
-    {
       "id": "crypto-door-026",
       "file": "packages/server/src/app-document.ts",
       "kind": "crypto-acquisition",
@@ -254,6 +246,14 @@
       ],
       "tier": "server-runtime",
       "review": "Boot-pinned, known-answer-tested primitive owner; only closed purpose-minimal handles leave this module."
+    },
+    {
+      "id": "crypto-door-058",
+      "file": "packages/server/src/derived-dataset.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "server-runtime",
+      "review": "Exact named non-keyed SHA-256 digest over a public scoped-key namespace frame; no entropy, key material, or keyed operation is acquired."
     },
     {
       "id": "crypto-door-032",

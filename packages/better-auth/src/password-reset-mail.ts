@@ -1,6 +1,5 @@
-import { randomBytes as builtinRandomBytes } from 'node:crypto';
-
 import type { AccessDecision } from '@kovojs/server';
+import { createBetterAuthPasswordResetCryptoHandle } from '@kovojs/server/internal/keyring';
 
 import {
   betterAuthCharacterCodeAt,
@@ -29,11 +28,9 @@ import {
 import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 
 const NativeTypeError = globalThis.TypeError;
-const nativeRandomBytes = builtinRandomBytes;
 const maximumPasswordResetEmailLength = 320;
 const maximumPasswordResetTokenLength = 256;
-const passwordResetTokenAlphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const passwordResetTokenLength = 24;
+const passwordResetCrypto = createBetterAuthPasswordResetCryptoHandle();
 
 declare const betterAuthPasswordResetMailDoorBrand: unique symbol;
 declare const betterAuthPasswordResetMailAttemptBrand: unique symbol;
@@ -453,12 +450,7 @@ function assertPasswordResetToken(token: string): void {
 }
 
 function providerShapedDecoyToken(): string {
-  const bytes = nativeRandomBytes(passwordResetTokenLength);
-  let token = '';
-  for (let index = 0; index < passwordResetTokenLength; index += 1) {
-    token += passwordResetTokenAlphabet[bytes[index]! % passwordResetTokenAlphabet.length];
-  }
-  return token;
+  return passwordResetCrypto.mintDecoyToken();
 }
 
 function ownText(source: object, key: PropertyKey, label: string): string {

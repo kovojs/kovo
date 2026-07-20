@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createBetterAuthPasswordResetCryptoHandle,
   createCapabilityCryptoHandle,
   createCsrfCryptoHandle,
   createPrincipalErasureCryptoHandle,
@@ -76,5 +77,17 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
     expect(handle).not.toHaveProperty('secret');
     expect(handle).not.toHaveProperty('derive');
     expect(handle).not.toHaveProperty('seal');
+  });
+
+  it('exposes password-reset entropy only as a fixed-width purpose-minimal decoy token', () => {
+    const handle = createBetterAuthPasswordResetCryptoHandle();
+    const token = handle.mintDecoyToken();
+
+    expect(Object.isFrozen(handle)).toBe(true);
+    expect(Reflect.ownKeys(handle)).toEqual(['mintDecoyToken']);
+    expect(token).toMatch(/^[A-Za-z0-9_-]{24}$/u);
+    expect(handle.mintDecoyToken()).not.toBe(token);
+    expect(handle).not.toHaveProperty('randomBytes');
+    expect(handle).not.toHaveProperty('sign');
   });
 });
