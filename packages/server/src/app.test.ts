@@ -898,47 +898,28 @@ describe('server createApp request shell', () => {
     expect(mutationHandler).not.toHaveBeenCalled();
   });
 
-  it('pins retained opaque CSRF key-ring methods against a forged victim token', async () => {
-    const mutationHandler = vi.fn(() => ({ ok: true }));
-    const originalSignature = Buffer.alloc(32, 0x11).toString('base64url');
-    const attackerSignature = Buffer.alloc(32, 0x22).toString('base64url');
+  it('rejects forged structural CSRF key rings before consulting attacker methods', () => {
+    const sign = vi.fn(() => ({ keyId: 'attacker', signature: 'forged' }));
+    const verify = vi.fn(() => ({ keyId: 'attacker', ok: true }) as const);
     const ring = {
-      currentKeyId: 'original',
-      sign: () => ({ keyId: 'original', signature: originalSignature }),
-      verify: (input: { signature: string }) =>
-        input.signature === originalSignature
-          ? ({ keyId: 'original', ok: true } as const)
-          : ({ ok: false, reason: 'bad-signature' } as const),
+      currentKeyId: 'attacker',
+      sign,
+      verify,
     };
-    const csrf = { secret: ring, sessionId: () => 'victim' };
-    const handler = createRequestHandler(
+
+    expect(() =>
       createApp({
-        csrf,
+        csrf: { secret: ring as never, sessionId: () => 'victim' },
         mutations: [
           mutation('account/keyring-delete', {
             input: s.object({}),
-            handler: mutationHandler,
+            handler: () => ({ ok: true }),
           }),
         ],
       }),
-    );
-
-    ring.currentKeyId = 'attacker';
-    ring.sign = () => ({ keyId: 'attacker', signature: attackerSignature });
-    ring.verify = () => ({ keyId: 'attacker', ok: true }) as const;
-    const forged = csrfToken({}, csrf, { audience: 'account/keyring-delete' });
-    const form = new FormData();
-    form.set('kovo-csrf', forged);
-    const response = await handler(
-      new Request('https://example.test/_m/account/keyring-delete', {
-        body: form,
-        headers: { Origin: 'https://example.test' },
-        method: 'POST',
-      }),
-    );
-
-    expect(response.status).toBe(422);
-    expect(mutationHandler).not.toHaveBeenCalled();
+    ).toThrow(/only an exact framework-minted token is accepted/u);
+    expect(sign).not.toHaveBeenCalled();
+    expect(verify).not.toHaveBeenCalled();
   });
 
   it('pins a top-level custom mutation schema parse identity after createApp', async () => {
