@@ -2099,6 +2099,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'dependency-package-root-containment',
+        file: 'packages/cli/src/dependency-capability-loader.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-package-root-containment',
+          'rejects relative and symlink escapes from an admitted third-party package root',
+          "['relative', 'symlink']",
+          "escapeKind === 'symlink'",
+          'import escapes its exact package root',
+        ],
+      },
+      {
         id: 'dependency-inline-html-module-closure',
         file: 'packages/cli/src/dependency-capability-loader.test.ts',
         snippets: [

@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 266,
+    "historicalWitnesses": 267,
     "productions": 12
   },
   "productions": [
@@ -980,6 +980,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness attributes a Rollup-externalized raw dependency edge to the reviewed third-party package that imported it even when resolveId was skipped."
+    },
+    {
+      "anchor": "dependency-package-root-containment",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness keeps every relative, absolute, or symlinked child of a reviewed third-party entry inside the exact installed package root."
     },
     {
       "anchor": "dependency-inline-html-module-closure",
