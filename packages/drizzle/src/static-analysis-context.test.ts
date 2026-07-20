@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   analyzeSqlSafetyFromProject,
   diagnosticsForQueryFacts,
@@ -92,6 +93,25 @@ describe('@kovojs/drizzle static analysis context', () => {
       toctouFacts: extractToctouFromProject(project),
       touchGraph: extractTouchGraphFromProject(project),
     });
+  });
+
+  it('mints analyzer diagnostics through the consumer registry capability', () => {
+    const transferred: ReturnType<typeof createRegisteredDiagnostic>[] = [];
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      ...fixtureProject(),
+      diagnosticRegistrar(code, message, severity, site) {
+        const diagnostic = createRegisteredDiagnostic(code, { site }, { message });
+        expect(diagnostic.severity).toBe(severity);
+        transferred.push(diagnostic);
+        return diagnostic;
+      },
+    });
+
+    expect(transferred.length).toBeGreaterThan(0);
+    expect(facts.sqlSafetyDiagnostics).toHaveLength(transferred.length);
+    for (let index = 0; index < transferred.length; index += 1) {
+      expect(facts.sqlSafetyDiagnostics[index]).toBe(transferred[index]);
+    }
   });
 
   it('derives canonical runtime table security from source instead of runtime callbacks', () => {

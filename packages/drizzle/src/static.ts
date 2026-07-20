@@ -4174,6 +4174,26 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   touchGraph: TouchGraph;
 }
 
+/**
+ * Constructor capability supplied by the build consumer when package bundling gives the Drizzle
+ * analyzer and the consumer distinct module-private diagnostic registries. The analyzer validates
+ * its own diagnostic before transferring only primitive registry fields; the consumer then mints
+ * the exact object it will trust (SPEC §2/§11).
+ *
+ * @internal
+ */
+export type StaticBuildDiagnosticRegistrar = (
+  code: TouchGraphDiagnostic['code'],
+  message: string,
+  severity: TouchGraphDiagnostic['severity'],
+  site: string,
+) => TouchGraphDiagnostic;
+
+/** @internal */
+export interface StaticBuildAnalysisProjectOptions extends TouchGraphProjectOptions {
+  diagnosticRegistrar?: StaticBuildDiagnosticRegistrar;
+}
+
 type AuthzCensusClassification = 'authzPolicy' | 'owned' | 'ownedVia' | 'public' | 'reference';
 
 /** @internal Compiler-owned runtime security facts for one physical Drizzle column. */
@@ -5382,20 +5402,38 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
  * @internal
  */
 /** @internal */ export function extractStaticBuildAnalysisFactsFromProject(
-  options: TouchGraphProjectOptions,
+  options: StaticBuildAnalysisProjectOptions,
 ): StaticBuildAnalysisFacts {
   // SPEC §11.1: share one syntactic parse cache across every project-mode pass in this
   // build-facing run so the same ~14/7 app files are parsed once, not re-parsed per pass.
   return runWithSourceFileParseCache(() => {
     const extraction = createProjectExtraction(options);
     try {
-      return extractStaticBuildAnalysisFactsFromAnalysisContext(
+      const facts = extractStaticBuildAnalysisFactsFromAnalysisContext(
         createDrizzleAnalysisContext(extraction),
       );
+      return options.diagnosticRegistrar === undefined
+        ? facts
+        : transferStaticBuildDiagnostics(facts, options.diagnosticRegistrar);
     } finally {
       extraction.dispose();
     }
   });
+}
+
+function transferStaticBuildDiagnostics(
+  facts: StaticBuildAnalysisFacts,
+  registrar: StaticBuildDiagnosticRegistrar,
+): StaticBuildAnalysisFacts {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (let index = 0; index < facts.sqlSafetyDiagnostics.length; index += 1) {
+    const diagnostic = facts.sqlSafetyDiagnostics[index]!;
+    assertRegisteredDiagnostic(diagnostic, `Drizzle transferred diagnostics[${index}]`);
+    diagnostics.push(
+      registrar(diagnostic.code, diagnostic.message, diagnostic.severity, diagnostic.site),
+    );
+  }
+  return { ...facts, sqlSafetyDiagnostics: diagnostics };
 }
 
 /** @internal */ export function extractStaticBuildAnalysisFactsFromAnalysisContext(

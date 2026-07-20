@@ -601,7 +601,10 @@ async function runStaticBuildAnalysisFacts(
       );
     }
     const facts = snapshotStaticBuildAnalysisFacts(
-      extractStaticBuildAnalysisFactsFromProject({ files }),
+      extractStaticBuildAnalysisFactsFromProject({
+        diagnosticRegistrar: registerTransferredSqlSafetyDiagnostic,
+        files,
+      }),
       { diagnosticCarrier: 'registered' },
     );
     if (facts === undefined) {
@@ -613,6 +616,22 @@ async function runStaticBuildAnalysisFacts(
   } catch (error) {
     throw dataPlaneStaticAnalysisError(error, files);
   }
+}
+
+function registerTransferredSqlSafetyDiagnostic(
+  code: DiagnosticCode,
+  message: string,
+  severity: DiagnosticSeverity,
+  site: string,
+): RegisteredDiagnostic<DiagnosticCode> & { site: string } {
+  if (!isDiagnosticCode(code) || typeof message !== 'string' || typeof site !== 'string') {
+    throw new TypeError('Transferred SQL-safety diagnostic has malformed authority fields.');
+  }
+  const diagnostic = createRegisteredDiagnostic(code, { site }, { message });
+  if (severity !== diagnostic.severity) {
+    throw new TypeError('Transferred SQL-safety diagnostic severity does not match the registry.');
+  }
+  return diagnostic;
 }
 
 function dataPlaneStaticAnalysisError(
@@ -1400,7 +1419,7 @@ function registeredSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike
     typeof site === 'string' &&
     (severity === 'error' || severity === 'warn' || severity === 'lint' || severity === 'notice')
   ) {
-    return { code, message, severity, site };
+    return value as unknown as TouchGraphDiagnosticLike;
   }
   throw new TypeError('Static SQL-safety diagnostic has malformed authority fields.');
 }
