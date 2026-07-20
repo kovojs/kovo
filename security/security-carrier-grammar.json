@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 263,
+    "historicalWitnesses": 265,
     "productions": 12
   },
   "productions": [
@@ -980,6 +980,18 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness rejects a Vite inline HTML module proxy because its JavaScript bytes are absent from the immutable approved-source snapshot."
+    },
+    {
+      "anchor": "dependency-browser-target-exactness",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness binds a package root to only the browser mapping that actually applies to its selected target."
+    },
+    {
+      "anchor": "dependency-manifest-graph-fingerprint",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness makes a reviewed package summary stale when the installed package dependency graph changes."
     },
     {
       "anchor": "capability-mint-symbol-identity-census",

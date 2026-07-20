@@ -2098,6 +2098,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'dependency-browser-target-exactness',
+        file: 'packages/cli/src/capability-closure-packages.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-browser-target-exactness',
+          'does not admit an unrelated browser-map value as the root package target',
+          "browser: { './unrelated.js': './evil.js' }",
+          "join(packageRoot, 'index.js')",
+          "join(packageRoot, 'evil.js')",
+        ],
+      },
+      {
+        id: 'dependency-manifest-graph-fingerprint',
+        file: 'packages/cli/src/capability-closure-packages.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-manifest-graph-fingerprint',
+          'fingerprints security-relevant manifest fields canonically',
+          "dependencies: { helper: '2.0.0' }",
+          'dependencyGraphChanged',
+          'expect(dependencyGraphChanged).not.toBe(left)',
+        ],
+      },
+      {
         id: 'capability-mint-symbol-identity-census',
         file: 'scripts/capability-surface-census-gate.test.mjs',
         snippets: [

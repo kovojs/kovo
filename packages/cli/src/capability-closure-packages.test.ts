@@ -18,6 +18,7 @@ import { analyzeCapabilityClosure } from '@kovojs/compiler/internal';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  capabilityPackageResolvedTargetMatches,
   capabilityManifestFingerprint,
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
@@ -428,6 +429,75 @@ describe('capability package resolution', () => {
     ]);
   });
 
+  it('uses Node pattern precedence and substitutes wildcard targets exactly', () => {
+    const { importer, root } = fixtureRoot();
+    const packageRoot = join(root, 'node_modules/safe-parser');
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({
+        exports: {
+          './foo/*baz': './safe/*.js',
+          './foo/bar*': './evil/*.js',
+        },
+        name: 'safe-parser',
+        type: 'module',
+        version: '1.2.3',
+      }),
+    );
+    mkdirSync(join(packageRoot, 'safe'), { recursive: true });
+    mkdirSync(join(packageRoot, 'evil'), { recursive: true });
+    writeFileSync(join(packageRoot, 'safe', 'bar.js'), 'export const value = "safe";\n');
+    writeFileSync(join(packageRoot, 'evil', 'baz.js'), 'export const value = "evil";\n');
+
+    const specifier = 'safe-parser/foo/barbaz';
+    const [fact] = resolveCapabilityPackages([{ importedNames: ['value'], specifier }], importer);
+    expect(fact?.exportStatus).toBe('resolved');
+    expect(
+      capabilityPackageResolvedTargetMatches(
+        specifier,
+        importer,
+        join(packageRoot, 'evil', 'baz.js'),
+      ),
+    ).toBe(true);
+    expect(
+      capabilityPackageResolvedTargetMatches(
+        specifier,
+        importer,
+        join(packageRoot, 'safe', 'bar.js'),
+      ),
+    ).toBe(false);
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-target-exactness
+  it('does not admit an unrelated browser-map value as the root package target', () => {
+    const { importer, root } = fixtureRoot();
+    const packageRoot = join(root, 'node_modules/safe-parser');
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({
+        browser: { './unrelated.js': './evil.js' },
+        main: './index.js',
+        name: 'safe-parser',
+        type: 'module',
+        version: '1.2.3',
+      }),
+    );
+    writeFileSync(join(packageRoot, 'index.js'), 'export const value = "safe";\n');
+    writeFileSync(join(packageRoot, 'evil.js'), 'export const value = "evil";\n');
+
+    expect(
+      capabilityPackageResolvedTargetMatches(
+        'safe-parser',
+        importer,
+        join(packageRoot, 'index.js'),
+      ),
+    ).toBe(true);
+    expect(
+      capabilityPackageResolvedTargetMatches('safe-parser', importer, join(packageRoot, 'evil.js')),
+    ).toBe(false);
+  });
+
+  // @kovo-security-certifies C13 dependency-manifest-graph-fingerprint
   it('fingerprints security-relevant manifest fields canonically', () => {
     const left = capabilityManifestFingerprint({
       exports: { '.': { default: './index.js', import: './index.js' } },
@@ -437,15 +507,35 @@ describe('capability package resolution', () => {
     const reordered = capabilityManifestFingerprint({
       version: '1.0.0',
       name: 'pkg',
+      exports: { '.': { default: './index.js', import: './index.js' } },
+    });
+    const reorderedConditions = capabilityManifestFingerprint({
       exports: { '.': { import: './index.js', default: './index.js' } },
+      name: 'pkg',
+      version: '1.0.0',
     });
     const changed = capabilityManifestFingerprint({
       exports: { '.': { default: './other.js', import: './index.js' } },
       name: 'pkg',
       version: '1.0.0',
     });
+    const browserChanged = capabilityManifestFingerprint({
+      browser: './browser.js',
+      exports: { '.': { default: './index.js', import: './index.js' } },
+      name: 'pkg',
+      version: '1.0.0',
+    });
+    const dependencyGraphChanged = capabilityManifestFingerprint({
+      dependencies: { helper: '2.0.0' },
+      exports: { '.': { default: './index.js', import: './index.js' } },
+      name: 'pkg',
+      version: '1.0.0',
+    });
     expect(left).toBe(reordered);
+    expect(reorderedConditions).not.toBe(left);
     expect(changed).not.toBe(left);
+    expect(browserChanged).not.toBe(left);
+    expect(dependencyGraphChanged).not.toBe(left);
   });
 
   it('loads an exact summary ledger and fails closed on unknown or malformed authority fields', () => {
