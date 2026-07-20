@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 257,
+    "historicalWitnesses": 258,
     "productions": 12
   },
   "productions": [
@@ -296,6 +296,12 @@
       "corpus": "egress-ip",
       "production": "platform-differential",
       "reason": "This witness compares independent runtime or platform implementations for one decision."
+    },
+    {
+      "anchor": "password-reset-purpose-closed-mail-egress",
+      "corpus": "better-auth-credentials",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned rejection, reconstruction, or boxing floor."
     },
     {
       "anchor": "credential-runtime-gate-identity-and-replay",
