@@ -58,7 +58,7 @@ import {
   snapshotLiveTargetRenderers,
 } from './app-snapshot.js';
 import { assertLiveTargetAttestationAuthority } from './live-target-app-identity.js';
-import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
+import type { TaskHandle, TaskSchedulingRequest } from './task.js';
 import { durableTaskScheduleInput } from './task-runner.js';
 import { MutationReplayConflictError } from './replay.js';
 import {
@@ -901,11 +901,8 @@ function requestWithTaskScheduling<Request>(
       );
     }
 
-    const parsedArgs = (await parseSchemaAsync(definition.input, args)) as TaskInput<
-      typeof definition
-    >;
-    const enqueueInput = durableTaskScheduleInput({
-      args: parsedArgs,
+    const enqueueInput = await durableTaskScheduleInput({
+      args,
       definition,
       options,
       registeredTasks: scheduler.registeredTasks,

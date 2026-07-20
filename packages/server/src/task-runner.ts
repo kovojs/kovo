@@ -12,6 +12,7 @@ import {
   type NonRequestPrincipalPosture,
   type PrincipalAccessOperation,
 } from './auth-principal.js';
+import { parseSchemaAsync } from './schema.js';
 import type {
   TaskDefinition,
   TaskHandle,
@@ -487,20 +488,21 @@ export class DurableTaskRunner {
         throw missingTaskPrincipalPostureError(job, 'read');
       },
       schedule: async (definition, args, options?: TaskScheduleOptions): Promise<TaskHandle> => {
-        // SPEC §9.6: task-body scheduling has one chokepoint. Registry checks, lineage,
+        // SPEC §9.6: task-body scheduling has one chokepoint. Registry/schema checks, lineage,
         // maxGenerations, and the self-reschedule delay floor are computed here before any queue
-        // write, so runtime hooks cannot replace the backstopped ctx.schedule contract.
+        // write, so runtime hooks cannot replace the backstopped ctx.schedule contract. Validation
+        // may yield, so re-check the lease immediately before persistence too.
         assertActiveTaskLease(job, signal);
-        return this.store.enqueue(
-          durableTaskScheduleInput({
-            args,
-            definition,
-            options,
-            parent: job,
-            registeredTasks: this.tasks,
-            selfRescheduleDelayFloorMs: this.selfRescheduleDelayFloorMs,
-          }),
-        );
+        const enqueueInput = await durableTaskScheduleInput({
+          args,
+          definition,
+          options,
+          parent: job,
+          registeredTasks: this.tasks,
+          selfRescheduleDelayFloorMs: this.selfRescheduleDelayFloorMs,
+        });
+        assertActiveTaskLease(job, signal);
+        return this.store.enqueue(enqueueInput);
       },
     };
     // The type is readonly for authors, but the runtime invariant must survive JavaScript and
@@ -834,7 +836,7 @@ function missingTaskPrincipalPostureError(
   );
 }
 
-export function durableTaskScheduleInput(input: {
+export async function durableTaskScheduleInput(input: {
   readonly args: unknown;
   readonly definition: TaskDefinition<string, any, any>;
   readonly options: TaskScheduleOptions | undefined;
@@ -843,7 +845,7 @@ export function durableTaskScheduleInput(input: {
     | ReadonlyMap<string, TaskDefinition<string, any, any>>
     | ReadonlyArray<TaskDefinition<string, any, any>>;
   readonly selfRescheduleDelayFloorMs?: number | undefined;
-}): DurableTaskEnqueueInput {
+}): Promise<DurableTaskEnqueueInput> {
   const scheduleOptions = snapshotTaskScheduleOptions(input.options);
   let registered = false;
   if (taskIsArray(input.registeredTasks)) {
@@ -870,11 +872,15 @@ export function durableTaskScheduleInput(input: {
   }
   if (!registered) throw new UnknownDurableTaskError(input.definition.key);
 
+  // SPEC §9.6: every schedule boundary validates before persistence. Keep this in the shared
+  // request/task admission helper so keyed debounce can never replace an already-valid row with
+  // raw follow-on args, and persist the schema's canonical parsed output rather than its input.
+  const parsedArgs = await parseSchemaAsync(input.definition.input, input.args);
   const runAt = scheduleRunAt(scheduleOptions);
   const parent = input.parent;
   return {
     task: input.definition.key,
-    args: input.args,
+    args: parsedArgs,
     runAt:
       parent === undefined
         ? runAt
