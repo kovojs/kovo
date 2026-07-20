@@ -23,7 +23,6 @@ export async function runWithUnavailableBuildAppEnvironment<Value>(
   // returning Vite's foreign thenable directly can close the lifecycle before evaluation settles.
   return await withKovoBuildContext(
     { appEnvironment: 'unavailable', graphDerivation: true },
-    async () =>
-      await runWithGeneratedLiveTargetRegistryInCurrentContext(async () => await load()),
+    async () => await runWithGeneratedLiveTargetRegistryInCurrentContext(async () => await load()),
   );
 }

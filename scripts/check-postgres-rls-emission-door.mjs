@@ -405,14 +405,7 @@ function isReviewedRuntimeEmitterReference(node, sourceFile, fileName, rootDir) 
   return ts.isCallExpression(node.parent) && node.parent.expression === node;
 }
 
-function collectRawPolicyRenderers(
-  sourceFile,
-  checker,
-  fileName,
-  createRows,
-  dropRows,
-  findings,
-) {
+function collectRawPolicyRenderers(sourceFile, checker, fileName, createRows, dropRows, findings) {
   walk(sourceFile, (node) => {
     if (isStringToken(node)) {
       const policyMutation = postgresPolicyMutationKeyword(node.text);
@@ -438,14 +431,14 @@ function collectRawPolicyRenderers(
     }
     if (!isStaticStringComposition(node)) return;
     const value = evaluateStaticString(node, checker);
-    const policyMutation =
-      value === undefined ? undefined : postgresPolicyMutationKeyword(value);
+    const policyMutation = value === undefined ? undefined : postgresPolicyMutationKeyword(value);
     if (policyMutation === undefined) return;
     if (containsDirectPolicyMutationLiteral(node)) return;
     const parentValue = isStaticStringComposition(node.parent)
       ? evaluateStaticString(node.parent, checker)
       : undefined;
-    if (parentValue !== undefined && postgresPolicyMutationKeyword(parentValue) !== undefined) return;
+    if (parentValue !== undefined && postgresPolicyMutationKeyword(parentValue) !== undefined)
+      return;
     findings.push(
       `${fileName}:${lineOf(sourceFile, node)}: statically concatenated ${policyMutation} POLICY SQL is outside the sole reviewed renderer`,
     );
@@ -569,10 +562,7 @@ function collectEmitterModuleEscapes(sourceFile, checker, fileName, findings, ro
   });
 
   walk(sourceFile, (node) => {
-    if (
-      !ts.isStringLiteral(node) ||
-      !moduleCanResolveToEmitter(fileName, node.text, rootDir)
-    ) {
+    if (!ts.isStringLiteral(node) || !moduleCanResolveToEmitter(fileName, node.text, rootDir)) {
       return;
     }
     const parent = node.parent;
@@ -617,9 +607,7 @@ function moduleSpecifierPathInterpretations(fileName, specifier) {
   }
   const resolved = [];
   for (const spelling of spellings) {
-    const candidate = path.posix.normalize(
-      path.posix.join(path.posix.dirname(fileName), spelling),
-    );
+    const candidate = path.posix.normalize(path.posix.join(path.posix.dirname(fileName), spelling));
     if (!resolved.includes(candidate)) resolved.push(candidate);
   }
   return resolved;
@@ -790,7 +778,8 @@ function isStringToken(node) {
 function containsDirectPolicyMutationLiteral(node) {
   let found = false;
   walk(node, (child) => {
-    if (isStringToken(child) && postgresPolicyMutationKeyword(child.text) !== undefined) found = true;
+    if (isStringToken(child) && postgresPolicyMutationKeyword(child.text) !== undefined)
+      found = true;
   });
   return found;
 }

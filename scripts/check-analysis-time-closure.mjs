@@ -942,7 +942,7 @@ function dependencyName(specifier) {
 }
 
 function scriptKind(file) {
-  if (/\.tsx$/u.test(file)) return ts.ScriptKind.TSX;
+  if (file.endsWith('.tsx')) return ts.ScriptKind.TSX;
   if (/\.(?:jsx|js|mjs|cjs)$/u.test(file)) return ts.ScriptKind.JS;
   return ts.ScriptKind.TS;
 }

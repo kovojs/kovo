@@ -1722,7 +1722,6 @@ async function runCompilePackageCssCommand(
   if (!result.css) throw new Error(`no CSS extracted for ${options.packageName}`);
 
   const lines = await compileArtifactLines(options, result.css, 'package-css');
-  assertCompileResultDiagnostics(result.diagnostics, 'CLI package CSS diagnostics');
   for (const diagnostic of result.diagnostics) {
     lines.splice(
       -1,

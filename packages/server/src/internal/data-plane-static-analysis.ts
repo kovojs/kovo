@@ -1398,10 +1398,7 @@ function registeredSqlSafetyDiagnostic(value: unknown): TouchGraphDiagnosticLike
     isDiagnosticCode(code) &&
     typeof message === 'string' &&
     typeof site === 'string' &&
-    (severity === 'error' ||
-      severity === 'warn' ||
-      severity === 'lint' ||
-      severity === 'notice')
+    (severity === 'error' || severity === 'warn' || severity === 'lint' || severity === 'notice')
   ) {
     return { code, message, severity, site };
   }

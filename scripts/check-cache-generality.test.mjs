@@ -75,9 +75,7 @@ describe('check:cache-generality', () => {
   it('rejects Vary tokens not derived from named request-header axes', () => {
     const poisoned = structuredClone(manifest);
     poisoned.entries[0].vary = ['accept-language', 'cookie', 'url-search'];
-    expect(
-      validateCacheGenerality({ authoredIntents: [], manifest: poisoned }).findings,
-    ).toEqual(
+    expect(validateCacheGenerality({ authoredIntents: [], manifest: poisoned }).findings).toEqual(
       expect.arrayContaining([
         'query:catalog: Vary token cookie is not a compiler-derived request-header axis',
         'query:catalog: Vary token url-search is not a compiler-derived request-header axis',

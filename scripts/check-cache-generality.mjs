@@ -38,7 +38,7 @@ const productionRequirements = [
     file: 'packages/server/src/query.ts',
     snippets: [
       'registeredCacheInfluenceForRoot(`query:${definition.key}`)',
-      'manifest.verdict === \'shared-cache-closed\'',
+      "manifest.verdict === 'shared-cache-closed'",
       'runtimeCacheInfluenceClosesPublic(rawRequest, lifecycleRequest)',
       "queryRequestHeader(rawRequest, 'cookie')",
       "queryRequestHeader(rawRequest, 'authorization')",
@@ -55,10 +55,7 @@ const productionRequirements = [
   },
   {
     file: 'packages/server/src/internal/runtime-registry-wire.ts',
-    snippets: [
-      'snapshotCacheInfluenceManifest',
-      'registerGeneratedCacheInfluenceManifest',
-    ],
+    snippets: ['snapshotCacheInfluenceManifest', 'registerGeneratedCacheInfluenceManifest'],
   },
   {
     file: 'packages/cli/src/commands/build-export.ts',

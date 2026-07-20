@@ -13,10 +13,7 @@ import {
   securityStreamEnqueue,
   securityStreamError,
 } from './response-security-intrinsics.js';
-import {
-  frameworkDocumentResponseBuildToken,
-  markFrameworkDocumentResponse,
-} from './response.js';
+import { frameworkDocumentResponseBuildToken, markFrameworkDocumentResponse } from './response.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,

@@ -448,9 +448,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
           '  await db.update(accounts).set({ role: trustedAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
         ),
       ),
-    ).toEqual([
-      expect.objectContaining({ column: 'role', provenance: 'input', via: 'set' }),
-    ]);
+    ).toEqual([expect.objectContaining({ column: 'role', provenance: 'input', via: 'set' })]);
 
     expect(
       facts(

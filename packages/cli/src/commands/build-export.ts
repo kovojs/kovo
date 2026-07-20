@@ -260,7 +260,7 @@ function dependencyCapabilityCompleteBundleNoExternal(): true {
 }
 
 function dependencyCapabilityCompleteSsrOptions(): {
-  readonly external: readonly string[];
+  readonly external: string[];
   readonly noExternal: true;
 } {
   // Native/CommonJS framework dependencies cannot all execute correctly as Vite-inlined ESM

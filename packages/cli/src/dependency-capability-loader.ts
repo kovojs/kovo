@@ -318,6 +318,11 @@ export function dependencyCapabilityLoaderVitePlugin(
         );
       }
       if (reviewedPackage !== undefined && !isBareDependencySpecifier(specifier)) {
+        if (importerPath === undefined) {
+          throw dependencyCapabilityError(
+            `reviewed package ${reviewedPackage.packageName} child edge has no canonical importer path`,
+          );
+        }
         if (
           configuredAliases.some(
             (alias) => aliasReplacementFor(specifier, alias.find, alias.replacement) !== undefined,
@@ -1018,11 +1023,17 @@ function htmlElements(
     const node = pending.pop()!;
     if ('tagName' in node) {
       elements.push(node);
-      if (node.tagName === 'template') pending.push(node.content);
+      if (isHtmlTemplateNode(node)) pending.push(node.content);
     }
     if ('childNodes' in node) pending.push(...node.childNodes);
   }
   return elements;
+}
+
+function isHtmlTemplateNode(
+  node: DefaultTreeAdapterTypes.Node,
+): node is DefaultTreeAdapterTypes.Template {
+  return 'tagName' in node && node.tagName === 'template' && 'content' in node;
 }
 
 function htmlAttribute(element: DefaultTreeAdapterTypes.Element, name: string): string | undefined {
@@ -1246,13 +1257,13 @@ function parsedModuleEdges(ast: unknown): ParsedModuleEdge[] {
       type === 'ExportNamedDeclaration'
     ) {
       if (record.source !== null && record.source !== undefined) {
-        edges.push({ specifier: literalAstString(record.source) });
+        edges.push(parsedModuleEdge(record.source));
       }
     } else if (type === 'ImportExpression') {
-      edges.push({ specifier: literalAstString(record.source) });
+      edges.push(parsedModuleEdge(record.source));
     } else if (type === 'CallExpression' && isModuleLoaderCall(record.callee)) {
       const args = Array.isArray(record.arguments) ? record.arguments : [];
-      edges.push({ specifier: args.length === 1 ? literalAstString(args[0]) : undefined });
+      edges.push(parsedModuleEdge(args.length === 1 ? args[0] : undefined));
     }
 
     for (const [key, child] of Object.entries(record)) {
@@ -1270,6 +1281,11 @@ function parsedModuleEdges(ast: unknown): ParsedModuleEdge[] {
     }
   }
   return edges;
+}
+
+function parsedModuleEdge(value: unknown): ParsedModuleEdge {
+  const specifier = literalAstString(value);
+  return specifier === undefined ? {} : { specifier };
 }
 
 function aliasesCommonJsLoaderAuthority(ast: unknown): boolean {

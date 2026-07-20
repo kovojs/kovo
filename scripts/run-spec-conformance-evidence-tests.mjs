@@ -50,24 +50,16 @@ for (const row of Object.values(evidence.diagnostics ?? {})) {
   }
 }
 
-const files = [
-  ...mandatoryExecutions.keys(),
-  ...witnesses.keys(),
-].filter((file, index, values) => values.indexOf(file) === index);
+const files = [...mandatoryExecutions.keys(), ...witnesses.keys()].filter(
+  (file, index, values) => values.indexOf(file) === index,
+);
 const outputDirectory = mkdtempSync(path.join(tmpdir(), 'kovo-spec-conformance-'));
 const outputFile = path.join(outputDirectory, 'vitest-report.json');
 
 try {
   const child = spawnSync(
     'pnpm',
-    [
-      'exec',
-      'vitest',
-      '--run',
-      ...files,
-      '--reporter=json',
-      `--outputFile=${outputFile}`,
-    ],
+    ['exec', 'vitest', '--run', ...files, '--reporter=json', `--outputFile=${outputFile}`],
     {
       cwd: repoRoot,
       encoding: 'utf8',
@@ -120,9 +112,10 @@ try {
   }
   if (findings.length > 0) {
     throw new Error(
-      ['spec-conformance-evidence-tests/v1 FAIL', ...findings.map((finding) => `- ${finding}`)].join(
-        '\n',
-      ),
+      [
+        'spec-conformance-evidence-tests/v1 FAIL',
+        ...findings.map((finding) => `- ${finding}`),
+      ].join('\n'),
     );
   }
   process.stdout.write(

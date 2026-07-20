@@ -760,7 +760,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'prints derived resources, decided transitions, and named budgeted escapes',
           'makes a top transition fail kovo check with KV414',
           'fail-closed-top',
-          "options: { grants: true }",
+          'options: { grants: true }',
         ],
       },
       {

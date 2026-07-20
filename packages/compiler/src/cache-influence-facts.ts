@@ -43,7 +43,11 @@ function appendHandlerInputs(
     if (handler.cacheInfluence === undefined) continue;
     const input = inputWithSemanticInfluences(handler.cacheInfluence, handler);
     const previous = compilerMapGet(target, input.root);
-    compilerMapSet(target, input.root, previous === undefined ? input : mergeInputs(previous, input));
+    compilerMapSet(
+      target,
+      input.root,
+      previous === undefined ? input : mergeInputs(previous, input),
+    );
   }
 }
 
@@ -112,9 +116,7 @@ interface MutableInfluences {
   urlSearch?: true;
 }
 
-function mutableInfluences(
-  source: CacheInfluenceDerivationInput['influences'],
-): MutableInfluences {
+function mutableInfluences(source: CacheInfluenceDerivationInput['influences']): MutableInfluences {
   return {
     ...(source.authorization === true ? { authorization: true as const } : {}),
     ...(source.cookie === true ? { cookie: true as const } : {}),
@@ -124,7 +126,10 @@ function mutableInfluences(
     ),
     ...(source.frameworkState === true ? { frameworkState: true as const } : {}),
     ...(source.principal === true ? { principal: true as const } : {}),
-    requestHeaders: compilerSnapshotDenseArray(source.requestHeaders ?? [], 'Cache request headers'),
+    requestHeaders: compilerSnapshotDenseArray(
+      source.requestHeaders ?? [],
+      'Cache request headers',
+    ),
     ...(source.secret === true ? { secret: true as const } : {}),
     ...(source.session === true ? { session: true as const } : {}),
     unclassified: compilerSnapshotDenseArray(source.unclassified ?? [], 'Cache unclassified facts'),
@@ -202,7 +207,8 @@ function appendUniqueExternalVersions(
 }
 
 function appendUniqueValues(target: string[], values: readonly string[], sorted: boolean): void {
-  for (let index = 0; index < values.length; index += 1) appendUnique(target, values[index]!, sorted);
+  for (let index = 0; index < values.length; index += 1)
+    appendUnique(target, values[index]!, sorted);
 }
 
 function appendUnique(target: string[], value: string, sorted = false): void {

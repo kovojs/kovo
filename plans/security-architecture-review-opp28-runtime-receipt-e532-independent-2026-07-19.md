@@ -95,28 +95,28 @@ update the description, and enroll or consolidate the case with
 
 ## Retested counterexample matrix
 
-| Case | Exact-tip result |
-| --- | --- |
-| No accepted static guard | `scope: unknown`; KV414 |
-| Mismatched accepted principal | `scope: unknown`; KV414 |
-| Opaque sibling before / after summarized leaf | both close to `unknown` |
-| Prime then current / current then poison | static verdict closes |
-| Two independently body-proved same-key boolean helpers | bounded positive: `scope: session` |
-| Two-hop helper or accepted-guard aliases | close to `unknown` |
-| `serverValue(context)` whole-carrier laundering | closes |
-| Final read/write consumer with absent or mismatched accepted key | all close to `unknown` |
-| Schema Proxy `get` drift, query / mutation | detached; both consumers receive `owned`; zero `get` reads |
-| Schema accessor, query / mutation | rejected before guard/consumer; zero getter reads |
-| Schema descriptor drift, query / mutation | rejected before guard/consumer |
-| Caller-retained raw args across `await` | detached on both paths |
-| Private `guard` / provider `session` / `tenant` source drift | all remain pinned on query and mutation |
-| Accessor in each private root | rejected with zero getter reads |
-| Async provider and async custom-schema ordering | provider completes first; completed values are pinned |
-| `ScopedKey` and `Secret` compatibility | exact witnessed identity preserved on query and mutation |
-| File compatibility | metadata and bytes detached; source mutation is invisible |
-| Date direct mutator compatibility | reads work and `receipt.setTime(...)` throws |
-| Date borrowed native mutator | **remote-selected drift reaches query and mutation consumers** |
-| Same-process intrinsic poisoning | not tested; out of scope |
+| Case                                                             | Exact-tip result                                               |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| No accepted static guard                                         | `scope: unknown`; KV414                                        |
+| Mismatched accepted principal                                    | `scope: unknown`; KV414                                        |
+| Opaque sibling before / after summarized leaf                    | both close to `unknown`                                        |
+| Prime then current / current then poison                         | static verdict closes                                          |
+| Two independently body-proved same-key boolean helpers           | bounded positive: `scope: session`                             |
+| Two-hop helper or accepted-guard aliases                         | close to `unknown`                                             |
+| `serverValue(context)` whole-carrier laundering                  | closes                                                         |
+| Final read/write consumer with absent or mismatched accepted key | all close to `unknown`                                         |
+| Schema Proxy `get` drift, query / mutation                       | detached; both consumers receive `owned`; zero `get` reads     |
+| Schema accessor, query / mutation                                | rejected before guard/consumer; zero getter reads              |
+| Schema descriptor drift, query / mutation                        | rejected before guard/consumer                                 |
+| Caller-retained raw args across `await`                          | detached on both paths                                         |
+| Private `guard` / provider `session` / `tenant` source drift     | all remain pinned on query and mutation                        |
+| Accessor in each private root                                    | rejected with zero getter reads                                |
+| Async provider and async custom-schema ordering                  | provider completes first; completed values are pinned          |
+| `ScopedKey` and `Secret` compatibility                           | exact witnessed identity preserved on query and mutation       |
+| File compatibility                                               | metadata and bytes detached; source mutation is invisible      |
+| Date direct mutator compatibility                                | reads work and `receipt.setTime(...)` throws                   |
+| Date borrowed native mutator                                     | **remote-selected drift reaches query and mutation consumers** |
+| Same-process intrinsic poisoning                                 | not tested; out of scope                                       |
 
 The accepted static subset remains deliberately narrow. Arbitrary public `guards.owns` callbacks
 still claim no SQL/static correspondence, and a string-valued owner extractor is not itself an

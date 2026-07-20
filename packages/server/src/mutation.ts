@@ -590,11 +590,19 @@ export async function runAgentToolMutation<
   );
   if (guardFailure) return mutationGuardFailureToResult(guardFailure);
 
+  const principalEpochAdmission = await mutationPrincipalEpochAdmission(
+    options.principalEpochStore,
+    lifecycleRequest,
+    undefined,
+  );
+
   return runWithRequestInputProvenance(input, (trackedInput) =>
     runMutationWithTrackedInput(
       definition,
       trackedInput as InferSchema<InputSchema>,
       lifecycleRequest,
+      pinnedRequest,
+      principalEpochAdmission,
       options,
     ),
   );

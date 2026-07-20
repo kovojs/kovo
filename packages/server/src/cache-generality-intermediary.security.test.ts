@@ -6,9 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
-import {
-  installGeneratedCacheInfluenceManifestForCommand,
-} from './generated-cache-influence-registry.js';
+import { installGeneratedCacheInfluenceManifestForCommand } from './generated-cache-influence-registry.js';
 import { query, renderQueryEndpointResponse } from './query.js';
 import { respond } from './response.js';
 import { route } from './route.js';

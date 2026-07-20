@@ -229,10 +229,10 @@ export function validateFrameworkExportPosture({
       if (pkg.sourceTreeSha256 !== expected.sourceTreeSha256) {
         findings.push(`${pkg.packageName}: reviewed production source tree digest is stale`);
       }
-    if (
-      canonicalJson(sortedManifestVariants(pkg.manifestVariants)) !==
-      canonicalJson(sortedManifestVariants(expected.manifestVariants))
-    ) {
+      if (
+        canonicalJson(sortedManifestVariants(pkg.manifestVariants)) !==
+        canonicalJson(sortedManifestVariants(expected.manifestVariants))
+      ) {
         findings.push(
           `${pkg.packageName}: manifest fingerprints, conditional export arms, or exact targets are stale`,
         );

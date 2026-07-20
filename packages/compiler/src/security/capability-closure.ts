@@ -5,10 +5,7 @@ import {
 } from '@kovojs/core/internal/diagnostics';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
-import {
-  compilerGeneratedCapabilityDependencies,
-  scanCapabilityClosureModules,
-} from '../scan/capability-closure.js';
+import { scanCapabilityClosureModules } from '../scan/capability-closure.js';
 import type {
   AppDependencyCapability,
   AppDependencyCapabilityImport,
@@ -236,9 +233,7 @@ interface FrameworkPackagePosture {
   readonly packageVersion: string;
 }
 
-type FrameworkImplementationBinding =
-  | 'exact-implementation'
-  | 'unconditional-request-closure';
+type FrameworkImplementationBinding = 'exact-implementation' | 'unconditional-request-closure';
 
 interface FrameworkPermission {
   readonly capabilities: readonly RawCapabilityKind[];
@@ -343,9 +338,7 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         return [canonical];
       });
       if (new Set(canonicalImplementationDigests).size !== canonicalImplementationDigests.length) {
-        invalidReasons.push(
-          `${packageName}/${fingerprint} has duplicate implementation digests`,
-        );
+        invalidReasons.push(`${packageName}/${fingerprint} has duplicate implementation digests`);
       }
       if (
         implementationBinding === 'exact-implementation' &&

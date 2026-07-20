@@ -64,10 +64,7 @@ import {
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
 import { isDurableMutationReplayStore } from './replay.js';
-import {
-  isDurablePrincipalEpochStore,
-  snapshotPrincipalEpochStore,
-} from './principal-epoch.js';
+import { isDurablePrincipalEpochStore, snapshotPrincipalEpochStore } from './principal-epoch.js';
 import {
   cloneRequestForAuthorityNeutralization,
   requestForAuthorityNeutralMetadata,

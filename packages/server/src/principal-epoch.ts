@@ -82,7 +82,10 @@ export interface PrincipalEpochStore {
 
 /** Authoritative lookup failed, timed out, returned no row, or returned malformed state. */
 export class PrincipalEpochUnavailableError extends Error {
-  constructor(message = 'Authoritative principal epoch state is unavailable.', options?: ErrorOptions) {
+  constructor(
+    message = 'Authoritative principal epoch state is unavailable.',
+    options?: ErrorOptions,
+  ) {
     super(message, options);
     this.name = 'PrincipalEpochUnavailableError';
   }
@@ -295,7 +298,10 @@ export async function assertPrincipalEpochFreshForRequest(
   } catch (error) {
     if (!(error instanceof PrincipalEpochStaleError)) throw error;
   }
-  if ((typeof requestCarrier !== 'object' && typeof requestCarrier !== 'function') || requestCarrier === null) {
+  if (
+    (typeof requestCarrier !== 'object' && typeof requestCarrier !== 'function') ||
+    requestCarrier === null
+  ) {
     throw new PrincipalEpochStaleError();
   }
   const receipt = witnessWeakMapGet(requestTransitionReceipts, requestCarrier);
@@ -340,7 +346,10 @@ export async function applyPrincipalEpochMutationTransition(
       'A privilege-changing mutation requires the app principalEpochStore.',
     );
   }
-  if ((typeof requestCarrier !== 'object' && typeof requestCarrier !== 'function') || requestCarrier === null) {
+  if (
+    (typeof requestCarrier !== 'object' && typeof requestCarrier !== 'function') ||
+    requestCarrier === null
+  ) {
     throw new PrincipalEpochUnavailableError(
       'A privilege-changing mutation requires a stable request carrier.',
     );

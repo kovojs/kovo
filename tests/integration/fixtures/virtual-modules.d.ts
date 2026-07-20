@@ -14,10 +14,7 @@ declare module 'virtual:kovo-fixture-css-manifest' {
 }
 
 declare module 'virtual:kovo-fixture-generated-query-plans' {
-  import type {
-    CompiledQueryUpdateContext,
-    QueryBindingRoot,
-  } from '@kovojs/browser/generated';
+  import type { CompiledQueryUpdateContext, QueryBindingRoot } from '@kovojs/browser/generated';
 
   export type KovoFixtureQueryPlan = (
     root: QueryBindingRoot,

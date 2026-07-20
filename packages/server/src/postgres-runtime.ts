@@ -4616,11 +4616,7 @@ async function postgresPrincipalEpochStorePostureIssues(
     relation === undefined ||
     postgresDenseArrayLength(relation.rows, 'Postgres principal epoch relation rows') === 0
       ? undefined
-      : postgresDenseArrayValue(
-          relation.rows,
-          0,
-          'Postgres principal epoch relation rows',
-        );
+      : postgresDenseArrayValue(relation.rows, 0, 'Postgres principal epoch relation rows');
   if (relationRow?.exists !== true) {
     return [
       {
@@ -4807,11 +4803,7 @@ async function postgresPrincipalEpochStorePostureIssues(
       privileges === undefined ||
       postgresDenseArrayLength(privileges.rows, 'Postgres principal epoch privilege rows') === 0
         ? undefined
-        : postgresDenseArrayValue(
-            privileges.rows,
-            0,
-            'Postgres principal epoch privilege rows',
-          );
+        : postgresDenseArrayValue(privileges.rows, 0, 'Postgres principal epoch privilege rows');
     if (privilegeRow === undefined) {
       appendPostgresDenseValue(issues, {
         code: 'KV433_PRINCIPAL_EPOCH_ACL',

@@ -223,7 +223,10 @@ export function deriveCacheInfluenceManifestEntry(
     }
   }
   if (unclassified.length > 0) {
-    securityArrayAppend(axes, freezeSecurityValue({ kind: 'unclassified', role: 'shared-cache-closed' }));
+    securityArrayAppend(
+      axes,
+      freezeSecurityValue({ kind: 'unclassified', role: 'shared-cache-closed' }),
+    );
     appendReason(reasons, 'unclassified-influence');
   }
 
@@ -279,7 +282,8 @@ export function snapshotCacheInfluenceManifest(value: unknown): CacheInfluenceMa
     throw new TypeError(`Cache influence manifest schema must be ${cacheInfluenceManifestSchema}.`);
   }
   const entries = ownData(value, 'entries', 'cache influence manifest');
-  if (!securityIsArray(entries)) throw new TypeError('Cache influence manifest entries must be an array.');
+  if (!securityIsArray(entries))
+    throw new TypeError('Cache influence manifest entries must be an array.');
   return createCacheInfluenceManifest(entries as readonly CacheInfluenceManifestEntry[]);
 }
 
@@ -291,7 +295,8 @@ function snapshotManifestEntry(value: unknown): CacheInfluenceManifestEntry {
     ownData(value, 'authored', 'cache influence entry') as CacheInfluenceAuthoredIntent,
   );
   const axesValue = ownData(value, 'axes', 'cache influence entry');
-  if (!securityIsArray(axesValue)) throw new TypeError('Cache influence entry axes must be an array.');
+  if (!securityIsArray(axesValue))
+    throw new TypeError('Cache influence entry axes must be an array.');
   const influences: CacheInfluenceDerivationInput['influences'] = axesToInfluences(axesValue);
   const derived = deriveCacheInfluenceManifestEntry({
     authored,
@@ -338,7 +343,8 @@ function axesToInfluences(axes: readonly unknown[]): CacheInfluenceDerivationInp
   const versions: CacheInfluenceExternalDataVersionInput[] = [];
   for (let index = 0; index < axes.length; index += 1) {
     const axis = ownArrayValue(axes, index, 'cache influence axes');
-    if (axis === null || typeof axis !== 'object') throw new TypeError('Cache influence axes must be objects.');
+    if (axis === null || typeof axis !== 'object')
+      throw new TypeError('Cache influence axes must be objects.');
     const kind = ownData(axis, 'kind', 'cache influence axis');
     switch (kind) {
       case 'url-path':
@@ -381,7 +387,8 @@ function axesToInfluences(axes: readonly unknown[]): CacheInfluenceDerivationInp
 }
 
 function snapshotAuthoredIntent(value: CacheInfluenceAuthoredIntent): CacheInfluenceAuthoredIntent {
-  if (value === null || typeof value !== 'object') throw new TypeError('Cache authored intent must be an object.');
+  if (value === null || typeof value !== 'object')
+    throw new TypeError('Cache authored intent must be an object.');
   const posture = ownData(value, 'posture', 'cache authored intent');
   if (posture !== 'public' && posture !== 'non-public') {
     throw new TypeError('Cache authored posture must be public or non-public.');
@@ -401,7 +408,8 @@ function snapshotAuthoredIntent(value: CacheInfluenceAuthoredIntent): CacheInflu
 }
 
 function snapshotAuditedEscape(value: unknown): CacheInfluenceAuditedEscape {
-  if (value === null || typeof value !== 'object') throw new TypeError('Cache audited escape must be an object.');
+  if (value === null || typeof value !== 'object')
+    throw new TypeError('Cache audited escape must be an object.');
   return freezeSecurityValue({
     name: requiredText(ownData(value, 'name', 'cache audited escape'), 'escape name'),
     retainedObligation: requiredText(
@@ -412,7 +420,8 @@ function snapshotAuditedEscape(value: unknown): CacheInfluenceAuditedEscape {
 }
 
 function snapshotKeyContribution(value: unknown): CacheInfluenceKeyContribution {
-  if (value === null || typeof value !== 'object') throw new TypeError('Cache key contribution must be an object.');
+  if (value === null || typeof value !== 'object')
+    throw new TypeError('Cache key contribution must be an object.');
   const axis = ownData(value, 'axis', 'cache key contribution');
   if (axis === 'url-path') return freezeSecurityValue({ axis });
   if (axis === 'url-search') {
@@ -427,7 +436,9 @@ function snapshotKeyContribution(value: unknown): CacheInfluenceKeyContribution 
       name: requiredHeader(ownData(value, 'name', 'request-header key contribution')),
     });
   }
-  throw new TypeError('Cache key contribution axis must be url-path, url-search, or request-header.');
+  throw new TypeError(
+    'Cache key contribution axis must be url-path, url-search, or request-header.',
+  );
 }
 
 function appendClosingAxis(
@@ -471,7 +482,8 @@ function normalizedHeaderName(value: string): string | undefined {
 function requiredHeader(value: unknown): string {
   if (typeof value !== 'string') throw new TypeError('Cache request-header name must be a string.');
   const normalized = normalizedHeaderName(value);
-  if (normalized === undefined) throw new TypeError('Cache request-header name must be an HTTP token.');
+  if (normalized === undefined)
+    throw new TypeError('Cache request-header name must be an HTTP token.');
   return normalized;
 }
 
@@ -489,7 +501,8 @@ function cacheInfluenceSurface(value: unknown): CacheInfluenceSurface {
 
 function ownRecord(value: object, key: string, label: string): object {
   const result = ownData(value, key, label);
-  if (result === null || typeof result !== 'object') throw new TypeError(`${label}.${key} must be an object.`);
+  if (result === null || typeof result !== 'object')
+    throw new TypeError(`${label}.${key} must be an object.`);
   return result;
 }
 
@@ -524,7 +537,8 @@ function ownData(value: object, key: PropertyKey, label: string): unknown {
 function optionalOwnData(value: object, key: PropertyKey, label: string): unknown {
   const descriptor = securityGetOwnPropertyDescriptor(value, key);
   if (descriptor === undefined) return undefined;
-  if (!('value' in descriptor)) throw new TypeError(`${label}.${String(key)} must be an own data property.`);
+  if (!('value' in descriptor))
+    throw new TypeError(`${label}.${String(key)} must be an own data property.`);
   return descriptor.value;
 }
 
@@ -533,7 +547,8 @@ function stringArray(value: unknown, label: string): string[] {
   const result: string[] = [];
   for (let index = 0; index < value.length; index += 1) {
     const entry = ownArrayValue(value, index, label);
-    if (typeof entry !== 'string') throw new TypeError(`Cache influence ${label} entries must be strings.`);
+    if (typeof entry !== 'string')
+      throw new TypeError(`Cache influence ${label} entries must be strings.`);
     securityArrayAppend(result, entry);
   }
   return result;
@@ -541,6 +556,7 @@ function stringArray(value: unknown, label: string): string[] {
 
 function jsonArrayKey(values: readonly string[]): string {
   let result = '';
-  for (let index = 0; index < values.length; index += 1) result += `${values[index]!.length}:${values[index]}`;
+  for (let index = 0; index < values.length; index += 1)
+    result += `${values[index]!.length}:${values[index]}`;
   return result;
 }

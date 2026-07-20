@@ -6992,6 +6992,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           const authSystemDb = appDatabase.systemDb({
             operation: 'write', reason: 'auth', surface: 'fixture',
           });
+          export const appRuntimePrincipalEpochStore = appDatabase.principalEpochStore;
           export const appRuntimeDbReady = appDatabase.ready;
           export function createAppAuthBindings(options) {
             return createBetterAuthSqliteBindingsFromEnvironment({
@@ -7000,6 +7001,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
                 id: authSession.id,
                 user: { email: user.email, id: user.id, name: user.name },
               }),
+              principalEpochStore: appRuntimePrincipalEpochStore,
               schema: authSchema,
               signInAccess: options.signInAccess,
               signOutAccess: options.signOutAccess,
@@ -7209,6 +7211,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           const authSystemDb = appDatabase.systemDb({
             operation: 'write', reason: 'auth', surface: 'fixture',
           });
+          export const appRuntimePrincipalEpochStore = appDatabase.principalEpochStore;
           export const appRuntimeDbReady = appDatabase.ready;
           export function createAppAuthBindings(options) {
             return createBetterAuthPostgresBindingsFromEnvironment({
@@ -7217,6 +7220,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
                 id: authSession.id,
                 user: { email: user.email, id: user.id, name: user.name },
               }),
+              principalEpochStore: appRuntimePrincipalEpochStore,
               schema: appRuntimeSchema.authSchema,
               signInAccess: options.signInAccess,
               signOutAccess: options.signOutAccess,
@@ -7688,6 +7692,11 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       ['schema', `schema: authSchema,`, `schema: {},`],
       ['signInAccess', `signInAccess: options.signInAccess,`, `signInAccess: {},`],
       ['signOutAccess', `signOutAccess: options.signOutAccess,`, `signOutAccess: [],`],
+      [
+        'principalEpochStore',
+        `principalEpochStore: appRuntimePrincipalEpochStore,`,
+        `principalEpochStore: {},`,
+      ],
       ['systemDb', `systemDb: authSystemDb,`, `systemDb: {},`],
     ] as const) {
       const files = exactEnvironmentBindingFiles.map((file) =>

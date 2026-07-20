@@ -1,10 +1,6 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
-import {
-  accessDecisionFor,
-  executableGuardAccessDecision,
-  type AccessDecision,
-} from './access.js';
+import { accessDecisionFor, executableGuardAccessDecision, type AccessDecision } from './access.js';
 import { explainGuard, type Guard, type GuardAuditFact } from './guards.js';
 import type {
   RuntimeTableSecurityWireManifest,
@@ -271,7 +267,10 @@ function authorizationSurfaceFact(
   guardFacts: readonly GuardAuditFact[],
 ): CoreGraph.AuthorizationCorrespondenceExplainFact {
   return Object.freeze({
-    activation: Object.freeze({ source: 'build' as const, status: 'environment-unchecked' as const }),
+    activation: Object.freeze({
+      source: 'build' as const,
+      status: 'environment-unchecked' as const,
+    }),
     correspondence: explainPostgresAuthorizationCorrespondence({
       guardFacts,
       policy: protectedTable.policy,
@@ -279,9 +278,7 @@ function authorizationSurfaceFact(
     schema: 'kovo.postgres.authorization-surface/v1' as const,
     surface: Object.freeze(surface),
     table: Object.freeze({
-      ...(protectedTable.table.domain === undefined
-        ? {}
-        : { domain: protectedTable.table.domain }),
+      ...(protectedTable.table.domain === undefined ? {} : { domain: protectedTable.table.domain }),
       name: protectedTable.table.name,
     }),
   });
@@ -355,10 +352,7 @@ function compareAuthorizationSurfaceFacts(
     compareStrings(left.surface.kind, right.surface.kind) ||
     compareStrings(left.surface.name, right.surface.name) ||
     compareStrings(left.surface.viaQuery ?? '', right.surface.viaQuery ?? '') ||
-    compareStrings(
-      left.correspondence.rls.emissionSite,
-      right.correspondence.rls.emissionSite,
-    )
+    compareStrings(left.correspondence.rls.emissionSite, right.correspondence.rls.emissionSite)
   );
 }
 

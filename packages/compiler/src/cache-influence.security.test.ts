@@ -102,7 +102,9 @@ export const cookieEndpoint = endpoint('/cookie-endpoint', {
       surface: 'endpoint',
       verdict: 'public-proved',
     });
-    expect(entries.find((entry) => entry.root === 'endpoint:/cookie-endpoint')?.axes).toContainEqual({
+    expect(
+      entries.find((entry) => entry.root === 'endpoint:/cookie-endpoint')?.axes,
+    ).toContainEqual({
       kind: 'cookie',
       role: 'shared-cache-closed',
     });
@@ -204,7 +206,10 @@ export const headersEscape = query('headers-escape', {
       'query:context-escape',
       'query:headers-escape',
     ]) {
-      expect(entries.find((entry) => entry.root === root), root).toMatchObject({
+      expect(
+        entries.find((entry) => entry.root === root),
+        root,
+      ).toMatchObject({
         verdict: 'shared-cache-closed',
       });
     }

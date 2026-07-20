@@ -19,7 +19,9 @@ export function registerGeneratedCacheInfluenceManifest(
   const literal = buildSecuritySourceLiteral(snapshot);
   if (registeredManifest !== undefined) {
     if (literal !== registeredLiteral) {
-      throw new TypeError('Generated cache-influence manifest is already registered for this boot.');
+      throw new TypeError(
+        'Generated cache-influence manifest is already registered for this boot.',
+      );
     }
     registeredPermanent = true;
     return snapshot;
@@ -38,7 +40,9 @@ export function installGeneratedCacheInfluenceManifestForCommand(
   const literal = buildSecuritySourceLiteral(snapshot);
   if (registeredManifest !== undefined) {
     if (literal !== registeredLiteral) {
-      throw new TypeError('Generated cache-influence manifest is already registered for this boot.');
+      throw new TypeError(
+        'Generated cache-influence manifest is already registered for this boot.',
+      );
     }
     return () => {};
   }

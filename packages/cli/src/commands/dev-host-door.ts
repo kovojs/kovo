@@ -55,7 +55,7 @@ interface DevRequestAuthority {
 interface DevRequestRejection {
   message: string;
   ok: false;
-  status: 400 | 403 | 503;
+  status: 400 | 401 | 403 | 503;
 }
 
 /**
@@ -210,7 +210,7 @@ function devRequestAuthority(
     `http://${configuredHost === '::1' ? '[::1]' : configuredHost}:${address.port}`,
   ).origin;
   const host = singletonRawHeader(request, 'host');
-  if (host === undefined || canonicalHttpAuthority(host) !== expectedOrigin) {
+  if (host === null || host === undefined || canonicalHttpAuthority(host) !== expectedOrigin) {
     return {
       message: 'Kovo dev rejected a request whose Host did not match the loopback listener.',
       ok: false,

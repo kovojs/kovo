@@ -1070,9 +1070,9 @@ function snapshotDenseArray<Value>(value: unknown, label: string): Value[] {
   return snapshot;
 }
 
-function readOwnPlanField(
-  plan: CompiledQueryUpdatePlan,
-  name: keyof CompiledQueryUpdatePlan,
+function readOwnPlanField<Plan extends object, Name extends string & keyof Plan>(
+  plan: Plan,
+  name: Name,
 ): unknown {
   const descriptor = securityGetOwnPropertyDescriptor(plan, name);
   if (!descriptor) return undefined;

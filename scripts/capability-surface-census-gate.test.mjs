@@ -95,10 +95,7 @@ it('closes principal-epoch freshness over capability URL and mutation replay cre
        export const admitReplayReceipt = () => fresh();
        export const completeReplayTransaction = () => freshForRequest();`,
     ],
-    [
-      'continuation.ts',
-      `export const runInFrameContinuation = () => undefined;`,
-    ],
+    ['continuation.ts', `export const runInFrameContinuation = () => undefined;`],
   ]);
   const rows = [
     {
@@ -170,7 +167,8 @@ it('closes principal-epoch freshness over capability URL and mutation replay cre
       owner: 'runInFrameContinuation',
       path: 'continuation.ts',
       phase: 'inapplicable',
-      reason: 'This continuation is closed before its adapter frame returns and is never a durable credential.',
+      reason:
+        'This continuation is closed before its adapter frame returns and is never a durable credential.',
     },
   ];
 

@@ -1108,7 +1108,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'SVG script document',
       'payload.svg',
-      '<svg xmlns="http://www.w3.org/2000/svg"><script>parent.postMessage(\'KOVO_STATIC_SVG_EXECUTED\',\'*\')</script></svg>\n',
+      "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>parent.postMessage('KOVO_STATIC_SVG_EXECUTED','*')</script></svg>\n",
       "import payloadUrl from './payload.svg'; export function start(){ const frame=document.createElement('iframe'); frame.src=payloadUrl; document.body.append(frame); }\n",
     ],
     [
@@ -1184,7 +1184,10 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
             root,
           }),
         ).rejects.toThrow(
-          new RegExp(`KV448.*reviewed package safe-parser.*${resourceName}.*closed module suffix`, 'u'),
+          new RegExp(
+            `KV448.*reviewed package safe-parser.*${resourceName}.*closed module suffix`,
+            'u',
+          ),
         );
         expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
       } finally {
@@ -1217,7 +1220,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       );
       writeFileSync(
         join(packageRoot, 'payload.js'),
-        '<svg xmlns="http://www.w3.org/2000/svg"><script>parent.postMessage(\'SYMLINK_SUFFIX\',\'*\')</script></svg>\n',
+        "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>parent.postMessage('SYMLINK_SUFFIX','*')</script></svg>\n",
       );
       symlinkSync('payload.js', join(packageRoot, 'payload.svg'));
       writeFileSync(appModulePath, source);
@@ -1281,7 +1284,8 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     const appModulePath = join(root, 'client.mjs');
     const packageRoot = join(root, 'node_modules', 'safe-parser');
     const outDir = join(root, 'dist');
-    const source = "import payloadUrl from 'safe-parser'; globalThis.__KOVO_PAYLOAD__ = payloadUrl;\n";
+    const source =
+      "import payloadUrl from 'safe-parser'; globalThis.__KOVO_PAYLOAD__ = payloadUrl;\n";
     try {
       mkdirSync(packageRoot, { recursive: true });
       writeFileSync(
@@ -1295,7 +1299,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       );
       writeFileSync(
         join(packageRoot, 'payload.svg'),
-        '<svg xmlns="http://www.w3.org/2000/svg"><script>parent.postMessage(\'EXECUTED\',\'*\')</script></svg>\n',
+        "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>parent.postMessage('EXECUTED','*')</script></svg>\n",
       );
       writeFileSync(appModulePath, source);
       const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;

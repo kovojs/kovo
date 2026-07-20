@@ -374,10 +374,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
     expect(isDurablePrincipalEpochStore(initial.principalEpochStore)).toBe(true);
     await initial.ready;
-    const created = await initializePrincipalEpoch(
-      initial.principalEpochStore,
-      'user-epoch-test',
-    );
+    const created = await initializePrincipalEpoch(initial.principalEpochStore, 'user-epoch-test');
     await expect(
       initializePrincipalEpoch(initial.principalEpochStore, 'user-epoch-test'),
     ).resolves.toEqual(created);
@@ -385,9 +382,9 @@ describe('createPostgresAppRuntimeDb', () => {
 
     const restarted = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
     await restarted.ready;
-    expect(
-      await currentPrincipalEpoch(restarted.principalEpochStore, 'user-epoch-test'),
-    ).toEqual(created);
+    expect(await currentPrincipalEpoch(restarted.principalEpochStore, 'user-epoch-test')).toEqual(
+      created,
+    );
     const changed = await advancePrincipalEpoch(
       restarted.principalEpochStore,
       'user-epoch-test',

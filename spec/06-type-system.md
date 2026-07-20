@@ -487,14 +487,14 @@ implementation digest. A package whose complete public runtime surface is explic
 that package by exact package name before version, manifest, or implementation identity can
 influence a request-root verdict. Such a binding is invalid if any public initializer or export is
 missing or has a disposition other than `request-closed`; widening the package therefore restores
- the exact-implementation requirement rather than inheriting an identity-free allow path. A new,
- missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
- door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
- subpath membership only through one compiler-owned exact table that classifies the initializer and
- every admitted member separately; that table is consulted only after the installed first-party
- manifest fingerprint and implementation digest match. A vocabulary match alone cannot mint an
- authority-free verdict. Explicitly reviewed framework companions use the same compiler-owned,
- version-pinned verdict model. Other packages use the committed
+the exact-implementation requirement rather than inheriting an identity-free allow path. A new,
+missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
+door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
+subpath membership only through one compiler-owned exact table that classifies the initializer and
+every admitted member separately; that table is consulted only after the installed first-party
+manifest fingerprint and implementation digest match. A vocabulary match alone cannot mint an
+authority-free verdict. Explicitly reviewed framework companions use the same compiler-owned,
+version-pinned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
 `<module>` entry. Every package import, including a named, default, or namespace import, evaluates

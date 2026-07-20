@@ -1224,7 +1224,9 @@ function classifyRawCapabilityImport(
 function isExactDigestOnlyCryptoImport(prefix: string): boolean {
   const match = /^\s*(?:import|export)\s*\{([\s\S]*)\}\s*from\s*['"]$/u.exec(prefix);
   if (match === null) return false;
-  const entries = match[1].split(',');
+  const importedNames = match[1];
+  if (importedNames === undefined) return false;
+  const entries = importedNames.split(',');
   if (entries.at(-1)?.trim() === '') entries.pop();
   return (
     entries.length > 0 &&

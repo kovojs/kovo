@@ -179,9 +179,7 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
   return {
     async read() {
       const scoped = await replayContext();
-      const response = enhancedReplayResponseOrConflict(
-        await readMutationReplay(scoped.context),
-      );
+      const response = enhancedReplayResponseOrConflict(await readMutationReplay(scoped.context));
       if (response !== undefined) await assertReplayResponseEpochFresh(scoped);
       return response;
     },
@@ -327,11 +325,7 @@ export function noJsMutationReplayPolicy<Request, Value>(mode: {
       if (result.kind !== 'reserved') return result;
       return {
         kind: 'reserved',
-        reservation: noJsReplayReservation(
-          result.reservation,
-          idemFacts.token,
-          scoped,
-        ),
+        reservation: noJsReplayReservation(result.reservation, idemFacts.token, scoped),
       };
     },
   };

@@ -49,7 +49,10 @@ describe('kovoFixtureCompilerPlugin', () => {
       new URL('../../../../tests/integration/fixtures/binding-text-attr/', import.meta.url),
     );
     const alphaFile = fileURLToPath(
-      new URL('../../../../tests/integration/fixtures/binding-text-attr/alpha.tsx', import.meta.url),
+      new URL(
+        '../../../../tests/integration/fixtures/binding-text-attr/alpha.tsx',
+        import.meta.url,
+      ),
     );
     const betaFile = fileURLToPath(
       new URL('../../../../tests/integration/fixtures/binding-text-attr/beta.tsx', import.meta.url),

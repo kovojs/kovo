@@ -73,9 +73,7 @@ describe('Postgres authorization production explain facts', () => {
 
     expect(facts).toHaveLength(6);
     expect(
-      facts.find(
-        (fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read',
-      ),
+      facts.find((fact) => fact.surface.kind === 'query' && fact.surface.name === 'document/read'),
     ).toMatchObject({
       activation: { source: 'build', status: 'environment-unchecked' },
       correspondence: {
@@ -112,10 +110,12 @@ describe('Postgres authorization production explain facts', () => {
       table: { domain: 'invoice', name: 'invoices' },
     });
     expect(
-      facts.filter((fact) => fact.surface.kind === 'framework-policy').map((fact) => ({
-        site: fact.correspondence.rls.emissionSite,
-        table: fact.table.name,
-      })),
+      facts
+        .filter((fact) => fact.surface.kind === 'framework-policy')
+        .map((fact) => ({
+          site: fact.correspondence.rls.emissionSite,
+          table: fact.table.name,
+        })),
     ).toEqual([
       { site: 'admin', table: 'documents' },
       { site: 'system', table: 'documents' },

@@ -976,10 +976,7 @@ function bindViteEmittedJsxRuntime(fileName: string, source: string): string {
   if (!containsJsx) return source;
 
   if (
-    compilerRegExpTest(
-      /^\s*\/\*\*?\s*@jsxImportSource[ \t]+@kovojs\/server(?:\s|\*\/)/u,
-      source,
-    )
+    compilerRegExpTest(/^\s*\/\*\*?\s*@jsxImportSource[ \t]+@kovojs\/server(?:\s|\*\/)/u, source)
   ) {
     return source;
   }

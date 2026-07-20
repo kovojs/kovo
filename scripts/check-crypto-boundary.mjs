@@ -306,8 +306,8 @@ function compareRows(left, right) {
 }
 
 function scriptKind(file) {
-  if (/\.tsx$/u.test(file)) return ts.ScriptKind.TSX;
-  if (/\.jsx$/u.test(file)) return ts.ScriptKind.JSX;
+  if (file.endsWith('.tsx')) return ts.ScriptKind.TSX;
+  if (file.endsWith('.jsx')) return ts.ScriptKind.JSX;
   if (/\.[cm]?js$/u.test(file)) return ts.ScriptKind.JS;
   return ts.ScriptKind.TS;
 }

@@ -45,9 +45,7 @@ import {
   compilerSetOwnDataProperty,
   compilerSetSize,
   compilerSnapshotJsonValue,
-  compilerStringEndsWith,
   compilerStringReplaceAll,
-  compilerStringSlice,
   compilerStringSplit,
   compilerStringStartsWith,
 } from './compiler-security-intrinsics.js';

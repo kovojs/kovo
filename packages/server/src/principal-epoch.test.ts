@@ -83,10 +83,7 @@ describe('persistent principal epoch authority', () => {
       ),
     ).rejects.toBeInstanceOf(PrincipalEpochUnavailableError);
     await expect(
-      currentPrincipalEpoch(
-        { ...base, current: () => new Promise(() => undefined) },
-        'u1',
-      ),
+      currentPrincipalEpoch({ ...base, current: () => new Promise(() => undefined) }, 'u1'),
     ).rejects.toThrow(/exceeded 1000ms/u);
   });
 

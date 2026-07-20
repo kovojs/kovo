@@ -415,7 +415,7 @@ function snapshotCompileResult(value: unknown): FixtureCompileResultSnapshot {
   const files = verifierDenseArraySnapshot(
     ownData(value, 'files', 'fixture compiler result') ?? [],
     'fixture compiler files',
-    (file, index) => {
+    (file, index): CompileResult['files'][number] => {
       if (typeof file !== 'object' || file === null) {
         throw new TypeError(`Fixture compiler file ${index} must be an object.`);
       }

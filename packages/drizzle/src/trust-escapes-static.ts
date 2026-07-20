@@ -1962,6 +1962,8 @@ function requestCompilerSemanticRootForFactoryCall(
 
   const exported = requestCompilerSemanticExportedConstName(call);
   switch (factory) {
+    case 'agent':
+      return 'agent:UNRESOLVED';
     case 'endpoint':
       return 'endpoint:UNRESOLVED';
     case 'mutation': {
@@ -2071,6 +2073,8 @@ function requestCompilerSemanticCallbackForFactory(
   factory: SecuritySemanticRootBinding['factory'],
 ): SecuritySemanticRootBinding['callback'] {
   switch (factory) {
+    case 'agent':
+      return 'model';
     case 'query':
       return 'load';
     case 'task':

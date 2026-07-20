@@ -12,10 +12,7 @@ import type {
   DurableTaskStatusSqlExecutor,
   DurableTaskStatusSqlResult,
 } from './task-observability.js';
-import type {
-  PrincipalEpochState,
-  PrincipalEpochStore,
-} from './principal-epoch.js';
+import type { PrincipalEpochState, PrincipalEpochStore } from './principal-epoch.js';
 
 /** Framework-owned persistent revocation relation (SPEC §6.6/§10.3). */
 export const POSTGRES_PRINCIPAL_EPOCH_TABLE = '_kovo_principal_epoch';
@@ -142,11 +139,7 @@ function rowState(row: PostgresPrincipalEpochRow | undefined): PrincipalEpochSta
   }
   const epoch = parseInteger(row.epoch);
   const changedAtMs = parseInteger(row.changed_at_ms);
-  if (
-    epoch < 1 ||
-    changedAtMs < 0 ||
-    (row.status !== 'active' && row.status !== 'tombstoned')
-  ) {
+  if (epoch < 1 || changedAtMs < 0 || (row.status !== 'active' && row.status !== 'tombstoned')) {
     throw new Error('Postgres principal epoch row is invalid.');
   }
   return witnessFreeze({ changedAtMs, epoch, status: row.status });
@@ -187,10 +180,7 @@ function snapshotExecutor(source: DurableTaskStatusSqlExecutor): DurableTaskStat
   });
 }
 
-function resultRows<Row>(
-  result: DurableTaskStatusSqlResult<Row>,
-  label: string,
-): readonly Row[] {
+function resultRows<Row>(result: DurableTaskStatusSqlResult<Row>, label: string): readonly Row[] {
   if (typeof result !== 'object' || result === null || witnessIsArray(result)) {
     throw new TypeError(`${label} must return a SQL result.`);
   }

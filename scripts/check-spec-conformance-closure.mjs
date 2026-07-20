@@ -1943,8 +1943,8 @@ function diagnosticBindingCandidateSourceFile(sourceFile, fileName) {
 }
 
 function sourceScriptKind(fileName) {
-  if (/\.tsx$/u.test(fileName)) return ts.ScriptKind.TSX;
-  if (/\.jsx$/u.test(fileName)) return ts.ScriptKind.JSX;
+  if (fileName.endsWith('.tsx')) return ts.ScriptKind.TSX;
+  if (fileName.endsWith('.jsx')) return ts.ScriptKind.JSX;
   if (/\.(?:mjs|cjs|js)$/u.test(fileName)) return ts.ScriptKind.JS;
   return ts.ScriptKind.TS;
 }
@@ -2335,7 +2335,7 @@ function resolveImportModulePath(fileName, moduleSpecifier) {
     path.posix.normalize(path.posix.join(path.posix.dirname(fileName), moduleSpecifier)),
   );
   if (/\.(?:js|mjs|cjs)$/u.test(resolved)) return resolved.replace(/\.(?:mjs|cjs|js)$/u, '.ts');
-  if (/\.ts$/u.test(resolved)) return resolved;
+  if (resolved.endsWith('.ts')) return resolved;
   return `${resolved}.ts`;
 }
 

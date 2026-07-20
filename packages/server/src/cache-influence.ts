@@ -6,10 +6,7 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessIsArray,
 } from './security-witness-intrinsics.js';
-import {
-  securityRegExpTest,
-  securityStringToLowerCase,
-} from './response-security-intrinsics.js';
+import { securityRegExpTest, securityStringToLowerCase } from './response-security-intrinsics.js';
 
 /** A request dimension that contributes an external data version to the shared-cache key. */
 export type SharedCacheKeyContribution =
@@ -75,11 +72,7 @@ function snapshotExternalVersions(value: unknown): readonly SharedCacheExternalD
     const key = snapshotKeyContribution(
       requiredOwnData(entry, 'key', 'cacheInfluence external data version'),
     );
-    witnessArrayAppend(
-      result,
-      witnessFreeze({ key, name }),
-      'Shared cache external data versions',
-    );
+    witnessArrayAppend(result, witnessFreeze({ key, name }), 'Shared cache external data versions');
   }
   return witnessFreeze(result);
 }
@@ -107,7 +100,9 @@ function snapshotKeyContribution(value: unknown): SharedCacheKeyContribution {
   return witnessFreeze({ axis, name });
 }
 
-function snapshotAuditedEscape(value: unknown): NonNullable<SharedCacheInfluenceDeclaration['auditedEscape']> {
+function snapshotAuditedEscape(
+  value: unknown,
+): NonNullable<SharedCacheInfluenceDeclaration['auditedEscape']> {
   if (value === null || typeof value !== 'object' || witnessIsArray(value)) {
     throw new TypeError('cacheInfluence.auditedEscape must be a record.');
   }
@@ -134,6 +129,7 @@ function requiredOwnData(value: object, key: string, label: string): unknown {
 function optionalOwnData(value: object, key: string, label: string): unknown {
   const descriptor = witnessGetOwnPropertyDescriptor(value, key);
   if (descriptor === undefined) return undefined;
-  if (!('value' in descriptor)) throw new TypeError(`${label}.${key} must be an own data property.`);
+  if (!('value' in descriptor))
+    throw new TypeError(`${label}.${key} must be an own data property.`);
   return descriptor.value;
 }
