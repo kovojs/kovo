@@ -103,14 +103,17 @@ describe('kovoVitePlugin', () => {
   });
 
   // @kovo-security-certifies C13 vite-emitted-jsx-runtime-provenance
-  it('binds compiler-emitted JSX to the framework runtime before Vite lowers it', async () => {
-    const plugin = kovoVitePlugin();
-    const transformed = await plugin.transform?.(cartBadgeSource, 'cart-badge.tsx');
+  it.each(['tsx', 'jsx'])(
+    'binds compiler-emitted .%s JSX to the framework runtime before Vite lowers it',
+    async (extension) => {
+      const plugin = kovoVitePlugin();
+      const transformed = await plugin.transform?.(cartBadgeSource, `cart-badge.${extension}`);
 
-    expect(transformed).not.toBeNull();
-    expect(transformed?.code).toContain('/** @jsxImportSource @kovojs/server */');
-    expect(transformed?.code).not.toContain('@jsxImportSource react');
-  });
+      expect(transformed).not.toBeNull();
+      expect(transformed?.code).toContain('/** @jsxImportSource @kovojs/server */');
+      expect(transformed?.code).not.toContain('@jsxImportSource react');
+    },
+  );
 
   it('compiles SPEC-supported JSX modules instead of delegating them past Kovo diagnostics', async () => {
     const plugin = kovoVitePlugin();
