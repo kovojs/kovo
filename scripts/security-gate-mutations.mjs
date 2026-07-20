@@ -1349,6 +1349,9 @@ const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
+const taskScheduleSchemaAdmission =
+  '  const parsedArgs = await parseSchemaAsync(input.definition.input, input.args);';
+const removedTaskScheduleSchemaAdmission = '  const parsedArgs = input.args;';
 const taskEgressCapabilitySeal =
   "    return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);";
 const removedTaskEgressCapabilitySeal = '    return context;';
@@ -4550,6 +4553,18 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertFrameworkEgressPinsInstalledDispatcher,
   },
   {
+    baseModule: {},
+    description:
+      'Persists raw follow-on task arguments before the child schema admits and canonicalizes them.',
+    expectedKiller: 'task scheduling must validate child arguments before keyed queue persistence',
+    name: 'server-task/drop-follow-on-schema-admission',
+    replacement: removedTaskScheduleSchemaAdmission,
+    search: taskScheduleSchemaAdmission,
+    sourceFile: taskRunnerPath,
+    sourceOnly: true,
+    test: assertTaskChildSchemaAdmissionBehavior,
+  },
+  {
     behavioralInstrumentation: taskEgressBehavioralInstrumentation,
     behavioralTypeScript: true,
     description: 'Makes the durable-task contextual fetch capability replaceable after delivery.',
@@ -5167,6 +5182,16 @@ function runIsolatedPackageVitestMutation({
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
+}
+
+function assertTaskChildSchemaAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'task-runner.ts',
+    sourceText,
+    testFile: 'packages/server/src/task-runner.test.ts',
+    testNamePattern: 'validates follow-on args before keyed persistence',
+  });
 }
 
 function assertDependencyLoaderReviewedChildAliasBehavior(_moduleUnderTest, { sourceText }) {
