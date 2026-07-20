@@ -75,6 +75,7 @@ export interface DataPlaneDiagnostic extends RegisteredDiagnostic<DiagnosticCode
 
 /** @internal Static facts consumed by build/check graph derivation. */
 export interface StaticDataPlaneBuildFacts {
+  grants: readonly CoreGraph.GrantExplainFact[];
   massAssignmentFacts: readonly CoreGraph.MassAssignmentFact[];
   ownerDomains: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly QueryReadFactLike[];
@@ -135,6 +136,7 @@ interface ToctouFactLike {
 }
 
 interface StaticBuildAnalysisFactsLike {
+  grants?: readonly CoreGraph.GrantExplainFact[];
   massAssignmentFacts?: readonly CoreGraph.MassAssignmentFact[];
   ownerDomains?: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly unknown[];
@@ -147,7 +149,7 @@ interface StaticBuildAnalysisFactsLike {
   touchGraph: unknown;
 }
 
-const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.authorization-table-identity.v1';
+const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-19.grant-graph.v1';
 const existsSync = builtinExistsSync;
 const dirname = builtinDirname;
 const relative = builtinRelative;
@@ -372,6 +374,7 @@ export async function staticDataPlaneBuildFacts(
       ? undefined
       : runtimeRegistryTableSecurityFromFacts(rawFacts.runtimeTableSecurityManifest);
   const result: StaticDataPlaneBuildFacts = {
+    grants: snapshotDenseArray(rawFacts.grants ?? [], 'Static grant-graph facts'),
     massAssignmentFacts: snapshotDenseArray(
       rawFacts.massAssignmentFacts ?? [],
       'Static mass-assignment facts',
@@ -511,6 +514,7 @@ function emptyStaticBuildAnalysisFactsLike(): StaticBuildAnalysisFactsLike {
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
   return {
+    grants: [],
     massAssignmentFacts: [],
     ownerDomains: [],
     queries: [],
@@ -759,6 +763,7 @@ function snapshotStaticBuildAnalysisFacts(
     return snapshotDenseArray(candidate, property);
   };
   const massAssignmentFacts = optionalArray('massAssignmentFacts');
+  const grants = optionalArray('grants');
   const ownerDomains = optionalArray('ownerDomains');
   const queryWriteReachability = optionalArray('queryWriteReachability');
   const revealed = optionalArray('revealed');
@@ -786,6 +791,7 @@ function snapshotStaticBuildAnalysisFacts(
   ) as readonly ToctouFactLike[];
   projectToctouFacts(toctouSnapshot);
   return {
+    ...(grants === undefined ? {} : { grants: grants as readonly CoreGraph.GrantExplainFact[] }),
     ...(massAssignmentFacts === undefined
       ? {}
       : { massAssignmentFacts: massAssignmentFacts as readonly CoreGraph.MassAssignmentFact[] }),

@@ -2473,6 +2473,69 @@ export default createApp({
     }
   }, 90_000);
 
+  it('serializes the compiler-derived grant model into an ordinary build graph', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-grant-graph-'));
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      symlinkSync(join(repoRoot, 'packages/drizzle'), join(root, 'node_modules/@kovojs/drizzle'));
+      symlinkSync(
+        join(repoRoot, 'packages/drizzle/node_modules/drizzle-orm'),
+        join(root, 'node_modules/drizzle-orm'),
+      );
+      writeClientEntry(root);
+      writeFileSync(
+        join(root, 'app.ts'),
+        `
+import { createApp } from '@kovojs/server';
+export default createApp({});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'schema.ts'),
+        `
+import { pgTable, text } from 'drizzle-orm/pg-core';
+import { kovo } from '@kovojs/drizzle';
+
+export const memberships = pgTable('memberships', {
+  id: text('id').primaryKey(),
+  principalId: text('principal_id').notNull(),
+}, kovo({ domain: 'membership', key: 'id', owner: 'principalId' }));
+`,
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        grants?: readonly Record<string, unknown>[];
+      };
+      expect(graph.grants).toEqual(
+        expect.arrayContaining([
+          {
+            domain: 'membership',
+            kind: 'resource',
+            rightKinds: ['delegate', 'owner', 'read', 'write'],
+            table: 'memberships',
+          },
+        ]),
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('fails closed on opaque Drizzle query protocols before artifact emission', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-security-preflight-'));
     const appPath = join(root, 'app.mjs');

@@ -84,6 +84,55 @@ describe('kovo graph input validation', () => {
     ).toEqual([]);
   });
 
+  it('rejects grant facts that overclaim the finite decision or escape budget', () => {
+    expect(
+      validateKovoExplainInput({
+        grants: [
+          {
+            checkedStates: 65,
+            kind: 'transition',
+            mutation: 'membership.revoke',
+            operation: 'delete',
+            resource: 'memberships',
+            site: 'membership.ts:7',
+            verdict: 'attenuating',
+          },
+          {
+            kind: 'transition',
+            mutation: 'membership.opaque',
+            operation: 'UNCLASSIFIED',
+            resource: 'memberships',
+            site: 'membership.ts:8',
+            verdict: 'top',
+          },
+          {
+            budget: 2,
+            kind: 'escape',
+            mutation: 'membership.grant',
+            name: 'membership.grant:insert:memberships',
+            operation: 'insert',
+            resource: 'memberships',
+            retainedObligation: 'review current policy',
+            site: 'membership.ts:9',
+          },
+          {
+            domain: 'membership',
+            kind: 'resource',
+            rightKinds: ['read', 'read'],
+            table: 'memberships',
+          },
+        ],
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'grants[0].checkedStates' }),
+        expect.objectContaining({ path: 'grants[1].reason' }),
+        expect.objectContaining({ path: 'grants[2].budget' }),
+        expect.objectContaining({ path: 'grants[3].rightKinds[1]' }),
+      ]),
+    );
+  });
+
   it('requires paired long-lived deadline facts on an endpoint surface', () => {
     expect(() =>
       deriveAccessExplainFacts({

@@ -118,6 +118,7 @@ export type {
   KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainOptions,
+  KovoGrantExplainOptions,
   KovoRevealedExplainOptions,
   KovoSourcesSinksExplainOptions,
   KovoTargetExplainOptions,
@@ -150,6 +151,72 @@ export const auditOutputVersion = 'kovo-audit/v1';
 
 function operationKinds(operations: readonly { kind: string }[]): string[] {
   return [...new Set(operations.map((operation) => operation.kind))].sort();
+}
+
+function compareGrantFacts(
+  left: CoreGraph.GrantExplainFact,
+  right: CoreGraph.GrantExplainFact,
+): number {
+  const order: Readonly<Record<CoreGraph.GrantExplainFact['kind'], number>> = {
+    principal: 0,
+    resource: 1,
+    delegation: 2,
+    transition: 3,
+    escape: 4,
+  };
+  const rank = order[left.kind] - order[right.kind];
+  if (rank !== 0) return rank;
+  const leftKey = grantFactKey(left);
+  const rightKey = grantFactKey(right);
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+function grantFactKey(fact: CoreGraph.GrantExplainFact): string {
+  switch (fact.kind) {
+    case 'principal':
+      return fact.principal;
+    case 'resource':
+      return fact.table;
+    case 'delegation':
+      return `${fact.parent}\u0000${fact.child}`;
+    case 'transition':
+      return `${fact.mutation}\u0000${fact.resource}\u0000${fact.operation}\u0000${fact.site}`;
+    case 'escape':
+      return fact.name;
+  }
+}
+
+function grantFactLine(fact: CoreGraph.GrantExplainFact): string {
+  switch (fact.kind) {
+    case 'principal':
+      return `PRINCIPAL ${fact.principal}`;
+    case 'resource':
+      return `RESOURCE ${fact.table} domain=${fact.domain} rights=${list(fact.rightKinds)}`;
+    case 'delegation':
+      return `DELEGATION ${fact.child} parent=${fact.parent} rights=${list(fact.rightKinds)}`;
+    case 'transition':
+      return [
+        `TRANSITION ${fact.mutation}`,
+        `operation=${fact.operation}`,
+        `resource=${fact.resource}`,
+        `verdict=${fact.verdict}`,
+        fact.checkedStates === undefined ? '' : `checked-states=${fact.checkedStates}`,
+        fact.reason === undefined ? '' : `reason=${JSON.stringify(fact.reason)}`,
+        `site=${JSON.stringify(fact.site)}`,
+      ]
+        .filter(Boolean)
+        .join(' ');
+    case 'escape':
+      return [
+        `ESCAPE ${fact.name}`,
+        `mutation=${fact.mutation}`,
+        `operation=${fact.operation}`,
+        `resource=${fact.resource}`,
+        `budget=${fact.budget}`,
+        `retained-obligation=${JSON.stringify(fact.retainedObligation)}`,
+        `site=${JSON.stringify(fact.site)}`,
+      ].join(' ');
+  }
 }
 
 /**
@@ -242,6 +309,21 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
         );
       }
     }
+    return ok(lines);
+  }
+
+  if ('grants' in options) {
+    const facts = [...(graph.grants ?? [])].sort(compareGrantFacts);
+    const resources = facts.filter((fact) => fact.kind === 'resource').length;
+    const delegations = facts.filter((fact) => fact.kind === 'delegation').length;
+    const transitions = facts.filter((fact) => fact.kind === 'transition').length;
+    const escapes = facts.filter((fact) => fact.kind === 'escape').length;
+    const top = facts.filter((fact) => fact.kind === 'transition' && fact.verdict === 'top').length;
+    lines.push('GRANTS');
+    for (const fact of facts) lines.push(grantFactLine(fact));
+    lines.push(
+      `SUMMARY resources=${resources} delegations=${delegations} transitions=${transitions} escapes=${escapes} top=${top}`,
+    );
     return ok(lines);
   }
 
@@ -832,6 +914,15 @@ export function kovoCheck(
   };
 
   if (includeAll) {
+    for (const fact of graph.grants ?? []) {
+      if (fact.kind !== 'transition' || fact.verdict !== 'top') continue;
+      const reason = fact.reason ?? 'authz-bearing write is outside the decided grant fragment';
+      pushFinding(
+        `ERROR KV414 GRANT ${fact.mutation} operation=${fact.operation} resource=${fact.resource} verdict=fail-closed-top site=${JSON.stringify(fact.site)} reason=${JSON.stringify(reason)}`,
+        true,
+      );
+    }
+
     const diagnostics = diagnosticsForTouchGraph(graph.touchGraph ?? {});
 
     for (let index = 0; index < diagnostics.length; index += 1) {

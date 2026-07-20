@@ -252,6 +252,7 @@ export const status = query({
         { cache: false },
       ),
     ).resolves.toEqual({
+      grants: [],
       massAssignmentFacts: [],
       ownerDomains: [],
       queries: [],
@@ -262,6 +263,42 @@ export const status = query({
       sqlSafetyDiagnostics: [],
       toctouFacts: [],
       touchGraph: {},
+    });
+  });
+
+  it('threads compiler-derived grant transitions through the build aggregate', async () => {
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject: () => ({
+        grants: [
+          {
+            kind: 'transition',
+            mutation: 'membership.opaque',
+            operation: 'UNCLASSIFIED',
+            reason: 'authz-bearing write escaped exact operation extraction',
+            resource: 'memberships',
+            site: 'src/membership.ts:8',
+            verdict: 'top',
+          },
+        ],
+        queries: [],
+        sqlSafetyDiagnostics: [],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    }));
+    const { staticDataPlaneBuildFacts } = await loadSubject();
+
+    await expect(
+      staticDataPlaneBuildFacts([RELEVANT_DRIZZLE_SOURCE], { cache: false }),
+    ).resolves.toMatchObject({
+      grants: [
+        expect.objectContaining({
+          mutation: 'membership.opaque',
+          resource: 'memberships',
+          verdict: 'top',
+        }),
+      ],
     });
   });
 

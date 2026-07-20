@@ -227,6 +227,46 @@ facts side by side and name that status. They MUST also warn that the managed tr
 writes `kovo.role` while no generated RLS predicate reads it; session-role guard success is not SQL
 authorization. The engine's FORCE-RLS/effective-privilege closure remains the enforcement boundary.
 
+**Finite grant-transition model (normative).** Build MUST derive one grant graph from the same
+compiler-owned table-security manifest and mutation extraction that feed RLS and the touch graph; an
+app-authored second grant registry is forbidden. The modeled principal kind is the current
+request principal. Each `owner` table contributes an exact resource with
+`{delegate, owner, read, write}` rights, each `ownerVia` table contributes
+`{delegated-owner, read, write}` plus a `read`/`write` delegation edge from its parent resource, and
+each `authzPolicy` table contributes `{policy, read, write}`. `public` and `reference` tables do not
+become authorization resources. Every extracted mutation write, every exact `registry.tables`
+declaration, and every declared touch whose domain contains one of those resources MUST contribute
+a transition row; domain-level declarations conservatively select every authorization-bearing
+table in that domain.
+
+The decided fragment is deliberately small. An exact Drizzle `delete` from an `owner` or
+`ownerVia` resource, with no unresolved receiver/helper path for that mutation, has the successor
+right-set `∅`. The checker MUST enumerate the complete local powerset `P(R)` and verify
+`successor ⊆ predecessor` for every state. The bound is 64 states (`2^|R|`, currently at most 16),
+and exceeding it fails closed rather than sampling. Exact `insert` and `update` operations and an
+explicitly table-declared raw-SQL transition lie outside that proof and MUST appear as stable named
+escapes with `budget=1` and a retained review obligation. A custom `authzPolicy` does not establish
+positive-grant semantics, so even its exact deletion is not in the decided fragment. Any opaque
+helper/receiver flow, unresolved operation, authorization-bearing domain touch without an exact
+operation witness, or other unclassified write is `⊤`; `kovo check` MUST fail it with KV414 before
+production artifacts are emitted. `kovo explain --grants` MUST print the derived principals,
+resources, delegation edges, checked-state counts, `⊤` reasons, and named escape budget.
+
+**Attenuating delegation (normative).** `createDelegationAuthority` is only a bridge from rights an
+already-passed guard/RLS door established; it does not grant database authority and MUST NOT be
+accepted as a substitute for that door. It snapshots an exact nonempty finite `kind:resource` set,
+the acting identity, a revocation principal, and that principal's persistent epoch into a
+module-private framework receipt. `onBehalfOf` accepts only such a receipt, rechecks the authoritative
+epoch without a positive cache, and mints a child only when every requested right is a runtime member
+of the parent set. Structural casts and widened sets fail. The TypeScript subset relation is an
+authoring guardrail; the private receipt, runtime subset test, and epoch check own enforcement.
+
+The honest claim is only that, in the exact positive `owner`/`ownerVia` deletion fragment, the
+compiler-derived local right-set cannot grow, and that framework-receipted delegation cannot widen
+its parent set before the bound epoch changes. Kovo does not claim arbitrary `authzPolicy` meaning,
+audited escape safety, global HRU safety, or safety against an external schema writer. The live
+FORCE-RLS/effective-privilege closure remains the authorization enforcement boundary.
+
 **Engine-door completeness (normative).** Kovo may claim the storage engine is the sole authorization/confidentiality door only when the runtime itself holds no superuser/`BYPASSRLS` authority and cannot assume a privileged provision/admin role, and when a closure audit over the engine's actual grant graph proves that **every** object reachable by the app roles is one of: (i) a base table under `FORCE ROW LEVEL SECURITY` with a live `kovo` policy; (ii) a proven `security_invoker` view/function whose reachable base relations are themselves in that safe set; or (iii) a relation declared through the reviewed public escape, `declarePublicRelation(...)`, and surfaced as a `publicRelation` row in `kovo explain --capabilities`. The audit MUST ask the engine's finest-granularity effective-privilege oracle instead of lossy grant views or direct-grant rows: table and column reachability both count for relations, `PUBLIC` and role membership count for every privilege decision, sequence reachability is audited separately from relation reachability, and `SECURITY DEFINER` routines are scanned across all non-system schemas. Reachable objects that cannot enforce RLS, including materialized views, foreign tables, unsupported relation kinds, non-allowlisted sequences, and reachable `SECURITY DEFINER` routines, MUST fail closed. App roles MUST also hold no unexpected privilege on other ACL-bearing catalog objects or default privileges that would create future reachable objects outside the audited relation/routine/sequence set; such grants are refused rather than ignored. Build-time lints and source enumerations remain defense-in-depth only — never the thing the authorization/confidentiality guarantee rests on.
 
 **Production database driver floor (normative).** In-process PGlite is a dev/test-only,

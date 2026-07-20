@@ -30,6 +30,7 @@ export type KovoExplainOptions =
   | { cookies: true }
   | KovoDocumentExplainOptions
   | KovoEndpointExplainOptions
+  | KovoGrantExplainOptions
   | { modelBoundaries: true }
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
@@ -79,6 +80,11 @@ export interface KovoDocumentExplainOptions {
  */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
+}
+
+/** `kovo explain --grants`: print the compiler-derived finite grant model (SPEC §10.3). */
+export interface KovoGrantExplainOptions {
+  grants: true;
 }
 
 /**
@@ -239,6 +245,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--capabilities',
     '--cookies',
     '--endpoints',
+    '--grants',
     '--model-boundaries',
     '--revealed',
     '--sources-sinks',
@@ -283,6 +290,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { authorization: true } };
+  }
+
+  if (flags.has('--grants')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { grants: true } };
   }
 
   if (flags.has('--model-boundaries')) {

@@ -255,6 +255,7 @@ export interface KovoCheckInput {
   escapeCensus?: EscapeCensusCoverageFact;
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
+  grants?: readonly GrantExplainFact[];
   handlerWriteSinks?: readonly HandlerWriteSinkExplain[];
   lints?: readonly SemanticLint[];
   massAssignmentFacts?: readonly MassAssignmentFact[];
@@ -311,6 +312,61 @@ export interface AgentExplainFact {
   name: string;
   tools: readonly AgentToolExplainFact[];
 }
+
+/** @internal Finite right kinds derived from Drizzle authorization annotations (SPEC §10.3). */
+export type GrantRightKind = 'delegate' | 'delegated-owner' | 'owner' | 'policy' | 'read' | 'write';
+
+/**
+ * @internal Compiler-derived grant model and transition verdicts consumed by
+ * `kovo check` and `kovo explain --grants` (SPEC §10.3).
+ */
+export type GrantExplainFact =
+  | {
+      kind: 'principal';
+      principal: 'request-principal';
+    }
+  | {
+      domain: string;
+      kind: 'resource';
+      rightKinds: readonly GrantRightKind[];
+      table: string;
+    }
+  | {
+      child: string;
+      kind: 'delegation';
+      parent: string;
+      rightKinds: readonly Extract<GrantRightKind, 'read' | 'write'>[];
+    }
+  | {
+      checkedStates: number;
+      kind: 'transition';
+      mutation: string;
+      operation: string;
+      reason?: never;
+      resource: string;
+      site: string;
+      verdict: 'attenuating';
+    }
+  | {
+      checkedStates?: never;
+      kind: 'transition';
+      mutation: string;
+      operation: string;
+      reason: string;
+      resource: string;
+      site: string;
+      verdict: 'top';
+    }
+  | {
+      budget: 1;
+      kind: 'escape';
+      mutation: string;
+      name: string;
+      operation: string;
+      resource: string;
+      retainedObligation: string;
+      site: string;
+    };
 
 /** @internal */
 export interface TaskExplain {
@@ -2123,6 +2179,7 @@ const arrayFields = [
   'endpointPosture',
   'eventPayloads',
   'fixpointChecks',
+  'grants',
   'handlerWriteSinks',
   'lints',
   'massAssignmentFacts',
@@ -2199,8 +2256,213 @@ export function validateKovoExplainInput(input: unknown): GraphInputValidationEr
   validateAttributeMergeDiagnosticCodes(fields.components, errors, budget);
   validateTouchGraphDiagnosticCodes(touchGraph, errors, budget);
   validateAuthorizationCorrespondenceFacts(fields.authorizationCorrespondence, errors, budget);
+  validateGrantExplainFacts(fields.grants, errors, budget);
 
   return errors;
+}
+
+function validateGrantExplainFacts(
+  values: unknown,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+): void {
+  if (!securityIsArray(values)) return;
+  const path = 'grants';
+  const length = snapshotGraphArrayLength(values, path, budget);
+  for (let index = 0; index < length; index += 1) {
+    const entryPath = `${path}[${index}]`;
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok || !isRecord(entry.value)) {
+      appendGraphValidationError(errors, entryPath, 'grant fact must be an object');
+      continue;
+    }
+    const fact = entry.value;
+    const kind = ownGraphData(fact, 'kind', `${entryPath}.kind`);
+    validateExactGraphString(
+      kind,
+      `${entryPath}.kind`,
+      'grant fact kind',
+      ['delegation', 'escape', 'principal', 'resource', 'transition'],
+      errors,
+    );
+    if (kind === 'principal') {
+      validateExactGraphString(
+        ownGraphData(fact, 'principal', `${entryPath}.principal`),
+        `${entryPath}.principal`,
+        'grant principal',
+        ['request-principal'],
+        errors,
+      );
+      continue;
+    }
+    if (kind === 'resource') {
+      validateRequiredGraphString(
+        ownGraphData(fact, 'domain', `${entryPath}.domain`),
+        `${entryPath}.domain`,
+        errors,
+      );
+      validateRequiredGraphString(
+        ownGraphData(fact, 'table', `${entryPath}.table`),
+        `${entryPath}.table`,
+        errors,
+      );
+      validateGrantRightKinds(
+        ownGraphData(fact, 'rightKinds', `${entryPath}.rightKinds`),
+        `${entryPath}.rightKinds`,
+        errors,
+        budget,
+        ['delegate', 'delegated-owner', 'owner', 'policy', 'read', 'write'],
+      );
+      continue;
+    }
+    if (kind === 'delegation') {
+      validateRequiredGraphString(
+        ownGraphData(fact, 'child', `${entryPath}.child`),
+        `${entryPath}.child`,
+        errors,
+      );
+      validateRequiredGraphString(
+        ownGraphData(fact, 'parent', `${entryPath}.parent`),
+        `${entryPath}.parent`,
+        errors,
+      );
+      validateGrantRightKinds(
+        ownGraphData(fact, 'rightKinds', `${entryPath}.rightKinds`),
+        `${entryPath}.rightKinds`,
+        errors,
+        budget,
+        ['read', 'write'],
+      );
+      continue;
+    }
+
+    validateRequiredGraphString(
+      ownGraphData(fact, 'mutation', `${entryPath}.mutation`),
+      `${entryPath}.mutation`,
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(fact, 'operation', `${entryPath}.operation`),
+      `${entryPath}.operation`,
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(fact, 'resource', `${entryPath}.resource`),
+      `${entryPath}.resource`,
+      errors,
+    );
+    validateRequiredGraphString(
+      ownGraphData(fact, 'site', `${entryPath}.site`),
+      `${entryPath}.site`,
+      errors,
+    );
+    if (kind === 'transition') {
+      const verdict = ownGraphData(fact, 'verdict', `${entryPath}.verdict`);
+      validateExactGraphString(
+        verdict,
+        `${entryPath}.verdict`,
+        'grant transition verdict',
+        ['attenuating', 'top'],
+        errors,
+      );
+      const checkedStates = ownGraphData(fact, 'checkedStates', `${entryPath}.checkedStates`);
+      if (verdict === 'attenuating') {
+        if (
+          typeof checkedStates !== 'number' ||
+          checkedStates < 1 ||
+          checkedStates > 64 ||
+          checkedStates % 1 !== 0
+        ) {
+          appendGraphValidationError(
+            errors,
+            `${entryPath}.checkedStates`,
+            'attenuating transition must check between 1 and 64 states',
+          );
+        }
+      } else if (checkedStates !== undefined) {
+        appendGraphValidationError(
+          errors,
+          `${entryPath}.checkedStates`,
+          'top transition cannot claim checked states',
+        );
+      }
+      const reason = ownGraphData(fact, 'reason', `${entryPath}.reason`);
+      if (verdict === 'top') {
+        if (typeof reason !== 'string' || securityStringTrim(reason).length === 0) {
+          appendGraphValidationError(
+            errors,
+            `${entryPath}.reason`,
+            'top transition must retain a non-empty reason',
+          );
+        }
+      } else {
+        validateOptionalGraphString(reason, `${entryPath}.reason`, errors);
+      }
+      continue;
+    }
+    if (kind === 'escape') {
+      validateExactGraphNumber(
+        ownGraphData(fact, 'budget', `${entryPath}.budget`),
+        `${entryPath}.budget`,
+        'grant escape budget',
+        1,
+        errors,
+      );
+      validateRequiredGraphString(
+        ownGraphData(fact, 'name', `${entryPath}.name`),
+        `${entryPath}.name`,
+        errors,
+      );
+      validateRequiredGraphString(
+        ownGraphData(fact, 'retainedObligation', `${entryPath}.retainedObligation`),
+        `${entryPath}.retainedObligation`,
+        errors,
+      );
+    }
+  }
+}
+
+function validateGrantRightKinds(
+  value: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+  budget: GraphTraversalBudget,
+  allowed: readonly string[],
+): void {
+  if (!securityIsArray(value)) {
+    appendGraphValidationError(errors, path, 'rightKinds must be an array');
+    return;
+  }
+  const length = snapshotGraphArrayLength(value, path, budget);
+  if (length < 1 || length > allowed.length) {
+    appendGraphValidationError(
+      errors,
+      path,
+      `rightKinds must contain between 1 and ${allowed.length} entries`,
+    );
+  }
+  const seen = securitySet<string>();
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(value, index);
+    if (entry.ok && typeof entry.value === 'string') {
+      if (securitySetHas(seen, entry.value)) {
+        appendGraphValidationError(
+          errors,
+          `${path}[${index}]`,
+          'right kind must not be duplicated',
+        );
+      } else {
+        securitySetAdd(seen, entry.value);
+      }
+    }
+    validateExactGraphString(
+      entry.ok ? entry.value : undefined,
+      `${path}[${index}]`,
+      'right kind',
+      allowed,
+      errors,
+    );
+  }
 }
 
 function validateEscapeCensusCoverage(

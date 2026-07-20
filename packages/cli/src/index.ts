@@ -89,6 +89,7 @@ export type {
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,
+  KovoGrantExplainOptions,
   KovoRevealedExplainOptions,
   KovoSourcesSinksExplainOptions,
   KovoTasksExplainOptions,
