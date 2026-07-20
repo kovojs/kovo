@@ -257,14 +257,14 @@ file.** Today there is no declared partial order, no join, and no ⊑: joins are
 negative denylist**, so a newly-added exempt constant silently widens the TCB with no test that would
 notice. (~1.5 pm after §1.0)
 
-- [x] Emit `security-provenance-relation/v1.json`: the 39 server + 20 browser states
+- [x] Emit `security-provenance-relation/v1.json`: the 43 server + 20 browser states
       (`scan/security-operation-ir.ts:72-104`), the **quotient** member alphabet (literal names +
       `databaseOperationKind` domain + `isRawDatabaseCapabilityMember` domain + `other`), the authority
       set, and the `State × MemberClass → State` table currently written as nested ifs (`:4456-4520`).
       Gate: the emitted state set equals the `ServerValueProvenance`/`BrowserValueProvenance` unions and
       `securityOperationKinds`; a new tag without a table row fails CI.
-  - Evidence: the committed v1 artifact and `check:provenance-closure` cover 39 server states, 20
-    browser states, 56 quotient member classes, and all 2,184 server relation pairs.
+  - Evidence: `node scripts/provenance-closure.mjs` validates the committed v1 artifact over 43 server
+    states, 20 browser states, 57 quotient member classes, and all 2,451 server relation pairs.
 - [x] Replace the authority denylist with a table-derived `p ⊑ authorityTop` test; verify with an
       exhaustive per-state test that old and new predicates agree element-by-element, then confirm a
       planted new element defaults to authority-bearing.
@@ -274,7 +274,7 @@ notice. (~1.5 pm after §1.0)
       `table[s][m] === serverMemberProvenance(s,m)`, asserting the executed pair count equals
       `|states| × |classes|` exactly, plus a mutated-cell negative test. Because the domain is finite
       this is a **proof** of table/implementation agreement, not a test of it.
-  - Evidence: the focused compiler relation suite exhausts all 2,184 pairs and kills a mutated cell.
+  - Evidence: the focused compiler relation suite exhausts all 2,451 pairs and kills a mutated cell.
 - [x] `check:provenance-closure`: least-fixpoint reachability from every authority state, asserting no
       path reaches a sink position except via an enrolled `operation:*` state with a C9 door owner, or
       via `unknown-authority` (which must always yield one of the 8 `SecuritySemanticClosedReason`
@@ -565,12 +565,16 @@ Kovo's confidentiality claim anchors on the database being **the** door, but dat
 into artifacts carrying no predicate: search indexes, denormalized caches, CSV exports, error-tracker
 payloads, warehouse tables, and — most acutely for Kovo's AI audience — vector/embedding stores.
 
-- [ ] A compile-time KV: "owner-scoped/governed row reaches a persistent non-engine sink", fail-closed
+- [x] A compile-time KV: "owner-scoped/governed row reaches a persistent non-engine sink", fail-closed
       over plan-1's existing provenance engine using C9's sink inventory as the sink vocabulary — no
       new analysis machinery.
-- [ ] A `derived()` door requiring the inherited scope key to be part of the artifact's identity
+  - Evidence: `pnpm exec vitest run packages/compiler/src/derived-dataset-security.test.ts
+packages/server/src/derived-dataset.test.ts` passes 15/15, including KV452 persistent-sink closure.
+- [x] A `derived()` door requiring the inherited scope key to be part of the artifact's identity
       (composing with ScopedKey), so a per-tenant vector/index namespace is the **default**, and reads
       are re-scoped by the same principal binding as a DB read. **Ship the RAG/vector-store case first.**
+  - Evidence: the same 15/15 suite proves exact request-principal frame reconstruction, adapter
+    callable pinning, and forged/non-request scope rejection for vector query/upsert.
 
 ### 3.5 App-dependency authority attenuation (~1–1.5 pm)
 
@@ -737,11 +741,13 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 
 ### 5.4 Residency and erasure (needs plan-2 §3.1 ScopedKey)
 
-- [ ] A required `residency` field on `SourceSinkInventoryEntry`
+- [x] A required `residency` field on `SourceSinkInventoryEntry`
       (`packages/core/src/internal/source-sink-registry.ts:20-38`) with values
       `none | db-owner | ledger | adapter-enumerable | unerasable:<reason>`, enforced fail-closed by the
       existing `check:c9-sink-inventory`, publishing the `unerasable` count as a metric that **must
       start non-zero**. Converts an unknown into a counted, named, spec-visible hole. (~2 weeks)
+  - Evidence: `pnpm run check:c9-sink-inventory` passes 33/33 and mutation-checks the closed posture
+    vocabulary plus a non-zero six-row `unerasable` metric; CLI tests pass 14/14.
 - [ ] `erasePrincipal(p)` with a signed receipt and a **mandatory absence probe** (re-enumerate the
       scope; non-empty **fails** the erasure, does not warn), for the three sinks that provably cannot
       self-enumerate today: blobs (`StorageCapability` has no list operation), `_kovo_jobs.args` (no
