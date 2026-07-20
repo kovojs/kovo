@@ -45,6 +45,19 @@ const manifest: AppDependencyCapabilityManifest = {
   schema: 'kovo-app-dependency-capabilities/v1',
 };
 
+function depthBudgetCarrierExpression(assetPath: string): string {
+  const depth = 56;
+  const nested = Array.from({ length: depth }).reduce<string>(
+    (value) => `{ next: ${value} }`,
+    'box',
+  );
+  return `(() => { function install(box) { const root = ${nested}; root${'.next'.repeat(depth)}.platform = globalThis; } const box = {}; install(box); return new box.platform.Worker('${assetPath}'); })()`;
+}
+
+function recursiveBudgetCarrierExpression(assetPath: string): string {
+  return `(() => { function install(box) { var cycle = cycle; console.log(cycle); const holder = { get target() { return box; } }; holder.target.platform = globalThis; } const box = {}; install(box); return new box.platform.Worker('${assetPath}'); })()`;
+}
+
 describe('SPEC §6.6 app dependency loader attenuation', () => {
   // @kovo-security-certifies C13 dependency-complete-ssr-wiring
   it('forces complete dependency traversal in both supported SSR app-evaluation lanes', () => {
@@ -1821,6 +1834,87 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'setter-captured-target-written Worker',
+      "(() => { const box = {}; const holder = { set platform(value) { box.platform = value; } }; holder.platform = globalThis; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'class-constructor-written Worker',
+      "(() => { class Installer { constructor(box) { box.platform = globalThis; } } const box = {}; new Installer(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'projected-constructor-written Worker',
+      "(() => { function Installer(box) { box.platform = globalThis; } const registry = { Installer }; const C = registry.Installer; const box = {}; new C(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'constructor-returned-setter-written Worker',
+      "(() => { function Holder() { return { set target(value) { value.platform = globalThis; } }; } const box = {}; const holder = new Holder(); holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'dynamic-constructor-written Worker',
+      "(() => { const Installer = getInstaller(); const box = {}; new Installer(box); return new box.platform.Worker('/worker.mjs'); })()",
+      'opaque',
+    ],
+    [
+      'Reflect.construct-written Worker',
+      "(() => { function Installer(box) { box.platform = globalThis; } const box = {}; Reflect.construct(Installer, [box]); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'projected-computed-setter-written Worker',
+      "(() => { const box = {}; const registry = { holder: { set target(value) { value.platform = globalThis; } } }; const holder = registry.holder; holder['tar' + 'get'] = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'class-instance-setter-written Worker',
+      "(() => { class Holder { set target(value) { value.platform = globalThis; } } const box = {}; const projected = { holder: new Holder() }.holder; projected.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'static-class-setter-written Worker',
+      "(() => { class Holder { static set target(value) { value.platform = globalThis; } } const box = {}; Holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'prototype-setter-written Worker',
+      "(() => { function Holder() {} Holder.prototype = { set target(value) { value.platform = globalThis; } }; const box = {}; const holder = new Holder(); holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'defineProperty-setter-written Worker',
+      "(() => { const holder = {}; Object.defineProperty(holder, 'target', { set(value) { value.platform = globalThis; } }); const box = {}; holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'defineProperty-prototype-setter-written Worker',
+      "(() => { function Holder() {} Object.defineProperty(Holder.prototype, 'target', { set(value) { value.platform = globalThis; } }); const box = {}; const holder = new Holder(); holder.target = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'Reflect.set-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; Reflect.set(holder, 'target', box); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'Object.assign-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; Object.assign(holder, { target: box }); return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    [
+      'dynamic-key-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; holder[getSetterKey()] = box; return new box.platform.Worker('/worker.mjs'); })()",
+      'Worker',
+    ],
+    ['depth-budget-helper-written Worker', depthBudgetCarrierExpression('/worker.mjs'), 'Worker'],
+    [
+      'recursive-budget-helper-written Worker',
+      recursiveBudgetCarrierExpression('/worker.mjs'),
+      'Worker',
+    ],
+    [
       'array-written Worker',
       "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
       'Worker',
@@ -2104,9 +2198,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           "const ignoredUnknownResult = inspectSomething({ value: 'off-slice' });",
           "const readLocalWorker = box => { const local = {}; local.seen = true; return box.worker; }; const forwardLocalWorker = box => readLocalWorker(box); const LocalViaHelper = forwardLocalWorker({ worker: class LocalWorker { constructor() { this.kind = 'helper-read'; } } }); const helperRead = new LocalViaHelper().kind;",
           "const nonCapturingBox = { Worker: class LocalWorker { constructor() { this.kind = 'non-capturing'; } } }; function makeLocalWriter(unused) { const local = {}; return () => platform => { local.platform = platform; return local.platform; }; } const localWrite = makeLocalWriter(nonCapturingBox)()('local-only'); const nonCapturingWorker = new nonCapturingBox.Worker().kind;",
+          "const safeConstructorBox = { Worker: class LocalWorker { constructor() { this.kind = 'safe-constructor'; } } }; function SafeInstaller(unused) { const local = {}; local.platform = 'local-only'; } class SafeClassInstaller { constructor(unused) { const local = {}; local.platform = 'local-only'; } } new SafeInstaller(safeConstructorBox); new SafeClassInstaller(safeConstructorBox); const safeConstructorWorker = new safeConstructorBox.Worker().kind;",
+          "const safeSetterBox = { Worker: class LocalWorker { constructor() { this.kind = 'safe-setter'; } } }; const safeHolder = { set target(unused) { const local = {}; local.platform = 'local-only'; } }; const safeHolderAlias = { holder: safeHolder }.holder; safeHolderAlias['tar' + 'get'] = safeSetterBox; class SafeClassHolder { set target(unused) { const local = {}; local.platform = 'local-only'; } } const safeClassHolder = new SafeClassHolder(); safeClassHolder.target = safeSetterBox; function SafePrototypeHolder() {} Object.defineProperty(SafePrototypeHolder.prototype, 'safe', { value: 'local-only' }); const safePrototypeHolder = new SafePrototypeHolder(); safePrototypeHolder.other = safeSetterBox; const safeSetterWorker = new safeSetterBox.Worker().kind;",
           "const describedLocal = (() => { const Object = { getOwnPropertyDescriptor: () => ({ value: class LocalWorker { constructor() { this.kind = 'local-object'; } } }) }; const Local = Object.getOwnPropertyDescriptor({}, 'Worker').value; return new Local().kind; })();",
           "const reflectedLocal = (() => { const Reflect = { get: (object, key) => object[key] }; const Local = Reflect.get({ Worker: class LocalWorker { constructor() { this.kind = 'local-reflect'; } } }, 'Worker'); return new Local().kind; })();",
-          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
+          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, safeConstructorWorker, safeSetterWorker, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
           '',
         ].join('\n'),
       );
@@ -2346,6 +2442,91 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'setter-argument-written Worker',
       "(() => { const box = {}; const holder = { set target(value) { value.platform = globalThis; } }; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'setter-captured-target-written Worker',
+      "(() => { const box = {}; const holder = { set platform(value) { box.platform = value; } }; holder.platform = globalThis; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'class-constructor-written Worker',
+      "(() => { class Installer { constructor(box) { box.platform = globalThis; } } const box = {}; new Installer(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'projected-constructor-written Worker',
+      "(() => { function Installer(box) { box.platform = globalThis; } const registry = { Installer }; const C = registry.Installer; const box = {}; new C(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'constructor-returned-setter-written Worker',
+      "(() => { function Holder() { return { set target(value) { value.platform = globalThis; } }; } const box = {}; const holder = new Holder(); holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'dynamic-constructor-written Worker',
+      "(() => { const Installer = getInstaller(); const box = {}; new Installer(box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'Reflect.construct-written Worker',
+      "(() => { function Installer(box) { box.platform = globalThis; } const box = {}; Reflect.construct(Installer, [box]); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'projected-computed-setter-written Worker',
+      "(() => { const box = {}; const registry = { holder: { set target(value) { value.platform = globalThis; } } }; const holder = registry.holder; holder['tar' + 'get'] = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'class-instance-setter-written Worker',
+      "(() => { class Holder { set target(value) { value.platform = globalThis; } } const box = {}; const projected = { holder: new Holder() }.holder; projected.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'static-class-setter-written Worker',
+      "(() => { class Holder { static set target(value) { value.platform = globalThis; } } const box = {}; Holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'prototype-setter-written Worker',
+      "(() => { function Holder() {} Holder.prototype = { set target(value) { value.platform = globalThis; } }; const box = {}; const holder = new Holder(); holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'defineProperty-setter-written Worker',
+      "(() => { const holder = {}; Object.defineProperty(holder, 'target', { set(value) { value.platform = globalThis; } }); const box = {}; holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'defineProperty-prototype-setter-written Worker',
+      "(() => { function Holder() {} Object.defineProperty(Holder.prototype, 'target', { set(value) { value.platform = globalThis; } }); const box = {}; const holder = new Holder(); holder.target = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'Reflect.set-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; Reflect.set(holder, 'target', box); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'Object.assign-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; Object.assign(holder, { target: box }); return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'dynamic-key-setter-written Worker',
+      "(() => { const holder = { set target(value) { value.platform = globalThis; } }; const box = {}; holder[getSetterKey()] = box; return new box.platform.Worker('/payload.mjs'); })()",
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'depth-budget-helper-written Worker',
+      depthBudgetCarrierExpression('/payload.mjs'),
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
+      'recursive-budget-helper-written Worker',
+      recursiveBudgetCarrierExpression('/payload.mjs'),
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
