@@ -492,6 +492,8 @@ export function validateSecurityFuzzReleaseWorkflowSource(source) {
   const requiredPrepareLines = [
     '    timeout-minutes: 240',
     '      - run: vp install --frozen-lockfile',
+    '      - name: Prove declared grammar containment model',
+    '        run: vp exec pnpm run check:grammar-containment',
     '      - name: Run deterministic release security fuzz campaign',
     '        run: vp exec pnpm run test:security-fuzz-release',
     '      - name: Archive release security fuzz counterexamples',
@@ -510,17 +512,19 @@ export function validateSecurityFuzzReleaseWorkflowSource(source) {
   }
 
   const installIndex = prepare.indexOf('run: vp install --frozen-lockfile');
+  const grammarIndex = prepare.indexOf('run: vp exec pnpm run check:grammar-containment');
   const fuzzIndex = prepare.indexOf('run: vp exec pnpm run test:security-fuzz-release');
   const artifactIndex = prepare.indexOf('name: Archive release security fuzz counterexamples');
   const supplyChainIndex = prepare.indexOf('run: vp exec pnpm run check:supply-chain');
   if (
     installIndex < 0 ||
-    fuzzIndex <= installIndex ||
+    grammarIndex <= installIndex ||
+    fuzzIndex <= grammarIndex ||
     artifactIndex <= fuzzIndex ||
     supplyChainIndex <= artifactIndex
   ) {
     findings.push(
-      'release prepare job must install, run the exact fuzz command, preserve failures, then continue release gates',
+      'release prepare job must install, prove grammar containment, run the exact fuzz command, preserve failures, then continue release gates',
     );
   }
   if (workflowLineCount(source, '        run: vp exec pnpm run test:security-fuzz-release') !== 1) {

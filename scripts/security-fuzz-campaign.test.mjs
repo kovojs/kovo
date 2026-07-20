@@ -188,6 +188,11 @@ describe('deterministic security fuzz campaign contract', () => {
 
     for (const [needle, replacement, finding] of [
       [
+        'run: vp exec pnpm run check:grammar-containment',
+        'run: vp exec pnpm run check:grammar-containment-disabled',
+        'check:grammar-containment',
+      ],
+      [
         'run: vp exec pnpm run test:security-fuzz-release',
         'run: vp exec pnpm run test:security-fuzz-nightly',
         'release fuzz command',

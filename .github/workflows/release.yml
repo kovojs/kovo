@@ -123,6 +123,9 @@ jobs:
 
       - run: vp install --frozen-lockfile
 
+      - name: Prove declared grammar containment model
+        run: vp exec pnpm run check:grammar-containment
+
       - name: Run deterministic release security fuzz campaign
         run: vp exec pnpm run test:security-fuzz-release
 

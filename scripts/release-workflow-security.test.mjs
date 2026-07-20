@@ -88,6 +88,7 @@ describe('release workflow authority', () => {
     expect(prepare).toContain('ref: ${{ github.sha }}');
     expect(prepare).toContain('persist-credentials: false');
     expect(prepare).toContain('run: vp install --frozen-lockfile');
+    expect(prepare).toContain('run: vp exec pnpm run check:grammar-containment');
     expect(prepare).toContain('run: vp exec pnpm run test:security-fuzz-release');
     expect(prepare).toContain('name: Archive release security fuzz counterexamples');
     expect(prepare).toContain('path: .kovo/security-failures/**');
