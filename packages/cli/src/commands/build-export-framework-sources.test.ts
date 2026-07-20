@@ -127,11 +127,15 @@ describe('Kovo framework source roots', () => {
     const cliEntry = realpathSync(join(process.cwd(), 'packages/cli/src/index.ts'));
     const serverEntry = realpathSync(createRequire(cliEntry).resolve('@kovojs/server'));
     const browserEntry = realpathSync(createRequire(serverEntry).resolve('@kovojs/browser'));
+    const compilerEntry = realpathSync(createRequire(cliEntry).resolve('@kovojs/compiler'));
+    const verifyEntry = realpathSync(createRequire(compilerEntry).resolve('@kovojs/verify'));
 
     const roots = kovoFrameworkSourceRootsForTesting(cliEntry);
 
     expect(roots).toContain(dirname(serverEntry));
     expect(roots).toContain(dirname(browserEntry));
+    expect(roots).toContain(dirname(compilerEntry));
+    expect(roots).toContain(dirname(verifyEntry));
   });
 
   it('follows only declared packed dependencies and rejects an app-planted Kovo name', () => {
