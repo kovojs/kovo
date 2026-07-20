@@ -1127,6 +1127,7 @@ describe('server app-shell public API barrels', () => {
       'authorizationCorrespondenceFactsFromApp',
       'createMemoryMutationReplayStore',
       'createRuntimeAttestationVerificationHandle',
+      'createSecurityEventRecordVerifier',
       'endpointMatches',
       'escapeObligationReviewPayload',
       'explainGuard',
