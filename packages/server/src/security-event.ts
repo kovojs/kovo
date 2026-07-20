@@ -1,6 +1,7 @@
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 
-import type { PurposeCryptoHandle } from './crypto-authority.js';
+import { createSecurityEventCryptoHandle, type PurposeCryptoHandle } from './crypto-authority.js';
+import type { SigningSecret } from './keyring.js';
 import {
   createWitnessSet,
   witnessArrayAppend,
@@ -168,7 +169,12 @@ export interface SecurityEventJournal {
   readonly head: () => Readonly<SecurityEventChainHead>;
   readonly record: (input: SecurityEventInput) => Readonly<SecurityEventRecord>;
   readonly snapshot: () => readonly Readonly<SecurityEventRecord>[];
-  readonly verify: (record: SecurityEventRecord) => boolean;
+  readonly verify: SecurityEventRecordVerifier['verify'];
+}
+
+/** Verify-only capability for records crossing an exported/at-rest trust boundary. @internal */
+export interface SecurityEventRecordVerifier {
+  readonly verify: (record: unknown) => record is SecurityEventRecord;
 }
 
 const EVENT_TYPES = createWitnessSet<SecurityEventType>();
@@ -328,21 +334,31 @@ export function createSecurityEventJournal(options: {
       return witnessFreeze(snapshot);
     },
     verify(record) {
-      if (!isSecurityEventRecord(record)) return false;
-      const keyId = ownDataValue(record, 'keyId', 'Security event record key id') as string;
-      const mac = ownDataValue(record, 'mac', 'Security event record MAC') as string;
-      const source = canonicalJsonStringify({
-        keyId,
-        occurredAt: ownDataValue(record, 'occurredAt', 'Security event record occurrence time'),
-        previousMac: ownDataValue(record, 'previousMac', 'Security event record previous MAC'),
-        schema: ownDataValue(record, 'schema', 'Security event record schema'),
-        sequence: ownDataValue(record, 'sequence', 'Security event record sequence'),
-        ...securityEventInputFromRecord(record),
-      });
-      return options.authority.verify(source, mac, keyId).ok;
+      return verifySecurityEventRecord(record, options.authority);
     },
   };
   return witnessFreeze(journal);
+}
+
+/**
+ * Construct the verify-only half of the deployment-bound security-event chain authority.
+ *
+ * The returned handle exposes no signing operation: a trusted caller supplies the deployment root,
+ * then offline consumers can only verify records at the exported/at-rest boundary (SPEC §6.6;
+ * plan 2 §4.3).
+ *
+ * @internal
+ */
+export function createSecurityEventRecordVerifier(options: {
+  readonly deploymentId: string;
+  readonly secret: SigningSecret;
+}): SecurityEventRecordVerifier {
+  const authority = createSecurityEventCryptoHandle(options.secret, options.deploymentId);
+  return witnessFreeze({
+    verify(record: unknown): record is SecurityEventRecord {
+      return verifySecurityEventRecord(record, authority);
+    },
+  });
 }
 
 function assertSecurityEventInput(input: SecurityEventInput): void {
@@ -622,7 +638,7 @@ function isUnrecordableKnownPrincipalScope(value: unknown): boolean {
   );
 }
 
-function securityEventInputFromRecord(record: SecurityEventRecord): SecurityEventInput {
+function securityEventInputFromRecord(record: object): SecurityEventInput {
   const type = ownDataValue(record, 'type', 'Security event record type');
   const input =
     type === 'security-decision'
@@ -726,7 +742,8 @@ function assertExactOwnDataFields(value: object, expected: readonly string[], la
   }
 }
 
-function isSecurityEventRecord(record: SecurityEventRecord): boolean {
+function isSecurityEventRecord(record: unknown): record is SecurityEventRecord {
+  if (record === null || typeof record !== 'object') return false;
   try {
     const type = ownDataValue(record, 'type', 'Security event record type');
     const expectedFields =
@@ -767,4 +784,22 @@ function isSecurityEventRecord(record: SecurityEventRecord): boolean {
   } catch {
     return false;
   }
+}
+
+function verifySecurityEventRecord(
+  record: unknown,
+  authority: PurposeCryptoHandle,
+): record is SecurityEventRecord {
+  if (!isSecurityEventRecord(record)) return false;
+  const keyId = ownDataValue(record, 'keyId', 'Security event record key id') as string;
+  const mac = ownDataValue(record, 'mac', 'Security event record MAC') as string;
+  const source = canonicalJsonStringify({
+    keyId,
+    occurredAt: ownDataValue(record, 'occurredAt', 'Security event record occurrence time'),
+    previousMac: ownDataValue(record, 'previousMac', 'Security event record previous MAC'),
+    schema: ownDataValue(record, 'schema', 'Security event record schema'),
+    sequence: ownDataValue(record, 'sequence', 'Security event record sequence'),
+    ...securityEventInputFromRecord(record),
+  });
+  return authority.verify(source, mac, keyId).ok;
 }

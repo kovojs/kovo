@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createSecurityEventCryptoHandle } from '../../../server/src/crypto-authority.js';
 import {
   createSecurityEventJournal,
+  createSecurityEventRecordVerifier,
   type SecurityDecisionEventInput,
   type SecurityEventInput,
 } from '../../../server/src/security-event.js';
@@ -18,10 +19,13 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
 
-const authority = createSecurityEventCryptoHandle(
-  'incident-scope-cli-test-secret-0123456789abcdef0123456789abcdef',
-  'deployment:incident-scope-test',
-);
+const TEST_SECRET = 'incident-scope-cli-test-secret-0123456789abcdef0123456789abcdef';
+const TEST_DEPLOYMENT_ID = 'deployment:incident-scope-test';
+const verificationEnvironment = Object.freeze({
+  KOVO_ATTESTATION_DEPLOYMENT_ID: TEST_DEPLOYMENT_ID,
+  KOVO_ATTESTATION_SECRET: TEST_SECRET,
+});
+const authority = createSecurityEventCryptoHandle(TEST_SECRET, TEST_DEPLOYMENT_ID);
 
 function event(
   principal: string,
@@ -84,6 +88,17 @@ function fixture(
   return { advisoryPath, eventsPath, root };
 }
 
+function runFixture(
+  files: { advisoryPath: string; eventsPath: string; root: string },
+  environment: NodeJS.ProcessEnv = verificationEnvironment,
+) {
+  return runIncidentScopeCommand(
+    { advisoryPath: files.advisoryPath, eventsPath: files.eventsPath },
+    files.root,
+    environment,
+  );
+}
+
 describe('kovo incident scope', () => {
   it('parses one advisory and a required event export without accepting extra flags', () => {
     expect(parseIncidentArgs(['scope', 'advisory.json', '--events', 'events.json'])).toEqual({
@@ -104,10 +119,7 @@ describe('kovo incident scope', () => {
       event('principal-a', 'tenant-a'),
       event('principal-ignored', 'tenant-ignored', 'framework:authorization:other-site'),
     ]);
-    const result = runIncidentScopeCommand(
-      { advisoryPath: files.advisoryPath, eventsPath: files.eventsPath },
-      files.root,
-    );
+    const result = runFixture(files);
 
     expect(result.exitCode).toBe(0);
     if (!('output' in result)) throw new Error(result.error);
@@ -130,10 +142,7 @@ describe('kovo incident scope', () => {
       const principal = 'p'.repeat(length);
       const tenant = 't'.repeat(length);
       const files = fixture([event(principal, tenant)]);
-      const result = runIncidentScopeCommand(
-        { advisoryPath: files.advisoryPath, eventsPath: files.eventsPath },
-        files.root,
-      );
+      const result = runFixture(files);
 
       expect(result.exitCode, `accepted identity length ${length}`).toBe(0);
       if (!('output' in result)) throw new Error(result.error);
@@ -150,10 +159,7 @@ describe('kovo incident scope', () => {
     };
     document.events[0]!.principal.id = 'p'.repeat(1_025);
     writeFileSync(overBound.eventsPath, canonicalJsonStringify(document));
-    const rejected = runIncidentScopeCommand(
-      { advisoryPath: overBound.advisoryPath, eventsPath: overBound.eventsPath },
-      overBound.root,
-    );
+    const rejected = runFixture(overBound);
     expect(rejected).toMatchObject({ exitCode: 1 });
     if (!('error' in rejected)) throw new Error(rejected.output);
     expect(rejected.error).toContain('bounded printable principal identity');
@@ -161,10 +167,7 @@ describe('kovo incident scope', () => {
 
   it('reports unanswerable within covered doors for bypasses, dropped history, and unresolved principals', () => {
     const outside = fixture([], { advisory: advisory('outside-covered-doors') });
-    const outsideResult = runIncidentScopeCommand(
-      { advisoryPath: outside.advisoryPath, eventsPath: outside.eventsPath },
-      outside.root,
-    );
+    const outsideResult = runFixture(outside);
     expect(outsideResult).toMatchObject({ exitCode: 1 });
     if (!('output' in outsideResult)) throw new Error(outsideResult.error);
     expect(JSON.parse(outsideResult.output)).toMatchObject({
@@ -179,10 +182,7 @@ describe('kovo incident scope', () => {
     const dropped = fixture([event('principal-a', 'tenant-a'), event('principal-b', 'tenant-b')], {
       dropped: 1,
     });
-    const droppedResult = runIncidentScopeCommand(
-      { advisoryPath: dropped.advisoryPath, eventsPath: dropped.eventsPath },
-      dropped.root,
-    );
+    const droppedResult = runFixture(dropped);
     expect(droppedResult).toMatchObject({ exitCode: 1 });
     if (!('output' in droppedResult)) throw new Error(droppedResult.error);
     expect(JSON.parse(droppedResult.output)).toMatchObject({
@@ -204,10 +204,7 @@ describe('kovo incident scope', () => {
       },
     };
     const unresolved = fixture([unresolvedInput]);
-    const unresolvedResult = runIncidentScopeCommand(
-      { advisoryPath: unresolved.advisoryPath, eventsPath: unresolved.eventsPath },
-      unresolved.root,
-    );
+    const unresolvedResult = runFixture(unresolved);
     expect(unresolvedResult).toMatchObject({ exitCode: 1 });
     if (!('output' in unresolvedResult)) throw new Error(unresolvedResult.error);
     expect(JSON.parse(unresolvedResult.output)).toMatchObject({
@@ -229,10 +226,7 @@ describe('kovo incident scope', () => {
         },
       },
     ]);
-    const unrecordableResult = runIncidentScopeCommand(
-      { advisoryPath: unrecordable.advisoryPath, eventsPath: unrecordable.eventsPath },
-      unrecordable.root,
-    );
+    const unrecordableResult = runFixture(unrecordable);
     expect(unrecordableResult).toMatchObject({ exitCode: 1 });
     if (!('output' in unrecordableResult)) throw new Error(unrecordableResult.error);
     expect(JSON.parse(unrecordableResult.output)).toMatchObject({
@@ -243,18 +237,75 @@ describe('kovo incident scope', () => {
     });
   });
 
-  it('fails closed on malformed facts or a broken append-only chain', () => {
-    const files = fixture([event('principal-a', 'tenant-a'), event('principal-b', 'tenant-b')]);
+  it('rejects forged fields through the server verifier and the CLI', () => {
+    const files = fixture([event('principal-a', 'tenant-a')]);
     const document = JSON.parse(readFileSync(files.eventsPath, 'utf8')) as {
-      events: Array<{ previousMac: string | null }>;
+      events: Array<{ outcome: 'allow' | 'deny' }>;
     };
-    document.events[1]!.previousMac = 'tampered';
+    const verifier = createSecurityEventRecordVerifier({
+      deploymentId: TEST_DEPLOYMENT_ID,
+      secret: TEST_SECRET,
+    });
+    expect(verifier.verify(document.events[0])).toBe(true);
+
+    document.events[0]!.outcome = 'deny';
+    expect(verifier.verify(document.events[0])).toBe(false);
     writeFileSync(files.eventsPath, canonicalJsonStringify(document));
 
-    const result = runIncidentScopeCommand(
-      { advisoryPath: files.advisoryPath, eventsPath: files.eventsPath },
-      files.root,
-    );
+    const result = runFixture(files);
+    expect(result).toMatchObject({ exitCode: 1 });
+    if (!('error' in result)) throw new Error(result.output);
+    expect(result.error).toContain('security-event record[0] MAC verification failed');
+  });
+
+  it('requires the exact deployment verification material and has no unverified fallback', () => {
+    const files = fixture([event('principal-a', 'tenant-a')]);
+    for (const environment of [
+      {},
+      { KOVO_ATTESTATION_DEPLOYMENT_ID: TEST_DEPLOYMENT_ID },
+      { KOVO_ATTESTATION_SECRET: TEST_SECRET },
+    ]) {
+      const result = runFixture(files, environment);
+      expect(result).toMatchObject({ exitCode: 1 });
+      if (!('error' in result)) throw new Error(result.output);
+      expect(result.error).toContain(
+        'security-event verification requires KOVO_ATTESTATION_DEPLOYMENT_ID and KOVO_ATTESTATION_SECRET',
+      );
+    }
+
+    for (const environment of [
+      {
+        KOVO_ATTESTATION_DEPLOYMENT_ID: TEST_DEPLOYMENT_ID,
+        KOVO_ATTESTATION_SECRET: 'wrong-incident-scope-secret-0123456789abcdef0123456789abcdef',
+      },
+      {
+        KOVO_ATTESTATION_DEPLOYMENT_ID: 'deployment:wrong-incident-scope',
+        KOVO_ATTESTATION_SECRET: TEST_SECRET,
+      },
+    ]) {
+      const result = runFixture(files, environment);
+      expect(result).toMatchObject({ exitCode: 1 });
+      if (!('error' in result)) throw new Error(result.output);
+      expect(result.error).toContain('security-event record[0] MAC verification failed');
+    }
+  });
+
+  it('fails closed on a broken append-only chain even when each record is genuine', () => {
+    const files = fixture([event('principal-a', 'tenant-a'), event('principal-b', 'tenant-b')]);
+    const other = fixture([event('principal-x', 'tenant-x'), event('principal-y', 'tenant-y')]);
+    const document = JSON.parse(readFileSync(files.eventsPath, 'utf8')) as {
+      events: unknown[];
+      head: unknown;
+    };
+    const otherDocument = JSON.parse(readFileSync(other.eventsPath, 'utf8')) as {
+      events: unknown[];
+      head: unknown;
+    };
+    document.events[1] = otherDocument.events[1];
+    document.head = otherDocument.head;
+    writeFileSync(files.eventsPath, canonicalJsonStringify(document));
+
+    const result = runFixture(files);
     expect(result).toMatchObject({ exitCode: 1 });
     if (!('error' in result)) throw new Error(result.output);
     expect(result.error).toContain('security-event chain is not contiguous');
@@ -262,10 +313,7 @@ describe('kovo incident scope', () => {
 
   it('uses NOT-OBSERVED language instead of claiming no impact', () => {
     const files = fixture([event('principal-a', null, 'framework:authorization:other-site')]);
-    const result = runIncidentScopeCommand(
-      { advisoryPath: files.advisoryPath, eventsPath: files.eventsPath },
-      files.root,
-    );
+    const result = runFixture(files);
     expect(result).toMatchObject({ exitCode: 0 });
     if (!('output' in result)) throw new Error(result.error);
     expect(JSON.parse(result.output)).toMatchObject({

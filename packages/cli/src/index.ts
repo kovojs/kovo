@@ -178,7 +178,9 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   incident(args, security) {
     const parsed = parseIncidentArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(runIncidentScopeCommand(parsed.options, security.invocationCwd));
+    return writeCommandResult(
+      runIncidentScopeCommand(parsed.options, security.invocationCwd, security.invocationEnv),
+    );
   },
 };
 

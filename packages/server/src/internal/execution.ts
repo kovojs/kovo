@@ -38,6 +38,10 @@ export {
 } from '../escape-obligation-review.js';
 export { exportSecurityEvents } from '../security-event-export.js';
 export {
+  createSecurityEventRecordVerifier,
+  type SecurityEventRecordVerifier,
+} from '../security-event.js';
+export {
   extractCompilerBoundKovoRuntimeDbMetadata,
   installGeneratedTableSecurityManifestForCommand,
   registeredGeneratedTableSecurityManifest,

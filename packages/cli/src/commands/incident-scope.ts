@@ -2,6 +2,10 @@ import { readFileSync as builtinReadFileSync, statSync as builtinStatSync } from
 import { resolve as builtinResolve } from 'node:path';
 
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
+import {
+  createSecurityEventRecordVerifier,
+  type SecurityEventRecordVerifier,
+} from '@kovojs/server/internal/execution';
 
 import {
   INCIDENT_ARGV_SPEC,
@@ -10,6 +14,7 @@ import {
   parsedStringOption,
   parseCommandArgv,
 } from '../commands-manifest.js';
+import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 
 const readFileSync = builtinReadFileSync;
@@ -132,18 +137,22 @@ export function parseIncidentArgs(
 }
 
 /**
- * Replay one finite advisory predicate against a structurally validated event export. Output is
- * canonical JSON so automation receives the same bytes regardless of input event order.
+ * Replay one finite advisory predicate against a structurally validated, deployment-authenticated
+ * event export. Output is canonical JSON so automation receives the same bytes regardless of input
+ * event order. The invocation environment must carry the same deployment id and root secret used
+ * by the runtime's purpose-separated security-event chain.
  *
  * @internal
  */
 export function runIncidentScopeCommand(
   options: IncidentOptions,
   invocationCwd: string,
+  invocationEnv: NodeJS.ProcessEnv,
 ): CliCommandResult {
   try {
+    const verifier = incidentEventVerifier(invocationEnv);
     const advisory = readAdvisory(resolve(invocationCwd, options.advisoryPath));
-    const eventExport = readEventExport(resolve(invocationCwd, options.eventsPath));
+    const eventExport = readEventExport(resolve(invocationCwd, options.eventsPath), verifier);
     const matched = eventExport.events.filter((record) => matches(advisory.predicate, record));
     const affectedPrincipals = sortedUnique(
       matched.flatMap((record) =>
@@ -253,7 +262,7 @@ function readAdvisory(path: string): IncidentAdvisory {
   };
 }
 
-function readEventExport(path: string): IncidentEventExport {
+function readEventExport(path: string, verifier: SecurityEventRecordVerifier): IncidentEventExport {
   const value = requireRecord(
     readBoundedJson(path, 'security-event export'),
     'security-event export',
@@ -278,6 +287,11 @@ function readEventExport(path: string): IncidentEventExport {
     throw new Error('security-event export events must be an array of at most 4096 records');
   }
   const chain = value.events.map((record, index) => readChainRecord(record, index));
+  for (let index = 0; index < chain.length; index += 1) {
+    if (!verifier.verify(chain[index])) {
+      throw new Error(`security-event record[${index}] MAC verification failed`);
+    }
+  }
   const head = requireRecord(value.head, 'security-event chain head');
   requireExactKeys(head, ['dropped', 'keyId', 'mac', 'sequence'], 'security-event chain head');
   const dropped = nonNegativeSafeInteger(head.dropped, 'security-event dropped count');
@@ -311,6 +325,20 @@ function readEventExport(path: string): IncidentEventExport {
       (record): record is IncidentDecisionRecord => record.type === 'security-decision',
     ),
   };
+}
+
+function incidentEventVerifier(invocationEnv: NodeJS.ProcessEnv): SecurityEventRecordVerifier {
+  const deploymentId = kovoInvocationEnvironmentValue(
+    invocationEnv,
+    'KOVO_ATTESTATION_DEPLOYMENT_ID',
+  );
+  const secret = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_ATTESTATION_SECRET');
+  if (deploymentId === undefined || secret === undefined) {
+    throw new Error(
+      'security-event verification requires KOVO_ATTESTATION_DEPLOYMENT_ID and KOVO_ATTESTATION_SECRET',
+    );
+  }
+  return createSecurityEventRecordVerifier({ deploymentId, secret });
 }
 
 function readChainRecord(value: unknown, index: number): IncidentChainRecord {
