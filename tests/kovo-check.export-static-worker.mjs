@@ -14,9 +14,9 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const options = JSON.parse(process.argv[2] ?? 'null');
 
 const nodeV8AsmWarning =
-  /^\(node:\d+\) V8: file:\/\/\/.*\/dist\/lexer\.asm-[A-Za-z0-9_-]+\.mjs:\d+ Invalid asm\.js: Unexpected token\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\n$/u;
+  /^\(node:\d+\) V8: file:\/\/\/.*\/dist\/lexer\.asm-[A-Za-z0-9_-]+\.mjs:\d+ Invalid asm\.js: Unexpected token\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\n/u;
 
-const frameworkCliStderr = (stderr) => (nodeV8AsmWarning.test(stderr) ? '' : stderr);
+const frameworkCliOutput = (output) => output.replace(nodeV8AsmWarning, '');
 
 if (options === null || typeof options !== 'object' || Array.isArray(options)) {
   throw new TypeError('kovo-check export-static worker requires a serialized options object');
@@ -29,15 +29,19 @@ const runCliCommand = async (args) => {
       [join(projectRoot, 'dist/cli/src/index.mjs'), ...args],
       { cwd: projectRoot, maxBuffer: 20 * 1024 * 1024 },
     );
-    return { exitCode: 0, stderr: frameworkCliStderr(stderr), stdout };
+    return {
+      exitCode: 0,
+      stderr: frameworkCliOutput(stderr),
+      stdout: frameworkCliOutput(stdout),
+    };
   } catch (error) {
     if (typeof error !== 'object' || error === null || typeof error.code !== 'number') {
       throw error;
     }
     return {
       exitCode: error.code,
-      stderr: frameworkCliStderr(String(error.stderr ?? '')),
-      stdout: String(error.stdout ?? ''),
+      stderr: frameworkCliOutput(String(error.stderr ?? '')),
+      stdout: frameworkCliOutput(String(error.stdout ?? '')),
     };
   }
 };
