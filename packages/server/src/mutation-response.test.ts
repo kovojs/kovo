@@ -2212,6 +2212,59 @@ describe('server mutation primitives', () => {
     expect(handlerSpy).toHaveBeenCalledOnce();
   });
 
+  it('aborts a deterministic enhanced-failure claim when failure rendering throws', async () => {
+    const abort = vi.fn();
+    const handlerSpy = vi.fn();
+    const replayStore = {
+      get() {
+        return undefined;
+      },
+      reserve() {
+        return {
+          abort,
+          commit() {},
+        };
+      },
+      set() {},
+    };
+    const rejectWrite = mutation('settings/enhanced-render-failure', {
+      errors: { DENIED: s.object({}) },
+      handler(_input, _request, context) {
+        handlerSpy();
+        return context.fail('DENIED', {});
+      },
+      input: s.object({ value: s.string() }),
+    });
+    const idem = mintIdemToken();
+
+    // SPEC §9.1/§10.3: deterministic-failure rendering has not committed application work.
+    // A renderer failure therefore releases the claim and returns closed framework error bytes so
+    // the same-token retry can render again instead of joining pending truth forever.
+    const failed = await renderMutationEndpointResponse(rejectWrite, {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
+      onError() {},
+      rawInput: { value: 'same-body' },
+      redirectTo: '/done',
+      renderFailureFragment() {
+        throw new Error('failure renderer crashed');
+      },
+      replayStore,
+      request: {},
+    });
+    expect(failed.status).toBe(500);
+    expect(abort).toHaveBeenCalledOnce();
+
+    const retry = await renderMutationEndpointResponse(rejectWrite, {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
+      rawInput: { value: 'same-body' },
+      redirectTo: '/done',
+      replayStore,
+      request: {},
+    });
+    expect(retry.status).toBe(422);
+    expect(handlerSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('M7: streaming duplicates stay joined after replay ttl until the stream commits', async () => {
     const replayStore = createMemoryMutationReplayStore({ ttlMs: 1 });
     let releaseStream: () => void = () => undefined;
