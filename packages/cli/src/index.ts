@@ -11,6 +11,7 @@ import {
 import { parseDbArgs, runDbCommand } from './commands/db.js';
 import { parseAttestArgs, runAttestCommand } from './commands/attest.js';
 import { parseIncidentArgs, runIncidentScopeCommand } from './commands/incident-scope.js';
+import { parseFixArgs, runFixCommand } from './commands/fix.js';
 import { parseDevArgs, runDevCommand } from './commands/dev.js';
 import {
   compileUsage,
@@ -210,6 +211,11 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     const parsed = parseExportArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runExportCommand(parsed.options, security));
+  },
+  async fix(args, security) {
+    const parsed = parseFixArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runFixCommand(parsed.options, security.invocationCwd));
   },
   async mcp(args) {
     return runMcpCommand(args);

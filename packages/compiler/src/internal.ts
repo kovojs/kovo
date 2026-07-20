@@ -140,6 +140,27 @@ export {
 } from './scan/query-shape-source.js';
 export { collectMinifierReservedNames } from './compile.js';
 export {
+  analyzeSafeComponentFixes,
+  compileBehaviorFingerprint,
+  proveSafeComponentRewrite,
+} from './scan/safe-fixes.js';
+export type {
+  ProveSafeComponentRewriteInput,
+  ProveSafeComponentRewriteResult,
+  SafeComponentFixCode,
+  SafeComponentFixEdit,
+  SafeComponentFixResult,
+} from './scan/safe-fixes.js';
+export {
+  agentAuthoredCostToGreenCorpus,
+  measureAgentAuthoredCostToGreenCorpus,
+} from './security/cost-to-green-corpus.js';
+export type {
+  AgentAuthoredCostToGreenCase,
+  AgentAuthoredCostToGreenReport,
+  CostToGreenDiagnosticMeasurement,
+} from './security/cost-to-green-corpus.js';
+export {
   lowerStandaloneServerSource,
   lowerStandaloneSourceDerivedRegistryDeclarations,
 } from './source-derived-lowering.js';

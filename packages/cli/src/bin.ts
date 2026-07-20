@@ -63,7 +63,8 @@ if (
   process.argv[2] === 'build' ||
   process.argv[2] === 'db' ||
   process.argv[2] === 'dev' ||
-  process.argv[2] === 'export'
+  process.argv[2] === 'export' ||
+  process.argv[2] === 'fix'
 ) {
   const { lockCompilerSecurityRealm } =
     await import('@kovojs/compiler/internal/security-bootstrap');
