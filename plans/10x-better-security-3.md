@@ -241,13 +241,13 @@ a **counterexample path**, not a flaky seed.
 - [x] Enumerate the arms of `serverExpressionProvenance`
       (`packages/compiler/src/scan/security-operation-ir.ts:4331-4394`) and classify each as
       _compositional_ (depends only on subterm provenance values) or _syntax-dependent_. Expected:
-      five compositional arms, one object-literal shape test, and two whole-subtree containment walks
+      five compositional arms, one object-literal shape test, and three whole-subtree containment walks
       in the fallthrough. **Do not abandon on that result** — define the decided relation over the
       compositional core and model the fallthrough as one named nondeterministic oracle edge yielding
-      `{local, foreign-executable, unknown-authority}`. If materially more arms inspect syntax, narrow
-      the finite-state frame and record the narrowing in §4.5.
-  - Evidence: `check:provenance-closure` extracts the exact nine-arm order and its 13/13 tests pin
-    five compositional arms, one leaf, one syntax predicate, and the two-walk nondeterministic edge.
+      `{local, foreign-executable, unsafe-wire-data, unknown-authority}`. If materially more arms
+      inspect syntax, narrow the finite-state frame and record the narrowing in §4.5.
+  - Evidence: `check:provenance-closure` extracts the exact ten-arm order and its 13/13 tests pin
+    five compositional arms, one leaf, one syntax predicate, and the three-walk nondeterministic edge.
 
 ### 1.1 Reify and decide the provenance relation
 
@@ -257,14 +257,14 @@ file.** Today there is no declared partial order, no join, and no ⊑: joins are
 negative denylist**, so a newly-added exempt constant silently widens the TCB with no test that would
 notice. (~1.5 pm after §1.0)
 
-- [x] Emit `security-provenance-relation/v1.json`: the 38 server + 20 browser states
+- [x] Emit `security-provenance-relation/v1.json`: the 39 server + 20 browser states
       (`scan/security-operation-ir.ts:72-104`), the **quotient** member alphabet (literal names +
       `databaseOperationKind` domain + `isRawDatabaseCapabilityMember` domain + `other`), the authority
       set, and the `State × MemberClass → State` table currently written as nested ifs (`:4456-4520`).
       Gate: the emitted state set equals the `ServerValueProvenance`/`BrowserValueProvenance` unions and
       `securityOperationKinds`; a new tag without a table row fails CI.
-  - Evidence: the committed v1 artifact and `check:provenance-closure` cover 38 server states, 20
-    browser states, 56 quotient member classes, and all 2,128 server relation pairs.
+  - Evidence: the committed v1 artifact and `check:provenance-closure` cover 39 server states, 20
+    browser states, 56 quotient member classes, and all 2,184 server relation pairs.
 - [x] Replace the authority denylist with a table-derived `p ⊑ authorityTop` test; verify with an
       exhaustive per-state test that old and new predicates agree element-by-element, then confirm a
       planted new element defaults to authority-bearing.
@@ -274,12 +274,12 @@ notice. (~1.5 pm after §1.0)
       `table[s][m] === serverMemberProvenance(s,m)`, asserting the executed pair count equals
       `|states| × |classes|` exactly, plus a mutated-cell negative test. Because the domain is finite
       this is a **proof** of table/implementation agreement, not a test of it.
-  - Evidence: the focused compiler relation suite exhausts all 2,128 pairs and kills a mutated cell.
+  - Evidence: the focused compiler relation suite exhausts all 2,184 pairs and kills a mutated cell.
 - [x] `check:provenance-closure`: least-fixpoint reachability from every authority state, asserting no
       path reaches a sink position except via an enrolled `operation:*` state with a C9 door owner, or
       via `unknown-authority` (which must always yield one of the 8 `SecuritySemanticClosedReason`
       values). Emit the reachability relation as a diffable artifact; fail with a counterexample path.
-  - Evidence: `check:provenance-closure` passes 12/12, validating the least fixpoint, eight closed
+  - Evidence: `check:provenance-closure` passes 13/13, validating the least fixpoint, eight closed
     reasons, exact C9 operation-door ownership, and counterexample-path negative controls.
 
 ### 1.2 Decide the authorization correspondence for the shipped fragment
@@ -653,11 +653,11 @@ Replaces a `ts.SyntaxKind` totality sweep, which would be theatre.
       `unknown-authority` — required for the two fallthrough containment walks and the object-literal
       shape test — each carrying an owner and a written JS-semantics witness ("`context.header` cannot
       return a capability because…"). Gate on zero ownerless rows.
-  - Evidence: `pnpm run check:provenance-precision-register` extracts all 14 below-top return sites,
-    validates 14 owned semantics witnesses, and kills row/owner/wrapper/prerequisite drift.
+  - Evidence: the precision-register structural gate extracts all 17 below-top return sites,
+    validates 17 owned semantics witnesses, and kills row/owner/wrapper/prerequisite drift.
 - [x] Point plan-2 §1.1's generator at exactly this register: sampling is the right tool for the
       obligations a decision procedure cannot discharge.
-  - Evidence: the same gate runs one deterministic compiler witness per 14/14 register rows and
+  - Evidence: the full gate runs one deterministic compiler witness per 17/17 register rows and
     requires both the declared provenance observation and abstract-transfer marker.
 
 ### 4.6 Undecidability ledger (~0.75–1 pm)
@@ -799,10 +799,16 @@ a within-corpus statistic published as coverage is dishonest.
 
 - [ ] §0 fully landed: defects fixed with real-Postgres regressions, process artifacts live, hermetic
       stage green, provenance stamp emitted.
-- [ ] §1 produces at least two decided results with committed diffable relation artifacts, each
+- [x] §1 produces at least two decided results with committed diffable relation artifacts, each
       publishing its domain, bound, and extraction gap.
-- [ ] §4.5 and §4.6 have zero ownerless rows, and SPEC §6.6's prohibition table is **generated** from
+  - Evidence: `check:provenance-closure`, `check:grammar-containment`,
+    `check:authorization-matrix`, and `check:rls-emission-door` pass over the finite provenance,
+    IPv4/header-grammar, and authorization fragments with committed artifacts and named gaps.
+- [x] §4.5 and §4.6 have zero ownerless rows, and SPEC §6.6's prohibition table is **generated** from
       the undecidability ledger.
+  - Evidence: the precision structural gate reports 17 rows and zero ownerless entries;
+    `analyzable-fragment.mjs` reports 9 prohibitions, 4 budgets, and 29 roots with the generated SPEC
+    table current, and its focused suite passes 4/4.
 - [ ] Metric E ratcheting downward for three consecutive comparable rounds; Δ at 100% of every declared
       fragment.
 - [ ] An outside party validates a `kovo.certificate/v1` with disjoint code, and the three negative
