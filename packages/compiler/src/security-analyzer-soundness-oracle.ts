@@ -21,6 +21,11 @@ import {
   serverConditionalTransfer,
   type SecurityAbstractTransferId,
 } from './scan/security-abstract-interpreter.js';
+import {
+  captureServerProvenancePrecisionGrants,
+  serverProvenancePrecisionGrantRows,
+  type ServerProvenancePrecisionGrantId,
+} from './scan/security-provenance-precision-grants.js';
 import type { ServerValueProvenance } from './scan/security-provenance-relation.js';
 
 export const analyzerSoundnessCounterexampleSchema =
@@ -105,6 +110,13 @@ export interface AnalyzerOracleLatticeBehavior {
   readonly defaultWithLocal: ServerValueProvenance;
 }
 
+export interface AnalyzerOraclePrecisionGrantWitness {
+  readonly expectedProvenance: Exclude<ServerValueProvenance, 'unknown-authority'>;
+  readonly id: ServerProvenancePrecisionGrantId;
+  readonly source: string;
+  readonly transferId: SecurityAbstractTransferId;
+}
+
 type AnalyzerOracleExpectation =
   | {
       readonly effects: readonly ObservedEffect[];
@@ -133,6 +145,7 @@ export interface AnalyzerOracleRunResult {
   readonly seed: string;
   readonly witnessedDoors: readonly AnalyzerEffectDoor[];
   readonly witnessedLatticeElements: readonly ServerValueProvenance[];
+  readonly witnessedPrecisionGrants: readonly ServerProvenancePrecisionGrantId[];
   readonly witnessedTransfers: readonly SecurityAbstractTransferId[];
 }
 
@@ -312,6 +325,16 @@ export function generateAnalyzerOracleLatticeWitnesses(): AnalyzerOracleLatticeW
   }));
 }
 
+/** Exactly one deterministic sampling obligation for every reviewed below-top precision grant. */
+export function generateAnalyzerOraclePrecisionGrantWitnesses(): AnalyzerOraclePrecisionGrantWitness[] {
+  return serverProvenancePrecisionGrantRows.map((row) => ({
+    expectedProvenance: row.generatorExpectedProvenance,
+    id: row.id,
+    source: precisionGrantWitnessSource(row.id),
+    transferId: precisionGrantTransferId(row.generatorTransfer),
+  }));
+}
+
 export function evaluateAnalyzerOracleLatticeWitness(
   witness: AnalyzerOracleLatticeWitness,
 ): AnalyzerOracleLatticeBehavior {
@@ -384,6 +407,43 @@ export async function runAnalyzerSoundnessOracle(
       );
     }
   }
+  const precisionGrantWitnesses = generateAnalyzerOraclePrecisionGrantWitnesses();
+  const witnessedPrecisionGrants = new Set<ServerProvenancePrecisionGrantId>();
+  for (const witness of precisionGrantWitnesses) {
+    const abstractCapture = captureSecurityAbstractTransfers(() =>
+      captureServerProvenancePrecisionGrants(() =>
+        compileComponentModule({
+          fileName: `src/precision-${witness.id}.tsx`,
+          source: witness.source,
+        }),
+      ),
+    );
+    const observation = abstractCapture.result.observations.find(
+      (candidate) =>
+        candidate.id === witness.id && candidate.provenance === witness.expectedProvenance,
+    );
+    if (observation === undefined) {
+      throw new Error(
+        `Analyzer precision witness ${witness.id} did not observe ${witness.expectedProvenance}; observed=${abstractCapture.result.observations
+          .map((candidate) => `${candidate.id}:${candidate.provenance}`)
+          .join(',')}`,
+      );
+    }
+    if (!abstractCapture.witnessedTransfers.includes(witness.transferId)) {
+      throw new Error(
+        `Analyzer precision witness ${witness.id} did not execute transfer ${witness.transferId}.`,
+      );
+    }
+    witnessedPrecisionGrants.add(witness.id);
+  }
+  const orderedWitnessedPrecisionGrants = serverProvenancePrecisionGrantRows
+    .map((row) => row.id)
+    .filter((id) => witnessedPrecisionGrants.has(id));
+  if (orderedWitnessedPrecisionGrants.length !== serverProvenancePrecisionGrantRows.length) {
+    throw new Error(
+      `Analyzer oracle did not execute every precision grant: ${orderedWitnessedPrecisionGrants.join(', ')}`,
+    );
+  }
   const witnessedDoors = new Set<AnalyzerEffectDoor>();
   const witnessedTransfers = new Set<SecurityAbstractTransferId>();
   for (const program of programs) {
@@ -420,10 +480,11 @@ export async function runAnalyzerSoundnessOracle(
     );
   }
   return {
-    checkedPrograms: programs.length,
+    checkedPrograms: programs.length + precisionGrantWitnesses.length,
     seed: `0x${seed.toString(16).padStart(8, '0')}`,
     witnessedDoors: [...witnessedDoors].sort(),
     witnessedLatticeElements: latticeWitnesses.map((witness) => witness.element),
+    witnessedPrecisionGrants: orderedWitnessedPrecisionGrants,
     witnessedTransfers: orderedWitnessedTransfers,
   };
 }
@@ -1008,6 +1069,135 @@ function shellEnvironment(environment: Readonly<Record<string, string>>): string
 
 function shellArgument(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function precisionGrantTransferId(value: string): SecurityAbstractTransferId {
+  if (isSecurityAbstractTransferId(value)) return value;
+  throw new TypeError(`Precision-grant generator names unknown transfer ${value}.`);
+}
+
+function isSecurityAbstractTransferId(value: string): value is SecurityAbstractTransferId {
+  return securityAbstractTransferIds.some((candidate) => candidate === value);
+}
+
+function precisionGrantWitnessSource(id: ServerProvenancePrecisionGrantId): string {
+  switch (id) {
+    case 'identifier-environment-lookup':
+      return renderTransferModule(
+        '',
+        `const localValue = 1;
+    const copiedValue = localValue;
+    void copiedValue;
+    ctx.fetch('https://oracle.invalid/precision-identifier');`,
+        false,
+      );
+    case 'new-response-outcome':
+      return renderTransferModule(
+        '',
+        `const value = new Response('oracle');
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-new-response');`,
+        false,
+      );
+    case 'new-foreign-executable':
+      return renderTransferModule(
+        '',
+        `const value = new endpoint();
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-new-foreign');`,
+        false,
+      );
+    case 'new-local-constructor':
+      return renderTransferModule(
+        `class LocalValue {}`,
+        `const value = new LocalValue();
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-new-local');`,
+        false,
+      );
+    case 'call-principal-scope':
+      return renderTransferModule(
+        '',
+        `const scoped = ctx.actAs({ id: 'precision-principal' });
+    void scoped;
+    ctx.fetch('https://oracle.invalid/precision-scope');`,
+        false,
+      );
+    case 'call-scoped-key':
+      return `import { task } from '@kovojs/server';
+export const analyzerOracle = task('precision-scoped-key', {
+  run(_input, ctx) {
+    const scoped = ctx.actAs({ id: 'precision-principal' });
+    const key = scoped.stateKey('precision-value');
+    ctx.storage.get(key);
+    return null;
+  },
+});
+`;
+    case 'call-intrinsic-identity':
+      return renderTransferModule(
+        '',
+        `const capability = Object.freeze(ctx.fetch);
+    capability('https://oracle.invalid/precision-intrinsic');`,
+        false,
+      );
+    case 'call-response-constructor':
+      return renderTransferModule(
+        '',
+        `const value = Response.json({ ok: true });
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-response-call');`,
+        false,
+      );
+    case 'call-local':
+      return renderTransferModule(
+        `function local(value) { return value; }`,
+        `const value = local(1);
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-local-call');`,
+        false,
+      );
+    case 'binary-finite-join':
+      return renderTransferModule(
+        '',
+        `const value = 1 + 2;
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-binary');`,
+        false,
+      );
+    case 'conditional-finite-join':
+      return renderTransferModule(
+        '',
+        `const value = true ? 1 : 2;
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-conditional');`,
+        false,
+      );
+    case 'static-member-relation':
+      return renderTransferModule(
+        '',
+        `const value = ctx.headers;
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-member');`,
+        false,
+      );
+    case 'fallthrough-foreign-containment':
+      return renderTransferModule(
+        '',
+        `const value = [endpoint];
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-foreign-container');`,
+        false,
+      );
+    case 'fallthrough-contained-local':
+      return renderTransferModule(
+        '',
+        `const value = { answer: 42 };
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-local-container');`,
+        false,
+      );
+  }
 }
 
 function transferWitnessSource(id: SecurityAbstractTransferId, noise: boolean): string {

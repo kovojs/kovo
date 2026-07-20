@@ -2192,6 +2192,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/verify/src/translation.test.ts',
       'scripts/analyzable-fragment-gate.test.mjs',
       'scripts/check-cache-generality.test.mjs',
+      'scripts/provenance-precision-register-c13.test.mjs',
       'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
@@ -2260,6 +2261,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'kills omission, classification, closed-reason, fixture, budget, and SPEC-table drift',
           'missingFixture.delete',
           'widenedBudget.budgetBindingMeasurement.budgets[0].limit += 1',
+        ],
+      },
+      {
+        id: 'provenance-precision-grant-register',
+        file: 'scripts/provenance-precision-register-c13.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 provenance-precision-grant-register',
+          'routes every non-top extractor return through an exact reviewed grant identity',
+          'unregisteredPrecisionReturns(sourceFile, declaration)',
+          'toEqual([])',
         ],
       },
       {

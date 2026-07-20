@@ -1341,7 +1341,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
       expect(source).toContain('cart: (draft, $input) => {');
       expect(source).not.toContain('productGrid:');
       expect(source).toContain(
-        'Overridden in the mutation module (derivation suppressed): productGrid.',
+        "Overridden in the mutation module (derivation suppressed): 'productGrid'.",
       );
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
         {
@@ -1458,7 +1458,7 @@ export const addToCart = mutation({
       expect(stderr).not.toHaveBeenCalled();
       expect(source).not.toContain('features/cart/queries/cart-summary:');
       expect(source).toContain(
-        'Overridden in the mutation module (derivation suppressed): features/cart/queries/cart-summary.',
+        "Overridden in the mutation module (derivation suppressed): 'features/cart/queries/cart-summary'.",
       );
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
         { query: 'features/cart/queries/cart-summary', status: 'hand-written' },

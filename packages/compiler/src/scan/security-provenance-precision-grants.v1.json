@@ -1,0 +1,123 @@
+{
+  "schema": "kovo-security-provenance-precision-grants/v1",
+  "authorityTop": "unknown-authority",
+  "extractor": "packages/compiler/src/scan/security-operation-ir.ts#serverExpressionProvenance",
+  "rows": [
+    {
+      "id": "identifier-environment-lookup",
+      "owner": "compiler-security",
+      "semanticsWitness": "The immutable alias fixed point pre-registers every framework authority root and foreign import binding; an identifier absent from that closed environment is local to this server-operation domain, while raw host acquisition is rejected by capability closure.",
+      "generatorTransfer": "expression.identifier",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": ["serverAliasEnvironment", "serverModuleAliasEnvironment"]
+    },
+    {
+      "id": "new-response-outcome",
+      "owner": "compiler-security",
+      "semanticsWitness": "Only the exact pre-registered Response constructor identity reaches response-constructor; constructing it produces response bytes/outcome authority, never a request, database, storage, or egress capability.",
+      "generatorTransfer": "expression.new",
+      "generatorExpectedProvenance": "response-outcome",
+      "prerequisites": ["serverAliasEnvironment", "serverExpressionProvenance"]
+    },
+    {
+      "id": "new-foreign-executable",
+      "owner": "compiler-security",
+      "semanticsWitness": "A constructor reached through an imported executable retains foreign-executable provenance; the extractor does not infer a safe result from opaque constructor behavior.",
+      "generatorTransfer": "expression.new",
+      "generatorExpectedProvenance": "foreign-executable",
+      "prerequisites": ["securityIrSourceIndex", "serverExpressionProvenance"]
+    },
+    {
+      "id": "new-local-constructor",
+      "owner": "compiler-security",
+      "semanticsWitness": "A new-expression is local only after the constructor is neither foreign nor authority-bearing and every argument is free of server authority; capability closure separately rejects raw host acquisition inside the module graph.",
+      "generatorTransfer": "expression.new",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": ["serverArgumentsContainAuthority", "serverProvenanceCarriesAuthority"]
+    },
+    {
+      "id": "call-principal-scope",
+      "owner": "compiler-security",
+      "semanticsWitness": "The closed member relation grants scope-call only to context.actAs/declareSystemRead/declareSystemWrite; invoking that exact operation returns the narrowed request context and no broader ambient principal.",
+      "generatorTransfer": "expression.call-scope",
+      "generatorExpectedProvenance": "context",
+      "prerequisites": ["serverMemberProvenanceFromRelation"]
+    },
+    {
+      "id": "call-scoped-key",
+      "owner": "compiler-security",
+      "semanticsWitness": "The closed relation grants scoped-key-call only to stateKey/systemStateKey on a witnessed context; the opaque key is plain result data in this operation lattice and does not expose its storage or principal mint authority.",
+      "generatorTransfer": "expression.call-scoped-key",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": ["serverMemberProvenanceFromRelation"]
+    },
+    {
+      "id": "call-intrinsic-identity",
+      "owner": "compiler-security",
+      "semanticsWitness": "Object.freeze/seal/preventExtensions are identity-preserving only for exactly one argument; the result keeps that argument's provenance, while every other arity closes at unknown-authority.",
+      "generatorTransfer": "expression.call-intrinsic-identity",
+      "generatorExpectedProvenance": "operation:server.egress.request",
+      "prerequisites": ["serverMemberProvenanceFromRelation", "serverExpressionProvenance"]
+    },
+    {
+      "id": "call-response-constructor",
+      "owner": "compiler-security",
+      "semanticsWitness": "Calling the exact Response constructor or a reviewed Response static operation yields response-outcome bytes; it cannot manufacture request, database, storage, or egress authority in the finite relation.",
+      "generatorTransfer": "expression.call-response",
+      "generatorExpectedProvenance": "response-outcome",
+      "prerequisites": ["serverMemberProvenanceFromRelation"]
+    },
+    {
+      "id": "call-local",
+      "owner": "compiler-security",
+      "semanticsWitness": "A call result is local only after the callee is outside every closed authority and foreign-executable state; helper authority movement is analyzed independently by the exact same-file helper map and opaque calls close before effect use.",
+      "generatorTransfer": "expression.call-local",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": ["analyzeServerHelperCall", "serverExpressionProvenance"]
+    },
+    {
+      "id": "binary-finite-join",
+      "owner": "compiler-security",
+      "semanticsWitness": "The finite binary transfer returns local only when neither operand carries authority or a foreign executable; any authority operand joins at unknown-authority and a foreign operand remains foreign-executable.",
+      "generatorTransfer": "expression.binary-join",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": ["serverBinaryTransfer"]
+    },
+    {
+      "id": "conditional-finite-join",
+      "owner": "compiler-security",
+      "semanticsWitness": "The finite conditional transfer preserves equal branches, joins unequal authority at unknown-authority, preserves foreign-executable, and grants local only when both alternatives are local.",
+      "generatorTransfer": "expression.conditional-join",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": ["serverConditionalTransfer"]
+    },
+    {
+      "id": "static-member-relation",
+      "owner": "compiler-security",
+      "semanticsWitness": "A static property read is projected exclusively through the complete server member relation; unknown or computed authority members default to unknown-authority instead of inheriting a benign receiver label.",
+      "generatorTransfer": "expression.static-member",
+      "generatorExpectedProvenance": "headers",
+      "prerequisites": ["staticMember", "serverMemberProvenanceFromRelation"]
+    },
+    {
+      "id": "fallthrough-foreign-containment",
+      "owner": "compiler-security",
+      "semanticsWitness": "The first bounded fallthrough walk skips nested executable scopes and call results but finds any referenced foreign executable in opaque containers; a hit remains foreign-executable rather than being granted local provenance.",
+      "generatorTransfer": "expression.fallthrough-foreign",
+      "generatorExpectedProvenance": "foreign-executable",
+      "prerequisites": ["expressionContainsServerForeignExecutable"]
+    },
+    {
+      "id": "fallthrough-contained-local",
+      "owner": "compiler-security",
+      "semanticsWitness": "The final local grant occurs only after the explicit object-literal implicit-protocol shape test and both bounded fallthrough walks find neither foreign executable nor server authority; otherwise the earlier branch returns foreign-executable or unknown-authority.",
+      "generatorTransfer": "expression.fallthrough-authority",
+      "generatorExpectedProvenance": "local",
+      "prerequisites": [
+        "serverObjectLiteralHasImplicitCallable",
+        "expressionContainsServerForeignExecutable",
+        "expressionContainsServerAuthority"
+      ]
+    }
+  ]
+}

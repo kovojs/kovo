@@ -246,7 +246,7 @@ a **counterexample path**, not a flaky seed.
       compositional core and model the fallthrough as one named nondeterministic oracle edge yielding
       `{local, foreign-executable, unknown-authority}`. If materially more arms inspect syntax, narrow
       the finite-state frame and record the narrowing in §4.5.
-  - Evidence: `check:provenance-closure` extracts the exact nine-arm order and its 12/12 tests pin
+  - Evidence: `check:provenance-closure` extracts the exact nine-arm order and its 13/13 tests pin
     five compositional arms, one leaf, one syntax predicate, and the two-walk nondeterministic edge.
 
 ### 1.1 Reify and decide the provenance relation
@@ -649,12 +649,16 @@ door id × owner scope`; `reveal('some string')` must stop typechecking.
 
 Replaces a `ts.SyntaxKind` totality sweep, which would be theatre.
 
-- [ ] One row per site in the provenance extractor returning anything **other than**
+- [x] One row per site in the provenance extractor returning anything **other than**
       `unknown-authority` — required for the two fallthrough containment walks and the object-literal
       shape test — each carrying an owner and a written JS-semantics witness ("`context.header` cannot
       return a capability because…"). Gate on zero ownerless rows.
-- [ ] Point plan-2 §1.1's generator at exactly this register: sampling is the right tool for the
+  - Evidence: `pnpm run check:provenance-precision-register` extracts all 14 below-top return sites,
+    validates 14 owned semantics witnesses, and kills row/owner/wrapper/prerequisite drift.
+- [x] Point plan-2 §1.1's generator at exactly this register: sampling is the right tool for the
       obligations a decision procedure cannot discharge.
+  - Evidence: the same gate runs one deterministic compiler witness per 14/14 register rows and
+    requires both the declared provenance observation and abstract-transfer marker.
 
 ### 4.6 Undecidability ledger (~0.75–1 pm)
 

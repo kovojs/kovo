@@ -82,4 +82,16 @@ describe('provenance closure artifact gate', () => {
       'unclassified-statement:SwitchStatement',
     );
   });
+
+  it('recognizes only the exact registered final containment payload', () => {
+    const source = readFileSync(`${repoRoot()}/${scannerPath}`, 'utf8');
+    const mutant = source.replace(
+      "'fallthrough-contained-local',\n    expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',",
+      "'unreviewed-local-grant',\n    expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',",
+    );
+    expect(mutant).not.toBe(source);
+    expect(extractServerExpressionProvenanceArms(mutant)).toContain(
+      'unclassified-return:CallExpression',
+    );
+  });
 });

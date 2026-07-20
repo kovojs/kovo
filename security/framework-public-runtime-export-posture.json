@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "dfc7079979c531eb4c4a2622a71f8094970b2b9a6f2860430904c13b821ce80e",
+      "sourceTreeSha256": "e1b058776d3a55e16726477a689312fcdc57eeae33f8d1518005fb3524cd7409",
       "manifestVariants": [
         {
           "exports": {
@@ -795,7 +795,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "b1b261f2ee378a7e102e28fe9b11b1537e1417b086cbc77fb43b58175da02ad7"
+      "sourceTreeSha256": "9ec21c49e61cecc7361b1aca72479ae2ab20bcd7325dc06a51a4643eda38cb42"
     },
     {
       "manifestVariants": [

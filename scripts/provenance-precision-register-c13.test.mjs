@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus finite-security-operation-ir
 import { readFileSync } from 'node:fs';
 
 import ts from 'typescript';
@@ -11,10 +12,7 @@ const sourcePath = new URL(
 function serverExpressionProvenanceFunction(sourceFile) {
   let match;
   const visit = (node) => {
-    if (
-      ts.isFunctionDeclaration(node) &&
-      node.name?.text === 'serverExpressionProvenance'
-    ) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'serverExpressionProvenance') {
       match = node;
       return;
     }

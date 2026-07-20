@@ -175,7 +175,8 @@ declared transfer registry exists to read (transfer identities are computed as i
       seed, running in `test:security-fuzz-nightly` (the campaign already runs cross-implementation
       differential families for redos/headers; none targets the interpreter — that is the gap).
   - Evidence: the campaign check reports 7 families/21 cases, and the fixed-seed nightly-profile oracle
-    passes all 96 generated programs.
+    passes 110 compiler programs: 96 census-derived programs plus the exact 14-row precision-grant
+    register from plan-3 §4.5.
 
 ### 1.2 Spec↔implementation conformance closure
 

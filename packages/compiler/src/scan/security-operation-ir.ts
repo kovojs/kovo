@@ -68,6 +68,7 @@ import {
   serverBindingProjectionTransfer,
   serverConditionalTransfer,
 } from './security-abstract-interpreter.js';
+import { serverPrecisionGrant } from './security-provenance-precision-grants.js';
 
 interface SecurityOperationScanResult<Operation> {
   readonly operations: readonly Operation[];
@@ -5080,7 +5081,10 @@ function serverExpressionProvenance(
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) {
     securityAbstractTransfer('expression.identifier');
-    return compilerMapGet(aliases, current.text) ?? 'local';
+    return serverPrecisionGrant(
+      'identifier-environment-lookup',
+      compilerMapGet(aliases, current.text) ?? 'local',
+    );
   }
   if (ts.isObjectLiteralExpression(current) && serverObjectLiteralHasImplicitCallable(current)) {
     securityAbstractTransfer('expression.implicit-protocol');
@@ -5089,66 +5093,79 @@ function serverExpressionProvenance(
   if (ts.isNewExpression(current)) {
     securityAbstractTransfer('expression.new');
     const constructor = serverExpressionProvenance(current.expression, aliases);
-    if (constructor === 'response-constructor') return 'response-outcome';
-    if (constructor === 'foreign-executable') return 'foreign-executable';
+    if (constructor === 'response-constructor') {
+      return serverPrecisionGrant('new-response-outcome', 'response-outcome');
+    }
+    if (constructor === 'foreign-executable') {
+      return serverPrecisionGrant('new-foreign-executable', 'foreign-executable');
+    }
     if (
       serverProvenanceCarriesAuthority(constructor) ||
       serverArgumentsContainAuthority(current.arguments ?? [], aliases)
     ) {
       return 'unknown-authority';
     }
-    return 'local';
+    return serverPrecisionGrant('new-local-constructor', 'local');
   }
   if (ts.isCallExpression(current)) {
     const callee = serverExpressionProvenance(current.expression, aliases);
     if (callee === 'scope-call') {
       securityAbstractTransfer('expression.call-scope');
-      return 'context';
+      return serverPrecisionGrant('call-principal-scope', 'context');
     }
     if (callee === 'scoped-key-call') {
       securityAbstractTransfer('expression.call-scoped-key');
-      return 'local';
+      return serverPrecisionGrant('call-scoped-key', 'local');
     }
     if (callee === 'intrinsic-identity-call') {
       securityAbstractTransfer('expression.call-intrinsic-identity');
-      return current.arguments.length === 1
-        ? serverExpressionProvenance(current.arguments[0]!, aliases)
-        : 'unknown-authority';
+      return serverPrecisionGrant(
+        'call-intrinsic-identity',
+        current.arguments.length === 1
+          ? serverExpressionProvenance(current.arguments[0]!, aliases)
+          : 'unknown-authority',
+      );
     }
     if (callee === 'response-constructor' || callee === 'operation:server.response.raw') {
       securityAbstractTransfer('expression.call-response');
-      return 'response-outcome';
+      return serverPrecisionGrant('call-response-constructor', 'response-outcome');
     }
     if (callee === 'unknown-authority') {
       securityAbstractTransfer('expression.call-unknown-authority');
       return 'unknown-authority';
     }
     securityAbstractTransfer('expression.call-local');
-    return 'local';
+    return serverPrecisionGrant('call-local', 'local');
   }
   if (ts.isBinaryExpression(current)) {
     const left = serverExpressionProvenance(current.left, aliases);
     const right = serverExpressionProvenance(current.right, aliases);
-    return serverBinaryTransfer(left, right);
+    return serverPrecisionGrant('binary-finite-join', serverBinaryTransfer(left, right));
   }
   if (ts.isConditionalExpression(current)) {
     const whenTrue = serverExpressionProvenance(current.whenTrue, aliases);
     const whenFalse = serverExpressionProvenance(current.whenFalse, aliases);
-    return serverConditionalTransfer(whenTrue, whenFalse);
+    return serverPrecisionGrant(
+      'conditional-finite-join',
+      serverConditionalTransfer(whenTrue, whenFalse),
+    );
   }
   const member = staticMember(current);
   if (member) {
     securityAbstractTransfer('expression.static-member');
-    return serverMemberProvenance(
-      serverExpressionProvenance(member.receiver, aliases),
-      member.name,
+    return serverPrecisionGrant(
+      'static-member-relation',
+      serverMemberProvenance(serverExpressionProvenance(member.receiver, aliases), member.name),
     );
   }
   if (expressionContainsServerForeignExecutable(current, aliases)) {
     securityAbstractTransfer('expression.fallthrough-foreign');
-    return 'foreign-executable';
+    return serverPrecisionGrant('fallthrough-foreign-containment', 'foreign-executable');
   }
-  return expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local';
+  return serverPrecisionGrant(
+    'fallthrough-contained-local',
+    expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',
+  );
 }
 
 function serverObjectLiteralHasImplicitCallable(object: ts.ObjectLiteralExpression): boolean {
