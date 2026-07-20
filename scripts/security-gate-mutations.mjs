@@ -342,10 +342,91 @@ const dependencyLoaderClosedCarrierConstructorClosureBranch =
   "  if (calleeAtoms.some((atom) => atom.kind === 'closed' || atom.kind === 'dynamic-code')) {";
 const removedDependencyLoaderClosedCarrierConstructorClosureBranch =
   "  if (calleeAtoms.some((atom) => atom.kind === 'dynamic-code')) {";
-const dependencyLoaderLocalCallableEffectClosureBranch =
-  '  for (const callable of localCallables) {';
-const removedDependencyLoaderLocalCallableEffectClosureBranch =
-  '  for (const callable of localCallables.filter(() => false)) {';
+const dependencyLoaderLocalCallableEffectClosureBranch = [
+  '  const receiverAffected = collectBrowserAffectedInvocationArguments(',
+  '    localCallables,',
+].join('\n');
+const removedDependencyLoaderLocalCallableEffectClosureBranch = [
+  '  const receiverAffected = collectBrowserAffectedInvocationArguments(',
+  '    [],',
+].join('\n');
+const dependencyLoaderProxyConstructorArgumentClosureBranch = [
+  '  const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);',
+  '  const args = Array.isArray(expression.arguments) ? expression.arguments : [];',
+].join('\n');
+const restoredDependencyLoaderProxyConstructorArgumentExemptionBranch = [
+  '  const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);',
+  "  if (callee.length > 0 && callee.every((atom) => atom.kind === 'proxy-constructor')) return;",
+  '  const args = Array.isArray(expression.arguments) ? expression.arguments : [];',
+].join('\n');
+const dependencyLoaderInvocationReceiverEffectClosureBranch = '  return receiverAffected;';
+const removedDependencyLoaderInvocationReceiverEffectClosureBranch = '  return false;';
+const dependencyLoaderUnsupportedCallTargetEffectClosureBranch = [
+  '  const callHasUnsupportedTarget =',
+  '    callee.length === 0 ||',
+  '    callee.some(',
+  "      (atom) => atom.kind !== 'namespace' || !browserAstFunctionType(String(atom.node.type)),",
+  '    );',
+].join('\n');
+const removedDependencyLoaderUnsupportedCallTargetEffectClosureBranch =
+  '  const callHasUnsupportedTarget = false;';
+const dependencyLoaderIterationAssignmentEffectClosureBranch =
+  "      (record.type === 'ForInStatement' || record.type === 'ForOfStatement') &&";
+const removedDependencyLoaderIterationAssignmentEffectClosureBranch = [
+  '      false &&',
+  "      (record.type === 'ForInStatement' || record.type === 'ForOfStatement') &&",
+].join('\n');
+const dependencyLoaderStructuredArgumentDepthClosureBranch = [
+  '  const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {',
+  '    if (depth > 48) {',
+  '      index.effectAnalysisClosed = true;',
+].join('\n');
+const removedDependencyLoaderStructuredArgumentDepthClosureBranch = [
+  '  const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {',
+  '    if (depth > 48) {',
+].join('\n');
+const dependencyLoaderArrayJoinCoercionClosureBranch =
+  '    collectBrowserArrayJoinCoercionEffects(calleeMember.object, scope, index, state);';
+const removedDependencyLoaderArrayJoinCoercionClosureBranch = '    true;';
+const dependencyLoaderReturnedCallableCaptureClosureBranch = [
+  "      type === 'ReturnStatement' &&",
+  '      record.argument !== null &&',
+  '      record.argument !== undefined',
+].join('\n');
+const removedDependencyLoaderReturnedCallableCaptureClosureBranch = [
+  '      false &&',
+  "      type === 'ReturnStatement' &&",
+  '      record.argument !== null &&',
+  '      record.argument !== undefined',
+].join('\n');
+const dependencyLoaderConstructorAffectedArgumentClosureBranch = [
+  '  collectBrowserAffectedInvocationArguments(',
+  '    callables,',
+  '    args,',
+  '    scope,',
+  '    index,',
+  '    state,',
+  '    affectedArguments,',
+  '  );',
+].join('\n');
+const removedDependencyLoaderConstructorAffectedArgumentClosureBranch = [
+  '  collectBrowserAffectedInvocationArguments(',
+  '    [],',
+  '    args,',
+  '    scope,',
+  '    index,',
+  '    state,',
+  '    affectedArguments,',
+  '  );',
+].join('\n');
+const dependencyLoaderSetterAffectedArgumentClosureBranch = [
+  '  const receiverAffected = collectBrowserAffectedInvocationArguments(',
+  '    resolution.callables,',
+].join('\n');
+const removedDependencyLoaderSetterAffectedArgumentClosureBranch = [
+  '  const receiverAffected = collectBrowserAffectedInvocationArguments(',
+  '    [],',
+].join('\n');
 const dependencyLoaderDirectExportOwnershipClosureBranch =
   '        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)';
 const removedDependencyLoaderDirectExportOwnershipClosureBranch = '        false';
@@ -2505,6 +2586,78 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
+    description: 'Restores the Proxy constructor exemption for target and handler effects.',
+    expectedKiller:
+      'Proxy targets and handlers must close trap-mediated browser authority transfers',
+    name: 'dependency-loader/restore-proxy-constructor-argument-exemption',
+    replacement: restoredDependencyLoaderProxyConstructorArgumentExemptionBranch,
+    search: dependencyLoaderProxyConstructorArgumentClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderProxyConstructorArgumentBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops implicit receiver effects from local calls and setter invocation.',
+    expectedKiller:
+      'reviewed-package effect summaries must propagate writes through the exact call receiver',
+    name: 'dependency-loader/drop-invocation-receiver-effect-closure',
+    replacement: removedDependencyLoaderInvocationReceiverEffectClosureBranch,
+    search: dependencyLoaderInvocationReceiverEffectClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderInvocationReceiverEffectBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats unsupported call targets as effect-free.',
+    expectedKiller:
+      'unsupported calls must close structured arguments and receivers that can transfer browser authority',
+    name: 'dependency-loader/drop-unsupported-call-target-effect-closure',
+    replacement: removedDependencyLoaderUnsupportedCallTargetEffectClosureBranch,
+    search: dependencyLoaderUnsupportedCallTargetEffectClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderUnsupportedCallTargetEffectBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops assignment effects performed by for-in and for-of iteration targets.',
+    expectedKiller:
+      'iteration assignment targets must not acquire executable browser authority outside the finite evaluator',
+    name: 'dependency-loader/drop-iteration-assignment-effect-closure',
+    replacement: removedDependencyLoaderIterationAssignmentEffectClosureBranch,
+    search: dependencyLoaderIterationAssignmentEffectClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderIterationAssignmentEffectBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Silently truncates structured argument traversal at its depth budget.',
+    expectedKiller:
+      'structured carrier-effect traversal must fail closed when its finite depth budget is exhausted',
+    name: 'dependency-loader/drop-structured-argument-depth-closure',
+    replacement: removedDependencyLoaderStructuredArgumentDepthClosureBranch,
+    search: dependencyLoaderStructuredArgumentDepthClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredArgumentDepthBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Skips effect closure for values coerced by a proven Array join.',
+    expectedKiller:
+      'Array join precision must still close structured values whose coercion mutates browser authority',
+    name: 'dependency-loader/drop-array-join-coercion-closure',
+    replacement: removedDependencyLoaderArrayJoinCoercionClosureBranch,
+    search: dependencyLoaderArrayJoinCoercionClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderArrayJoinCoercionBehavior,
+  },
+  {
+    baseModule: {},
     description:
       'Drops local-call parameter effect propagation from the reviewed-package carrier evaluator.',
     expectedKiller:
@@ -2515,6 +2668,42 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderLocalCallableEffectBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops captured outer-argument effects from returned local callables.',
+    expectedKiller:
+      'returned local callables must preserve closure captures in reviewed-package effect summaries',
+    name: 'dependency-loader/drop-returned-callable-capture-closure',
+    replacement: removedDependencyLoaderReturnedCallableCaptureClosureBranch,
+    search: dependencyLoaderReturnedCallableCaptureClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderReturnedCallableCaptureBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops affected-argument propagation at local constructor calls.',
+    expectedKiller:
+      'local constructors must close arguments their constructor body can mutate or escape',
+    name: 'dependency-loader/drop-constructor-affected-argument-closure',
+    replacement: removedDependencyLoaderConstructorAffectedArgumentClosureBranch,
+    search: dependencyLoaderConstructorAffectedArgumentClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderConstructorAffectedArgumentBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops affected-argument propagation when an assignment invokes a setter.',
+    expectedKiller:
+      'setter assignments must close values and receivers affected by the resolved setter body',
+    name: 'dependency-loader/drop-setter-affected-argument-closure',
+    replacement: removedDependencyLoaderSetterAffectedArgumentClosureBranch,
+    search: dependencyLoaderSetterAffectedArgumentClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderSetterAffectedArgumentBehavior,
   },
   {
     baseModule: {},
@@ -6259,6 +6448,74 @@ function assertCspReportAvoidsDbAdmissionBehavior(_moduleUnderTest, { sourceText
   });
 }
 
+function assertDependencyLoaderProxyConstructorArgumentBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'reviewed package audit-(Proxy-set-trap|Object-freeze-Proxy-trap)-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderInvocationReceiverEffectBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'reviewed package audit-(method-this|static-setter-this)-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderUnsupportedCallTargetEffectBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'reviewed package audit-(array-callback|timer-extra-argument)-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderIterationAssignmentEffectBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'reviewed package audit-for-(of-member-target|await-member-target)-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderStructuredArgumentDepthBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'reviewed package audit-deep-structured-argument-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderArrayJoinCoercionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package audit-array-join-coercion-written Worker before Vite copies',
+  });
+}
+
 function assertDependencyLoaderLocalCallableEffectBehavior(_moduleUnderTest, { sourceText }) {
   runIsolatedPackageVitestMutation({
     packageName: 'cli',
@@ -6266,6 +6523,39 @@ function assertDependencyLoaderLocalCallableEffectBehavior(_moduleUnderTest, { s
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
     testNamePattern: 'reviewed package helper-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderReturnedCallableCaptureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package nested-returned-helper-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderConstructorAffectedArgumentBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package constructor-written Worker before Vite copies',
+  });
+}
+
+function assertDependencyLoaderSetterAffectedArgumentBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package setter-argument-written Worker before Vite copies',
   });
 }
 
