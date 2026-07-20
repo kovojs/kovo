@@ -370,7 +370,7 @@ export async function renderAppRouteDocumentResponse({
       requestHeader(request, 'cookie') !== null ||
       requestHeader(request, 'authorization') !== null;
     const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
-      request.headers.get('accept'),
+      requestHeader(request, 'accept'),
     );
 
     // SPEC §6.6: HSTS is attached only when the adapter-proven request scheme is HTTPS.
