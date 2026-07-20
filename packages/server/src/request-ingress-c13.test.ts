@@ -191,6 +191,8 @@ describe('SPEC §9.5 request-ingress closed corpus', () => {
       '/_m/a/%2e/b',
       '/_m/a/%2F/b',
       '/_m/a/%5c/b',
+      'http://app.example/_m/a/%2F/b',
+      'http://app.example/_m/a/%5c/b',
       '/_m/a/./b',
       'https://app.example/probe',
       'http://evil.example/probe',

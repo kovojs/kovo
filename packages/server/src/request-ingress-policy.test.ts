@@ -233,6 +233,8 @@ describe('SPEC §9.5 finite request-ingress classifier', () => {
       'HTTP://app.example/path',
       'http://app.example:80/path',
       'http://app.example',
+      'http://app.example/_m/a/%2F/b',
+      'http://app.example/_m/a/%5c/b',
     ]) {
       expect(classifier.classify(http1({ rawTarget })), rawTarget).toEqual({
         issue: 'target',
@@ -286,6 +288,11 @@ describe('SPEC §9.5 finite request-ingress classifier', () => {
       issue: 'target',
       ok: false,
     });
+    expect(
+      classifier.classify(
+        platformFetch({ rawTarget: 'https://app.example/assets%2fcart.css' }),
+      ),
+    ).toEqual({ issue: 'target', ok: false });
   });
 
   it('fails closed for an unknown runtime source discriminant', () => {

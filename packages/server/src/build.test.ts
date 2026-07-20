@@ -4331,9 +4331,98 @@ export default async function handler(request) {
       await expect(
         readFile(join(cloudflareOutDir, 'client/kovo-static-manifest.json'), 'utf8'),
       ).rejects.toThrow();
-      await expect(readFile(join(cloudflareOutDir, 'worker.mjs'), 'utf8')).rejects.toThrow();
+      const staticWorkerPath = join(cloudflareOutDir, 'worker.mjs');
+      const staticWorkerSource = await readFile(staticWorkerPath, 'utf8');
+      expect(staticWorkerSource).not.toContain("import('./server/handler.mjs')");
+      expect(staticWorkerSource.indexOf('requestIngressClassifier.classify({')).toBeLessThan(
+        staticWorkerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
+      expect(staticWorkerSource.indexOf('bodylessRequestHasPayload(method, headers)')).toBeLessThan(
+        staticWorkerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
       await expect(readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8')).resolves.toContain(
         'directory = "./client"',
+      );
+
+      const [
+        framedAsset,
+        framedClient,
+        framedDocument,
+        zeroAsset,
+        zeroPaddedClient,
+        absentDocument,
+        encodedTarget,
+        ambiguousSource,
+        platformCanonicalAuthority,
+      ] = runGeneratedCloudflareWorker(staticWorkerPath, [
+        {
+          asset: { body: 'FRAMED_ASSET_MUST_NOT_RUN' },
+          headers: { 'content-length': '1' },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: { body: 'FRAMED_CLIENT_MUST_NOT_RUN' },
+          headers: { 'transfer-encoding': 'chunked' },
+          method: 'HEAD',
+          url: 'https://worker.test/c/__v/static-v1/static.client.js',
+        },
+        {
+          asset: { body: 'FRAMED_DOCUMENT_MUST_NOT_RUN' },
+          headers: { 'content-length': '7' },
+          url: 'https://worker.test/',
+        },
+        {
+          asset: { body: 'ZERO_ASSET' },
+          headers: { 'content-length': '0' },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: { body: 'ZERO_PADDED_CLIENT' },
+          headers: { 'content-length': '00' },
+          method: 'HEAD',
+          url: 'https://worker.test/c/__v/static-v1/static.client.js',
+        },
+        {
+          asset: { body: 'ABSENT_DOCUMENT' },
+          url: 'https://worker.test/',
+        },
+        {
+          asset: { body: 'ENCODED_TARGET_MUST_NOT_RUN' },
+          url: 'https://worker.test/assets%2fcart.css',
+        },
+        {
+          asset: { body: 'AMBIGUOUS_SOURCE_MUST_NOT_RUN' },
+          headers: { 'cf-worker': 'attacker.example' },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: { body: 'PLATFORM_CANONICAL_AUTHORITY' },
+          // SPEC §9.5 limits Fetch-native authority proof to the canonical URL delivered by the
+          // named platform bridge; Request normalizes these raw spellings before Kovo receives it.
+          url: 'https://WORKER.TEST:443/assets/cart.css',
+        },
+      ]);
+
+      for (const rejected of [framedAsset, framedClient, framedDocument]) {
+        expect(rejected!.assetCalls).toBe(0);
+        expect(rejected!.response.status).toBe(413);
+        expect(rejected!.response.headers.get('cache-control')).toBe('no-store');
+      }
+      await expect(framedAsset!.response.text()).resolves.toBe('Payload Too Large');
+      await expect(framedClient!.response.text()).resolves.toBe('');
+      await expect(framedDocument!.response.text()).resolves.toBe('Payload Too Large');
+
+      for (const admitted of [zeroAsset, zeroPaddedClient, absentDocument]) {
+        expect(admitted!.assetCalls).toBe(1);
+        expect(admitted!.response.status).toBe(200);
+      }
+      expect(encodedTarget!.assetCalls).toBe(0);
+      expect(encodedTarget!.response.status).toBe(400);
+      expect(ambiguousSource!.assetCalls).toBe(0);
+      expect(ambiguousSource!.response.status).toBe(403);
+      expect(platformCanonicalAuthority!.assetCalls).toBe(1);
+      await expect(platformCanonicalAuthority!.response.text()).resolves.toBe(
+        'PLATFORM_CANONICAL_AUTHORITY',
       );
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -4772,6 +4861,12 @@ export default async function handler(request) {
       expect(workerSource.indexOf('requestIngressClassifier.classify({')).toBeLessThan(
         workerSource.indexOf('await loadHandler()'),
       );
+      expect(workerSource.indexOf('bodylessRequestHasPayload(method, headers)')).toBeLessThan(
+        workerSource.indexOf("ownDataValue(env, 'ASSETS')"),
+      );
+      expect(workerSource.indexOf('bodylessRequestHasPayload(method, headers)')).toBeLessThan(
+        workerSource.indexOf('await loadHandler()'),
+      );
 
       const [
         postedAssetProbe,
@@ -4783,6 +4878,13 @@ export default async function handler(request) {
         overLimitProbe,
         invalidSchemeProbe,
         extensionMethodProbe,
+        framedAssetProbe,
+        framedClientProbe,
+        framedDocumentProbe,
+        zeroAssetProbe,
+        zeroPaddedClientProbe,
+        absentDocumentProbe,
+        encodedTargetProbe,
       ] = runGeneratedCloudflareWorker(workerPath, [
         {
           asset: { body: 'STATIC_POST_MUST_NOT_WIN' },
@@ -4831,6 +4933,41 @@ export default async function handler(request) {
           asset: { body: 'EXTENSION_METHOD_ASSET_MUST_NOT_RUN' },
           method: 'custom',
           url: 'https://worker.test/ingress-identity',
+        },
+        {
+          asset: { body: 'FRAMED_ASSET_MUST_NOT_RUN' },
+          headers: { 'content-length': '1' },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: { body: 'FRAMED_CLIENT_MUST_NOT_RUN' },
+          headers: { 'transfer-encoding': 'chunked' },
+          method: 'HEAD',
+          url: 'https://worker.test/c/__v/cart-v1/cart.client.js',
+        },
+        {
+          asset: { body: 'FRAMED_DOCUMENT_MUST_NOT_RUN' },
+          headers: { 'content-length': '7' },
+          url: 'https://worker.test/index.html',
+        },
+        {
+          asset: { body: 'ZERO_ASSET' },
+          headers: { 'content-length': '0' },
+          url: 'https://worker.test/assets/cart.css',
+        },
+        {
+          asset: { body: 'ZERO_PADDED_CLIENT' },
+          headers: { 'content-length': '00' },
+          method: 'HEAD',
+          url: 'https://worker.test/c/__v/cart-v1/cart.client.js',
+        },
+        {
+          asset: { body: 'ABSENT_DOCUMENT' },
+          url: 'https://worker.test/index.html',
+        },
+        {
+          asset: { body: 'ENCODED_TARGET_MUST_NOT_RUN' },
+          url: 'https://worker.test/assets%2fcart.css',
         },
       ]);
 
@@ -4896,6 +5033,22 @@ export default async function handler(request) {
         method: 'custom',
         urlHost: 'worker.test',
       });
+
+      for (const rejected of [framedAssetProbe, framedClientProbe, framedDocumentProbe]) {
+        expect(rejected!.assetCalls).toBe(0);
+        expect(rejected!.response.status).toBe(413);
+        expect(rejected!.response.headers.get('cache-control')).toBe('no-store');
+      }
+      await expect(framedAssetProbe!.response.text()).resolves.toBe('Payload Too Large');
+      await expect(framedClientProbe!.response.text()).resolves.toBe('');
+      await expect(framedDocumentProbe!.response.text()).resolves.toBe('Payload Too Large');
+
+      for (const admitted of [zeroAssetProbe, zeroPaddedClientProbe, absentDocumentProbe]) {
+        expect(admitted!.assetCalls).toBe(1);
+        expect(admitted!.response.status).toBe(200);
+      }
+      expect(encodedTargetProbe!.assetCalls).toBe(0);
+      expect(encodedTargetProbe!.response.status).toBe(400);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
