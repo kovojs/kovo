@@ -20,7 +20,7 @@ export const repoRoot = findRepoRoot();
 export const securityCoverageManifestPath = 'security/security-coverage.json';
 export const securityCarrierGrammarPath = 'security/security-carrier-grammar.json';
 const coreInventoryPath = 'packages/core/src/internal/security-operation-ir.ts';
-const reviewedCoverageCellCount = 47;
+const reviewedCoverageCellCount = 48;
 
 export function evaluateSecurityCoverageFiles({ rootDir = repoRoot } = {}) {
   const findings = [];

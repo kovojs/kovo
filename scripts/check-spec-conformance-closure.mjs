@@ -45,10 +45,12 @@ const rootDiagnosticDoor = `${coreDiagnosticsPath}#createRegisteredDiagnostic`;
 const derivedDiagnosticDoor = `${coreDiagnosticsPath}#deriveRegisteredDiagnostic`;
 const staticExportDiagnosticRehydrationDoor =
   'packages/server/src/static-export-diagnostics.ts#rehydrateStaticExportCompileDiagnostic';
+const sqlSafetyDiagnosticRehydrationDoor =
+  'packages/server/src/internal/data-plane-static-analysis.ts#rehydrateSerializedSqlSafetyDiagnostic';
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '479ce31481cf3063610e1dbc0b3cf854bf429ec292e0eb17068909cf129fc707';
+  'd00668d42cf859015b93c86d51b19176bd28a7204127bc628b7ac93bb8daec20';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -59,6 +61,8 @@ const expectedDerivedDiagnosticDoorDigest =
   '45d97a10f0537ad7fcdbcfc806e9ce227ba5a157e73eaab13e108717f4d7e63a';
 const expectedStaticExportDiagnosticRehydrationDoorDigest =
   '38e9f176edf8a6520ec7884e2e05d0d86c6a44938fd11c2a370a789f84ce704c';
+const expectedSqlSafetyDiagnosticRehydrationDoorDigest =
+  'a57280e38f41d9b9de108369fc46f7ec0b25c829f8178657106d5e7446662e90';
 const expectedRegisteredDiagnosticDefinitionFactoryDigest =
   'e8dd153b51da2c8f22bc81bfe190d872c63bca35acf4a10ddef4db6f511f6a97';
 const expectedDiagnosticFactoryConstructorDigest =
@@ -66,9 +70,9 @@ const expectedDiagnosticFactoryConstructorDigest =
 const expectedDiagnosticFactorySinkDigest =
   '74213deb854487b068017e285bc57791f0fcd5ec333c8971b3bcf22df832befd';
 const expectedDiagnosticEvidenceWitnessDigest =
-  '3853796300370563dd5283c9ecaa1770bbd8a49ff6252b806a88859203085715';
+  'f13c6210b08259959c03ae1942ee0cdf6846fd079c4ad37c2650dbcd3ba3993d';
 const expectedDiagnosticActualLayerReviewDigest =
-  '68d65aff789f74256669b76e3ed246f94bd1cb6007bfa2615bd10b78751a8ada';
+  'f2e0a86a4e6d0097496cf153b7fbed007aab49f1995b50e28994746a9e056f41';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -84,7 +88,7 @@ const expectedCoreBuildDistCommand =
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
-  'packages/browser/src/inline-loader.ts#2f9e41eda34b608793f2dbd54817ca1f0aa04da106d278e7fef51e4d03caaa91#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#fe077646c148f9549c06040f0837738a4efe4d97394c4c3cc0a75c865c31e56b#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
   'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
   'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
@@ -92,11 +96,11 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
   'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
   'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
-  'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
-  'packages/compiler/src/security-analyzer-soundness-oracle.ts#20c389cf7797b16fd645a7b507fda66ede4f84c3857fdb1d8cd487dd8c8b68b5#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
-  'packages/server/src/sqlite.ts#bf1d2efe01383618c6bb4f0c6050b408b074f8f76ab263d3a02f6a164e81d9c8#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
+  'packages/server/src/sqlite.ts#cb9e237f018341e5691068e518d914311e3699a6b214f34e54dfb399b5f80e50#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
   'packages/test/src/integration/optimistic-client.ts#b24a45e17548fade0853e47da6ae471c27445ca38c518f509fe71353aafe1879#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
 ]);
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
@@ -110,20 +114,24 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/capability-closure-packages.ts',
-    '30542a21ce9288e9ec52707f79c0a02b397923c20f166a8b761c7d881224fa92',
+    '7b13fa8f9c8f16fd5159adbec738120549cf1a5f72b088121d1e2ae944a1ab3a',
   ],
-  ['packages/cli/src/bin.ts', 'a3f0e056e282bb26179e8e4923ad17674b995ef6320326091a21e71d55db9f8e'],
+  ['packages/cli/src/bin.ts', '1d98e30c50e8fd8ce2bbe489d56fcbd0df3042d49c1a38d03dcfdd635a77a088'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a',
+    'd18f549af2fd8959198884b543623970ff32b8f4a8c8c0a3f9499843776d4af5',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '61ad06c6c437ab42a81c6408b4dd33ff237dfb24244c120a16a4f6d25a5e1d0e',
+    '5534abf475805e3c2d3243af249fe6ccd252868b079b1465c5f83ac50bcf2f9b',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '50b45397b114a15fbe4bf8ea1a531fff63f33f049d6fd2e68163acc44698531b',
+    '8b290a6f16a508bc5e2dddaf2d181c451bba0f47b345b63cdf010c5b852e5d28',
+  ],
+  [
+    'packages/cli/src/dependency-capability-loader.ts',
+    'b0a97f773b9d2c7fb9f7d623618c4d270421a734004f0d704fcb72efc516a930',
   ],
   [
     'packages/compiler/src/ts-api.ts',
@@ -139,11 +147,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/core/src/secret.ts',
-    '7053fe51e30006da2bf9f437653f85e61bc142e63c9430eef19ee1a071543a8b',
+    'b18abbf9d4787e7370b655061e96796fa5c9832afc193e0144d06d3591346d5c',
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    'c3891dd6d1415a1ffe9cd1d51bca521a41639da002f40472f83acebde18fdc43',
+    '829c7729109edc83e983f77ef990c983f004e2cf56b7bd4585b95f2ac6bd3805',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -159,7 +167,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/server/src/sqlite.ts',
-    'bf1d2efe01383618c6bb4f0c6050b408b074f8f76ab263d3a02f6a164e81d9c8',
+    'cb9e237f018341e5691068e518d914311e3699a6b214f34e54dfb399b5f80e50',
   ],
   [
     'packages/server/src/vite-source.ts',
@@ -186,7 +194,11 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived compiler diagnostic projection for the build-export result protocol.',
   ],
   [
-    'packages/cli/src/commands/compile.ts#literal#46266841b02836a4b1a875f9222807db4ebb2e7bee8d197868ac210207efe2ac#35282b851c8c02ec18cc841f9ab19d7f9d4b848483e472c59be682870a4d09f8',
+    'packages/cli/src/commands/compile.ts#literal#46266841b02836a4b1a875f9222807db4ebb2e7bee8d197868ac210207efe2ac#22b7e55be74451af3ef543a558c504f8544d37057b37fd5664fe9f385a262c85',
+    'Registry-derived compiler diagnostic projection for the compile command result protocol.',
+  ],
+  [
+    'packages/cli/src/commands/compile.ts#literal#cfdea11064fabff0b302c4d536e741b1291bc50a27aea6646451d6f6706b6511#22b7e55be74451af3ef543a558c504f8544d37057b37fd5664fe9f385a262c85',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
@@ -278,12 +290,24 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Environment validation issue protocol with a non-Kovo code namespace.',
   ],
   [
-    'packages/server/src/internal/data-plane-static-analysis.ts#literal#d8b01e4ce93ec83c534e009638f2469aa0608d221b451f71cf8ea1f10ed10c10#698a3c77a3848eb3b80cddf5442f4cc1133ee05d5b8e6ac930385024def78b81',
-    'Registry-derived compiler diagnostic projection for data-plane analysis.',
+    'packages/server/src/internal/data-plane-static-analysis.ts#literal#c84de7c7f12dde57b3f69b9420957a880b1a8acb66fba7e7da2cc60bc8cdb460#4660349562d6c2a6add947055587fb6cf750e43c8317af2b043df0ff7652b30b',
+    'Registry-derived SQL-safety diagnostic projection for data-plane analysis.',
   ],
   [
-    'packages/test/src/integration/fixture-compiler-plugin.ts#literal#6d68b0cf359673b8aaa9738ba0e6082092fc51a98d943d841017256b72d1078a#6f24790b339c702d1fc57fd7f6bb3fd02ae753a67cf002b09dd0c92cb4b32595',
+    'packages/server/src/internal/data-plane-static-analysis.ts#literal#c84de7c7f12dde57b3f69b9420957a880b1a8acb66fba7e7da2cc60bc8cdb460#c01575de27970b5060015a9f89ed0f20a5dcd508b5c8c923044e9554eaa89cd0',
+    'Registry-derived SQL-safety diagnostic projection for data-plane analysis.',
+  ],
+  [
+    'packages/test/src/integration/fixture-compiler-plugin.ts#literal#6d68b0cf359673b8aaa9738ba0e6082092fc51a98d943d841017256b72d1078a#305fc1bbeefe4be138b486fa15164dd12d8bdaf6b9390faccc71188226f48cab',
     'Registry-derived compiler diagnostic projection for integration fixtures.',
+  ],
+  [
+    'packages/verify/src/index.ts#literal#31f609b29dfa8b7824dd1bbd42fdbe901d15ad88ea04a3cd8e65c965b2242037#9573ca48da5473895cee1e9383b8557d80bbba60a5970ab83137e8663b60a07e',
+    'Certificate finding projection with a non-Kovo capability-obligation code namespace.',
+  ],
+  [
+    'packages/verify/src/translation.ts#literal#34420495135a3d428c054b502a02d1a1ecaf6c4ed10edbb63e1f2f01c761c4e8#993d7ea5e33d2835ff644550c337a0815edc65fcc792c09aa57df274e6a0b2b5',
+    'Translation finding projection with a non-Kovo relation-specific code namespace.',
   ],
   [
     'packages/test/src/verifier-snapshots.ts#literal#9224c50f792a02912a3f2d0d36f4f011064979221208a2310cdb635a06023e82#cef07ca9ac80147617387ba25768bb9844f4e16727ce2193d75e8dda6b90fa01',
@@ -304,6 +328,10 @@ const reviewedDiagnosticWrappers = new Map([
   [
     staticExportDiagnosticRehydrationDoor,
     { exported: false, name: 'rehydrateStaticExportCompileDiagnostic' },
+  ],
+  [
+    sqlSafetyDiagnosticRehydrationDoor,
+    { exported: false, name: 'rehydrateSerializedSqlSafetyDiagnostic' },
   ],
   [
     'packages/cli/src/commands/build-export.ts#rehydrateStaticExportDiagnostic',
@@ -352,6 +380,7 @@ const reviewedDiagnosticEmitterNames = new Set([
   'eventTriggerDiagnostic',
   'rehydrateStaticExportDiagnostic',
   'rehydrateStaticExportCompileDiagnostic',
+  'rehydrateSerializedSqlSafetyDiagnostic',
   'staticExportDiagnostic',
   'blockingStaticExportDiagnostic',
 ]);
@@ -389,19 +418,19 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '383734dbb9eaeab763cc0a5481be54e040a4b13341f0b05c8e5e0c2a387ce16f',
+    '9374d59aaac27aedbb744d06b6f824250aeceec5ecaa41d03996ff67a3e441ea',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
-    'ee61fe6440f3266d2f3732b3790df3f1a912e8add405e0c8ff836bb225bb0a84',
+    'b2a2e74e73641bc3ce062528f7260240a501fadc509727e8248c0a0e626608de',
   ],
   [
     'packages/core/src/internal/security-markers.ts',
-    'b72797c2e10fb8ebb745c4b5d4d6db0be583e2d1f4f414c4d247957d2c75a92d',
+    'f8fb3738500b06b5231b5d867ca68725f08a2917dc5a98095af71f408232bfae',
   ],
   [
     'packages/core/src/internal/source-sink-registry.ts',
-    '6a5146b4a59074fd17af104e09b7acb9375cb56d8149a8721ed4274db821e190',
+    'c83459d29021dea2f761b8b7500a4e67d3ecd73094738dee03a435eae64c3671',
   ],
 ]);
 
@@ -4173,6 +4202,19 @@ function validateRegisteredDiagnosticProvenance(sourceFile, analysis) {
   if (staticExportDigest !== expectedStaticExportDiagnosticRehydrationDoorDigest) {
     findings.push(
       `${staticExportDiagnosticRehydrationDoor}: serialized diagnostic rehydration door drifted from its reviewed exact body (received ${staticExportDigest})`,
+    );
+  }
+  const sqlSafetySource = analysis.sourceFiles.get(
+    'packages/server/src/internal/data-plane-static-analysis.ts',
+  );
+  const sqlSafetyRehydration =
+    sqlSafetySource === undefined
+      ? undefined
+      : findTopLevelFunction(sqlSafetySource, 'rehydrateSerializedSqlSafetyDiagnostic');
+  const sqlSafetyDigest = sourceNodeDigest(sqlSafetyRehydration, sqlSafetySource);
+  if (sqlSafetyDigest !== expectedSqlSafetyDiagnosticRehydrationDoorDigest) {
+    findings.push(
+      `${sqlSafetyDiagnosticRehydrationDoor}: serialized SQL-safety diagnostic rehydration door drifted from its reviewed exact body (received ${sqlSafetyDigest})`,
     );
   }
   return findings;

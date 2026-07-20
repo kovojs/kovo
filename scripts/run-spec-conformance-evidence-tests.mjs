@@ -107,6 +107,22 @@ try {
     }
   }
 
+  for (const result of report.testResults ?? []) {
+    const file = path.relative(repoRoot, result.name).replaceAll(path.sep, '/');
+    const failedAssertions = (result.assertionResults ?? []).filter(
+      (assertion) => assertion.status === 'failed',
+    );
+    for (const assertion of failedAssertions) {
+      const identity = `${file}#${assertion.title}`;
+      if (!findings.some((finding) => finding.startsWith(`${identity}:`))) {
+        findings.push(`${identity}: Vitest assertion failed outside the required witness receipt`);
+      }
+    }
+    if (result.status === 'failed' && failedAssertions.length === 0) {
+      findings.push(`${file}: Vitest file failed before reporting an assertion result`);
+    }
+  }
+
   if (child.status !== 0) {
     findings.push(`Vitest evidence suite exited with status ${child.status ?? '<signal>'}`);
   }

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
 import type { Duplex } from 'node:stream';
 
+import { secret, type SecretValue } from '@kovojs/core';
 import type { InlineConfig, ViteDevServer } from 'vite-plus';
 
 const DEV_AUTH_COOKIE = 'Kovo-Dev-Auth';
@@ -87,6 +87,7 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
   if (!isBase64UrlToken(token)) {
     throw new TypeError('Kovo dev requires Vite to provide one non-empty boot websocket token.');
   }
+  const tokenWitness = secret(token);
   const httpServer = server.httpServer;
   if (httpServer === null) {
     throw new TypeError('Kovo dev requires one owned HTTP server for its HTTP/HMR host door.');
@@ -99,7 +100,7 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
       return;
     }
     if (devRequestReadsSourceOrEnvironment(request, authority.expectedOrigin)) {
-      if (!requestHasDevAuth(request, token)) {
+      if (!requestHasDevAuth(request, tokenWitness)) {
         rejectHttpDevRequest(response, {
           message: 'Kovo dev source endpoints require the boot-authenticated browser session.',
           ok: false,
@@ -126,7 +127,7 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
       rejectWebSocketDevRequest(socket, authority);
       return;
     }
-    if (!requestHasDevAuth(request, token)) {
+    if (!requestHasDevAuth(request, tokenWitness)) {
       rejectWebSocketDevRequest(socket, {
         message: 'Kovo dev HMR requires the boot-authenticated browser session.',
         ok: false,
@@ -152,6 +153,7 @@ export function installKovoDevSourceFallbackDoor(server: ViteDevServer): void {
   if (!isBase64UrlToken(token)) {
     throw new TypeError('Kovo dev requires Vite to provide one non-empty boot websocket token.');
   }
+  const tokenWitness = secret(token);
   const httpServer = server.httpServer;
   if (httpServer === null) {
     throw new TypeError('Kovo dev requires one owned HTTP server for its source fallback door.');
@@ -162,7 +164,7 @@ export function installKovoDevSourceFallbackDoor(server: ViteDevServer): void {
       rejectHttpDevRequest(response, authority);
       return;
     }
-    if (!requestHasDevAuth(request, token)) {
+    if (!requestHasDevAuth(request, tokenWitness)) {
       response.removeHeader('Set-Cookie');
       rejectHttpDevRequest(response, {
         message: 'Kovo dev Vite endpoints require the boot-authenticated browser session.',
@@ -304,7 +306,7 @@ function singletonRawHeader(request: IncomingMessage, name: string): string | nu
   return value;
 }
 
-function requestHasDevAuth(request: IncomingMessage, token: string): boolean {
+function requestHasDevAuth(request: IncomingMessage, token: SecretValue<string>): boolean {
   const cookieHeader = request.headers.cookie;
   if (typeof cookieHeader !== 'string') return false;
   const cookies = cookieHeader.split(';');
@@ -317,9 +319,7 @@ function requestHasDevAuth(request: IncomingMessage, token: string): boolean {
     candidate = cookie.slice(separator + 1);
   }
   if (candidate === undefined) return false;
-  const actual = Buffer.from(candidate, 'utf8');
-  const expected = Buffer.from(token, 'utf8');
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  return token.equals(candidate);
 }
 
 function issueDevAuthCookie(response: ServerResponse, token: string): void {

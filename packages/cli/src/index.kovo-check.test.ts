@@ -2591,7 +2591,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json]\n',
+      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]\n',
     );
   });
 
@@ -2702,7 +2702,7 @@ describe('kovo check', () => {
       });
 
       expect(output).toBe(
-        'kovo: add, audit, build, dev, check, db, compile, explain, export, mcp, update-docs\n',
+        'kovo: add, audit, build, dev, check, db, compile, fix, explain, incident, export, mcp, update-docs\n',
       );
     } finally {
       rmSync(parent, { force: true, recursive: true });

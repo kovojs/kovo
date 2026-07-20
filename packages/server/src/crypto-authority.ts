@@ -193,6 +193,11 @@ export interface BetterAuthRateLimitCryptoHandle {
   readonly bucket: (frame: string, bucketCount: number) => string;
 }
 
+/** @internal Purpose-minimal entropy handle for Better Auth password-reset decoy messages. */
+export interface BetterAuthPasswordResetCryptoHandle {
+  readonly mintDecoyToken: () => string;
+}
+
 /** @internal Purpose-minimal asymmetric handle for externally pinned runtime attestations. */
 export interface RuntimeAttestationCryptoHandle {
   readonly currentKeyId: string;
@@ -500,6 +505,23 @@ export function createBetterAuthRateLimitCryptoHandle(
       const bucket = (((digest[0] ?? 0) << 8) | (digest[1] ?? 0)) % bucketCount;
       const hex = witnessReflectApply<string>(nativeNumberToString, bucket, [16]);
       return `${securityStringSlice('0000', hex.length)}${hex}`;
+    },
+  });
+}
+
+/** @internal Mint only the fixed-width opaque token used for password-reset decoy messages. */
+export function createBetterAuthPasswordResetCryptoHandle(): BetterAuthPasswordResetCryptoHandle {
+  return witnessFreeze({
+    mintDecoyToken(): string {
+      // Eighteen random bytes encode to exactly 24 unpadded base64url characters. The consumer
+      // receives neither raw entropy nor an algorithm selector (SPEC §6.6).
+      const token = securityBufferToString(nativeRandomBytes(18), 'base64url');
+      if (token.length !== 24) {
+        throw new TypeError(
+          'Kovo crypto authority returned an invalid password-reset decoy token.',
+        );
+      }
+      return token;
     },
   });
 }

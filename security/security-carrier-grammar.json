@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 275,
+    "historicalWitnesses": 277,
     "productions": 12
   },
   "productions": [
@@ -638,6 +638,12 @@
       "corpus": "kv424-request-process",
       "production": "root-registration",
       "reason": "This witness registers an exact security root or closes before execution."
+    },
+    {
+      "anchor": "task-b-layered-root-and-semantic-correspondence",
+      "corpus": "kv424-request-process",
+      "production": "structural-closure",
+      "reason": "The same-snapshot capability, package-root, finite-IR, and semantic facts form one closed structural correspondence proof."
     },
     {
       "anchor": "existing-dangerous-sink-closed-verdicts",
@@ -1340,6 +1346,12 @@
       "corpus": "finite-security-operation-ir",
       "production": "positive-control",
       "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "declassification-policy-and-provenance-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "The exact policy-bound declassification operation is admitted while attacker-controlled values and enabling conditions close."
     },
     {
       "anchor": "raw-response-body-provenance-closure",
