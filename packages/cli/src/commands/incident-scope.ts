@@ -138,7 +138,9 @@ export function runIncidentScopeCommand(
     const matched = eventExport.events.filter((record) => matches(advisory.predicate, record));
     const affectedPrincipals = sortedUnique(
       matched.flatMap((record) =>
-        record.principal.kind === 'principal' || record.principal.kind === 'system'
+        record.principal.kind === 'principal' ||
+        record.principal.kind === 'system' ||
+        (record.principal.kind === 'unresolved' && record.principal.id !== null)
           ? [record.principal.id!]
           : [],
       ),
@@ -460,9 +462,6 @@ function readPrincipal(value: unknown, index: number): IncidentPrincipal {
           : boundedText(principal.tenant, `security-event record[${index}] tenant`),
     };
   }
-  if (principal.epoch !== null || principal.id !== null || principal.tenant !== null) {
-    throw new Error(`security-event record[${index}] ${kind} principal facts must be null`);
-  }
   if (kind === 'unresolved') {
     const reason = closedString(
       principal.reason,
@@ -474,7 +473,30 @@ function readPrincipal(value: unknown, index: number): IncidentPrincipal {
       ] as const,
       `security-event record[${index}] unresolved reason`,
     );
+    if (principal.epoch !== null) {
+      throw new Error(`security-event record[${index}] unresolved epoch must be null`);
+    }
+    if (reason === 'epoch-unavailable' || reason === 'tenant-unavailable') {
+      return {
+        epoch: null,
+        id: boundedText(principal.id, `security-event record[${index}] unresolved principal id`),
+        kind,
+        reason,
+        tenant:
+          principal.tenant === null
+            ? null
+            : boundedText(principal.tenant, `security-event record[${index}] unresolved tenant`),
+      };
+    }
+    if (principal.id !== null || principal.tenant !== null) {
+      throw new Error(
+        `security-event record[${index}] unknown unresolved principal facts must be null`,
+      );
+    }
     return { epoch: null, id: null, kind, reason, tenant: null };
+  }
+  if (principal.epoch !== null || principal.id !== null || principal.tenant !== null) {
+    throw new Error(`security-event record[${index}] anonymous principal facts must be null`);
   }
   return { epoch: null, id: null, kind, tenant: null };
 }

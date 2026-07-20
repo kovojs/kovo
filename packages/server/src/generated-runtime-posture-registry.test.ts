@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { publicScopedKey } from '@kovojs/core';
+import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import {
   registerGeneratedRuntimePostureManifest,
   runtimePostureAttestationResponse,
 } from './generated-runtime-posture-registry.js';
+import { securityDecisionEventRecorderArmed, securityEventSnapshot } from './security-event.js';
 
 const originalDeployment = process.env.KOVO_ATTESTATION_DEPLOYMENT_ID;
 const originalSecret = process.env.KOVO_ATTESTATION_SECRET;
@@ -28,6 +31,25 @@ afterAll(() => {
 });
 
 describe('generated runtime posture registry', () => {
+  it('arms the single event door and connects core decisions before app evaluation', async () => {
+    expect(securityDecisionEventRecorderArmed()).toBe(true);
+    const storage = createMemoryStorage();
+    await storage.put(publicScopedKey('answerability-object'), 'value');
+    expect(securityEventSnapshot()).toContainEqual(
+      expect.objectContaining({
+        decisionSite: 'framework:storage:scoped-key-admission',
+        door: 'storage',
+        outcome: 'allow',
+        principal: { epoch: null, id: null, kind: 'anonymous', tenant: null },
+        resourceScope: {
+          identity: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+          kind: 'object',
+        },
+        type: 'security-decision',
+      }),
+    );
+  });
+
   it('serves a no-store nonce-bound envelope and refuses replay', async () => {
     const nonce = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const first = await runtimePostureAttestationResponse(

@@ -12,6 +12,7 @@ import type {
   DurableTaskStatusSqlStatement,
 } from './task-observability.js';
 import { scrubSecretLifecycleValue } from './logging.js';
+import { securityEvent, securityEventResourceIdentity } from './security-event.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import {
@@ -345,7 +346,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const maxAttempts = normalizePositiveInteger(input.maxAttempts, 1);
     const status = input.status ?? 'ready';
     const lastError = input.lastError === undefined ? null : scrubErrorMessage(input.lastError);
-    const logicalKeyFrame = input.key === undefined ? null : scopedKeyFactsFor(input.key).frame;
+    const logicalKeyFrame = taskQueueKeyAdmission(input);
 
     if (input.key !== undefined && coalesce === 'throttle') {
       const result = await this.executor.execute<{ id: string }>(
@@ -493,7 +494,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const priority = normalizePriority(input.priority);
     const maxAttempts = normalizePositiveInteger(input.maxAttempts, 1);
     const status = input.status ?? 'ready';
-    if (input.key !== undefined) scopedKeyFactsFor(input.key);
+    taskQueueKeyAdmission(input);
 
     if (input.key !== undefined) {
       let ready: MutableDurableTaskJob | undefined;
@@ -664,6 +665,58 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     taskMapForEach(this.jobs, (job) => taskArrayPush(jobs, readonlyJob(job)));
     return jobs;
   }
+}
+
+function taskQueueKeyAdmission(input: DurableTaskEnqueueInput): string | null {
+  let facts: ReturnType<typeof scopedKeyFactsFor> | undefined;
+  try {
+    facts = input.key === undefined ? undefined : scopedKeyFactsFor(input.key);
+  } catch (error) {
+    emitTaskQueueDecision('deny', input.task);
+    throw error;
+  }
+  emitTaskQueueDecision('allow', input.task, facts);
+  return facts?.frame ?? null;
+}
+
+function emitTaskQueueDecision(
+  outcome: 'allow' | 'deny',
+  task: string,
+  facts?: ReturnType<typeof scopedKeyFactsFor>,
+): void {
+  // @kovo-security-decision task enqueue-scope-admission
+  securityEvent({
+    decisionSite: 'framework:task:enqueue-scope-admission',
+    door: 'task',
+    outcome,
+    principal:
+      facts === undefined
+        ? {
+            epoch: null,
+            id: null,
+            kind: 'unresolved',
+            reason: 'outside-request-context',
+            tenant: null,
+          }
+        : facts.posture === 'public'
+          ? { epoch: null, id: null, kind: 'anonymous', tenant: null }
+          : facts.posture === 'system'
+            ? { epoch: null, id: facts.authority, kind: 'system', tenant: null }
+            : {
+                epoch: null,
+                id: facts.authority,
+                kind: 'unresolved',
+                reason: 'epoch-unavailable',
+                tenant: null,
+              },
+    resourceScope: {
+      identity: securityEventResourceIdentity(
+        facts === undefined ? `task:${task}` : `task:${task}\u0000${facts.frame}`,
+      ),
+      kind: 'task',
+    },
+    type: 'security-decision',
+  });
 }
 
 interface MutableDurableTaskJob {

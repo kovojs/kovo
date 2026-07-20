@@ -1240,3 +1240,11 @@ export function securitySha256Base64(value: string): string {
   apply(nativeHashUpdate, hash, [value]);
   return apply(nativeHashDigest, hash, ['base64']);
 }
+
+/** Boot-pinned SHA-256 used for opaque, no-payload security-event identities. */
+export function securitySha256Hex(value: string): string {
+  assertResponseSecurityIntrinsics();
+  const hash = nativeCreateHash('sha256');
+  apply(nativeHashUpdate, hash, [value]);
+  return apply(nativeHashDigest, hash, ['hex']);
+}

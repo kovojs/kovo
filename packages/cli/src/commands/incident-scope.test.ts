@@ -163,10 +163,10 @@ describe('kovo incident scope', () => {
       ...event('unused', null),
       principal: {
         epoch: null,
-        id: null,
+        id: 'principal-known-without-epoch',
         kind: 'unresolved',
         reason: 'epoch-unavailable',
-        tenant: null,
+        tenant: 'tenant-known',
       },
     };
     const unresolved = fixture([unresolvedInput]);
@@ -177,6 +177,8 @@ describe('kovo incident scope', () => {
     expect(unresolvedResult).toMatchObject({ exitCode: 1 });
     if (!('output' in unresolvedResult)) throw new Error(unresolvedResult.error);
     expect(JSON.parse(unresolvedResult.output)).toMatchObject({
+      affectedPrincipals: ['principal-known-without-epoch'],
+      affectedTenants: ['tenant-known'],
       answerability: { complete: false, reason: expect.stringContaining('unresolved principal') },
       status: 'unanswerable',
     });

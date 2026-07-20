@@ -53,6 +53,7 @@ import {
   witnessWeakSetAdd,
   witnessWeakSetHas,
 } from './security-witness-intrinsics.js';
+import { securityEvent, securityEventResourceIdentity } from './security-event.js';
 import {
   requestStateBoundedMutationReplayIdentity,
   requestStateExactCompositeKey,
@@ -722,17 +723,19 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   replay: ReplayReservationRequest<Response, Reservation>,
 ): Promise<ReplayReservationResult<Response, Reservation>> {
   if (replay.idem === undefined || replay.scope === null || replay.store === undefined) {
-    return { kind: 'disabled' };
+    return replayReservationDecision(replay, { kind: 'disabled' });
   }
 
   let reservation: Reservation | undefined;
   try {
     reservation = await replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     throw error;
   }
-  if (reservation) return { kind: 'reserved', reservation };
+  if (reservation) return replayReservationDecision(replay, { kind: 'reserved', reservation });
 
   // reserve() returned undefined: a concurrent request created the record between
   // our get() miss and this reserve(). Await the now-present pending entry rather
@@ -741,9 +744,11 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   // running ourselves rather than propagating the abort.
   try {
     const pending = await replay.store.get(replay.scope, replay.idem, replay.fingerprint);
-    if (pending) return { kind: 'replayed', response: pending };
+    if (pending) return replayReservationDecision(replay, { kind: 'replayed', response: pending });
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
@@ -754,24 +759,63 @@ export async function reserveReplayBeforeRun<Response, Reservation>(
   try {
     retryReservation = await replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     throw error;
   }
-  if (retryReservation) return { kind: 'reserved', reservation: retryReservation };
+  if (retryReservation) {
+    return replayReservationDecision(replay, {
+      kind: 'reserved',
+      reservation: retryReservation,
+    });
+  }
 
   // Another request snuck in again — await that one.
   try {
     const pending = await replay.store.get(replay.scope, replay.idem, replay.fingerprint);
-    if (pending) return { kind: 'replayed', response: pending };
+    if (pending) return replayReservationDecision(replay, { kind: 'replayed', response: pending });
   } catch (error) {
-    if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
+    if (error instanceof MutationReplayConflictError) {
+      return replayReservationDecision(replay, { kind: 'conflict' });
+    }
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
   // Still can't reserve. A bounded replay store is shedding distinct pending work (for
   // example maxPending saturation), so callers must fail closed instead of running the
   // mutation without the atomic replay reservation SPEC §10.3 requires.
-  return { kind: 'unavailable' };
+  return replayReservationDecision(replay, { kind: 'unavailable' });
+}
+
+function replayReservationDecision<Response, Reservation>(
+  replay: ReplayReservationRequest<Response, Reservation>,
+  result: ReplayReservationResult<Response, Reservation>,
+): ReplayReservationResult<Response, Reservation> {
+  // @kovo-security-decision replay reservation-admission
+  securityEvent({
+    decisionSite: 'framework:replay:reservation-admission',
+    door: 'replay',
+    outcome: result.kind === 'conflict' || result.kind === 'unavailable' ? 'deny' : 'allow',
+    principal: {
+      epoch: null,
+      id: null,
+      kind: 'unresolved',
+      reason: 'outside-request-context',
+      tenant: null,
+    },
+    resourceScope: {
+      identity:
+        replay.scope === null || replay.idem === undefined
+          ? 'global'
+          : securityEventResourceIdentity(
+              `${replay.scope}\u0000${replay.idem}\u0000${replay.fingerprint ?? ''}`,
+            ),
+      kind: 'reservation',
+    },
+    type: 'security-decision',
+  });
+  return result;
 }
 
 export class MutationReplayAbortedError extends Error {

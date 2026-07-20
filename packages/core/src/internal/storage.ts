@@ -31,3 +31,8 @@ export {
   scopedKeyFactsFor,
   scopedKeysEqual,
 } from '../scoped-key.js';
+export {
+  installCoreSecurityDecisionBridge,
+  type CoreSecurityDecisionBridge,
+  type CoreSecurityDecisionEvent,
+} from './security-decision.js';

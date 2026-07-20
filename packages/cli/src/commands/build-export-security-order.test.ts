@@ -212,6 +212,12 @@ describe('build/export security bootstrap ordering', () => {
           save: [{ domain: 'accounts', keys: 'id' }],
         },
         queryReads: [{ domains: ['accounts'], query: 'account' }],
+        runtimePosture: {
+          artifactSubject: `sha256:${'a'.repeat(64)}`,
+          facts: { endpointAuth: [], egressAllowlist: [], irVersions: [], trustEscapes: [] },
+          postureDigest: `sha256:${'b'.repeat(64)}`,
+          schema: 'kovo-runtime-posture/v1',
+        },
       });
 
       expect(handler).not.toContain(marker);
@@ -224,6 +230,12 @@ describe('build/export security bootstrap ordering', () => {
     } finally {
       JSON.stringify = nativeStringify;
     }
+  });
+
+  it('refuses a production registry that cannot arm security-decision recording', () => {
+    expect(() =>
+      serializeBuildRuntimeRegistryWireModule({ mutationTouches: {}, queryReads: [] }),
+    ).toThrow(/requires the generated runtime posture registration boundary/u);
   });
 
   it('does not dispatch build parsing through a late String symbol split hook', () => {

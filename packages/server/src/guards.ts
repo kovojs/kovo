@@ -95,6 +95,11 @@ import {
   securityStringStartsWith,
   securityStringTrim,
 } from './response-security-intrinsics.js';
+import {
+  securityEvent,
+  type SecurityDecisionOutcome,
+  type SecurityEventPrincipalScope,
+} from './security-event.js';
 
 /**
  * A guard denial that expresses the user-facing *intent* of a rejection, leaving
@@ -1412,11 +1417,31 @@ export async function runAccessDecisionGuards<Request>(
   request: Request,
 ): Promise<ResolvedGuardFailure | null> {
   const decision = snapshotAccessDecision(access);
+  let failure: ResolvedGuardFailure | null;
   if (witnessIsArray(decision)) {
-    return runGuardChain(decision as readonly Guard<Request>[], request);
+    failure = await runGuardChain(decision as readonly Guard<Request>[], request);
+  } else if (decision !== undefined) {
+    failure = null;
+  } else {
+    failure = await runGuard(fallbackGuard, request);
   }
-  if (decision !== undefined) return null;
-  return runGuard(fallbackGuard, request);
+  emitAuthorizationDecision(failure === null ? 'allow' : 'deny', request);
+  return failure;
+}
+
+function emitAuthorizationDecision<Request>(
+  outcome: SecurityDecisionOutcome,
+  request: Request,
+): void {
+  // @kovo-security-decision authorization access-guard-chain
+  securityEvent({
+    decisionSite: 'framework:authorization:access-guard-chain',
+    door: 'authorization',
+    outcome,
+    principal: securityEventPrincipalForRequest(request),
+    resourceScope: { identity: 'global', kind: 'resource' },
+    type: 'security-decision',
+  });
 }
 
 /**
@@ -1441,17 +1466,18 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     const envelope = snapshotSessionProviderEnvelope<SessionValue>(resolved);
     if (envelope !== undefined) {
       sessionValue = snapshotPinnedLifecycleValue(envelope.value ?? null) as SessionValue | null;
-      if (options.onSessionSetCookie) {
-        for (let index = 0; index < envelope.setCookies.length; index += 1) {
-          options.onSessionSetCookie(envelope.setCookies[index]!);
-        }
-      }
     } else {
       sessionValue = snapshotPinnedLifecycleValue(
         (resolved as SessionValue | null | undefined) ?? null,
       ) as SessionValue | null;
     }
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
+    emitAuthSessionDecision(sessionValue === null ? 'deny' : 'allow', lifecycleRequest);
+    if (envelope !== undefined && options.onSessionSetCookie) {
+      for (let index = 0; index < envelope.setCookies.length; index += 1) {
+        options.onSessionSetCookie(envelope.setCookies[index]!);
+      }
+    }
   }
 
   if (options.principalPosture !== undefined) {
@@ -1516,6 +1542,44 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     SessionValue,
     DbValue
   >;
+}
+
+function emitAuthSessionDecision<Request>(
+  outcome: SecurityDecisionOutcome,
+  request: Request,
+): void {
+  // @kovo-security-decision auth session-resolution
+  securityEvent({
+    decisionSite: 'framework:auth:session-resolution',
+    door: 'auth',
+    outcome,
+    principal: securityEventPrincipalForRequest(request),
+    resourceScope: { identity: 'global', kind: 'credential' },
+    type: 'security-decision',
+  });
+}
+
+function securityEventPrincipalForRequest(request: unknown): SecurityEventPrincipalScope {
+  const principal = requestPrincipalSnapshot(request);
+  if (principal.kind === 'anonymous') {
+    return { epoch: null, id: null, kind: 'anonymous', tenant: null };
+  }
+  if (principal.kind === 'proven' && principal.principal !== undefined) {
+    return {
+      epoch: null,
+      id: principal.principal,
+      kind: 'unresolved',
+      reason: 'epoch-unavailable',
+      tenant: null,
+    };
+  }
+  return {
+    epoch: null,
+    id: null,
+    kind: 'unresolved',
+    reason: 'principal-not-proven',
+    tenant: null,
+  };
 }
 
 const pinnedPrivateScopeRequestCarriers = createWitnessWeakSet<object>();

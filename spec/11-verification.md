@@ -77,6 +77,35 @@ On the Postgres/PGlite managed path, the engine also enforces the dangerous writ
 
 Because instrumentation under-approximates (executed branches only), passing dev/test runs do **not** establish KV406 completeness; an unexercised raw-SQL arm is proven sound only by its statically-declared `tables:`/`touches`, which is why those declarations are KV406-`error` (not advisory) and an unexecuted such branch is KV405-`error` (§11.1). Read-side gets identical treatment (query loaders' SELECT/JOIN tables vs. derived read sets, **and observed result shapes vs. declared/inferred types — the runtime half of KV410**, so an opaque projection's schema claim is tested against what the database actually returns; an opaque projection that reads a table absent from its declared `reads:` set (§10.2) is a CI failure on the same `observed ⊆ static ∪ declared` invariant, but the static `reads:` declaration — not this dev/test-only observation — is what proves an unexercised branch sound). An observed read of an `exempt` table is the runtime half of **KV411** (§10.1) — the same CI failure whether the exempt read was statically visible or smuggled through raw SQL.
 
+**Security-decision event completeness (normative).** The generated production runtime has one
+closed, build-checked answerability denominator: the canonical `auth`, `authorization`,
+`declassification`, `egress`, `storage`, `task`, and `replay` decision chokes. Every enrolled choke
+MUST route both allow and deny outcomes through the single `securityEvent()` journal and emit
+exactly these no-payload facts: the door, an outcome, a build-stable decision-site identity, an
+honest principal scope including its epoch (or an explicit unresolved reason when the epoch or
+principal is unavailable), and an opaque resource scope consisting only of its registered kind and
+`global` or a framework-produced SHA-256 identity. Raw credentials, URLs, keys, rows, secret values,
+task arguments, replay tokens, and other payload data MUST NOT enter the record.
+
+The reviewed decision-site census and production markers are a closed emission-coverage recorder.
+The root gate MUST fail when a door lacks exactly one enrolled site, a marker or site exists without
+the other, an enrolled constructor disappears, a constructor bypasses `securityEvent()` (or the
+journal-free core-to-server transport that immediately feeds it), a required fact becomes optional,
+an allow/deny branch disappears, or an extra field is added. The core transport MUST NOT own a
+second journal, buffer, export surface, or verdict; generated registration installs it before
+authored app evaluation and the server journal remains the only event authority.
+
+This completeness claim begins when the compiler-generated runtime-posture registry evaluates.
+Production artifact emission MUST refuse a runtime entry that can evaluate the authored app before
+that registration. Direct low-level library calls and unit calls made before registration are
+explicitly outside the claim. Registration arms decision recording only after any configured
+deployment journal is installed; after arming, an enrolled decision with no journal MUST fail closed
+before proceeding. This is emission completeness for the seven named chokes, not a claim about
+arbitrary app or third-party decisions, host compromise, fleet-wide delivery, or infinite retention.
+The bounded journal's dropped count and every unresolved principal scope remain explicit
+`unanswerable` outcomes for retrospective tooling; absence of a matching retained event is only
+`not-observed`, never a no-impact proof.
+
 **C9 sink-proof inventory (normative).** The verification surface MUST keep a single reviewed
 inventory for the required boundary-crossing sinks named in §10.3 C9. Each row names: the sink, its
 mechanism (`reconstruct`, `box`, or framework-`own`), the sole door, at least one lint/check/build
