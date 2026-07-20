@@ -118,7 +118,9 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       buildToken,
       maxBodyBytes,
       request,
-      requestDeadlineMsForMatch(app, match),
+      urlSnapshot.pathname === KOVO_RUNTIME_ATTESTATION_ENDPOINT
+        ? app.requestLimits.deadlineMs
+        : requestDeadlineMsForMatch(app, match),
     );
     if (loadShed) return loadShed;
     const deadlineRequest = requestWithDeadlineCapability(request);
