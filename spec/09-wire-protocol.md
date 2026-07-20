@@ -533,6 +533,13 @@ stable idempotency key per scheduled job and exposes the job id as the key a tas
 non-idempotent external APIs. A retry must not double-charge, double-send, or otherwise commit an
 effect without an idempotency key.
 
+The in-process runner's lazy startup is itself pre-dispatch work. It MUST begin only after the
+triggering request passes the coarse rate, target, and complete streamed-body admission gates from
+§9.5; a rejected request MUST NOT resolve or provision the task database. Startup receives only a
+framework-owned bodyless, credential-neutral metadata request, never the admitted body or ambient
+browser/machine credentials. A transient startup failure may be retried by a later admitted request,
+but rejected traffic cannot drive that retry loop.
+
 Every preset that supports `task()` MUST declare a `JobRunner` capability. The node preset's
 in-process runner is on by default; a runner-only mode may drain jobs without serving HTTP. A preset
 with no runner capability MUST fail closed at build time when `task()`/`schedule()` is used, with an

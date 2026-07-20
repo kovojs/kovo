@@ -53,7 +53,20 @@ import { securityEvent } from './security-event.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
-export async function handleAppRequest(app: KovoApp, request: Request): Promise<Response> {
+interface AppRequestAdmissionHooks {
+  /**
+   * Framework-owned hook invoked only after coarse request admission and any ordinary streamed
+   * body ceiling have completed. The carrier is bodyless and credential-neutral; this hook must
+   * not be used as an app middleware surface (SPEC §9.5).
+   */
+  readonly admitted?: (request: Request) => void;
+}
+
+export async function handleAppRequest(
+  app: KovoApp,
+  request: Request,
+  hooks: AppRequestAdmissionHooks = {},
+): Promise<Response> {
   pinRequestIngressSurface(request);
   const urlLimitResponse = appRequestUrlLimitResponse(request);
   if (urlLimitResponse) return urlLimitResponse;
@@ -158,14 +171,26 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
           limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
         }
 
-        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
-
         if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
           return kovoSecurityReportResponse(app, deadlineRequest);
         }
 
+        // Durable-task startup may resolve/provision its own database. Keep that background work
+        // behind the same pre-dispatch admission boundary as the app database: a rejected streamed
+        // request must not be able to trigger either provider (SPEC §9.5/§9.6).
+        let admittedRequest = dispatchRequest;
+        if (
+          hooks.admitted !== undefined &&
+          match.kind !== 'endpoint' &&
+          match.kind !== 'mutation'
+        ) {
+          admittedRequest = await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes);
+        }
+        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
+        hooks.admitted?.(loadShedRequest);
+
         if (match.kind !== 'endpoint' && match.kind !== 'mutation') {
-          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
+          limitedRequest = requestWithBodyLimit(admittedRequest, maxBodyBytes);
         }
         return dispatchMatchedAppRequest({
           app,

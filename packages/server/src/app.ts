@@ -935,10 +935,14 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
       const dispatchRequest = isolateNestedResponseDispatchRequest(request);
       const urlLimitResponse = appRequestUrlLimitResponse(dispatchRequest);
       if (urlLimitResponse) return urlLimitResponse;
-      void taskRuntime?.ensureStarted(dispatchRequest).catch((error: unknown) => {
-        reportAppStartupError(app, dispatchRequest, error);
+      if (taskRuntime === undefined) return handleAppRequest(app, dispatchRequest);
+      return handleAppRequest(app, dispatchRequest, {
+        admitted(admittedRequest) {
+          void taskRuntime.ensureStarted(admittedRequest).catch((error: unknown) => {
+            reportAppStartupError(app, admittedRequest, error);
+          });
+        },
       });
-      return handleAppRequest(app, dispatchRequest);
     });
 }
 

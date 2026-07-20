@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { mintFrameworkLoadShedError } from './app-load-shed.js';
+import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { endpoint } from './endpoint.js';
 import { createFrameworkManagedDbProvider } from './guards.js';
+import { s } from './schema.js';
+import { task } from './task.js';
 
 const rawTextResponse = {
   appOwnedSafety: true,
@@ -15,7 +18,12 @@ const rawTextResponse = {
 describe('Postgres posture app load shedding', () => {
   it('rejects an oversized streamed body before managed database admission', async () => {
     const admit = vi.fn(async () => undefined);
-    const provider = createFrameworkManagedDbProvider(async () => ({}), { admit });
+    const resolve = vi.fn(async () => ({}));
+    const provider = createFrameworkManagedDbProvider(resolve, { admit });
+    const background = task('admission-order/background', {
+      input: s.object({}),
+      run() {},
+    });
     const ingest = endpoint('/ingest', {
       access: publicAccess('streamed admission-order regression fixture'),
       auth: { kind: 'none', justification: 'streamed admission-order regression fixture' },
@@ -30,7 +38,12 @@ describe('Postgres posture app load shedding', () => {
       response: rawTextResponse,
     });
     const handler = createRequestHandler(
-      createApp({ db: provider, endpoints: [ingest], requestLimits: { maxBodyBytes: 4 } }),
+      createApp({
+        db: provider,
+        endpoints: [ingest],
+        requestLimits: { maxBodyBytes: 4 },
+        tasks: [background],
+      }),
     );
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -47,8 +60,29 @@ describe('Postgres posture app load shedding', () => {
       } as RequestInit & { duplex: 'half' }),
     );
 
+    await Promise.resolve();
     expect(response.status).toBe(413);
     expect(admit).not.toHaveBeenCalled();
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it('keeps the reserved bounded CSP report reader outside app database admission', async () => {
+    const admit = vi.fn(async () => undefined);
+    const resolve = vi.fn(async () => ({}));
+    const provider = createFrameworkManagedDbProvider(resolve, { admit });
+    const handler = createRequestHandler(createApp({ db: provider }));
+
+    const response = await handler(
+      new Request(`https://app.example${KOVO_CSP_REPORT_ENDPOINT}`, {
+        body: JSON.stringify({ type: 'csp-violation' }),
+        headers: { 'Content-Type': 'application/reports+json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(admit).not.toHaveBeenCalled();
+    expect(resolve).not.toHaveBeenCalled();
   });
 
   it('maps only a framework-minted posture admission failure to a stable 503 shell', async () => {
