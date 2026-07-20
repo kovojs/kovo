@@ -132,6 +132,16 @@ export type {
   SigningKeyState,
   SigningSecret,
 } from './keyring.js';
+export {
+  erasePrincipal,
+  PrincipalErasureIncompleteError,
+  verifyPrincipalErasureReceipt,
+} from './principal-erasure.js';
+export type {
+  ErasePrincipalOptions,
+  PrincipalErasureReceipt,
+  PrincipalErasureStorageSet,
+} from './principal-erasure.js';
 // SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned storage
 // download ROUTE that hosts the capability verify sink. `createStorageDownloadEndpoint` builds a
 // prefix-mounted GET/HEAD endpoint whose handler verifies a per-object token BEFORE any storage
@@ -209,6 +219,9 @@ export type {
   S3CompatibleGetObjectInput,
   S3CompatibleGetObjectOutput,
   S3CompatibleHeadObjectInput,
+  S3CompatibleListedObject,
+  S3CompatibleListObjectsInput,
+  S3CompatibleListObjectsOutput,
   S3CompatibleObjectClient,
   S3CompatibleObjectMetadata,
   S3CompatiblePutObjectInput,

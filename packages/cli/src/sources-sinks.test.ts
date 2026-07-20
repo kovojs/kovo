@@ -303,7 +303,7 @@ describe('source/sink inventory', () => {
     expect(result.output).toContain(' diagnostic=');
     expect(result.output).toContain(' escapeHatch=');
     expect(result.output).toContain(' residency=');
-    expect(result.output).toContain('SUMMARY total=14 unerasable=6');
+    expect(result.output).toContain('SUMMARY total=14 unerasable=3');
     expect(result.output).toContain('CORPUS family=html.dom.output');
     expect(result.output).toContain(' negative=');
     expect(result.output).toContain(' positive=');
@@ -441,7 +441,7 @@ describe('source/sink inventory', () => {
   it('exposes the same inventory through kovo check', () => {
     expect(kovoCheck({}, { family: 'sources-sinks' })).toMatchObject({
       exitCode: 0,
-      output: expect.stringContaining('CHECK families=13 entries=14 drift-tokens=17 unerasable=6'),
+      output: expect.stringContaining('CHECK families=13 entries=14 drift-tokens=17 unerasable=3'),
     });
   });
 

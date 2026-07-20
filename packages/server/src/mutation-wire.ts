@@ -373,6 +373,7 @@ export interface NoJsMutationReplayStore {
     scope: string,
     idem: string,
     fingerprint?: string,
+    principal?: string,
   ):
     | Promise<MutationEndpointReplayResponse | undefined>
     | MutationEndpointReplayResponse
@@ -382,6 +383,7 @@ export interface NoJsMutationReplayStore {
     scope: string,
     idem: string,
     fingerprint?: string,
+    principal?: string,
   ): NoJsMutationReplayReservation | Promise<NoJsMutationReplayReservation | undefined> | undefined;
 }
 

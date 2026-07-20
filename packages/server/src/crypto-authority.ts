@@ -50,6 +50,7 @@ type CryptoPurpose =
   | 'confidential-at-rest'
   | 'csrf'
   | 'live-target-attestation'
+  | 'principal-erasure-receipt'
   | 'rendered-html-coercion'
   | 'runtime-posture-attestation'
   | 'security-event-chain'
@@ -103,6 +104,13 @@ export const cryptoPurposeRegistry = witnessFreeze([
     audience: 'literal:mutation-live-target',
     operations: witnessFreeze(['sign', 'verify'] as const),
     purpose: 'live-target-attestation',
+    rootSource: 'framework-key-ring',
+  }),
+  witnessFreeze({
+    algorithm: 'hmac-sha256',
+    audience: 'literal:principal-erasure-receipt',
+    operations: witnessFreeze(['sign', 'verify'] as const),
+    purpose: 'principal-erasure-receipt',
     rootSource: 'framework-key-ring',
   }),
   witnessFreeze({
@@ -289,6 +297,11 @@ export function createCsrfCryptoHandle(
 
 export function createLiveTargetCryptoHandle(secret: SigningSecret): PurposeCryptoHandle {
   return createPurposeHandle(secret, 'live-target-attestation', 'mutation-live-target');
+}
+
+/** @internal Mint the fixed principal-erasure receipt signing authority. */
+export function createPrincipalErasureCryptoHandle(secret: SigningSecret): PurposeCryptoHandle {
+  return createPurposeHandle(secret, 'principal-erasure-receipt', 'principal-erasure-receipt');
 }
 
 export function createSessionFingerprintCryptoHandle(secret: SigningSecret): PurposeSignHandle {

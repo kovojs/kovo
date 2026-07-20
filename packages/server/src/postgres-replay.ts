@@ -3,6 +3,7 @@ import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { mintFrameworkDurableReplayStoreReceipt } from '@kovojs/core/internal/security-markers';
 
 import { snapshotAuditJustification } from './audit-justification.js';
+import { isProvenPrincipal } from './auth-principal.js';
 import type { CapabilityReplayStore } from './capability-url.js';
 import { parseMutationIdemToken } from './mutation-idem.js';
 import {
@@ -70,6 +71,7 @@ interface PostgresReplayRow {
   generation: string;
   is_unexpired: boolean;
   occurred_at: string | null;
+  principal_index: string | null;
   response_body: string | null;
   response_headers: string | null;
   response_status: number | null;
@@ -136,19 +138,33 @@ export function createPostgresMutationReplayStoreFromExecutor(
 ): MutationReplayStore {
   const runtime = createPostgresReplayRuntime(executor, options);
   const store: MutationReplayStore = {
-    async get(key, scope: string, idem: string, fingerprint?: string) {
+    async get(key, scope: string, idem: string, fingerprint?: string, principal?: string) {
       const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
       const identity = mutationReplayIdentity(idem);
-      const row = await runtime.readSettled('mutation', keyFrame, identity, fingerprint);
+      const principalIndex = persistedReplayPrincipal(principal);
+      const row = await runtime.readSettled(
+        'mutation',
+        keyFrame,
+        identity,
+        fingerprint,
+        principalIndex,
+      );
       return row === undefined ? undefined : mutationResponseFromRow(row);
     },
-    async reserve(key, scope: string, idem: string, fingerprint?: string) {
+    async reserve(key, scope: string, idem: string, fingerprint?: string, principal?: string) {
       const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
       const identity = mutationReplayIdentity(idem);
-      const generation = await runtime.reserve('mutation', keyFrame, identity, fingerprint);
+      const principalIndex = persistedReplayPrincipal(principal);
+      const generation = await runtime.reserve(
+        'mutation',
+        keyFrame,
+        identity,
+        fingerprint,
+        principalIndex,
+      );
       return generation === undefined
         ? undefined
-        : mutationReservation(runtime, keyFrame, identity, fingerprint, generation);
+        : mutationReservation(runtime, keyFrame, identity, fingerprint, principalIndex, generation);
     },
     async set(
       key,
@@ -156,6 +172,7 @@ export function createPostgresMutationReplayStoreFromExecutor(
       idem: string,
       response: MutationReplayResponse,
       fingerprint?: string,
+      principal?: string,
     ) {
       const keyFrame = assertMutationReplayScopedKey(key, scope, idem).frame;
       const identity = mutationReplayIdentity(idem);
@@ -164,6 +181,7 @@ export function createPostgresMutationReplayStoreFromExecutor(
         keyFrame,
         identity,
         fingerprint,
+        persistedReplayPrincipal(principal),
         mutationResponseForStorage(response),
       );
     },
@@ -186,7 +204,7 @@ export function createPostgresWebhookReplayStoreFromExecutor(
         source,
         'Postgres webhook replay get() identity',
       );
-      const row = await runtime.readSettled('webhook', scope, identity, undefined);
+      const row = await runtime.readSettled('webhook', scope, identity, undefined, null);
       return row === undefined ? undefined : webhookResponseFromRow(row);
     },
     async reserve(scope: string, source: WebhookReplayIdentity) {
@@ -194,7 +212,7 @@ export function createPostgresWebhookReplayStoreFromExecutor(
         source,
         'Postgres webhook replay reserve() identity',
       );
-      const generation = await runtime.reserve('webhook', scope, identity, undefined);
+      const generation = await runtime.reserve('webhook', scope, identity, undefined, null);
       return generation === undefined
         ? undefined
         : webhookReservation(runtime, scope, identity, generation);
@@ -209,6 +227,7 @@ export function createPostgresWebhookReplayStoreFromExecutor(
         scope,
         identity,
         undefined,
+        null,
         webhookResponseForStorage(response),
       );
     },
@@ -370,6 +389,42 @@ export async function releasePostgresPendingReplayFromExecutor(
   return replayRows(result, 'Postgres replay release result').length === 1;
 }
 
+/** @internal Delete every mutation replay row carrying one principal's additive erasure index. */
+export async function erasePostgresMutationReplayPrincipalRows(
+  executor: DurableTaskStatusSqlExecutor,
+  principal: string,
+): Promise<number> {
+  const principalIndex = persistedReplayPrincipal(principal);
+  const sql = snapshotReplaySqlExecutor(executor);
+  const result = await sql.execute<{ deleted_count: number }>({
+    text:
+      "WITH deleted AS (DELETE FROM public._kovo_replay WHERE surface = 'mutation' " +
+      'AND principal_index = $1 RETURNING 1) SELECT COUNT(*)::int AS deleted_count FROM deleted',
+    values: [principalIndex],
+  });
+  return exactReplayCount(result, 'deleted_count', 'Postgres mutation replay principal erasure');
+}
+
+/** @internal Independently count mutation replay rows still carrying one principal index. */
+export async function countPostgresMutationReplayPrincipalRows(
+  executor: DurableTaskStatusSqlExecutor,
+  principal: string,
+): Promise<number> {
+  const principalIndex = persistedReplayPrincipal(principal);
+  const sql = snapshotReplaySqlExecutor(executor);
+  const result = await sql.execute<{ remaining_count: number }>({
+    text:
+      "SELECT COUNT(*)::int AS remaining_count FROM public._kovo_replay WHERE surface = 'mutation' " +
+      'AND principal_index = $1',
+    values: [principalIndex],
+  });
+  return exactReplayCount(
+    result,
+    'remaining_count',
+    'Postgres mutation replay principal absence probe',
+  );
+}
+
 interface PostgresReplayRuntime {
   abort(
     surface: Exclude<PostgresReplaySurface, 'capability'>,
@@ -382,6 +437,7 @@ interface PostgresReplayRuntime {
     scope: string,
     identity: PostgresReplayIdentity,
     generation: string,
+    principalIndex: string | null,
     response: SettledReplayResponse,
   ): Promise<void>;
   readSettled(
@@ -389,18 +445,21 @@ interface PostgresReplayRuntime {
     scope: string,
     identity: PostgresReplayIdentity,
     fingerprint: string | undefined,
+    principalIndex: string | null,
   ): Promise<PostgresReplayRow | undefined>;
   reserve(
     surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
     identity: PostgresReplayIdentity,
     fingerprint: string | undefined,
+    principalIndex: string | null,
   ): Promise<string | undefined>;
   settleWithoutReservation(
     surface: Exclude<PostgresReplaySurface, 'capability'>,
     scope: string,
     identity: PostgresReplayIdentity,
     fingerprint: string | undefined,
+    principalIndex: string | null,
     response: SettledReplayResponse,
   ): Promise<void>;
 }
@@ -444,7 +503,7 @@ function createPostgresReplayRuntime(
       text:
         'SELECT expires_at::text AS expires_at, fingerprint, generation, ' +
         '(expires_at > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint) AS is_unexpired, ' +
-        'occurred_at::text AS occurred_at, response_body, response_headers, response_status, state ' +
+        'occurred_at::text AS occurred_at, principal_index, response_body, response_headers, response_status, state ' +
         'FROM public._kovo_replay WHERE surface = $1 AND scope = $2 AND idem = $3',
       values: [surface, persisted.scope, persisted.idem],
     });
@@ -483,7 +542,7 @@ function createPostgresReplayRuntime(
       const rows = replayRows(result, 'Postgres replay abort result');
       if (rows.length > 1) throw new Error('Postgres replay abort changed duplicate truth rows.');
     },
-    async commit(surface, scope, identity, generation, response) {
+    async commit(surface, scope, identity, generation, principalIndex, response) {
       const persisted = persistedReplayKey(scope, identity.idem);
       const headers = serializeReplayHeaders(response.headers, maxResponseHeaderBytes);
       const body = serializeReplayBody(response.body, maxResponseBodyBytes);
@@ -497,6 +556,7 @@ function createPostgresReplayRuntime(
           'admission_slot = NULL ' +
           "WHERE surface = $1 AND scope = $2 AND idem = $3 AND generation = $4 AND state = 'pending' " +
           'AND expires_at = $8::bigint AND occurred_at IS NOT DISTINCT FROM $9::bigint ' +
+          'AND principal_index IS NOT DISTINCT FROM $10 ' +
           'AND expires_at > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
           'AND expires_at > (SELECT reclaimed_through FROM locked_watermark) ' +
           'RETURNING generation',
@@ -510,6 +570,7 @@ function createPostgresReplayRuntime(
           response.status,
           identity.expiresAtMs,
           identity.occurredAtMs,
+          principalIndex,
         ],
       });
       const rows = replayRows(result, 'Postgres replay commit result');
@@ -519,7 +580,7 @@ function createPostgresReplayRuntime(
         );
       }
     },
-    async readSettled(surface, scope, identity, fingerprint) {
+    async readSettled(surface, scope, identity, fingerprint, principalIndex) {
       await retireExpiredCommitted(surface);
       const persistedFingerprint = persistedReplayFingerprint(fingerprint);
       const startedAt = requestStateNow();
@@ -527,6 +588,7 @@ function createPostgresReplayRuntime(
         const row = await readRow(surface, scope, identity);
         if (row === undefined) return undefined;
         assertReplayFingerprint(row.fingerprint, persistedFingerprint);
+        assertReplayPrincipalIndex(row.principal_index, principalIndex);
         if (row.state === 'committed') {
           return row.is_unexpired ? assertSettledReplayRow(row) : undefined;
         }
@@ -537,7 +599,7 @@ function createPostgresReplayRuntime(
         await replayDelay(pollIntervalMs < remaining ? pollIntervalMs : remaining);
       }
     },
-    async reserve(surface, scope, identity, fingerprint) {
+    async reserve(surface, scope, identity, fingerprint, principalIndex) {
       await retireExpiredCommitted(surface);
       const persisted = persistedReplayKey(scope, identity.idem);
       const persistedFingerprint = persistedReplayFingerprint(fingerprint);
@@ -548,8 +610,8 @@ function createPostgresReplayRuntime(
           'SELECT reclaimed_through FROM public._kovo_replay_reclaimed ' +
           'WHERE surface = $1 FOR UPDATE) ' +
           'INSERT INTO public._kovo_replay ' +
-          '(surface, scope, idem, fingerprint, generation, state, admission_slot, expires_at, occurred_at) ' +
-          "SELECT $1, $2, $3, $4, $5, 'pending', candidate.slot, $7::bigint, $8::bigint " +
+          '(surface, scope, idem, fingerprint, generation, state, admission_slot, expires_at, occurred_at, principal_index) ' +
+          "SELECT $1, $2, $3, $4, $5, 'pending', candidate.slot, $7::bigint, $8::bigint, $9 " +
           'FROM locked_watermark CROSS JOIN generate_series(1, $6::integer) AS candidate(slot) ' +
           'WHERE $7::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
           'AND $7::bigint > locked_watermark.reclaimed_through ' +
@@ -567,6 +629,7 @@ function createPostgresReplayRuntime(
           maxEntries,
           identity.expiresAtMs,
           identity.occurredAtMs,
+          principalIndex,
         ],
       });
       const rows = replayRows(result, 'Postgres replay reserve result');
@@ -574,6 +637,7 @@ function createPostgresReplayRuntime(
         const existing = await readRow(surface, scope, identity);
         if (existing !== undefined) {
           assertReplayFingerprint(existing.fingerprint, persistedFingerprint);
+          assertReplayPrincipalIndex(existing.principal_index, principalIndex);
         }
         return undefined;
       }
@@ -583,7 +647,14 @@ function createPostgresReplayRuntime(
       }
       return generation;
     },
-    async settleWithoutReservation(surface, scope, identity, fingerprint, response) {
+    async settleWithoutReservation(
+      surface,
+      scope,
+      identity,
+      fingerprint,
+      principalIndex,
+      response,
+    ) {
       await retireExpiredCommitted(surface);
       const persisted = persistedReplayKey(scope, identity.idem);
       const persistedFingerprint = persistedReplayFingerprint(fingerprint);
@@ -595,9 +666,9 @@ function createPostgresReplayRuntime(
           'WHERE surface = $1 FOR UPDATE) ' +
           'INSERT INTO public._kovo_replay ' +
           '(surface, scope, idem, fingerprint, generation, state, response_body, ' +
-          'response_headers, response_status, committed_at, expires_at, occurred_at) ' +
+          'response_headers, response_status, committed_at, expires_at, occurred_at, principal_index) ' +
           "SELECT $1, $2, $3, $4, $5, 'committed', $6, $7, $8, CURRENT_TIMESTAMP, " +
-          '$9::bigint, $10::bigint ' +
+          '$9::bigint, $10::bigint, $11 ' +
           'FROM locked_watermark ' +
           'WHERE $9::bigint > FLOOR(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint ' +
           'AND $9::bigint > locked_watermark.reclaimed_through ' +
@@ -613,6 +684,7 @@ function createPostgresReplayRuntime(
           response.status,
           identity.expiresAtMs,
           identity.occurredAtMs,
+          principalIndex,
         ],
       });
       const rows = replayRows(result, 'Postgres replay direct settlement result');
@@ -627,6 +699,7 @@ function createPostgresReplayRuntime(
         );
       }
       assertReplayFingerprint(existing.fingerprint, persistedFingerprint);
+      assertReplayPrincipalIndex(existing.principal_index, principalIndex);
       if (existing.state !== 'committed') {
         throw new Error(
           'Postgres replay key is pending; direct settlement refused to overwrite it.',
@@ -644,12 +717,20 @@ function mutationReservation(
   scope: string,
   identity: PostgresReplayIdentity,
   fingerprint: string | undefined,
+  principalIndex: string | null,
   generation: string,
 ): MutationReplayReservation {
   return witnessFreeze({
     abort: () => runtime.abort('mutation', scope, identity, generation),
     commit: (response: MutationReplayResponse) =>
-      runtime.commit('mutation', scope, identity, generation, mutationResponseForStorage(response)),
+      runtime.commit(
+        'mutation',
+        scope,
+        identity,
+        generation,
+        principalIndex,
+        mutationResponseForStorage(response),
+      ),
   });
 }
 
@@ -662,7 +743,14 @@ function webhookReservation(
   return witnessFreeze({
     abort: () => runtime.abort('webhook', scope, identity, generation),
     commit: (response: WebhookWireResponse) =>
-      runtime.commit('webhook', scope, identity, generation, webhookResponseForStorage(response)),
+      runtime.commit(
+        'webhook',
+        scope,
+        identity,
+        generation,
+        null,
+        webhookResponseForStorage(response),
+      ),
   });
 }
 
@@ -758,6 +846,14 @@ function assertReplayFingerprint(stored: string | null, expected: string | null)
   if (stored !== expected) throw new MutationReplayConflictError();
 }
 
+function assertReplayPrincipalIndex(stored: string | null, expected: string | null): void {
+  if (stored !== expected) {
+    throw new Error(
+      'Postgres mutation replay principal erasure index does not match its admitted request.',
+    );
+  }
+}
+
 function mutationReplayIdentity(idem: string): PostgresReplayIdentity {
   const facts = parseMutationIdemToken(idem);
   if (facts === undefined) {
@@ -845,6 +941,18 @@ function persistedReplayFingerprint(fingerprint: string | undefined): string | n
   return persistedReplayKeyPart(fingerprint);
 }
 
+/**
+ * Non-authoritative additive erasure index. This digest is deliberately separate from
+ * `persistedReplayKey()` and MUST NOT enter mutationReplayScope composition (SPEC §10.3).
+ */
+export function persistedReplayPrincipal(principal: string | undefined): string | null {
+  if (principal === undefined) return null;
+  if (!isProvenPrincipal(principal)) {
+    throw new TypeError('Postgres mutation replay principal index requires a proven principal.');
+  }
+  return persistedReplayKeyPart(principal);
+}
+
 function optionalReplayDuration(
   source: PostgresReplayStoreOptions,
   property: keyof PostgresReplayStoreOptions,
@@ -918,6 +1026,21 @@ function replayRows<Row>(result: DurableTaskStatusSqlResult<Row>, label: string)
   return rows as readonly Row[];
 }
 
+function exactReplayCount(
+  result: DurableTaskStatusSqlResult<Record<string, unknown>>,
+  property: string,
+  label: string,
+): number {
+  const rows = replayRows(result, label);
+  const row = rows.length === 1 ? rows[0] : undefined;
+  if (row === undefined) throw new Error(`${label} returned invalid count truth.`);
+  const value = stableReplayRowValue(row, property);
+  if (!requestStateIsSafeInteger(value) || value < 0) {
+    throw new Error(`${label} returned invalid count truth.`);
+  }
+  return value;
+}
+
 function snapshotPostgresReplayRow(source: PostgresReplayRow | undefined): PostgresReplayRow {
   if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
     throw new TypeError('Postgres replay row must be a record.');
@@ -927,6 +1050,7 @@ function snapshotPostgresReplayRow(source: PostgresReplayRow | undefined): Postg
   const generation = stableReplayRowValue(source, 'generation');
   const isUnexpired = stableReplayRowValue(source, 'is_unexpired');
   const occurredAt = stableReplayRowValue(source, 'occurred_at');
+  const principalIndex = stableReplayRowValue(source, 'principal_index');
   const responseBody = stableReplayRowValue(source, 'response_body');
   const responseHeaders = stableReplayRowValue(source, 'response_headers');
   const responseStatus = stableReplayRowValue(source, 'response_status');
@@ -937,6 +1061,7 @@ function snapshotPostgresReplayRow(source: PostgresReplayRow | undefined): Postg
     typeof generation !== 'string' ||
     typeof isUnexpired !== 'boolean' ||
     (occurredAt !== null && typeof occurredAt !== 'string') ||
+    (principalIndex !== null && typeof principalIndex !== 'string') ||
     (responseBody !== null && typeof responseBody !== 'string') ||
     (responseHeaders !== null && typeof responseHeaders !== 'string') ||
     (responseStatus !== null && typeof responseStatus !== 'number') ||
@@ -950,6 +1075,7 @@ function snapshotPostgresReplayRow(source: PostgresReplayRow | undefined): Postg
     generation,
     is_unexpired: isUnexpired,
     occurred_at: occurredAt,
+    principal_index: principalIndex,
     response_body: responseBody,
     response_headers: responseHeaders,
     response_status: responseStatus,

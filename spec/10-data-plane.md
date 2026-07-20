@@ -621,6 +621,34 @@ uncached, and limited to 1,000 ms. Missing/malformed rows, provider errors, time
 tombstone all fail closed. This yields zero positive-cache staleness; only one bounded in-flight
 authoritative read/action race remains.
 
+**Principal erasure receipts (normative).** `erasePrincipal(principal, options)` is the public
+framework door for erasing Kovo-owned residue. It MUST accept only an exact
+`createPostgresAppRuntimeDb()` runtime, an exact framework `SigningKeyRing`, and a non-empty bounded
+list containing every storage adapter wired by the app. It MUST permanently tombstone the
+principal epoch before deletion; erase principal-indexed `_kovo_jobs` rows, mutation replay rows,
+and objects from every supplied storage adapter; then independently re-enumerate all three sink
+families. Any residue, malformed index carrier, incomplete pagination, unrecognized filesystem
+generation, or non-enumerable structural storage lookalike MUST fail without a receipt. A receipt
+is a signed point-in-time absence proof over precisely the supplied adapters and exact app runtime,
+not a promise to recall external egress, browser cookies, omitted/derived third-party adapters, or
+future writes by arbitrary app code. The receipt contains a one-way principal commitment, never the
+raw principal, and is signed only through the fixed `principal-erasure-receipt` crypto purpose.
+
+Every durable task scheduled from a proven request MUST persist that principal in a separately
+indexed `_kovo_jobs.principal` column and propagate it to child jobs. Every durable mutation replay
+row admitted from a proven request principal MUST persist a separately indexed, one-way
+`principal_index`; mutation rows without a proven principal plus webhook and capability rows MUST
+carry `NULL`. This replay column is non-authoritative and additive: it exists only for erasure and
+reconstructive row validation, MUST NOT enter `mutationReplayScope()`, the canonical replay
+`ScopedKey`, replay authorization, or uniqueness composition, and a row/index mismatch fails
+closed. A pre-index task ledger containing rows or a pre-index replay ledger containing mutation
+rows MUST require explicit operator reconciliation and fail provisioning rather than silently
+claiming that legacy residue is enumerable. Memory, filesystem, and S3-compatible storage
+constructors retain an internal enumerable authority without adding list methods to the app-facing
+`StorageCapability`. Filesystem sidecars and S3 object metadata MUST reconstruct an exact
+`ScopedKey` whose digest matches the physical object identity; S3 listing MUST be bounded, dense,
+duplicate-free, and completely paginated.
+
 The credential-door census is exact: principal-scoped capability URL mint/verify plus mutation
 replay-receipt reservation, response release, handler admission, in-transaction completion, and
 settlement are applicable, while the exactly-once adapter continuation is inapplicable because it
@@ -685,7 +713,7 @@ retryable/idempotent after-commit effects, not the only syntactically legal plac
 
 Pending truth never expires or loses its slot automatically, because the application transaction may already have committed. Committed mutation truth has a canonical token-mint horizon of 24 hours; committed webhook truth has the authenticated event horizon from §9.1, `expiresAtMs = occurredAtMs + 30 days`. At either exact persisted expiry, committed truth becomes eligible for bounded batched deletion; expiry does not slide on lookup or replay. Fresh admission MUST perform eligible committed cleanup before applying its bounded-retention refusal and MUST compare the supplied expiry against the store's current clock atomically with reservation, so request latency cannot admit already-stale work. Once cleanup reclaims committed truth, the store MUST advance a monotonic `reclaimedThroughMs` high-water mark and reject fresh reserve or settlement with `expiresAtMs <= reclaimedThroughMs`, even if the wall clock later moves backward; durable storage persists this watermark, while a volatile development/test store guarantees it only for that store lifetime. Settlement performs the same current-clock and watermark checks; if the horizon elapsed after reservation, it leaves the reservation pending/fail-closed with its slot for reconciliation rather than publishing committed truth that the next cleanup could delete and re-execute. The same identity key may be admitted only after its prior committed row has actually been removed; while a pending or unexpired committed row exists, mismatched canonical facts conflict. The request path MUST NOT apply a receipt-time TTL, slide the deadline, evict the oldest row, or retire pending ambiguity. Volatile and durable stores implement the same temporal and conflict lifecycle, although a volatile store may additionally cap its total retained entries.
 
-One committed snapshot is additionally limited to 1,048,576 UTF-16LE body bytes and 65,536 UTF-8 header bytes. Oversized settlement stores no oversized bytes and leaves the already-claimed key pending/fail-closed, so a retry cannot repeat a write whose application transaction may have committed; operator reconciliation must first establish the application outcome. The schema posture audit proves the exact non-deferrable `(surface, scope, idem)` primary key, nullable pending-slot column, 1..1,000 slot constraint, unique per-surface pending-slot index, canonical mint/occurrence/expiry columns and constraints, persisted per-surface reclamation watermark, response-byte constraint, and exact replay-table ACL before production serves. Ordinary app/runtime roles MUST have neither table-level nor column-level replay privileges; only the isolated system role receives the exact `SELECT, INSERT, UPDATE, DELETE` set. Provisioning repairs missing canonical identity constraints, revokes stray table/column grants, and fails closed if duplicate or temporally ambiguous legacy truth prevents repair.
+One committed snapshot is additionally limited to 1,048,576 UTF-16LE body bytes and 65,536 UTF-8 header bytes. Oversized settlement stores no oversized bytes and leaves the already-claimed key pending/fail-closed, so a retry cannot repeat a write whose application transaction may have committed; operator reconciliation must first establish the application outcome. The schema posture audit proves the exact non-deferrable `(surface, scope, idem)` primary key, nullable pending-slot column, 1..1,000 slot constraint, unique per-surface pending-slot index, canonical mint/occurrence/expiry columns and constraints, the nullable mutation-only principal erasure index and partial index, persisted per-surface reclamation watermark, response-byte constraint, and exact replay-table ACL before production serves. Ordinary app/runtime roles MUST have neither table-level nor column-level replay privileges; only the isolated system role receives the exact `SELECT, INSERT, UPDATE, DELETE` set. Provisioning repairs missing canonical identity constraints, revokes stray table/column grants, and fails closed if duplicate or temporally ambiguous legacy truth prevents repair.
 
 <!-- kovo-model-boundary:replay-reservation/v1 -->
 

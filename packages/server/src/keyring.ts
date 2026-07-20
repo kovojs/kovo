@@ -217,6 +217,7 @@ export function authoritySigningKeyRing(
     | 'confidential-at-rest'
     | 'csrf'
     | 'live-target-attestation'
+    | 'principal-erasure-receipt'
     | 'rendered-html-coercion'
     | 'runtime-posture-attestation'
     | 'security-event-chain'

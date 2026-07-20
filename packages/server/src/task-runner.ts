@@ -8,6 +8,7 @@ import {
 import {
   actAsNonRequestPrincipal,
   declareSystemPrincipal,
+  isProvenPrincipal,
   type NonRequestPrincipalPosture,
   type PrincipalAccessOperation,
 } from './auth-principal.js';
@@ -706,6 +707,7 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
   const leaseOwner = taskOptionalOwnDataValue(source, 'leaseOwner');
   const leaseToken = taskOptionalOwnDataValue(source, 'leaseToken');
   const lastError = taskOptionalOwnDataValue(source, 'lastError');
+  const principal = taskOptionalOwnDataValue(source, 'principal');
   if (key !== undefined) scopedKeyFactsFor(key);
   if (
     typeof id !== 'string' ||
@@ -724,7 +726,8 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
     !isDurableRunnerJobStatus(status) ||
     (leaseOwner !== undefined && typeof leaseOwner !== 'string') ||
     (leaseToken !== undefined && typeof leaseToken !== 'string') ||
-    (lastError !== undefined && typeof lastError !== 'string')
+    (lastError !== undefined && typeof lastError !== 'string') ||
+    (principal !== undefined && !isProvenPrincipal(principal))
   ) {
     throw new TypeError(`${label} contains invalid authority fields.`);
   }
@@ -742,6 +745,7 @@ function snapshotDurableTaskJob(source: unknown, index: number): DurableTaskJob 
     createdAt: snapshotRunnerDate(createdAt, `${label}.createdAt`),
     updatedAt: snapshotRunnerDate(updatedAt, `${label}.updatedAt`),
     ...(key === undefined ? {} : { key: key as NonNullable<DurableTaskJob['key']> }),
+    ...(principal === undefined ? {} : { principal }),
     ...(leasedUntil === undefined
       ? {}
       : { leasedUntil: snapshotRunnerDate(leasedUntil, `${label}.leasedUntil`) }),
@@ -885,6 +889,7 @@ export function durableTaskScheduleInput(input: {
       : {
           generation: parent.generation + 1,
           lineage: parent.lineage,
+          ...(parent.principal === undefined ? {} : { principal: parent.principal }),
           ...generationStatus(parent, input.definition),
         }),
     ...(input.definition.priority === undefined ? {} : { priority: input.definition.priority }),

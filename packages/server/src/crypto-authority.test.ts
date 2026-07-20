@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createCapabilityCryptoHandle,
   createCsrfCryptoHandle,
+  createPrincipalErasureCryptoHandle,
   cryptoPurposeRegistry,
 } from './crypto-authority.js';
 import { createSigningKeyRing } from './keyring.js';
@@ -19,6 +20,7 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
       'confidential-at-rest',
       'csrf',
       'live-target-attestation',
+      'principal-erasure-receipt',
       'rendered-html-coercion',
       'session-fingerprint',
       'runtime-posture-attestation',
@@ -36,7 +38,9 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
     const capability = createCapabilityCryptoHandle(ring, 'storage-download');
     const otherAudience = createCapabilityCryptoHandle(ring, 'other-storage');
     const csrf = createCsrfCryptoHandle(ring, 'csrf', 'storage-download');
+    const principalErasure = createPrincipalErasureCryptoHandle(ring);
     const signed = capability.sign('same-payload');
+    const erasureSigned = principalErasure.sign('same-payload');
 
     expect(capability.verify('same-payload', signed.signature, signed.keyId)).toEqual({
       keyId: 'current',
@@ -50,6 +54,16 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
       ok: false,
       reason: 'bad-signature',
     });
+    expect(principalErasure.verify('same-payload', signed.signature, signed.keyId)).toEqual({
+      ok: false,
+      reason: 'bad-signature',
+    });
+    expect(capability.verify('same-payload', erasureSigned.signature, erasureSigned.keyId)).toEqual(
+      {
+        ok: false,
+        reason: 'bad-signature',
+      },
+    );
   });
 
   it('returns frozen purpose-minimal handles without primitive or key escape', () => {

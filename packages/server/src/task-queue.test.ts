@@ -8,6 +8,8 @@ import {
   MemoryDurableTaskQueue,
   PostgresDurableTaskQueue,
   createDurableTaskSqlExecutor,
+  countDurableTaskPrincipalRows,
+  eraseDurableTaskPrincipalRows,
   ensureDurableTaskSchema,
   type DurableTaskSqlExecutor,
   type DurableTaskSqlStatement,
@@ -15,6 +17,34 @@ import {
 import { managedDb } from './managed-db.js';
 
 describe('durable task queue store (SPEC §9.6)', () => {
+  it('indexes principal-bearing args and erases only that principal in real PGlite', async () => {
+    const client = new PGlite();
+    const executor = createDurableTaskSqlExecutor(client);
+    await ensureDurableTaskSchema(executor);
+    const store = new PostgresDurableTaskQueue(executor);
+    await store.enqueue({ args: { secret: 'victim' }, principal: 'victim', task: 'erase.me' });
+    await store.enqueue({ args: { secret: 'other' }, principal: 'other', task: 'keep.me' });
+
+    await expect(eraseDurableTaskPrincipalRows(executor, 'victim')).resolves.toBe(1);
+    await expect(countDurableTaskPrincipalRows(executor, 'victim')).resolves.toBe(0);
+    await expect(countDurableTaskPrincipalRows(executor, 'other')).resolves.toBe(1);
+    const rows = await client.query<{ task_key: string }>(
+      'select task_key from _kovo_jobs order by task_key',
+    );
+    expect(rows.rows).toEqual([{ task_key: 'keep.me' }]);
+  });
+
+  it('rejects attacker-supplied non-principal erasure indexes before SQL', async () => {
+    const store = new PostgresDurableTaskQueue({
+      async execute() {
+        throw new Error('SQL must not run');
+      },
+    });
+    await expect(store.enqueue({ args: {}, principal: 'anonymous', task: 'bad' })).rejects.toThrow(
+      /proven non-empty principal/u,
+    );
+  });
+
   it.each([
     ['memory', async () => new MemoryDurableTaskQueue()],
     [
@@ -482,6 +512,7 @@ describe('durable task queue store (SPEC §9.6)', () => {
       'ready',
       null,
       1,
+      null,
     ]);
     expect(statements[1]!.text).toContain('for update skip locked');
     expect(statements[1]!.values).toHaveLength(6);

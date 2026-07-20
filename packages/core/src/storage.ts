@@ -2,7 +2,6 @@ import { createHash, randomUUID as builtinRandomUuid } from 'node:crypto';
 
 import {
   createFrameworkOutputFileSystemBoundary,
-  type ConfinedFileSystemEntry,
   type FrameworkOutputFileSystemBoundary,
 } from './internal/filesystem.js';
 import { restoreScopedKey, scopedKeyFactsFor, type ScopedKey } from './scoped-key.js';
@@ -1270,9 +1269,7 @@ async function enumerateFileSystemPrincipalKeys(
   for (let shardIndex = 0; shardIndex < shards.length; shardIndex += 1) {
     const shard = shards[shardIndex]!;
     if (shard.kind !== 'directory' || !isLowercaseHexText(shard.name, 2)) {
-      throw new Error(
-        `Filesystem storage erasure cannot classify entry '${shard.relativePath}'.`,
-      );
+      throw new Error(`Filesystem storage erasure cannot classify entry '${shard.relativePath}'.`);
     }
     const entries = await fileSystem.entriesOf(shard);
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
@@ -1317,9 +1314,7 @@ async function enumerateFileSystemPrincipalKeys(
         securityArrayAppend(generationPaths, entry.relativePath);
         continue;
       }
-      throw new Error(
-        `Filesystem storage erasure cannot classify entry '${entry.relativePath}'.`,
-      );
+      throw new Error(`Filesystem storage erasure cannot classify entry '${entry.relativePath}'.`);
     }
   }
 
@@ -1692,7 +1687,8 @@ function s3StorageMetadata(
   callerMetadata: Readonly<Record<string, string>> | undefined,
   scopedKeyFrame: string,
 ): Readonly<Record<string, string>> {
-  const snapshot = callerMetadata === undefined ? undefined : snapshotStorageMetadata(callerMetadata);
+  const snapshot =
+    callerMetadata === undefined ? undefined : snapshotStorageMetadata(callerMetadata);
   const output = securityNullRecord<string>();
   if (snapshot !== undefined) {
     const keys = securityObjectKeys(snapshot);
@@ -1775,9 +1771,11 @@ async function enumerateS3PrincipalKeys(options: {
         throw new Error('S3 storage listing returned an invalid or duplicate physical key.');
       }
       securityArrayAppend(seenKeys, objectKey);
-      const head = await fileSystemReflectApply<
-        ReturnType<S3CompatibleObjectClient['headObject']>
-      >(options.headObject, options.client, [{ bucket: options.bucket, key: objectKey }]);
+      const head = await fileSystemReflectApply<ReturnType<S3CompatibleObjectClient['headObject']>>(
+        options.headObject,
+        options.client,
+        [{ bucket: options.bucket, key: objectKey }],
+      );
       if (head === undefined) {
         throw new Error(`S3 storage object '${objectKey}' disappeared during erasure enumeration.`);
       }

@@ -537,6 +537,75 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('rejects retained mutation bodies when a legacy replay schema lacks the erasure index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-erasure-cutover-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    const idem = mintMutationIdemToken();
+    await initial.mutationReplayStore.set(
+      mutationReplayScopedKey('legacy-erasure', idem),
+      'legacy-erasure',
+      idem,
+      {
+        body: replayMutationWireBody('private', {
+          reason: 'Postgres legacy erasure-index cutover fixture',
+        }),
+        headers: {},
+        status: 200,
+      },
+      'fingerprint',
+      'victim',
+    );
+    await initial.close();
+
+    const legacy = new PGlite(dataDir);
+    await legacy.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_principal_index_check;',
+        'DROP INDEX _kovo_replay_principal_index_idx;',
+        'ALTER TABLE _kovo_replay DROP COLUMN principal_index',
+      ].join(' '),
+    );
+    await legacy.close();
+
+    const rejected = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    try {
+      await expect(rejected.ready).rejects.toThrow(
+        /KV433_REPLAY_STORE_CUTOVER[\s\S]*principal erasure index[\s\S]*operator cutover/u,
+      );
+    } finally {
+      await rejected.close();
+    }
+  });
+
+  it('rejects retained task args when a legacy task schema lacks the erasure index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-task-erasure-cutover-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const legacy = new PGlite(dataDir);
+    await legacy.exec(
+      [
+        "INSERT INTO _kovo_jobs (id, task_key, args, status, principal, run_at) VALUES ('legacy', 'private.task', '{\"private\":true}'::jsonb, 'ready', 'victim', CURRENT_TIMESTAMP);",
+        'DROP INDEX _kovo_jobs_principal;',
+        'ALTER TABLE _kovo_jobs DROP COLUMN principal',
+      ].join(' '),
+    );
+    await legacy.close();
+
+    const rejected = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    try {
+      await expect(rejected.ready).rejects.toThrow(
+        /KV433_TASK_ERASURE_CUTOVER[\s\S]*principal erasure index[\s\S]*operator cutover/u,
+      );
+    } finally {
+      await rejected.close();
+    }
+  });
+
   it('fails posture and repairs a weakened or incomplete replay rollback watermark', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-watermark-'));
     roots.push(dataDir);
@@ -550,6 +619,41 @@ describe('createPostgresAppRuntimeDb', () => {
         'ALTER TABLE _kovo_replay_reclaimed DROP CONSTRAINT _kovo_replay_reclaimed_value_check;',
         'ALTER TABLE _kovo_replay_reclaimed ADD CONSTRAINT _kovo_replay_reclaimed_value_check CHECK (reclaimed_through >= -1);',
         "DELETE FROM _kovo_replay_reclaimed WHERE surface = 'webhook'",
+      ].join(' '),
+    );
+    await weakened.close();
+
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_REPLAY_STORE_SCHEMA' }),
+      ]),
+    });
+
+    const repaired = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await repaired.ready;
+    await repaired.close();
+    await expect(
+      checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema }),
+    ).resolves.toMatchObject({ ok: true, issues: [] });
+  });
+
+  it('fails posture and repairs a weakened replay principal-erasure index', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-replay-principal-index-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_replay DROP CONSTRAINT _kovo_replay_principal_index_check;',
+        'DROP INDEX _kovo_replay_principal_index_idx;',
+        'ALTER TABLE _kovo_replay ADD CONSTRAINT _kovo_replay_principal_index_check CHECK (principal_index IS NULL OR char_length(principal_index) > 0);',
+        'CREATE INDEX _kovo_replay_principal_index_idx ON _kovo_replay (principal_index)',
       ].join(' '),
     );
     await weakened.close();

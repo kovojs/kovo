@@ -15,6 +15,7 @@ import {
 } from './response.js';
 import { resolveCsrfReplayBinding, type CsrfOptions } from './csrf.js';
 import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
+import { isProvenPrincipal, provenPrincipalFromRequest } from './auth-principal.js';
 import { parseMutationIdemToken } from './mutation-idem.js';
 import { formLikeToRecord } from './schema.js';
 import {
@@ -105,12 +106,14 @@ export interface MutationReplayStore<
     scope: string,
     idem: string,
     fingerprint?: string,
+    principal?: string,
   ): Promise<Response | undefined> | Response | undefined;
   reserve(
     key: ScopedKey,
     scope: string,
     idem: string,
     fingerprint?: string,
+    principal?: string,
   ):
     | MutationReplayReservation<Response>
     | Promise<MutationReplayReservation<Response> | undefined>
@@ -121,6 +124,7 @@ export interface MutationReplayStore<
     idem: string,
     response: Response,
     fingerprint?: string,
+    principal?: string,
   ): Promise<void> | void;
 }
 
@@ -135,31 +139,54 @@ export function snapshotMutationReplayStore<Response extends MutationReplayRespo
   const reserve = stableMutationReplayMethod(source, 'reserve', true)!;
   const set = stableMutationReplayMethod(source, 'set', true)!;
   const snapshot: MutationReplayStore<Response> = witnessFreeze({
-    get(key: ScopedKey, scope: string, idem: string, fingerprint?: string) {
+    get(key: ScopedKey, scope: string, idem: string, fingerprint?: string, principal?: string) {
       assertMutationReplayScopedKey(key, scope, idem);
-      return witnessReflectApply(get, source, [key, scope, idem, fingerprint]);
+      assertOptionalReplayPrincipal(principal);
+      return witnessReflectApply(
+        get,
+        source,
+        principal === undefined
+          ? [key, scope, idem, fingerprint]
+          : [key, scope, idem, fingerprint, principal],
+      );
     },
-    async reserve(key: ScopedKey, scope: string, idem: string, fingerprint?: string) {
+    async reserve(
+      key: ScopedKey,
+      scope: string,
+      idem: string,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertMutationReplayScopedKey(key, scope, idem);
-      const reservation = await witnessReflectApply<unknown>(reserve, source, [
-        key,
-        scope,
-        idem,
-        fingerprint,
-      ]);
+      assertOptionalReplayPrincipal(principal);
+      const reservation = await witnessReflectApply<unknown>(
+        reserve,
+        source,
+        principal === undefined
+          ? [key, scope, idem, fingerprint]
+          : [key, scope, idem, fingerprint, principal],
+      );
       return reservation === undefined
         ? undefined
         : snapshotMutationReplayReservation<Response>(reservation);
     },
-    set(key: ScopedKey, scope: string, idem: string, response: Response, fingerprint?: string) {
+    set(
+      key: ScopedKey,
+      scope: string,
+      idem: string,
+      response: Response,
+      fingerprint?: string,
+      principal?: string,
+    ) {
       assertMutationReplayScopedKey(key, scope, idem);
-      return witnessReflectApply<Promise<void> | void>(set, source, [
-        key,
-        scope,
-        idem,
-        response,
-        fingerprint,
-      ]);
+      assertOptionalReplayPrincipal(principal);
+      return witnessReflectApply<Promise<void> | void>(
+        set,
+        source,
+        principal === undefined
+          ? [key, scope, idem, response, fingerprint]
+          : [key, scope, idem, response, fingerprint, principal],
+      );
     },
   });
   if (witnessWeakSetHas(memoryMutationReplayStores, source)) {
@@ -258,6 +285,8 @@ export interface MutationReplayContext<
   fingerprint?: string;
   idem?: string;
   replayStore?: MutationReplayStore<Response>;
+  /** Additive erasure index; never participates in replay authorization identity. */
+  principal?: string;
   scope: string | null;
 }
 
@@ -549,6 +578,12 @@ function assertMutationReplayStoreOptions(options: {
   }
 }
 
+function assertOptionalReplayPrincipal(value: unknown): asserts value is string | undefined {
+  if (value !== undefined && !isProvenPrincipal(value)) {
+    throw new TypeError('Mutation replay principal index must be a proven principal id.');
+  }
+}
+
 export async function mutationReplayContext<Request, Response extends MutationReplayResponse>(
   csrf: CsrfReplayScope<Request>,
   wireRequest: {
@@ -561,10 +596,12 @@ export async function mutationReplayContext<Request, Response extends MutationRe
   },
 ): Promise<MutationReplayContext<Response>> {
   const sessionScope = mutationReplayScope(csrf, wireRequest.request);
+  const principal = provenPrincipalFromRequest(wireRequest.request);
   return {
     ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
     ...(await replayFingerprint(csrf, wireRequest)),
     ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
+    ...(principal === undefined ? {} : { principal }),
     // Security finding M4: fold the mutation key into the replay scope so
     // idempotency is per-(session, mutation, idem). Without this, one mutation's
     // cached response/Set-Cookie could be replayed under a different mutation
@@ -658,6 +695,7 @@ export async function readMutationReplay<Response extends MutationReplayResponse
       replay.scope,
       replay.idem,
       replay.fingerprint,
+      replay.principal,
     );
     return response === undefined ? undefined : cloneMutationReplayResponse(response);
   } catch (error) {
@@ -696,10 +734,16 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
       ? undefined
       : {
           get(_scope: string, _idem: string, fingerprint?: string) {
-            return replay.replayStore!.get(replayKey, scope!, idem!, fingerprint);
+            return replay.replayStore!.get(replayKey, scope!, idem!, fingerprint, replay.principal);
           },
           reserve(_scope: string, _idem: string, fingerprint?: string) {
-            return replay.replayStore!.reserve(replayKey, scope!, idem!, fingerprint);
+            return replay.replayStore!.reserve(
+              replayKey,
+              scope!,
+              idem!,
+              fingerprint,
+              replay.principal,
+            );
           },
         };
   const result = await reserveReplayBeforeRun({
