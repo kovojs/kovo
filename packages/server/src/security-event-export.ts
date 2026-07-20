@@ -3,7 +3,7 @@ import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { frameworkEgressFetch } from './egress.js';
 import {
   SECURITY_EVENT_INCIDENT_DOORS,
-  securityEventChainHead,
+  securityEventExportHead,
   securityEventSnapshot,
 } from './security-event.js';
 
@@ -15,8 +15,8 @@ export function securityEventExportEnvelope(): object {
       schema: 'kovo-security-event-coverage/v1',
     },
     events: securityEventSnapshot(),
-    head: securityEventChainHead(),
-    schema: 'kovo-security-event-export/v1',
+    head: securityEventExportHead(),
+    schema: 'kovo-security-event-export/v2',
   };
 }
 

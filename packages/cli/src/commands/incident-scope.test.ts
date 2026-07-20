@@ -81,8 +81,8 @@ function fixture(
         schema: 'kovo-security-event-coverage/v1',
       },
       events: journal.snapshot(),
-      head: journal.head(),
-      schema: 'kovo-security-event-export/v1',
+      head: journal.exportHead(),
+      schema: 'kovo-security-event-export/v2',
     }),
   );
   return { advisoryPath, eventsPath, root };
@@ -288,6 +288,71 @@ describe('kovo incident scope', () => {
       if (!('error' in result)) throw new Error(result.output);
       expect(result.error).toContain('security-event record[0] MAC verification failed');
     }
+  });
+
+  it('accepts a deployment-authenticated empty export but rejects whole-chain replacement', () => {
+    const empty = fixture([]);
+    const valid = runFixture(empty);
+    expect(valid).toMatchObject({ exitCode: 0 });
+    if (!('output' in valid)) throw new Error(valid.error);
+    expect(JSON.parse(valid.output)).toMatchObject({ matchedEvents: 0, status: 'not-observed' });
+
+    const populated = fixture([event('principal-a', 'tenant-a')]);
+    const document = JSON.parse(readFileSync(populated.eventsPath, 'utf8')) as {
+      events: unknown[];
+      head: {
+        dropped: number;
+        sequence: number;
+        tailKeyId: string | null;
+        tailMac: string | null;
+      };
+    };
+    document.events = [];
+    document.head.dropped = 0;
+    document.head.sequence = 0;
+    document.head.tailKeyId = null;
+    document.head.tailMac = null;
+    writeFileSync(populated.eventsPath, canonicalJsonStringify(document));
+
+    const replaced = runFixture(populated);
+    expect(replaced).toMatchObject({ exitCode: 1 });
+    if (!('error' in replaced)) throw new Error(replaced.output);
+    expect(replaced.error).toContain('security-event export head MAC verification failed');
+  });
+
+  it('rejects tail truncation even when unauthenticated head facts are rewritten to match', () => {
+    const files = fixture([event('principal-a', 'tenant-a'), event('principal-b', 'tenant-b')]);
+    const document = JSON.parse(readFileSync(files.eventsPath, 'utf8')) as {
+      events: Array<{ keyId: string; mac: string; sequence: number }>;
+      head: {
+        dropped: number;
+        sequence: number;
+        tailKeyId: string | null;
+        tailMac: string | null;
+      };
+    };
+    document.events.pop();
+    const retainedTail = document.events[0]!;
+    document.head.sequence = retainedTail.sequence;
+    document.head.tailKeyId = retainedTail.keyId;
+    document.head.tailMac = retainedTail.mac;
+    writeFileSync(files.eventsPath, canonicalJsonStringify(document));
+
+    const result = runFixture(files);
+    expect(result).toMatchObject({ exitCode: 1 });
+    if (!('error' in result)) throw new Error(result.output);
+    expect(result.error).toContain('security-event export head MAC verification failed');
+  });
+
+  it('rejects an authenticated empty export under the wrong deployment key', () => {
+    const files = fixture([]);
+    const result = runFixture(files, {
+      KOVO_ATTESTATION_DEPLOYMENT_ID: TEST_DEPLOYMENT_ID,
+      KOVO_ATTESTATION_SECRET: 'wrong-incident-scope-secret-0123456789abcdef0123456789abcdef',
+    });
+    expect(result).toMatchObject({ exitCode: 1 });
+    if (!('error' in result)) throw new Error(result.output);
+    expect(result.error).toContain('security-event export head MAC verification failed');
   });
 
   it('fails closed on a broken append-only chain even when each record is genuine', () => {

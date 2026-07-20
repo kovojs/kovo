@@ -84,12 +84,26 @@ describe('security-event retrospective answerability gate', () => {
       expect.stringContaining('export must carry the exact incident-door'),
     ]);
 
+    const unsignedHead = sources();
+    unsignedHead['packages/server/src/security-event-export.ts'] = unsignedHead[
+      'packages/server/src/security-event-export.ts'
+    ].replace('head: securityEventExportHead()', 'head: securityEventChainHead()');
+    expect(run(unsignedHead).findings).toEqual([expect.stringContaining('authenticated v2 head')]);
+
     const dishonestCli = sources();
     dishonestCli['packages/cli/src/commands/incident-scope.ts'] = dishonestCli[
       'packages/cli/src/commands/incident-scope.ts'
     ].replaceAll('unanswerable within the covered doors', 'no impact');
     expect(run(dishonestCli).findings).toEqual([
       expect.stringContaining('absent evidence into no impact'),
+    ]);
+
+    const unverifiedHead = sources();
+    unverifiedHead['packages/cli/src/commands/incident-scope.ts'] = unverifiedHead[
+      'packages/cli/src/commands/incident-scope.ts'
+    ].replace('verifier.verifyExportHead(head)', 'true');
+    expect(run(unverifiedHead).findings).toEqual([
+      expect.stringContaining('authenticate the v2 export head'),
     ]);
   });
 

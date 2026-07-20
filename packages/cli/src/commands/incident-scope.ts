@@ -268,7 +268,7 @@ function readEventExport(path: string, verifier: SecurityEventRecordVerifier): I
     'security-event export',
   );
   requireExactKeys(value, ['coverage', 'events', 'head', 'schema'], 'security-event export');
-  if (value.schema !== 'kovo-security-event-export/v1') {
+  if (value.schema !== 'kovo-security-event-export/v2') {
     throw new Error('security-event export has an unsupported schema');
   }
   const coverage = requireRecord(value.coverage, 'security-event coverage');
@@ -293,14 +293,25 @@ function readEventExport(path: string, verifier: SecurityEventRecordVerifier): I
     }
   }
   const head = requireRecord(value.head, 'security-event chain head');
-  requireExactKeys(head, ['dropped', 'keyId', 'mac', 'sequence'], 'security-event chain head');
+  requireExactKeys(
+    head,
+    ['dropped', 'keyId', 'mac', 'schema', 'sequence', 'tailKeyId', 'tailMac'],
+    'security-event chain head',
+  );
+  if (!verifier.verifyExportHead(head)) {
+    throw new Error('security-event export head MAC verification failed');
+  }
+  boundedToken(head.keyId);
+  boundedToken(head.mac);
+  const tailKeyId = head.tailKeyId === null ? null : boundedToken(head.tailKeyId);
+  const tailMac = head.tailMac === null ? null : boundedToken(head.tailMac);
   const dropped = nonNegativeSafeInteger(head.dropped, 'security-event dropped count');
   const sequence = nonNegativeSafeInteger(head.sequence, 'security-event head sequence');
   if (sequence !== dropped + chain.length) {
     throw new Error('security-event chain head does not equal retained plus dropped records');
   }
   if (chain.length === 0) {
-    if (head.keyId !== null || head.mac !== null || sequence !== 0 || dropped !== 0) {
+    if (tailKeyId !== null || tailMac !== null || sequence !== 0 || dropped !== 0) {
       throw new Error('empty security-event chain head is inconsistent');
     }
     return { dropped, events: [] };
@@ -316,7 +327,7 @@ function readEventExport(path: string, verifier: SecurityEventRecordVerifier): I
     }
   }
   const last = chain[chain.length - 1]!;
-  if (head.mac !== last.mac || head.keyId !== last.keyId || sequence !== last.sequence) {
+  if (tailMac !== last.mac || tailKeyId !== last.keyId || sequence !== last.sequence) {
     throw new Error('security-event chain head does not match the retained tail');
   }
   return {

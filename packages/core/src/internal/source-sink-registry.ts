@@ -509,7 +509,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     runtimeGuard:
       'framework-egress-choke-rejects-undeclared-origin-before-dns-and-classifies-every-selected-dial-address',
     schema:
-      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress|kovo-security-event-export/v1',
+      'ctx.fetch|framework-egress|declared-http-origin|redirect-hop|dns-answer|selected-dial-address|proxy-posture|private-network-posture|metadata-capability|database-endpoint|task-webhook-agent-tool-egress|kovo-security-event-export/v2',
     sink: 'network.egress',
     source:
       'request-derived-url|task-payload-url|webhook-payload-url|agent-tool-argument|redirect-location|dns-answer|app-config-env-values|bounded-redacted-security-event-journal',

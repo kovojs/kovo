@@ -152,9 +152,13 @@ export function checkSecurityEventAnswerability(options = {}) {
   const exportSource = readText(exportPath);
   if (
     !exportSource.includes('doors: SECURITY_EVENT_INCIDENT_DOORS') ||
-    !exportSource.includes("schema: 'kovo-security-event-coverage/v1'")
+    !exportSource.includes("schema: 'kovo-security-event-coverage/v1'") ||
+    !exportSource.includes('head: securityEventExportHead()') ||
+    !exportSource.includes("schema: 'kovo-security-event-export/v2'")
   ) {
-    findings.push(`${exportPath}: export must carry the exact incident-door coverage denominator`);
+    findings.push(
+      `${exportPath}: export must carry the exact incident-door denominator and authenticated v2 head`,
+    );
   }
 
   const cliPath = 'packages/cli/src/commands/incident-scope.ts';
@@ -181,10 +185,12 @@ export function checkSecurityEventAnswerability(options = {}) {
   }
   if (
     !cliSource.includes('unanswerable within the covered doors') ||
-    !cliSource.includes('this is not a no-impact claim')
+    !cliSource.includes('this is not a no-impact claim') ||
+    !cliSource.includes('verifier.verifyExportHead(head)') ||
+    !cliSource.includes("value.schema !== 'kovo-security-event-export/v2'")
   ) {
     findings.push(
-      `${cliPath}: CLI must fail closed instead of turning absent evidence into no impact`,
+      `${cliPath}: CLI must authenticate the v2 export head and fail closed instead of turning absent evidence into no impact`,
     );
   }
 

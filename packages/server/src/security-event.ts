@@ -17,6 +17,7 @@ import {
 import { securitySha256Hex, securityStringCharCodeAt } from './response-security-intrinsics.js';
 
 export const KOVO_SECURITY_EVENT_SCHEMA = 'kovo-security-event/v1' as const;
+export const KOVO_SECURITY_EVENT_EXPORT_HEAD_SCHEMA = 'kovo-security-event-export-head/v1' as const;
 
 /** Gate-checked projection of the reviewed runtime denial-site census. */
 export const SECURITY_EVENT_TYPES = witnessFreeze([
@@ -165,16 +166,38 @@ export interface SecurityEventChainHead {
   readonly sequence: number;
 }
 
+/**
+ * Deployment-authenticated export checkpoint. Unlike the live chain head, this carrier binds the
+ * retained tail, sequence, and dropped-record count so an at-rest attacker cannot rewrite a
+ * truncated export into a complete-looking one (SPEC §§6.6, 11.2).
+ *
+ * @internal
+ */
+export interface SecurityEventExportHead {
+  readonly dropped: number;
+  readonly keyId: string;
+  readonly mac: string;
+  readonly schema: typeof KOVO_SECURITY_EVENT_EXPORT_HEAD_SCHEMA;
+  readonly sequence: number;
+  readonly tailKeyId: string | null;
+  readonly tailMac: string | null;
+}
+
 export interface SecurityEventJournal {
+  readonly exportHead: () => Readonly<SecurityEventExportHead>;
   readonly head: () => Readonly<SecurityEventChainHead>;
   readonly record: (input: SecurityEventInput) => Readonly<SecurityEventRecord>;
   readonly snapshot: () => readonly Readonly<SecurityEventRecord>[];
   readonly verify: SecurityEventRecordVerifier['verify'];
 }
 
-/** Verify-only capability for records crossing an exported/at-rest trust boundary. @internal */
+/**
+ * Verify-only capability for records and their checkpoint crossing an exported/at-rest boundary.
+ * @internal
+ */
 export interface SecurityEventRecordVerifier {
   readonly verify: (record: unknown) => record is SecurityEventRecord;
+  readonly verifyExportHead: (head: unknown) => head is SecurityEventExportHead;
 }
 
 const EVENT_TYPES = createWitnessSet<SecurityEventType>();
@@ -254,6 +277,14 @@ export function securityEventChainHead(): Readonly<SecurityEventChainHead> {
   return witnessFreeze({ dropped: unsealedEventCount, keyId: null, mac: null, sequence: 0 });
 }
 
+/** @internal Deployment-authenticated checkpoint for the declared-egress event export. */
+export function securityEventExportHead(): Readonly<SecurityEventExportHead> {
+  if (installedJournal === undefined) {
+    throw new TypeError('Security-event export requires a deployment-keyed journal.');
+  }
+  return installedJournal.exportHead();
+}
+
 /** @internal Bounded records for reviewed declared-egress export. */
 export function securityEventSnapshot(): readonly Readonly<SecurityEventRecord>[] {
   return installedJournal?.snapshot() ?? witnessFreeze([]);
@@ -277,15 +308,19 @@ export function createSecurityEventJournal(options: {
   let sequence = 0;
   let previousMac: string | null = null;
 
+  const currentHead = (): Readonly<SecurityEventChainHead> =>
+    witnessFreeze({
+      dropped,
+      keyId: sequence === 0 ? null : options.authority.currentKeyId,
+      mac: previousMac,
+      sequence,
+    });
+
   const journal: SecurityEventJournal = {
-    head() {
-      return witnessFreeze({
-        dropped,
-        keyId: sequence === 0 ? null : options.authority.currentKeyId,
-        mac: previousMac,
-        sequence,
-      });
+    exportHead() {
+      return signSecurityEventExportHead(currentHead(), options.authority);
     },
+    head: currentHead,
     record(input) {
       const normalized = normalizedSecurityEventInput(input);
       const occurredAt = now();
@@ -357,6 +392,9 @@ export function createSecurityEventRecordVerifier(options: {
   return witnessFreeze({
     verify(record: unknown): record is SecurityEventRecord {
       return verifySecurityEventRecord(record, authority);
+    },
+    verifyExportHead(head: unknown): head is SecurityEventExportHead {
+      return verifySecurityEventExportHead(head, authority);
     },
   });
 }
@@ -800,6 +838,76 @@ function verifySecurityEventRecord(
     schema: ownDataValue(record, 'schema', 'Security event record schema'),
     sequence: ownDataValue(record, 'sequence', 'Security event record sequence'),
     ...securityEventInputFromRecord(record),
+  });
+  return authority.verify(source, mac, keyId).ok;
+}
+
+function signSecurityEventExportHead(
+  head: Readonly<SecurityEventChainHead>,
+  authority: PurposeCryptoHandle,
+): Readonly<SecurityEventExportHead> {
+  const unsigned = {
+    dropped: head.dropped,
+    keyId: authority.currentKeyId,
+    schema: KOVO_SECURITY_EVENT_EXPORT_HEAD_SCHEMA,
+    sequence: head.sequence,
+    tailKeyId: head.keyId,
+    tailMac: head.mac,
+  } as const;
+  const signed = authority.sign(canonicalJsonStringify(unsigned));
+  if (signed.keyId !== unsigned.keyId) {
+    throw new TypeError('Security-event export authority changed keys while signing the head.');
+  }
+  return witnessFreeze({ ...unsigned, mac: signed.signature });
+}
+
+function isSecurityEventExportHead(head: unknown): head is SecurityEventExportHead {
+  if (head === null || typeof head !== 'object') return false;
+  try {
+    assertExactOwnDataFields(
+      head,
+      ['dropped', 'keyId', 'mac', 'schema', 'sequence', 'tailKeyId', 'tailMac'],
+      'Security event export head',
+    );
+    const dropped = ownDataValue(head, 'dropped', 'Security event export dropped count');
+    const keyId = ownDataValue(head, 'keyId', 'Security event export head key id');
+    const mac = ownDataValue(head, 'mac', 'Security event export head MAC');
+    const schema = ownDataValue(head, 'schema', 'Security event export head schema');
+    const sequence = ownDataValue(head, 'sequence', 'Security event export head sequence');
+    const tailKeyId = ownDataValue(head, 'tailKeyId', 'Security event export tail key id');
+    const tailMac = ownDataValue(head, 'tailMac', 'Security event export tail MAC');
+    const hasTail = typeof tailKeyId === 'string' && typeof tailMac === 'string';
+    const hasNoTail = tailKeyId === null && tailMac === null;
+    return (
+      schema === KOVO_SECURITY_EVENT_EXPORT_HEAD_SCHEMA &&
+      Number.isSafeInteger(dropped) &&
+      (dropped as number) >= 0 &&
+      Number.isSafeInteger(sequence) &&
+      (sequence as number) >= (dropped as number) &&
+      typeof keyId === 'string' &&
+      typeof mac === 'string' &&
+      (hasTail || hasNoTail) &&
+      ((sequence === 0 && dropped === 0 && hasNoTail) || (sequence !== 0 && hasTail))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function verifySecurityEventExportHead(
+  head: unknown,
+  authority: PurposeCryptoHandle,
+): head is SecurityEventExportHead {
+  if (!isSecurityEventExportHead(head)) return false;
+  const keyId = ownDataValue(head, 'keyId', 'Security event export head key id') as string;
+  const mac = ownDataValue(head, 'mac', 'Security event export head MAC') as string;
+  const source = canonicalJsonStringify({
+    dropped: ownDataValue(head, 'dropped', 'Security event export dropped count'),
+    keyId,
+    schema: ownDataValue(head, 'schema', 'Security event export head schema'),
+    sequence: ownDataValue(head, 'sequence', 'Security event export head sequence'),
+    tailKeyId: ownDataValue(head, 'tailKeyId', 'Security event export tail key id'),
+    tailMac: ownDataValue(head, 'tailMac', 'Security event export tail MAC'),
   });
   return authority.verify(source, mac, keyId).ok;
 }

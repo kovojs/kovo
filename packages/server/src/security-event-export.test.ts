@@ -5,6 +5,7 @@ import { EGRESS_BLOCKED_ERROR_NAME } from './egress.js';
 import { exportSecurityEvents, securityEventExportEnvelope } from './security-event-export.js';
 import {
   createSecurityEventJournal,
+  createSecurityEventRecordVerifier,
   installSecurityEventJournal,
   securityEvent,
   securityEventSnapshot,
@@ -31,12 +32,29 @@ describe('security-event export boundary (SPEC §§6.6, 11.2)', () => {
       'sequence',
       'type',
     ]);
-    expect(securityEventExportEnvelope()).toMatchObject({
+    const envelope = securityEventExportEnvelope() as {
+      events: Array<{ keyId: string; mac: string }>;
+      head: unknown;
+      schema: string;
+    };
+    expect(envelope).toMatchObject({
       coverage: {
         doors: ['auth', 'authorization', 'declassification', 'egress', 'storage', 'task', 'replay'],
         schema: 'kovo-security-event-coverage/v1',
       },
-      schema: 'kovo-security-event-export/v1',
+      schema: 'kovo-security-event-export/v2',
+    });
+    const verifier = createSecurityEventRecordVerifier({
+      deploymentId: 'deployment:test',
+      secret: 'security-event-export-test-secret-0123456789abcdef0123456789abcdef',
+    });
+    expect(verifier.verifyExportHead(envelope.head)).toBe(true);
+    expect(envelope.head).toMatchObject({
+      dropped: 0,
+      schema: 'kovo-security-event-export-head/v1',
+      sequence: 1,
+      tailKeyId: envelope.events[0]!.keyId,
+      tailMac: envelope.events[0]!.mac,
     });
     await expect(
       exportSecurityEvents('https://collector.example.test/v1/events'),
