@@ -153,7 +153,9 @@ function normalizePlaintext(value: unknown): Buffer {
 function normalizeAad(options: EncryptAtRestOptions): Buffer {
   const value = stableOptionalValue(options, 'aad', 'confidential-at-rest options');
   if (value === undefined) return securityBufferFrom('');
-  if (typeof value === 'string') return securityBufferFrom(securityStringTrim(value), 'utf8');
+  // SPEC §6.6 authenticates the exact caller AAD. Normalizing security context would alias
+  // distinct application identities and allow an envelope to cross the intended context boundary.
+  if (typeof value === 'string') return securityBufferFrom(value, 'utf8');
   if (securityIsUint8Array(value)) return securityBufferFrom(value);
   throw new TypeError('encryptAtRest aad must be a string or Uint8Array (OPP-04).');
 }
