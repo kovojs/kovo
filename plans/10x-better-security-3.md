@@ -788,12 +788,15 @@ near-zero present value — while §0.5's process half is nearly free and is a l
       start non-zero**. Converts an unknown into a counted, named, spec-visible hole. (~2 weeks)
   - Evidence: `pnpm run check:c9-sink-inventory` passes 33/33 and mutation-checks the closed posture
     vocabulary plus a non-zero six-row `unerasable` metric; CLI tests pass 14/14.
-- [ ] `erasePrincipal(p)` with a signed receipt and a **mandatory absence probe** (re-enumerate the
+- [x] `erasePrincipal(p)` with a signed receipt and a **mandatory absence probe** (re-enumerate the
       scope; non-empty **fails** the erasure, does not warn), for the three sinks that provably cannot
       self-enumerate today: blobs (`StorageCapability` has no list operation), `_kovo_jobs.args` (no
       principal column), and replay `response_body` (scoped by CSRF rotation binding, never by
       principal). The replay principal dimension must be a **non-authoritative additive index column**
       that never enters `mutationReplayScope()` composition.
+  - Evidence: the integrated storage/task/replay/principal-erasure suite passes 173/173, including
+    delete-then-re-enumerate failure, signed receipt verification, additive principal indexes, and
+    replay-scope non-authority; C9 passes 33/33 and the API/VP gates pass.
 
 ---
 
@@ -802,14 +805,19 @@ near-zero present value — while §0.5's process half is nearly free and is a l
 One model, not three, and only for the protocol where a wrong interleaving means money moves twice.
 TLA+ is a real learning cost nobody on the team has paid.
 
-- [ ] `formal/ReplayReservation.tla` + `.cfg` at R=2 replicas, N=2 slots, 2 identities, one backward
+- [x] `formal/ReplayReservation.tla` + `.cfg` at R=2 replicas, N=2 slots, 2 identities, one backward
       clock step, one crash point: no double execute; refuse-never-evict; monotone `reclaimedThrough` /
       no resurrection; bounded admission. (~0.75 pm)
-- [ ] **Mandatory faithfulness gate in the same commit**: broken variants reproducing the historical
+  - Evidence: `pnpm run check:replay-model` under the pinned Temurin 21.0.11+10/TLC v1.7.4 toolchain
+    explores 22,025 generated/4,824 distinct states and passes all six declared invariants.
+- [x] **Mandatory faithfulness gate in the same commit**: broken variants reproducing the historical
       hazards narrated at `packages/server/src/replay.ts:280-296` (evict-pending, A6/M4) and a
       naive-watermark variant vs the GREATEST advance at `postgres-replay.ts:299`, each yielding a
       committed counterexample under `formal/replay/counterexamples/`. **If those variants do not
       produce counterexamples, the model is not faithful and the item stops there.**
+  - Evidence: the same gate reproduces both committed counterexamples and passes its 9/9 structural
+    tests; protocol/honesty gates cover 82 SQL statements, 33 actions, and the explicit 7/26 modeled
+    partition including principal-erasure interleavings as not modeled.
 - [x] `scripts/check-protocol-alphabet.mjs` (the cheap, high-certainty anti-rot half — ship it even if
       the model never does): every SQL string touching `_kovo_replay`, `_kovo_replay_reclaimed`,
       `_kovo_jobs` maps to a named model action, and the status literals equal the registered model
