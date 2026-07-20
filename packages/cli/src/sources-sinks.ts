@@ -10,6 +10,7 @@ import {
   type DangerousSinkToken,
   type SourceSinkCorpusEntry,
   type SourceSinkInventoryEntry,
+  type SourceSinkResidency,
   type SourceSinkRuntimeEvidence,
 } from '@kovojs/core/internal/source-sink-registry';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
@@ -19,7 +20,7 @@ import { type KovoCheckResult } from './shared.js';
 export const sourcesSinksArtifactVersion = 'kovo-sources-sinks/v1';
 export const sourcesSinksArtifactPath = join('.kovo', 'sources-sinks.json');
 
-export type { DangerousSinkToken, SourceSinkInventoryEntry };
+export type { DangerousSinkToken, SourceSinkInventoryEntry, SourceSinkResidency };
 export type { SourceSinkCorpusEntry };
 export type { SourceSinkRuntimeEvidence };
 
@@ -146,7 +147,7 @@ export function sourcesSinksCheckResult(
     }
   }
   lines.push(
-    `CHECK families=${families.size} entries=${entries.length} drift-tokens=${dangerousSinkTokens().length}`,
+    `CHECK families=${families.size} entries=${entries.length} drift-tokens=${dangerousSinkTokens().length} unerasable=${unerasableResidencyCount(entries)}`,
   );
   return { exitCode: failed ? 1 : 0, output: `${lines.join('\n')}\n` };
 }
@@ -297,7 +298,7 @@ function sourcesSinksTextLines(version: string): string[] {
       .join(',')}`,
   );
   lines.push(`ARTIFACT ${sourcesSinksArtifactPath}`);
-  lines.push(`SUMMARY total=${entries.length}`);
+  lines.push(`SUMMARY total=${entries.length} unerasable=${unerasableResidencyCount(entries)}`);
   return lines;
 }
 
@@ -311,6 +312,7 @@ function sourceSinkTextLine(entry: SourceSinkInventoryEntry): string {
     `firstParser=${entry.firstParser}`,
     `consumers=${entry.consumers.join('|')}`,
     `guard=${entry.guard}`,
+    `residency=${entry.residency}`,
     `schema=${entry.schema}`,
     `runtimeGuard=${entry.runtimeGuard}`,
     `diagnostic=${entry.diagnostic}`,
@@ -318,6 +320,10 @@ function sourceSinkTextLine(entry: SourceSinkInventoryEntry): string {
     `specAnchor=${entry.specAnchor}`,
     `testEvidence=${entry.testEvidence.join(',')}`,
   ].join(' ');
+}
+
+function unerasableResidencyCount(entries: readonly SourceSinkInventoryEntry[]): number {
+  return entries.filter((entry) => entry.residency.startsWith('unerasable:')).length;
 }
 
 function sourceSinkCorpusLine(entry: SourceSinkCorpusEntry): string {

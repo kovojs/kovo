@@ -99,6 +99,16 @@ proxy-only wrapper. The `data.derived.persistence` family is discharged by the s
 only when its proof evidence includes both KV452 provenance closure and runtime reconstruction of the
 complete request-principal `ScopedKey` namespace.
 
+Every source/sink census row MUST also declare one closed residency posture:
+`none`, `db-owner`, `ledger`, `adapter-enumerable`, or `unerasable:<reason>`. A family that combines
+multiple runtime sinks takes the least erasable posture of any covered sink; it cannot hide retained
+task, replay, client, adapter, or external-recipient state behind a transient member. The C9 inventory
+gate MUST fail on a missing or unknown posture, an empty or malformed `unerasable` reason, or an
+`unerasable` count of zero. `kovo explain --sources-sinks`, `kovo check sources-sinks`, and the
+versioned inventory artifact MUST publish each row's posture, and the text summaries MUST publish the
+current `unerasable` count. This count is an honesty metric and erasure-work denominator, not a claim
+that the enumerable postures already implement principal erasure.
+
 **Finite provenance relation (normative proof boundary).** The compiler MUST publish the current
 server/browser provenance vocabularies and the complete server member-projection relation as the
 versioned, diffable `security-provenance-relation/v1.json` artifact. The current denominator is 43

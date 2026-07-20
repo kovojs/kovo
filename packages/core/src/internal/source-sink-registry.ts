@@ -28,6 +28,7 @@ export interface SourceSinkInventoryEntry {
   finiteBrowserControlProof?: FiniteBrowserControlSinkProof;
   firstParser: string;
   guard: string;
+  residency: SourceSinkResidency;
   runtimeGuard: string;
   schema: string;
   sink: string;
@@ -36,6 +37,14 @@ export interface SourceSinkInventoryEntry {
   testEvidence: readonly string[];
   trust: string;
 }
+
+/** @internal Enumerability posture for data retained beyond one request. */
+export type SourceSinkResidency =
+  | 'none'
+  | 'db-owner'
+  | 'ledger'
+  | 'adapter-enumerable'
+  | `unerasable:${string}`;
 
 /** @internal */
 export interface DangerousSinkToken {
@@ -183,6 +192,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     },
     firstParser: 'tsx-lowered-output-context',
     guard: `contextual-encoding+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
+    residency: 'none',
     runtimeGuard:
       'server-renderer+browser-output-helpers-drop-unsafe-url-attrs+server-meta-refresh-first-attribute-pair+canonical-finite-browser-control-tuples+finite-iframe-sandbox-token-policy',
     schema: [
@@ -226,6 +236,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'InlineScript|InlineStyle|trustedHtml|trustedUrl',
     firstParser: 'structured-document-primitives',
     guard: `typed-document-primitives+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
+    residency: 'none',
     runtimeGuard: 'server-document-assembly-csp-enrollment',
     schema:
       'Document|Head|BodyStart|BodyEnd|HtmlAttrs|BodyAttrs|Meta|Link|StylesheetLink|FontPreload|ModulePreload|InlineScript|InlineStyle',
@@ -243,6 +254,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'trustedUrl|external-route-opt-out|compiler-owned-handler-ref',
     firstParser: 'route-registry+url-parser+fragment-target-registry',
     guard: 'route-registry+safeSameOrigin+normalizePathname+selector-escape',
+    residency: 'none',
     runtimeGuard: 'sanitizeNext+route-matcher+fragment-target-escape+versioned-client-modules',
     schema:
       'route().params|route().search|GET-form-url-state|URL-fragments-hashes|href|src|action|formaction|poster|ping|xlink:href|meta-url-content|redirect-Location|auth-next|route-normalization-redirects|enhanced-navigation-fetch-targets|dynamic-import-handler-refs|immutable-c-v-client-module-URLs|querySelector|hash-scrolling|static-export-reserved-refs|handler-ref-registry|safe-url-schemes',
@@ -260,6 +272,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'trustedCss-not-public|compiler-owned-stylex-output',
     firstParser: 'compiler-style-context+StyleX-extractor',
     guard: 'style-context-encoding+no-raw-style-escape-hatch',
+    residency: 'none',
     runtimeGuard: 'browser-style-property-writer+unsafe-url-attr-drop',
     schema:
       'style-attribute|style-text|raw-CSS|style-props|StyleX-extraction|CSS-custom-properties|url()-inside-CSS|view-transition-name|runtime-style-property-writers|theme-config|generated-keyframe-theme-output|keyframe-input',
@@ -287,6 +300,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
       'respond-builder+configured-error-shell-builder+cookie-serializer+app-response-header-classifier+response-transport-header-classifier',
     guard:
       'direct-app-header-allowlist+dedicated-field-options+typed-cookie-builder+transport-owned-header-deny-set',
+    residency: 'unerasable:client-state-outside-framework-erasure',
     runtimeGuard:
       'reject-unknown-direct-app-names+reject-cr-lf-nul-controls+content-disposition-bidi-neutralization+reject-framing-hop-by-hop+structural-cookie-serialization+browser-state-private-no-store-floor+static-export-browser-state-rejection+adapter-browser-state-private-no-store-floor',
     schema:
@@ -314,6 +328,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'endpoint({csrf:false,reason})|webhook({verify:none,reason})',
     firstParser: 'endpoint-dispatcher-raw-request+webhook-verify-before-parse',
     guard: 'csrf-or-machine-verifier+raw-bytes-before-parse',
+    residency: 'unerasable:replay-records-lack-principal-index',
     runtimeGuard: 'dispatcher-endpoint-auth+webhook-verify+replay-store',
     schema:
       'endpoint-raw-Response|webhook-responses|/_q-typed-reads|SSE-live-query-pushes|BroadcastChannel-rebroadcast|HMR-dev-refresh-endpoints|mutation-defer-streams|Kovo-Changes|fragment-target-selection|endpoint-method+path+body-posture|webhook-input+provider-headers-signatures+idempotency',
@@ -331,6 +346,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'renderOnce|await-fragment|disableServerRefresh',
     firstParser: 'typed-query-read-endpoint+browser-live-envelope-parser',
     guard: 'guard-recheck+private-cache+principal-fingerprint+build-token',
+    residency: 'unerasable:durable-task-args-lack-principal-index',
     runtimeGuard: 'typed-read-endpoint+BroadcastChannel-principal-discard+SSE-guard-recheck',
     schema:
       '/_q/search-args+query-shape+fragment-target-registry+Kovo-Targets+Kovo-Live-Targets+render-plan-token',
@@ -348,6 +364,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'respond.file|respond.stream|storage-adapter',
     firstParser: 'FileSchema+storage-key-parser+static-export-route-graph',
     guard: 'path-containment+attachment-nosniff+static-export-reference-check',
+    residency: 'unerasable:storage-adapter-has-no-list-operation',
     runtimeGuard:
       'safe-content-disposition+upload-and-wire-bidi-filename-neutralization+reserved-dynamic-endpoint-refusal+storage-key-validation',
     schema:
@@ -371,6 +388,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     firstParser: 'finite-security-ir-governed-data-provenance+derived-options-validator',
     guard:
       'exact-derived-constructor+exact-request-principal-binding+governed-data-persistent-sink-gate',
+    residency: 'unerasable:derived-adapter-has-no-enumeration-or-delete',
     runtimeGuard:
       'request-principal-ScopedKey-reconstruction+complete-frame-hash+adapter-callable-pin+dense-array-snapshot',
     schema:
@@ -391,6 +409,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'public-read-justification',
     firstParser: 'request-shell-session-provider+guard-refinement',
     guard: 'authed+owns()+owner-table-scope',
+    residency: 'db-owner',
     runtimeGuard: 'guard-refinement+runtime-observed-read-write-cross-check',
     schema:
       'req.session|owner-annotated-table-reads-writes|guard-refinement-results|session-provider-cookies|unauthenticated-redirects|CSRF-exempt-mutations-endpoints|webhook-verify-none|replay-stores|rate-limit-keys|query-cacheability|owner:domain|guard-chain|scope-audit',
@@ -415,6 +434,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'none',
     firstParser: 'fixed-binding-option-validation+credential-consumer-contract-census',
     guard: 'exact-runtime-consumer-registry+complete-M2-path-census+same-consumer-one-shot-results',
+    residency: 'adapter-enumerable',
     runtimeGuard:
       'runBetterAuthCredentialConsumer{Async}+consumeBetterAuthCredentialResult+result-shape-validation+provider-error-redaction',
     schema:
@@ -437,6 +457,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'sql<T>+reads|raw-sql-tables+touches',
     firstParser: 'static-drizzle-extractor+runtime-statement-parser',
     guard: 'static-drizzle-analysis+runtime-statement-parser',
+    residency: 'none',
     runtimeGuard: 'observed-subset-static-or-declared',
     schema: 'projection-schema+reads-set+tables-allowlist',
     sink: 'sql.executable',
@@ -453,6 +474,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     escapeHatch: 'compiler-owned-versioned-handler-import',
     firstParser: 'compiler-handler-registry+dev-server-module-resolver',
     guard: 'closed-handler-registry+request-path-deny-audit',
+    residency: 'none',
     runtimeGuard: 'loader-imports-only-declared-/c/__v-refs',
     schema:
       'import()|compiler-dev-HMR-module-loading|build-preset-runtime-API-compatibility|new Function|eval|vm|child_process|shell-commands-in-scripts|adapter-asset-fetch-fallbacks|HandlerModules+ComponentRegistry+build-preset-capabilities',
@@ -477,6 +499,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     firstParser: 'declared-origin-parser+framework-egress-request-constructor',
     guard:
       'declared-origin-allowlist+per-hop-origin-check+dns-resolution+private-network-classification+selected-ip-pin',
+    residency: 'unerasable:external-recipient-outside-framework-erasure',
     runtimeGuard:
       'framework-egress-choke-rejects-undeclared-origin-before-dns-and-classifies-every-selected-dial-address',
     schema:

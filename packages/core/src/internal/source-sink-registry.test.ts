@@ -48,6 +48,8 @@ const allowedKeyScoping = new Set([
   'runtime-opaque-scoped-key',
   'not-stateful-keyed',
 ]);
+const exactResidencyPostures = new Set(['none', 'db-owner', 'ledger', 'adapter-enumerable']);
+const unerasableResidencyPattern = /^unerasable:[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const exactFiniteBrowserControlKeys = [
   'script[src]',
   'script[href]',
@@ -149,6 +151,21 @@ function assertC9SinkInventoryComplete(
   const seenSinks = new Set<string>();
   const requiredOperations = new Set(securityOperationKinds);
   const seenOperations = new Set<string>();
+
+  let unerasable = 0;
+  for (const entry of census) {
+    const residency = Reflect.get(entry, 'residency');
+    if (
+      typeof residency !== 'string' ||
+      (!exactResidencyPostures.has(residency) && !unerasableResidencyPattern.test(residency))
+    ) {
+      throw new Error(`${entry.sink} has an unknown or missing residency posture.`);
+    }
+    if (residency.startsWith('unerasable:')) unerasable += 1;
+  }
+  if (unerasable === 0) {
+    throw new Error('The source/sink census must publish a non-zero unerasable residency count.');
+  }
 
   for (const entry of inventory) {
     assertNonBlank(entry.sink, 'C9 sink name');
@@ -256,6 +273,14 @@ function mutableBoundaryInventory(): BoundaryCrossingSinkInventoryEntry[] {
     hostileValueEvidence: [...entry.hostileValueEvidence],
     operationKinds: [...entry.operationKinds],
     proofEvidence: [...entry.proofEvidence],
+  }));
+}
+
+function mutableSourceSinkInventory(): SourceSinkInventoryEntry[] {
+  return frameworkSourceSinkInventory().map((entry) => ({
+    ...entry,
+    consumers: [...entry.consumers],
+    testEvidence: [...entry.testEvidence],
   }));
 }
 
@@ -401,6 +426,74 @@ describe('boundary crossing sink inventory', () => {
     expect(credentialDoor?.hostileValueEvidence).toContain(
       'packages/better-auth/src/internal.trusted-plaintext.test.ts',
     );
+  });
+
+  it('classifies retained data with a closed residency posture and named unerasable holes', () => {
+    const residency = new Map(
+      frameworkSourceSinkInventory().map((entry) => [entry.sink, entry.residency]),
+    );
+
+    expect(residency).toEqual(
+      new Map([
+        ['html.dom.output', 'none'],
+        ['document.shell.output', 'none'],
+        ['url.navigation.selector', 'none'],
+        ['css.style.output', 'none'],
+        ['http.header.cookie', 'unerasable:client-state-outside-framework-erasure'],
+        ['ingress.endpoint.webhook', 'unerasable:replay-records-lack-principal-index'],
+        ['transport.query.live.broadcast', 'unerasable:durable-task-args-lack-principal-index'],
+        ['file.storage.static-export', 'unerasable:storage-adapter-has-no-list-operation'],
+        ['data.derived.persistence', 'unerasable:derived-adapter-has-no-enumeration-or-delete'],
+        ['auth.data-access', 'db-owner'],
+        ['auth.credential.non-egress', 'adapter-enumerable'],
+        ['sql.executable', 'none'],
+        ['dynamic.import.process', 'none'],
+        ['network.egress', 'unerasable:external-recipient-outside-framework-erasure'],
+      ]),
+    );
+    expect([...residency.values()].filter((value) => value.startsWith('unerasable:'))).toHaveLength(
+      6,
+    );
+  });
+
+  it.each([
+    {
+      expected: /unknown or missing residency posture/u,
+      mutate: (inventory: SourceSinkInventoryEntry[]) => {
+        Reflect.deleteProperty(inventory[0]!, 'residency');
+        return inventory;
+      },
+      name: 'missing residency',
+    },
+    {
+      expected: /unknown or missing residency posture/u,
+      mutate: (inventory: SourceSinkInventoryEntry[]) => [
+        { ...inventory[0]!, residency: 'erasable' as never },
+        ...inventory.slice(1),
+      ],
+      name: 'unknown residency',
+    },
+    {
+      expected: /unknown or missing residency posture/u,
+      mutate: (inventory: SourceSinkInventoryEntry[]) => [
+        { ...inventory[0]!, residency: 'unerasable:' },
+        ...inventory.slice(1),
+      ],
+      name: 'unreasoned unerasable residency',
+    },
+    {
+      expected: /non-zero unerasable residency count/u,
+      mutate: (inventory: SourceSinkInventoryEntry[]) =>
+        inventory.map((entry) => ({ ...entry, residency: 'none' })),
+      name: 'zero unerasable metric',
+    },
+  ])('fails closed for a $name', ({ expected, mutate }) => {
+    expect(() =>
+      assertC9SinkInventoryComplete(
+        mutate(mutableSourceSinkInventory()),
+        boundaryCrossingSinkInventory(),
+      ),
+    ).toThrow(expected);
   });
 
   it('assigns every finite compiler-owned operation to exactly one C9 sink owner', () => {
