@@ -587,6 +587,11 @@ function appendViolations(
     }
     if (violation.kind === 'unscoped-state-key') {
       appendScopedKeyDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
+    } else if (
+      violation.kind === 'derived-dataset-scope' ||
+      violation.kind === 'governed-data-persistence'
+    ) {
+      appendDerivedDatasetDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
     } else {
       appendFiniteIrDiagnostic(found, diagnostics, violation.span, violation.detail + '.');
     }
@@ -658,6 +663,25 @@ function appendScopedKeyDiagnostic(
       detail,
     ),
     'Scoped-key diagnostics',
+  );
+}
+
+function appendDerivedDatasetDiagnostic(
+  found: CompilerDiagnostic[],
+  diagnostics: DiagnosticFactory,
+  span: SourceSpan,
+  detail: string,
+): void {
+  const measuredLength = span.end - span.start;
+  compilerArrayAppend(
+    found,
+    diagnosticAt(
+      diagnostics,
+      'KV452',
+      { length: measuredLength > 0 ? measuredLength : 1, start: span.start },
+      detail,
+    ),
+    'Derived-dataset diagnostics',
   );
 }
 

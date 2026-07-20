@@ -368,6 +368,10 @@ describe('boundary crossing sink inventory', () => {
     expect(inventory.find((entry) => entry.sink === 'Set-Cookie')?.censusFamilies).toEqual([
       'http.header.cookie',
     ]);
+    expect(inventory.find((entry) => entry.sink === 'blob/file write')?.censusFamilies).toEqual([
+      'file.storage.static-export',
+      'data.derived.persistence',
+    ]);
     expect(inventory.find((entry) => entry.sink === 'webhook payload')?.censusFamilies).toEqual([
       'ingress.endpoint.webhook',
     ]);

@@ -76,6 +76,18 @@
       "prerequisites": ["serverMemberProvenanceFromRelation"]
     },
     {
+      "id": "call-governed-data",
+      "owner": "compiler-security",
+      "semanticsWitness": "A database-read result, derived-dataset read, or local transform receiving governed data retains governed-data provenance; ordinary stringification, mapping, and exact same-file helper calls cannot erase inherited owner scope before a persistent non-engine sink.",
+      "generatorTransfer": "expression.call-local",
+      "generatorExpectedProvenance": "governed-data",
+      "prerequisites": [
+        "serverArgumentsContainGovernedData",
+        "serverCallReadsDerivedDataset",
+        "serverExpressionProvenance"
+      ]
+    },
+    {
       "id": "call-unsafe-wire-data",
       "owner": "compiler-security",
       "semanticsWitness": "A locally callable expression invoked with request-derived or catch-bound data retains unsafe-wire-data provenance because an opaque local transform is not evidence that attacker influence disappeared.",
@@ -94,7 +106,7 @@
     {
       "id": "binary-finite-join",
       "owner": "compiler-security",
-      "semanticsWitness": "The finite binary transfer returns local only when neither operand carries authority or a foreign executable; any authority operand joins at unknown-authority and a foreign operand remains foreign-executable.",
+      "semanticsWitness": "The finite binary transfer returns local only when neither operand carries authority, governed/unsafe data, or a foreign executable; authority joins at unknown-authority, foreign remains foreign, and governed/unsafe provenance survives.",
       "generatorTransfer": "expression.binary-join",
       "generatorExpectedProvenance": "local",
       "prerequisites": ["serverBinaryTransfer"]
@@ -102,7 +114,7 @@
     {
       "id": "conditional-finite-join",
       "owner": "compiler-security",
-      "semanticsWitness": "The finite conditional transfer preserves equal branches, joins unequal authority at unknown-authority, preserves foreign-executable, and grants local only when both alternatives are local.",
+      "semanticsWitness": "The finite conditional transfer preserves equal branches, joins unequal authority at unknown-authority, preserves foreign-executable and governed/unsafe provenance, and grants local only when both alternatives are local.",
       "generatorTransfer": "expression.conditional-join",
       "generatorExpectedProvenance": "local",
       "prerequisites": ["serverConditionalTransfer"]
@@ -124,6 +136,14 @@
       "prerequisites": ["expressionContainsServerForeignExecutable"]
     },
     {
+      "id": "fallthrough-governed-data-containment",
+      "owner": "compiler-security",
+      "semanticsWitness": "The bounded fallthrough walk skips nested executable scopes and detects governed database or derived-dataset values inside objects, arrays, and other inert containers, preserving owner scope until a reviewed derived-data door consumes it.",
+      "generatorTransfer": "expression.fallthrough-authority",
+      "generatorExpectedProvenance": "governed-data",
+      "prerequisites": ["expressionContainsServerGovernedData"]
+    },
+    {
       "id": "fallthrough-unsafe-wire-data",
       "owner": "compiler-security",
       "semanticsWitness": "The bounded fallthrough walk skips nested executable scopes and detects request-derived or catch-bound values inside otherwise inert containers, preserving unsafe-wire-data until an audited render door consumes it.",
@@ -134,7 +154,7 @@
     {
       "id": "fallthrough-contained-local",
       "owner": "compiler-security",
-      "semanticsWitness": "The final local grant occurs only after the explicit object-literal implicit-protocol shape test and both bounded fallthrough walks find neither foreign executable nor server authority; otherwise the earlier branch returns foreign-executable or unknown-authority.",
+      "semanticsWitness": "The final local grant occurs only after the object-literal implicit-protocol shape test and all bounded fallthrough walks find no foreign executable, governed data, unsafe wire data, or server authority; otherwise an earlier branch preserves that closed or tracked provenance.",
       "generatorTransfer": "expression.fallthrough-authority",
       "generatorExpectedProvenance": "local",
       "prerequisites": [

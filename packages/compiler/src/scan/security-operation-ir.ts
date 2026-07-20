@@ -111,6 +111,7 @@ const PUBLIC_SCOPED_KEY_IDENTITIES = [
   frameworkExport('@kovojs/server', 'publicScopedKey'),
 ] as const;
 const SCOPED_KEY_IDENTITY = frameworkExport('@kovojs/server', 'scopedKey');
+const DERIVED_IDENTITY = frameworkExport('@kovojs/server', 'derived');
 const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
 const SERVER_STORAGE_FACTORY_IDENTITIES = [
   frameworkExport('@kovojs/core', 'createFileSystemStorage'),
@@ -2281,6 +2282,8 @@ function semanticReasonForViolation(
       return 'opaque-transfer';
     case 'unknown-security-operation':
       return 'unknown-operation';
+    case 'derived-dataset-scope':
+    case 'governed-data-persistence':
     case 'incomplete-mutation-form':
     case 'raw-capability-operation':
     case 'raw-dom-operation':
@@ -2971,6 +2974,77 @@ interface ServerScopedKeySink {
   readonly target: string;
 }
 
+interface ServerDerivedDatasetCall {
+  readonly kind: 'query' | 'upsert';
+  readonly request: ts.Node;
+  readonly requestScoped: boolean;
+  readonly target: string;
+}
+
+/**
+ * Recognize only operations on the module-constant handle returned by the exact framework
+ * `derived()` constructor. Structural lookalikes never acquire `derived-dataset` provenance.
+ */
+function serverDerivedDatasetCall(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerDerivedDatasetCall | undefined {
+  const callee = unwrapExpression(call.expression);
+  const calleeProvenance = serverExpressionProvenance(callee, aliases);
+  const kind =
+    calleeProvenance === 'derived-query-call'
+      ? 'query'
+      : calleeProvenance === 'derived-upsert-call'
+        ? 'upsert'
+        : undefined;
+  if (kind === undefined) return undefined;
+
+  const request = call.arguments[0] ?? call;
+  return {
+    kind,
+    request,
+    requestScoped:
+      call.arguments.length === 2 &&
+      call.arguments[0] !== undefined &&
+      serverExpressionProvenance(call.arguments[0], aliases) === 'request',
+    target: expressionPath(callee) ?? `derived.${kind}`,
+  };
+}
+
+/**
+ * SPEC §6.6/§10.3 C9: governed data may leave the managed engine only through `derived()`.
+ * This vocabulary deliberately names the existing durable non-engine doors rather than trying to
+ * classify arbitrary JavaScript effects.
+ */
+function serverPersistentNonEngineSink(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ts.Expression | undefined {
+  const member = staticMember(unwrapExpression(call.expression));
+  if (!member) return undefined;
+  const receiver = serverExpressionProvenance(member.receiver, aliases);
+  let firstPayloadIndex: number | undefined;
+  if (receiver === 'storage' && member.name === 'put') {
+    firstPayloadIndex = 1;
+  } else if (receiver === 'context' && member.name === 'fetch') {
+    firstPayloadIndex = 0;
+  } else if ((receiver === 'request' || receiver === 'context') && member.name === 'schedule') {
+    firstPayloadIndex = 1;
+  }
+  if (firstPayloadIndex === undefined) return undefined;
+
+  const argumentsList = compilerSnapshotDenseArray(
+    call.arguments,
+    'Persistent non-engine sink arguments',
+  );
+  for (let index = firstPayloadIndex; index < argumentsList.length; index += 1) {
+    const argument = argumentsList[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'governed-data') return expression;
+  }
+  return undefined;
+}
+
 type ServerExactObjectProperty =
   | { readonly kind: 'absent' }
   | { readonly kind: 'present'; readonly values: readonly ts.Expression[] }
@@ -3374,6 +3448,30 @@ function classifyServerCall(
     callee,
     { legacyGlobals: SERVER_OPERATION_LEGACY_IDENTITIES },
   );
+  const derivedCall = serverDerivedDatasetCall(call, aliases);
+  if (derivedCall !== undefined) {
+    if (!derivedCall.requestScoped) {
+      appendViolation(
+        derivedCall.request,
+        'derived-dataset-scope',
+        `${derivedCall.target} requires the exact framework request principal binding`,
+      );
+    }
+    appendOperation(
+      derivedCall.kind === 'query' ? 'server.storage.read' : 'server.storage.write',
+      call,
+      derivedCall.target,
+    );
+    return;
+  }
+  const persistentSink = serverPersistentNonEngineSink(call, aliases);
+  if (persistentSink !== undefined) {
+    appendViolation(
+      persistentSink,
+      'governed-data-persistence',
+      'owner-scoped or governed data reaches a persistent non-engine sink; use the framework-owned derived() door',
+    );
+  }
   if (serverCallIsExactScopedKeyConstructor(sourceFile, call, surface, aliases)) {
     // SPEC §6.6: these are the only app-authored constructors whose module identity and request or
     // task authority let a key reach a non-database stateful sink. Runtime witness validation at
@@ -3679,7 +3777,13 @@ function classifyServerCall(
     appendOperation('server.helper.call', call, `local:${local.name}`);
     return;
   }
-  if (provenance === 'safe-call' || provenance === 'unsafe-wire-data') return;
+  if (
+    provenance === 'safe-call' ||
+    provenance === 'governed-data' ||
+    provenance === 'unsafe-wire-data'
+  ) {
+    return;
+  }
   const localRoot = securityIrLeftmostExecutableRoot(callee);
   if (
     provenance === 'local' &&
@@ -4933,6 +5037,19 @@ function serverModuleFrameworkCapabilityFactoryProvenance(
     sourceFile,
     callee,
   );
+  if (frameworkExportEquals(identity, DERIVED_IDENTITY)) {
+    if (
+      !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
+      !securityIrMemberCallableIsStable(sourceFile, callee, current) ||
+      !serverCallHasExactDerivedOptions(current)
+    ) {
+      return 'unknown-authority';
+    }
+    // SPEC §6.6/§10.3 C9: derived() is the reviewed containment door for one foreign vector
+    // adapter. Its module-constant result is authority, but the adapter never receives an
+    // app-selected namespace; each runtime operation reconstructs one from the request ScopedKey.
+    return 'derived-dataset';
+  }
   if (!frameworkIdentityIn(identity, SERVER_STORAGE_FACTORY_IDENTITIES)) return undefined;
   if (
     !securityIrExpressionUsesDirectImportBinding(sourceFile, callee) ||
@@ -4946,6 +5063,44 @@ function serverModuleFrameworkCapabilityFactoryProvenance(
   // storage capability. Request-time factories and mutable/aliased/lookalike callables never reach
   // this module-constant fixed point.
   return 'storage';
+}
+
+function serverCallHasExactDerivedOptions(call: ts.CallExpression): boolean {
+  const argumentsList = compilerSnapshotDenseArray(
+    call.arguments,
+    'Finite derived dataset constructor arguments',
+  );
+  if (argumentsList.length !== 2) return false;
+  for (let index = 0; index < argumentsList.length; index += 1) {
+    if (ts.isSpreadElement(argumentsList[index]!)) return false;
+  }
+  const options = unwrapExpression(argumentsList[1]!);
+  if (!ts.isObjectLiteralExpression(options)) return false;
+
+  let key: string | undefined;
+  let kind: string | undefined;
+  const properties = compilerSnapshotDenseArray(
+    options.properties,
+    'Finite derived dataset options',
+  );
+  if (properties.length !== 2) return false;
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return false;
+    }
+    const name = staticPropertyName(property.name);
+    const value = unwrapExpression(property.initializer);
+    if (!ts.isStringLiteralLike(value)) return false;
+    if (name === 'key' && key === undefined) {
+      key = value.text;
+    } else if (name === 'kind' && kind === undefined) {
+      kind = value.text;
+    } else {
+      return false;
+    }
+  }
+  return key !== undefined && key.length > 0 && key.length <= 960 && kind === 'vector';
 }
 
 function serverModuleInitializerReturnsAuthority(
@@ -5193,6 +5348,15 @@ function serverExpressionProvenance(
       return 'unknown-authority';
     }
     if (
+      callee === 'governed-data' ||
+      callee === 'operation:server.database.read' ||
+      serverCallReadsDerivedDataset(current, aliases) ||
+      serverArgumentsContainGovernedData(current.arguments, aliases)
+    ) {
+      securityAbstractTransfer('expression.call-local');
+      return serverPrecisionGrant('call-governed-data', 'governed-data');
+    }
+    if (
       callee === 'unsafe-wire-data' ||
       serverArgumentsContainUnsafeWireData(current.arguments, aliases)
     ) {
@@ -5227,6 +5391,10 @@ function serverExpressionProvenance(
     securityAbstractTransfer('expression.fallthrough-foreign');
     return serverPrecisionGrant('fallthrough-foreign-containment', 'foreign-executable');
   }
+  if (expressionContainsServerGovernedData(current, aliases)) {
+    securityAbstractTransfer('expression.fallthrough-authority');
+    return serverPrecisionGrant('fallthrough-governed-data-containment', 'governed-data');
+  }
   if (expressionContainsServerUnsafeWireData(current, aliases)) {
     securityAbstractTransfer('expression.fallthrough-authority');
     return serverPrecisionGrant('fallthrough-unsafe-wire-data', 'unsafe-wire-data');
@@ -5235,6 +5403,39 @@ function serverExpressionProvenance(
     'fallthrough-contained-local',
     expressionContainsServerAuthority(current, aliases) ? 'unknown-authority' : 'local',
   );
+}
+
+function serverCallReadsDerivedDataset(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  return serverExpressionProvenance(call.expression, aliases) === 'derived-query-call';
+}
+
+function expressionContainsServerGovernedData(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== expression && isSecurityIrFunctionScope(node)) return;
+    if (ts.isIdentifier(node) && compilerMapGet(aliases, node.text) === 'governed-data') {
+      found = true;
+      return;
+    }
+    if (
+      node !== expression &&
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      serverExpressionProvenance(node, aliases) === 'governed-data'
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
 }
 
 function expressionContainsServerUnsafeWireData(
@@ -5383,6 +5584,19 @@ function serverArgumentsContainAuthority(
   );
   for (let index = 0; index < snapshot.length; index += 1) {
     if (serverExpressionCarriesAuthority(snapshot[index]!, aliases)) return true;
+  }
+  return false;
+}
+
+function serverArgumentsContainGovernedData(
+  argumentsList: readonly ts.Expression[],
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): boolean {
+  const snapshot = compilerSnapshotDenseArray(argumentsList, 'Server governed-data call arguments');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const argument = snapshot[index]!;
+    const expression = ts.isSpreadElement(argument) ? argument.expression : argument;
+    if (serverExpressionProvenance(expression, aliases) === 'governed-data') return true;
   }
   return false;
 }

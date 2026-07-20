@@ -86,6 +86,13 @@ const rows = await ctx.db.select().from(documents);
 await ctx.schedule(background, { rows });
 `,
     ],
+    [
+      'derived read re-persistence',
+      `
+const rows = await vectors.query(ctx.request, { vector: [1, 2, 3] });
+await storage.put(publicScopedKey('unsafe-export'), rows);
+`,
+    ],
   ])('rejects %s outside the framework-owned derived door', (_label, body) => {
     const diagnostics = diagnosticsFor(
       `${prelude}
@@ -112,11 +119,12 @@ export const persist = endpoint('/persist', {
   it('admits writes only through an exact derived vector dataset and reuses the request scope', () => {
     const source = `${prelude}
 const documents = {};
+const upsertVectors = vectors.upsert;
 export const persist = endpoint('/persist', {
   access: { kind: 'public', reason: 'classifier fixture' },
   async handler(_input, ctx) {
     const rows = await ctx.db.select().from(documents);
-    await vectors.upsert(ctx.request, rows);
+    await upsertVectors(ctx.request, rows);
     const matches = await vectors.query(ctx.request, { vector: [1, 2, 3] });
     return { count: matches.length };
   },
@@ -128,15 +136,17 @@ export const persist = endpoint('/persist', {
   });
 
   it('rejects a forged derived lookalike and a non-request scope carrier', () => {
-    const source = `${prelude}
+    const source = `import { forged } from 'foreign-vector-adapter';
+${prelude}
 const documents = {};
-const forged = { async upsert(_request, _rows) {} };
+const detachedUpsert = vectors.upsert;
 export const persist = endpoint('/persist', {
   access: { kind: 'public', reason: 'classifier fixture' },
   async handler(input, ctx) {
     const rows = await ctx.db.select().from(documents);
     await forged.upsert(ctx.request, rows);
     await vectors.upsert(input.request, rows);
+    await detachedUpsert(input.request, rows);
     return { ok: true };
   },
 });
@@ -144,6 +154,10 @@ export const persist = endpoint('/persist', {
 
     expect(diagnosticsFor(source, 'KV449')).not.toEqual([]);
     expect(diagnosticsFor(source, 'KV452')).toEqual([
+      expect.objectContaining({
+        code: 'KV452',
+        message: expect.stringContaining('exact framework request principal binding'),
+      }),
       expect.objectContaining({
         code: 'KV452',
         message: expect.stringContaining('exact framework request principal binding'),

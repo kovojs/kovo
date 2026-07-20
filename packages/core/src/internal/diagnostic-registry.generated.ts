@@ -101,6 +101,7 @@ export const diagnosticRegistry = freezeGeneratedDiagnosticMap({
   KV449: createRegisteredDiagnosticDefinition('KV449', 'compile-error'),
   KV450: createRegisteredDiagnosticDefinition('KV450', 'fail-closed-runtime'),
   KV451: createRegisteredDiagnosticDefinition('KV451', 'compile-error'),
+  KV452: createRegisteredDiagnosticDefinition('KV452', 'compile-error'),
 } satisfies RegisteredDiagnosticRegistry);
 
 /** @internal Typed, registry-derived constructor for every normative KV diagnostic. */
@@ -196,4 +197,5 @@ export const diagnosticConstructors = freezeGeneratedDiagnosticMap({
   KV449: createDiagnosticConstructor('KV449'),
   KV450: createDiagnosticConstructor('KV450'),
   KV451: createDiagnosticConstructor('KV451'),
+  KV452: createDiagnosticConstructor('KV452'),
 } satisfies DiagnosticConstructorRegistry);

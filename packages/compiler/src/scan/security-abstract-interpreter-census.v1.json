@@ -12,9 +12,13 @@
       "database-relational-table-namespace",
       "database-table-namespace",
       "database-write-namespace",
+      "derived-dataset",
+      "derived-query-call",
+      "derived-upsert-call",
       "headers",
       "global-object",
       "foreign-executable",
+      "governed-data",
       "intrinsic-identity-call",
       "intrinsic-object",
       "local",
@@ -102,7 +106,7 @@
     {
       "id": "alias.join",
       "production": "repeated-alias-binding",
-      "semantics": "equal bindings are stable; unequal bindings join at unknown-authority"
+      "semantics": "equal bindings are stable; governed-data survives plain-data joins; unequal authority joins close at unknown-authority"
     },
     {
       "id": "binding.static-member",
@@ -112,12 +116,12 @@
     {
       "id": "binding.rest",
       "production": "rest-destructure",
-      "semantics": "a rest binding over authority widens to unknown-authority"
+      "semantics": "a rest binding preserves governed-data and unsafe-wire-data; authority widens to unknown-authority"
     },
     {
       "id": "binding.default-join",
       "production": "binding-default",
-      "semantics": "authority in either branch joins at top unless both branches are equal"
+      "semantics": "authority in either branch joins at top unless equal; governed-data and unsafe-wire-data survive plain fallback joins"
     },
     {
       "id": "expression.identifier",

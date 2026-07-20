@@ -1157,6 +1157,15 @@ export const analyzerOracle = task('precision-scoped-key', {
     ctx.fetch('https://oracle.invalid/precision-response-call');`,
         false,
       );
+    case 'call-governed-data':
+      return renderTransferModule(
+        `const documents = {};`,
+        `const rows = ctx.db.select().from(documents);
+    const value = JSON.stringify(rows);
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-call-governed');`,
+        false,
+      );
     case 'call-unsafe-wire-data':
       return renderTransferModule(
         `function local(value) { return value; }`,
@@ -1203,6 +1212,15 @@ export const analyzerOracle = task('precision-scoped-key', {
         `const value = [endpoint];
     void value;
     ctx.fetch('https://oracle.invalid/precision-foreign-container');`,
+        false,
+      );
+    case 'fallthrough-governed-data-containment':
+      return renderTransferModule(
+        `const documents = {};`,
+        `const rows = ctx.db.select().from(documents);
+    const value = { rows };
+    void value;
+    ctx.fetch('https://oracle.invalid/precision-governed-container');`,
         false,
       );
     case 'fallthrough-unsafe-wire-data':
@@ -1561,7 +1579,7 @@ function transferWitnessExpectation(id: SecurityAbstractTransferId): AnalyzerOra
 }
 
 function independentLatticeBehavior(element: ServerValueProvenance): AnalyzerOracleLatticeBehavior {
-  if (element === 'unsafe-wire-data') {
+  if (element === 'governed-data' || element === 'unsafe-wire-data') {
     return {
       aliasFromBottom: element,
       binaryWithLocal: element,
@@ -1591,6 +1609,7 @@ function independentLatticeBehavior(element: ServerValueProvenance): AnalyzerOra
 function independentlyCarriesAuthority(element: ServerValueProvenance): boolean {
   switch (element) {
     case 'foreign-executable':
+    case 'governed-data':
     case 'intrinsic-identity-call':
     case 'intrinsic-object':
     case 'local':

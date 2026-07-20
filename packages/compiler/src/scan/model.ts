@@ -150,6 +150,8 @@ export interface SecurityOperationViolationModel {
   detail: string;
   kind:
     | 'computed-security-operation'
+    | 'derived-dataset-scope'
+    | 'governed-data-persistence'
     | 'incomplete-mutation-form'
     | 'raw-capability-operation'
     | 'raw-dom-operation'

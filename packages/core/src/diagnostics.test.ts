@@ -153,6 +153,7 @@ describe('diagnostic registry', () => {
       'KV449',
       'KV450',
       'KV451',
+      'KV452',
     ]);
   });
 
@@ -944,6 +945,15 @@ describe('diagnostic registry', () => {
           "message": "Compiler-derived value is outside the structural source-emission grammar.",
           "severity": "error",
         },
+        "KV452": {
+          "code": "KV452",
+          "help": "Would lower to: a framework-owned derived vector dataset operation whose physical namespace is reconstructed from the complete request-principal ScopedKey frame.
+      Blocked reason: owner-scoped or governed data reaches a persistent non-engine sink directly, or a derived dataset operation lacks the exact framework request principal binding.
+      Fixes: wrap the vector/RAG adapter with derived(adapter, { key, kind: 'vector' }) and pass the exact handler request to every query/upsert; keep ordinary storage, egress, and durable-task payloads free of owner-scoped database rows.
+      SPEC §6.6 and §10.3 C9 require derived artifacts to inherit owner scope through the existing provenance engine and runtime-opaque ScopedKey namespace.",
+          "message": "Owner-scoped or governed data reaches a persistent non-engine sink.",
+          "severity": "error",
+        },
       }
     `);
   });
@@ -955,6 +965,7 @@ describe('diagnostic registry', () => {
         code === 'KV201' ||
         code === 'KV449' ||
         code === 'KV451' ||
+        code === 'KV452' ||
         (code !== 'KV313' && /^KV[23]\d\d$/.test(code)),
     );
 
