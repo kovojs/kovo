@@ -612,6 +612,103 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-cjs-loader-alias-pre-evaluation
+  it('rejects a reviewed CJS loader alias whose resolved child would evade Vite resolution', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-cjs-alias-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const helperRoot = join(root, 'node_modules', 'helper-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+    try {
+      for (const [directory, packageName] of [
+        [packageRoot, 'safe-parser'],
+        [helperRoot, 'helper-parser'],
+      ] as const) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          join(directory, 'package.json'),
+          JSON.stringify({
+            ...(packageName === 'safe-parser'
+              ? { dependencies: { 'helper-parser': '1.0.0' } }
+              : {}),
+            exports: { '.': './index.cjs' },
+            name: packageName,
+            type: 'commonjs',
+            version: packageName === 'safe-parser' ? '1.2.3' : '1.0.0',
+          }),
+        );
+      }
+      writeFileSync(
+        join(packageRoot, 'index.cjs'),
+        [
+          'const load = require;',
+          "const helperPath = load.resolve('helper-parser');",
+          'load(helperPath);',
+          'exports.parse = value => value;',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(helperRoot, 'index.cjs'),
+        "globalThis.__KOVO_UNCENSUSED_REQUIRE_ALIAS__ = 'EXECUTED';\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+            ssr: true,
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              'build-server',
+              { allowNodeBuiltins: true },
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        }),
+      ).rejects.toThrow(
+        /KV448.*reviewed package safe-parser aliases CommonJS loader authority/u,
+      );
+      expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-builtin-ssr-pre-evaluation
   it('rejects a reviewed package builtin import before supported SSR app evaluation', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-builtin-ssr-')));
@@ -1015,6 +1112,49 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           root,
         }),
       ).rejects.toThrow(/KV448.*HTML module.*immutable approved-source snapshot/u);
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-html-url-module-snapshot
+  it.each([
+    ['data URL', "data:text/javascript,globalThis.__KOVO_DATA_SCRIPT_PWNED__%3D'EXECUTED'"],
+    ['absolute HTTPS URL', 'https://attacker.invalid/remote-pwn.js'],
+  ])('rejects an executable HTML module %s outside the approved snapshot', async (_label, src) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-url-')));
+    const appModulePath = join(root, 'src', 'client.ts');
+    const outDir = join(root, 'dist');
+    const appSource = "globalThis.__KOVO_APPROVED_CLIENT__ = 'loaded';\n";
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(
+        join(root, 'index.html'),
+        [
+          '<!doctype html>',
+          '<script type="module" src="/src/client.ts"></script>',
+          `<script type="module" src="${src}"></script>`,
+        ].join('\n'),
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.ts', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*HTML module URL.*immutable approved-source snapshot/u);
       expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
