@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -1342,6 +1342,51 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           root,
         }),
       ).rejects.toThrow(/KV448.*HTML module.*immutable approved-source snapshot/u);
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-html-public-shadow-snapshot
+  it.each([
+    ['ordinary module', ''],
+    ['Vite-ignored module', ' vite-ignore'],
+  ])('rejects an approved-looking %s shadowed by a public asset', async (_label, ignore) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-public-shadow-')));
+    const appModulePath = join(root, 'src', 'client.ts');
+    const publicModulePath = join(root, 'public', 'src', 'client.ts');
+    const outDir = join(root, 'dist');
+    const appSource = "globalThis.__KOVO_APPROVED_CLIENT__ = 'loaded';\n";
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(dirname(publicModulePath), { recursive: true });
+      writeFileSync(appModulePath, appSource);
+      writeFileSync(
+        publicModulePath,
+        "globalThis.__KOVO_PUBLIC_SHADOW_PACKAGE__ = 'EXECUTED';\n",
+      );
+      writeFileSync(
+        join(root, 'index.html'),
+        `<!doctype html><script type="module"${ignore} src="/src/client.ts"></script>`,
+      );
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.ts', source: appSource }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*public asset shadows approved HTML module/u);
       expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
