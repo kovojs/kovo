@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 274,
+    "historicalWitnesses": 275,
     "productions": 12
   },
   "productions": [
@@ -1142,6 +1142,12 @@
       "corpus": "browser-posture",
       "production": "module-boundary",
       "reason": "This witness binds compiler production, generated registry transport, and document response consumption across package boundaries."
+    },
+    {
+      "anchor": "derived-dataset-persistent-sink-provenance",
+      "corpus": "finite-security-operation-ir",
+      "production": "exact-operation",
+      "reason": "This witness closes owner-scoped and governed data at persistent sinks unless the exact framework-owned derived-dataset door carries the request scope."
     },
     {
       "anchor": "cache-influence-static-closure",

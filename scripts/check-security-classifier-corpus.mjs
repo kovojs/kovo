@@ -2432,6 +2432,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/compiler/src/route-pages.test.ts',
       'packages/compiler/src/cache-influence.security.test.ts',
       'packages/compiler/src/analyzable-fragment.security.test.ts',
+      'packages/compiler/src/derived-dataset-security.test.ts',
       'packages/compiler/src/security-operation-ir.security.test.ts',
       'packages/compiler/src/security-analyzer-soundness-oracle.test.ts',
       'packages/compiler/src/executable-reference-attributes.test.ts',
@@ -2457,6 +2458,17 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'scripts/security-coverage.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'derived-dataset-persistent-sink-provenance',
+        file: 'packages/compiler/src/derived-dataset-security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 derived-dataset-persistent-sink-provenance',
+          'rejects %s outside the framework-owned derived door',
+          'admits writes only through an exact derived vector dataset and reuses the request scope',
+          'rejects a forged derived lookalike and a non-request scope carrier',
+          "code: 'KV452'",
+        ],
+      },
       {
         id: 'cache-influence-static-closure',
         file: 'packages/compiler/src/cache-influence.security.test.ts',

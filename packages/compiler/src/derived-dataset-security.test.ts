@@ -1,3 +1,4 @@
+// @kovo-security-classifier-corpus finite-security-operation-ir
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
@@ -28,7 +29,7 @@ const background = task('derived/background', { async run() {} });
 `;
 
 describe('derived-dataset authorization inheritance (SPEC §6.6/§10.3 C9)', () => {
-  // @kovo-security-classifier-corpus C13 derived-dataset-persistent-sink-provenance
+  // @kovo-security-certifies C13 derived-dataset-persistent-sink-provenance
   it.each([
     [
       'direct storage write',

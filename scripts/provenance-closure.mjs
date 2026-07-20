@@ -39,6 +39,7 @@ const expectedServerExpressionArmOrder = [
   'conditional-expression',
   'static-member',
   'foreign-executable-containment',
+  'governed-data-containment',
   'unsafe-wire-data-containment',
   'authority-containment',
 ];
@@ -189,6 +190,9 @@ function classifyIfArm(expression, sourceFile) {
   if (exactCalledNames(calls, ['isConditionalExpression'])) return 'conditional-expression';
   if (exactCalledNames(calls, ['expressionContainsServerForeignExecutable'])) {
     return 'foreign-executable-containment';
+  }
+  if (exactCalledNames(calls, ['expressionContainsServerGovernedData'])) {
+    return 'governed-data-containment';
   }
   if (exactCalledNames(calls, ['expressionContainsServerUnsafeWireData'])) {
     return 'unsafe-wire-data-containment';
