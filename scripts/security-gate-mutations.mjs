@@ -127,6 +127,7 @@ const trustedHtmlProvenancePath = path.join(
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
 const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const appRequestPath = path.join(repoRoot, 'packages/server/src/app-request.ts');
 const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
 const webhookPath = path.join(repoRoot, 'packages/server/src/webhook.ts');
 const betterAuthCredentialRuntimeGatePath = path.join(
@@ -283,6 +284,10 @@ const dependencyLoaderClosedCarrierConstructorClosureBranch =
   "  if (calleeAtoms.some((atom) => atom.kind === 'closed' || atom.kind === 'dynamic-code')) {";
 const removedDependencyLoaderClosedCarrierConstructorClosureBranch =
   "  if (calleeAtoms.some((atom) => atom.kind === 'dynamic-code')) {";
+const dependencyLoaderLocalCallableEffectClosureBranch =
+  '  for (const callable of localCallables) {';
+const removedDependencyLoaderLocalCallableEffectClosureBranch =
+  '  for (const callable of localCallables.filter(() => false)) {';
 const dependencyLoaderDirectExportOwnershipClosureBranch =
   '        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)';
 const removedDependencyLoaderDirectExportOwnershipClosureBranch = '        false';
@@ -1349,6 +1354,28 @@ const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
+const requestBodyBeforeDbAdmissionBranch = [
+  '        const dispatchRequest =',
+  "          match.kind === 'endpoint' || match.kind === 'mutation'",
+  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
+  '            : deadlineRequest;',
+  "        if (match.kind === 'endpoint' || match.kind === 'mutation') {",
+  '          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);',
+  '        }',
+  '',
+  '        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);',
+].join('\n');
+const weakenedRequestBodyBeforeDbAdmissionBranch = [
+  '        if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);',
+  '',
+  '        const dispatchRequest =',
+  "          match.kind === 'endpoint' || match.kind === 'mutation'",
+  '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
+  '            : deadlineRequest;',
+  "        if (match.kind === 'endpoint' || match.kind === 'mutation') {",
+  '          limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);',
+  '        }',
+].join('\n');
 const taskScheduleSchemaAdmission =
   '  const parsedArgs = await parseSchemaAsync(input.definition.input, input.args);';
 const removedTaskScheduleSchemaAdmission = '  const parsedArgs = input.args;';
@@ -2216,6 +2243,19 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderClosedCarrierConstructorBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Drops local-call parameter effect propagation from the reviewed-package carrier evaluator.',
+    expectedKiller:
+      'reviewed package helpers must close structured arguments that receive browser authority',
+    name: 'dependency-loader/drop-local-callable-effect-closure',
+    replacement: removedDependencyLoaderLocalCallableEffectClosureBranch,
+    search: dependencyLoaderLocalCallableEffectClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderLocalCallableEffectBehavior,
   },
   {
     baseModule: {},
@@ -4555,6 +4595,18 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
+      'Runs managed database posture admission before the streamed endpoint or mutation body ceiling.',
+    expectedKiller: 'remote streamed bodies must be rejected before managed database work',
+    name: 'server-request/move-db-admission-before-body-limit',
+    replacement: weakenedRequestBodyBeforeDbAdmissionBranch,
+    search: requestBodyBeforeDbAdmissionBranch,
+    sourceFile: appRequestPath,
+    sourceOnly: true,
+    test: assertRequestBodyPrecedesDbAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
       'Persists raw follow-on task arguments before the child schema admits and canonicalizes them.',
     expectedKiller: 'task scheduling must validate child arguments before keyed queue persistence',
     name: 'server-task/drop-follow-on-schema-admission',
@@ -5191,6 +5243,26 @@ function assertTaskChildSchemaAdmissionBehavior(_moduleUnderTest, { sourceText }
     sourceText,
     testFile: 'packages/server/src/task-runner.test.ts',
     testNamePattern: 'validates follow-on args before keyed persistence',
+  });
+}
+
+function assertRequestBodyPrecedesDbAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'app-request.ts',
+    sourceText,
+    testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
+    testNamePattern: 'rejects an oversized streamed body before managed database admission',
+  });
+}
+
+function assertDependencyLoaderLocalCallableEffectBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package helper-written Worker before Vite copies',
   });
 }
 
