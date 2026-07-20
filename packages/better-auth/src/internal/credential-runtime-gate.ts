@@ -41,6 +41,7 @@ export type BetterAuthCredentialRawSourceId =
   | 'cookie.snapshot'
   | 'password.hash'
   | 'password.verify'
+  | 'password-reset-mail.dispatch'
   | 'rate-limit.constructor'
   | 'session.reconstruction';
 
@@ -70,6 +71,27 @@ export interface BetterAuthCredentialConsumerContract {
  */
 export const betterAuthCredentialConsumerContracts = betterAuthDeepFreeze(
   [
+    {
+      credentialFailure: false,
+      id: 'password-reset.mail-dispatch',
+      owner: 'password-reset-mail.ts',
+      paths: [
+        'better-auth.password-reset.account-email-mail-egress',
+        'better-auth.password-reset.token-mail-egress',
+      ],
+      result: 'discarded',
+      source: 'password-reset-mail.dispatch',
+      token: 'passwordResetMailDispatch',
+    },
+    {
+      credentialFailure: false,
+      id: 'credential-handler.request-password-reset',
+      owner: 'internal/trusted-plaintext.ts',
+      paths: ['better-auth.password-reset.account-email-lookup'],
+      result: 'opaque-response',
+      source: 'better-auth.callable',
+      token: 'passwordResetHandler',
+    },
     {
       credentialFailure: true,
       id: 'credential-handler.sign-in-email',
@@ -275,12 +297,10 @@ function validateConsumerContract(contract: BetterAuthCredentialConsumerContract
     throw new NativeTypeError(`Better Auth credential consumer ${contract.id} needs an owner.`);
   }
   if (typeof contract.token !== 'string' || contract.token === '') {
-    throw new NativeTypeError(`Better Auth credential consumer ${contract.id} needs a token name.`);
+    throw new NativeTypeError(`Credential consumer ${contract.id} needs a token name.`);
   }
   if (typeof contract.credentialFailure !== 'boolean') {
-    throw new NativeTypeError(
-      `Better Auth credential consumer ${contract.id} needs a credential-failure verdict.`,
-    );
+    throw new NativeTypeError(`Consumer ${contract.id} needs a credential-failure verdict.`);
   }
   switch (contract.result) {
     case 'adapter-instance':
@@ -303,6 +323,7 @@ function validateConsumerContract(contract: BetterAuthCredentialConsumerContract
     case 'cookie.snapshot':
     case 'password.hash':
     case 'password.verify':
+    case 'password-reset-mail.dispatch':
     case 'rate-limit.constructor':
     case 'session.reconstruction':
       break;
@@ -385,6 +406,12 @@ export const betterAuthCredentialConsumers = betterAuthFreezeOwn(
     ),
     credentialHandlerSignUpEmail: createBetterAuthCredentialConsumer(
       contractById('credential-handler.sign-up-email'),
+    ),
+    passwordResetHandler: createBetterAuthCredentialConsumer(
+      contractById('credential-handler.request-password-reset'),
+    ),
+    passwordResetMailDispatch: createBetterAuthCredentialConsumer(
+      contractById('password-reset.mail-dispatch'),
     ),
     seedSignUpEmail: createBetterAuthCredentialConsumer(
       contractById('credential-api.seed-sign-up-email'),

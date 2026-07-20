@@ -1,9 +1,9 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.6",
-  "runtimeSurfaceSha256": "ea660bcd205777370ed3134fff165c6c0015debf3da093380f62f97d9ee4f57e",
-  "postureMemberSha256": "0e8da8f63b9dce56835aac44130a276845018beebf637c6d1049ed9a74d7f508",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.7",
+  "runtimeSurfaceSha256": "83890e0f382c12c47f907ad7c3f40151b49a11ac8dc729b0300aad0665f30222",
+  "postureMemberSha256": "7293da5b6aafb000f489a5776f56dab3c4cda0c4d2fc1d83b475370cc368c42f",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -296,6 +296,35 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
+          "id": "authority-free-security-control-auth-password-reset-mail-20260719",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "auth"
+          },
+          "members": {
+            ".": ["betterAuthPasswordResetMailDoor"]
+          },
+          "review": {
+            "basis": "betterAuthPasswordResetMailDoor captures one exact non-Proxy deployer sender behind an opaque registry token; it acquires no raw host capability and fixed bindings can invoke it only through the reviewed password-reset mail sink.",
+            "evidence": [
+              "packages/better-auth/src/index.ts",
+              "packages/better-auth/src/password-reset-mail.ts",
+              "packages/better-auth/src/internal/credential-runtime-gate.ts",
+              "packages/better-auth/src/password-reset.security.test.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-19"
+          },
+          "rootKind": "none",
+          "securityRole": "security-control"
+        },
+        {
+          "capabilities": [],
+          "disposition": "authority-free",
           "id": "authority-free-security-control-auth-d73d7b76eb",
           "matrix": {
             "cells": {
@@ -449,7 +478,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "b8f4ccdd49b8a095a1fc74253301bce12797a916dcb6376816b8bd44f636d42a"
+      "sourceTreeSha256": "25ed467c4429435b1feae0187f8e77f7b4ba04c9b9d7eeb059c8ce780eff1a76"
     },
     {
       "manifestVariants": [
@@ -10586,5 +10615,5 @@
       "sourceTreeSha256": "140b9519855eec9c62d26612ea2aefbcf329d82ac5da834ff1a39320b35fe46b"
     }
   ],
-  "classificationSha256": "34718ed7c4bde6de966a40417d100dabb50f4b223070dfeda6470dd02237902b"
+  "classificationSha256": "a9274e45a042397be14404fc037d53d661e83e04052953f7cce78841db59708b"
 }

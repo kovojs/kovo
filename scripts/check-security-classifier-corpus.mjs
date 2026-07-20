@@ -536,8 +536,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/better-auth/src/internal.trusted-plaintext.test.ts',
       'packages/better-auth/src/index.schema-bridge.test.ts',
       'packages/better-auth/src/index.schema-materialize.test.ts',
+      'packages/better-auth/src/password-reset.security.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'password-reset-purpose-closed-mail-egress',
+        file: 'packages/better-auth/src/password-reset.security.test.ts',
+        snippets: [
+          'keeps password-reset token egress bound to the registered mail purpose',
+          'createBetterAuthPasswordResetMailBinding({} as never',
+          'rejects provider token, recipient, callback, and attempt mismatches before mail egress',
+          'redacts mail-provider failures and seals each attempt against replay',
+          'unregistered password-reset mail attempt',
+        ],
+      },
       {
         id: 'credential-runtime-gate-identity-and-replay',
         file: 'packages/better-auth/src/internal.trusted-plaintext.test.ts',

@@ -22,7 +22,7 @@ describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
     );
   });
 
-  it('prints inherited defaults, exactly three Kovo-owned transitions, and the honest complement', () => {
+  it('prints inherited defaults, exactly four Kovo-owned transitions, and the honest complement', () => {
     expect(kovoExplain({}, { authLifecycle: true } as never)).toEqual({
       exitCode: 0,
       output: [
@@ -32,10 +32,11 @@ describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
         'OWNED signIn upstream=signInEmail surface=auth/sign-in devOnly=false',
         'OWNED signOut upstream=signOut surface=auth/sign-out devOnly=false',
         'OWNED seedSignUp upstream=signUpEmail surface=developmentSeed devOnly=true',
+        'OWNED requestPasswordReset upstream=requestPasswordReset surface=auth/request-password-reset devOnly=false feature=password-reset-mail',
         'UNREACHABLE unsafe-method-provider-lifecycle reason="the opaque provider mount accepts GET only and no other direct provider API is exposed"',
         'DELEGATED get-provider-callback-lifecycle status=unsupported reason="the opaque GET redirect/callback mount can change identity state under Better Auth; Kovo does not guarantee those lifecycle semantics"',
-        'NON-CLAIM "Kovo guarantees only its three owned transitions; reachable Better Auth GET callback lifecycle is delegated and unsupported."',
-        'SUMMARY kovoOwned=3 structurallyUnreachable=1 delegatedReachable=1',
+        'NON-CLAIM "Kovo guarantees only its four owned transitions, with requestPasswordReset present only when its purpose-closed mail feature is configured; reset completion and reachable Better Auth GET callback lifecycle remain delegated and unsupported."',
+        'SUMMARY kovoOwned=4 structurallyUnreachable=1 delegatedReachable=1',
         '',
       ].join('\n'),
     });
@@ -44,7 +45,8 @@ describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
   it('keeps the same explicit ownership and non-claim in SPEC §6.6', () => {
     const spec = readFileSync(new URL('../../../spec/06-type-system.md', import.meta.url), 'utf8');
     expect(spec).toContain('**Better Auth lifecycle ownership and non-claims (normative).**');
-    expect(spec).toContain('exactly three Kovo-owned identity transitions');
+    expect(spec).toContain('exactly four Kovo-owned identity transitions');
+    expect(spec).toContain('purpose-closed password-reset mail door');
     expect(spec).toMatch(/reachable GET\s+callback lifecycle is delegated and unsupported/u);
   });
 });

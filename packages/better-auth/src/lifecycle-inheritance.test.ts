@@ -130,7 +130,7 @@ describe('Better Auth 1.6.17 lifecycle inheritance (Plan 3 §5.3 C13 anchor)', (
     });
   });
 
-  it('binds the explain boundary to the three direct Kovo transitions and the GET-only delegated partition', () => {
+  it('binds the explain boundary to the four direct Kovo transitions and the GET-only delegated partition', () => {
     const boundary = JSON.parse(
       readFileSync(new URL('../../cli/src/auth-lifecycle-boundary.json', import.meta.url), 'utf8'),
     ) as {
@@ -144,11 +144,22 @@ describe('Better Auth 1.6.17 lifecycle inheritance (Plan 3 §5.3 C13 anchor)', (
       structurallyUnreachable: readonly { id: string }[];
     };
 
-    expect(betterAuthCredentialMutationApis).toEqual(['signInEmail', 'signOut', 'signUpEmail']);
+    expect(betterAuthCredentialMutationApis).toEqual([
+      'requestPasswordReset',
+      'signInEmail',
+      'signOut',
+      'signUpEmail',
+    ]);
     expect(boundary.kovoOwnedTransitions).toEqual([
       expect.objectContaining({ devOnly: false, id: 'signIn', upstreamApi: 'signInEmail' }),
       expect.objectContaining({ devOnly: false, id: 'signOut', upstreamApi: 'signOut' }),
       expect.objectContaining({ devOnly: true, id: 'seedSignUp', upstreamApi: 'signUpEmail' }),
+      expect.objectContaining({
+        devOnly: false,
+        feature: 'password-reset-mail',
+        id: 'requestPasswordReset',
+        upstreamApi: 'requestPasswordReset',
+      }),
     ]);
     expect(boundary.inheritedSession).toEqual({
       cookieCacheEnabled: false,

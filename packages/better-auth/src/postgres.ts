@@ -32,8 +32,16 @@ import {
   callBetterAuthSignUpEmail,
   pinBetterAuthSignUpEmail,
 } from './internal/trusted-plaintext.js';
-import { betterAuthSignInEmailMutation, betterAuthSignOutMutation } from './mutations.js';
+import {
+  betterAuthRequestPasswordResetMutation,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+} from './mutations.js';
 import { createBetterAuthMountAdapter, type BetterAuthMountAdapter } from './mount-adapter.js';
+import {
+  optionalBetterAuthPasswordResetFeature,
+  type BetterAuthPasswordResetOptions,
+} from './password-reset-mail.js';
 import { betterAuthSession, type BetterAuthSessionMapper } from './session.js';
 
 const NativeHeaders = globalThis.Headers;
@@ -98,6 +106,8 @@ export interface BetterAuthPostgresBindingsOptions<
   mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
   /** Persistent revocation authority initialized from each authenticated provider identity. */
   principalEpochStore?: PrincipalEpochStore;
+  /** Optional account-recovery mutation plus its purpose-closed mail capability. */
+  passwordReset?: BetterAuthPasswordResetOptions;
   /** Exact Better Auth Drizzle table record from the app's pinned Postgres schema. */
   schema: Record<string, unknown>;
   /** Better Auth signing secret. */
@@ -135,6 +145,10 @@ export interface BetterAuthPostgresBindings<
   seedDemoUser(): Promise<void>;
   /** Runtime-sanitized Better Auth session provider for `session(schema).provider(...)`. */
   sessionProvider: SessionProvider<BetterAuthBindingRequest, SessionValue>;
+  /** Present only when `passwordReset` configured the purpose-closed mail feature. */
+  requestPasswordReset?: ReturnType<
+    typeof betterAuthRequestPasswordResetMutation<'auth/request-password-reset', Request, Request>
+  >;
   /** CSRF-protected Better Auth email/password sign-in mutation. */
   signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
   /** CSRF-protected Better Auth sign-out mutation. */
@@ -165,6 +179,11 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
     'principalEpochStore',
     'Better Auth Postgres binding option principalEpochStore',
   );
+  const passwordReset = betterAuthOwnDataOption<BetterAuthPasswordResetOptions>(
+    options,
+    'passwordReset',
+    'Better Auth Postgres environment binding option passwordReset',
+  );
   return createBetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>({
     baseURL: environment.baseURL,
     csrf: requiredOption<CsrfOptions<Request>>(options, 'csrf'),
@@ -176,6 +195,7 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
       'mapSession',
     ),
     ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
+    ...(passwordReset === undefined ? {} : { passwordReset }),
     schema: requiredOption<Record<string, unknown>>(options, 'schema'),
     secret: betterAuthPostgresSecret(environment.secret),
     signInAccess: requiredOption<AccessDecision>(options, 'signInAccess'),
@@ -237,6 +257,14 @@ export function createBetterAuthPostgresBindings<
   const pinnedSchema = postgresSchemaModule(schema);
   const rateLimitTable = requireBetterAuthRateLimitSchema(pinnedSchema);
   const secret = betterAuthPostgresSecret(requiredTextOption(options, 'secret'));
+  const passwordReset = optionalBetterAuthPasswordResetFeature(
+    betterAuthOwnDataOption<BetterAuthPasswordResetOptions>(
+      options,
+      'passwordReset',
+      'Better Auth Postgres binding option passwordReset',
+    ),
+    baseURL,
+  );
   const signInAccess = requiredOption<AccessDecision>(options, 'signInAccess');
   const signOutAccess = requiredOption<AccessDecision>(options, 'signOutAccess');
   const systemDb = requiredOption<KovoPostgresSystemDb>(options, 'systemDb');
@@ -287,6 +315,7 @@ export function createBetterAuthPostgresBindings<
           autoSignIn: false,
           enabled: true,
           password: { hash: betterAuthHashPassword, verify: betterAuthVerifyPassword },
+          ...(passwordReset === undefined ? {} : { sendResetPassword: passwordReset.mail.capture }),
         },
         rateLimit,
         secret,
@@ -316,6 +345,14 @@ export function createBetterAuthPostgresBindings<
           await initializePrincipalEpoch(principalEpochStore, principal);
         },
   );
+  const requestPasswordReset =
+    passwordReset === undefined
+      ? undefined
+      : betterAuthRequestPasswordResetMutation<'auth/request-password-reset', Request>(auth, {
+          access: passwordReset.access,
+          csrf,
+          mail: passwordReset.mail,
+        });
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,
     csrf,
@@ -351,7 +388,14 @@ export function createBetterAuthPostgresBindings<
   }
 
   return betterAuthFreezeOwn(
-    { mountAdapter, seedDemoUser, sessionProvider, signIn, signOut },
+    {
+      mountAdapter,
+      ...(requestPasswordReset === undefined ? {} : { requestPasswordReset }),
+      seedDemoUser,
+      sessionProvider,
+      signIn,
+      signOut,
+    },
     'Better Auth Postgres bindings',
   );
 }

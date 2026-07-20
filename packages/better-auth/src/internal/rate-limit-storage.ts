@@ -65,6 +65,7 @@ export function createBetterAuthBoundedRateLimitStorage(
 
   return {
     customRules: {
+      '/request-password-reset': postCredentialRule,
       '/sign-in/email': postCredentialRule,
       '/sign-up/email': postCredentialRule,
       '/**': false,
@@ -111,7 +112,10 @@ function assertCredentialRateLimitKey(rawKey: string): void {
   }
   const separator = rawKey.lastIndexOf('|');
   const path = separator < 0 ? '' : rawKey.slice(separator + 1);
-  if (separator < 1 || (path !== '/sign-in/email' && path !== '/sign-up/email')) {
+  if (
+    separator < 1 ||
+    (path !== '/request-password-reset' && path !== '/sign-in/email' && path !== '/sign-up/email')
+  ) {
     throw new Error('KV414: Better Auth supplied an unreviewed credential rate-limit path.');
   }
 }

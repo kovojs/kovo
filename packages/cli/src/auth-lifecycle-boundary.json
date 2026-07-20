@@ -29,6 +29,13 @@
       "upstreamApi": "signUpEmail",
       "surface": "developmentSeed",
       "devOnly": true
+    },
+    {
+      "id": "requestPasswordReset",
+      "upstreamApi": "requestPasswordReset",
+      "surface": "auth/request-password-reset",
+      "devOnly": false,
+      "feature": "password-reset-mail"
     }
   ],
   "structurallyUnreachable": [
@@ -44,5 +51,5 @@
       "reason": "the opaque GET redirect/callback mount can change identity state under Better Auth; Kovo does not guarantee those lifecycle semantics"
     }
   ],
-  "nonClaim": "Kovo guarantees only its three owned transitions; reachable Better Auth GET callback lifecycle is delegated and unsupported."
+  "nonClaim": "Kovo guarantees only its four owned transitions, with requestPasswordReset present only when its purpose-closed mail feature is configured; reset completion and reachable Better Auth GET callback lifecycle remain delegated and unsupported."
 }

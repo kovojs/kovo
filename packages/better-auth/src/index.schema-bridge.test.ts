@@ -87,11 +87,18 @@ describe('schema bridge', () => {
     expect(betterAuthTableDomain('organization')).toBe('organization');
     expect(betterAuthTableDomain('verification')).toBe(null);
     expect(betterAuthCredentialMutationDefaultKeys).toEqual({
+      requestPasswordReset: 'auth/request-password-reset',
       signInEmail: 'auth/sign-in',
       signOut: 'auth/sign-out',
       signUpEmail: 'auth/sign-up',
     });
     expect(betterAuthCredentialOperationContracts).toMatchObject({
+      requestPasswordReset: {
+        access: { kind: 'public', reason: 'better-auth password-reset request form' },
+        csrf: 'checked',
+        defaultKey: 'auth/request-password-reset',
+        tableTouches: [],
+      },
       signInEmail: {
         access: { kind: 'public', reason: 'better-auth email sign-in credential form' },
         csrf: 'checked',
@@ -115,6 +122,10 @@ describe('schema bridge', () => {
       },
     });
     expect(betterAuthCredentialMutationTouchGraph).toEqual({
+      'auth/request-password-reset': {
+        touches: [],
+        unresolved: [],
+      },
       'auth/sign-in': {
         touches: [
           {

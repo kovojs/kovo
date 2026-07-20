@@ -803,7 +803,12 @@ describe('credential mutation helpers', () => {
     keyOverrides.signInEmail = 'custom/sign-in';
 
     const graph = createBetterAuthCredentialMutationTouchGraph(keyOverrides);
-    expect(Object.keys(graph).sort()).toEqual(['auth/sign-out', 'auth/sign-up', 'custom/sign-in']);
+    expect(Object.keys(graph).sort()).toEqual([
+      'auth/request-password-reset',
+      'auth/sign-out',
+      'auth/sign-up',
+      'custom/sign-in',
+    ]);
   });
 
   it('rejects touch-graph option accessors without invoking them', () => {

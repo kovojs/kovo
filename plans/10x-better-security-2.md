@@ -712,8 +712,8 @@ host integrity or fleet-wide identity without a separate remote-attestation/depl
 
 **Class:** error/stack/secret disclosure regressions, account/resource enumeration via differential
 responses and timing (three doors — `password.ts` decoy, `capability-route.ts` 404, `app-request.ts`
-constant bodies — each independently rediscovered the pattern; Better Auth signup/reset remains an
-open email-enumeration oracle). **Leverage:** high · **Effort:** L · sequence the body-content rule
+constant bodies — each independently rediscovered the pattern; Better Auth signup remains an open
+email-enumeration oracle). **Leverage:** high · **Effort:** L · sequence the body-content rule
 after Layer-3 lands (else it's a second raw-AST analyzer).
 
 **Depends on:** plan-1 Layer 3 and an explicit policy mapping from surface to equivalence class.
@@ -723,7 +723,7 @@ after Layer-3 lands (else it's a second raw-AST analyzer).
 - [x] SPEC §9.2 canonical rejection table + defined indistinguishability classes. Each class names its
       attacker-visible tuple: status, redirect, selected headers, cookies/tokens after normalization,
       body type/length/content relation, connection behavior, work factor, and timing distribution.
-  - Evidence: `pnpm run check:response-observation` passes 14/14 and classifies both remotely
+  - Evidence: `pnpm run check:response-observation` passes 14/14 and classifies all three remotely
     reachable response-observation surfaces against the versioned tuple registry.
 - [x] Extend `check:wire-output-boundary` with a fail-closed body-content rule over the Layer-3
       provenance IR: no catch-bound error value / `Error` property / request-derived string into a wire
@@ -741,12 +741,19 @@ after Layer-3 lands (else it's a second raw-AST analyzer).
       Better Auth sign-up mutation through a generic accepted result without forwarding provider
       body, status, or session-cookie differences.
   - Evidence: the focused password/Better Auth response-observation suite passes 27/27.
-- [ ] Add a supported forgot-password mutation only with a purpose-closed email-egress contract, then
-      route it through `normalizeBetterAuthPasswordResetResponse`; until then the future-door census
-      must keep the upstream reset API structurally unreachable instead of claiming a mounted flow.
+- [x] Add a supported forgot-password mutation only with a purpose-closed email-egress contract and
+      route it through `normalizeBetterAuthPasswordResetResponse`. The opaque mail door admits only
+      the submitted recipient and a fixed-origin/fixed-callback reset URL; present and absent worlds
+      each dispatch exactly one provider-shaped message. External mail-provider delivery is outside
+      Kovo's HTTP equivalence claim, while rate-limit/provider failures fail before or are redacted at
+      the door.
+  - Evidence: `password-reset.security.test.ts` passes 5/5 over a real Better Auth router, account
+    present/absent equality, rate-limit cancellation, mail-door forgery/replay, and failure redaction;
+    `pnpm run check:response-observation` passes 14/14 with reset promoted from future door to a
+    classified surface.
 - [x] Run a versioned nightly statistical timing budget with sample size, noise model, effect
       threshold, and persisted counterexamples.
-  - Evidence: the explicitly enabled nightly timing oracle passes 2/2 and the response-observation
+  - Evidence: the explicitly enabled nightly timing oracle passes 3/3 and the response-observation
     gate verifies its workflow enrollment and stable budget identity.
 
 ### 4.5 Dev-tier door parity + single dev-host door

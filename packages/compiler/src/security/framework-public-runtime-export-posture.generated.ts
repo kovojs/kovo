@@ -28,7 +28,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-19.6' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-19.7' as const;
 
 // Compact generated closed membership; expanded formatting triples parse input.
 // prettier-ignore
@@ -3818,6 +3818,9 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ]],
   ["@kovojs/better-auth", "authority-free", [], "none", null, [
     [".",["betterAuthCsrfFromEnvironment"]],
+  ]],
+  ["@kovojs/better-auth", "authority-free", [], "none", null, [
+    [".",["betterAuthPasswordResetMailDoor"]],
   ]],
   ["@kovojs/better-auth", "authority-free", [], "none", null, [
     [".",["role"]],

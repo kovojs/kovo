@@ -31,6 +31,13 @@ export {
 } from './sqlite.js';
 export { mount } from './mount.js';
 export type { BetterAuthMountAdapter } from './mount-adapter.js';
+export type {
+  BetterAuthPasswordResetMailDoor,
+  BetterAuthPasswordResetMailMessage,
+  BetterAuthPasswordResetMailSender,
+  BetterAuthPasswordResetOptions,
+} from './password-reset-mail.js';
+export { betterAuthPasswordResetMailDoor } from './password-reset-mail.js';
 export type { BetterAuthBindingRequest, BetterAuthCredentialMutationValue } from './internal.js';
 export type {
   BetterAuthSafeField,

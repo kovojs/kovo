@@ -769,7 +769,7 @@ that closure.
       "packageJson": "packages/better-auth/package.json",
       "pinnedVersion": "1.6.17",
       "integrity": "sha512-M0XMJ9/KE9hlmuN2Zha1VayShZW5CQifAMPaoz41gtao2la6YpT5KrnL5MAeIAM/3d4DkdYA2BVMY1Gt4iEzHw==",
-      "guarantee": "If an app enables Better Auth password-reset or email-verification flows, the reset/verification tokens remain Better Auth protocol state: Kovo confines submitted secrets and proves non-egress, but token single-use, expiry, and uniform non-enumerating reset/verify responses are delegated to Better Auth rather than enforced by Kovo.",
+      "guarantee": "For Kovo's feature-conditional password-reset request, the real token crosses only the opaque purpose-closed mail door inside a validated same-origin URL, and Kovo normalizes the HTTP result and mail-dispatch work across account-present/account-absent worlds. Mail-provider delivery, token single-use, expiry, and reset completion remain Better Auth/deployment protocol behavior. Email verification remains unsupported and delegated.",
       "reviewTrigger": "Any bump of better-auth, or any new Kovo wrapper around reset/verify flows, must re-confirm single-use + expiry semantics and that reset/verification responses do not introduce account-enumeration body/timing oracles."
     },
     {
@@ -1055,6 +1055,9 @@ that closure.
       "classification": "inventory-classifier",
       "proof": "packages/better-auth/src/internal.trusted-plaintext.test.ts",
       "paths": [
+        "better-auth.password-reset.account-email-lookup",
+        "better-auth.password-reset.account-email-mail-egress",
+        "better-auth.password-reset.token-mail-egress",
         "better-auth.sign-in.submitted-password",
         "better-auth.sign-up.submitted-password",
         "better-auth.sign-out.request-cookie",
