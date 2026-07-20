@@ -7,6 +7,7 @@ import {
   kovoStyleProperty,
   runQueryUpdatePlan,
 } from '@kovojs/browser/generated';
+import { trustedUrl } from '@kovojs/browser';
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint } from './index.js';
@@ -350,13 +351,11 @@ export const SelectorCard = component({
     expect(stamps).toEqual([
       {
         attr: 'aria-label',
-        selector:
-          '[data-bind\\:aria-label="card.SelectorCard$button_aria_label_derive"]',
+        selector: '[data-bind\\:aria-label="card.SelectorCard$button_aria_label_derive"]',
       },
       {
         attr: 'data-state',
-        selector:
-          '[data-bind\\:data-state="card.SelectorCard$button_data_state_derive"]',
+        selector: '[data-bind\\:data-state="card.SelectorCard$button_data_state_derive"]',
       },
       {
         attr: 'hidden',
@@ -464,12 +463,14 @@ export const LiteralUrlPayloads = component({
     const result = compileComponentModule({
       fileName: 'dynamic-url-payloads.tsx',
       source: `
+import { trustedUrl } from '@kovojs/browser';
+
 export const DynamicUrlPayloads = component({
   queries: { product: productQuery },
   render: ({ product }) => (
     <article>
       <a href={product.href}>Product</a>
-      <img src={product.image} />
+      <img src={trustedUrl(product.image, 'reviewed product image origin')} />
     </article>
   ),
 });
@@ -672,6 +673,7 @@ function executeClientModule(source: string): Record<string, unknown> {
         kovoEscapeHtml,
         kovoStyleProperty,
         runQueryUpdatePlan,
+        trustedUrl,
       },
     },
     { timeout: 1000 },
