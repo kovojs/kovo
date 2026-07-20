@@ -68,7 +68,8 @@
         "KV445",
         "KV446",
         "KV448",
-        "KV449"
+        "KV449",
+        "KV451"
       ],
       "fail-closed-runtime": [
         "KV313",
@@ -260,7 +261,8 @@
         "KV448|packages/compiler/src/security/capability-closure.ts:1110|createRegisteredDiagnostic|owner=c796a0489677fb7d03d467dba43759bccc489aaa737c28ac6c536bb0bad3af4c|body=57174d2faeb09df94a7e6a2342940e25c168a57eac25a42399a131ea70254003",
         "KV449|packages/compiler/src/validate/security-operation-ir.ts:483|diagnosticAt|owner=0c564d7bf036206cf12c6b6d58dafbd08aa0d53ea4049715bfac3b148629456a|body=4e67e7a3aa0d55b72c581bd7d9d23424e18b4a1714cab46289949710bed484d5",
         "KV450|packages/compiler/src/scan/route-pages.ts:363|diagnosticFor|owner=9e6b1dfc5fb988157f9317bdcaeb3873c3ce93153788733c956b10b1d39b8061|body=870130c1de1add34a257dea757074da9695ed08322ae7512876bc8f2cc202752",
-        "KV450|packages/compiler/src/validate/security-operation-ir.ts:502|diagnosticAt|owner=e8878367ddc5e03e349b4749303075b704d2dff9ac87218c87f062a11f6e9552|body=d35b64cca9db4769608118193fbe1775fe58503aa9ed2d2c2f114dfa7fe7d89e"
+        "KV450|packages/compiler/src/validate/security-operation-ir.ts:502|diagnosticAt|owner=e8878367ddc5e03e349b4749303075b704d2dff9ac87218c87f062a11f6e9552|body=d35b64cca9db4769608118193fbe1775fe58503aa9ed2d2c2f114dfa7fe7d89e",
+        "KV451|packages/core/src/internal/emission.ts:162|diagnosticConstructors.KV451|owner=281cc07fa4fabea49398f5bb51a7a4909fdab5d89ab6730c6f8f5813ea888dbe|body=46ae7ee67ae0b2dd2165d98b7c6bb50ac19d11ce195d713e1af6d4a378dca31a"
       ],
       "fail-closed-runtime": [
         "KV236|packages/core/src/internal/sink-policy.ts:1320|createRegisteredDiagnostic|owner=44220792a097188ffbe9f3301a46e6cc30f075d5c75a6a025a4d29c7a9988294|body=5453afda73dc7d400061080aab3fd881be1dbec4212f451e10aad2a7ba5656d6",
@@ -421,7 +423,10 @@
         "KV448|green|packages/compiler/src/capability-closure.security.test.ts#keeps supported framework network, filesystem, process, and database doors open and explain-visible|body=b2d97654087149adb4c04fc429349448e8395dcb4398dbee99afd9658e10941f",
         "KV448|own-layer|packages/compiler/src/capability-closure.security.test.ts#closes raw authority through wrappers, re-exports, literal dynamic import, and require|body=a0750c975a6c5209b68acb53bf9af28ded5f05a51b63645bc55a20665dc718d8",
         "KV448|red|packages/compiler/src/capability-closure.security.test.ts#closes the deferred fabricated agent-tool export without instantiating a ghost root|body=98cdf2a25bd5005ffec70f5f587351ea6d49d630050bf77800c0af3f4c9adf3f",
-        "KV449|compiler-matrix|packages/compiler/src/diagnostic-coverage-matrix.data.ts#KV449|source=5e65e145924c9f57274145f318bcb0297419eb08135315944a00b0852342e923|packages/compiler/src/diagnostic-coverage-matrix.test.ts#proves every in-scope compiler-owned diagnostic has positive and negative coverage|body=5ef64f2866ff18529060bb654b5b1cc2b61ecde3c924b2a4cb8ad45cec8b0e84"
+        "KV449|compiler-matrix|packages/compiler/src/diagnostic-coverage-matrix.data.ts#KV449|source=5e65e145924c9f57274145f318bcb0297419eb08135315944a00b0852342e923|packages/compiler/src/diagnostic-coverage-matrix.test.ts#proves every in-scope compiler-owned diagnostic has positive and negative coverage|body=5ef64f2866ff18529060bb654b5b1cc2b61ecde3c924b2a4cb8ad45cec8b0e84",
+        "KV451|green|packages/core/src/internal/emission.test.ts#emits valid values for every structural source grammar role|body=8cac73deb59d011f9fdd12f4ba60f2e3dfb0fcf8a581098a8f544af42411fdfe",
+        "KV451|own-layer|packages/core/src/internal/emission.test.ts#confines hostile data to one parse-tree leaf in every data-bearing role|body=85f83323532ac017eb6c1104d4457812095ef16d149f69f3f939a207ec7dc311",
+        "KV451|red|packages/core/src/internal/emission.test.ts#rejects malformed grammar roles with registered KV451|body=33a77641abdec443f518c0dd92bfe359e528c58bc2eb888334bb7e12f4d1a92f"
       ],
       "fail-closed-runtime": [
         "KV313|green|packages/browser/src/optimism-rebase.test.ts#rebases pending optimistic transforms over arriving server truth|body=895ff49e06a92cc16627b225b00eefcb8c7ede6d95ca9a6be5b5060c6ad76198",
@@ -1052,6 +1057,22 @@
       "ownLayer": {
         "file": "packages/core/src/scoped-key.test.ts",
         "test": "keeps the public value opaque while authenticating it in the originating runtime"
+      }
+    },
+    "KV451": {
+      "kind": "fixtures",
+      "ownerPackage": "core",
+      "red": {
+        "file": "packages/core/src/internal/emission.test.ts",
+        "test": "rejects malformed grammar roles with registered KV451"
+      },
+      "green": {
+        "file": "packages/core/src/internal/emission.test.ts",
+        "test": "emits valid values for every structural source grammar role"
+      },
+      "ownLayer": {
+        "file": "packages/core/src/internal/emission.test.ts",
+        "test": "confines hostile data to one parse-tree leaf in every data-bearing role"
       }
     }
   }

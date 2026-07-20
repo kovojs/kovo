@@ -84,6 +84,61 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).not.toContain('now()');
   });
 
+  it('confines hostile queue/import/comment data and rejects hostile emitted identifiers', () => {
+    const queue = "serial'; owned: true, tail: 'queue";
+    const importPath = "../../app.js'; const importedOwned = true; //";
+    const override = 'cart\nexport const overrideOwned = true;';
+    const source = serializeDerivedOptimistic({
+      complete: false,
+      constName: 'safePlan',
+      entries: [{ program: cartProgram, query: 'cart' }],
+      formImport: { name: 'addToCartForm', path: importPath },
+      overrides: [override],
+      queue,
+    });
+    const parsed = ts.createSourceFile(
+      'generated/optimistic.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const leaves: string[] = [];
+    const identifiers: string[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isStringLiteral(node)) leaves.push(node.text);
+      if (ts.isIdentifier(node)) identifiers.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+
+    expect(parsed.parseDiagnostics).toEqual([]);
+    expect(leaves.filter((value) => value === queue)).toHaveLength(1);
+    expect(leaves.filter((value) => value === importPath)).toHaveLength(1);
+    expect(identifiers).not.toContain('importedOwned');
+    expect(identifiers).not.toContain('overrideOwned');
+
+    expect(() =>
+      serializeDerivedOptimistic({
+        complete: false,
+        constName: 'safe; export const constOwned = true',
+        entries: [],
+        formImport: { name: 'addToCartForm', path: '../../app.js' },
+      }),
+    ).toThrow(/KV451/u);
+    expect(() =>
+      serializeDerivedOptimistic({
+        complete: false,
+        constName: 'safePlan',
+        entries: [],
+        formImport: {
+          name: 'safe; export const importNameOwned = true',
+          path: '../../app.js',
+        },
+      }),
+    ).toThrow(/KV451/u);
+  });
+
   it('typechecks and executes an emitted transform that exercises every placeholder import', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-derived-optimistic-emitted-'));
     try {
@@ -259,7 +314,7 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).toContain('orderHistory: (draft, _$input) =>');
     expect(source).not.toContain('satisfies OptimisticFor');
     expect(source).toContain(
-      'Overridden in the mutation module (derivation suppressed): cart, productGrid.',
+      "Overridden in the mutation module (derivation suppressed): 'cart', 'productGrid'.",
     );
   });
 
@@ -715,6 +770,39 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
 // SPEC.md §6.1/§10.6/§11.1 — the generated `@kovojs/core` registry augmentation drives KV310 /
 // `OptimisticFor` exhaustiveness without a hand-authored `declare module` (capability-gaps §3).
 describe('serializeCoreRegistryModule', () => {
+  it('confines a hostile invalidation key to one parse-tree string leaf (C13)', () => {
+    // Plan 3 §2.3 red oracle: this reaches the raw union interpolation that was at
+    // derive-codegen.ts:179 when the plan was written. A string search is insufficient here;
+    // the security claim is that attacker-controlled data cannot become sibling TS syntax.
+    const hostile = "cart'; injected: 'owned";
+    const source = serializeCoreRegistryModule({
+      invalidations: { voteUp: [hostile] },
+      queries: [{ name: 'cart', type: 'unknown' }],
+    });
+    const parsed = ts.createSourceFile(
+      'generated/core-registry.d.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const hostileLeaves: ts.StringLiteral[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isStringLiteral(node) && node.text === hostile) hostileLeaves.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+
+    expect(parsed.parseDiagnostics).toEqual([]);
+    expect(hostileLeaves).toHaveLength(1);
+    expect(hostileLeaves[0]?.getChildCount(parsed)).toBe(0);
+    expect(
+      parsed.statements.some(
+        (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === 'injected',
+      ),
+    ).toBe(false);
+  });
+
   it('emits a module-augmentation .d.ts with sorted QueryRegistry + InvalidationSets', () => {
     const source = serializeCoreRegistryModule({
       headerImports: [`import type { QueryResult } from '@kovojs/server';`],

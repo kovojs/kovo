@@ -104,7 +104,8 @@ export type DiagnosticCode =
   | 'KV447'
   | 'KV448'
   | 'KV449'
-  | 'KV450';
+  | 'KV450'
+  | 'KV451';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -354,6 +355,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV449: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
+  KV451: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
 
 /** The frozen registry of every `KV###` diagnostic: code → definition (message, severity, help). */
@@ -1300,6 +1302,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Stateful sink key lacks framework-witnessed owner scope.',
+  },
+  KV451: {
+    code: 'KV451',
+    help: [
+      'Would lower to: one grammar-validated JavaScript/TypeScript leaf produced by the shared structural emission constructor for the exact source role.',
+      'Blocked reason: the value is not valid for that grammar role, so direct interpolation could create executable sibling syntax or an ambiguous generated artifact.',
+      'Fixes: derive a valid source identifier/specifier, keep data in a jsStringLiteral/tsPropertyKey leaf, or repair the typed fact producer before emission.',
+      'SPEC §5.2 requires generated artifacts to remain valid, auditable Kovo source and security-sensitive emission to fail closed.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Compiler-derived value is outside the structural source-emission grammar.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
 

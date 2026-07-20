@@ -16,6 +16,7 @@
           "./internal/derivation",
           "./internal/client-module-url",
           "./internal/diagnostics",
+          "./internal/emission",
           "./internal/document-protocol",
           "./internal/filesystem",
           "./internal/fragment-target",
