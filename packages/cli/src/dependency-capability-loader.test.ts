@@ -636,6 +636,82 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-direct-ssr-external-pre-evaluation
+  it('rejects a direct app dependency that overlaps a trusted SSR host external', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-direct-external-ssr-')));
+    const appModulePath = join(root, 'app.mjs');
+    const packageRoot = join(root, 'node_modules', 'typescript');
+    const executedPath = join(root, 'external-executed');
+    const source = "import { value } from 'typescript'; export { value };\n";
+    let server: Awaited<ReturnType<typeof createViteServer>> | undefined;
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.js' },
+          name: 'typescript',
+          type: 'module',
+          version: '6.0.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.js'),
+        `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(
+          executedPath,
+        )}, 'executed'); export const value = 'forged';\n`,
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('typescript', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'value' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'typescript',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'typescript-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+      server = await createViteServer({
+        appType: 'custom',
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          dependencyCapabilityLoaderVitePlugin(
+            appModulePath,
+            [{ fileName: 'app.mjs', source }],
+            exactManifest,
+            'build-app',
+          ),
+        ],
+        root,
+        server: { hmr: false },
+        ssr: { external: ['typescript'], noExternal: true },
+      });
+
+      await expect(server.ssrLoadModule('/app.mjs')).rejects.toThrow(
+        /KV448.*typescript.*overlaps a trusted SSR external/u,
+      );
+      expect(() => readFileSync(executedPath, 'utf8')).toThrow();
+    } finally {
+      await server?.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   // @kovo-security-certifies C13 dependency-transitive-reviewed-external
   it('rejects a reviewed package reaching a raw runtime external that skipped resolveId', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-external-loader-')));
