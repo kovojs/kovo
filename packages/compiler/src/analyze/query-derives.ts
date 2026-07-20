@@ -15,6 +15,7 @@ import {
   compilerStringReplaceAll,
   compilerStringSlice,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
 } from '../compiler-security-intrinsics.js';
 import {
   callExpressions,
@@ -147,6 +148,7 @@ export function dataDeriveStamps(
 
       const attr = compilerStringSlice(attribute.name, 'data-bind:'.length);
       const selector = queryBindingAttributeSelector(attribute.name, attribute.value);
+      const trustedUrl = hasTrustedUrlMarker(attributes, attr);
       compilerArrayAppend(
         stampFacts,
         withOutputContext(
@@ -157,6 +159,7 @@ export function dataDeriveStamps(
               selector,
             },
             selector,
+            ...(trustedUrl ? { trustedUrl: true as const } : {}),
           },
           {
             context: outputContextForAttribute(attr),
@@ -191,6 +194,7 @@ export function dataDeriveStamps(
     };
 
     if (attr) {
+      const trustedUrl = hasTrustedUrlMarker(attributes, attr);
       compilerArrayAppend(
         stampFacts,
         withOutputContext(
@@ -198,6 +202,7 @@ export function dataDeriveStamps(
             attr,
             derive: deriveFact,
             selector: deriveFact.selector,
+            ...(trustedUrl ? { trustedUrl: true as const } : {}),
           },
           {
             context: outputContextForAttribute(attr),
@@ -218,6 +223,18 @@ export function dataDeriveStamps(
     derives: deriveFacts,
     stamps: stampFacts,
   };
+}
+
+function hasTrustedUrlMarker(
+  attributes: readonly { readonly name: string }[],
+  attr: string,
+): boolean {
+  const expected = `data-kovo-trusted-url:${compilerStringToLowerCase(attr)}`;
+  const source = compilerSnapshotDenseArray(attributes, 'Compiler trusted URL marker lookup');
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index]!.name === expected) return true;
+  }
+  return false;
 }
 
 /**

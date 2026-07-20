@@ -25,6 +25,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, route } from '@kovojs/server';
+import type { AppDependencyCapabilityManifest } from '@kovojs/core/internal/graph';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderedHtml } from '@kovojs/server/internal/html';
@@ -103,6 +104,18 @@ describe('kovo build', () => {
       expect(handlerSource).not.toContain('readFileSync');
       expect(handlerSource).not.toContain('pgsql-ast-parser');
       expect(handlerSource).not.toContain('kovo-managed-sql-parser');
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        dependencyCapabilities?: AppDependencyCapabilityManifest;
+      };
+      expect(graph.dependencyCapabilities?.schema).toBe('kovo-app-dependency-capabilities/v1');
+      expect(
+        graph.dependencyCapabilities?.dependencies.flatMap((dependency) => dependency.entries),
+      ).toEqual(expect.arrayContaining([expect.objectContaining({ specifier: '@kovojs/server' })]));
+      expect(
+        graph.dependencyCapabilities?.dependencies.every(
+          (dependency) => dependency.verdict === 'open',
+        ),
+      ).toBe(true);
 
       const server = builtServerProcess(join(outDir, 'server/server.mjs'));
       const origin = await listen(server);
@@ -478,7 +491,6 @@ export function ContactCard(props: { name: string }) {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
-      writeReactJsxRuntimeStub(root);
       writeFileSync(
         appPath,
         `
@@ -3034,7 +3046,8 @@ export async function resetFixture() {
     }
   });
 
-  it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
+  // @kovo-security-certifies C13 build-app-jsx-runtime-provenance
+  it('auto-collects compiled component CSS without acquiring a foreign JSX runtime', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
     const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
@@ -3047,7 +3060,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, staticStylesheetRouteComponentAppModuleSource(), 'utf8');
       writeStyledComponentClientEntry(root);
 
@@ -3090,7 +3102,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
 
@@ -3174,7 +3185,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeSplitStyleCreateComponentClientEntry(root);
       writeFileSync(appPath, splitSrcStylesheetRouteAppModuleSource(), 'utf8');
 
@@ -3230,7 +3240,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, documentShellRouteSplitAppModuleSource(), 'utf8');
       writeDocumentShellTemplate(root);
       writeSplitStyleCreateComponentClientEntry(root);
@@ -3276,7 +3285,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
       writeFileSync(
@@ -4994,32 +5002,6 @@ export const ${name} = component({
   render: () => <${host} {...style.attrs(styles.root)}>${name}</${host}>,
 });
 `;
-}
-
-function writeReactJsxRuntimeStub(root: string): void {
-  const reactDir = join(root, 'node_modules/react');
-  mkdirSync(reactDir, { recursive: true });
-  writeFileSync(
-    join(reactDir, 'package.json'),
-    JSON.stringify({
-      exports: {
-        './jsx-dev-runtime': './jsx-dev-runtime.js',
-        './jsx-runtime': './jsx-runtime.js',
-      },
-      name: 'react',
-      type: 'module',
-    }),
-    'utf8',
-  );
-  const runtime = [
-    'export function jsx() { return null; }',
-    'export function jsxs() { return null; }',
-    'export function jsxDEV() { return null; }',
-    'export const Fragment = Symbol.for("react.fragment");',
-    '',
-  ].join('\n');
-  writeFileSync(join(reactDir, 'jsx-dev-runtime.js'), runtime, 'utf8');
-  writeFileSync(join(reactDir, 'jsx-runtime.js'), runtime, 'utf8');
 }
 
 function builtAssetPath(outDir: string, predicate: (path: string) => boolean): string {

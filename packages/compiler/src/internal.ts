@@ -14,16 +14,23 @@ export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
   analyzeCapabilityClosure,
+  appDependencyCapabilityManifestSchema,
   collectCapabilityPackageRequests,
+  compilerGeneratedCapabilityDependencies,
   isCompilerOwnedCapabilityPackage,
   packageCapabilitySummarySchema,
 } from './security/capability-closure.js';
 export type {
   AnalyzeCapabilityClosureOptions,
   AnalyzeCapabilityClosureResult,
+  AppDependencyCapability,
+  AppDependencyCapabilityEntry,
+  AppDependencyCapabilityImport,
+  AppDependencyCapabilityManifest,
   CapabilityClosureSourceFile,
   CapabilityPackageRequest,
   CapabilityRootKind,
+  CompilerGeneratedCapabilityDependency,
   PackageCapabilitySummary,
   PackageCapabilitySummaryEntry,
   PackageCapabilitySummaryExport,

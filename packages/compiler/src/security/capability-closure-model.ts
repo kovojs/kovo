@@ -188,11 +188,32 @@ export interface ScannedCapabilityModule {
   readonly aliases: readonly ScannedBindingAliasFact[];
   readonly browserHandlers: readonly ScannedBrowserHandlerFact[];
   readonly calls: readonly ScannedCallFact[];
+  readonly compilerDependencies: readonly ScannedCompilerDependencyFact[];
   readonly exports: readonly ScannedExportBindingFact[];
   readonly fileName: string;
   readonly globals: readonly ScannedGlobalCapabilityFact[];
   readonly importBindings: readonly ScannedImportBindingFact[];
   readonly imports: readonly ScannedImportFact[];
+}
+
+/** @internal Exact package edges inserted only by the reviewed compiler transform. */
+export interface ScannedCompilerDependencyFact {
+  readonly importedNames: readonly string[];
+  readonly kind: 'generated-internal-abi' | 'jsx-runtime';
+  readonly site: string;
+  readonly specifier:
+    | '@kovojs/browser/internal/output'
+    | '@kovojs/server/internal/csrf'
+    | '@kovojs/server/internal/escape'
+    | '@kovojs/server/internal/route'
+    | '@kovojs/server/internal/wire'
+    | '@kovojs/server/jsx-dev-runtime'
+    | '@kovojs/server/jsx-runtime';
+}
+
+/** @internal Exact compiler dependency fact bound to the authored module that was lowered. */
+export interface CompilerGeneratedCapabilityDependency extends ScannedCompilerDependencyFact {
+  readonly importer: string;
 }
 
 /**
@@ -202,6 +223,8 @@ export interface ScannedCapabilityModule {
 export interface ResolvedCapabilityPackage {
   readonly conditions: readonly string[];
   readonly exportStatus: 'resolved' | 'unresolved';
+  /** Normalized authored module that owns this exact resolution fact. */
+  readonly importer?: string;
   /** Exact compiler-derived source or packed implementation identity; never package metadata. */
   readonly implementationDigest?: string;
   readonly manifestFingerprint: string;
@@ -241,6 +264,31 @@ export interface PackageCapabilitySummary {
 
 /** @internal */
 export interface CapabilityPackageRequest {
+  /** Normalized authored module that contains this package edge. */
+  readonly importer?: string;
   readonly importedNames: readonly string[];
   readonly specifier: string;
 }
+
+/** @internal Version token for the compiler-derived app dependency loader manifest. */
+export const appDependencyCapabilityManifestSchema = 'kovo-app-dependency-capabilities/v1' as const;
+
+/** @internal One exact export permission retained from the L1 package verdict. */
+export type AppDependencyCapabilityImport =
+  import('@kovojs/core/internal/graph').AppDependencyCapabilityImport;
+
+/** @internal One exact package subpath used by an untrusted-data-reachable app root. */
+export type AppDependencyCapabilityEntry =
+  import('@kovojs/core/internal/graph').AppDependencyCapabilityEntry;
+
+/** @internal Exact installed identity plus the least-authority verdict used by the loader floor. */
+export type AppDependencyCapability = import('@kovojs/core/internal/graph').AppDependencyCapability;
+
+/**
+ * Compiler-derived dependency import bound consumed by supported build/dev loader paths.
+ *
+ * This is a fail-closed runtime/build-loader floor, not a same-realm sandbox proof (SPEC §6.6).
+ * @internal
+ */
+export type AppDependencyCapabilityManifest =
+  import('@kovojs/core/internal/graph').AppDependencyCapabilityManifest;

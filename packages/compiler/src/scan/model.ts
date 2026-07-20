@@ -275,6 +275,14 @@ export interface JsxCommentModel {
   text: string;
 }
 
+/** Parser-owned JSX transform directive found inside an actual source comment. */
+export interface JsxPragmaModel {
+  end: number;
+  kind: 'jsx' | 'jsxFrag' | 'jsxImportSource' | 'jsxRuntime';
+  start: number;
+  value?: string;
+}
+
 export interface JsxAttributeModel {
   /** Parser-owned proof that this DOM-style `onX` attribute is attached to a component tag. */
   componentEventProp?: true;
@@ -479,6 +487,8 @@ export interface ComponentModuleModel {
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
+  /** @internal Non-enumerable parser facts; security consumers must not rescan source comments. */
+  readonly jsxPragmas: readonly JsxPragmaModel[];
   moduleScopeBindings: readonly ModuleScopeBindingModel[];
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];

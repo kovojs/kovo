@@ -117,3 +117,11 @@ build, and static export; they may be summarized or streamed through the surface
 diagnostic channel, but they do not trigger dev teaching-error documents. MCP tools expose the same
 structured diagnostics (code, severity, message, help, and position when available) from the
 compile/check/explain APIs; MCP is a rendering/query surface, not a second diagnostic channel.
+
+Structured diagnostic provenance is runtime-registry identity, not structural shape. That private
+identity is realm-local: when a supported compiler, build, or export boundary crosses an isolate or
+bundled SSR module graph, the originating realm MUST first verify exact registry membership and
+emit a bounded own-data diagnostic wire record; the receiving realm MUST validate that record and
+reconstruct it through its own generated diagnostic constructor before collection or rendering.
+Copying a diagnostic object, sharing a public symbol brand, or accepting a wire record without the
+originating registry check cannot transfer framework diagnostic authority.

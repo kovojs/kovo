@@ -9,10 +9,44 @@ import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
-import { blockingStaticExportDiagnostics } from './static-export-diagnostics.js';
+import {
+  blockingStaticExportDiagnostics,
+  isStaticExportDiagnosticError,
+  staticExportDiagnostic,
+} from './static-export-diagnostics.js';
 import { exportStaticApp } from './static-export.js';
 
 describe('server static export diagnostic boundary', () => {
+  it('accepts only origin-registered own-data diagnostic error rows', () => {
+    expect(
+      isStaticExportDiagnosticError({
+        diagnostics: [staticExportDiagnostic('/docs', 'KV229 docs are not exportable.')],
+      }),
+    ).toBe(true);
+    expect(
+      isStaticExportDiagnosticError({
+        diagnostics: [
+          {
+            code: 'KV229',
+            message: 'forged',
+            routePath: '/docs',
+            severity: 'error',
+          },
+        ],
+      }),
+    ).toBe(false);
+
+    let getterReads = 0;
+    const accessor = Object.defineProperty({}, 'diagnostics', {
+      get() {
+        getterReads += 1;
+        return [];
+      },
+    });
+    expect(isStaticExportDiagnosticError(accessor)).toBe(false);
+    expect(getterReads).toBe(0);
+  });
+
   it('coerces only blocking compiler diagnostics into KV229-compatible export diagnostics', () => {
     expect(
       blockingStaticExportDiagnostics([

@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 259,
+    "historicalWitnesses": 270,
     "productions": 12
   },
   "productions": [
@@ -950,6 +950,72 @@
       "corpus": "capability-closure",
       "production": "runtime-floor",
       "reason": "The verifier reconstructs the exact site, obligation, and artifact subject, then rejects replacement keys, anchors, and signatures at the detached review boundary."
+    },
+    {
+      "anchor": "dependency-capability-loader-identity",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "This witness re-resolves an exact censused package import and rejects absent specifiers or installed-identity drift at the supported loader boundary."
+    },
+    {
+      "anchor": "dependency-capability-loader-closed-verdict",
+      "corpus": "capability-closure",
+      "production": "runtime-floor",
+      "reason": "This witness prevents closed, raw, or request-closed dependency rows from becoming loader authority."
+    },
+    {
+      "anchor": "compiler-generated-wire-abi-provenance",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness distinguishes exact private ABI imports added by reviewed compiler lowering from identical authored spellings and unknown generated names."
+    },
+    {
+      "anchor": "dependency-transitive-bundle-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness rejects uncensused transitive package code before it can enter a supported loader graph, even when a bundler would otherwise inline it."
+    },
+    {
+      "anchor": "dependency-module-initializer-verdict",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness requires every package import to consume the explicit initializer verdict as well as each requested export verdict."
+    },
+    {
+      "anchor": "dependency-transitive-reviewed-external",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness attributes a Rollup-externalized raw dependency edge to the reviewed third-party package that imported it even when resolveId was skipped."
+    },
+    {
+      "anchor": "dependency-package-root-containment",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness keeps every relative, absolute, or symlinked child of a reviewed third-party entry inside the exact installed package root."
+    },
+    {
+      "anchor": "static-export-diagnostic-origin-provenance",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness prevents app-authored structural diagnostic lookalikes from being reminted as framework diagnostics across the SSR realm boundary."
+    },
+    {
+      "anchor": "dependency-inline-html-module-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness rejects a Vite inline HTML module proxy because its JavaScript bytes are absent from the immutable approved-source snapshot."
+    },
+    {
+      "anchor": "dependency-browser-target-exactness",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness binds a package root to only the browser mapping that actually applies to its selected target."
+    },
+    {
+      "anchor": "dependency-manifest-graph-fingerprint",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "This witness makes a reviewed package summary stale when the installed package dependency graph changes."
     },
     {
       "anchor": "capability-mint-symbol-identity-census",

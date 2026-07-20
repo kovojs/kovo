@@ -17,7 +17,6 @@ import { tmpdir as builtinTmpdir } from 'node:os';
 import {
   basename as builtinBasename,
   dirname as builtinDirname,
-  extname as builtinExtname,
   isAbsolute as builtinIsAbsolute,
   join as builtinJoin,
   relative as builtinRelative,
@@ -57,6 +56,7 @@ import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  compilerGeneratedCapabilityDependencies,
   cssRouteDeliveryGate,
   dedupeCss,
   lowerStandaloneSourceDerivedRegistryDeclarations,
@@ -64,6 +64,8 @@ import {
   mutationSessionAuthorityFacts,
   parseComponentModule,
   projectMutationRegistryFactsFromFiles,
+  type AppDependencyCapabilityManifest,
+  type CompilerGeneratedCapabilityDependency,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   type AnalyzeCapabilityClosureResult,
@@ -128,6 +130,7 @@ import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
 } from '../capability-closure-packages.js';
+import { dependencyCapabilityLoaderVitePlugin } from '../dependency-capability-loader.js';
 import {
   buildOutputVersion,
   type CliCommandResult,
@@ -192,7 +195,6 @@ const createRequire = builtinCreateRequire;
 const tmpdir = builtinTmpdir;
 const basename = builtinBasename;
 const dirname = builtinDirname;
-const extname = builtinExtname;
 const isAbsolute = builtinIsAbsolute;
 const join = builtinJoin;
 const relative = builtinRelative;
@@ -220,6 +222,7 @@ const kovoFrameworkSourcePackages = [
   '@kovojs/server',
   '@kovojs/style',
   '@kovojs/ui',
+  '@kovojs/verify',
 ] as const;
 
 const KOVO_FRAMEWORK_SOURCE_MAX_CONTEXTS = 256;
@@ -248,6 +251,36 @@ function isKovoServerHandlerExternalDependency(id: string): boolean {
     id === 'pg' ||
     buildStringStartsWith(id, 'pg/')
   );
+}
+
+function dependencyCapabilityCompleteBundleNoExternal(): true {
+  // Every supported artifact and pre-evaluation SSR graph must traverse unknown package children;
+  // the loader's source-level edge census closes builtins before Vite can externalize them.
+  return true;
+}
+
+function dependencyCapabilityCompleteSsrOptions(): {
+  readonly external: readonly string[];
+  readonly noExternal: true;
+} {
+  // Native/CommonJS framework dependencies cannot all execute correctly as Vite-inlined ESM
+  // namespaces. This exact list is trusted compiler/runtime host tooling, not app packages. A
+  // reviewed app dependency cannot exploit these externals because its own source is parsed first
+  // and every bare child edge closes before Vite's externalization decision (SPEC §6.6; C13).
+  return {
+    external: [
+      '@electric-sql/pglite',
+      '@material/material-color-utilities',
+      '@node-rs/argon2',
+      'es-module-lexer',
+      'pg',
+      'pgsql-ast-parser',
+      'ts-morph',
+      'typescript',
+      'undici',
+    ],
+    noExternal: true,
+  };
 }
 
 function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
@@ -428,7 +461,6 @@ interface KovoExportOptions {
   origin?: string;
   outDir: string;
   root?: string;
-  stylesheetEnv?: string;
   vite?: boolean;
 }
 
@@ -468,7 +500,15 @@ type BuildExecutionModule = Pick<
 interface LoadedExportAppModule {
   appModule: unknown;
   close?: () => Promise<void>;
+  createStaticExportCompileDiagnostic: (
+    code: DiagnosticCode,
+    fields: { fileName: string; start?: { column: number; line: number } },
+    options: { help?: string; message: string },
+  ) => StaticExportCompileDiagnostic;
   exportStaticApp: ExportStaticApp;
+  isStaticExportCompileDiagnostic: (value: unknown) => boolean;
+  isStaticExportDiagnostic: (value: unknown) => boolean;
+  isStaticExportDiagnosticError: (value: unknown) => boolean;
 }
 
 export interface KovoExportCommandResult extends KovoCheckResult {
@@ -547,7 +587,6 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   const manifestFile = parsedStringOption(parsed.value, '--manifest');
   const origin = parsedStringOption(parsed.value, '--origin');
   const root = parsedStringOption(parsed.value, '--root');
-  const stylesheetEnv = parsedStringOption(parsed.value, '--stylesheet-env');
   const vite = parsedBooleanOption(parsed.value, '--vite');
   const onNonExportable = parsedBooleanOption(parsed.value, '--skip-non-exportable')
     ? ('skip' as const)
@@ -564,7 +603,6 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       ...(origin === undefined ? {} : { origin }),
       outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
       ...(root === undefined ? {} : { root }),
-      ...(stylesheetEnv === undefined ? {} : { stylesheetEnv }),
       ...(vite ? { vite } : {}),
     },
   };
@@ -678,6 +716,7 @@ export async function runBuildCommand(
       buildStylesheetCss,
       checkGraph,
       cloudflare,
+      dependencyCapabilities,
       deriveClosedKovoApp,
       node,
       queryShapeFacts,
@@ -725,6 +764,7 @@ export async function runBuildCommand(
       {
         approvedSourceFiles,
         cache: options.cache,
+        dependencyCapabilities,
         projectMutationFacts: clientProjectMutationFacts,
         queryShapeFacts,
       },
@@ -737,6 +777,7 @@ export async function runBuildCommand(
     const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
       approvedSourceFiles,
       buildRoot: invocationRoot,
+      dependencyCapabilities,
       projectMutationFacts: serverProjectMutationFacts,
       queryShapeFacts,
       runtimeTarget: selectedPreset.name,
@@ -852,7 +893,12 @@ async function loadAndCheckBuildApp(
   // before any other build lane is allowed to evaluate authored modules. In particular, do not
   // race CSS discovery against the server/compiler/data-plane preload.
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
-    loadBuildAppModule(resolvedAppModulePath, invocationRoot),
+    loadBuildAppModule(
+      resolvedAppModulePath,
+      invocationRoot,
+      preEvaluationStaticTrust.files,
+      preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+    ),
   );
   const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
     kovoBuildStylesheetCss(resolvedAppModulePath),
@@ -877,6 +923,7 @@ async function loadAndCheckBuildApp(
     buildStylesheetCss,
     checkGraph: buildCheck.graph,
     cloudflare,
+    dependencyCapabilities: preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
     deriveClosedKovoApp,
     node,
     queryShapeFacts: buildCheck.queryShapeFacts,
@@ -944,16 +991,22 @@ function runPreEvaluationStaticTrustPreflight(
   // config Vite build can transform. A project-root census would incorrectly promote unrelated
   // authored tooling such as vite.config.ts into app runtime authority.
   const files = preEvaluationAppSourceFiles(appModulePath, root);
-  const packageRequests = collectCapabilityPackageRequests(files);
+  // Parse and lower this exact snapshot before deriving the loader manifest. Private ABI rows are
+  // admitted only when the reviewed compiler added their exact names; authored spellings remain
+  // ordinary closed package edges (SPEC §5.2 rule 10 / §6.6).
+  const sourceGraphFacts = sourceGraphFactsFromFiles(files);
+  const packageRequests = collectCapabilityPackageRequests(
+    files,
+    sourceGraphFacts.compilerDependencies,
+  );
   const capabilityClosure = analyzeCapabilityClosure({
+    compilerDependencies: sourceGraphFacts.compilerDependencies,
     files,
     packageSummaries: readCapabilityPackageSummaries(root),
     packages: resolveCapabilityPackages(packageRequests, appModulePath),
   });
-  // SPEC §5.2/§6.6: parse the exact immutable snapshot through the compiler-owned finite IR before
-  // any authored SSR module executes. These same typed component/semantic facts are retained for
-  // graph assembly below; neither the verdict nor framework identity is re-derived from disk.
-  const sourceGraphFacts = sourceGraphFactsFromFiles(files);
+  // The same typed component/semantic facts are retained for graph assembly below; neither the
+  // verdict nor framework identity is re-derived from disk.
   const compilerSecurityDiagnostics = buildMapDense(
     buildFilterDense(
       buildPreflightComponentDiagnostics(sourceGraphFacts.components),
@@ -1794,6 +1847,10 @@ async function staticBuildCheckGraph(
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(capabilityClosure.length === 0 ? {} : { capabilityClosure }),
+      // SPEC §6.6: retain the exact pre-evaluation package verdict as a reviewable artifact and
+      // as the single bound consumed by every supported app Vite loader below. An explicit empty
+      // manifest distinguishes a proved-zero dependency surface from a missing producer.
+      dependencyCapabilities: options.preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
       egressPosture,
       escapeCensus: {
@@ -1942,6 +1999,7 @@ function compareBuildRevealFacts(
 }
 
 interface SourceGraphFacts {
+  compilerDependencies: CompilerGeneratedCapabilityDependency[];
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   components: SourceComponentGraphFacts[];
   routeOutcomes: Map<string, 'file' | 'stream'>;
@@ -2163,6 +2221,7 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
 }
 
 function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
+  const compilerDependencies: CompilerGeneratedCapabilityDependency[] = [];
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
@@ -2196,6 +2255,32 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       sourceProvenance: 'app',
     } as const;
     const component = compileComponentModule(componentOptions);
+    const standaloneRegistrySource = lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: file.fileName,
+      source: file.source,
+    });
+    const compilerLoweredSources = [component.loweredSource, standaloneRegistrySource] as const;
+    for (let loweredIndex = 0; loweredIndex < compilerLoweredSources.length; loweredIndex += 1) {
+      const generatedDependencies = buildSnapshotDenseArray(
+        compilerGeneratedCapabilityDependencies({
+          authoredSource: file.source,
+          fileName: file.fileName,
+          loweredSource: compilerLoweredSources[loweredIndex]!,
+        }),
+        `Compiler-generated dependencies for ${file.fileName}`,
+      );
+      for (
+        let dependencyIndex = 0;
+        dependencyIndex < generatedDependencies.length;
+        dependencyIndex += 1
+      ) {
+        buildSecurityArrayAppend(
+          compilerDependencies,
+          generatedDependencies[dependencyIndex]!,
+          'CLI compiler-generated dependency carriers',
+        );
+      }
+    }
     const semanticGraphs = buildFlatMapDense(
       component.componentGraphFacts,
       `Compiler semantic graph facts for ${file.fileName}`,
@@ -2227,6 +2312,31 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     }
 
     const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    const routeFiles = buildSnapshotDenseArray(
+      routePage.files,
+      `Compiler-emitted route files for ${file.fileName}`,
+    );
+    for (let routeFileIndex = 0; routeFileIndex < routeFiles.length; routeFileIndex += 1) {
+      const generatedDependencies = buildSnapshotDenseArray(
+        compilerGeneratedCapabilityDependencies({
+          authoredSource: file.source,
+          fileName: file.fileName,
+          loweredSource: routeFiles[routeFileIndex]!.source,
+        }),
+        `Compiler-generated route dependencies for ${file.fileName}`,
+      );
+      for (
+        let dependencyIndex = 0;
+        dependencyIndex < generatedDependencies.length;
+        dependencyIndex += 1
+      ) {
+        buildSecurityArrayAppend(
+          compilerDependencies,
+          generatedDependencies[dependencyIndex]!,
+          'CLI compiler-generated route dependency carriers',
+        );
+      }
+    }
     if (routePage.routePageFacts.length > 0) {
       buildSecurityArrayAppend(
         routePages,
@@ -2246,7 +2356,13 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     }
   }
 
-  return { compilerSecuritySemanticSources, components, routeOutcomes, routePages };
+  return {
+    compilerDependencies,
+    compilerSecuritySemanticSources,
+    components,
+    routeOutcomes,
+    routePages,
+  };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
@@ -2954,6 +3070,8 @@ async function withBuildGraphDerivationContext<T>(fn: () => Promise<T>): Promise
 async function loadBuildAppModule(
   appModulePath: string,
   root: string,
+  approvedSourceFiles: readonly BuildCheckSourceFile[],
+  dependencyCapabilities: AppDependencyCapabilityManifest,
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
   const lifetime = await createBuildTimeViteServer({
@@ -2961,19 +3079,32 @@ async function loadBuildAppModule(
     configFile: false,
     logLevel: 'error',
     plugins: [
+      approvedBuildSourcesVitePlugin(appModulePath, root, approvedSourceFiles),
+      dependencyCapabilityLoaderVitePlugin(
+        appModulePath,
+        approvedSourceFiles,
+        dependencyCapabilities,
+        'build-app',
+      ),
       sourceDerivedRegistryVitePlugin(
         appModulePath,
         root,
         lowerStandaloneSourceDerivedRegistryDeclarations,
       ),
     ],
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server',
+        runtime: 'automatic',
+      },
+    },
     root,
     server: buildTimeViteServerOptions(),
     // The closed-app proof is intentionally module-local. Keep the app's Kovo imports inside this
     // SSR graph so createApp() and the internal derivation capability share one app-guards WeakSet,
     // including when the CLI runs from a packed install whose node_modules would otherwise be
     // externalized by Vite.
-    ssr: { noExternal: [/^@kovojs\//] },
+    ssr: dependencyCapabilityCompleteSsrOptions(),
   });
   const { server } = lifetime;
   let primaryError: unknown;
@@ -3327,6 +3458,7 @@ async function buildKovoClientManifest(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
+    dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
   },
@@ -3354,8 +3486,20 @@ async function buildKovoClientManifest(
     },
     configFile: false,
     logLevel: 'silent',
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server',
+        runtime: 'automatic',
+      },
+    },
     plugins: [
       approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+      dependencyCapabilityLoaderVitePlugin(
+        appModulePath,
+        options.approvedSourceFiles,
+        options.dependencyCapabilities,
+        'build-client',
+      ),
       viteAssetPlugin,
     ],
     root,
@@ -3415,6 +3559,7 @@ async function buildKovoComponentClientModules(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
+    dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
   },
@@ -3472,6 +3617,16 @@ async function buildKovoComponentClientModules(
       },
       plugins: [
         approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+        dependencyCapabilityLoaderVitePlugin(
+          appModulePath,
+          options.approvedSourceFiles,
+          options.dependencyCapabilities,
+          'build-client',
+          {
+            allowNodeBuiltins: true,
+            allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+          },
+        ),
         kovoBuildLoweringVitePlugin(kovoPlugin),
         bundledUndiciRuntimeVitePlugin(),
       ],
@@ -3494,7 +3649,10 @@ async function buildKovoComponentClientModules(
         ],
       },
       root,
-      ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
+      ssr: {
+        external: ['@node-rs/argon2'],
+        noExternal: dependencyCapabilityCompleteBundleNoExternal(),
+      },
     });
 
     return kovoPlugin;
@@ -4521,6 +4679,7 @@ async function bundleKovoServerHandler(
   options: {
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     buildRoot: string;
+    dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
     runtimeTarget: KovoBuildPresetName;
@@ -4600,6 +4759,16 @@ async function bundleKovoServerHandler(
           options.buildRoot,
           options.approvedSourceFiles,
         ),
+        dependencyCapabilityLoaderVitePlugin(
+          appModulePath,
+          options.approvedSourceFiles,
+          options.dependencyCapabilities,
+          'build-server',
+          {
+            allowNodeBuiltins: true,
+            allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+          },
+        ),
         kovoBuildLoweringVitePlugin(kovoPlugin),
         bundledUndiciRuntimeVitePlugin(),
       ],
@@ -4630,7 +4799,10 @@ async function bundleKovoServerHandler(
         ],
       },
       root: options.buildRoot,
-      ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
+      ssr: {
+        external: ['@node-rs/argon2'],
+        noExternal: dependencyCapabilityCompleteBundleNoExternal(),
+      },
     });
 
     const source = stableKovoServerHandlerSource(
@@ -4987,38 +5159,53 @@ export async function runExportCommandStructured(
   try {
     options = snapshotKovoExportOptions(options);
     const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
+    const exportRoot = resolvedOptions.root ?? dirname(resolvedOptions.appModulePath);
+    const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+      resolvedOptions.appModulePath,
+      exportRoot,
+      security.paranoidStaticAdvisory,
+    );
     const currentManifestPlan = await staticExportManifestPlan(resolvedOptions);
     manifestPlan = currentManifestPlan;
-    const staticExport = await withStylesheetEnvOverlay(
-      currentManifestPlan.stylesheetEnv,
-      async () => {
-        loadedExport = await loadExportAppModule(resolvedOptions, security.invocationCwd);
-        const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
-        return await loadedExport.exportStaticApp(app, {
-          ...(currentManifestPlan.assets.length === 0
-            ? {}
-            : { assets: currentManifestPlan.assets }),
-          ...(resolvedOptions.onNonExportable === undefined
-            ? {}
-            : { onNonExportable: resolvedOptions.onNonExportable }),
-          diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
-          ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
-          outDir: resolvedOptions.outDir,
-          ...(resolvedOptions.assetBase === undefined
-            ? {}
-            : { publicAssetBase: resolvedOptions.assetBase }),
-          ...(currentManifestPlan.publicAssetRoot === undefined
-            ? {}
-            : { publicAssetRoot: currentManifestPlan.publicAssetRoot }),
-        });
-      },
-    );
+    const staticExport = await (async () => {
+      loadedExport = await loadExportAppModule(
+        resolvedOptions,
+        preEvaluationStaticTrust.files,
+        preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+      );
+      const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
+      const realmResult = await loadedExport.exportStaticApp(app, {
+        ...(currentManifestPlan.assets.length === 0 ? {} : { assets: currentManifestPlan.assets }),
+        ...(resolvedOptions.onNonExportable === undefined
+          ? {}
+          : { onNonExportable: resolvedOptions.onNonExportable }),
+        diagnostics: staticExportDiagnosticsFromModule(
+          loadedExport.appModule,
+          loadedExport.isStaticExportCompileDiagnostic,
+          loadedExport.createStaticExportCompileDiagnostic,
+        ),
+        ...(resolvedOptions.origin === undefined ? {} : { origin: resolvedOptions.origin }),
+        outDir: resolvedOptions.outDir,
+        ...(resolvedOptions.assetBase === undefined
+          ? {}
+          : { publicAssetBase: resolvedOptions.assetBase }),
+        ...(currentManifestPlan.publicAssetRoot === undefined
+          ? {}
+          : { publicAssetRoot: currentManifestPlan.publicAssetRoot }),
+      });
+      return transferStaticExportResult(realmResult, loadedExport.isStaticExportDiagnostic);
+    })();
 
     result = kovoExportResult(staticExport, resolvedOptions);
   } catch (error) {
     primaryError = error;
     hasPrimaryError = true;
-    result = exportErrorResult(error);
+    result = exportErrorResult(
+      error,
+      loadedExport === undefined
+        ? undefined
+        : transferStaticExportDiagnosticError(error, loadedExport),
+    );
   }
 
   let teardownError: unknown;
@@ -5078,14 +5265,7 @@ function snapshotKovoExportOptions(value: KovoExportOptions): KovoExportOptions 
   const snapshot = buildCreateNullRecord<unknown>();
   snapshot.appModulePath = requiredBuildOptionString(value, 'appModulePath', 'export');
   snapshot.outDir = requiredBuildOptionString(value, 'outDir', 'export');
-  const stringNames = [
-    'assetBase',
-    'distDir',
-    'manifestFile',
-    'origin',
-    'root',
-    'stylesheetEnv',
-  ] as const;
+  const stringNames = ['assetBase', 'distDir', 'manifestFile', 'origin', 'root'] as const;
   for (let index = 0; index < stringNames.length; index += 1) {
     const name = stringNames[index]!;
     const option = buildOwnDataValue(value, name, 'Kovo export options');
@@ -5147,50 +5327,45 @@ function resolveKovoExportOptions(
 
 async function loadExportAppModule(
   options: KovoExportOptions,
-  invocationRoot: string,
+  approvedSourceFiles: readonly BuildCheckSourceFile[],
+  dependencyCapabilities: AppDependencyCapabilityManifest,
 ): Promise<LoadedExportAppModule> {
-  const root = options.root ?? invocationRoot;
   const resolvedAppModulePath = options.appModulePath;
+  const root = options.root ?? dirname(resolvedAppModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
-  const appResolvedServerPath = requireFromApp.resolve('@kovojs/server');
-  if (!options.vite && !exportAppModuleNeedsVite(options.appModulePath)) {
-    const requireFromServer = createRequire(pathToFileURL(appResolvedServerPath));
-    await import(
-      pathToFileURL(requireFromServer.resolve('@kovojs/compiler/internal/security-bootstrap')).href
-    );
-    await import(pathToFileURL(requireFromServer.resolve('@kovojs/compiler')).href);
-    await import(
-      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/data-plane-static-analysis'))
-        .href
-    );
-    const serverModule = await import(
-      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/static-export')).href
-    );
-    const serverInternalBuildModule = await import(
-      pathToFileURL(requireFromApp.resolve('@kovojs/server/internal/build')).href
-    );
-    return {
-      appModule: await serverInternalBuildModule.runWithGeneratedLiveTargetRegistry(
-        () => import(pathToFileURL(resolvedAppModulePath).href),
-      ),
-      exportStaticApp: exportStaticAppFromModule(serverModule),
-    };
-  }
 
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
     logLevel: 'error',
+    plugins: [
+      approvedBuildSourcesVitePlugin(resolvedAppModulePath, root, approvedSourceFiles),
+      dependencyCapabilityLoaderVitePlugin(
+        resolvedAppModulePath,
+        approvedSourceFiles,
+        dependencyCapabilities,
+        'export',
+      ),
+    ],
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server',
+        runtime: 'automatic',
+      },
+    },
     root,
     server: buildTimeViteServerOptions(),
-    ssr: { noExternal: [/^@kovojs\//] },
+    ssr: dependencyCapabilityCompleteSsrOptions(),
   });
   const { server } = lifetime;
   try {
     await preloadKovoSsrSecurityProfile(server, resolvedAppModulePath, root);
-    const serverModule = await server.ssrLoadModule(
+    const serverModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/static-export'), root),
-    );
+    )) as typeof import('@kovojs/server/internal/static-export');
+    const diagnosticModule = (await server.ssrLoadModule(
+      viteSsrModuleId(requireFromApp.resolve('@kovojs/core/internal/diagnostics'), root),
+    )) as typeof import('@kovojs/core/internal/diagnostics');
     const serverInternalBuildModule = (await server.ssrLoadModule(
       viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
     )) as typeof import('@kovojs/server/internal/build');
@@ -5200,7 +5375,12 @@ async function loadExportAppModule(
     return {
       appModule,
       close: () => lifetime.close(),
+      createStaticExportCompileDiagnostic: (code, fields, constructionOptions) =>
+        diagnosticModule.createRegisteredDiagnostic(code, fields, constructionOptions),
       exportStaticApp: exportStaticAppFromModule(serverModule),
+      isStaticExportCompileDiagnostic: diagnosticModule.isRegisteredDiagnostic,
+      isStaticExportDiagnostic: serverModule.isStaticExportDiagnostic,
+      isStaticExportDiagnosticError: serverModule.isStaticExportDiagnosticError,
     };
   } catch (error) {
     await closeBuildTimeViteServerLifetime(lifetime, true, error);
@@ -5215,10 +5395,6 @@ function exportStaticAppFromModule(moduleValue: unknown): ExportStaticApp {
   throw new Error('@kovojs/server must export exportStaticApp for kovo export.');
 }
 
-function exportAppModuleNeedsVite(appModulePath: string): boolean {
-  return ['.ts', '.tsx', '.jsx'].includes(extname(appModulePath));
-}
-
 interface ExportManifestPlan {
   assets: readonly {
     path: string;
@@ -5227,10 +5403,6 @@ interface ExportManifestPlan {
   cleanup?: () => void;
   publicAssetRoot?: string;
   stylesheetHref?: string;
-  stylesheetEnv?: {
-    name: string;
-    value: string;
-  };
 }
 
 const exportPublicSnapshotMaxFiles = 10_000;
@@ -5334,21 +5506,10 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
       }
     }
 
-    if (options.stylesheetEnv !== undefined) {
-      if (stylesheetCount !== 1 || stylesheetHref === undefined) {
-        throw new Error(
-          `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
-        );
-      }
-    }
-
     return {
       assets: [...assets.values()],
       cleanup: () => rmSync(snapshotRoot, { force: true, recursive: true }),
       publicAssetRoot,
-      ...(options.stylesheetEnv === undefined || stylesheetHref === undefined
-        ? {}
-        : { stylesheetEnv: { name: options.stylesheetEnv, value: stylesheetHref } }),
       ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
     };
   } catch (error) {
@@ -5466,21 +5627,6 @@ function exportSnapshotPathIsExcluded(
   return false;
 }
 
-async function withStylesheetEnvOverlay<T>(
-  overlay: ExportManifestPlan['stylesheetEnv'],
-  fn: () => Promise<T>,
-): Promise<T> {
-  if (overlay === undefined) return await fn();
-  const previous = process.env[overlay.name];
-  process.env[overlay.name] = overlay.value;
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete process.env[overlay.name];
-    else process.env[overlay.name] = previous;
-  }
-}
-
 function staticExportDefaultPublicAssetRoot(options: KovoExportOptions): string {
   return resolve(options.root ?? dirname(resolve(options.appModulePath)));
 }
@@ -5587,7 +5733,11 @@ function isKovoApp(value: unknown): value is KovoApp {
   );
 }
 
-function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompileDiagnostic[] {
+function staticExportDiagnosticsFromModule(
+  module: unknown,
+  originIsRegistered: LoadedExportAppModule['isStaticExportCompileDiagnostic'],
+  createDiagnostic: LoadedExportAppModule['createStaticExportCompileDiagnostic'],
+): StaticExportCompileDiagnostic[] {
   if (typeof module !== 'object' || module === null) return [];
   const diagnostics = (module as { diagnostics?: unknown }).diagnostics;
   if (!buildArrayIsArray(diagnostics)) return [];
@@ -5595,7 +5745,12 @@ function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompile
   const transferred: StaticExportCompileDiagnostic[] = [];
   const source = buildSnapshotDenseArray(diagnostics, 'Static-export compile diagnostics');
   for (let index = 0; index < source.length; index += 1) {
-    const diagnostic = registeredStaticExportCompileDiagnostic(source[index], index);
+    const diagnostic = registeredStaticExportCompileDiagnostic(
+      source[index],
+      index,
+      originIsRegistered,
+      createDiagnostic,
+    );
     if (diagnostic !== undefined) {
       buildSecurityArrayAppend(
         transferred,
@@ -5610,8 +5765,10 @@ function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompile
 function registeredStaticExportCompileDiagnostic(
   value: unknown,
   index: number,
+  originIsRegistered: LoadedExportAppModule['isStaticExportCompileDiagnostic'],
+  createDiagnostic: LoadedExportAppModule['createStaticExportCompileDiagnostic'],
 ): StaticExportCompileDiagnostic | undefined {
-  if (typeof value !== 'object' || value === null) return undefined;
+  if (!originIsRegistered(value) || typeof value !== 'object' || value === null) return undefined;
   const label = `Static-export compile diagnostics[${index}]`;
   const code = buildOwnDataProperty(value, 'code', `${label}.code`);
   const fileName = buildOwnDataProperty(value, 'fileName', `${label}.fileName`);
@@ -5651,6 +5808,7 @@ function registeredStaticExportCompileDiagnostic(
       ...(help.present ? { help: help.value as string } : {}),
       message: message.value,
     },
+    createDiagnostic,
   );
 }
 
@@ -5658,8 +5816,89 @@ function rehydrateStaticExportCompileDiagnostic(
   code: DiagnosticCode,
   fields: { fileName: string; start?: { column: number; line: number } },
   options: { help?: string; message: string },
+  createDiagnostic: LoadedExportAppModule['createStaticExportCompileDiagnostic'] = createRegisteredDiagnostic,
 ): StaticExportCompileDiagnostic {
-  return createRegisteredDiagnostic(code, fields, options);
+  return createDiagnostic(code, fields, options);
+}
+
+/**
+ * Cross the bundled SSR realm only through an origin-registry check and a receiving-registry
+ * reconstruction. Private WeakSet provenance is deliberately realm-local; structural copying or a
+ * shared symbol would turn app-authored lookalikes into framework diagnostics (SPEC §2/§11).
+ */
+function transferStaticExportResult(
+  result: StaticExportResult,
+  originIsRegistered: LoadedExportAppModule['isStaticExportDiagnostic'],
+): StaticExportResult {
+  return {
+    ...result,
+    diagnostics: transferStaticExportDiagnostics(result.diagnostics, originIsRegistered),
+  };
+}
+
+function transferStaticExportDiagnosticError(
+  error: unknown,
+  origin: Pick<LoadedExportAppModule, 'isStaticExportDiagnostic' | 'isStaticExportDiagnosticError'>,
+): StaticExportResult['diagnostics'] | undefined {
+  if (!origin.isStaticExportDiagnosticError(error)) return undefined;
+  const diagnostics = buildOwnDataProperty(
+    error as object,
+    'diagnostics',
+    'Static-export cross-realm error diagnostics',
+  );
+  if (!diagnostics.present || !buildArrayIsArray(diagnostics.value)) {
+    throw new TypeError('Static-export cross-realm diagnostic error has no dense diagnostics.');
+  }
+  return transferStaticExportDiagnostics(diagnostics.value, origin.isStaticExportDiagnostic);
+}
+
+function transferStaticExportDiagnostics(
+  diagnostics: readonly unknown[],
+  originIsRegistered: LoadedExportAppModule['isStaticExportDiagnostic'],
+): StaticExportResult['diagnostics'] {
+  const source = buildSnapshotDenseArray(diagnostics, 'Static-export cross-realm diagnostics');
+  const transferred: StaticExportResult['diagnostics'][number][] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const diagnostic = source[index];
+    if (!originIsRegistered(diagnostic)) {
+      throw new TypeError(
+        `Static-export cross-realm diagnostics[${index}] lacks originating registry provenance.`,
+      );
+    }
+    const label = `Static-export cross-realm diagnostics[${index}]`;
+    const code = buildOwnDataProperty(diagnostic as object, 'code', `${label}.code`);
+    const concretePath = buildOwnDataProperty(
+      diagnostic as object,
+      'concretePath',
+      `${label}.concretePath`,
+    );
+    const message = buildOwnDataProperty(diagnostic as object, 'message', `${label}.message`);
+    const routePath = buildOwnDataProperty(diagnostic as object, 'routePath', `${label}.routePath`);
+    if (
+      !code.present ||
+      !isDiagnosticCode(code.value) ||
+      !message.present ||
+      typeof message.value !== 'string' ||
+      !routePath.present ||
+      typeof routePath.value !== 'string' ||
+      (concretePath.present && typeof concretePath.value !== 'string')
+    ) {
+      throw new TypeError(`${label} has an invalid registered wire shape.`);
+    }
+    buildSecurityArrayAppend(
+      transferred,
+      createRegisteredDiagnostic(
+        code.value,
+        {
+          ...(concretePath.present ? { concretePath: concretePath.value } : {}),
+          routePath: routePath.value,
+        },
+        { message: message.value },
+      ),
+      'CLI packages/cli/src/commands/build-export.ts cross-realm diagnostic transfer',
+    );
+  }
+  return transferred;
 }
 
 function kovoExportResult(
@@ -5864,10 +6103,13 @@ function buildErrorResult(error: unknown): CliCommandResult {
   };
 }
 
-function exportErrorResult(error: unknown): CliCommandResult {
-  if (isStaticExportDiagnosticError(error)) {
+function exportErrorResult(
+  error: unknown,
+  transferredDiagnostics?: StaticExportResult['diagnostics'],
+): CliCommandResult {
+  if (transferredDiagnostics !== undefined) {
     const diagnosticLines = buildMapDense(
-      error.diagnostics,
+      transferredDiagnostics,
       'Static-export error diagnostics',
       (diagnostic) =>
         `ERROR ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
@@ -5886,14 +6128,4 @@ function exportErrorResult(error: unknown): CliCommandResult {
     error: `kovo: export failed: ${error instanceof Error ? error.message : String(error)}`,
     exitCode: 1,
   };
-}
-
-function isStaticExportDiagnosticError(error: unknown): error is {
-  diagnostics: readonly { code: DiagnosticCode; message: string; routePath: string }[];
-} {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    buildArrayIsArray((error as { diagnostics?: unknown }).diagnostics)
-  );
 }

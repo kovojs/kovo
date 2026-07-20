@@ -97,6 +97,7 @@ import type {
   JsxElementChildBody,
   JsxElementModel,
   JsxExpressionModel,
+  JsxPragmaModel,
   LocalConstAliasModel,
   ModuleScopeBindingModel,
   ModuleSpecifierModel,
@@ -129,6 +130,7 @@ ensureTypescriptRuntime(ts);
 
 const frameworkTrustedUrlFacts = compilerCreateWeakMap<object, true>();
 const frameworkTrustedUrlReasonFacts = compilerCreateWeakMap<object, string>();
+const frameworkTrustedUrlValueFacts = compilerCreateWeakMap<object, string>();
 
 /** @internal Exact parser-owned trustedUrl identity without widening serialized model shapes. */
 export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
@@ -138,6 +140,11 @@ export function parserFactHasFrameworkTrustedUrl(fact: object): boolean {
 /** @internal Static audited reason carried by an exact framework trustedUrl call, when present. */
 export function parserFactFrameworkTrustedUrlReason(fact: object): string | undefined {
   return compilerWeakMapGet(frameworkTrustedUrlReasonFacts, fact);
+}
+
+/** @internal Exact first-argument source carried by a parser-proven trustedUrl call. */
+export function parserFactFrameworkTrustedUrlValue(fact: object): string | undefined {
+  return compilerWeakMapGet(frameworkTrustedUrlValueFacts, fact);
 }
 
 interface ComponentFactoryBindings {
@@ -355,6 +362,7 @@ export function parseComponentModule(
   const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
+  const jsxPragmas = jsxPragmaModels(sourceFile, source);
   const moduleScopeBindings: ModuleScopeBindingModel[] = [];
   const moduleSpecifiers: ModuleSpecifierModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
@@ -552,6 +560,7 @@ export function parseComponentModule(
     jsxComments,
     jsxExpressions,
     jsxElements,
+    jsxPragmas,
     moduleScopeBindings,
     moduleSpecifiers,
     mutationHandlers,
@@ -565,7 +574,105 @@ export function parseComponentModule(
   // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
   compilerDefineOwnDataProperty(model, 'sourceFile', sourceFile, false);
+  // SPEC §5.2 rule 10: keep comment-derived JSX transform authority as non-serialized parser
+  // facts so every post-parse consumer uses the same comment ranges and closed verdict.
+  compilerDefineOwnDataProperty(model, 'jsxPragmas', jsxPragmas, false);
   return model;
+}
+
+function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaModel[] {
+  const ranges: ts.CommentRange[] = [];
+  const seen = compilerCreateSet<string>();
+
+  const appendRanges = (candidates: readonly ts.CommentRange[] | undefined): void => {
+    if (candidates === undefined) return;
+    const length = compilerArrayLength(candidates, 'JSX pragma comment ranges');
+    for (let index = 0; index < length; index += 1) {
+      const range = compilerOwnDataValue(candidates, index, 'JSX pragma comment ranges') as
+        | ts.CommentRange
+        | undefined;
+      if (!range) throw new TypeError(`JSX pragma comment ranges[${index}] must be own data.`);
+      const key = `${range.pos}:${range.end}`;
+      if (compilerSetHas(seen, key)) continue;
+      compilerSetAdd(seen, key);
+      compilerArrayAppend(ranges, range, 'Distinct JSX pragma comment ranges');
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    appendRanges(ts.getLeadingCommentRanges(source, node.getFullStart()));
+    appendRanges(ts.getTrailingCommentRanges(source, node.getEnd()));
+    const children = node.getChildren(sourceFile);
+    const length = compilerArrayLength(children, 'JSX pragma AST children');
+    for (let index = 0; index < length; index += 1) {
+      const child = compilerOwnDataValue(children, index, 'JSX pragma AST children');
+      if (!child) throw new TypeError(`JSX pragma AST children[${index}] must be own data.`);
+      visit(child as ts.Node);
+    }
+  };
+  visit(sourceFile);
+
+  const facts: JsxPragmaModel[] = [];
+  const rangeLength = compilerArrayLength(ranges, 'Distinct JSX pragma comment ranges');
+  for (let rangeIndex = 0; rangeIndex < rangeLength; rangeIndex += 1) {
+    const range = compilerOwnDataValue(ranges, rangeIndex, 'Distinct JSX pragma comment ranges') as
+      | ts.CommentRange
+      | undefined;
+    if (!range) {
+      throw new TypeError(`Distinct JSX pragma comment ranges[${rangeIndex}] must be own data.`);
+    }
+    appendDenseValues(
+      facts,
+      jsxPragmaModelsFromComment(compilerStringSlice(source, range.pos, range.end), range.pos),
+      'JSX pragma models',
+    );
+  }
+  return facts;
+}
+
+function jsxPragmaModelsFromComment(comment: string, commentStart: number): JsxPragmaModel[] {
+  const facts: JsxPragmaModel[] = [];
+  const pattern = /@(jsxruntime|jsximportsource|jsxfrag|jsx)\b(?:[ \t]+([^\s*]+))?/giu;
+  while (true) {
+    const match = compilerRegExpExec(pattern, comment);
+    if (!match) break;
+    const rawKind = compilerOwnDataValue(match, 1, 'JSX pragma kind');
+    const value = compilerOwnDataValue(match, 2, 'JSX pragma value');
+    if (typeof rawKind !== 'string') {
+      throw new TypeError('JSX pragma match must contain an own directive kind.');
+    }
+    if (value !== undefined && typeof value !== 'string') {
+      throw new TypeError('JSX pragma match value must be an own string when present.');
+    }
+    const kind = jsxPragmaKind(rawKind);
+    const start = commentStart + match.index;
+    compilerArrayAppend(
+      facts,
+      {
+        end: start + match[0].length,
+        kind,
+        start,
+        ...(value === undefined ? {} : { value }),
+      },
+      'JSX pragma models',
+    );
+  }
+  return facts;
+}
+
+function jsxPragmaKind(value: string): JsxPragmaModel['kind'] {
+  switch (compilerStringToLowerCase(value)) {
+    case 'jsx':
+      return 'jsx';
+    case 'jsxfrag':
+      return 'jsxFrag';
+    case 'jsximportsource':
+      return 'jsxImportSource';
+    case 'jsxruntime':
+      return 'jsxRuntime';
+    default:
+      throw new TypeError(`Unknown JSX pragma kind: ${value}`);
+  }
 }
 
 function componentIdentityAssignmentModel(
@@ -7264,6 +7371,16 @@ function recordFrameworkTrustedUrlFact(
   )
     return;
   compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
+  const rawValue = candidate.arguments[0];
+  if (rawValue !== undefined) {
+    compilerWeakMapSet(
+      frameworkTrustedUrlValueFacts,
+      fact,
+      compilerStringTrim(
+        compilerStringSlice(sourceFile.text, rawValue.getStart(sourceFile), rawValue.getEnd()),
+      ),
+    );
+  }
   const rawReason = candidate.arguments[1];
   if (rawReason === undefined) return;
   const reason = unwrapExpression(rawReason);

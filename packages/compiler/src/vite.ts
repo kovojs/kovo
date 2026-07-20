@@ -102,6 +102,14 @@ const URL = BuiltinURL;
  * wires into its `vite.config` (SPEC.md §5.2).
  */
 export interface KovoVitePlugin {
+  config?: () => {
+    oxc: {
+      jsx: {
+        importSource: '@kovojs/server';
+        runtime: 'automatic';
+      };
+    };
+  };
   configResolved?: (config: KovoViteResolvedConfig) => void;
   configureServer?: (server: KovoViteDevServer) => void;
   enforce?: 'pre';
@@ -338,6 +346,7 @@ const KOVO_DEV_CLIENT_MODULE_FILE_LIMIT = 1024;
 const KOVO_DEV_CLIENT_MODULE_SOURCE_UNIT_LIMIT = 16 * 1024 * 1024;
 
 const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
+  'config',
   'configResolved',
   'configureServer',
   'getClientModules',
@@ -468,6 +477,16 @@ function createBoundKovoVitePlugin(
   let clientSourceFileSystems = viteClientSourceFileSystems(root);
 
   return {
+    config() {
+      return {
+        oxc: {
+          jsx: {
+            importSource: '@kovojs/server',
+            runtime: 'automatic',
+          },
+        },
+      };
+    },
     get enforce(): 'pre' {
       return 'pre';
     },
@@ -650,6 +669,11 @@ function createBoundKovoVitePlugin(
           finish();
           return null;
         }
+        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
+        if (!isCurrent()) {
+          finish();
+          return null;
+        }
         const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
         if (!isCurrent()) {
           finish();
@@ -748,6 +772,8 @@ function createBoundKovoVitePlugin(
         const source = await context.read();
         if (!isCurrent()) return [];
         const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
+        if (!isCurrent()) return [];
+        if (isAuthoredSource) assertKovoViteJsxPragmas(fileName, source);
         if (!isCurrent()) return [];
         const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
         if (!isCurrent()) return [];
@@ -905,9 +931,59 @@ function transformViteCompileResult(
       break;
     }
   }
-  const code = executableViteServerSource(serverSource) ?? source;
+  const code = bindViteEmittedJsxRuntime(
+    fileName,
+    executableViteServerSource(serverSource) ?? source,
+  );
   if (!shouldRetainResult()) return null;
   return { code, map: null };
+}
+
+const kovoJsxImportSourcePragma = '/** @jsxImportSource @kovojs/server */';
+
+function assertKovoViteJsxPragmas(fileName: string, source: string): void {
+  if (!compilerRegExpTest(/\.[cm]?[jt]sx$/u, fileName)) return;
+  assertKovoViteJsxPragmaModels(parseComponentModule(fileName, source));
+}
+
+function assertKovoViteJsxPragmaModels(model: ReturnType<typeof parseComponentModule>): void {
+  const length = compilerArrayLength(model.jsxPragmas, 'Vite authored JSX pragma facts');
+  for (let index = 0; index < length; index += 1) {
+    const pragma = compilerOwnDataValue(
+      model.jsxPragmas,
+      index,
+      'Vite authored JSX pragma facts',
+    ) as (typeof model.jsxPragmas)[number] | undefined;
+    if (!pragma) throw new TypeError(`Vite authored JSX pragma facts[${index}] must be own data.`);
+    if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    const rendered = `@${pragma.kind}${pragma.value === undefined ? '' : ` ${pragma.value}`}`;
+    const importSourceHelp =
+      pragma.kind === 'jsxImportSource' ? ' JSX import source must be @kovojs/server.' : '';
+    throw new TypeError(
+      `Kovo Vite JSX pragma ${rendered} cannot override the compiler-owned automatic runtime.${importSourceHelp} SPEC.md §5.2/§6.6 requires authored JSX to use the framework runtime.`,
+    );
+  }
+}
+
+function bindViteEmittedJsxRuntime(fileName: string, source: string): string {
+  if (!compilerRegExpTest(/\.[cm]?[jt]sx$/u, fileName)) return source;
+  const model = parseComponentModule(fileName, source);
+  assertKovoViteJsxPragmaModels(model);
+  const containsJsx =
+    compilerArrayLength(model.jsxElements, 'Vite emitted JSX elements') > 0 ||
+    compilerArrayLength(model.jsxExpressions, 'Vite emitted JSX expressions') > 0 ||
+    compilerRegExpTest(/<>[\s\S]*?<\/>/u, source);
+  if (!containsJsx) return source;
+
+  if (
+    compilerRegExpTest(
+      /^\s*\/\*\*?\s*@jsxImportSource[ \t]+@kovojs\/server(?:\s|\*\/)/u,
+      source,
+    )
+  ) {
+    return source;
+  }
+  return `${kovoJsxImportSourcePragma}\n${source}`;
 }
 
 function createViteDevStateStore(buildMode: boolean): ViteDevStateStore {

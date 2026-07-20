@@ -19,7 +19,6 @@ import {
   compilerSetHas,
   compilerSnapshotDenseArray,
   compilerStringEndsWith,
-  compilerStringIncludes,
   compilerStringLocaleCompare,
   compilerStringToLowerCase,
 } from './compiler-security-intrinsics.js';
@@ -78,11 +77,11 @@ export function deriveBrowserPostureManifestFromSourceFiles(
       diagnosticIndex += 1
     ) {
       const diagnostic = diagnosticSnapshot[diagnosticIndex]!;
-      if (
-        diagnostic.code === 'KV236' &&
-        (compilerStringIncludes(diagnostic.message, 'external asset URL') ||
-          compilerStringIncludes(diagnostic.message, 'opaque spread'))
-      ) {
+      // A browser-posture manifest is a positive build proof, so it must never be assembled from
+      // a component whose output-context verdict is already closed. Some execution/isolation
+      // positions are owned by the shared finite KV236 classifier rather than duplicating a second
+      // browser-posture diagnostic; both owners block manifest generation (SPEC §2/§4.8).
+      if (diagnostic.code === 'KV236') {
         blocking = diagnostic;
         break;
       }

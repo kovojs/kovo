@@ -115,6 +115,7 @@ const exactFiniteBrowserControlKeys = [
   'image[crossorigin]',
   'feimage[crossorigin]',
   'meta[name]',
+  'meta[http-equiv]',
 ] as const;
 const exactIframeSandboxTokens = [
   'allow-forms',
@@ -602,7 +603,7 @@ describe('boundary crossing sink inventory', () => {
 
     expect(proof?.controlTuples).toBe(ELEMENT_CONTEXT_SECURITY_CONTROL_TUPLES);
     expect(proof?.iframeSandboxTokens).toBe(SAFE_IFRAME_SANDBOX_TOKENS);
-    expect(proof?.controlTuples).toHaveLength(66);
+    expect(proof?.controlTuples).toHaveLength(67);
     expect(proof?.controlTuples.map(([tag, attribute]) => `${tag}[${attribute}]`)).toEqual(
       exactFiniteBrowserControlKeys,
     );

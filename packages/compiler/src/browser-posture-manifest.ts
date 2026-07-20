@@ -4,12 +4,17 @@ import type {
   BrowserPostureIsolationBlocker,
   BrowserPostureOpaqueExternalUrl,
 } from '@kovojs/core/internal/security-operation-ir';
+import {
+  elementContextSecurityControl,
+  elementHasContextSecurityControls,
+} from '@kovojs/core/internal/sink-policy';
 
 import {
   compilerAbsoluteHttpUrlOrigin,
   compilerArrayLength,
   compilerDefineOwnDataProperty,
   compilerOwnDataValue,
+  compilerSetOwnDataProperty,
   compilerSnapshotDenseArray,
   compilerStringCharCodeAt,
   compilerStringIncludes,
@@ -22,6 +27,11 @@ import {
 import { contextualizeCompilerDiagnostic, diagnosticFor } from './diagnostics.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import type { JsxIrAttribute, JsxIrElement } from './jsx-ir.js';
+import {
+  parserFactFrameworkTrustedUrlReason,
+  parserFactHasFrameworkTrustedUrl,
+} from './scan/parse.js';
+import type { StaticJsxWireAttributeEntry } from './scan/model.js';
 
 /** @internal Browser posture facts derived from the final effective intrinsic tree. */
 export interface DerivedBrowserPostureFacts {
@@ -85,7 +95,8 @@ export function deriveBrowserPostureFacts(
       if (
         normalizedTag === 'link' &&
         effectiveAttribute(element, 'href') !== undefined &&
-        effectiveAttribute(element, 'rel')?.value.kind === 'expression'
+        effectiveAttribute(element, 'rel')?.value.kind === 'expression' &&
+        elementContextSecurityControl(normalizedTag, 'rel') === undefined
       ) {
         append(
           diagnostics,
@@ -97,7 +108,11 @@ export function deriveBrowserPostureFacts(
         );
       }
 
-      if (hasOpaqueSpread(element) && possibleAssetAttributes(element, normalizedTag).length > 0) {
+      if (
+        hasOpaqueSpread(element) &&
+        possibleAssetAttributes(element, normalizedTag).length > 0 &&
+        opaqueSpreadNeedsBrowserPostureDiagnostic(normalizedTag)
+      ) {
         append(
           diagnostics,
           browserPostureDiagnostic(
@@ -165,6 +180,14 @@ function classifyAssetAttribute(
   const span = spanForAttribute(element, attribute);
   if (attribute.value.kind === 'expression') {
     if (attribute.value.trustedUrl !== true || attribute.value.trustedUrlReason === undefined) {
+      if (
+        elementContextSecurityControl(
+          element.intrinsicTagName ?? element.tag,
+          position.attribute,
+        ) !== undefined
+      ) {
+        return;
+      }
       append(
         diagnostics,
         browserPostureDiagnostic(
@@ -418,22 +441,141 @@ function popupTargetIsOpen(attribute: JsxIrAttribute): boolean {
   );
 }
 
+interface EffectiveAttributeState {
+  attribute: JsxIrAttribute | undefined;
+  key: string;
+}
+
 function effectiveAttribute(element: JsxIrElement, name: string): JsxIrAttribute | undefined {
-  let found: JsxIrAttribute | undefined;
-  const visit = (attributes: readonly JsxIrAttribute[]): void => {
-    const length = compilerArrayLength(attributes, 'Browser posture element attributes');
+  const states: EffectiveAttributeState[] = [];
+  const visit = (attributes: readonly JsxIrAttribute[], sourceOrdered: boolean): void => {
+    const ordered = sourceOrdered ? sourceOrderedAttributes(attributes) : attributes;
+    const length = compilerArrayLength(ordered, 'Browser posture element attributes');
     for (let index = 0; index < length; index += 1) {
       const attribute = compilerOwnDataValue(
-        attributes,
+        ordered,
         index,
         'Browser posture element attributes',
       ) as JsxIrAttribute;
-      if (compilerStringToLowerCase(attribute.name) === name) found = attribute;
+      const source = attribute.source;
+      if (source !== undefined && !('name' in source)) {
+        const entries = source.staticWireAttributeEntries;
+        if (entries === undefined) continue;
+        const entryLength = compilerArrayLength(entries, 'Browser posture static spread entries');
+        for (let entryIndex = 0; entryIndex < entryLength; entryIndex += 1) {
+          const entry = compilerOwnDataValue(
+            entries,
+            entryIndex,
+            'Browser posture static spread entries',
+          ) as StaticJsxWireAttributeEntry;
+          setEffectiveAttribute(states, entry.key, staticWireEntryAttribute(attribute, entry));
+        }
+        continue;
+      }
+      setEffectiveAttribute(states, attribute.name, attribute);
     }
   };
-  visit(element.attributes);
-  visit(element.generatedAttributes);
-  return found;
+  visit(element.attributes, true);
+  visit(element.generatedAttributes, false);
+  const stateLength = compilerArrayLength(states, 'Browser posture effective attributes');
+  for (let index = 0; index < stateLength; index += 1) {
+    const state = compilerOwnDataValue(
+      states,
+      index,
+      'Browser posture effective attributes',
+    ) as EffectiveAttributeState;
+    if (state.attribute === undefined || compilerStringToLowerCase(state.key) !== name) continue;
+    return state.attribute;
+  }
+  return undefined;
+}
+
+function sourceOrderedAttributes(attributes: readonly JsxIrAttribute[]): JsxIrAttribute[] {
+  const ordered: JsxIrAttribute[] = [];
+  const length = compilerArrayLength(attributes, 'Browser posture source attributes');
+  for (let index = 0; index < length; index += 1) {
+    const attribute = compilerOwnDataValue(
+      attributes,
+      index,
+      'Browser posture source attributes',
+    ) as JsxIrAttribute;
+    const insertionIndex = compilerArrayLength(ordered, 'Browser posture ordered attributes');
+    compilerSetOwnDataProperty(ordered, insertionIndex, attribute);
+    let cursor = insertionIndex;
+    while (cursor > 0) {
+      const previous = compilerOwnDataValue(
+        ordered,
+        cursor - 1,
+        'Browser posture ordered attributes',
+      ) as JsxIrAttribute;
+      const currentStart = attribute.anchor?.start;
+      const previousStart = previous.anchor?.start;
+      if (
+        currentStart === undefined ||
+        previousStart === undefined ||
+        previousStart <= currentStart
+      ) {
+        break;
+      }
+      compilerSetOwnDataProperty(ordered, cursor, previous);
+      compilerSetOwnDataProperty(ordered, cursor - 1, attribute);
+      cursor -= 1;
+    }
+  }
+  return ordered;
+}
+
+function setEffectiveAttribute(
+  states: EffectiveAttributeState[],
+  key: string,
+  attribute: JsxIrAttribute | undefined,
+): void {
+  const length = compilerArrayLength(states, 'Browser posture effective attributes');
+  for (let index = 0; index < length; index += 1) {
+    const state = compilerOwnDataValue(
+      states,
+      index,
+      'Browser posture effective attributes',
+    ) as EffectiveAttributeState;
+    if (state.key !== key) continue;
+    state.attribute = attribute;
+    return;
+  }
+  compilerDefineOwnDataProperty(states, length, { attribute, key });
+}
+
+function staticWireEntryAttribute(
+  spread: JsxIrAttribute,
+  entry: StaticJsxWireAttributeEntry,
+): JsxIrAttribute | undefined {
+  const trustedUrl = parserFactHasFrameworkTrustedUrl(entry);
+  const trustedUrlReason = parserFactFrameworkTrustedUrlReason(entry);
+  let value: JsxIrAttribute['value'];
+  if (trustedUrl) {
+    value = {
+      kind: 'expression',
+      source: 'trustedUrl(...)',
+      trustedUrl: true,
+      ...(trustedUrlReason === undefined ? {} : { trustedUrlReason }),
+    };
+  } else if (entry.value.kind === 'unknown') {
+    value = { kind: 'expression', source: 'static spread value' };
+  } else {
+    const staticValue = entry.value.value;
+    if (staticValue === undefined || staticValue === false || staticValue === null)
+      return undefined;
+    if (typeof staticValue === 'string') value = { kind: 'string', value: staticValue };
+    else if (typeof staticValue === 'number') value = { kind: 'number', value: staticValue };
+    else if (staticValue === true) value = { kind: 'boolean', value: true };
+    else value = { kind: 'expression', source: 'non-scalar static spread value' };
+  }
+  return {
+    ...(spread.anchor === undefined ? {} : { anchor: spread.anchor }),
+    name: entry.key,
+    ownership: spread.ownership,
+    provenance: spread.provenance,
+    value,
+  };
 }
 
 function hasOpaqueSpread(element: JsxIrElement): boolean {
@@ -444,9 +586,22 @@ function hasOpaqueSpread(element: JsxIrElement): boolean {
       index,
       'Browser posture spread attributes',
     ) as JsxIrAttribute;
+    const source = attribute.source;
+    if (source !== undefined && !('name' in source)) {
+      if (source.staticWireAttributeEntries === undefined) return true;
+      continue;
+    }
     if (compilerStringStartsWith(attribute.name, '...')) return true;
   }
   return false;
+}
+
+function opaqueSpreadNeedsBrowserPostureDiagnostic(tag: string): boolean {
+  // The shared element-context validator already closes arbitrary spreads for every ordinary
+  // finite-control element. Image inputs are the exception: their mutation-submitter membrane
+  // strips transport controls but does not classify browser asset URLs, so posture keeps that
+  // rejection. Elements with no finite controls are exclusively posture-owned here.
+  return tag === 'input' || !elementHasContextSecurityControls(tag);
 }
 
 function staticLowerAttributeValue(element: JsxIrElement, name: string): string | undefined {

@@ -674,8 +674,9 @@ checkboxes when a page is picked up. Format: what to add — the API/contract �
   (optimistic|coverage|endpoint-posture|sources-sinks); `kovo mcp`'s four tools by name
   (`compile_component`, `kovo_check`, `kovo_explain`, `list_diagnostics`,
   `packages/cli/src/commands/mcp.ts:415-430`) plus an `.mcp.json` registration snippet;
-  `kovo export` asset flags (`--manifest`/`--dist`/`--asset-base`/`--stylesheet-env` — the
-  manifest even ships the example invocation); `kovo db` flag/env precedence
+  `kovo export` asset flags (`--manifest`/`--dist`/`--asset-base` — the manifest even ships the
+  example invocation), including that authored stylesheet declarations replace the removed raw
+  `process.env` bridge; `kovo db` flag/env precedence
   (`--database-url` > `KOVO_RUNTIME_DATABASE_URL`…, `--reader-role`/`--writer-role`); exit-code
   contract table for CI; `kovo explain context <target>` example (listed, never shown);
   `--trust` mode; the `derived=`/`PUNTED=` summary fields (P0).

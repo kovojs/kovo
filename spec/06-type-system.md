@@ -476,18 +476,76 @@ conditional-export arm set. Every manifest-public Kovo runtime export and every 
 posture ledger with an explicit raw-authority disposition, root kind or `none`, security role,
 implementation digest, manifest-target/condition fingerprint, and threat-matrix posture. A new,
 missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
-door list is never an authority-free verdict. Explicitly reviewed framework companions use the same
-compiler-owned, version-pinned verdict model. Other packages use the committed
+door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
+subpath membership only through one compiler-owned exact table that classifies the initializer and
+every admitted member separately; that table is consulted only after the installed first-party
+manifest fingerprint and implementation digest match. A vocabulary match alone cannot mint an
+authority-free verdict. Explicitly reviewed framework companions use the same compiler-owned,
+version-pinned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
-`<module>` entry and MUST classify package initialization explicitly rather than relying on an empty
-export list. An absent, stale, duplicate,
+`<module>` entry. Every package import, including a named, default, or namespace import, evaluates
+that initializer and MUST consume one exact `<module>` verdict in addition to every requested export;
+an export wildcard cannot stand in for the initializer. An absent, stale, duplicate,
 contradictory, malformed, export-incomplete, condition-incomplete, or unresolved verdict fails
 closed with KV448. `kovo explain --capabilities` prints the root census, reviewed doors, exact
 package-summary versions/fingerprints, and every closed fact with the same provenance used by the
 diagnostic. This is a conservative proof about accidental authority in Kovo's supported static
 authoring subset; consistent with the trusted application-code boundary above, it is not a
 same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
+
+For every authored or compiler-derived package edge, including an initializer in a malformed or
+currently rootless module, the compiler MUST also derive one
+`kovo-app-dependency-capabilities/v1` loader manifest row containing the exact installed identity,
+specifier and conditional-export arms, retained export dispositions/capabilities, exact importer
+and sites, and the reachable root kinds. A loader-census-only row uses an explicit empty
+`rootKinds` array; that row does not invent a request root or explain fact, but its package
+initializer still cannot execute by omission. Every supported production Vite path that loads or
+bundles an approved app source MUST re-resolve that exact package identity before admitting its bare
+import and reject an absent/duplicate or malformed row, identity drift, a closed package row, or a
+retained `raw` or `request-closed` export. Pre-evaluation SSR MUST force complete dependency
+traversal and parse every admitted third-party module before execution; every bare child edge,
+including a Node builtin, and every non-literal module edge fails closed before Vite can externalize
+it. A relative child edge from a reviewed package MUST retain that package's exact nearest owning
+package root; physical containment does not admit a nested `package.json` or `node_modules` package
+identity, including one reached through a symlink or package-main redirect. Application aliases MUST
+NOT match a reviewed package child edge, and reviewed dependencies require Kovo's fixed Vite
+extension-resolution order; same-root retargeting invalidates the reviewed summary just as an escape
+does. Every direct reviewed export and resolved relative child MUST have one exact case-sensitive
+JavaScript/TypeScript module suffix — `.cjs`, `.cts`, `.js`, `.jsx`, `.mjs`, `.mts`, `.ts`, or
+`.tsx` — in both its lexical resolver identity and canonical realpath. Extensionless modules, JSON,
+CSS, SVG/HTML, WASM/native modules, and image/font/media resources remain closed until a separate
+pinned semantic and provenance lane admits them; Vite cannot reinterpret reviewed bytes as an
+asset, stylesheet, executable document, or worker payload. Query/fragment variants, direct
+`Worker`/`SharedWorker` construction, and every `new URL(..., import.meta.url)` asset carrier from a
+reviewed package likewise fail closed before Vite can create a secondary module/resource graph. An
+external module edge from a loaded HTML entry MUST resolve to the immutable approved-source
+snapshot or one exact framework-owned Vite bootstrap virtual; inline HTML module proxies remain
+outside the supported source graph. Before Vite resolution, Kovo MUST parse raw HTML with one
+exact-pinned standards-compatible parser in both the build tool's scripting-disabled state and the
+browser's ordinary scripting-enabled state. Every script source must be an exact HTML-namespace
+module URL in the immutable approved-source snapshot; inline scripts other than explicit JSON data
+blocks, foreign-namespace scripts, raw `on*` event attributes, JavaScript URL attributes, SVG SMIL
+execution primitives, and any `iframe`/`frame`/`frameset`/`object`/`embed` carrier fail closed with
+KV448. Raw element controls consume §4.8's finite static-value policy, including target-keyword,
+no-opener, and `meta[http-equiv=refresh]` automatic-navigation rules. Raw `<base href>` and
+`<base target>` also fail closed because they can retarget emitted modules or later navigation at
+browser consumption. Public-asset shadows, `vite-ignore`, browser-only module-type spellings, and
+post-resolution aliases cannot weaken the same approved-file binding. An exact
+framework host-tool external is permitted only when no
+app dependency manifest row overlaps that package or subpath. Artifact checks distinguish
+bundle-owned chunk filenames from true unresolved externals without weakening the earlier source
+and module-graph checks: only a relative runtime specifier normalized from its importing chunk may
+bind a bundle-owned file, while Rollup file-name metadata is checked separately and cannot bless a
+bare runtime specifier. Retained non-literal module edges fail closed. Relative artifact specifiers
+with percent encoding, query/fragment syntax, backslashes, ASCII whitespace/control bytes, or empty
+path segments fail closed before ownership comparison because browser/Node URL resolution can map
+those spellings to a different file. Only `OutputChunk` names — never `OutputAsset` names — satisfy
+executable bundle ownership. The same manifest is emitted in `graph.json`; an explicit empty manifest
+means the compiler proved that the app graph has no dependency edge. This loader check turns the
+pre-evaluation census into a fail-closed runtime/build bound for supported production artifacts, but
+it is defense-in-depth under rule (3): it does not sandbox deliberately hostile same-realm package
+code or prevent privileged host loaders from bypassing Kovo.
 
 Supported browser event handlers MUST be authored as TSX/JSX event attributes and lowered through
 the compiler-owned finite browser operation vocabulary. App-authored imperative registration — an

@@ -229,7 +229,10 @@ export function validateFrameworkExportPosture({
       if (pkg.sourceTreeSha256 !== expected.sourceTreeSha256) {
         findings.push(`${pkg.packageName}: reviewed production source tree digest is stale`);
       }
-      if (canonicalJson(pkg.manifestVariants) !== canonicalJson(expected.manifestVariants)) {
+    if (
+      canonicalJson(sortedManifestVariants(pkg.manifestVariants)) !==
+      canonicalJson(sortedManifestVariants(expected.manifestVariants))
+    ) {
         findings.push(
           `${pkg.packageName}: manifest fingerprints, conditional export arms, or exact targets are stale`,
         );
@@ -314,7 +317,7 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
       return [
         pkg.packageName,
         pkg.packageVersion,
-        arrayOrEmpty(pkg.manifestVariants).map((variant) => [
+        sortedManifestVariants(pkg.manifestVariants).map((variant) => [
           variant.fingerprint,
           subpaths.map((subpath) => [
             subpath,
@@ -576,15 +579,40 @@ function frameworkImplementationVariants(
 
 function capabilityManifestFingerprint(manifest) {
   const securityShape = {
-    exports: ownValue(manifest, 'exports'),
-    imports: ownValue(manifest, 'imports'),
+    browser: orderPreservingManifestValue(ownValue(manifest, 'browser')),
+    bundleDependencies: orderPreservingManifestValue(ownValue(manifest, 'bundleDependencies')),
+    bundledDependencies: orderPreservingManifestValue(ownValue(manifest, 'bundledDependencies')),
+    dependencies: orderPreservingManifestValue(ownValue(manifest, 'dependencies')),
+    exports: orderPreservingManifestValue(ownValue(manifest, 'exports')),
+    imports: orderPreservingManifestValue(ownValue(manifest, 'imports')),
     main: ownValue(manifest, 'main'),
     module: ownValue(manifest, 'module'),
     name: ownValue(manifest, 'name'),
+    optionalDependencies: orderPreservingManifestValue(ownValue(manifest, 'optionalDependencies')),
+    peerDependencies: orderPreservingManifestValue(ownValue(manifest, 'peerDependencies')),
+    peerDependenciesMeta: orderPreservingManifestValue(ownValue(manifest, 'peerDependenciesMeta')),
+    sideEffects: orderPreservingManifestValue(ownValue(manifest, 'sideEffects')),
     type: ownValue(manifest, 'type'),
     version: ownValue(manifest, 'version'),
   };
   return `sha256:${createHash('sha256').update(canonicalJson(securityShape)).digest('hex')}`;
+}
+
+function sortedManifestVariants(value) {
+  return [...arrayOrEmpty(value)].sort((left, right) =>
+    compareStrings(String(left?.fingerprint), String(right?.fingerprint)),
+  );
+}
+
+function orderPreservingManifestValue(value) {
+  if (Array.isArray(value)) return value.map(orderPreservingManifestValue);
+  if (!isRecord(value)) return value;
+  return {
+    entries: Object.keys(value).map((key) => [
+      key,
+      orderPreservingManifestValue(ownValue(value, key)),
+    ]),
+  };
 }
 
 export function productionSourceTreeSha256(

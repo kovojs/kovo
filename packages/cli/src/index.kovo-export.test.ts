@@ -304,7 +304,8 @@ describe('kovo export', () => {
     }
   });
 
-  it('prints compile diagnostics exported by app modules before writing static output', async () => {
+  // @kovo-security-certifies C13 static-export-diagnostic-origin-provenance
+  it('ignores app-exported structural diagnostic lookalikes without blocking static output', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -331,13 +332,13 @@ describe('kovo export', () => {
         'utf8',
       );
 
-      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(1);
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
 
-      expect(stdout).not.toHaveBeenCalled();
-      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(output).toContain('kovo-export/v1\nERROR KV201 route=src/cart.tsx');
-      expect(output).toContain('Static export refused error diagnostic KV201 at src/cart.tsx:4:12');
-      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo-export/v1\nHTML /index.html');
+      expect(output).toContain('diagnostics=0');
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain('<main>Home</main>');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -633,7 +634,7 @@ describe('kovo export', () => {
     }
   });
 
-  it('pins the Vite public asset root before app evaluation can replace it', async () => {
+  it('rejects Vite public-root mutation authority before app evaluation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const outside = mkdtempSync(join(tmpdir(), 'kovo-export-dist-substitute-'));
     const appPath = join(root, 'app.mjs');
@@ -679,11 +680,16 @@ describe('kovo export', () => {
           '--dist',
           distDir,
         ]),
-      ).resolves.toBe(0);
+      ).resolves.toBe(1);
 
-      expect(stderr).not.toHaveBeenCalled();
-      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).toBe('reviewed public asset');
-      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).not.toContain('outside secret');
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('ERROR KV448');
+      expect(output).toContain('raw filesystem authority');
+      expect(readFileSync(join(distDir, 'victim.txt'), 'utf8')).toBe('reviewed public asset');
+      expect(readFileSync(join(outside, 'victim.txt'), 'utf8')).toBe('outside secret');
+      expect(existsSync(parkedDistDir)).toBe(false);
+      expect(existsSync(join(outDir, 'victim.txt'))).toBe(false);
     } finally {
       if (previousRoot === undefined) delete process.env.KOVO_TEST_EXPORT_DIST_ROOT;
       else process.env.KOVO_TEST_EXPORT_DIST_ROOT = previousRoot;
@@ -698,7 +704,7 @@ describe('kovo export', () => {
     }
   });
 
-  it('pins the default public asset root before app evaluation can replace it', async () => {
+  it('rejects default public-root mutation authority before app evaluation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-root-'));
     const outside = mkdtempSync(join(tmpdir(), 'kovo-export-root-substitute-'));
     const exportRoot = mkdtempSync(join(tmpdir(), 'kovo-export-root-output-'));
@@ -731,11 +737,16 @@ describe('kovo export', () => {
         'utf8',
       );
 
-      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(1);
 
-      expect(stderr).not.toHaveBeenCalled();
-      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).toBe('reviewed public asset');
-      expect(readFileSync(join(outDir, 'victim.txt'), 'utf8')).not.toContain('outside secret');
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('ERROR KV448');
+      expect(output).toContain('raw filesystem authority');
+      expect(readFileSync(join(root, 'victim.txt'), 'utf8')).toBe('reviewed public asset');
+      expect(readFileSync(join(outside, 'victim.txt'), 'utf8')).toBe('outside secret');
+      expect(existsSync(parkedRoot)).toBe(false);
+      expect(existsSync(join(outDir, 'victim.txt'))).toBe(false);
     } finally {
       if (previousRoot === undefined) delete process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT;
       else process.env.KOVO_TEST_EXPORT_PUBLIC_ROOT = previousRoot;
@@ -791,7 +802,7 @@ describe('kovo export', () => {
     }
   });
 
-  it('sets a stylesheet env var from exactly one manifest stylesheet before loading the app', async () => {
+  it('rejects the removed ambient --stylesheet-env escape before app evaluation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');
     const distDir = join(root, 'vite-dist');
@@ -836,12 +847,13 @@ describe('kovo export', () => {
           '--stylesheet-env',
           'KOVO_TEST_STYLESHEET_HREF',
         ]),
-      ).resolves.toBe(0);
+      ).resolves.toBe(1);
 
-      expect(stderr).not.toHaveBeenCalled();
-      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
-        '<link href="/assets/site.css">',
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'unknown export option "--stylesheet-env"',
       );
+      expect(existsSync(join(outDir, 'index.html'))).toBe(false);
       expect(process.env.KOVO_TEST_STYLESHEET_HREF).toBeUndefined();
     } finally {
       delete process.env.KOVO_TEST_STYLESHEET_HREF;
@@ -851,68 +863,66 @@ describe('kovo export', () => {
     }
   });
 
-  it('loads TS app modules through Vite after resolving manifest stylesheet env', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
-    const srcDir = join(root, 'src');
-    const appPath = join(srcDir, 'app.ts');
-    const distDir = join(root, 'vite-dist');
-    const outDir = join(root, 'dist');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  it.each(['mjs', 'tsx'] as const)(
+    'rejects an uncensused %s dependency before its package initializer runs',
+    async (extension) => {
+      const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+      const appPath = join(root, `app.${extension}`);
+      const packageRoot = join(root, 'node_modules/uncensused-initializer');
+      const marker = join(root, 'initializer-ran');
+      const outDir = join(root, 'dist');
+      const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    try {
-      symlinkServerPackage(root);
-      mkdirSync(srcDir, { recursive: true });
-      mkdirSync(join(distDir, '.vite'), { recursive: true });
-      mkdirSync(join(distDir, 'assets'), { recursive: true });
-      writeFileSync(join(distDir, 'assets', 'vite.css'), 'main{display:block}', 'utf8');
-      writeFileSync(
-        join(distDir, '.vite', 'manifest.json'),
-        JSON.stringify({
-          'src/app.ts': {
-            css: ['assets/vite.css'],
-          },
-        }),
-        'utf8',
-      );
-      writeFileSync(
-        appPath,
-        appModuleSource({
-          route:
-            "{ path: '/', page: () => trustedHtml(`<main data-vite-export>${process.env.KOVO_TEST_VITE_STYLESHEET}</main>`) }",
-        }),
-        'utf8',
-      );
-      delete process.env.KOVO_TEST_VITE_STYLESHEET;
+      try {
+        symlinkServerPackage(root);
+        mkdirSync(packageRoot, { recursive: true });
+        writeFileSync(
+          join(packageRoot, 'package.json'),
+          JSON.stringify({
+            exports: './index.mjs',
+            name: 'uncensused-initializer',
+            type: 'module',
+            version: '1.0.0',
+          }),
+          'utf8',
+        );
+        writeFileSync(
+          join(packageRoot, 'index.mjs'),
+          [
+            "import { writeFileSync } from 'node:fs';",
+            `writeFileSync(${JSON.stringify(marker)}, 'evaluated');`,
+            "export const value = 'unsafe';",
+          ].join('\n'),
+          'utf8',
+        );
+        writeFileSync(
+          appPath,
+          appModuleSource({
+            prelude: ["import { value } from 'uncensused-initializer';"],
+            route:
+              "{ path: '/', page: () => trustedHtml(`<main data-dependency>${value}</main>`) }",
+          }),
+          'utf8',
+        );
 
-      const exitCode = await mainAsync([
-        'export',
-        '/src/app.ts',
-        '--vite',
-        '--root',
-        root,
-        '--out',
-        outDir,
-        '--manifest',
-        join(distDir, '.vite', 'manifest.json'),
-        '--dist',
-        distDir,
-        '--stylesheet-env',
-        'KOVO_TEST_VITE_STYLESHEET',
-      ]);
-      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(0);
+        const args =
+          extension === 'tsx'
+            ? ['export', '/app.tsx', '--vite', '--root', root, '--out', outDir]
+            : ['export', appPath, '--out', outDir];
+        await expect(mainAsync(args)).resolves.toBe(1);
 
-      expect(stderr).not.toHaveBeenCalled();
-      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
-        '<main data-vite-export>/assets/vite.css</main>',
-      );
-      expect(readFileSync(join(outDir, 'assets', 'vite.css'), 'utf8')).toBe('main{display:block}');
-    } finally {
-      delete process.env.KOVO_TEST_VITE_STYLESHEET;
-      stdout.mockRestore();
-      stderr.mockRestore();
-      rmSync(root, { force: true, recursive: true });
-    }
-  });
+        expect(stdout).not.toHaveBeenCalled();
+        const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+        expect(output).toContain('ERROR KV448');
+        expect(output).toContain('uncensused-initializer');
+        expect(existsSync(marker)).toBe(false);
+        expect(existsSync(join(outDir, 'index.html'))).toBe(false);
+      } finally {
+        stdout.mockRestore();
+        stderr.mockRestore();
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
 });

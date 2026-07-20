@@ -13,6 +13,7 @@ import {
   join as builtinJoin,
   parse as builtinParsePath,
   relative as builtinRelative,
+  resolve as builtinResolve,
 } from 'node:path';
 import { fileURLToPath as builtinFileURLToPath, pathToFileURL } from 'node:url';
 
@@ -71,15 +72,108 @@ export function resolveCapabilityPackages(
   const facts: ResolvedCapabilityPackage[] = [];
   const implementationDigestCache = new Map<string, string | undefined>();
   for (const request of requests) {
+    const requestImporter =
+      request.importer === undefined
+        ? importerPath
+        : builtinResolve(builtinDirname(importerPath), request.importer);
     const fact = resolveCapabilityPackage(
       request.specifier,
-      importerPath,
+      requestImporter,
       implementationDigestCache,
       options,
     );
-    if (fact !== undefined) facts.push(fact);
+    if (fact !== undefined) {
+      facts.push(request.importer === undefined ? fact : { ...fact, importer: request.importer });
+    }
   }
-  return facts.sort((left, right) => left.specifier.localeCompare(right.specifier));
+  return facts.sort(
+    (left, right) =>
+      (left.importer ?? '').localeCompare(right.importer ?? '') ||
+      left.specifier.localeCompare(right.specifier),
+  );
+}
+
+/** Re-resolve one exact import at a supported loader boundary (SPEC §6.6). @internal */
+export function resolveCapabilityPackageImport(
+  specifier: string,
+  importerPath: string,
+): ResolvedCapabilityPackage | undefined {
+  return resolveCapabilityPackage(specifier, importerPath, new Map(), {});
+}
+
+/**
+ * Verify that a bundler's exact consumed file is one of the selected package export targets.
+ * The manifest fingerprint binds all conditional arms; this check binds the current lane's choice.
+ * @internal
+ */
+export function capabilityPackageResolvedTargetMatches(
+  specifier: string,
+  importerPath: string,
+  resolvedId: string,
+): boolean {
+  return capabilityPackageResolvedTargetRoot(specifier, importerPath, resolvedId) !== undefined;
+}
+
+/** Return the exact owning package root only when the bundler target matches package resolution. */
+export function capabilityPackageResolvedTargetRoot(
+  specifier: string,
+  importerPath: string,
+  resolvedId: string,
+): string | undefined {
+  const packageName = packageNameForSpecifier(specifier);
+  const manifestPath = resolvedPackageManifestPath(specifier, packageName, importerPath);
+  if (manifestPath === undefined) return undefined;
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = requiredRecord(
+      JSON.parse(builtinReadFileSync(manifestPath, 'utf8')) as unknown,
+      manifestPath,
+      undefined,
+    );
+  } catch {
+    return undefined;
+  }
+  if (ownValue(manifest, 'name') !== packageName) return undefined;
+  const cleanResolvedId = resolvedId.split(/[?#]/u, 1)[0] ?? resolvedId;
+  if (!builtinIsAbsolute(cleanResolvedId)) return undefined;
+  const actualManifestPath = findNearestPackageManifest(cleanResolvedId);
+  if (actualManifestPath === undefined) return undefined;
+  let canonicalManifestPath: string;
+  let canonicalActualManifestPath: string;
+  try {
+    canonicalManifestPath = builtinRealpathSync(manifestPath);
+    canonicalActualManifestPath = builtinRealpathSync(actualManifestPath);
+  } catch {
+    return undefined;
+  }
+  if (canonicalManifestPath !== canonicalActualManifestPath) return undefined;
+
+  const packageRoot = builtinDirname(canonicalManifestPath);
+  const resolution = packageExportResolution(manifest, packageSubpath(specifier));
+  if (!resolution.resolved) return undefined;
+  let canonicalActual: string;
+  try {
+    canonicalActual = builtinRealpathSync(cleanResolvedId);
+  } catch {
+    return undefined;
+  }
+  const targetMatches = resolution.targets.some((target) => {
+    if (!target.startsWith('./')) return false;
+    try {
+      const candidate = builtinRealpathSync(builtinResolve(packageRoot, target));
+      const relative = slashPath(builtinRelative(packageRoot, candidate));
+      return (
+        relative !== '' &&
+        relative !== '..' &&
+        !relative.startsWith('../') &&
+        !builtinIsAbsolute(relative) &&
+        candidate === canonicalActual
+      );
+    } catch {
+      return false;
+    }
+  });
+  return targetMatches ? packageRoot : undefined;
 }
 
 /** Load the optional committed project review ledger. Malformed authority fails before app load. */
@@ -111,11 +205,19 @@ export function readCapabilityPackageSummaries(root: string): PackageCapabilityS
 /** Stable installed-manifest fingerprint authors copy into `kovo.capabilities.json`. */
 export function capabilityManifestFingerprint(manifest: Readonly<Record<string, unknown>>): string {
   const securityShape = {
-    exports: ownValue(manifest, 'exports'),
-    imports: ownValue(manifest, 'imports'),
+    browser: orderPreservingManifestValue(ownValue(manifest, 'browser')),
+    bundleDependencies: orderPreservingManifestValue(ownValue(manifest, 'bundleDependencies')),
+    bundledDependencies: orderPreservingManifestValue(ownValue(manifest, 'bundledDependencies')),
+    dependencies: orderPreservingManifestValue(ownValue(manifest, 'dependencies')),
+    exports: orderPreservingManifestValue(ownValue(manifest, 'exports')),
+    imports: orderPreservingManifestValue(ownValue(manifest, 'imports')),
     main: ownValue(manifest, 'main'),
     module: ownValue(manifest, 'module'),
     name: ownValue(manifest, 'name'),
+    optionalDependencies: orderPreservingManifestValue(ownValue(manifest, 'optionalDependencies')),
+    peerDependencies: orderPreservingManifestValue(ownValue(manifest, 'peerDependencies')),
+    peerDependenciesMeta: orderPreservingManifestValue(ownValue(manifest, 'peerDependenciesMeta')),
+    sideEffects: orderPreservingManifestValue(ownValue(manifest, 'sideEffects')),
     type: ownValue(manifest, 'type'),
     version: ownValue(manifest, 'version'),
   };
@@ -229,6 +331,23 @@ function findOwningPackageManifest(start: string, packageName: string): string |
   return undefined;
 }
 
+function findNearestPackageManifest(start: string): string | undefined {
+  let current: string;
+  try {
+    current = builtinDirname(builtinRealpathSync(start));
+  } catch {
+    return undefined;
+  }
+  const root = builtinParsePath(current).root;
+  for (let depth = 0; depth < 64; depth += 1) {
+    const candidate = builtinJoin(current, 'package.json');
+    if (builtinExistsSync(candidate)) return candidate;
+    if (current === root) return undefined;
+    current = builtinDirname(current);
+  }
+  return undefined;
+}
+
 function packageExportResolution(
   manifest: Readonly<Record<string, unknown>>,
   subpath: string,
@@ -237,13 +356,17 @@ function packageExportResolution(
   if (exportsValue === undefined) {
     const main = ownValue(manifest, 'main');
     const module = ownValue(manifest, 'module');
-    const targets = [main, module].filter(
-      (value): value is string => typeof value === 'string' && value.length > 0,
+    const browser = ownValue(manifest, 'browser');
+    const targets = new Set(
+      [main, module].filter(
+        (value): value is string => typeof value === 'string' && value.length > 0,
+      ),
     );
+    const hasBrowserTarget = appendBrowserTargets(browser, targets);
     return {
-      conditions: ['default'],
-      resolved: subpath === '.' && targets.length > 0,
-      targets,
+      conditions: hasBrowserTarget ? ['browser', 'default'] : ['default'],
+      resolved: subpath === '.' && targets.size > 0,
+      targets: [...targets].sort(),
     };
   }
   const target = selectExportTarget(exportsValue, subpath);
@@ -253,6 +376,8 @@ function packageExportResolution(
   const conditions = new Set<string>();
   const targets = new Set<string>();
   const hasTarget = collectExportConditions(target, conditions, targets);
+  const browser = ownValue(manifest, 'browser');
+  if (appendBrowserTargets(browser, targets)) conditions.add('browser');
   if (conditions.size === 0 && hasTarget) conditions.add('default');
   return {
     conditions: [...conditions].sort(),
@@ -269,8 +394,39 @@ function selectExportTarget(exportsValue: unknown, subpath: string): unknown {
   if (Object.hasOwn(exportsValue, subpath)) return ownValue(exportsValue, subpath);
   const pattern = keys
     .filter((key) => key.includes('*') && exportPatternMatches(key, subpath))
-    .sort((left, right) => exportPatternSpecificity(right) - exportPatternSpecificity(left))[0];
-  return pattern === undefined ? undefined : ownValue(exportsValue, pattern);
+    .sort(compareExportPatterns)[0];
+  if (pattern === undefined) return undefined;
+  const star = pattern.indexOf('*');
+  const match = subpath.slice(star, subpath.length - (pattern.length - star - 1));
+  return substituteExportPattern(ownValue(exportsValue, pattern), match);
+}
+
+function substituteExportPattern(value: unknown, match: string): unknown {
+  if (typeof value === 'string') return value.replaceAll('*', match);
+  if (Array.isArray(value)) return value.map((entry) => substituteExportPattern(entry, match));
+  if (!isRecord(value)) return value;
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    result[key] = substituteExportPattern(ownValue(value, key), match);
+  }
+  return result;
+}
+
+function appendBrowserTargets(browser: unknown, targets: Set<string>): boolean {
+  if (typeof browser === 'string' && browser.length > 0) {
+    targets.add(browser);
+    return true;
+  }
+  if (!isRecord(browser)) return false;
+  let found = false;
+  for (const [source, target] of Object.entries(browser)) {
+    if (typeof target !== 'string' || target.length === 0) continue;
+    if (targets.has(source) || targets.has(source.startsWith('./') ? source : `./${source}`)) {
+      targets.add(target);
+      found = true;
+    }
+  }
+  return found;
 }
 
 function collectExportConditions(
@@ -552,8 +708,16 @@ function exportPatternMatches(pattern: string, subpath: string): boolean {
   return subpath.startsWith(prefix) && subpath.endsWith(suffix);
 }
 
-function exportPatternSpecificity(pattern: string): number {
-  return pattern.replace('*', '').length;
+function compareExportPatterns(left: string, right: string): number {
+  const leftStar = left.indexOf('*');
+  const rightStar = right.indexOf('*');
+  const leftBaseLength = leftStar < 0 ? left.length : leftStar + 1;
+  const rightBaseLength = rightStar < 0 ? right.length : rightStar + 1;
+  if (leftBaseLength !== rightBaseLength) return rightBaseLength - leftBaseLength;
+  if (leftStar < 0) return 1;
+  if (rightStar < 0) return -1;
+  if (left.length !== right.length) return right.length - left.length;
+  return 0;
 }
 
 function parsePackageSummary(
@@ -652,6 +816,18 @@ function requiredStringArray(value: Record<string, unknown>, key: string, path: 
     throw new TypeError(`${path}.${key} must be an array of strings.`);
   }
   return [...new Set(found)].sort((left, right) => left.localeCompare(right)) as string[];
+}
+
+/** Preserve order where Node/Vite treat object insertion order as conditional-export semantics. */
+function orderPreservingManifestValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(orderPreservingManifestValue);
+  if (!isRecord(value)) return value;
+  return {
+    entries: Object.keys(value).map((key) => [
+      key,
+      orderPreservingManifestValue(ownValue(value, key)),
+    ]),
+  };
 }
 
 function canonicalJson(value: unknown): string {
