@@ -112,6 +112,17 @@
       "escapeCells": { "C": "c9-escape-audit", "I": "c9-escape-audit" }
     },
     {
+      "sink": "data.derived.persistence",
+      "escapeHatches": ["derived(adapter,{key,kind:vector})"],
+      "surface": "runtime-infra",
+      "cells": { "C": "c9-control", "I": "c9-control", "Au": "c9-control" },
+      "escapeCells": {
+        "C": "c9-escape-audit",
+        "I": "c9-escape-audit",
+        "Au": "c9-escape-audit"
+      }
+    },
+    {
       "sink": "auth.data-access",
       "escapeHatches": ["public-read-justification"],
       "surface": "auth",

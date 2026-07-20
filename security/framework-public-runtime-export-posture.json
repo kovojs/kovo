@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-19.8",
-  "runtimeSurfaceSha256": "ff1146ea1fb0fee80a631467be02e7a6eeef69e5e8cb10a3b7df7bdfc80f4e1d",
-  "postureMemberSha256": "0616cb9faf32b6a119bafbe73bdf0017c0c5aa8fbd372c0cfa776808ab3ea6a8",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-20.1",
+  "runtimeSurfaceSha256": "67345c9170353227603894b1e6769e77e0487f6f4de2b3e705263d357976bf2f",
+  "postureMemberSha256": "0aaf44933c12bbc39f67c16a907f5b5d5e9c37cf7056d0fae1b119770b243419",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "e81de8bcebd87cf157c2c719b7b59ec1d2678f1d6b7a1f60fafbd9eadde55184",
+      "sourceTreeSha256": "d9b0a1ec299061a7741256b6225445a1a783cef66cd73f6f6709d56c747f635d",
       "manifestVariants": [
         {
           "exports": {
@@ -762,7 +762,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "4fc1c50a198256cd55650193fa46c7797987ca67edf9cb9039d10777fa0173b5"
+      "sourceTreeSha256": "d809e6296572f1e5264bf581724608c7337727d0af4019b3b1c967fbb7b7dee6"
     },
     {
       "manifestVariants": [
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "a3efd4c9dfde2b807ce34eac6b43575c49d7aa7adb7cee3e1070642e0b166c47"
+      "sourceTreeSha256": "a2b27520f6ad88a20ef5708626ab02a5928afadcd2dfc79a0daab2e62e2e6f69"
     },
     {
       "manifestVariants": [
@@ -1718,7 +1718,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "207e6d83bba3c850cbc4dbf39df64b99edf5d67f8fd2e2f6620bca3636ae0e6e"
+      "sourceTreeSha256": "568c9d946870c66a49691083f444fb6adfd4a24ae90792246017689e400a1356"
     },
     {
       "manifestVariants": [
@@ -1986,7 +1986,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "dd48e82c5a848e52677127e86f544403e8a4ffa68d97ffd85ea8f1379baf93d5"
+      "sourceTreeSha256": "3201efc37d965e77802e11704145f9d45bbf74172e809ca85310e2a313c19949"
     },
     {
       "manifestVariants": [
@@ -9747,9 +9747,38 @@
           "rootKind": "none",
           "securityRole": "request-closed",
           "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
+        },
+        {
+          "capabilities": [],
+          "disposition": "authority-free",
+          "id": "authority-free-security-control-runtime-infra-derived-dataset-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "runtime-infra"
+          },
+          "members": {
+            ".": ["derived"]
+          },
+          "review": {
+            "basis": "derived reconstructs principal-scoped persistence authority at the exact governed-data boundary and exposes no raw host capability.",
+            "evidence": [
+              "packages/server/src/derived-dataset.ts",
+              "packages/compiler/src/derived-dataset-security.test.ts",
+              "packages/server/src/derived-dataset.test.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-20-derived-dataset"
+          },
+          "rootKind": "none",
+          "securityRole": "security-control",
+          "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "4589849544bdf3c83c11eef9aca1392a3c8c3f82d02134d823dfd763f159a452"
+      "sourceTreeSha256": "5ab90c23bc5903ecaf16f12c59a8a19ce60db80a51e4632932a36aafaa797881"
     },
     {
       "manifestVariants": [
@@ -10096,7 +10125,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "acee9118ae68afa976fee2e78790577746e021e54757dd177145048217c68043"
+      "sourceTreeSha256": "e8cf6a7770df1773c3eeadc7aebb0126af4dbbcfe956fb54f1866a244d59548a"
     },
     {
       "manifestVariants": [
@@ -10684,8 +10713,8 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "67a607e26a214e6588f45da2acd7f359981b0601e8649a8d62bed7cc4a0c136a"
+      "sourceTreeSha256": "f1eb5b00692a02930c7d4df48daf61d64de4102fddfdfef0a07de10bf73cce40"
     }
   ],
-  "classificationSha256": "cd414a2c333d3e9ab35ee0127bfc40992b1ea1682edd996054309f61f3468deb"
+  "classificationSha256": "f8ef3c97e923fabd0a5cdc128bdf041dba33ced686da1a07c9e4d301ecce8e06"
 }

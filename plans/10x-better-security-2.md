@@ -823,11 +823,17 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
   - Evidence: the seven-file, 177-test live-channel suite proves cross-owner isolation in memory,
     filesystem, S3-compatible, memory-queue, and Postgres/PGlite paths plus boxed config-secret
     wire/clone/render/log rejection and client-artifact exclusion.
-- [ ] `kovo explain --attest` verifies the bounded single-instance posture statement defined in §4.3;
+- [x] `kovo explain --attest` verifies the bounded single-instance posture statement defined in §4.3;
       the tier-aware dev/prod obligation mapping is green without overclaiming host or fleet identity.
-- [ ] New SPEC text (ScopedKey algebra, posture lease, request deadline, config-env door, cache
+  - Evidence: the five-file, 17-test attestation/parity suite verifies nonce, expiry, signature,
+    artifact, posture, boot-witness, response-cap, and explicit host/fleet non-claims; the parity gate
+    closes one production and five development doors.
+- [x] New SPEC text (ScopedKey algebra, posture lease, request deadline, config-env door, cache
       generality, indistinguishability classes, crypto envelope) landed and cited from code, with each
       residual/out-of-scope cell explicit in the threat matrix.
+  - Evidence: `check:spec-index`, `check:framework-export-posture`, and `check:threat-matrix` pass;
+    the exact seven contracts live in SPEC §§6.6/9.2/9.4/9.5/10.3 and the liveness projection now
+    maps all 14 C9 sinks, including derived-data persistence.
 - [ ] Every changed public API/export passes `check:api-surface`; full classifier, compiler, browser,
       integration, package, real-Postgres, performance, memory, and availability gates pass from a
       clean checkout with zero required skips at the intended SHA, followed by required CI jobs.
