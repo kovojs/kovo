@@ -698,6 +698,14 @@ transaction and row-lock behavior, not machine-verified evidence about the datab
 `kovo explain --model-boundaries` MUST print that axiom, these bounds, every registered modeled
 action, and the exact action complement plus excluded phenomena below.
 
+The checked status is `bounded-model-checked`: TLC v1.7.4 under the exact-pinned
+`formal/replay/tlc-toolchain.json` exhausts the committed `formal/ReplayReservation.cfg` state space
+for type safety, no double execution, refuse-never-evict, monotonic reclamation, no resurrection,
+and bounded admission. The same gate MUST reproduce the committed evict-pending/double-execute and
+naive-watermark/backward-clock resurrection counterexamples. This bounded evidence validates the
+declared abstraction and its historical mutants; it **does not prove Postgres**, its CTE/row-lock
+implementation, unbounded cardinalities, or any excluded phenomenon below.
+
 The model explicitly does not cover:
 
 - <!-- kovo-not-modeled:durable-task-semantics --> durable-task queue transitions or scheduling;

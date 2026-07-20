@@ -27,10 +27,18 @@ jobs:
           # The analysis-time TCB ratchet compares this commit to its first parent.
           fetch-depth: 2
           persist-credentials: false
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95
+        with:
+          distribution: temurin
+          java-version: '21.0.11+10'
       - uses: ./.github/actions/kovo-setup
         with:
           rebuild-better-sqlite3: 'true'
+      - name: Prepare exact-pinned TLC checker
+        run: vp exec node scripts/check-replay-reservation-model.mjs --prepare
       - name: Format, type, and import checks
+        env:
+          KOVO_TLA_OFFLINE: '1'
         run: vp exec pnpm run check
       - run: git diff --check
 

@@ -54,10 +54,8 @@ export function validateModelHonestyBoundary({ boundary, protocol, specText }) {
   if (boundary?.id !== 'replay-reservation/v1') {
     findings.push('model boundary id must be replay-reservation/v1');
   }
-  if (boundary?.status !== 'registered-not-model-checked') {
-    findings.push(
-      'model boundary status must remain registered-not-model-checked until TLC evidence lands',
-    );
+  if (boundary?.status !== 'bounded-model-checked') {
+    findings.push('model boundary status must be bounded-model-checked after TLC evidence lands');
   }
   if (!sameRecord(boundary?.bounds, expectedBounds)) {
     findings.push(`model bounds must equal ${JSON.stringify(expectedBounds)}`);
