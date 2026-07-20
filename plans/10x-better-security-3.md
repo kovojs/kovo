@@ -875,8 +875,11 @@ a within-corpus statistic published as coverage is dishonest.
   - Evidence: the integrated agent/grant/environment/derived-dataset/dependency suite passes 116/116
     across all five §3 parties, including retained and suspended `kovo check env` obligations.
 - [ ] A fire drill returns AFFECTED → fixed → NOT-AFFECTED → UNKNOWN-fails-closed.
-- [ ] `rules/v1-acceptance.md` cites the decided fragments, the undecidability ledger, and metric E —
+- [x] `rules/v1-acceptance.md` cites the decided fragments, the undecidability ledger, and metric E —
       without claiming immunity outside the scoped threat model.
+  - Evidence: the rule requires finite-domain/bound/gap evidence, the precision and undecidability
+    ledgers, three Metric E rounds, retained obligations, and the advisory drill, with explicit
+    arbitrary-JavaScript, deployment, same-process, and out-of-scope non-claims.
 
 ## Kill list (normative — do not attempt)
 

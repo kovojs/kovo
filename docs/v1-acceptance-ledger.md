@@ -4,7 +4,7 @@
 each criterion to repo evidence or an external evidence ledger before v1 freeze;
 it does not claim that v1 is complete.
 
-Last ledger audit: 2026-07-18.
+Last ledger audit: 2026-07-20.
 
 ## Required Gates
 
@@ -20,6 +20,14 @@ Last ledger audit: 2026-07-18.
 | 16.8 Update coverage            | Every query-dependent commerce DOM position has an explicit status and zero unhandled KV311s.                                                                                                                                                                                                                                                                                                                                                                                               | KV311/update-coverage graph assertions and `kovo check coverage` output.                                                                                                                                                                                                                                                                                                                                                                                | ready to run                                      |
 | 16.9 Authorization & data plane | `KOVO_PARANOID=1` Postgres generative dogfood proves zero cross-owner read/write + zero secret-column egress across every query shape; capability-closure boot audit refuses every unsafe reachable object; runtime holds no superuser/`BYPASSRLS`; no value/effect authz/confidentiality code is `build-only`; SQLite quarantined; the scoped threat matrix, independent architecture review, third-party audit, and exact-candidate retest are complete. (`rules/v1-acceptance.md` 16.9.) | `test:authz-paranoid` is wired into `acceptance` and contains three real-Postgres served-artifact cases plus the grant-shape fuzzer; closure, least-privilege, provider-capability, and registry invariants are implemented. `plans/claude-bugz-32.md` B1–B4 are closed. The clean Phase 0 baseline passed all 7 tests with real local Postgres and zero skips at `a6dae7223`; independent review/audit/retest and the final freeze run remain pending. | baseline passed; external review + freeze pending |
 | Pre-launch                      | Trademark, domain, npm-scope, and linguistic screens have dated evidence.                                                                                                                                                                                                                                                                                                                                                                                                                   | Dated pending ledger in `rules/prelaunch-checklist.md`; no external completion evidence recorded yet.                                                                                                                                                                                                                                                                                                                                                   | pending external checks                           |
+
+## Security Proof-Program Evidence
+
+The Plan 2/3 evidence named by `rules/v1-acceptance.md` is implemented for the finite provenance,
+authorization, grammar, precision-register, undecidability-ledger, and bounded-periphery artifacts.
+The final packet remains pending on three comparable Metric E rounds, the disjoint outside
+certificate validation, the signed-advisory fire drill, and the exact-candidate freeze run. None of
+the implemented artifacts is recorded here as proof of arbitrary JavaScript or deployment behavior.
 
 ## Dated Ledger Audit
 
