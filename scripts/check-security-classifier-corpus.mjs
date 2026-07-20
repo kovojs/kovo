@@ -2866,6 +2866,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'declassification-policy-and-provenance-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-classifier-corpus C13 finite-ir-reviewed-data-doors',
+          'accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations',
+          "door: 'trustedReveal'",
+          "ownerScope: 'application'",
+          "purpose: 'public-projection'",
+          '@kovo-security-classifier-corpus C13 declassification-robustness',
+          'rejects a declassification with an %s',
+          'attacker-controlled enabling condition',
+          'attacker-controlled released value',
+        ],
+      },
+      {
         id: 'raw-response-body-provenance-closure',
         file: 'packages/compiler/src/security-operation-ir.response-body-provenance.security.test.ts',
         snippets: [

@@ -1,9 +1,9 @@
 {
   "schema": "kovo-security-coverage/v1",
   "summary": {
-    "cells": 47,
+    "cells": 48,
     "inapplicable": 1,
-    "witnessed": 46
+    "witnessed": 47
   },
   "cells": [
     {
@@ -236,6 +236,24 @@
         },
         {
           "anchor": "server-framework-identity-and-principal-scope-operations",
+          "corpus": "finite-security-operation-ir"
+        }
+      ]
+    },
+    {
+      "id": "server-operation:server.data.declassify",
+      "surface": "server-operation",
+      "value": "server.data.declassify",
+      "disposition": "witness",
+      "reason": null,
+      "review": null,
+      "witnesses": [
+        {
+          "anchor": "exact-operation-door-and-closed-verdict-relation",
+          "corpus": "finite-security-operation-ir"
+        },
+        {
+          "anchor": "declassification-policy-and-provenance-closure",
           "corpus": "finite-security-operation-ir"
         }
       ]
