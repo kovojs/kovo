@@ -2199,6 +2199,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*raw HTML element control a\[rel\].*window\.opener authority/u,
     ],
     [
+      'meta refresh navigation',
+      '<meta http-equiv="refresh" content="0;url=https://attacker.invalid/phish">',
+      /KV448.*raw HTML element control meta\[http-equiv\].*automatic navigation/u,
+    ],
+    [
       'javascript URL handler',
       '<a href="javascript:void(globalThis.__KOVO_JS_URL_PWNED__=\'EXECUTED\')">run</a>',
       /KV448.*raw HTML javascript URL.*compiler-owned JSX lowering/u,
