@@ -1,6 +1,6 @@
 # 10x Better Security — Convergence Plan
 
-Status: ACTIVE (revised 2026-07-18). This is the class-kill and convergence roadmap layered on
+Status: ACTIVE (revised 2026-07-20). This is the class-kill and convergence roadmap layered on
 top of `plans/threat-matrix-plan.md`, which owns the scoped coverage matrix. Transient bug ledgers
 may reproduce individual findings, but this plan accepts work only when it removes a class of
 bypass, builds a forcing gate, or adds an independent oracle.
@@ -192,8 +192,8 @@ Measurements are versioned and reproducible:
     container transfers across all seven raw capability kinds; C13 passes with 21 corpora.
 - [x] Define versioned, least-authority package summaries. An absent, stale, contradictory, or
       unresolved summary fails closed; package upgrades cannot silently retain an old verdict.
-  - Evidence: `pnpm run check:framework-export-posture` exact-matches 2,315 runtime exports plus
-    1,838 module initializers against package versions, source-tree digests, manifest targets,
+  - Landing evidence: `pnpm run check:framework-export-posture` exact-matched 2,315 runtime exports
+    plus 1,838 module initializers against package versions, source-tree digests, manifest targets,
     conditional arms, authority/root/security roles, and matrix posture; omission, duplication,
     same-version implementation drift, root deletion, and security-role omission mutants fail.
     `capability-closure-packages.test.ts` retains the corresponding third-party summary proofs.
@@ -245,7 +245,7 @@ Measurements are versioned and reproducible:
     and opaque containers.
 - [x] Remove only predicates proven superseded by the normalized engine. Record P across all moved
       modules and G across real fixtures; do not claim success from moving LOC elsewhere.
-  - Evidence: the live convergence collector reports `P=8,112` across all 13 production predicate
+  - Checkpoint evidence: the convergence collector reported `P=8,112` across all 13 production predicate
     files, with the retired imperative-DOM name lexicon at zero; `pnpm run check:green-corpus`
     passes 18/18. The higher total honestly includes newly enrolled closure logic rather than
     presenting the eight deleted callback-name rows as a global P reduction.
@@ -261,7 +261,7 @@ Measurements are versioned and reproducible:
 
 - [x] For every remaining dynamic fact, identify the real sink, classify-and-pin or reconstruct
       its carrier, and enroll the door plus hostile-value evidence in the C9 inventory.
-  - Evidence: `pnpm run check:c9-sink-inventory` passes 23/23 and mechanically maps every census
+  - Evidence: `pnpm run check:c9-sink-inventory` passes 33/33 and mechanically maps every census
     family and finite operation to one owned reconstruct/box/own door with live hostile evidence.
 - [x] Prove no TypeScript brand, module-private sentinel, proxy, or static diagnostic is treated as
       the runtime security mechanism.
@@ -272,7 +272,8 @@ Measurements are versioned and reproducible:
   - Evidence: `plans/security-architecture-review-phase-2-2026-07-18.md` records an exact-tip
     independent **REJECT** verdict after 102 focused tests, C13=20, M=68/68, G=18, and C9=23/23.
     Its three provenance/summary blockers keep Phase 2C migration and every production-classifier
-    deletion open until repaired and independently re-reviewed.
+    deletion open until repaired and independently re-reviewed. The final exact-tip review below
+    must explicitly disposition this historical REJECT before the treadmill can be declared retired.
 
 ## Phase 3 — Migrate the three enumerative treadmills
 
@@ -388,7 +389,7 @@ Measurements are versioned and reproducible:
   - Evidence: `pnpm run check:csrf-mint-delivery` closes 18 mint/deliver/validate/rotate/replay
     surfaces with 6 canaries; the focused lifecycle suite passes 11 files / 433 tests, and the
     separate packed Node/Vercel proof passes.
-  - Evidence: `pnpm run check:c9-sink-inventory` passes 16/16; the shared integrated C13 run reports
+  - Evidence: `pnpm run check:c9-sink-inventory` passes 33/33; the shared integrated C13 run reports
     `check-security-classifier-corpus/v1 OK corpora=17` (54 files / 2,257 tests). API, docs-snippet,
     and example-typecheck gates pass.
 - [x] **Request method/authority:** separate trusted transport-source selection from strict grammar.
@@ -400,7 +401,7 @@ Measurements are versioned and reproducible:
 - [x] **C9 completeness:** mechanically compare the boundary/sink census with the single reviewed
       inventory. Every sink has mechanism, sole door, proof gate, hostile-value test, and owner;
       an unowned or missing row fails `pnpm run check`.
-  - Evidence: `pnpm run check:c9-sink-inventory` (23/23) proves all 15 named sinks across the 12
+  - Evidence: `pnpm run check:c9-sink-inventory` (33/33) proves all 15 named sinks across the 12
     census families have executable ownership/evidence rows and fail closed on inventory drift;
     `pnpm run check:sink-policy` and `pnpm run check:imports` pass at merge `7bdd75a38`.
 
@@ -432,25 +433,37 @@ Measurements are versioned and reproducible:
 
 ## Phase 6 — Scoped v1 security signoff
 
+- [ ] Freeze the intended candidate SHA and perform one exact-tip reconciliation of this ledger:
+      refresh the framework-export posture, convergence row, C9/C13/mutation denominators, survivor
+      register, and an independent architecture/security re-review that explicitly accepts or rejects
+      the Phase 3C deletions after the historical REJECT above.
+  - Final evidence placeholder: candidate SHA, review artifact, and proving commands are intentionally
+    absent until implementation stops moving; no earlier checkpoint is final-tip evidence.
 - [x] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
       specifically owned and signed-off out-of-scope disposition.
   - Evidence: `pnpm run check:framework-export-posture` closes 12 packages / 1,839 subpaths / 2,344
     runtime exports, and `pnpm run check:threat-matrix` passes its 8/8 exact-denominator suite.
-- [ ] `pnpm run acceptance`, including required real-Postgres 16.9 cases, passes from a clean
+- [ ] `pnpm run acceptance`, including criterion 16.9's required real-Postgres cases, passes from a clean
       checkout at the intended SHA with zero required skips.
 - [ ] Capability closure, finite IR, normalized provenance, runtime sink floors, and the complete
       C9 inventory pass their C13, mutation, green-corpus, performance, and package gates.
-- [ ] R is zero across three consecutive comparable adversarial rounds; every seeded canary is
-      detected and every release-significant security mutation is killed.
-- [ ] Release-budget fuzzers have no unresolved normative-property violation, have run nightly for
-      at least two weeks, and pass the deterministic release command at the intended SHA.
-- [ ] Third-party implementation audit and exact-candidate retest are complete; all blocking
-      findings are closed.
+- [ ] R is zero across three consecutive weekly rounds under the frozen charter; each round records
+      an exact SHA and detects every seeded canary.
+- [ ] Every release-significant security mutation is killed at the intended SHA.
+- [ ] Release-budget fuzzers have no unresolved normative-property violation across at least 14
+      terminal-green scheduled nightly runs spanning at least 14 days.
+- [ ] The deterministic release-budget fuzz command passes at the intended SHA with no unresolved
+      normative-property violation.
+
+The third-party implementation-audit and exact-candidate-retest exit is owned by the two authoritative
+Phase 5 checkboxes above; this exit section does not duplicate that external work or its evidence.
+
 - [ ] Local `main` equals the reviewed commit pushed to `origin/main`; required CI, race,
       package, browser, integration, Pages, and acceptance checks are terminal green.
 - [ ] `rules/v1-acceptance.md` and `docs/v1-acceptance-ledger.md` cite the threat matrix,
-      architecture review, audit/retest, exact commands, and this plan's convergence table without
-      claiming immunity outside the scoped threat model.
+      architecture reviews, exact commands, and this plan's convergence table without claiming
+      immunity outside the scoped threat model. They must label the Phase 5 audit/retest evidence
+      pending until those authoritative external checkboxes close.
 
 ## Convergence table
 

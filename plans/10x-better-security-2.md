@@ -1,9 +1,9 @@
 # 10x Better Security 2 — Derive-and-Re-Witness Roadmap
 
-Status: ACTIVE (created 2026-07-18; premise-reconciled 2026-07-20 at integration candidate
-`b18aae90f`). Successor frontier layered on `plans/10x-better-security.md` (the four-layer closure
-roadmap) and `plans/threat-matrix-plan.md` (the scoped coverage matrix). The implementation phases
-have landed; the active ledger now owns the exact-tip drift, duration evidence, clean-candidate
+Status: ACTIVE (created 2026-07-18; historical premise checkpoint `b18aae90f` recorded 2026-07-20).
+Successor frontier layered on `plans/10x-better-security.md` (the four-layer closure roadmap) and
+`plans/threat-matrix-plan.md` (the scoped coverage matrix). The implementation phases have landed;
+the active ledger now owns one final exact-tip reconciliation, duration evidence, clean-candidate
 verification, and CI exits still listed below. No item lands as a point fix.
 
 ## Authority, scope, and honesty boundary
@@ -25,7 +25,7 @@ inexpressibility claims — they are honestly labeled as such and do not extend 
 Plan-1 converts enumerative classifiers into structural closure **at build time**: capability-closed
 module graph, finite compiler-owned security IR, narrow normalized abstract interpretation, runtime
 sink floors, plus forcing gates (`test:authz-paranoid`, `check:security-gate-mutations`, C13 corpus,
-C9 inventory). The original taxonomy and the `b18aae90f` exact-tip reconciliation were both checked
+C9 inventory). The original taxonomy and the `b18aae90f` then-candidate reconciliation were both checked
 against plan-1's full text and check scripts; no Plan-2 section has since been subsumed and dropped.
 Plan-1's Layer-3 dependencies are now present as consumable data. Several items deliberately reuse
 plan-1's own machinery (the KV414 provenance engine, the C9 sink registry closure, the capability
@@ -89,15 +89,15 @@ or served artifact.
 
 ## Phase 0 — Reconcile against the current tip and rank
 
-- [x] Rebase every §-item premise on the exact integration candidate intended for `main`; re-confirm
+- [x] Rebase every §-item premise on the then-current integration checkpoint `b18aae90f`; re-confirm
       stale file/line and red-state premises, classify later-plan drift separately from missing
-      implementation, and record the baseline SHA. Final acceptance still re-runs this audit after
-      the candidate is merged and frozen.
+      implementation, and record the baseline SHA. This is historical checkpoint evidence, not the
+      final-candidate reconciliation below.
   - Evidence: source and focused-gate audit at `b18aae90f` on 2026-07-20. Local `main` was
     `19a8fb06e` and `origin/main` was `635fbea78`, so this is explicitly candidate-tip evidence, not
     a claim that delivery or final CI has happened. No Plan-2 section was superseded by plan-1.
 
-  | Section | Exact-tip premise classification                                                         | Current authoritative evidence                                                                              |
+  | Section | `b18aae90f` premise classification                                                       | Checkpoint evidence                                                                                         |
   | ------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
   | §1.1    | Implemented; bounded-language non-claim retained                                         | `analyzer-soundness-oracle.mjs`: lattice 44, transfers/productions 33/33, doors 9                           |
   | §1.2    | Implementation present; exact evidence bindings drifted after later KV/source additions  | `check-spec-conformance-closure`: 92 codes, 72 error classes, 200 sites, currently red                      |
@@ -117,7 +117,7 @@ or served artifact.
   | §4.4    | Implemented and policy denominator current                                               | response-observation gate green for 3 remotely reachable surfaces                                           |
   | §4.5    | Implemented and tier mapping current                                                     | runtime-tier parity green for 1 production and 5 development doors                                          |
 
-- [x] Repair the four exact-tip Plan-2 forcing-gate drifts exposed by this reconciliation before
+- [x] Repair the four `b18aae90f` Plan-2 forcing-gate drifts exposed by this reconciliation before
       final acceptance: diagnostic conformance bindings (including KV452), the stale TCB
       `validateRevealReason` row, the missing `server.data.declassify` coverage cell/summary, and the
       five crypto-boundary acquisition/ratchet/ceiling findings. This premise-only checkpoint does
@@ -125,6 +125,11 @@ or served artifact.
   - Evidence: the merged coverage gate reports 48/47/1 with 277 anchors; crypto reports 58 reviewed
     rows with a high-authority ceiling of 30; conformance reports 92 codes, 72 errors, 200 sites, and
     37 evidence files / 108 witnesses / six mandatory executions.
+- [ ] At the frozen intended candidate SHA, rerun the complete Plan-2 premise audit and every
+      digest/manifest-backed forcing gate, replace stale checkpoint counts instead of appending a
+      transcript, and record the exact SHA plus terminal command results.
+  - Final evidence placeholder: SHA and commands are intentionally absent while implementation is
+    still moving; `b18aae90f` must not be presented as final-tip proof.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
   - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
@@ -217,8 +222,8 @@ gap is closed by `security-abstract-interpreter-census.v1.json`, whose current 4
 enforces what SPEC no longer promises. **Leverage:** medium (process closure, not a new attacker
 class) · **Effort:** L · generalizes the proven `check:security-guarantee` tri-binding to the full KV
 surface. The original unbound-coverage premise is closed by the constructor/site/witness binding
-below. At `b18aae90f`, later KV and source additions have drifted its reviewed evidence manifests;
-Phase 0 tracks that forcing-gate repair separately from the landed implementation.
+below. The reviewed-manifest drift found at `b18aae90f` was repaired as the historical Phase 0
+checkpoint; the open final-tip reconciliation owns any later source or digest movement.
 
 **Depends on:** the exact diagnostics registry and Phase 0 baseline. **Produces:** generated
 diagnostic constructors and a registry↔enforcement↔test binding. **Blocks:** spec-conformance exit,
@@ -227,25 +232,25 @@ not live-channel remediation.
 - [x] Add a machine-readable enforcement-class column (`compile-error | fail-closed-runtime |
 audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV table.
   - Landing evidence: the gate parsed all then-current normative rows and matched every generated
-    runtime enforcement class. It now derives 92 rows; the exact-tip binding drift is open above.
+    runtime enforcement class; the `b18aae90f` repair derived 92 rows.
 - [x] Generate typed KV constructors from the registry and route production emission through the
       validating diagnostics door; stage removal of ad hoc `{ code: 'KV###' }` production literals
       under the classifier-refactor rule without banning test fixtures that consume generated IDs.
-  - Landing evidence: the generated constructor registry and AST gate derived 197 production sites
-    while rejecting ad hoc literals. Exact-tip source derives 200 sites pending reviewed-summary refresh.
+  - Landing evidence: the generated constructor registry and AST gate initially derived 197
+    production sites while rejecting ad hoc literals; the checkpoint repair reviewed 200 sites.
 - [x] `check:spec-conformance-closure` requires, per error-class KV, a registry row, derived production
       enforcement site, red fixture, green counterpart, and own-layer evidence. Runtime emission
       coverage is supporting evidence only; a platform-specific zero-emission row needs a reviewed
       applicability reason rather than a synthetic test call.
   - Landing evidence: 90 codes, 70 error-class rows, 197 sites, 105 bound witnesses, and 6 controls
-    passed. Exact-tip derives 92/72/200 and intentionally fails on stale reviewed bindings.
+    passed initially; the checkpoint repair reviewed the later 92/72/200 denominator.
 - [x] Promote `diagnostics-ref`'s registry equality out of the site pipeline into the root check chain.
   - Evidence: the root `check` chain invokes `check:spec-conformance-closure`, which calls the
     write-free `checkDiagnosticsRegistryEquality` comparison.
 - [x] Inventory and bind every raw KV guard-error channel (`Error`/throw/rejection/log text) to
       registry-derived identity, or migrate it through a dedicated raw guard-error door; gate code
       swaps and new channels. Structured diagnostic evidence does not cover these raw strings.
-  - Evidence: `check:raw-diagnostic-channels` derives and registry-binds 437 production channels
+  - Evidence: `check:raw-diagnostic-channels` derives and registry-binds 482 production channels
     across analysis, generated-runtime, runtime, and verifier layers; its 7/7 tests reject new sites,
     expression/code drift, and enforcement-class relabeling.
 - [x] Close `RegisteredDiagnostic` runtime provenance: record constructor outputs behind a
@@ -253,12 +258,12 @@ audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV tab
       structurally forged records. Add cross-package negative controls; TypeScript shape alone is
       author-time ergonomics, not the enforcement proof.
   - Landing evidence: the constructor-owned registry passed forged-record and cross-package controls;
-    the exact-tip failure is evidence-manifest drift, not a return to structural provenance.
+    later evidence-manifest drift was repaired without returning to structural provenance.
 - [x] Bind each derived emission site and evidence witness to its actual compile/runtime/audited
       layer, then gate that posture against the registry `enforcementClass`. Kill class-relabeling
       mutants (for example compile-error ↔ fail-closed-runtime), not only code/site swaps.
   - Landing evidence: 197 exact production sites, 140 witness bodies, and 58/58 class-relabelling
-    mutants passed; Phase 0 records the required exact-tip rebind to 200 production sites.
+    mutants passed; Phase 0 records the checkpoint rebind to 200 production sites.
 
 ### 1.3 Analysis-time TCB closure + reproducible rebuild
 
@@ -276,12 +281,12 @@ used by §4.3; it does not establish runtime host integrity.
       `security/TCB.md` with exact pins; the `typescript ^6.0.3` caret in
       `packages/compiler/package.json` should FAIL `check:tcb-boundary` first, proving the gate sees it.
   - Landing evidence: exact toolchain declarations fit the 1,992-line TCB budget and rejected the
-    caret mutation; the current stale declaration row is tracked in Phase 0.
+    caret mutation; the later stale declaration row was repaired at the Phase 0 checkpoint.
 - [x] Replace the former `lockfileHasResolvedVersion` regex presence test with structural
       `pnpm-lock.yaml` parsing that pins each surface's `resolution.integrity` sha512, closing the
       same-version lockfile-integrity swap that previously passed on human review alone.
-  - Evidence: the structural parser and integrity-pin implementation remain present; the exact-tip
-    `check:tcb-boundary` failure is the separately tracked stale `validateRevealReason` manifest row.
+  - Evidence: the structural parser and integrity-pin implementation remain present; the stale
+    `validateRevealReason` checkpoint row was repaired in Phase 0.
 - [x] `check:analysis-time-closure`: walk the import graph of every gate entrypoint + the compile
       path, derive the loaded third-party set, fail on any package absent from the TCB manifest.
   - Evidence: the exact-tip closure gate is green with 136 roots closing over 381
@@ -313,17 +318,17 @@ a stable-ID decision-surface manifest and D denominator. **Blocks:** §1.1 gener
 §4.5 door comparison, and D exit.
 
 The original gap was two observation-grown artifacts: a pinned-snippet classifier corpus and a
-regex-based capability census. Both now derive from closed vocabularies. The current coverage gate
-correctly detects the newly added 48th `server.data.declassify` cell as missing rather than silently
-accepting denominator growth; Phase 0 keeps that exact-tip repair open.
+regex-based capability census. Both now derive from closed vocabularies. The gate detected the added
+48th `server.data.declassify` cell instead of silently accepting denominator growth, and the Phase 0
+checkpoint repair bound that cell into the reviewed 48/47/1 denominator.
 
 - [x] Emit `kovo-security-coverage/v1`, a decision-surface manifest generated from
       `browserSecurityOperationKinds`/`serverSecurityOperationKinds` + posture `rootKinds` + the
       closed verdict set; independently verify the cell count and that appending a scratch kind adds
       exactly its cells.
   - Landing evidence: 47 independently counted cells (46 witnessed, one reviewed inapplicable), and
-    the scratch-kind test proved exact denominator growth. Exact tip now derives 48 and correctly
-    fails until `server.data.declassify` gains its witness.
+    the scratch-kind test proved exact denominator growth; the checkpoint repair then reviewed the
+    48th `server.data.declassify` cell.
 - [x] Flip `check:security-classifier-corpus` to require each cell to carry a witness or a reviewed
       `inapplicable` row with reason (fail-closed on unclassified); a new IR operation/root kind
       without coverage becomes a build error.
@@ -337,8 +342,8 @@ accepting denominator growth; Phase 0 keeps that exact-tip repair open.
 - [x] Sequence the encoding/carrier grammar generator LAST as a versioned closed grammar (weakest
       component; must not become a denylist). Keep all historical anchors as mapped witnesses so C13
       is never weakened during cutover.
-  - Evidence: the current gate derives 275 historical anchors; its stale 47-cell summary and missing
-    declassification witness are the exact-tip repair tracked in Phase 0.
+  - Evidence: the Phase 0 checkpoint gate reports 48/47/1 with 277 historical anchors after binding
+    the declassification witness.
 
 ### 2.2 Config-secret env door
 
@@ -529,24 +534,25 @@ use; C9's 33/33 current inventory keeps that obligation closed for future statef
 ### 3.2 One crypto authority door + purpose registry + rotation lifecycle
 
 **Class:** divergent intrinsic pinning, duplicate compare implementations, cross-purpose raw-key
-reuse, and unrotatable keys. The purpose-bound authority and rotation envelope are present; later
-consumers currently exceed the reviewed crypto door set and remain an exact-tip forcing-gate repair.
+reuse, and unrotatable keys. The purpose-bound authority and rotation envelope are present; the
+later-consumer drift found at the historical checkpoint was repaired, and final source movement is
+owned by the open exact-tip reconciliation.
 **Leverage:** high · **Effort:** L.
 
 **Depends on:** plan-1 capability closure and a purpose/algorithm compatibility decision. **Produces:**
 purpose-bound opaque crypto handles and a rotation envelope. **Blocks:** §4.3 signing and the crypto
 portion of D; it must not become one generic signer available to every caller.
 
-The original audit found roughly 27 direct crypto consumers and no acquisition gate. The current gate
-derives 32 high-authority files against a ceiling of 31 and rejects the specific new consumers listed
-in Phase 0; this is detected drift, not an absent authority implementation.
+The original audit found roughly 27 direct crypto consumers and no acquisition gate. The checkpoint
+gate detected later acquisition/ratchet/ceiling drift rather than silently widening authority; Phase 0
+records its reviewed repair.
 
 - [x] Add a `crypto-acquisition` capability to the module-graph closure: importing the primitives
       outside a declared door fails the build (seed the door list with the original ~27 modules; the
       list must monotonically shrink or it degenerates into a census manifest). Classify build-time
       non-secret hashing as a separate low-privilege `digest` capability.
-  - Landing evidence: 56 exact rows closed under a 31-file high-authority ceiling with `digest`
-    separate. Exact tip derives 32 high-authority files and rejects five reviewed-door/ratchet drifts.
+  - Landing evidence: 56 exact rows initially closed under a 31-file high-authority ceiling with
+    `digest` separate; the Phase 0 repair records 58 reviewed rows under a 30-file ceiling.
 - [x] `crypto-authority.ts`: one boot pinning + known-answer self-test, but distribute only
       purpose-bound opaque handles exposing the minimum operation for that purpose—not a generic
       signer/sealer or raw key. Retire `verifier.ts`'s hand XOR compare in favor of fixed-length
@@ -823,10 +829,11 @@ Extend plan-1's R/M/P/G with two derivation-era metrics:
 
 Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-1's gates):
 
-- [ ] §1.1 soundness-falsification oracle runs nightly ≥2 weeks with zero unresolved
-      `observed ⊄ predicted` counterexamples over its versioned finite language; publish grammar,
-      semantic-coverage, canary-recall, mutation, seed, and budget evidence without claiming proof of
-      general JavaScript soundness.
+- [ ] §1.1 soundness-falsification oracle completes at least 14 terminal-green scheduled nightly
+      runs spanning at least 14 days with zero unresolved `observed ⊄ predicted` counterexamples over
+      one unchanged versioned finite-language/census digest; publish grammar, semantic-coverage,
+      canary-recall, mutation, seed, and budget evidence without claiming proof of general JavaScript
+      soundness.
 - [x] D inventory has zero uncovered stable-ID obligations; every authored declaration is derived,
       mechanically checked intent, or a reviewed explicit exemption, and drift fails the build.
   - Evidence: `node scripts/derivation-rewitness-inventory.mjs` reports `D=8/8 uncovered=0`, and
@@ -851,7 +858,8 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
   - Evidence: `check:spec-index`, `check:framework-export-posture`, and `check:threat-matrix` pass;
     the exact seven contracts live in SPEC §§6.6/9.2/9.4/9.5/10.3 and the liveness projection now
     maps all 14 C9 sinks, including derived-data persistence.
-- [ ] Every changed public API/export passes `check:api-surface`; full classifier, compiler, browser,
+- [ ] After the final-tip reconciliation above, every changed public API/export passes
+      `check:api-surface`; full classifier, compiler, browser,
       integration, package, real-Postgres, performance, memory, and availability gates pass from a
       clean checkout with zero required skips at the intended SHA, followed by required CI jobs.
 
