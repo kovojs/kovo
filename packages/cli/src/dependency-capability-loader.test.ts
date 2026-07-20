@@ -1236,6 +1236,105 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     },
   );
 
+  // @kovo-security-certifies C13 dependency-approved-worker-subgraph-closure
+  it.each(['query import', 'constructor'] as const)(
+    'rejects an approved app %s worker subgraph that omits dependency closure',
+    async (kind) => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-app-worker-')));
+      const appModulePath = join(root, 'app.mjs');
+      const workerPath = join(root, 'worker.mjs');
+      const packageRoot = join(root, 'node_modules', 'safe-parser');
+      const helperRoot = join(root, 'node_modules', 'helper-parser');
+      const outDir = join(root, 'dist');
+      const appSource =
+        kind === 'query import'
+          ? "import WorkerEntry from './worker.mjs?worker'; new WorkerEntry();\n"
+          : "new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });\n";
+      const workerSource = "import { parse } from 'safe-parser'; parse('worker');\n";
+      try {
+        for (const [directory, packageName] of [
+          [packageRoot, 'safe-parser'],
+          [helperRoot, 'helper-parser'],
+        ] as const) {
+          mkdirSync(directory, { recursive: true });
+          writeFileSync(
+            join(directory, 'package.json'),
+            JSON.stringify({
+              exports: { '.': './index.mjs' },
+              name: packageName,
+              type: 'module',
+              version: packageName === 'safe-parser' ? '1.2.3' : '1.0.0',
+            }),
+          );
+        }
+        writeFileSync(
+          join(packageRoot, 'index.mjs'),
+          "import { helper } from 'helper-parser'; export const parse = value => helper(value);\n",
+        );
+        writeFileSync(
+          join(helperRoot, 'index.mjs'),
+          "globalThis.__KOVO_APP_WORKER_HELPER__ = 'EXECUTED'; export const helper = value => value;\n",
+        );
+        writeFileSync(appModulePath, appSource);
+        writeFileSync(workerPath, workerSource);
+        const installed = resolveCapabilityPackageImport('safe-parser', workerPath)!;
+        const exactManifest: AppDependencyCapabilityManifest = {
+          dependencies: [
+            {
+              entries: [
+                {
+                  conditions: installed.conditions,
+                  importers: ['worker.mjs'],
+                  imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                  rootKinds: ['route'],
+                  sites: ['worker.mjs:1:1'],
+                  specifier: 'safe-parser',
+                },
+              ],
+              manifestFingerprint: installed.manifestFingerprint,
+              packageName: installed.packageName,
+              packageVersion: installed.packageVersion,
+              summaryVersion: 'safe-parser-review/1',
+              verdict: 'open',
+            },
+          ],
+          schema: 'kovo-app-dependency-capabilities/v1',
+        };
+
+        await expect(
+          viteBuild({
+            build: {
+              emptyOutDir: true,
+              outDir,
+              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+            },
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [
+              dependencyCapabilityLoaderVitePlugin(
+                appModulePath,
+                [
+                  { fileName: 'app.mjs', source: appSource },
+                  { fileName: 'worker.mjs', source: workerSource },
+                ],
+                exactManifest,
+                'build-client',
+              ),
+            ],
+            root,
+          }),
+        ).rejects.toThrow(
+          kind === 'query import'
+            ? /KV448.*approved app source app\.mjs edge.*query or fragment/u
+            : /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+        );
+        expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
+
   // @kovo-security-certifies C13 dependency-relative-nested-package-boundary
   it.each([
     ['manifest-owned', true, 'node_modules', false, false],
