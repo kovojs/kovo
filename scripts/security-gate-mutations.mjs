@@ -1951,6 +1951,7 @@ const staticBuildAuthoritativeProjectBranch = [
   '  cookieDowngrades: CookieDowngradeExplain[];',
   '  diagnostics: StaticDiagnosticFact[];',
   '  revealed: RevealExplainFact[];',
+  '  trustEscapes: TrustEscapeExplain[];',
   '  unregisteredSinks: UnregisteredSinkFact[];',
   '} {',
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
@@ -1961,10 +1962,11 @@ const bypassedStaticBuildAuthoritativeProjectBranch = [
   '  cookieDowngrades: CookieDowngradeExplain[];',
   '  diagnostics: StaticDiagnosticFact[];',
   '  revealed: RevealExplainFact[];',
+  '  trustEscapes: TrustEscapeExplain[];',
   '  unregisteredSinks: UnregisteredSinkFact[];',
   '} {',
   '  if (!options.buildConfigEntryFileName) {',
-  '    return { capabilities: [], cookieDowngrades: [], diagnostics: [], revealed: [], unregisteredSinks: [] };',
+  '    return { capabilities: [], cookieDowngrades: [], diagnostics: [], revealed: [], trustEscapes: [], unregisteredSinks: [] };',
   '  }',
   '  const { sourceFiles, dispose } = createSyntacticProject(options.files);',
 ].join('\n');
@@ -1974,10 +1976,26 @@ const rawRegistrationRequestProcessClosureBranch = [
   '      sourceFiles,',
   '      options.buildConfigEntryFileName,',
   '      options.compilerSecuritySemanticSources,',
+  '      options.compilerTaskBClosure,',
   '    );',
 ].join('\n');
 const removedRawRegistrationRequestProcessClosureBranch =
   '    const facts: UnregisteredSinkFact[] = [];';
+const taskBCapabilityRootCorrespondenceBranch =
+  '        verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);';
+const removedTaskBCapabilityRootCorrespondenceBranch =
+  '        // TASK B capability-root correspondence removed by mutant';
+const taskBPackageRootCorrespondenceBranch = [
+  '  if (',
+  '    dependencyRootKinds.length === 0 ||',
+  '    dependencyRootKinds.some((rootKinds) => !rootKinds.has(rootKind))',
+  '  ) {',
+].join('\n');
+const removedTaskBPackageRootCorrespondenceBranch = '  if (false) {';
+const taskBSemanticRootCorrespondenceBranch =
+  '  verifyRequestTaskBSemanticRoot(context, callable);';
+const removedTaskBSemanticRootCorrespondenceBranch =
+  '  // TASK B semantic-root correspondence removed by mutant';
 
 const reviewedCommandCapabilityDoorBranch =
   '  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
@@ -3343,6 +3361,38 @@ export const SECURITY_GATE_MUTANTS = [
     search: rawRegistrationRequestProcessClosureBranch,
     sourceFile: drizzleTrustEscapesPath,
     test: assertTaskBRawRegistrationClosureIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact capability-root correspondence from the TASK B routing proof.',
+    expectedKiller:
+      'TASK B must reject a request root absent from the same-snapshot capability census',
+    name: 'drizzle-task-b/drop-capability-root-correspondence',
+    replacement: removedTaskBCapabilityRootCorrespondenceBranch,
+    search: taskBCapabilityRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBCapabilityRootCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact finite-IR semantic-root correspondence from TASK B.',
+    expectedKiller: 'TASK B must reject a compiler-owned handler with no exact semantic root',
+    name: 'drizzle-task-b/drop-semantic-root-correspondence',
+    replacement: removedTaskBSemanticRootCorrespondenceBranch,
+    search: taskBSemanticRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBSemanticRootCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact package-summary root correspondence from TASK B.',
+    expectedKiller:
+      'TASK B must reject a capability root omitted from one reachable package-summary entry',
+    name: 'drizzle-task-b/drop-package-root-correspondence',
+    replacement: removedTaskBPackageRootCorrespondenceBranch,
+    search: taskBPackageRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBPackageRootCorrespondenceIsEnforced,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -7695,6 +7745,132 @@ element.addEventListener('click', () => element.focus());
     !sinkKinds.has('request-handler.opaque-call')
   ) {
     throw new Error('raw browser registration escaped authoritative request-graph closure');
+  }
+}
+
+function taskBMutationProof(files, capabilityFacts, rootKinds) {
+  return {
+    capabilityFacts: [
+      ...capabilityFacts,
+      {
+        kind: 'summary',
+        packageName: '@kovojs/server',
+        packageVersion: '0.2.0',
+        site: `${files[0]?.fileName ?? 'app.ts'}:1:1`,
+        status: 'valid',
+      },
+    ],
+    dependencyManifest: {
+      dependencies: [
+        {
+          entries: [
+            {
+              conditions: ['default', 'import'],
+              importers: files.map((file) => file.fileName),
+              imports: [{ capabilities: [], disposition: 'authority-free', name: '<module>' }],
+              rootKinds,
+              sites: files.map((file) => `${file.fileName}:1:1`),
+              specifier: '@kovojs/server',
+            },
+          ],
+          packageName: '@kovojs/server',
+          packageVersion: '0.2.0',
+          verdict: 'open',
+        },
+      ],
+      schema: 'kovo-app-dependency-capabilities/v1',
+    },
+    files,
+    schema: 'kovo-task-b-closure/v1',
+  };
+}
+
+async function assertTaskBCapabilityRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const files = [{ fileName: 'app.ts', source }];
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(files, [], ['application']),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' &&
+        sink.source?.includes('sink=capability-closure'),
+    )
+  ) {
+    throw new Error('TASK B admitted a root absent from the exact capability census');
+  }
+}
+
+async function assertTaskBPackageRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const files = [{ fileName: 'app.ts', source }];
+  const offset = source.indexOf('createApp({})');
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(
+      files,
+      [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'app',
+          rootKind: 'application',
+          site: `app.ts:${line}:${column}`,
+        },
+      ],
+      [],
+    ),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' &&
+        sink.source?.includes('sink=package-summary'),
+    )
+  ) {
+    throw new Error('TASK B admitted a root omitted from a reachable package summary');
+  }
+}
+
+async function assertTaskBSemanticRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source =
+    "import { mutation } from '@kovojs/server';\nexport const save = mutation('save', { handler() { return { ok: true }; } });";
+  const files = [{ fileName: 'app.ts', source }];
+  const offset = source.indexOf("mutation('save'");
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(
+      files,
+      [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'save',
+          rootKind: 'mutation',
+          site: `app.ts:${line}:${column}`,
+        },
+      ],
+      ['mutation'],
+    ),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' && sink.source?.includes('sink=finite-ir'),
+    )
+  ) {
+    throw new Error('TASK B admitted a handler absent from the exact semantic root census');
   }
 }
 

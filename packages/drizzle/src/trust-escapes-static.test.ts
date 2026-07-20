@@ -12,6 +12,7 @@ import {
   collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
 import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
+import type { CompilerTaskBClosureProof } from '@kovojs/drizzle/internal/static';
 
 function trustEscapesFor(source: string, fileName = 'app.tsx') {
   return collectTrustEscapesFromProject({ files: [{ fileName, source }] });
@@ -27,6 +28,49 @@ function sinksFor(source: string, fileName = 'app.tsx') {
 
 function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
+}
+
+function taskBClosureProof(
+  files: readonly TrustEscapeSourceFileInput[],
+  options: {
+    facts?: CompilerTaskBClosureProof['capabilityFacts'];
+    rootKinds?: readonly ('application' | 'mutation')[];
+  } = {},
+): CompilerTaskBClosureProof {
+  return {
+    capabilityFacts: [
+      ...(options.facts ?? []),
+      {
+        kind: 'summary',
+        packageName: '@kovojs/server',
+        packageVersion: '0.2.0',
+        site: `${files[0]?.fileName ?? 'app.ts'}:1:1`,
+        status: 'valid',
+      },
+    ],
+    dependencyManifest: {
+      dependencies: [
+        {
+          entries: [
+            {
+              conditions: ['default', 'import'],
+              importers: files.map((file) => file.fileName),
+              imports: [{ capabilities: [], disposition: 'authority-free', name: '<module>' }],
+              rootKinds: options.rootKinds ?? [],
+              sites: files.map((file) => `${file.fileName}:1:1`),
+              specifier: '@kovojs/server',
+            },
+          ],
+          packageName: '@kovojs/server',
+          packageVersion: '0.2.0',
+          verdict: 'open',
+        },
+      ],
+      schema: 'kovo-app-dependency-capabilities/v1',
+    },
+    files,
+    schema: 'kovo-task-b-closure/v1',
+  };
 }
 
 function starterTemplateSource(relativePath: string): string {
@@ -292,6 +336,163 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 
 // @kovo-security-classifier-corpus kv424-request-process
 describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () => {
+  // @kovo-security-certifies KV424 task-b-layered-closure-routing
+  it('binds every TASK B root to the same-snapshot capability and package-root census', () => {
+    const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+    const files = [{ fileName: 'app.ts', source }] as const;
+    const parsed = ts.createSourceFile(
+      'app.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let call: import('typescript').CallExpression | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'createApp'
+      ) {
+        call = node;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(call).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(call!.getStart(parsed));
+    const rootFact = {
+      kind: 'root' as const,
+      module: 'app.ts',
+      name: 'app',
+      rootKind: 'application' as const,
+      site: `app.ts:${position.line + 1}:${position.character + 1}`,
+    };
+    const semanticSources = [{ fileName: 'app.ts', graphs: [], source }] as const;
+
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
+        compilerTaskBClosure: taskBClosureProof(files, {
+          facts: [rootFact],
+          rootKinds: ['application'],
+        }),
+        files,
+      }),
+    ).toEqual([]);
+
+    const missingRoot = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: semanticSources,
+      compilerTaskBClosure: taskBClosureProof(files, { rootKinds: ['application'] }),
+      files,
+    });
+    expect(missingRoot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=capability-closure'),
+        }),
+      ]),
+    );
+
+    const missingPackageRoot = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: semanticSources,
+      compilerTaskBClosure: taskBClosureProof(files, { facts: [rootFact] }),
+      files,
+    });
+    expect(missingPackageRoot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=package-summary'),
+        }),
+      ]),
+    );
+  });
+
+  it('requires an exact finite-IR semantic root for every compiler-owned TASK B handler', () => {
+    const source =
+      "import { mutation } from '@kovojs/server';\nexport const save = mutation('save', { handler() { return { ok: true }; } });";
+    const files = [{ fileName: 'app.ts', source }] as const;
+    const parsed = ts.createSourceFile(
+      'app.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let call: import('typescript').CallExpression | undefined;
+    let handler: import('typescript').MethodDeclaration | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'mutation'
+      ) {
+        call = node;
+      }
+      if (ts.isMethodDeclaration(node) && node.name.getText(parsed) === 'handler') handler = node;
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(call).toBeDefined();
+    expect(handler).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(call!.getStart(parsed));
+    const proof = taskBClosureProof(files, {
+      facts: [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'save',
+          rootKind: 'mutation',
+          site: `app.ts:${position.line + 1}:${position.character + 1}`,
+        },
+      ],
+      rootKinds: ['mutation'],
+    });
+    const missingSemanticRoot = collectUnregisteredSinksFromProject({
+      compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+      compilerTaskBClosure: proof,
+      files,
+    });
+    expect(missingSemanticRoot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=finite-ir'),
+        }),
+      ]),
+    );
+
+    const root = 'mutation:save';
+    const graph: SecuritySemanticGraph = {
+      budgets: { callDepth: 16, nodes: 50_000, operations: 4_096, summaries: 256 },
+      roots: [
+        {
+          binding: {
+            callback: 'handler',
+            callableSpan: { end: handler!.getEnd(), start: handler!.getStart(parsed) },
+            factory: 'mutation',
+            factoryCallSpan: { end: call!.getEnd(), start: call!.getStart(parsed) },
+            root,
+          },
+          helperInvocations: [],
+          root,
+          summaries: [],
+          traces: [],
+        },
+      ],
+      schema: 'kovo-security-semantic-graph/v2',
+    };
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [graph], source }],
+        compilerTaskBClosure: proof,
+        files,
+      }),
+    ).toEqual([]);
+  });
+
   it('does not duplicate compiler-owned JSX innerHTML closure in TASK B', () => {
     const facts = sinksFor(`
       export function Widget(userInput: string) {

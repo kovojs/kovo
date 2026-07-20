@@ -475,6 +475,30 @@ Inlining `createRequestHandler(app)`, importing the handler before the bootstrap
 bootstrap from the handler graph is unsupported and fails closed with KV448. Generated runners own
 the equivalent compiler-created separation and bootstrap order.
 
+**TASK B layered routing (normative).** The pre-evaluation request/process check MUST consume the
+capability-closure result, dependency manifest, finite-operation diagnostics, and normalized
+semantic graphs derived from the same immutable source snapshot; running those analyzers beside an
+unbound legacy pass is not sufficient. The internal `kovo-task-b-closure/v1` carrier repeats the
+exact source census, capability root rows, and `kovo-app-dependency-capabilities/v1` manifest. TASK B
+MUST reconstruct each enrolled `createApp`, endpoint, layout, mutation, query, route, task, and
+webhook invocation from its independent parser view and require exactly one capability root at the
+same module and call site plus the same root kind in that module's dependency-manifest entries. A
+missing, duplicate, byte-mismatched, or differently rooted row fails KV424 with a stable
+`root -> transfers -> sink -> closed verdict` trace; it never falls back to a syntax-only allow.
+
+For endpoint, mutation, query, task, and webhook effect handlers, TASK B MUST additionally require
+one exact `kovo-security-semantic-graph/v2` root whose factory call span, callable span, callback,
+root identity, all-path verdict, helper summaries, and terminal inventory match the authored root.
+A missing graph, closed trace, closed helper summary, unknown transfer, or terminal mismatch is
+KV424 even when the residual analyzer would otherwise find no named sink. KV448 remains the primary
+diagnostic for raw/module/package authority and KV449 remains the primary diagnostic for a finite-IR
+operation that cannot lower; the KV424 correspondence check prevents either result from being
+silently omitted between compiler phases. Existing request/process predicates may remain as a
+conservative residual and independent C13 oracle until their exact root-and-terminal
+correspondence is proved, but they MUST NOT discharge a missing L1/L2/L3 proof or mint an allow
+verdict. The specialized Drizzle KV406/owner-predicate proof remains a separate data-plane
+correspondence responsibility under §10.3 and §11.1.
+
 Reachable package code requires a least-authority verdict for the exact installed package name,
 version, security-relevant manifest fingerprint, requested subpath, imported export, and complete
 conditional-export arm set. Every manifest-public Kovo runtime export and every public subpath's
