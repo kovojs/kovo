@@ -6,11 +6,17 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  analyzeKovoCertificate,
   generateKovoCertificate,
+  generateKovoCertificateFromAnalysis,
   stableKovoCertificateJson,
   validateCertificateDoorPosture,
   validateCertificateLexicalAuthorityLedger,
 } from './kovo-certificate.mjs';
+import {
+  signKovoCertificate,
+  verifyKovoCertificateSignature,
+} from './kovo-certificate-signature.mjs';
 
 const roots = [];
 
@@ -19,6 +25,63 @@ afterEach(() => {
 });
 
 describe('kovo.certificate/v1 search-side generator', () => {
+  it('binds the production analyzer output to the production certificate generator', () => {
+    const fixture = createFixture({
+      '@kovojs/server': {
+        exports: { '.': './dist/index.mjs' },
+        files: {
+          'dist/index.mjs': "import 'node:fs'; export const app = true;",
+        },
+      },
+    });
+    const options = {
+      ...fixture,
+      internalDoorPosture: emptyInternalDoorPosture(),
+      posture: {
+        packages: [
+          {
+            packageName: '@kovojs/server',
+            postureGroups: [
+              {
+                capabilities: [],
+                disposition: 'authority-free',
+                id: 'server-root',
+                members: { '.': ['createApp'] },
+                rootKind: 'application',
+              },
+            ],
+          },
+        ],
+      },
+      seedPackageNames: ['@kovojs/server'],
+    };
+
+    const analysis = analyzeKovoCertificate(options);
+    expect(analysis.schema).toBe('kovo.certificate-analysis/v1');
+    expect(generateKovoCertificateFromAnalysis(analysis)).toEqual(generateKovoCertificate(options));
+
+    const widened = structuredClone(analysis);
+    widened.localCapabilities['@kovojs/server/dist/index.mjs'] = ['filesystem', 'network'];
+    expect(() => generateKovoCertificateFromAnalysis(widened)).toThrow(/analysis.*capability/iu);
+  });
+
+  it('signs the exact certificate bytes with the dependency-free Ed25519 signer', () => {
+    const certificate = Buffer.from('{"schema":"kovo.certificate/v1"}\n');
+    const signed = signKovoCertificate(certificate);
+
+    expect(signed.envelope).toMatchObject({
+      algorithm: 'ed25519',
+      schema: 'kovo.certificate-signature/v1',
+    });
+    expect(verifyKovoCertificateSignature(certificate, signed.envelope)).toBe(true);
+    expect(
+      verifyKovoCertificateSignature(
+        Buffer.from('{"schema":"kovo.certificate/v1","tampered":true}\n'),
+        signed.envelope,
+      ),
+    ).toBe(false);
+  });
+
   it('closes whole package trees, computes sha512 and a least post-fixpoint, and emits stable roots and doors', () => {
     const fixture = createFixture({
       '@kovojs/better-auth': {

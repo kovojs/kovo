@@ -9,10 +9,11 @@ import {
 describe('hermetic proof stage', () => {
   it('pins the three-stage isolation contract', () => {
     const manifest = readHermeticProofManifest();
+    expect(manifest.toolingBinding).toBe('kovo-certificate-v1-signed');
     const packageJson = {
       scripts: { 'check:hermetic-proof-stage': 'node scripts/hermetic-proof-stage.mjs' },
     };
-    const workflow = `name: Hermetic proof sandbox self-test\n${manifest.linuxRunner.image}\nvp exec node scripts/hermetic-proof-stage.mjs`;
+    const workflow = `hermetic-proof:\n    needs: publish-readiness\nname: Hermetic certificate proof stage\nvp install --frozen-lockfile --ignore-scripts\n${manifest.linuxRunner.image}\nvp exec node scripts/hermetic-proof-stage.mjs\n      - hermetic-proof`;
     expect(
       validateHermeticProofContract({
         manifest,
@@ -26,6 +27,20 @@ describe('hermetic proof stage', () => {
     expect(validateHermeticProofContract({ manifest: widened, packageJson, workflow })).toContain(
       'analysis does not match the exact reviewed stage contract',
     );
+
+    const unbound = structuredClone(manifest);
+    unbound.toolingBinding = 'sandbox-self-test-unbound';
+    expect(validateHermeticProofContract({ manifest: unbound, packageJson, workflow })).toContain(
+      'hermetic proof tooling must be bound to kovo.certificate/v1 analysis, generation, and signing',
+    );
+
+    expect(
+      validateHermeticProofContract({
+        manifest,
+        packageJson,
+        workflow: workflow.replace(' --ignore-scripts', ''),
+      }),
+    ).toContain('CI must install the proof toolchain without lifecycle scripts');
   });
 
   it('kills network, lifecycle, mount-source, mount-destination, and mount-mode weakenings', () => {
