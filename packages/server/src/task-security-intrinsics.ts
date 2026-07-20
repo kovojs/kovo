@@ -61,8 +61,8 @@ const NativeRegExp = globalThis.RegExp;
 const NativeRequest = globalThis.Request;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
-const NativeURL = globalThis.URL;
 const nativeNodeRandomBytes = nodeRandomBytes;
+const TASK_INTERNAL_REQUEST_URL = 'https://kovo.invalid/_kovo/task';
 
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeArrayReverse = NativeArray.prototype.reverse;
@@ -114,7 +114,6 @@ const nativeStringSlice = NativeString.prototype.slice;
 const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringTrim = NativeString.prototype.trim;
-const nativeUrlHref = witnessGetOwnPropertyDescriptor(NativeURL.prototype, 'href')?.get;
 const realmClearInterval = globalThis.clearInterval;
 const realmClearTimeout = globalThis.clearTimeout;
 const realmSetInterval = globalThis.setInterval;
@@ -273,11 +272,11 @@ function capturedTaskControlsAreSound(): boolean {
     if (apply<RegExpExecArray | null>(nativeRegExpExec, /^\d+$/, ['12']) === null) return false;
     if (apply<RegExpExecArray | null>(nativeRegExpExec, /^\d+$/, ['x']) !== null) return false;
 
-    if (typeof nativeRequestUrl !== 'function' || typeof nativeUrlHref !== 'function') return false;
+    if (typeof nativeRequestUrl !== 'function') return false;
     const controlRequest = new NativeRequest('https://kovo.local/control');
     if (apply(nativeRequestUrl, controlRequest, []) !== 'https://kovo.local/control') return false;
-    const controlUrl = new NativeURL('/_kovo/task', 'https://kovo.local/control');
-    if (apply(nativeUrlHref, controlUrl, []) !== 'https://kovo.local/_kovo/task') return false;
+    const internalRequest = new NativeRequest(TASK_INTERNAL_REQUEST_URL, { method: 'POST' });
+    if (apply(nativeRequestUrl, internalRequest, []) !== TASK_INTERNAL_REQUEST_URL) return false;
 
     const object = { first: 1, second: 2 };
     const entries = apply<[string, number][]>(nativeObjectEntries, NativeObject, [object]);
@@ -614,16 +613,10 @@ export function taskNewDate(value?: string | number | Date): Date {
   return value === undefined ? new DateConstructor() : new DateConstructor(value);
 }
 
-export function taskInternalRequest(seed: Request, signal?: AbortSignal): Request {
+export function taskInternalRequest(signal?: AbortSignal): Request {
   assertTaskSecurityIntrinsics();
-  if (typeof nativeRequestUrl !== 'function' || typeof nativeUrlHref !== 'function') {
-    throw new TypeError('Kovo durable-task URL controls are unavailable.');
-  }
-  const seedUrl = apply<string>(nativeRequestUrl, seed, []);
-  const url = new NativeURL('/_kovo/task', seedUrl);
-  const href = apply<string>(nativeUrlHref, url, []);
   return new NativeRequest(
-    href,
+    TASK_INTERNAL_REQUEST_URL,
     signal === undefined ? { method: 'POST' } : { method: 'POST', signal },
   );
 }
@@ -657,14 +650,9 @@ export function taskAbortSignalIsAborted(signal: AbortSignal): boolean {
   return apply(nativeAbortSignalAborted, signal, []);
 }
 
-export function taskInternalUrl(seed: Request): string {
+export function taskInternalUrl(): string {
   assertTaskSecurityIntrinsics();
-  if (typeof nativeRequestUrl !== 'function' || typeof nativeUrlHref !== 'function') {
-    throw new TypeError('Kovo durable-task URL controls are unavailable.');
-  }
-  const seedUrl = apply<string>(nativeRequestUrl, seed, []);
-  const url = new NativeURL('/_kovo/task', seedUrl);
-  return apply(nativeUrlHref, url, []);
+  return TASK_INTERNAL_REQUEST_URL;
 }
 
 export function taskDateNow(): number {

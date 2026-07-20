@@ -4,6 +4,7 @@ import { frameworkScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/sto
 
 import { createApp, createRequestHandler } from './app.js';
 import { mutation, runMutation } from './mutation.js';
+import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 import { task, type TaskSchedulingRequest } from './task.js';
@@ -40,7 +41,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       tasks: [nightly],
     });
 
-    await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/'));
+    await createAppTaskRuntime(app)?.ensureStarted();
 
     expect(
       statements.some((statement) =>
@@ -90,7 +91,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       tasks: [noop],
     });
 
-    await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+    await createAppTaskRuntime(app)?.ensureStarted();
 
     expect(providerCalls).toEqual(['internal']);
     expect(
@@ -127,7 +128,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       tasks: [noop],
     });
 
-    await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+    await createAppTaskRuntime(app)?.ensureStarted();
 
     expect(statements.map((statement) => statement.text)).toEqual(
       expect.arrayContaining([
@@ -194,9 +195,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
         },
       });
 
-      await expect(runtime?.ensureStarted(new Request('http://localhost/request'))).resolves.toBe(
-        undefined,
-      );
+      await expect(runtime?.ensureStarted()).resolves.toBe(undefined);
       const runner = createDurableTaskRunner({ store, tasks: [sendReceipt] });
       await runner.runOnce(new Date('2026-06-30T07:15:31.000Z'));
 
@@ -262,7 +261,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
         tasks: [failing],
       });
 
-      await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+      await createAppTaskRuntime(app)?.ensureStarted();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(onError).toHaveBeenCalledWith(
@@ -271,6 +270,131 @@ describe('durable task runtime (SPEC §9.6)', () => {
           operation: 'task-runner',
           taskJobId: 'job_fail',
           taskKey: 'fail.task',
+          url: '/_kovo/task',
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps remote request authority out of task reads, writes, providers, and errors', async () => {
+    vi.useFakeTimers();
+    try {
+      const onError = vi.fn();
+      const sessionProvider = vi.fn(() => null);
+      const providerFacts: Array<{
+        principal: string | undefined;
+        posture: string | undefined;
+        url: string;
+      }> = [];
+      const readUrls: string[] = [];
+      const writeUrls: string[] = [];
+      let claimed = false;
+      const db = {
+        async query(text: string, values: readonly unknown[]) {
+          if (text === 'select now() as now') {
+            return { rows: [{ now: '2026-07-20T10:00:00.000Z' }] };
+          }
+          if (text.includes('with claimed as')) {
+            if (claimed) return { rows: [] };
+            claimed = true;
+            return {
+              rows: [
+                {
+                  args: { ownerId: 'tenant-b-user' },
+                  attempts: 1,
+                  created_at: '2026-07-20T10:00:00.000Z',
+                  generation: 0,
+                  id: 'tenant_b_job',
+                  last_error: null,
+                  lease_owner: values[2],
+                  lease_token: values[4],
+                  leased_until: '2026-07-20T10:00:30.000Z',
+                  lineage: 'tenant_b_job',
+                  logical_key: null,
+                  max_attempts: 1,
+                  principal: 'tenant-b-user',
+                  priority: 0,
+                  run_at: '2026-07-20T10:00:00.000Z',
+                  status: 'running',
+                  task_key: 'tenant.background',
+                  updated_at: '2026-07-20T10:00:00.000Z',
+                },
+              ],
+            };
+          }
+          return { rowCount: text.includes('set status = case') ? 1 : 0, rows: [] };
+        },
+      };
+      const readTenant = query('tenant/read', {
+        load(_input, context?: { request: Request }) {
+          return context!.request.url;
+        },
+      });
+      const writeTenant = mutation('tenant/write', {
+        input: s.object({}),
+        handler(_input, request: Request) {
+          return request.url;
+        },
+      });
+      const background = task('tenant.background', {
+        input: s.object({ ownerId: s.string() }),
+        async run(args, context) {
+          readUrls.push(await context.actAs(args.ownerId).runQuery(readTenant, undefined));
+          writeUrls.push(await context.actAs(args.ownerId).runMutation(writeTenant, {}));
+          throw new Error('tenant background failure');
+        },
+      });
+      const app = createApp({
+        db(request: unknown) {
+          if (request !== undefined) {
+            const carrier = request as Request & {
+              principalPosture?: { kind?: string; principal?: string };
+            };
+            providerFacts.push({
+              principal: carrier.principalPosture?.principal,
+              posture: carrier.principalPosture?.kind,
+              url: carrier.url,
+            });
+          }
+          return db;
+        },
+        mutations: [writeTenant],
+        onError,
+        queries: [readTenant],
+        sessionProvider,
+        tasks: [background],
+      });
+
+      const response = await createRequestHandler(app)(
+        new Request('https://tenant-a.example/probe-that-starts-the-runner'),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(response.status).toBe(404);
+      expect(readUrls).toEqual(['https://kovo.invalid/_kovo/task']);
+      expect(writeUrls).toEqual(['https://kovo.invalid/_kovo/task']);
+      expect(providerFacts).toEqual([
+        {
+          principal: 'tenant-b-user',
+          posture: 'act-as',
+          url: 'https://kovo.invalid/_kovo/task',
+        },
+        {
+          principal: 'tenant-b-user',
+          posture: 'act-as',
+          url: 'https://kovo.invalid/_kovo/task',
+        },
+      ]);
+      expect(sessionProvider).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'tenant background failure' }),
+        expect.objectContaining({
+          operation: 'task-runner',
+          request: expect.objectContaining({ url: 'https://kovo.invalid/_kovo/task' }),
+          taskJobId: 'tenant_b_job',
+          taskKey: 'tenant.background',
           url: '/_kovo/task',
         }),
       );
@@ -332,7 +456,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       });
       const app = createApp({ db: () => db, tasks: [loop] });
 
-      await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+      await createAppTaskRuntime(app)?.ensureStarted();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(enqueues).toHaveLength(1);
@@ -411,8 +535,8 @@ describe('durable task runtime (SPEC §9.6)', () => {
       }),
       {
         operation: 'task-runtime-startup',
-        request: expect.any(Request),
-        url: '/needs-startup',
+        request: expect.objectContaining({ url: 'https://kovo.invalid/_kovo/task' }),
+        url: '/_kovo/task',
       },
     );
   });

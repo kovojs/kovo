@@ -536,9 +536,16 @@ effect without an idempotency key.
 The in-process runner's lazy startup is itself pre-dispatch work. It MUST begin only after the
 triggering request passes the coarse rate, target, and complete streamed-body admission gates from
 §9.5; a rejected request MUST NOT resolve or provision the task database. Startup receives only a
-framework-owned bodyless, credential-neutral metadata request, never the admitted body or ambient
-browser/machine credentials. A transient startup failure may be retried by a later admitted request,
-but rejected traffic cannot drive that retry loop.
+request-free admission signal: the root queue database resolves through the app-root provider with
+no request carrier. Every background `runQuery` / `runMutation` lifecycle and runner diagnostic uses
+a newly constructed framework-owned, bodyless, credential-neutral `Request` at the exact non-public
+URL `https://kovo.invalid/_kovo/task`; a remote request's scheme, authority, path, headers, body,
+session, or other ambient browser/machine authority MUST NOT seed it. Task lifecycle MUST NOT call
+the app's `sessionProvider`. Its only principal authority is the framework-minted explicit
+`actAs(id)` or declared-system posture, attached before the per-operation `app.db` provider resolves;
+the app-root queue handle is not substituted for that scoped provider resolution. A transient
+startup failure may be retried by a later admitted request, but rejected traffic cannot drive that
+retry loop.
 
 Every preset that supports `task()` MUST declare a `JobRunner` capability. The node preset's
 in-process runner is on by default; a runner-only mode may drain jobs without serving HTTP. A preset

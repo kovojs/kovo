@@ -56,10 +56,10 @@ const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 interface AppRequestAdmissionHooks {
   /**
    * Framework-owned hook invoked only after coarse request admission and any ordinary streamed
-   * body ceiling have completed. The carrier is bodyless and credential-neutral; this hook must
-   * not be used as an app middleware surface (SPEC §9.5).
+   * body ceiling have completed. This is a request-free signal, not an app middleware surface
+   * or a carrier for remote metadata (SPEC §9.5/§9.6).
    */
-  readonly admitted?: (request: Request) => void;
+  readonly admitted?: () => void;
 }
 
 export async function handleAppRequest(
@@ -187,7 +187,7 @@ export async function handleAppRequest(
           admittedRequest = await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes);
         }
         if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
-        hooks.admitted?.(loadShedRequest);
+        hooks.admitted?.();
 
         if (match.kind !== 'endpoint' && match.kind !== 'mutation') {
           limitedRequest = requestWithBodyLimit(admittedRequest, maxBodyBytes);

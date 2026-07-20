@@ -39,6 +39,7 @@ import type { LiveTargetRenderer } from './mutation-wire.js';
 import { query } from './query.js';
 import { layout, route, routeLayoutLiveTargetRenderers } from './route.js';
 import { task } from './task.js';
+import { taskInternalRequest } from './task-security-intrinsics.js';
 import {
   createWitnessSet,
   createWitnessWeakMap,
@@ -937,9 +938,9 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
       if (urlLimitResponse) return urlLimitResponse;
       if (taskRuntime === undefined) return handleAppRequest(app, dispatchRequest);
       return handleAppRequest(app, dispatchRequest, {
-        admitted(admittedRequest) {
-          void taskRuntime.ensureStarted(admittedRequest).catch((error: unknown) => {
-            reportAppStartupError(app, admittedRequest, error);
+        admitted() {
+          void taskRuntime.ensureStarted().catch((error: unknown) => {
+            reportAppStartupError(app, taskInternalRequest(), error);
           });
         },
       });

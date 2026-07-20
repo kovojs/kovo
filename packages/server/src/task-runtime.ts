@@ -41,7 +41,7 @@ const TASK_CRON_POLL_INTERVAL_MS = 30_000;
 
 export interface AppTaskRuntime {
   readonly scheduler: TaskScheduler;
-  ensureStarted(request: Request): Promise<void>;
+  ensureStarted(): Promise<void>;
 }
 
 const appTaskRuntimes = taskCreateWeakMap<KovoApp, AppTaskRuntime>();
@@ -92,10 +92,10 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     };
   }
 
-  async ensureStarted(request: Request): Promise<void> {
+  async ensureStarted(): Promise<void> {
     if (this.runner !== undefined) return;
     this.startPromise ??= taskPromiseThen(
-      this.start(request),
+      this.start(),
       () => undefined,
       (error: unknown) => {
         this.startPromise = undefined;
@@ -105,7 +105,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     await this.startPromise;
   }
 
-  private async start(request: Request): Promise<void> {
+  private async start(): Promise<void> {
     const db = await this.resolveRootDb();
     const executor = createDurableTaskSqlExecutor(db);
     await ensureTaskStoreReady(executor);
@@ -119,24 +119,17 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     this.runner = createDurableTaskRunner({
       hooks: {
         onError: async (error, context) => {
-          this.reportTaskError(error, context, request);
+          this.reportTaskError(error, context);
         },
         runMutation: async (definition, input, ingressOptions) => {
-          const result = await runMutation(
-            definition as never,
-            input,
-            taskInternalRequest(request, ingressOptions.signal) as never,
-            {
-              csrf: false,
-              ...(this.app.db === undefined ? {} : { db: this.app.db }),
-              ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),
-              ...(this.app.sessionProvider === undefined
-                ? {}
-                : { sessionProvider: this.app.sessionProvider }),
-              principalPosture: ingressOptions.principalPosture,
-              taskScheduler: this.scheduler,
-            },
-          );
+          const request = taskInternalRequest(ingressOptions.signal);
+          const result = await runMutation(definition as never, input, request as never, {
+            csrf: false,
+            ...(this.app.db === undefined ? {} : { db: this.app.db }),
+            ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),
+            principalPosture: ingressOptions.principalPosture,
+            taskScheduler: this.scheduler,
+          });
           if (!result.ok) {
             throw new Error(
               `Durable task runMutation(${definition.key}) failed with ${result.status} ${result.error.code}.`,
@@ -145,20 +138,13 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
           return result.value;
         },
         runQuery: async (definition, input, ingressOptions) => {
-          const result = await runQuery(
-            definition as never,
-            input,
-            taskInternalRequest(request, ingressOptions.signal) as never,
-            {
-              ...(this.app.db === undefined ? {} : { db: this.app.db }),
-              maxListItems: this.app.requestLimits.maxQueryListItems,
-              ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),
-              ...(this.app.sessionProvider === undefined
-                ? {}
-                : { sessionProvider: this.app.sessionProvider }),
-              principalPosture: ingressOptions.principalPosture,
-            },
-          );
+          const request = taskInternalRequest(ingressOptions.signal);
+          const result = await runQuery(definition as never, input, request as never, {
+            ...(this.app.db === undefined ? {} : { db: this.app.db }),
+            maxListItems: this.app.requestLimits.maxQueryListItems,
+            ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),
+            principalPosture: ingressOptions.principalPosture,
+          });
           if (!result.ok) {
             throw new Error(
               `Durable task runQuery(${definition.key}) failed with ${result.status} ${result.error.code}.`,
@@ -197,18 +183,14 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     await this.cronMaterializer?.materializeDue();
   }
 
-  private reportTaskError(
-    error: unknown,
-    context: DurableTaskRunnerErrorContext,
-    request: Request,
-  ): void {
+  private reportTaskError(error: unknown, context: DurableTaskRunnerErrorContext): void {
     if (this.app.onError !== undefined) {
       reportServerError(this.app.onError, error, {
         operation: 'task-runner',
-        request: taskInternalRequest(request),
+        request: taskInternalRequest(),
         taskJobId: context.job.id,
         taskKey: context.task?.key ?? context.job.task,
-        url: taskInternalUrl(request),
+        url: taskInternalUrl(),
       });
       return;
     }
