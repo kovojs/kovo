@@ -52,10 +52,8 @@ export function registerGeneratedRuntimePostureManifest(
     }
     return manifest;
   }
-  registeredPosture = snapshot;
-  registeredPostureLiteral = literal;
-  installCoreSecurityDecisionBridge(coreSecurityDecisionBridge);
 
+  const production = runtimeEnvironmentValue('NODE_ENV') === 'production';
   const deploymentId = runtimeEnvironmentValue('KOVO_ATTESTATION_DEPLOYMENT_ID');
   const secret = runtimeEnvironmentValue('KOVO_ATTESTATION_SECRET');
   if ((deploymentId === undefined) !== (secret === undefined)) {
@@ -63,11 +61,18 @@ export function registerGeneratedRuntimePostureManifest(
       'Runtime posture attestation requires both KOVO_ATTESTATION_DEPLOYMENT_ID and KOVO_ATTESTATION_SECRET.',
     );
   }
+  if (production && deploymentId === undefined) {
+    throw new TypeError(
+      'Production runtime posture registration requires KOVO_ATTESTATION_DEPLOYMENT_ID and KOVO_ATTESTATION_SECRET so the answerability journal can be installed (SPEC §11.2).',
+    );
+  }
+
+  let nextAttestor: RuntimePostureAttestor | undefined;
+  let eventCrypto: ReturnType<typeof createSecurityEventCryptoHandle> | undefined;
   if (deploymentId !== undefined && secret !== undefined) {
-    const eventCrypto = createSecurityEventCryptoHandle(secret, deploymentId);
-    installSecurityEventJournal(createSecurityEventJournal({ authority: eventCrypto }));
+    eventCrypto = createSecurityEventCryptoHandle(secret, deploymentId);
     const attestationAuthority = createRuntimeAttestationCryptoHandle(secret, deploymentId);
-    attestor = createRuntimePostureAttestor({
+    nextAttestor = createRuntimePostureAttestor({
       authority: attestationAuthority,
       bootWitnesses: runtimeBootWitnesses,
       deploymentId,
@@ -76,9 +81,21 @@ export function registerGeneratedRuntimePostureManifest(
       posture: snapshot,
     });
   }
-  // Registration is the production completeness boundary. Arm only after the deployment journal
-  // has been installed when configured; every later enrolled decision fails closed if it is absent.
-  armSecurityDecisionEventRecorder();
+
+  // Validate and construct the deployment authorities before committing any boot-global state. A
+  // rejected registration must not leave a posture that a same-manifest retry can bypass.
+  installCoreSecurityDecisionBridge(coreSecurityDecisionBridge);
+  if (eventCrypto !== undefined) {
+    installSecurityEventJournal(createSecurityEventJournal({ authority: eventCrypto }));
+  }
+  registeredPosture = snapshot;
+  registeredPostureLiteral = literal;
+  attestor = nextAttestor;
+
+  // SPEC §11.2: production registration begins the answerability completeness claim, so it may arm
+  // only with its mandatory journal installed. Explicit non-production attestation configuration
+  // deliberately exercises the same journaled path; ordinary dev/test registration stays unarmed.
+  if (production || deploymentId !== undefined) armSecurityDecisionEventRecorder();
   return manifest;
 }
 
