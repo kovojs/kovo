@@ -1157,6 +1157,18 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "data:text/javascript,globalThis.__KOVO_DASH_COMMENT_PWNED__%3D'EXECUTED'",
       '<!--->',
     ],
+    [
+      'module after a script-looking quoted attribute value',
+      'module',
+      "data:text/javascript,globalThis.__KOVO_ATTRIBUTE_DECOY_PWNED__%3D'EXECUTED'",
+      '<div data-decoy="<script type=application/json>"></div>',
+    ],
+    [
+      'module after a script-looking RCDATA value',
+      'module',
+      "data:text/javascript,globalThis.__KOVO_RCDATA_DECOY_PWNED__%3D'EXECUTED'",
+      '<textarea><script type=application/json></textarea>',
+    ],
   ])(
     'rejects an executable HTML %s outside the approved snapshot',
     async (_label, type, src, prefix) => {
@@ -1170,9 +1182,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       writeFileSync(
         join(root, 'index.html'),
         [
-          prefix,
           '<!doctype html>',
           '<script type="module" src="/src/client.ts"></script>',
+          prefix,
           `<script type="${type}" src="${src}"></script>`,
         ].join('\n'),
       );
