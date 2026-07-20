@@ -941,9 +941,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       });
 
       await expect(server.ssrLoadModule('/app.mjs')).resolves.toMatchObject({ value: 'safe' });
-      await expect(
-        server.ssrLoadModule(`/@fs${driverPath}`),
-      ).resolves.toMatchObject({ driven: 'framework' });
+      await expect(server.ssrLoadModule(`/@fs${driverPath}`)).resolves.toMatchObject({
+        driven: 'framework',
+      });
     } finally {
       await server?.close();
       rmSync(root, { force: true, recursive: true });
@@ -1563,7 +1563,16 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     ['SharedWorker', 'SharedWorker', '', "new URL('./worker.mjs', import.meta.url)"],
     ['Worker URL string', 'Worker', '', "'/worker.mjs'"],
     ['Worker alias', 'W', 'const W = Worker; ', "new URL('./worker.mjs', import.meta.url)"],
+    ['Worker alias URL string', 'W', 'const W = Worker; ', "'/worker.mjs'"],
     ['global Worker member', 'globalThis.Worker', '', "new URL('./worker.mjs', import.meta.url)"],
+    ['computed global Worker member', "globalThis['Worker']", '', "'/worker.mjs'"],
+    ['computed global Worker alias', 'W', "const W = globalThis['Wor' + 'ker']; ", "'/worker.mjs'"],
+    [
+      'destructured global Worker alias',
+      'W',
+      'const { Worker: W } = globalThis; ',
+      "'/worker.mjs'",
+    ],
     [
       'SharedWorker alias',
       'W',
@@ -1653,11 +1662,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           }),
         ).rejects.toThrow(
           new RegExp(
-            label === 'Worker' || label === 'SharedWorker' || label === 'Worker URL string'
-              ? `KV448.*reviewed package safe-parser creates a ${label === 'Worker URL string' ? 'Worker' : label} subgraph`
-              : label === 'Worker alias' || label === 'SharedWorker alias'
-                ? `KV448.*(?:reviewed package safe-parser creates an opaque new-URL executable asset|supported build-client artifact.*retains a ${label.startsWith('Shared') ? 'SharedWorker' : 'Worker'} constructor)`
-                : 'KV448.*reviewed package safe-parser creates an opaque new-URL executable asset',
+            `KV448.*reviewed package safe-parser creates a ${label.includes('Shared') ? 'SharedWorker' : 'Worker'} subgraph`,
             'u',
           ),
         );
@@ -1667,6 +1672,85 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       }
     },
   );
+
+  // @kovo-security-certifies C13 dependency-reviewed-public-worker-closure
+  it('rejects a computed reviewed Worker before Vite copies an unapproved public module', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-public-worker-')));
+    const appModulePath = join(root, 'client.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const publicRoot = join(root, 'public');
+    const outDir = join(root, 'dist');
+    const source = "import { start } from 'safe-parser'; start();\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      mkdirSync(publicRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.mjs' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        "export const start = () => new globalThis['Worker']('/worker.mjs', { type: 'module' });\n",
+      );
+      writeFileSync(
+        join(publicRoot, 'worker.mjs'),
+        "import 'data:text/javascript,globalThis.__KOVO_PUBLIC_WORKER__%3D%27EXECUTED%27';\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['client.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
+                rootKinds: ['route'],
+                sites: ['client.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.mjs', source }],
+              exactManifest,
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*reviewed package safe-parser creates a Worker subgraph/u);
+      expect(() => readFileSync(join(outDir, 'worker.mjs'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 
   // @kovo-security-certifies C13 dependency-reviewed-executable-asset-closure
   it.each([
@@ -1676,92 +1760,107 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     ],
     ['paint worklet', "CSS.paintWorklet.addModule(new URL('./payload.mjs', import.meta.url))"],
     ['audio worklet', "context.audioWorklet.addModule(new URL('./payload.mjs', import.meta.url))"],
-  ] as const)(
-    'rejects a reviewed package %s new-URL executable asset',
-    async (carrier, expression) => {
-      const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-executable-asset-')));
-      const appModulePath = join(root, 'client.mjs');
-      const packageRoot = join(root, 'node_modules', 'safe-parser');
-      const outDir = join(root, 'dist');
-      const source = "import { start } from 'safe-parser'; start({});\n";
-      try {
-        mkdirSync(packageRoot, { recursive: true });
-        writeFileSync(
-          join(packageRoot, 'package.json'),
-          JSON.stringify({
-            exports: { '.': './index.mjs' },
-            name: 'safe-parser',
-            type: 'module',
-            version: '1.2.3',
-          }),
-        );
-        writeFileSync(
-          join(packageRoot, 'index.mjs'),
-          `export const start = context => ${expression};\n`,
-        );
-        writeFileSync(
-          join(packageRoot, 'payload.mjs'),
-          "import 'data:text/javascript,globalThis.__KOVO_EXECUTABLE_ASSET_IMPORT__%3D%27EXECUTED%27'; globalThis.__KOVO_EXECUTABLE_ASSET__ = 'EXECUTED';\n",
-        );
-        writeFileSync(appModulePath, source);
-        const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
-        const exactManifest: AppDependencyCapabilityManifest = {
-          dependencies: [
-            {
-              entries: [
-                {
-                  conditions: installed.conditions,
-                  importers: ['client.mjs'],
-                  imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
-                  rootKinds: ['route'],
-                  sites: ['client.mjs:1:1'],
-                  specifier: 'safe-parser',
-                },
-              ],
-              manifestFingerprint: installed.manifestFingerprint,
-              packageName: installed.packageName,
-              packageVersion: installed.packageVersion,
-              summaryVersion: 'safe-parser-review/1',
-              verdict: 'open',
-            },
-          ],
-          schema: 'kovo-app-dependency-capabilities/v1',
-        };
-
-        await expect(
-          viteBuild({
-            build: {
-              emptyOutDir: true,
-              outDir,
-              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
-            },
-            configFile: false,
-            logLevel: 'silent',
-            plugins: [
-              dependencyCapabilityLoaderVitePlugin(
-                appModulePath,
-                [{ fileName: 'client.mjs', source }],
-                exactManifest,
-                'build-client',
-              ),
+    [
+      'service worker',
+      "navigator['service' + 'Worker']['register']('/payload.mjs', { type: 'module' })",
+    ],
+    ['paint worklet', "CSS['paint' + 'Worklet']['addModule']('/payload.mjs')"],
+    ['audio worklet', "context['audio' + 'Worklet']['addModule']('/payload.mjs')"],
+    [
+      'service worker',
+      "(() => { const { serviceWorker: worker } = navigator; return worker.register('/payload.mjs', { type: 'module' }); })()",
+    ],
+    [
+      'worklet',
+      "(() => { const { paintWorklet: worklet } = CSS; return worklet.addModule('/payload.mjs'); })()",
+    ],
+    [
+      'worklet',
+      "(() => { const { audioWorklet: worklet } = context; return worklet.addModule('/payload.mjs'); })()",
+    ],
+  ] as const)('rejects a reviewed package %s executable asset', async (carrier, expression) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-executable-asset-')));
+    const appModulePath = join(root, 'client.mjs');
+    const packageRoot = join(root, 'node_modules', 'safe-parser');
+    const outDir = join(root, 'dist');
+    const source = "import { start } from 'safe-parser'; start({});\n";
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.mjs' },
+          name: 'safe-parser',
+          type: 'module',
+          version: '1.2.3',
+        }),
+      );
+      writeFileSync(
+        join(packageRoot, 'index.mjs'),
+        `export const start = context => ${expression};\n`,
+      );
+      writeFileSync(
+        join(packageRoot, 'payload.mjs'),
+        "import 'data:text/javascript,globalThis.__KOVO_EXECUTABLE_ASSET_IMPORT__%3D%27EXECUTED%27'; globalThis.__KOVO_EXECUTABLE_ASSET__ = 'EXECUTED';\n",
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['client.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'start' }],
+                rootKinds: ['route'],
+                sites: ['client.mjs:1:1'],
+                specifier: 'safe-parser',
+              },
             ],
-            root,
-          }),
-        ).rejects.toThrow(
-          new RegExp(
-            `KV448.*reviewed package safe-parser creates a ${carrier} executable asset`,
-            'u',
-          ),
-        );
-        expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
-      } finally {
-        rmSync(root, { force: true, recursive: true });
-      }
-    },
-  );
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'safe-parser-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir,
+            rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'client.mjs', source }],
+              exactManifest,
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(
+        new RegExp(
+          `KV448.*reviewed package safe-parser creates a ${carrier} executable asset`,
+          'u',
+        ),
+      );
+      expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 
   // @kovo-security-certifies C13 dependency-approved-worker-subgraph-closure
-  it.each(['query import', 'constructor'] as const)(
+  it.each(['query import', 'constructor', 'computed constructor', 'service worker'] as const)(
     'rejects an approved app %s worker subgraph that omits dependency closure',
     async (kind) => {
       const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-app-worker-')));
@@ -1773,7 +1872,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       const appSource =
         kind === 'query import'
           ? "import WorkerEntry from './worker.mjs?worker'; new WorkerEntry();\n"
-          : "new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });\n";
+          : kind === 'constructor'
+            ? "new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });\n"
+            : kind === 'computed constructor'
+              ? "new globalThis['Worker']('/worker.mjs', { type: 'module' });\n"
+              : "navigator['service' + 'Worker']['register']('/worker.mjs', { type: 'module' });\n";
       const workerSource = "import { parse } from 'safe-parser'; parse('worker');\n";
       try {
         for (const [directory, packageName] of [
@@ -1850,7 +1953,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         ).rejects.toThrow(
           kind === 'query import'
             ? /KV448.*approved app source app\.mjs edge.*query or fragment/u
-            : /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+            : kind === 'service worker'
+              ? /KV448.*supported build-client artifact.*retains a service worker executable asset/u
+              : /KV448.*supported build-client artifact.*retains a Worker constructor/u,
         );
         expect(() => readFileSync(join(outDir, 'entry.js'), 'utf8')).toThrow();
       } finally {

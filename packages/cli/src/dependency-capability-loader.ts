@@ -246,9 +246,7 @@ export function dependencyCapabilityLoaderVitePlugin(
         );
       }
       const reviewedPackage =
-        sourcePath === undefined
-          ? undefined
-          : reviewedThirdPartyModules.get(sourcePath);
+        sourcePath === undefined ? undefined : reviewedThirdPartyModules.get(sourcePath);
       if (reviewedPackage !== undefined) {
         let ast: unknown;
         try {
@@ -330,9 +328,7 @@ export function dependencyCapabilityLoaderVitePlugin(
       }
       const importerName = importerPath === undefined ? undefined : approvedPaths.get(importerPath);
       const reviewedPackage =
-        importerPath === undefined
-          ? undefined
-          : reviewedThirdPartyModules.get(importerPath);
+        importerPath === undefined ? undefined : reviewedThirdPartyModules.get(importerPath);
       if (importerName !== undefined && specifierHasUnsupportedSubgraphSuffix(specifier)) {
         throw dependencyCapabilityError(
           `approved app source ${importerName} edge ${specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
@@ -1163,70 +1159,197 @@ interface ParsedModuleEdge {
 }
 
 function reviewedWorkerConstructor(ast: unknown): 'SharedWorker' | 'Worker' | undefined {
-  const pending: unknown[] = [ast];
+  const pending: Array<{
+    key?: string;
+    parent?: Record<string, unknown>;
+    value: unknown;
+  }> = [{ value: ast }];
   const seen = new Set<object>();
   while (pending.length > 0) {
-    const value = pending.pop();
+    const item = pending.pop()!;
+    const value = item.value;
     if (typeof value !== 'object' || value === null || seen.has(value)) continue;
     seen.add(value);
     if (Array.isArray(value)) {
-      for (const item of value) pending.push(item);
+      for (const child of value) {
+        pending.push({
+          ...(item.key === undefined ? {} : { key: item.key }),
+          ...(item.parent === undefined ? {} : { parent: item.parent }),
+          value: child,
+        });
+      }
       continue;
     }
     const record = value as Record<string, unknown>;
-    if (record.type === 'NewExpression') {
-      const callee = record.callee;
-      if (typeof callee === 'object' && callee !== null) {
-        const calleeRecord = callee as Record<string, unknown>;
-        if (
-          calleeRecord.type === 'Identifier' &&
-          (calleeRecord.name === 'Worker' || calleeRecord.name === 'SharedWorker')
-        ) {
-          return calleeRecord.name;
-        }
+    const workerName = workerAuthorityReferenceName(record, item.parent, item.key);
+    if (workerName !== undefined) return workerName;
+    for (const [key, child] of Object.entries(record)) {
+      if (
+        key === 'type' ||
+        key === 'start' ||
+        key === 'end' ||
+        key === 'loc' ||
+        key === 'range' ||
+        key === 'raw'
+      ) {
+        continue;
       }
+      pending.push({ key, parent: record, value: child });
     }
-    for (const child of Object.values(record)) pending.push(child);
   }
   return undefined;
+}
+
+function workerAuthorityReferenceName(
+  record: Readonly<Record<string, unknown>>,
+  parent: Readonly<Record<string, unknown>> | undefined,
+  key: string | undefined,
+): 'SharedWorker' | 'Worker' | undefined {
+  if (record.type === 'Property' && parent?.type === 'ObjectPattern') {
+    const propertyName = staticObjectPropertyName(record);
+    if (propertyName === 'Worker' || propertyName === 'SharedWorker') return propertyName;
+  }
+  if (record.type === 'MemberExpression') {
+    const memberName = staticMemberPropertyName(record);
+    if (
+      (memberName === 'Worker' || memberName === 'SharedWorker') &&
+      memberExpressionHasBrowserGlobalReceiver(record)
+    ) {
+      return memberName;
+    }
+  }
+  if (
+    record.type !== 'Identifier' ||
+    (record.name !== 'Worker' && record.name !== 'SharedWorker') ||
+    workerIdentifierIsDeclarationOrProperty(parent, key)
+  ) {
+    return undefined;
+  }
+  return record.name;
+}
+
+function memberExpressionHasBrowserGlobalReceiver(
+  member: Readonly<Record<string, unknown>>,
+): boolean {
+  const object = member.object;
+  if (typeof object !== 'object' || object === null) return false;
+  const objectRecord = object as Record<string, unknown>;
+  return (
+    objectRecord.type === 'Identifier' &&
+    (objectRecord.name === 'globalThis' ||
+      objectRecord.name === 'self' ||
+      objectRecord.name === 'window')
+  );
+}
+
+function workerIdentifierIsDeclarationOrProperty(
+  parent: Readonly<Record<string, unknown>> | undefined,
+  key: string | undefined,
+): boolean {
+  if (parent === undefined) return true;
+  if (parent.type === 'MemberExpression' && parent.computed !== true && key === 'property') {
+    return true;
+  }
+  if (
+    (parent.type === 'Property' || parent.type === 'MethodDefinition') &&
+    parent.computed !== true &&
+    key === 'key'
+  ) {
+    return true;
+  }
+  if (
+    (parent.type === 'VariableDeclarator' && key === 'id') ||
+    ((parent.type === 'FunctionDeclaration' ||
+      parent.type === 'FunctionExpression' ||
+      parent.type === 'ClassDeclaration' ||
+      parent.type === 'ClassExpression') &&
+      key === 'id') ||
+    ((parent.type === 'ImportSpecifier' ||
+      parent.type === 'ImportDefaultSpecifier' ||
+      parent.type === 'ImportNamespaceSpecifier' ||
+      parent.type === 'ExportSpecifier') &&
+      (key === 'local' || key === 'imported' || key === 'exported')) ||
+    (parent.type === 'LabeledStatement' && key === 'label') ||
+    ((parent.type === 'BreakStatement' || parent.type === 'ContinueStatement') && key === 'label')
+  ) {
+    return true;
+  }
+  if (
+    (parent.type === 'FunctionDeclaration' ||
+      parent.type === 'FunctionExpression' ||
+      parent.type === 'ArrowFunctionExpression') &&
+    key === 'params'
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function reviewedExecutableAssetCarrier(
   ast: unknown,
 ): 'audio worklet' | 'opaque new-URL' | 'paint worklet' | 'service worker' | 'worklet' | undefined {
-  const pending: unknown[] = [ast];
+  const pending: Array<{
+    key?: string;
+    parent?: Record<string, unknown>;
+    value: unknown;
+  }> = [{ value: ast }];
   const seen = new Set<object>();
   while (pending.length > 0) {
-    const value = pending.pop();
+    const item = pending.pop()!;
+    const value = item.value;
     if (typeof value !== 'object' || value === null || seen.has(value)) continue;
     seen.add(value);
     if (Array.isArray(value)) {
-      for (const item of value) pending.push(item);
+      for (const child of value) {
+        pending.push({
+          ...(item.key === undefined ? {} : { key: item.key }),
+          ...(item.parent === undefined ? {} : { parent: item.parent }),
+          value: child,
+        });
+      }
       continue;
     }
     const record = value as Record<string, unknown>;
-    if (record.type === 'CallExpression' && callContainsImportMetaUrl(record)) {
-      const callee = record.callee;
-      if (typeof callee === 'object' && callee !== null) {
-        const calleeRecord = callee as Record<string, unknown>;
-        const method = staticMemberPropertyName(calleeRecord);
-        const receiver =
-          typeof calleeRecord.object === 'object' && calleeRecord.object !== null
-            ? staticMemberPropertyName(calleeRecord.object as Record<string, unknown>)
-            : undefined;
-        if (method === 'register' && receiver === 'serviceWorker') return 'service worker';
-        if (method === 'addModule' && receiver === 'paintWorklet') return 'paint worklet';
-        if (method === 'addModule' && receiver === 'audioWorklet') return 'audio worklet';
-        if (method === 'addModule') return 'worklet';
+    const carrier = reviewedExecutableAssetMember(record, item.parent);
+    if (carrier !== undefined) return carrier;
+    for (const [key, child] of Object.entries(record)) {
+      if (
+        key === 'type' ||
+        key === 'start' ||
+        key === 'end' ||
+        key === 'loc' ||
+        key === 'range' ||
+        key === 'raw'
+      ) {
+        continue;
       }
+      pending.push({ key, parent: record, value: child });
     }
-    for (const child of Object.values(record)) pending.push(child);
   }
   return containsImportMetaUrlConstructor(ast) ? 'opaque new-URL' : undefined;
 }
 
-function callContainsImportMetaUrl(call: Readonly<Record<string, unknown>>): boolean {
-  return containsImportMetaUrlConstructor(call.arguments);
+function reviewedExecutableAssetMember(
+  record: Readonly<Record<string, unknown>>,
+  parent: Readonly<Record<string, unknown>> | undefined,
+): 'audio worklet' | 'paint worklet' | 'service worker' | 'worklet' | undefined {
+  if (record.type === 'Property' && parent?.type === 'ObjectPattern') {
+    const property = staticObjectPropertyName(record);
+    if (property === 'serviceWorker') return 'service worker';
+    if (property === 'paintWorklet') return 'paint worklet';
+    if (property === 'audioWorklet') return 'audio worklet';
+  }
+  if (record.type !== 'MemberExpression') return undefined;
+  const property = staticMemberPropertyName(record);
+  if (property === 'serviceWorker') return 'service worker';
+  if (property === 'paintWorklet') return 'paint worklet';
+  if (property === 'audioWorklet') return 'audio worklet';
+  const receiver = staticMemberReceiverName(record);
+  if (property === 'register' && receiver === 'serviceWorker') return 'service worker';
+  if (property !== 'addModule' || receiver === undefined) return undefined;
+  if (receiver === 'paintWorklet') return 'paint worklet';
+  if (receiver === 'audioWorklet') return 'audio worklet';
+  return receiver.toLowerCase().endsWith('worklet') ? 'worklet' : undefined;
 }
 
 function containsImportMetaUrlConstructor(value: unknown): boolean {
@@ -1282,11 +1405,40 @@ function objectContainsImportMeta(value: object): boolean {
 }
 
 function staticMemberPropertyName(member: Readonly<Record<string, unknown>>): string | undefined {
-  if (member.type !== 'MemberExpression' || member.computed === true) return undefined;
+  if (member.type !== 'MemberExpression') return undefined;
   const property = member.property;
   if (typeof property !== 'object' || property === null) return undefined;
   const record = property as Record<string, unknown>;
+  if (member.computed === true) return finiteStaticMemberString(record);
   return record.type === 'Identifier' && typeof record.name === 'string' ? record.name : undefined;
+}
+
+function staticObjectPropertyName(property: Readonly<Record<string, unknown>>): string | undefined {
+  if (property.type !== 'Property') return undefined;
+  const key = property.key;
+  if (typeof key !== 'object' || key === null) return undefined;
+  const record = key as Record<string, unknown>;
+  if (property.computed === true) return finiteStaticMemberString(record);
+  return record.type === 'Identifier' && typeof record.name === 'string' ? record.name : undefined;
+}
+
+function staticMemberReceiverName(member: Readonly<Record<string, unknown>>): string | undefined {
+  const object = member.object;
+  if (typeof object !== 'object' || object === null) return undefined;
+  const record = object as Record<string, unknown>;
+  if (record.type === 'Identifier' && typeof record.name === 'string') return record.name;
+  return staticMemberPropertyName(record);
+}
+
+function finiteStaticMemberString(value: unknown): string | undefined {
+  const literal = literalAstString(value);
+  if (literal !== undefined) return literal;
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.type !== 'BinaryExpression' || record.operator !== '+') return undefined;
+  const left = finiteStaticMemberString(record.left);
+  const right = finiteStaticMemberString(record.right);
+  return left === undefined || right === undefined ? undefined : `${left}${right}`;
 }
 
 /**
@@ -1375,7 +1527,9 @@ function canonicalizeFiniteArtifactModuleEdges(source: string, ast: unknown): st
 
 function finiteArtifactModuleEdgeReplacements(ast: unknown): ArtifactModuleEdgeReplacement[] {
   const replacements: ArtifactModuleEdgeReplacement[] = [];
-  const pending: Array<{ lexicalBody?: Record<string, unknown>; value: unknown }> = [{ value: ast }];
+  const pending: Array<{ lexicalBody?: Record<string, unknown>; value: unknown }> = [
+    { value: ast },
+  ];
   const seen = new Set<object>();
   while (pending.length > 0) {
     const item = pending.pop()!;
@@ -1384,14 +1538,16 @@ function finiteArtifactModuleEdgeReplacements(ast: unknown): ArtifactModuleEdgeR
     seen.add(value);
     if (Array.isArray(value)) {
       for (let index = 0; index < value.length; index += 1) {
-        pending.push({ lexicalBody: item.lexicalBody, value: value[index] });
+        pending.push({
+          ...(item.lexicalBody === undefined ? {} : { lexicalBody: item.lexicalBody }),
+          value: value[index],
+        });
       }
       continue;
     }
     const record = value as Record<string, unknown>;
     const type = typeof record.type === 'string' ? record.type : undefined;
-    const lexicalBody =
-      type === 'Program' || type === 'BlockStatement' ? record : item.lexicalBody;
+    const lexicalBody = type === 'Program' || type === 'BlockStatement' ? record : item.lexicalBody;
     if (type === 'ImportExpression') {
       const imported = record.source;
       if (typeof imported === 'object' && imported !== null && lexicalBody !== undefined) {
@@ -1429,8 +1585,9 @@ function finiteArtifactModuleEdgeReplacements(ast: unknown): ArtifactModuleEdgeR
       ) {
         continue;
       }
+      const childLexicalBody = functionBoundary ? undefined : lexicalBody;
       pending.push({
-        lexicalBody: functionBoundary ? undefined : lexicalBody,
+        ...(childLexicalBody === undefined ? {} : { lexicalBody: childLexicalBody }),
         value: child,
       });
     }
