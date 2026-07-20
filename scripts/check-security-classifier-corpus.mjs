@@ -2035,8 +2035,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'scripts/wire-input-boundary-gate.test.mjs',
       'scripts/framework-export-posture-gate.test.mjs',
       'scripts/check-crypto-boundary.test.mjs',
+      'packages/server/src/escape-obligation-review.security.test.ts',
     ],
     verdictAnchors: [
+      {
+        id: 'structured-escape-review-signature',
+        file: 'packages/server/src/escape-obligation-review.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 structured-escape-review-signature',
+          'composes with the runtime-attestation trust anchor and binds site, obligation, and artifact',
+          'rejects a replacement key, fingerprint, or signature',
+          "siteIdentity: 'src/mutations.ts:45'",
+          "reference: 'tests/authz/forged'",
+          'publicKeySpki: replacement.publicKeySpki',
+        ],
+      },
       {
         id: 'capability-mint-symbol-identity-census',
         file: 'scripts/capability-surface-census-gate.test.mjs',
@@ -2859,7 +2872,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'accepts the starter database chains and exact plain-data identities without widening the finite IR',
           'crypto.randomUUID()',
-          "trustedAssign(id, 'framework-generated opaque identifier')",
+          "invariant: 'governed-write.authorized-principal'",
+          "policy: 'contacts.generated-id/v1'",
           '.from(contacts).orderBy(contacts.id)',
           'does not grant reviewed data-helper identity through %s',
           'keeps randomUUID closed through %s',
