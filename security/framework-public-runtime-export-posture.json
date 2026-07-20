@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "92d1aa340d1d08cab6f49b83499e253b5d207d372942a28ed327fe388226ae57",
+      "sourceTreeSha256": "73ade2b9e4339960be90509d8121d971deaef77910482244232af35fd79ac2b7",
       "manifestVariants": [
         {
           "exports": {
@@ -478,7 +478,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "f12949c510c95c5f8f2efc409eb54e0fbc9cb83710bcd3c2da38882b9f84145a"
+      "sourceTreeSha256": "ffcafefde8cac1fa85029ddc31f285c7c5291ce5bdcb74aaef4f36d226bc9ff6"
     },
     {
       "manifestVariants": [
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "7bf739bd7e8ebc379f1ab81666b9b8830e66fb0cb37f5131bb03d6491f62f801"
+      "sourceTreeSha256": "73ca7559c6994f5afc029b3b0f03c3eb480b6713caa3011f6e7d87aef459d1b7"
     },
     {
       "manifestVariants": [
@@ -9813,7 +9813,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "24d0ec9976d524b228c39e2e23392199486cc966e3f2e7f588305b2a41894129"
+      "sourceTreeSha256": "2c01370befc0bcab24c763818e925b3631a1e0749162af41ea128baf0559f27d"
     },
     {
       "manifestVariants": [
