@@ -1156,6 +1156,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     marker: '@kovo-security-classifier-corpus kv424-request-process',
     testFiles: [
       'packages/cli/src/phase3c-semantic-bridge-adversarial.test.ts',
+      'packages/cli/src/phase3c-task-b-routing.test.ts',
       'packages/drizzle/src/capability-escapes-static.test.ts',
       'packages/drizzle/src/jsx-pragma-static.test.ts',
       'packages/drizzle/src/trust-escapes-static.test.ts',
@@ -1191,12 +1192,12 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
       {
         id: 'task-b-layered-root-and-semantic-correspondence',
-        file: 'packages/drizzle/src/trust-escapes-static.test.ts',
+        file: 'packages/cli/src/phase3c-task-b-routing.test.ts',
         snippets: [
-          'binds every TASK B root to the same-snapshot capability and package-root census',
+          'routes the complete request-factory census through L1 and each compiler-owned handler through L2/L3',
+          'analyzeCapabilityClosure',
+          'compileComponentModule',
           'sink=capability-closure',
-          'sink=package-summary',
-          'requires an exact finite-IR semantic root for every compiler-owned TASK B handler',
           'sink=finite-ir',
           "schema: 'kovo-task-b-closure/v1'",
         ],

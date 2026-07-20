@@ -1985,6 +1985,13 @@ const taskBCapabilityRootCorrespondenceBranch =
   '        verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);';
 const removedTaskBCapabilityRootCorrespondenceBranch =
   '        // TASK B capability-root correspondence removed by mutant';
+const taskBPackageRootCorrespondenceBranch = [
+  '  if (',
+  '    dependencyRootKinds.length === 0 ||',
+  '    dependencyRootKinds.some((rootKinds) => !rootKinds.has(rootKind))',
+  '  ) {',
+].join('\n');
+const removedTaskBPackageRootCorrespondenceBranch = '  if (false) {';
 const taskBSemanticRootCorrespondenceBranch =
   '  verifyRequestTaskBSemanticRoot(context, callable);';
 const removedTaskBSemanticRootCorrespondenceBranch =
@@ -3375,6 +3382,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: taskBSemanticRootCorrespondenceBranch,
     sourceFile: drizzleTrustEscapesPath,
     test: assertTaskBSemanticRootCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes exact package-summary root correspondence from TASK B.',
+    expectedKiller:
+      'TASK B must reject a capability root omitted from one reachable package-summary entry',
+    name: 'drizzle-task-b/drop-package-root-correspondence',
+    replacement: removedTaskBPackageRootCorrespondenceBranch,
+    search: taskBPackageRootCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBPackageRootCorrespondenceIsEnforced,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -7783,6 +7801,41 @@ async function assertTaskBCapabilityRootCorrespondenceIsEnforced(moduleUnderTest
     )
   ) {
     throw new Error('TASK B admitted a root absent from the exact capability census');
+  }
+}
+
+async function assertTaskBPackageRootCorrespondenceIsEnforced(moduleUnderTest) {
+  const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
+  const files = [{ fileName: 'app.ts', source }];
+  const offset = source.indexOf('createApp({})');
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerTaskBClosure: taskBMutationProof(
+      files,
+      [
+        {
+          kind: 'root',
+          module: 'app.ts',
+          name: 'app',
+          rootKind: 'application',
+          site: `app.ts:${line}:${column}`,
+        },
+      ],
+      [],
+    ),
+    files,
+  });
+  if (
+    !sinks.some(
+      (sink) =>
+        sink.sink === 'request-handler.opaque-source' &&
+        sink.source?.includes('sink=package-summary'),
+    )
+  ) {
+    throw new Error('TASK B admitted a root omitted from a reachable package summary');
   }
 }
 

@@ -7,8 +7,8 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('pins the exact forcing denominator after lifecycle private-scope closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(284);
+  it('pins the exact forcing denominator after TASK B routing closure', () => {
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(287);
   });
 
   it('enrolls the dependency-loader graph, HTML, and artifact closure mutants', () => {
@@ -364,6 +364,18 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'drizzle-task-b/drop-capability-root-correspondence',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'drizzle-task-b/drop-semantic-root-correspondence',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'drizzle-task-b/drop-package-root-correspondence',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'threat-matrix-gate/drop-missing-sink-denominator',
           status: 'killed',
         }),
@@ -541,7 +553,10 @@ describe('security-gate-mutations', () => {
       'drizzle-analyzer-summary/drop-carrier-integrity-proof',
       'drizzle-analyzer-summary/drop-owner-accepted-guard-intersection',
       'drizzle-owner-scope/drop-final-accepted-guard-consumer',
+      'drizzle-task-b/drop-capability-root-correspondence',
+      'drizzle-task-b/drop-package-root-correspondence',
       'drizzle-task-b/drop-raw-registration-closure',
+      'drizzle-task-b/drop-semantic-root-correspondence',
       'drizzle-task-b/restore-static-build-analysis-bypass',
     ];
 

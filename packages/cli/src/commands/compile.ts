@@ -57,6 +57,10 @@ import {
   stableValue,
 } from '../shared.js';
 import { findNearestFile, isRecord, readJsonRecord } from '../tooling.js';
+import {
+  readCapabilityPackageSummaries,
+  resolveCapabilityPackages,
+} from '../capability-closure-packages.js';
 
 const requireFromCli = createRequire(import.meta.url);
 const cliPackageManifest = readCliPackageManifest();
@@ -1179,12 +1183,27 @@ async function runCompileDrizzleStaticCommand(
       // SPEC §5.2/§6.6: standalone static extraction follows the same compiler-owned finite
       // handler graph as `kovo build`. The exact supplied byte snapshot supplies both framework
       // identity and semantic summaries; TASK B keeps its non-handler request/process coverage.
-      const compilerVerdict = await compileStaticHandlerSecurityVerdict(files);
+      const staticInputDirectory = dirname(resolve(options.inputPath));
+      const staticInputManifest =
+        findNearestPackageJson(staticInputDirectory) ?? findNearestPackageJson(process.cwd());
+      const staticInputRoot =
+        staticInputManifest === undefined ? staticInputDirectory : dirname(staticInputManifest);
+      const compilerVerdict = await compileStaticHandlerSecurityVerdict(
+        files,
+        staticInputRoot,
+        resolve(staticInputRoot, files[0]?.fileName ?? 'app.ts'),
+      );
       if (compilerVerdict.diagnostics.length > 0) {
         appendDrizzleStaticDiagnostics(output, compilerVerdict.diagnostics);
       }
       output.unregisteredSinks = collectUnregisteredSinksFromProject({
         compilerSecuritySemanticSources: compilerVerdict.semanticSources,
+        compilerTaskBClosure: {
+          capabilityFacts: compilerVerdict.capabilityClosure.facts,
+          dependencyManifest: compilerVerdict.capabilityClosure.dependencyManifest,
+          files,
+          schema: 'kovo-task-b-closure/v1',
+        },
         files,
       });
     }
@@ -1273,6 +1292,7 @@ async function runCompileDrizzleStaticCommand(
 }
 
 interface StaticHandlerSecurityVerdict {
+  capabilityClosure: import('@kovojs/compiler/internal').AnalyzeCapabilityClosureResult;
   diagnostics: CoreGraph.StaticDiagnosticFact[];
   semanticSources: {
     fileName: string;
@@ -1283,8 +1303,17 @@ interface StaticHandlerSecurityVerdict {
 
 async function compileStaticHandlerSecurityVerdict(
   files: readonly { fileName: string; source: string }[],
+  root: string,
+  importerPath: string,
 ): Promise<StaticHandlerSecurityVerdict> {
+  const {
+    analyzeCapabilityClosure,
+    collectCapabilityPackageRequests,
+    compilerGeneratedCapabilityDependencies,
+  } = await import('@kovojs/compiler/internal');
   const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
+  const compilerDependencies: import('@kovojs/compiler/internal').CompilerGeneratedCapabilityDependency[] =
+    [];
   const semanticSources: StaticHandlerSecurityVerdict['semanticSources'] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]!;
@@ -1312,6 +1341,13 @@ async function compileStaticHandlerSecurityVerdict(
         ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
       });
     }
+    for (const dependency of compilerGeneratedCapabilityDependencies({
+      authoredSource: file.source,
+      fileName: file.fileName,
+      loweredSource: result.loweredSource,
+    })) {
+      compilerDependencies.push(dependency);
+    }
     semanticSources.push({
       fileName: file.fileName,
       graphs: result.componentGraphFacts.flatMap((fact) =>
@@ -1320,7 +1356,27 @@ async function compileStaticHandlerSecurityVerdict(
       source: file.source,
     });
   }
-  return { diagnostics, semanticSources };
+  const packageRequests = collectCapabilityPackageRequests(files, compilerDependencies);
+  const capabilityClosure = analyzeCapabilityClosure({
+    compilerDependencies,
+    files,
+    packageSummaries: readCapabilityPackageSummaries(root),
+    packages: resolveCapabilityPackages(packageRequests, importerPath),
+  });
+  assertCompileResultDiagnostics(
+    capabilityClosure.diagnostics,
+    'CLI static capability-closure diagnostics',
+  );
+  for (const diagnostic of capabilityClosure.diagnostics) {
+    diagnostics.push({
+      code: diagnostic.code,
+      message: diagnostic.message,
+      severity: diagnostic.severity ?? 'error',
+      site: diagnostic.fileName,
+      ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+    });
+  }
+  return { capabilityClosure, diagnostics, semanticSources };
 }
 
 interface SqlSafetyDiagnosticLike {
