@@ -216,6 +216,15 @@ describe('SPEC §9.5 finite request-ingress classifier', () => {
     expect(
       classifier.classify(http1({ rawTarget: 'http://app.example/absolute?x=1' })),
     ).toMatchObject({ ok: true, target: '/absolute?x=1', targetForm: 'absolute' });
+    expect(
+      classifier.classify(
+        http1({ rawTarget: 'http://app.example/absolute?next=%2Faccount' }),
+      ),
+    ).toMatchObject({
+      ok: true,
+      target: '/absolute?next=%2Faccount',
+      targetForm: 'absolute',
+    });
 
     for (const rawTarget of [
       '*',

@@ -537,9 +537,18 @@ async function emitCloudflarePreset(
       'cloudflare static output',
       'cloudflare',
     );
+    const workerSource = cloudflareWorkerSource({ staticOnly: true });
+    validateGeneratedJavaScript(path.join(outDir, 'worker.mjs'), workerSource, 'module');
     await writePresetArtifacts(
       outDir,
       [
+        presetContentEntry(outDir, 'worker.mjs', workerSource, 'cloudflare static worker'),
+        presetJsonEntry(outDir, 'kovo-artifact-integrity.json', {
+          algorithm: 'sha256',
+          files: {
+            'worker.mjs': generatedArtifactDigest(workerSource),
+          },
+        }),
         presetContentEntry(
           outDir,
           'wrangler.toml',
@@ -2463,7 +2472,35 @@ function requestUrlLimitFailure(value) {
 `;
 }
 
-function cloudflareWorkerSource(): string {
+function cloudflareWorkerSource(
+  options: Readonly<{ staticOnly?: boolean }> = {},
+): string {
+  const staticOnly = options.staticOnly === true;
+  const handlerStateSource = staticOnly ? '' : 'let handlerPromise;';
+  const assetResponseConditionSource = staticOnly ? 'true' : 'status !== 404';
+  const fallbackSource = staticOnly
+    ? `const responseHeaders = new NativeHeaders();
+    applyHeaders(responseHeaders, staticErrorHeaders);
+    apply(nativeHeadersSet, responseHeaders, ['content-type', 'text/plain; charset=utf-8']);
+    return new NativeResponse(method === 'HEAD' ? null : 'Not Found', {
+      headers: responseHeaders,
+      status: 404,
+      statusText: 'Not Found',
+    });`
+    : `const handler = await loadHandler();
+    return handler(dispatchRequest);`;
+  const handlerLoaderSource = staticOnly
+    ? ''
+    : `async function importHandler() {
+  const module = await import('./server/handler.mjs');
+  return module.default;
+}
+
+function loadHandler() {
+  handlerPromise ??= importHandler();
+  return handlerPromise;
+}`;
+
   return `const lockRequestSafeRuntimeRealm = (${generatedRequestSafeRuntimeLockSource});
 lockRequestSafeRuntimeRealm(${generatedRequestSafeRuntimeInventorySource});
 
@@ -2536,7 +2573,7 @@ const documentStaticHeaders = ${documentStaticHeadersSource};
 const staticErrorHeaders = ${staticErrorHeadersSource};
 const maxRequestUrlLength = ${MAX_REQUEST_URL_CHARACTERS};
 const maxRequestQueryEntries = ${MAX_REQUEST_QUERY_ENTRIES};
-let handlerPromise;
+${handlerStateSource}
 
 export default {
   async fetch(request, env) {
@@ -2551,6 +2588,18 @@ export default {
         },
         status: 414,
         statusText: 'URI Too Long',
+      });
+    }
+    const headers = apply(nativeRequestHeadersGetter, request, []);
+    if (bodylessRequestHasPayload(method, headers)) {
+      return new NativeResponse(method === 'HEAD' ? null : 'Payload Too Large', {
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+        },
+        status: 413,
+        statusText: 'Payload Too Large',
       });
     }
     const url = new NativeURL(requestUrl);
@@ -2594,7 +2643,7 @@ export default {
       }
       const assetResponse = await apply(assetFetch, assets, [dispatchRequest]);
       const status = apply(nativeResponseStatusGetter, assetResponse, []);
-      if (status !== 404) {
+      if (${assetResponseConditionSource}) {
         const headers = cloneHeaders(apply(nativeResponseHeadersGetter, assetResponse, []));
         if (status >= 400) {
           applyHeaders(headers, staticErrorHeaders);
@@ -2615,8 +2664,7 @@ export default {
       }
     }
 
-    const handler = await loadHandler();
-    return handler(dispatchRequest);
+    ${fallbackSource}
   },
 };
 
@@ -2684,6 +2732,24 @@ function requestUrlLimitFailure(value) {
     return 'query-entries';
   }
   return undefined;
+}
+
+// SPEC §9.5: a Fetch-native bridge cannot recover body bytes the platform discarded, but retained
+// framing is still a finite rejection signal and must close before Cloudflare ASSETS or app import.
+function bodylessRequestHasPayload(method, headers) {
+  if (method !== 'GET' && method !== 'HEAD') return false;
+  const contentLength = apply(nativeHeadersGet, headers, ['content-length']);
+  if (contentLength !== null && !bodylessContentLengthIsZero(contentLength)) return true;
+  return apply(nativeHeadersGet, headers, ['transfer-encoding']) !== null;
+}
+
+function bodylessContentLengthIsZero(value) {
+  const trimmed = apply(nativeStringTrim, value, []);
+  if (trimmed.length === 0) return false;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (apply(nativeStringCharCodeAt, trimmed, [index]) !== 0x30) return false;
+  }
+  return true;
 }
 
 function sameDataDescriptor(left, right) {
@@ -2775,15 +2841,7 @@ function platformSingleHeaderValue(value) {
   return trimmed;
 }
 
-async function importHandler() {
-  const module = await import('./server/handler.mjs');
-  return module.default;
-}
-
-function loadHandler() {
-  handlerPromise ??= importHandler();
-  return handlerPromise;
-}
+${handlerLoaderSource}
 
 function cloneHeaders(source) {
   const headers = new NativeHeaders();

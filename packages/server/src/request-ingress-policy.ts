@@ -223,16 +223,11 @@ export function createRequestIngressClassifier(
   ): { readonly form: 'absolute' | 'origin'; readonly value: string } | undefined {
     // Kovo intentionally does not assign app/static semantics to server-wide OPTIONS *.
     if (typeof rawTarget !== 'string' || rawTarget === '' || rawTarget === '*') return undefined;
+    if (contains(rawTarget, '\\') || contains(rawTarget, '#')) return undefined;
+    if (containsEncodedPathControl(rawTarget)) return undefined;
     const origin = `${scheme}://${authority}`;
     if (rawTarget[0] === '/') {
-      if (
-        rawTarget[1] === '/' ||
-        contains(rawTarget, '\\') ||
-        contains(rawTarget, '#') ||
-        containsEncodedPathControl(rawTarget)
-      ) {
-        return undefined;
-      }
+      if (rawTarget[1] === '/') return undefined;
       const parsed = controls.parseTarget(rawTarget, origin);
       if (
         parsed === undefined ||

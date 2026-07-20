@@ -3884,6 +3884,7 @@ export default async function handler(request) {
           { url: 'https://deployment.example/hello?x=1' },
           { url: 'javascript:alert(1)' },
           { url: 'mailto:security@example.test' },
+          { url: 'https://deployment.example/assets%2fcart.css' },
           { url: `https://deployment.example/${'a'.repeat(MAX_REQUEST_URL_CHARACTERS)}` },
           {
             url: `https://deployment.example/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`,
@@ -3894,10 +3895,10 @@ export default async function handler(request) {
       const rejectedMiddlewareResponses = middlewareResponses.slice(1);
       expect(acceptedMiddlewareResponse.status).toBe(200);
       expect(acceptedMiddlewareResponse.headers.get('x-middleware-next')).toBe('1');
-      expect(rejectedMiddlewareResponses).toHaveLength(4);
+      expect(rejectedMiddlewareResponses).toHaveLength(5);
       for (let index = 0; index < rejectedMiddlewareResponses.length; index += 1) {
         const response = rejectedMiddlewareResponses[index]!;
-        expect(response.status).toBe(index < 2 ? 400 : 414);
+        expect(response.status).toBe(index < 3 ? 400 : 414);
         expect(response.headers.get('x-middleware-next')).toBeNull();
       }
 
@@ -4334,15 +4335,27 @@ export default async function handler(request) {
       const staticWorkerPath = join(cloudflareOutDir, 'worker.mjs');
       const staticWorkerSource = await readFile(staticWorkerPath, 'utf8');
       expect(staticWorkerSource).not.toContain("import('./server/handler.mjs')");
+      await expect(
+        readFile(join(cloudflareOutDir, 'server/handler.mjs'), 'utf8'),
+      ).rejects.toThrow();
+      await expect(
+        readJson(join(cloudflareOutDir, 'kovo-artifact-integrity.json')),
+      ).resolves.toEqual({
+        algorithm: 'sha256',
+        files: {
+          'worker.mjs': createHash('sha256').update(staticWorkerSource).digest('hex'),
+        },
+      });
       expect(staticWorkerSource.indexOf('requestIngressClassifier.classify({')).toBeLessThan(
         staticWorkerSource.indexOf("ownDataValue(env, 'ASSETS')"),
       );
       expect(staticWorkerSource.indexOf('bodylessRequestHasPayload(method, headers)')).toBeLessThan(
         staticWorkerSource.indexOf("ownDataValue(env, 'ASSETS')"),
       );
-      await expect(readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8')).resolves.toContain(
-        'directory = "./client"',
-      );
+      const staticWranglerSource = await readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8');
+      expect(staticWranglerSource).toContain('main = "./worker.mjs"');
+      expect(staticWranglerSource).toContain('directory = "./client"');
+      expect(staticWranglerSource).toContain('run_worker_first = true');
 
       const [
         framedAsset,
@@ -4351,7 +4364,11 @@ export default async function handler(request) {
         zeroAsset,
         zeroPaddedClient,
         absentDocument,
+        assetNotFound,
+        missingBinding,
+        missingBindingHead,
         encodedTarget,
+        encodedQueryControl,
         ambiguousSource,
         platformCanonicalAuthority,
       ] = runGeneratedCloudflareWorker(staticWorkerPath, [
@@ -4383,12 +4400,25 @@ export default async function handler(request) {
           url: 'https://worker.test/c/__v/static-v1/static.client.js',
         },
         {
-          asset: { body: 'ABSENT_DOCUMENT' },
+          asset: {
+            body: 'ABSENT_DOCUMENT',
+            headers: { 'content-security-policy': "default-src 'none'" },
+          },
           url: 'https://worker.test/',
         },
         {
+          asset: { body: 'ASSET_NOT_FOUND', status: 404 },
+          url: 'https://worker.test/missing',
+        },
+        { url: 'https://worker.test/missing-binding' },
+        { method: 'HEAD', url: 'https://worker.test/missing-binding' },
+        {
           asset: { body: 'ENCODED_TARGET_MUST_NOT_RUN' },
           url: 'https://worker.test/assets%2fcart.css',
+        },
+        {
+          asset: { body: 'ENCODED_QUERY_CONTROL' },
+          url: 'https://worker.test/assets/cart.css?next=%2Faccount',
         },
         {
           asset: { body: 'AMBIGUOUS_SOURCE_MUST_NOT_RUN' },
@@ -4416,8 +4446,26 @@ export default async function handler(request) {
         expect(admitted!.assetCalls).toBe(1);
         expect(admitted!.response.status).toBe(200);
       }
+      expect(absentDocument!.response.headers.get('content-security-policy')).toBe(
+        "default-src 'none'",
+      );
+      expect(assetNotFound!.assetCalls).toBe(1);
+      expect(assetNotFound!.response.status).toBe(404);
+      expect(assetNotFound!.response.headers.get('cache-control')).toBe('no-store');
+      expect(assetNotFound!.response.headers.get('x-content-type-options')).toBe('nosniff');
+      await expect(assetNotFound!.response.text()).resolves.toBe('ASSET_NOT_FOUND');
+      for (const missing of [missingBinding, missingBindingHead]) {
+        expect(missing!.assetCalls).toBe(0);
+        expect(missing!.response.status).toBe(404);
+        expect(missing!.response.headers.get('cache-control')).toBe('no-store');
+        expect(missing!.response.headers.get('x-content-type-options')).toBe('nosniff');
+      }
+      await expect(missingBinding!.response.text()).resolves.toBe('Not Found');
+      await expect(missingBindingHead!.response.text()).resolves.toBe('');
       expect(encodedTarget!.assetCalls).toBe(0);
       expect(encodedTarget!.response.status).toBe(400);
+      expect(encodedQueryControl!.assetCalls).toBe(1);
+      await expect(encodedQueryControl!.response.text()).resolves.toBe('ENCODED_QUERY_CONTROL');
       expect(ambiguousSource!.assetCalls).toBe(0);
       expect(ambiguousSource!.response.status).toBe(403);
       expect(platformCanonicalAuthority!.assetCalls).toBe(1);
@@ -6035,6 +6083,8 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     'http:\\\\attacker.test\\_m\\a\\b',
     'foo:/_m/a/b',
     'http://proxy.invalid\\_m\\a\\%2e\\b',
+    'http://h1.example.test/_m/a/%2f/b',
+    'http://h1.example.test/_m/a/%5C/b',
   ]) {
     const unsafeMutationRequest = adapterParityRequest();
     unsafeMutationRequest.method = 'POST';

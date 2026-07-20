@@ -900,14 +900,10 @@ const weakenedExactIngressSchemeBranch = [
   "    return value === 'http' || value === 'https'",
 ].join('\n');
 
-const encodedIngressTargetBranch = [
-  "        contains(rawTarget, '#') ||",
-  '        containsEncodedPathControl(rawTarget)',
-].join('\n');
-const weakenedEncodedIngressTargetBranch = [
-  "        contains(rawTarget, '#') ||",
-  '        false',
-].join('\n');
+const encodedIngressTargetBranch =
+  '    if (containsEncodedPathControl(rawTarget)) return undefined;';
+const weakenedEncodedIngressTargetBranch =
+  '    if (false && containsEncodedPathControl(rawTarget)) return undefined;';
 
 const h2IncompatibleSourceBranch = [
   "        input.httpVersion[0] !== '2' ||",
@@ -1541,6 +1537,14 @@ const weakenedVercelPreFilesystemBodylessAdmissionBranch = [
   "    return ingressFailure(method, 413, 'Payload Too Large');",
   '  }',
 ].join('\n');
+const cloudflarePreAssetBodylessAdmissionBranch =
+  '    if (bodylessRequestHasPayload(method, headers)) {';
+const weakenedCloudflarePreAssetBodylessAdmissionBranch =
+  '    if (false && bodylessRequestHasPayload(method, headers)) {';
+const cloudflareStaticWorkerClosureBranch =
+  '    const workerSource = cloudflareWorkerSource({ staticOnly: true });';
+const weakenedCloudflareStaticWorkerClosureBranch =
+  '    const workerSource = cloudflareWorkerSource();';
 const transportManagedNodeBodyDeferredCancelBranch = [
   '    cancel() {',
   '      cancelled = true;',
@@ -5394,6 +5398,32 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
+      'Drops retained GET/HEAD payload-framing admission from generated Cloudflare Workers before ASSETS or app dispatch.',
+    expectedKiller:
+      'dynamic and static-only Cloudflare workers must reject retained body framing before ASSETS',
+    name: 'server-build/drop-cloudflare-pre-assets-bodyless-admission',
+    replacement: weakenedCloudflarePreAssetBodylessAdmissionBranch,
+    search: cloudflarePreAssetBodylessAdmissionBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertEmittedCloudflareBodylessAdmissionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Replaces the static-only Cloudflare Worker with a dynamic worker that imports a nonexistent app handler on ASSETS miss.',
+    expectedKiller:
+      'static-only Cloudflare output must emit a closed worker with no dynamic handler import',
+    name: 'server-build/drop-cloudflare-static-worker-closure',
+    replacement: weakenedCloudflareStaticWorkerClosureBranch,
+    search: cloudflareStaticWorkerClosureBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertEmittedCloudflareStaticWorkerClosureBehavior,
+  },
+  {
+    baseModule: {},
+    description:
       'Restores immediate source cancellation for a live Node transport-managed request body before its 413 can flush.',
     expectedKiller:
       'live Node streamed POST and PUT body-limit failures must flush complete 413 responses',
@@ -6739,6 +6769,27 @@ function assertEmittedVercelPreFilesystemBodylessAdmissionBehavior(
     sourceText,
     testFile: 'packages/server/src/build.test.ts',
     testNamePattern: 'emits Vercel Build Output API v3 with static files and a Node function',
+  });
+}
+
+function assertEmittedCloudflareBodylessAdmissionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'build.ts',
+    sourceText,
+    testFile: 'packages/server/src/build.test.ts',
+    testNamePattern:
+      'lets presets prefer a proven static-only neutral build|emits a Cloudflare Workers project with assets binding and node compatibility',
+  });
+}
+
+function assertEmittedCloudflareStaticWorkerClosureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'build.ts',
+    sourceText,
+    testFile: 'packages/server/src/build.test.ts',
+    testNamePattern: 'lets presets prefer a proven static-only neutral build',
   });
 }
 
@@ -10452,11 +10503,14 @@ async function assertRequestIngressExactSchemeIsClosed(moduleUnderTest) {
 }
 
 async function assertRequestIngressEncodedTargetIsClosed(moduleUnderTest) {
-  const decision = requestIngressClassifier(moduleUnderTest).classify(
-    requestIngressHttp1({ rawTarget: '/_m/a/%2f/b' }),
+  const classifier = requestIngressClassifier(moduleUnderTest);
+  const admitted = ['/_m/a/%2f/b', 'http://app.example/_m/a/%2f/b'].filter(
+    (rawTarget) => classifier.classify(requestIngressHttp1({ rawTarget })).ok,
   );
-  if (decision.ok) {
-    throw new Error('request-ingress classifier admitted an encoded path separator');
+  if (admitted.length > 0) {
+    throw new Error(
+      `request-ingress classifier admitted encoded path separators: ${admitted.join(', ')}`,
+    );
   }
 }
 
