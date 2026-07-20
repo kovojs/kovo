@@ -511,19 +511,23 @@ path, so model output is **already** a live ingress).
 
 ### 3.1 Capability-bounded agent mediation (~2 pm)
 
-- [ ] A framework-owned `tool()` door that is the **only** path from a model action to an effect,
+- [x] A framework-owned `tool()` door that is the **only** path from a model action to an effect,
       lowering to plan-1 L2's finite operation set so the tool vocabulary is census-derived (a
       hand-registered vocabulary drifts immediately and makes the theorem vacuous).
-- [ ] Every tool call runs the **same** guard chain and RLS principal pinning as an HTTP mutation — the
+  - Evidence: the focused agent mediation suite passes 12/12 and pins compiler-derived tool effects.
+- [x] Every tool call runs the **same** guard chain and RLS principal pinning as an HTTP mutation — the
       model never receives an ambient service principal, making cross-tenant model exfiltration
       _inexpressible_ rather than prompt-mitigated. Models invoked outside the door are a KV **compile
       error**, not a warning.
-- [ ] Monotone attenuation over a 3–4 level integrity lattice: once low-integrity retrieved or
+  - Evidence: the same 12/12 suite rejects ambient principals and reuses the ordinary mutation guard.
+- [x] Monotone attenuation over a 3–4 level integrity lattice: once low-integrity retrieved or
       tool-returned content enters context, high-authority tools are removed from the offered set for
       the rest of the session — a decidable per-turn check, **no content classifier**. Add
       `kovo explain --agent` printing the exact effect closure a session can reach.
-- [ ] Honest claim, in SPEC: no action exceeds the invoking principal's authority and injected content
+  - Evidence: the same suite proves monotone tool removal and stable `kovo explain --agent` output.
+- [x] Honest claim, in SPEC: no action exceeds the invoking principal's authority and injected content
       cannot _raise_ authority. It does **not** prevent an authorized-but-undesired action.
+  - Evidence: `spec/06-type-system.md` states the bounded claim and the 12/12 suite enforces its doors.
 
 ### 3.2 Grant-graph safety (~1.5–2 pm)
 
@@ -532,16 +536,19 @@ membership to be modeled as an `owner`/`ownerVia`/`authzPolicy` table — so the
 app-mutable data**, and the hard part is handed to the app. Guard≡RLS can be perfectly proven while a
 member-role principal executes a legal write that makes them an owner.
 
-- [ ] Derive a grant model (principals, resources, right-kinds, delegation edges) from the annotations
+- [x] Derive a grant model (principals, resources, right-kinds, delegation edges) from the annotations
       that already exist, so it cannot drift from the schema.
-- [ ] Enumerate every mutation whose declared write scope intersects an authz-bearing table; those are
+  - Evidence: the focused grant-model suite passes 11/11 over schema-derived resources and rights.
+- [x] Enumerate every mutation whose declared write scope intersects an authz-bearing table; those are
       the transition rules. Restrict to a monotone/attenuating fragment where the HRU safe-state
       question is decidable; bounded-model-check it; **fail closed to ⊤ for any write the analyzer
       cannot classify**.
-- [ ] Delegation and impersonation as first-class **attenuating** constructs (`onBehalfOf` yielding a
+  - Evidence: the same 11/11 suite checks the bounded transition relation and KV414 top verdict.
+- [x] Delegation and impersonation as first-class **attenuating** constructs (`onBehalfOf` yielding a
       provably subset right-set, carrying plan-2 §3.3's epoch so revocation propagates) — `owns()` is
       explicitly single-hop today and impersonation/support-access appears nowhere in SPEC. Grant edges
       outside the fragment become named budgeted escapes in `kovo explain --grants`.
+  - Evidence: the same suite proves subset-only delegation with epoch binding and explain-visible escapes.
 
 ### 3.3 Assume-guarantee deployment contract (~1–1.5 pm)
 
@@ -549,15 +556,18 @@ member-role principal executes a legal write that makes them an owner.
 `spec/09-wire-protocol.md:223-231` already carries an ad-hoc forwarded-scheme operator contract and
 §6.6 rule (6) already carves out host preload / `NODE_OPTIONS`.
 
-- [ ] Give every guarantee a machine-readable **antecedent**, derived from the doors that _consume_
+- [x] Give every guarantee a machine-readable **antecedent**, derived from the doors that _consume_
       those environment facts (sole occupant of the registrable domain, exactly-N trusted proxy hops
       with a pinned edge, no non-Kovo writer on the schema, TLS terminator identity, no shared cache,
       bootstrap order) — plan-2's derive-don't-author rule applied to assumptions.
-- [ ] `kovo check env`: discharge what is probeable, print the rest as **retained obligations** naming
+  - Evidence: the deployment environment suite passes 5/5 against the consuming-door registry.
+- [x] `kovo check env`: discharge what is probeable, print the rest as **retained obligations** naming
       the exact guarantees they suspend.
-- [ ] A composition operator for the two real cases: Kovo × Kovo on a shared registrable domain (cookie
+  - Evidence: the same 5/5 suite keeps unobservable facts retained and suspends dependent guarantees.
+- [x] A composition operator for the two real cases: Kovo × Kovo on a shared registrable domain (cookie
       tossing defeats CSRF binding regardless of how well the mint door is proven), and Kovo mounted
       under a foreign host — with a `mounted` posture that refuses to claim what it cannot own.
+  - Evidence: the same suite rejects shared-domain CSRF claims and withholds host-owned mounted claims.
 
 ### 3.4 Derived-dataset authorization inheritance (~1–1.5 pm; needs plan-2 §3.1 ScopedKey)
 
@@ -581,9 +591,11 @@ packages/server/src/derived-dataset.test.ts` passes 15/15, including KV452 persi
 `rules/dependency-policy.md` is well-built but governs **only** Kovo's own `trustedDependencySurfaces`.
 The app's dependency graph — far larger, far less curated — has no policy at all.
 
-- [ ] Derive a per-dependency capability manifest from plan-1 L1's module-graph census and enforce it
+- [x] Derive a per-dependency capability manifest from plan-1 L1's module-graph census and enforce it
       at the loader/import path, so the build-time census becomes a **runtime bound**. Label as
       fail-closed floor / defense-in-depth per §6.6 rule (3), **never** by-construction.
+  - Evidence: `dependency-capability-loader.test.ts` passes 73/73 across identity, export-condition,
+    dynamic-load, digest, contradiction, and closed-verdict controls.
 - [x] Deny-by-default lifecycle-script policy generated by `create-kovo`.
   - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.lifecycle-policy.test.ts`
     passes 4/4 against offline pnpm 10.12.1: unreviewed hooks fail installation without executing,
