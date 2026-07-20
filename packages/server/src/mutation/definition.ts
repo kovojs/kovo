@@ -33,6 +33,11 @@ import {
 } from '../security-witness-intrinsics.js';
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
+import type {
+  PrincipalEpochAdvanceReason,
+  PrincipalEpochStore,
+  PrincipalEpochTombstoneReason,
+} from '../principal-epoch.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 import { validateMutationCsrfPosture } from './csrf-posture.js';
 
@@ -356,6 +361,8 @@ export interface MutationDefinition<
   input: InputSchema;
   key: Key;
   optimistic?: MutationOptimisticMap<Key, InputSchema>;
+  /** Explicit privilege-lifecycle door; Kovo never infers this semantic fact from table names. */
+  principalEpoch?: PrincipalEpochMutationDeclaration<InferSchema<InputSchema>, GuardedRequest>;
   queue?: string | true | MutationQueue;
   /**
    * Mutation-local success redirect policy for dynamic POST-redirect-GET targets (SPEC §9.1 PRG).
@@ -455,9 +462,24 @@ export interface RunMutationOptions<
    * `guardResolved`; direct callers omit it and `runMutation` parses `rawInput` itself.
    */
   preParsedInput?: { value: unknown };
+  /** App-scoped persistent principal revocation authority. */
+  principalEpochStore?: PrincipalEpochStore;
   /** @internal Transaction-scoped durable task scheduler used by request.schedule/cancel (SPEC §9.6). */
   taskScheduler?: TaskScheduler;
 }
+
+/** Closed privilege-change declaration used as a mutation-registry completeness fact. */
+export type PrincipalEpochMutationDeclaration<Input, Request> =
+  | {
+      readonly action: 'advance';
+      readonly principal: (input: Input, request: Request) => string;
+      readonly reason: PrincipalEpochAdvanceReason;
+    }
+  | {
+      readonly action: 'tombstone';
+      readonly principal: (input: Input, request: Request) => string;
+      readonly reason: PrincipalEpochTombstoneReason;
+    };
 
 /** @internal Runtime adapter implemented by the durable task queue/runner integration. */
 export interface TaskScheduler {
@@ -676,6 +698,8 @@ function snapshotMutationDefinition(
     const stableValue =
       key === 'csrf' && typeof before.value === 'object' && before.value !== null
         ? snapshotMutationCsrfOptions(before.value as CsrfOptions<unknown>)
+        : key === 'principalEpoch'
+          ? snapshotPrincipalEpochMutationDeclaration(before.value)
         : before.value;
     witnessDefineProperty(snapshot, key, {
       configurable: true,
@@ -686,6 +710,59 @@ function snapshotMutationDefinition(
   }
   validateMutationCsrfPosture(snapshot);
   return snapshot as MutationDefinitionWithoutKey;
+}
+
+function snapshotPrincipalEpochMutationDeclaration(
+  source: unknown,
+): PrincipalEpochMutationDeclaration<unknown, unknown> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('mutation() principalEpoch must be a stable declaration object.');
+  }
+  const action = principalEpochDeclarationOwnDataValue(source, 'action');
+  const principal = principalEpochDeclarationOwnDataValue(source, 'principal');
+  const reason = principalEpochDeclarationOwnDataValue(source, 'reason');
+  if (typeof principal !== 'function') {
+    throw new TypeError('mutation() principalEpoch.principal must be a selector function.');
+  }
+  if (action === 'advance') {
+    if (
+      reason !== 'principal-created' &&
+      reason !== 'password-change' &&
+      reason !== 'role-change' &&
+      reason !== 'tenant-change' &&
+      reason !== 'admin-change' &&
+      reason !== 'provider-revocation' &&
+      reason !== 'manual-security-invalidation'
+    ) {
+      throw new TypeError('mutation() principalEpoch advance reason is unsupported.');
+    }
+    return witnessFreeze({ action, principal, reason });
+  }
+  if (action === 'tombstone') {
+    if (reason !== 'principal-deletion' && reason !== 'provider-deletion') {
+      throw new TypeError('mutation() principalEpoch tombstone reason is unsupported.');
+    }
+    return witnessFreeze({ action, principal, reason });
+  }
+  throw new TypeError('mutation() principalEpoch.action must be advance or tombstone.');
+}
+
+function principalEpochDeclarationOwnDataValue(
+  source: object,
+  property: 'action' | 'principal' | 'reason',
+): unknown {
+  const before = witnessGetOwnPropertyDescriptor(source, property);
+  const after = witnessGetOwnPropertyDescriptor(source, property);
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    !witnessObjectIs(before.value, after.value)
+  ) {
+    throw new TypeError(`mutation() principalEpoch.${property} must be stable own data.`);
+  }
+  return before.value;
 }
 
 /**

@@ -50,6 +50,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isLiveTargetRenderers(value.liveTargetRenderers) &&
     isVersionedClientModuleRegistry(value.clientModules) &&
     isOptionalMutationReplayStore(value.mutationReplayStore) &&
+    isOptionalPrincipalEpochStore(value.principalEpochStore) &&
     (isOptionalFunction(value.db) || isFrameworkManagedDbProvider(value.db)) &&
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
@@ -366,5 +367,16 @@ function isOptionalMutationReplayStore(value: unknown): boolean {
       typeof value.get === 'function' &&
       typeof value.reserve === 'function' &&
       typeof value.set === 'function')
+  );
+}
+
+function isOptionalPrincipalEpochStore(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isRecord(value) &&
+      typeof value.current === 'function' &&
+      typeof value.initialize === 'function' &&
+      typeof value.advance === 'function' &&
+      typeof value.tombstone === 'function')
   );
 }

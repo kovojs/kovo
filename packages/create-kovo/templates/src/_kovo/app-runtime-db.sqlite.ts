@@ -1,6 +1,11 @@
 import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqlite';
 import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
-import { type AccessDecision, type CsrfOptions, type MutationReplayStore } from '@kovojs/server';
+import {
+  type AccessDecision,
+  type CsrfOptions,
+  type MutationReplayStore,
+  type PrincipalEpochStore,
+} from '@kovojs/server';
 
 import {
   account,
@@ -53,6 +58,7 @@ const authSystemDb = appDatabase.systemDb({
 
 /** Volatile local-development replay token; opaque and non-callable in app-authored modules. */
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
+export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
 interface AppAuthBindingOptions {
   csrf: CsrfOptions<AppRequest>;
@@ -77,6 +83,7 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
       id: authSession.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
+    principalEpochStore: appRuntimePrincipalEpochStore,
     schema: authSchema,
     signInAccess: options.signInAccess,
     signOutAccess: options.signOutAccess,

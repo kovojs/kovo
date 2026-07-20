@@ -45,6 +45,7 @@ import * as managedDbApi from '../managed-db.js';
 import * as sqlSafeHandleApi from '../sql-safe-handle.js';
 import * as passwordApi from '../password.js';
 import * as postgresRuntimeApi from '../postgres-runtime.js';
+import * as principalEpochApi from '../principal-epoch.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
@@ -660,6 +661,13 @@ describe('server app-shell public API barrels', () => {
       verifyPassword: passwordApi.verifyPassword,
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
+      // SPEC §6.6/§10.3: persistent principal revocation state is an app-facing lifecycle door.
+      advancePrincipalEpoch: principalEpochApi.advancePrincipalEpoch,
+      createMemoryPrincipalEpochStore: principalEpochApi.createMemoryPrincipalEpochStore,
+      initializePrincipalEpoch: principalEpochApi.initializePrincipalEpoch,
+      PrincipalEpochStaleError: principalEpochApi.PrincipalEpochStaleError,
+      PrincipalEpochUnavailableError: principalEpochApi.PrincipalEpochUnavailableError,
+      tombstonePrincipalEpoch: principalEpochApi.tombstonePrincipalEpoch,
       postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
       createRequestHandler: requestHandlerApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,

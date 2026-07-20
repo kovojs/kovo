@@ -381,7 +381,12 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.tsx')).toContain(
       'const mutationReplayStore = appRuntimeMutationReplayStore;',
     );
+    expect(files.get('src/app.tsx')).toContain('appRuntimePrincipalEpochStore');
+    expect(files.get('src/app.tsx')).toContain(
+      'const principalEpochStore = appRuntimePrincipalEpochStore;',
+    );
     expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
+    expect(files.get('src/app.tsx')).toContain('principalEpochStore,');
     expect(files.get('src/app.tsx')).toContain("} from './_kovo/app-runtime-db.js'");
     expect(files.get('src/app.tsx')).not.toContain("import { appDbReady } from './db.js'");
     expect(files.get('src/app.tsx')).not.toContain('appRuntimeDbReady');

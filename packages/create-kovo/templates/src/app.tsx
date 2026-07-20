@@ -21,7 +21,11 @@ import {
   appSignOut,
   type AppRequest,
 } from './auth.js';
-import { appRuntimeDbProvider, appRuntimeMutationReplayStore } from './_kovo/app-runtime-db.js';
+import {
+  appRuntimeDbProvider,
+  appRuntimeMutationReplayStore,
+  appRuntimePrincipalEpochStore,
+} from './_kovo/app-runtime-db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
@@ -35,6 +39,7 @@ const clientModules = createMemoryVersionedClientModuleRegistry();
 // SPEC §10.3: duplicate same-principal enhanced POSTs reserve and replay through durable
 // system-role Postgres truth, including across process restart and multiple replicas.
 const mutationReplayStore = appRuntimeMutationReplayStore;
+const principalEpochStore = appRuntimePrincipalEpochStore;
 
 const styles = style.create({
   shell: {
@@ -165,6 +170,7 @@ const app = createApp({
   document: { lang: 'en' },
   endpoints: [healthEndpoint],
   mutationReplayStore,
+  principalEpochStore,
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
   sessionProvider: appSessionProvider,

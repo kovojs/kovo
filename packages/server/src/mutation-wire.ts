@@ -25,6 +25,7 @@ import type { LiveTargetAttestationAuthority } from './live-target-app-identity.
 import type { RegisteredQueryDefinition } from './query.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
+import type { PrincipalEpochStore } from './principal-epoch.js';
 import type { MutationRenderRequestResolver } from './mutation-render-request-authority.js';
 import { isNativeRequest } from './request-carrier.js';
 import { requestCreateUrl, requestUrl, requestUrlSnapshot } from './request-body-intrinsics.js';
@@ -151,6 +152,7 @@ export interface MutationWireRequest<
     rawInput: unknown,
   ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<MutationEndpointReplayResponse>;
+  principalEpochStore?: PrincipalEpochStore;
   /** Framework-owned lazy authorization for the source document used by response renderers. */
   resolveRenderRequest?: MutationRenderRequestResolver<Request>;
   resolvePostLifecycleResponse?: MutationPostLifecycleResponseResolver;
@@ -286,6 +288,7 @@ export interface MutationWireRequestOptions<
     rawInput: unknown,
   ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<MutationEndpointReplayResponse>;
+  principalEpochStore?: PrincipalEpochStore;
   /** Framework-owned lazy authorization for the source document used by response renderers. */
   resolveRenderRequest?: MutationRenderRequestResolver<Request>;
   resolvePostLifecycleResponse?: MutationPostLifecycleResponseResolver;
@@ -338,6 +341,7 @@ export interface NoJsMutationRequest<
   renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   /** Replay store for no-JS dedup (A2, SPEC §10.3:1063). Typed as a separate interface to allow 303 responses. */
   replayStore?: NoJsMutationReplayStore;
+  principalEpochStore?: PrincipalEpochStore;
   resolvePostLifecycleResponse?: MutationPostLifecycleResponseResolver;
   request: Request;
   /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
@@ -516,6 +520,9 @@ export function mutationWireRequestFromHeaders<Request>(
       ? {}
       : { renderFailureFragment: options.renderFailureFragment }),
     ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
+    ...(options.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: options.principalEpochStore }),
     ...(options.resolveRenderRequest === undefined
       ? {}
       : { resolveRenderRequest: options.resolveRenderRequest }),

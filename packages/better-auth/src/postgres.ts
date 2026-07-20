@@ -1,8 +1,10 @@
 import {
+  initializePrincipalEpoch,
   postgresSchemaModule,
   type AccessDecision,
   type CsrfOptions,
   type KovoPostgresSystemDb,
+  type PrincipalEpochStore,
   type SessionProvider,
 } from '@kovojs/server';
 import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
@@ -94,6 +96,8 @@ export interface BetterAuthPostgresBindingsOptions<
   developmentSeed?: BetterAuthDevelopmentSeed;
   /** Sanitized projection from Better Auth's credential-free session/user records. */
   mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
+  /** Persistent revocation authority initialized from each authenticated provider identity. */
+  principalEpochStore?: PrincipalEpochStore;
   /** Exact Better Auth Drizzle table record from the app's pinned Postgres schema. */
   schema: Record<string, unknown>;
   /** Better Auth signing secret. */
@@ -156,6 +160,11 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
     );
   }
   const environment = resolveBetterAuthEnvironment();
+  const principalEpochStore = betterAuthOwnDataOption<PrincipalEpochStore>(
+    options,
+    'principalEpochStore',
+    'Better Auth Postgres binding option principalEpochStore',
+  );
   return createBetterAuthPostgresBindings<Request, SessionValue, AuthenticatedRequest>({
     baseURL: environment.baseURL,
     csrf: requiredOption<CsrfOptions<Request>>(options, 'csrf'),
@@ -166,6 +175,7 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
       options,
       'mapSession',
     ),
+    ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
     schema: requiredOption<Record<string, unknown>>(options, 'schema'),
     secret: betterAuthPostgresSecret(environment.secret),
     signInAccess: requiredOption<AccessDecision>(options, 'signInAccess'),
@@ -206,6 +216,19 @@ export function createBetterAuthPostgresBindings<
   );
   if (typeof mapSession !== 'function') {
     throw new NativeTypeError('Better Auth Postgres binding mapSession must be a function.');
+  }
+  const principalEpochStore = betterAuthOwnDataOption<PrincipalEpochStore>(
+    options,
+    'principalEpochStore',
+    'Better Auth Postgres binding option principalEpochStore',
+  );
+  if (
+    principalEpochStore !== undefined &&
+    (typeof principalEpochStore !== 'object' || principalEpochStore === null)
+  ) {
+    throw new NativeTypeError(
+      'Better Auth Postgres binding principalEpochStore must be a stable object.',
+    );
   }
   const schema = requiredOption<Record<string, unknown>>(options, 'schema');
   if (typeof schema !== 'object' || schema === null) {
@@ -276,7 +299,20 @@ export function createBetterAuthPostgresBindings<
   const auth = consumeBetterAuthCredentialResult(adapterConsumer, sealedAuth);
   registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'Better Auth Postgres binding');
   const mountAdapter = createBetterAuthMountAdapter(auth, baseURL);
-  const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
+  const sessionProvider = betterAuthSession<Session, User, SessionValue>(
+    auth,
+    mapSession,
+    principalEpochStore === undefined
+      ? undefined
+      : async (payload) => {
+          const principal = betterAuthOwnDataOption<unknown>(
+            payload.user,
+            'id',
+            'Better Auth sanitized user.id',
+          );
+          await initializePrincipalEpoch(principalEpochStore, principal as string);
+        },
+  );
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,
     csrf,

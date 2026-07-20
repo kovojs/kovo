@@ -92,6 +92,7 @@ export type {
   MutationFail,
   MutationFormDefinition,
   MutationHandlerRequest,
+  PrincipalEpochMutationDeclaration,
   MutationQueue,
   MutationRequestDb,
   MutationResult,

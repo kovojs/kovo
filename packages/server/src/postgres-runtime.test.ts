@@ -39,6 +39,13 @@ import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-q
 import { mintMutationIdemToken } from './mutation-idem.js';
 import { createPostgresPostureDigest } from './postgres-posture-lease.js';
 import { isDurableMutationReplayStore, mutationReplayScopedKey } from './replay.js';
+import {
+  advancePrincipalEpoch,
+  currentPrincipalEpoch,
+  initializePrincipalEpoch,
+  isDurablePrincipalEpochStore,
+  tombstonePrincipalEpoch,
+} from './principal-epoch.js';
 import { replayMutationWireBody } from './response.js';
 import { isDurableWebhookReplayStore } from './webhook.js';
 
@@ -359,6 +366,68 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('persists strictly monotone principal epochs and tombstones across PGlite restart', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-principal-epoch-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    expect(isDurablePrincipalEpochStore(initial.principalEpochStore)).toBe(true);
+    await initial.ready;
+    const created = await initializePrincipalEpoch(
+      initial.principalEpochStore,
+      'user-epoch-test',
+    );
+    await expect(
+      initializePrincipalEpoch(initial.principalEpochStore, 'user-epoch-test'),
+    ).resolves.toEqual(created);
+    await initial.close();
+
+    const restarted = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await restarted.ready;
+    expect(
+      await currentPrincipalEpoch(restarted.principalEpochStore, 'user-epoch-test'),
+    ).toEqual(created);
+    const changed = await advancePrincipalEpoch(
+      restarted.principalEpochStore,
+      'user-epoch-test',
+      'role-change',
+    );
+    expect(changed.epoch).toBe(created.epoch + 1);
+    expect(changed.changedAtMs).toBeGreaterThan(created.changedAtMs);
+    const deleted = await tombstonePrincipalEpoch(
+      restarted.principalEpochStore,
+      'user-epoch-test',
+      'principal-deletion',
+    );
+    expect(deleted.status).toBe('tombstoned');
+    await restarted.close();
+  });
+
+  it('fails posture on a weakened principal epoch alphabet or non-system grant', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-principal-epoch-posture-'));
+    roots.push(dataDir);
+    const initial = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+    await initial.ready;
+    await initial.close();
+
+    const weakened = new PGlite(dataDir);
+    await weakened.exec(
+      [
+        'ALTER TABLE _kovo_principal_epoch DROP CONSTRAINT _kovo_principal_epoch_status_check;',
+        "ALTER TABLE _kovo_principal_epoch ADD CONSTRAINT _kovo_principal_epoch_status_check CHECK (status IN ('active', 'tombstoned', 'attacker'));",
+        'GRANT DELETE ON _kovo_principal_epoch TO kovo_writer;',
+      ].join(' '),
+    );
+    await weakened.close();
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'KV433_PRINCIPAL_EPOCH_SCHEMA' }),
+        expect.objectContaining({ code: 'KV433_PRINCIPAL_EPOCH_ACL' }),
+      ]),
+    );
   });
 
   it('fails posture on weakened temporal replay constraints, column type, and cleanup index', async () => {

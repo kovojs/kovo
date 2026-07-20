@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import {
   createBoundedRuntimeAuditCollector,
   mintFrameworkDurableReplayStoreReceipt,
+  mintFrameworkPrincipalEpochStoreReceipt,
 } from '@kovojs/core/internal/security-markers';
 import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
@@ -95,6 +96,11 @@ import {
 } from './postgres-posture-lease.js';
 import type { CapabilityReplayStore } from './capability-url.js';
 import type { MutationReplayStore } from './replay.js';
+import {
+  createPostgresPrincipalEpochStoreFromExecutor,
+  POSTGRES_PRINCIPAL_EPOCH_TABLE,
+} from './postgres-principal-epoch.js';
+import type { PrincipalEpochStore } from './principal-epoch.js';
 import {
   forEachReadonlyMapEntry,
   forEachReadonlySetValue,
@@ -193,6 +199,7 @@ const FRAMEWORK_INTERNAL_REACHABLE_TABLES = postgresStringSet([
   MIGRATIONS_TABLE,
   POSTGRES_REPLAY_TABLE,
   POSTGRES_REPLAY_WATERMARK_TABLE,
+  POSTGRES_PRINCIPAL_EPOCH_TABLE,
   '_kovo_task_cron_occurrences',
   SCHEMA_STATE_TABLE,
 ]);
@@ -1569,6 +1576,8 @@ export interface KovoPostgresAppRuntimeDb {
   readonly db: FrameworkManagedDbProvider<KovoPostgresRuntimeDb>;
   /** Framework-system durable mutation idempotency truth (SPEC §10.3). */
   readonly mutationReplayStore: MutationReplayStore;
+  /** Framework-system persistent monotone principal revocation truth (SPEC §6.6/§10.3). */
+  readonly principalEpochStore: PrincipalEpochStore;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
   ready: Promise<void>;
   /** Operator reconciliation for an exact crash-orphaned pending replay claim (SPEC §10.3). */
@@ -1722,6 +1731,7 @@ export function createPostgresAppRuntimeDb(
   });
   let capabilityReplayStore: CapabilityReplayStore | undefined;
   let mutationReplayStore: MutationReplayStore | undefined;
+  let principalEpochStore: PrincipalEpochStore | undefined;
   let replaySqlExecutor: ReturnType<typeof createDurableTaskSqlExecutor> | undefined;
   let webhookReplayStore: WebhookReplayStore | undefined;
 
@@ -1767,6 +1777,12 @@ export function createPostgresAppRuntimeDb(
     webhookReplayStore ??= createPostgresWebhookReplayStoreFromExecutor(durableReplaySqlExecutor());
     return webhookReplayStore;
   };
+  const durablePrincipalEpochStore = (): PrincipalEpochStore => {
+    principalEpochStore ??= createPostgresPrincipalEpochStoreFromExecutor(
+      durableReplaySqlExecutor(),
+    );
+    return principalEpochStore;
+  };
   const capabilityStore: CapabilityReplayStore = witnessFreeze({
     consume(id, expiresAt) {
       return durableCapabilityReplayStore().consume(id, expiresAt);
@@ -1785,6 +1801,21 @@ export function createPostgresAppRuntimeDb(
     },
   });
   mintFrameworkDurableReplayStoreReceipt(mutationStore, 'mutation');
+  const principalStore: PrincipalEpochStore = witnessFreeze({
+    current(principal, options) {
+      return durablePrincipalEpochStore().current(principal, options);
+    },
+    initialize(principal) {
+      return durablePrincipalEpochStore().initialize(principal);
+    },
+    advance(principal, reason) {
+      return durablePrincipalEpochStore().advance(principal, reason);
+    },
+    tombstone(principal, reason) {
+      return durablePrincipalEpochStore().tombstone(principal, reason);
+    },
+  });
+  mintFrameworkPrincipalEpochStoreReceipt(principalStore);
   const webhookStore: WebhookReplayStore = witnessFreeze({
     get(scope, idem) {
       return durableWebhookReplayStore().get(scope, idem);
@@ -1814,6 +1845,7 @@ export function createPostgresAppRuntimeDb(
       },
     ),
     mutationReplayStore: mutationStore,
+    principalEpochStore: principalStore,
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
     releasePendingReplay(target, releaseOptions) {
@@ -2226,6 +2258,9 @@ async function provisionRuntimeDb(
     );
     await withPostgresAppDdlSearchPath(tx, () =>
       provisionPostgresFrameworkReplayStore(tx, input.config, input.runtimeLoginRole),
+    );
+    await withPostgresAppDdlSearchPath(tx, () =>
+      provisionPostgresPrincipalEpochStore(tx, input.config, input.runtimeLoginRole),
     );
     await applyPostgresRlsPolicies(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
@@ -2726,6 +2761,11 @@ async function checkRuntimeDbPostureTransaction(
     issues,
     await postgresReplayStorePostureIssues(client, input.config, runtimeLoginRole),
     'Postgres replay store posture issues',
+  );
+  appendPostgresDenseValues(
+    issues,
+    await postgresPrincipalEpochStorePostureIssues(client, input.config, runtimeLoginRole),
+    'Postgres principal epoch store posture issues',
   );
   if (input.config.driver === 'node-postgres') {
     appendPostgresDenseValues(
@@ -3997,6 +4037,44 @@ async function provisionPostgresFrameworkReplayStore(
   await client.exec(`GRANT SELECT ON TABLE ${watermarkTable} TO ${quoteIdent(config.adminRole)}`);
 }
 
+/** Provision persistent per-principal revocation truth outside ordinary app-role authority. */
+async function provisionPostgresPrincipalEpochStore(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<void> {
+  const table = quoteQualified('public', POSTGRES_PRINCIPAL_EPOCH_TABLE);
+  await client.exec(
+    postgresJoin(
+      [
+        `CREATE TABLE IF NOT EXISTS ${table} (`,
+        'principal_digest text PRIMARY KEY CHECK (char_length(principal_digest) BETWEEN 40 AND 128),',
+        'epoch bigint NOT NULL CHECK (epoch >= 1),',
+        'changed_at_ms bigint NOT NULL CHECK (changed_at_ms >= 0),',
+        "status text NOT NULL CHECK (status IN ('active', 'tombstoned')),",
+        'last_reason text NOT NULL CHECK (last_reason IN (',
+        "'principal-created', 'password-change', 'role-change', 'tenant-change',",
+        "'admin-change', 'provider-revocation', 'manual-security-invalidation',",
+        "'principal-deletion', 'provider-deletion')))",
+      ],
+      ' ',
+    ),
+  );
+  await client.exec(`REVOKE ALL ON TABLE ${table} FROM PUBLIC`);
+  const deniedRoles = [config.readerRole, config.writerRole, config.adminRole, config.systemRole];
+  if (runtimeLoginRole !== undefined) appendPostgresDenseValue(deniedRoles, runtimeLoginRole);
+  const seen = createWitnessSet<string>();
+  for (let index = 0; index < deniedRoles.length; index += 1) {
+    const role = postgresDenseValue(deniedRoles, index, 'Postgres principal epoch denied roles');
+    if (witnessSetHas(seen, role)) continue;
+    witnessSetAdd(seen, role);
+    await client.exec(`REVOKE ALL ON TABLE ${table} FROM ${quoteIdent(role)}`);
+  }
+  await client.exec(
+    `GRANT SELECT, INSERT, UPDATE ON TABLE ${table} TO ${quoteIdent(config.systemRole)}`,
+  );
+}
+
 interface PostgresReplayPrivilegeRow {
   can_any_column_insert: boolean;
   can_any_column_references: boolean;
@@ -4046,6 +4124,35 @@ interface PostgresReplayWatermarkShapeRow {
   exact_value_constraint: boolean;
 }
 
+interface PostgresPrincipalEpochShapeRow {
+  exact_changed_at_column: boolean;
+  exact_changed_at_constraint: boolean;
+  exact_column_count: boolean;
+  exact_epoch_column: boolean;
+  exact_epoch_constraint: boolean;
+  exact_identity_constraint: boolean;
+  exact_principal_column: boolean;
+  exact_principal_constraint: boolean;
+  exact_reason_column: boolean;
+  exact_reason_constraint: boolean;
+  exact_status_column: boolean;
+  exact_status_constraint: boolean;
+}
+
+interface PostgresPrincipalEpochPrivilegeRow {
+  can_any_column_insert: boolean;
+  can_any_column_references: boolean;
+  can_any_column_select: boolean;
+  can_any_column_update: boolean;
+  can_delete: boolean;
+  can_insert: boolean;
+  can_references: boolean;
+  can_select: boolean;
+  can_trigger: boolean;
+  can_truncate: boolean;
+  can_update: boolean;
+}
+
 const POSTGRES_REPLAY_SURFACE_CONSTRAINT =
   "CHECK ((surface = ANY (ARRAY['capability'::text, 'mutation'::text, 'webhook'::text])))";
 const POSTGRES_REPLAY_EXPIRY_CONSTRAINT = 'CHECK (((expires_at IS NULL) OR (expires_at > 0)))';
@@ -4060,6 +4167,14 @@ const POSTGRES_REPLAY_COMMITTED_INDEX_PREDICATE = "(state = 'committed'::text)";
 const POSTGRES_REPLAY_ADMISSION_INDEX_PREDICATE =
   "((surface = ANY (ARRAY['mutation'::text, 'webhook'::text])) AND (state = 'pending'::text))";
 const POSTGRES_REPLAY_WATERMARK_VALUE_CONSTRAINT = 'CHECK ((reclaimed_through >= 0))';
+const POSTGRES_PRINCIPAL_EPOCH_PRINCIPAL_CONSTRAINT =
+  'CHECK (((char_length(principal_digest) >= 40) AND (char_length(principal_digest) <= 128)))';
+const POSTGRES_PRINCIPAL_EPOCH_VALUE_CONSTRAINT = 'CHECK ((epoch >= 1))';
+const POSTGRES_PRINCIPAL_EPOCH_CHANGED_AT_CONSTRAINT = 'CHECK ((changed_at_ms >= 0))';
+const POSTGRES_PRINCIPAL_EPOCH_STATUS_CONSTRAINT =
+  "CHECK ((status = ANY (ARRAY['active'::text, 'tombstoned'::text])))";
+const POSTGRES_PRINCIPAL_EPOCH_REASON_CONSTRAINT =
+  "CHECK ((last_reason = ANY (ARRAY['principal-created'::text, 'password-change'::text, 'role-change'::text, 'tenant-change'::text, 'admin-change'::text, 'provider-revocation'::text, 'manual-security-invalidation'::text, 'principal-deletion'::text, 'provider-deletion'::text])))";
 
 async function postgresReplayStorePostureIssues(
   client: RuntimeTransactionClient,
@@ -4482,6 +4597,258 @@ async function postgresReplayStorePostureIssues(
           : expected.watermarkRead
             ? `${expected.role} must have no access to public._kovo_replay and exactly SELECT on public._kovo_replay_reclaimed`
             : `${expected.role} must not have effective access to the replay truth or reclamation-watermark relations`,
+      });
+    }
+  }
+  return issues;
+}
+
+async function postgresPrincipalEpochStorePostureIssues(
+  client: RuntimeTransactionClient,
+  config: ResolvedPostgresRuntimeConfig,
+  runtimeLoginRole: string | undefined,
+): Promise<KovoPostgresPostureIssue[]> {
+  const relation = await safeQuery<{ exists: boolean }>(
+    client,
+    "SELECT to_regclass('public._kovo_principal_epoch') IS NOT NULL AS exists",
+  );
+  const relationRow =
+    relation === undefined ||
+    postgresDenseArrayLength(relation.rows, 'Postgres principal epoch relation rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(
+          relation.rows,
+          0,
+          'Postgres principal epoch relation rows',
+        );
+  if (relationRow?.exists !== true) {
+    return [
+      {
+        code: 'KV433_PRINCIPAL_EPOCH_SCHEMA',
+        detail:
+          'public._kovo_principal_epoch is missing; provision the persistent principal revocation authority before boot',
+      },
+    ];
+  }
+
+  const issues: KovoPostgresPostureIssue[] = [];
+  const shape = await safeQuery<PostgresPrincipalEpochShapeRow>(
+    client,
+    postgresJoin(
+      [
+        'SELECT (SELECT COUNT(*) = 5 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        'AND column_row.attnum > 0 AND NOT column_row.attisdropped) AS exact_column_count,',
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'principal_digest' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_principal_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'epoch' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_epoch_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'changed_at_ms' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'bigint') AS exact_changed_at_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'status' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_status_column,",
+        'EXISTS (SELECT 1 FROM pg_attribute AS column_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = column_row.attrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND column_row.attname = 'last_reason' AND column_row.attnum > 0",
+        'AND NOT column_row.attisdropped AND column_row.attnotnull',
+        "AND format_type(column_row.atttypid, column_row.atttypmod) = 'text') AS exact_reason_column,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        'JOIN pg_attribute AS principal_column ON principal_column.attrelid = relation_row.oid',
+        'AND principal_column.attnum = constraint_row.conkey[1]',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'p' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_pkey'",
+        'AND cardinality(constraint_row.conkey) = 1',
+        "AND principal_column.attname = 'principal_digest') AS exact_identity_constraint,",
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_principal_digest_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $1) AS exact_principal_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_epoch_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $2) AS exact_epoch_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_changed_at_ms_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $3) AS exact_changed_at_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_status_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $4) AS exact_status_constraint,',
+        'EXISTS (SELECT 1 FROM pg_constraint AS constraint_row',
+        'JOIN pg_class AS relation_row ON relation_row.oid = constraint_row.conrelid',
+        'JOIN pg_namespace AS namespace_row ON namespace_row.oid = relation_row.relnamespace',
+        "WHERE namespace_row.nspname = 'public' AND relation_row.relname = '_kovo_principal_epoch'",
+        "AND constraint_row.contype = 'c' AND constraint_row.convalidated",
+        'AND NOT constraint_row.condeferrable AND NOT constraint_row.condeferred',
+        "AND constraint_row.conname = '_kovo_principal_epoch_last_reason_check'",
+        'AND pg_get_constraintdef(constraint_row.oid) = $5) AS exact_reason_constraint',
+      ],
+      ' ',
+    ),
+    [
+      POSTGRES_PRINCIPAL_EPOCH_PRINCIPAL_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_VALUE_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_CHANGED_AT_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_STATUS_CONSTRAINT,
+      POSTGRES_PRINCIPAL_EPOCH_REASON_CONSTRAINT,
+    ],
+  );
+  const shapeRow =
+    shape === undefined ||
+    postgresDenseArrayLength(shape.rows, 'Postgres principal epoch shape rows') === 0
+      ? undefined
+      : postgresDenseArrayValue(shape.rows, 0, 'Postgres principal epoch shape rows');
+  if (
+    shapeRow?.exact_column_count !== true ||
+    shapeRow.exact_principal_column !== true ||
+    shapeRow.exact_epoch_column !== true ||
+    shapeRow.exact_changed_at_column !== true ||
+    shapeRow.exact_status_column !== true ||
+    shapeRow.exact_reason_column !== true ||
+    shapeRow.exact_identity_constraint !== true ||
+    shapeRow.exact_principal_constraint !== true ||
+    shapeRow.exact_epoch_constraint !== true ||
+    shapeRow.exact_changed_at_constraint !== true ||
+    shapeRow.exact_status_constraint !== true ||
+    shapeRow.exact_reason_constraint !== true
+  ) {
+    appendPostgresDenseValue(issues, {
+      code: 'KV433_PRINCIPAL_EPOCH_SCHEMA',
+      detail:
+        'public._kovo_principal_epoch must have the exact digest identity, monotone epoch/timestamp bounds, and closed active/tombstoned reason alphabet',
+    });
+  }
+
+  const roles: { allow: boolean; role: string }[] = [
+    { allow: false, role: config.readerRole },
+    { allow: false, role: config.writerRole },
+    { allow: false, role: config.adminRole },
+    { allow: true, role: config.systemRole },
+  ];
+  if (runtimeLoginRole !== undefined) {
+    appendPostgresDenseValue(roles, { allow: false, role: runtimeLoginRole });
+  }
+  const seen = createWitnessSet<string>();
+  const roleCount = postgresDenseArrayLength(roles, 'Postgres principal epoch privilege roles');
+  for (let index = 0; index < roleCount; index += 1) {
+    const expected = postgresDenseArrayValue(
+      roles,
+      index,
+      'Postgres principal epoch privilege roles',
+    );
+    if (witnessSetHas(seen, expected.role)) continue;
+    witnessSetAdd(seen, expected.role);
+    const privileges = await safeQuery<PostgresPrincipalEpochPrivilegeRow>(
+      client,
+      postgresJoin(
+        [
+          "SELECT has_table_privilege($1, 'public._kovo_principal_epoch', 'SELECT') AS can_select,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'INSERT') AS can_insert,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'UPDATE') AS can_update,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'DELETE') AS can_delete,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'TRUNCATE') AS can_truncate,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'REFERENCES') AS can_references,",
+          "has_table_privilege($1, 'public._kovo_principal_epoch', 'TRIGGER') AS can_trigger,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'SELECT') AS can_any_column_select,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'INSERT') AS can_any_column_insert,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'UPDATE') AS can_any_column_update,",
+          "has_any_column_privilege($1, 'public._kovo_principal_epoch', 'REFERENCES') AS can_any_column_references",
+        ],
+        ' ',
+      ),
+      [expected.role],
+    );
+    const privilegeRow =
+      privileges === undefined ||
+      postgresDenseArrayLength(privileges.rows, 'Postgres principal epoch privilege rows') === 0
+        ? undefined
+        : postgresDenseArrayValue(
+            privileges.rows,
+            0,
+            'Postgres principal epoch privilege rows',
+          );
+    if (privilegeRow === undefined) {
+      appendPostgresDenseValue(issues, {
+        code: 'KV433_PRINCIPAL_EPOCH_ACL',
+        detail: `could not verify principal-epoch privileges for ${expected.role}`,
+      });
+      continue;
+    }
+    const hasSystemPrivileges =
+      privilegeRow.can_select === true &&
+      privilegeRow.can_insert === true &&
+      privilegeRow.can_update === true &&
+      privilegeRow.can_delete === false &&
+      privilegeRow.can_truncate === false &&
+      privilegeRow.can_references === false &&
+      privilegeRow.can_trigger === false &&
+      privilegeRow.can_any_column_select === true &&
+      privilegeRow.can_any_column_insert === true &&
+      privilegeRow.can_any_column_update === true &&
+      privilegeRow.can_any_column_references === false;
+    const hasAnyPrivilege =
+      privilegeRow.can_select === true ||
+      privilegeRow.can_insert === true ||
+      privilegeRow.can_update === true ||
+      privilegeRow.can_delete === true ||
+      privilegeRow.can_truncate === true ||
+      privilegeRow.can_references === true ||
+      privilegeRow.can_trigger === true ||
+      privilegeRow.can_any_column_select === true ||
+      privilegeRow.can_any_column_insert === true ||
+      privilegeRow.can_any_column_update === true ||
+      privilegeRow.can_any_column_references === true;
+    if (expected.allow ? !hasSystemPrivileges : hasAnyPrivilege) {
+      appendPostgresDenseValue(issues, {
+        code: 'KV433_PRINCIPAL_EPOCH_ACL',
+        detail: expected.allow
+          ? `${expected.role} must have exactly SELECT, INSERT, UPDATE on public._kovo_principal_epoch`
+          : `${expected.role} must not have effective access to public._kovo_principal_epoch`,
       });
     }
   }

@@ -9,9 +9,12 @@ import {
   AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES,
   createBoundedRuntimeAuditCollector,
   hasFrameworkDurableReplayStoreReceipt,
+  hasFrameworkPrincipalEpochStoreReceipt,
   mintFrameworkDurableReplayStoreReceipt,
+  mintFrameworkPrincipalEpochStoreReceipt,
   PARANOID_SECURITY_ADVISORY_CODES,
   propagateFrameworkDurableReplayStoreReceipt,
+  propagateFrameworkPrincipalEpochStoreReceipt,
   SECURITY_CODE_REGISTRY,
   type SecurityBoundaryProof,
   securityClassifier,
@@ -67,6 +70,28 @@ describe('durable replay store receipts (SPEC §10.3)', () => {
     }
     expect(propagated).toBe(true);
     expect(authenticated).toBe(true);
+  });
+});
+
+describe('persistent principal epoch store receipts (SPEC §6.6/§10.3)', () => {
+  it('carries module-private provenance through framework snapshots', () => {
+    const store = {};
+    const snapshot = {};
+    mintFrameworkPrincipalEpochStoreReceipt(store);
+
+    expect(hasFrameworkPrincipalEpochStoreReceipt(store)).toBe(true);
+    expect(propagateFrameworkPrincipalEpochStoreReceipt(store, snapshot)).toBe(true);
+    expect(hasFrameworkPrincipalEpochStoreReceipt(snapshot)).toBe(true);
+  });
+
+  it('rejects structural and global-symbol lookalikes', () => {
+    const forged = {
+      kind: 'framework-principal-epoch-store',
+      [Symbol.for('kovo.principal-epoch-store')]: true,
+    };
+
+    expect(hasFrameworkPrincipalEpochStoreReceipt(forged)).toBe(false);
+    expect(propagateFrameworkPrincipalEpochStoreReceipt(forged, {})).toBe(false);
   });
 });
 

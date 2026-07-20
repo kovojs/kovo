@@ -218,6 +218,9 @@ export async function handleAppMutationRequest(
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
+    ...(app.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: app.principalEpochStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),
     maxListItems: app.requestLimits.maxQueryListItems,
     redirectTo: fallbackRedirectTo,
@@ -292,6 +295,9 @@ async function renderPreBodyCsrfFailure(
     liveTargetAudience,
     liveTargetSourceUrl: requestUrlSnapshot(sourceUrl).href,
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+    ...(app.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: app.principalEpochStore }),
     currentUrl: appRequestUrl(sourceUrl),
     headers: request.headers,
     rawInput: {},

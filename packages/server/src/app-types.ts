@@ -18,6 +18,7 @@ import type { AppResponseHeaders } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.js';
 import type { Reader } from './managed-db.js';
+import type { PrincipalEpochStore } from './principal-epoch.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
@@ -305,6 +306,8 @@ export interface CreateAppOptions<
   // replay the stored response without re-executing the handler. Production mutation declarations
   // require createPostgresAppRuntimeDb().mutationReplayStore.
   mutationReplayStore?: MutationReplayStore;
+  /** Persistent principal revocation authority used by credentials and replay receipts. */
+  principalEpochStore?: PrincipalEpochStore;
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
@@ -353,6 +356,7 @@ export interface KovoApp<
   readonly liveTargetRenderers: readonly LiveTargetRenderer<any>[];
   readonly mutations: readonly AppMutationDeclaration<any>[];
   readonly mutationReplayStore?: MutationReplayStore;
+  readonly principalEpochStore?: PrincipalEpochStore;
   readonly onError?: ServerErrorHandler;
   readonly queries: readonly AppQueryDeclaration<any>[];
   readonly renderRoute?: (

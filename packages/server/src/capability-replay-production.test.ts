@@ -23,9 +23,10 @@ const postgresRuntime = postgresRuntimeApi.createPostgresAppRuntimeDb({
 await postgresRuntime.ready;
 process.env.NODE_ENV = 'production';
 
-const [capabilityRouteApi, capabilityUrlApi] = await Promise.all([
+const [capabilityRouteApi, capabilityUrlApi, principalEpochApi] = await Promise.all([
   import('./capability-route.js?durable-capability-replay-production'),
   import('./capability-url.js?durable-capability-replay-production'),
+  import('./principal-epoch.js?durable-capability-replay-production'),
 ]);
 
 const SECRET = 'production-capability-replay-secret-at-least-32-bytes';
@@ -88,6 +89,31 @@ describe('production one-time capability replay truth', () => {
         capabilityUrlApi.snapshotReplayStore(replayStore),
       ),
     ).toBe(true);
+  });
+
+  it('requires durable principal epochs for principal-scoped capability endpoints', () => {
+    const common = {
+      replayStore: postgresRuntime.capabilityReplayStore,
+      scope: () => 'user-1',
+      secret: SECRET,
+      storage,
+    };
+
+    expect(() => capabilityRouteApi.createStorageDownloadEndpoint(common)).toThrow(
+      /principalEpochStore/u,
+    );
+    expect(() =>
+      capabilityRouteApi.createStorageDownloadEndpoint({
+        ...common,
+        principalEpochStore: principalEpochApi.createMemoryPrincipalEpochStore(),
+      }),
+    ).toThrow(/principalEpochStore/u);
+    expect(() =>
+      capabilityRouteApi.createStorageDownloadEndpoint({
+        ...common,
+        principalEpochStore: postgresRuntime.principalEpochStore,
+      }),
+    ).not.toThrow();
   });
 
   it('fails closed when direct production verification is given a memory store', async () => {

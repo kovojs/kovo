@@ -65,6 +65,10 @@ import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
 import { isDurableMutationReplayStore } from './replay.js';
 import {
+  isDurablePrincipalEpochStore,
+  snapshotPrincipalEpochStore,
+} from './principal-epoch.js';
+import {
   cloneRequestForAuthorityNeutralization,
   requestForAuthorityNeutralMetadata,
 } from './request-carrier.js';
@@ -160,6 +164,14 @@ export function createApp<
     options,
     'mutationReplayStore',
   ) as KovoApp['mutationReplayStore'];
+  const configuredPrincipalEpochStore = appOptionOwnDataValue(
+    options,
+    'principalEpochStore',
+  ) as KovoApp['principalEpochStore'];
+  const principalEpochStore =
+    configuredPrincipalEpochStore === undefined
+      ? undefined
+      : snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
   const configuredClientModules = appOptionOwnDataValue(options, 'clientModules') as
     | KovoApp['clientModules']
     | undefined;
@@ -304,6 +316,16 @@ export function createApp<
       'KV436: createApp() refused a missing, custom, or volatile memory mutationReplayStore in production; declared mutations require createPostgresAppRuntimeDb().mutationReplayStore so idempotency truth survives restart and replicas (SPEC §10.3).',
     );
   }
+  if (
+    resolveBootMode() === 'production' &&
+    sessionProvider !== undefined &&
+    mutations.length > 0 &&
+    !isDurablePrincipalEpochStore(principalEpochStore)
+  ) {
+    throw new Error(
+      'KV436: createApp() refused a missing, custom, or volatile principalEpochStore in production; authenticated mutations require createPostgresAppRuntimeDb().principalEpochStore so revocation survives restart and replicas (SPEC §6.6/§10.3).',
+    );
+  }
   const tasks = assertUniqueTaskKeys(
     resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
       tasksSource,
@@ -327,6 +349,7 @@ export function createApp<
       ...(csrf === undefined ? {} : { csrf }),
       ...(db === undefined ? {} : { db }),
       ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
+      ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
       ...(onError === undefined ? {} : { onError }),
       ...(renderRoute === undefined ? {} : { renderRoute }),
       ...(sessionProvider === undefined ? {} : { sessionProvider }),

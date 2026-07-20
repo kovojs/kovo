@@ -1,7 +1,7 @@
 import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
-import { requestPrincipalSnapshot } from './auth-principal.js';
+import { provenPrincipalFromRequest, requestPrincipalSnapshot } from './auth-principal.js';
 import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   isExactlyOnceAdapterSettlementAmbiguousError,
@@ -61,6 +61,16 @@ import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
 import { durableTaskScheduleInput } from './task-runner.js';
 import { MutationReplayConflictError } from './replay.js';
 import {
+  applyPrincipalEpochMutationTransition,
+  assertPrincipalEpochFresh,
+  assertPrincipalEpochFreshForRequest,
+  currentPrincipalEpoch,
+  PrincipalEpochUnavailableError,
+  PrincipalEpochStaleError,
+  snapshotPrincipalEpochStore,
+  type PrincipalEpochStore,
+} from './principal-epoch.js';
+import {
   formLikeToRecord,
   isSchemaValidationError,
   parseSchemaAsync,
@@ -75,6 +85,7 @@ import {
   optionalReplayPolicy,
   type MutationLifecycleReplayPolicy,
   type MutationLifecycleReplayReservation,
+  type ReplayPrincipalEpochAdmission,
 } from './mutation/replay-policy.js';
 import {
   enhancedMutationReauthResponse,
@@ -141,6 +152,7 @@ export type {
   MutationOptimisticEntry,
   MutationOptimisticMap,
   MutationOptimisticTransform,
+  PrincipalEpochMutationDeclaration,
   MutationQueue,
   MutationRequestDb,
   MutationRegistry,
@@ -183,6 +195,7 @@ type ValidatedMutationLifecycle<Input, Request> = {
   readonly [mutationLifecycleGate]: true;
   readonly input: Input;
   readonly lifecycleRequest: Request;
+  readonly principalEpochAdmission?: ReplayPrincipalEpochAdmission;
 };
 
 type InternalRunMutationOptions<Request, Input = unknown> = RunMutationOptions<Request> & {
@@ -279,6 +292,7 @@ async function executeMutationLifecycle<
       replayed = await options.replay.read();
     } catch (error) {
       if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
+      if (error instanceof PrincipalEpochUnavailableError) return { kind: 'replay-unavailable' };
       throw error;
     }
     if (replayed) return { kind: 'replayed', response: replayed };
@@ -290,6 +304,7 @@ async function executeMutationLifecycle<
       reservationResult = await options.replay.reserve();
     } catch (error) {
       if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
+      if (error instanceof PrincipalEpochUnavailableError) return { kind: 'replay-unavailable' };
       throw error;
     }
     if (reservationResult.kind === 'conflict') return { kind: 'replay-conflict' };
@@ -308,6 +323,7 @@ async function executeMutationLifecycle<
         options,
         input,
         lifecycleRequest,
+        reservation?.principalEpochAdmission,
       ),
       {
         catchHandlerErrors: options.catchHandlerErrors,
@@ -324,6 +340,7 @@ async function executeMutationLifecycle<
       options,
       input,
       lifecycleRequest,
+      undefined,
     ),
     {
       catchHandlerErrors: options.catchHandlerErrors,
@@ -336,6 +353,7 @@ function validatedMutationLifecycleOptions<Request, Input>(
   options: ExecuteMutationLifecycleOptions<Request, unknown>,
   input: Input,
   lifecycleRequest: Request,
+  principalEpochAdmission: ReplayPrincipalEpochAdmission | undefined,
 ): InternalRunMutationOptions<Request, Input> {
   return {
     ...options,
@@ -343,6 +361,7 @@ function validatedMutationLifecycleOptions<Request, Input>(
       [mutationLifecycleGate]: true,
       input,
       lifecycleRequest,
+      ...(principalEpochAdmission === undefined ? {} : { principalEpochAdmission }),
     },
   };
 }
@@ -369,6 +388,14 @@ async function runMutationLifecycleHandler<
   try {
     result = await runMutation(definition, rawInput, request, options);
   } catch (error) {
+    if (error instanceof PrincipalEpochStaleError) {
+      await state.reservation?.abort?.();
+      return { kind: 'replay-conflict' };
+    }
+    if (error instanceof PrincipalEpochUnavailableError) {
+      await state.reservation?.abort?.();
+      return { kind: 'replay-unavailable' };
+    }
     // SPEC §10.3: a successful transaction callback followed by an adapter/COMMIT rejection is
     // ambiguous, not a proven rollback. Preserve its pending replay claim so a remote retry cannot
     // execute work that the database may already have committed. Setup and callback failures still
@@ -468,14 +495,56 @@ export async function runMutation<
     if (guardFailure) return mutationGuardFailureToResult(guardFailure);
   }
 
-  return runWithRequestInputProvenance(input, (trackedInput) =>
+  const principalEpochAdmission = await mutationPrincipalEpochAdmission(
+    options.principalEpochStore,
+    lifecycleRequest,
+    validatedLifecycle?.principalEpochAdmission,
+  );
+  const result = await runWithRequestInputProvenance(input, (trackedInput) =>
     runMutationWithTrackedInput(
       definition,
       trackedInput as InferSchema<InputSchema>,
       lifecycleRequest,
+      request,
+      principalEpochAdmission,
       options,
     ),
   );
+  return result;
+}
+
+interface MutationPrincipalEpochAdmission {
+  readonly epoch: number;
+  readonly principal: string;
+  readonly store: PrincipalEpochStore;
+}
+
+async function mutationPrincipalEpochAdmission(
+  configuredStore: PrincipalEpochStore | undefined,
+  lifecycleRequest: unknown,
+  replayAdmission: ReplayPrincipalEpochAdmission | undefined,
+): Promise<MutationPrincipalEpochAdmission | undefined> {
+  const principal = provenPrincipalFromRequest(lifecycleRequest);
+  if (replayAdmission !== undefined) {
+    if (configuredStore === undefined || principal !== replayAdmission.principal) {
+      throw new PrincipalEpochStaleError();
+    }
+    const state = await assertPrincipalEpochFresh(
+      replayAdmission.store,
+      replayAdmission.principal,
+      replayAdmission.epoch,
+    );
+    return witnessFreeze({
+      epoch: state.epoch,
+      principal: replayAdmission.principal,
+      store: replayAdmission.store,
+    });
+  }
+  if (configuredStore === undefined || principal === undefined) return undefined;
+  const store = snapshotPrincipalEpochStore(configuredStore);
+  const state = await currentPrincipalEpoch(store, principal);
+  if (state.status !== 'active') throw new PrincipalEpochStaleError();
+  return witnessFreeze({ epoch: state.epoch, principal, store });
 }
 
 async function runMutationWithTrackedInput<
@@ -489,6 +558,8 @@ async function runMutationWithTrackedInput<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   input: InferSchema<InputSchema>,
   lifecycleRequest: Request,
+  requestCarrier: Request,
+  principalEpochAdmission: MutationPrincipalEpochAdmission | undefined,
   options: RunMutationOptions<Request>,
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const manualInvalidations: ChangeRecord[] = [];
@@ -572,6 +643,27 @@ async function runMutationWithTrackedInput<
 
     if (isMutationFail(handlerValue)) {
       throw new MutationRollback(handlerValue);
+    }
+
+    // SPEC §6.6/§10.3: privilege changes must not commit while their revocation version is
+    // unchanged. Run the explicit registry transition before the transaction callback succeeds;
+    // an epoch-store outage therefore throws through the normal rollback path. If the epoch
+    // advances but the app transaction later rejects or has an ambiguous COMMIT, the conservative
+    // outcome is over-revocation rather than stale privilege authority.
+    if (definition.principalEpoch !== undefined) {
+      await applyPrincipalEpochMutationTransition(
+        options.principalEpochStore,
+        requestCarrier,
+        definition.principalEpoch,
+        input,
+        lifecycleRequest,
+      );
+    }
+    if (principalEpochAdmission !== undefined) {
+      await assertMutationPrincipalEpochTransactionComplete(
+        requestCarrier,
+        principalEpochAdmission,
+      );
     }
 
     return handlerValue as Value;
@@ -672,6 +764,18 @@ function transactionCapableRequestDb(request: unknown): TransactionCapableReques
     target: db,
     transaction,
   };
+}
+
+async function assertMutationPrincipalEpochTransactionComplete(
+  requestCarrier: unknown,
+  admission: MutationPrincipalEpochAdmission,
+): Promise<void> {
+  await assertPrincipalEpochFreshForRequest(
+    admission.store,
+    requestCarrier,
+    admission.principal,
+    admission.epoch,
+  );
 }
 
 function asyncMutationTransaction(
@@ -1101,6 +1205,9 @@ export async function renderMutationEndpointResponse<
     ...(endpointRequest.replayStore === undefined
       ? {}
       : { replayStore: endpointRequest.replayStore }),
+    ...(endpointRequest.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: endpointRequest.principalEpochStore }),
     ...(endpointRequest.renderFailurePage === undefined
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
@@ -1284,7 +1391,10 @@ async function parseMutationInput<InputSchema extends Schema<unknown>>(
 
 function runMutationOptions<Request>(
   csrf: CsrfOptions<Request> | false | undefined,
-  lifecycle?: RequestLifecycleOptions<Request> & { taskScheduler?: TaskScheduler },
+  lifecycle?: RequestLifecycleOptions<Request> & {
+    principalEpochStore?: import('./principal-epoch.js').PrincipalEpochStore;
+    taskScheduler?: TaskScheduler;
+  },
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
@@ -1296,6 +1406,9 @@ function runMutationOptions<Request>(
     ...(lifecycle?.sessionProvider === undefined
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
+    ...(lifecycle?.principalEpochStore === undefined
+      ? {}
+      : { principalEpochStore: lifecycle.principalEpochStore }),
     ...(lifecycle?.taskScheduler === undefined ? {} : { taskScheduler: lifecycle.taskScheduler }),
   };
 }

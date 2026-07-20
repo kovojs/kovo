@@ -1,6 +1,12 @@
 import { snapshotSqliteSchemaRecord } from '@kovojs/server/internal/sqlite';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
-import type { AccessDecision, CsrfOptions, SessionProvider } from '@kovojs/server';
+import {
+  initializePrincipalEpoch,
+  type AccessDecision,
+  type CsrfOptions,
+  type PrincipalEpochStore,
+  type SessionProvider,
+} from '@kovojs/server';
 import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -74,6 +80,8 @@ export interface BetterAuthSqliteBindingsOptions<
   developmentSeed?: BetterAuthSqliteDevelopmentSeed;
   /** Sanitized projection from Better Auth's credential-free session/user records. */
   mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
+  /** Persistent revocation authority initialized from each authenticated provider identity. */
+  principalEpochStore?: PrincipalEpochStore;
   /** Exact Better Auth Drizzle table record from the app's SQLite schema. */
   schema: Record<string, unknown>;
   /** Better Auth signing secret. */
@@ -128,6 +136,11 @@ export function createBetterAuthSqliteBindingsFromEnvironment<
     throw new NativeTypeError('Better Auth SQLite environment binding options must be an object.');
   }
   const environment = resolveBetterAuthEnvironment();
+  const principalEpochStore = betterAuthOwnDataOption<PrincipalEpochStore>(
+    options,
+    'principalEpochStore',
+    'Better Auth SQLite binding option principalEpochStore',
+  );
   return createBetterAuthSqliteBindings<Request, SessionValue, AuthenticatedRequest>({
     baseURL: environment.baseURL,
     csrf: requiredOption<CsrfOptions<Request>>(options, 'csrf'),
@@ -138,6 +151,7 @@ export function createBetterAuthSqliteBindingsFromEnvironment<
       options,
       'mapSession',
     ),
+    ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
     schema: requiredOption<Record<string, unknown>>(options, 'schema'),
     secret: betterAuthSqliteSecret(environment.secret),
     signInAccess: requiredOption<AccessDecision>(options, 'signInAccess'),
@@ -176,6 +190,19 @@ export function createBetterAuthSqliteBindings<
   );
   if (typeof mapSession !== 'function') {
     throw new NativeTypeError('Better Auth SQLite binding mapSession must be a function.');
+  }
+  const principalEpochStore = betterAuthOwnDataOption<PrincipalEpochStore>(
+    options,
+    'principalEpochStore',
+    'Better Auth SQLite binding option principalEpochStore',
+  );
+  if (
+    principalEpochStore !== undefined &&
+    (typeof principalEpochStore !== 'object' || principalEpochStore === null)
+  ) {
+    throw new NativeTypeError(
+      'Better Auth SQLite binding principalEpochStore must be a stable object.',
+    );
   }
   const schema = requiredOption<Record<string, unknown>>(options, 'schema');
   if (typeof schema !== 'object' || schema === null) {
@@ -246,7 +273,20 @@ export function createBetterAuthSqliteBindings<
   const auth = consumeBetterAuthCredentialResult(adapterConsumer, sealedAuth);
   registerFixedBetterAuthCanonicalOrigin(auth, baseURL, 'Better Auth SQLite binding');
   const mountAdapter = createBetterAuthMountAdapter(auth, baseURL);
-  const sessionProvider = betterAuthSession<Session, User, SessionValue>(auth, mapSession);
+  const sessionProvider = betterAuthSession<Session, User, SessionValue>(
+    auth,
+    mapSession,
+    principalEpochStore === undefined
+      ? undefined
+      : async (payload) => {
+          const principal = betterAuthOwnDataOption<unknown>(
+            payload.user,
+            'id',
+            'Better Auth sanitized user.id',
+          );
+          await initializePrincipalEpoch(principalEpochStore, principal as string);
+        },
+  );
   const signIn = betterAuthSignInEmailMutation<'auth/sign-in', Request>(auth, {
     access: signInAccess,
     csrf,

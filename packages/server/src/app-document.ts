@@ -143,6 +143,9 @@ export async function renderAppRouteDocumentResponse({
               ? {}
               : { defaultScope: storageDownloadSigner.defaultScope }),
             oneTimeReplayStore: storageDownloadSigner.oneTimeReplayStore,
+            ...(storageDownloadSigner.principalEpochStore === undefined
+              ? {}
+              : { principalEpochStore: storageDownloadSigner.principalEpochStore }),
           })
         : createUnavailableSignUrl(storageDownloadSigner.message);
   const signUrlDescriptor =
@@ -601,6 +604,7 @@ type AppStorageDownloadSigner =
       basePath: string;
       defaultScope?: string;
       oneTimeReplayStore: boolean;
+      principalEpochStore?: StorageDownloadEndpointInfo['principalEpochStore'];
       secret: StorageDownloadEndpointInfo['secret'];
     }
   | { kind: 'absent' }
@@ -637,6 +641,9 @@ function appStorageDownloadSigner(app: KovoApp, request: Request): AppStorageDow
       basePath: selected.basePath,
       ...(defaultScope === undefined ? {} : { defaultScope }),
       oneTimeReplayStore: selected.oneTimeReplayStore,
+      ...(selected.principalEpochStore === undefined
+        ? {}
+        : { principalEpochStore: selected.principalEpochStore }),
       secret: selected.secret,
     };
   }

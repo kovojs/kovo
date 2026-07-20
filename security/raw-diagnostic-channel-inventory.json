@@ -751,6 +751,17 @@
       "expressionSha256": "0f780afbffd968be4acee6e7dc7a1b6b781f04beae0679e99317821fa87f53d1"
     },
     {
+      "id": "packages/server/src/app.ts#throw#KV436#ba6958a2ef9c3a2041a864a037de396d14ee8df55d26a8f5242f532a235e1537#0",
+      "code": "KV436",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/app.ts",
+      "owner": "createApp",
+      "expressionSha256": "ba6958a2ef9c3a2041a864a037de396d14ee8df55d26a8f5242f532a235e1537"
+    },
+    {
       "id": "packages/server/src/capability-route.ts#throw#KV436#276ace864849c1ab9e6c67d3e8bd672926579743836345588af3756ab60d1a01#0",
       "code": "KV436",
       "enforcementClass": "compile-error",
@@ -771,6 +782,17 @@
       "file": "packages/server/src/capability-route.ts",
       "owner": "createSignUrl",
       "expressionSha256": "341c12c00c1c170ef3064a78be723a0114f69d822fd5c4f3e3d78d7b590c0a87"
+    },
+    {
+      "id": "packages/server/src/capability-route.ts#throw#KV436#5b6fa7f223654607fde73361fa02f00ffa829efef010e81f32afe15513330ce0#0",
+      "code": "KV436",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/capability-route.ts",
+      "owner": "createStorageDownloadEndpoint",
+      "expressionSha256": "5b6fa7f223654607fde73361fa02f00ffa829efef010e81f32afe15513330ce0"
     },
     {
       "id": "packages/server/src/capability-route.ts#throw#KV436#a22b45f9994848bb303a51a28dd659136d8df6f6c93efd70021882ecfe0acaa1#0",

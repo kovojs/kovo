@@ -37,6 +37,12 @@ const durableReplaySurfaceByReceipt = securityWeakMap<
   FrameworkDurableReplaySurface
 >();
 
+interface FrameworkPrincipalEpochStoreReceipt {
+  readonly kind: 'framework-principal-epoch-store';
+}
+
+const principalEpochReceiptByStore = securityWeakMap<object, FrameworkPrincipalEpochStoreReceipt>();
+
 /**
  * Mint framework-only durable replay provenance for a store constructor (SPEC §10.3).
  *
@@ -124,6 +130,49 @@ function assertFrameworkDurableReplaySurface(
   if (surface !== 'capability' && surface !== 'mutation' && surface !== 'webhook') {
     throw new TypeError('Durable replay surface must be "capability", "mutation", or "webhook".');
   }
+}
+
+/**
+ * Authenticate a framework-owned persistent principal-epoch store constructor (SPEC §6.6/§10.3).
+ * The receipt exists only in this module-private WeakMap and therefore cannot be forged with a
+ * structural field or a global symbol.
+ *
+ * @internal
+ */
+export function mintFrameworkPrincipalEpochStoreReceipt(store: object): void {
+  assertFrameworkDurableReplayStoreObject(store, 'Principal epoch store');
+  if (securityWeakMapGet(principalEpochReceiptByStore, store) !== undefined) return;
+  securityWeakMapSet(
+    principalEpochReceiptByStore,
+    store,
+    freezeSecurityValue({ kind: 'framework-principal-epoch-store' as const }),
+  );
+}
+
+/** @internal Carry persistent principal-epoch provenance through a framework-owned snapshot. */
+export function propagateFrameworkPrincipalEpochStoreReceipt(
+  source: object,
+  target: object,
+): boolean {
+  assertFrameworkDurableReplayStoreObject(source, 'Principal epoch store receipt source');
+  assertFrameworkDurableReplayStoreObject(target, 'Principal epoch store receipt target');
+  const receipt = securityWeakMapGet(principalEpochReceiptByStore, source);
+  if (receipt === undefined) return false;
+  const targetReceipt = securityWeakMapGet(principalEpochReceiptByStore, target);
+  if (targetReceipt !== undefined && targetReceipt !== receipt) {
+    throw new TypeError('Principal epoch store snapshot already has different provenance.');
+  }
+  securityWeakMapSet(principalEpochReceiptByStore, target, receipt);
+  return true;
+}
+
+/** @internal Verify module-private persistent principal-epoch store provenance. */
+export function hasFrameworkPrincipalEpochStoreReceipt(store: unknown): boolean {
+  return (
+    (typeof store === 'object' || typeof store === 'function') &&
+    store !== null &&
+    securityWeakMapGet(principalEpochReceiptByStore, store) !== undefined
+  );
 }
 
 /**

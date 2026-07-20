@@ -39,6 +39,7 @@ import type { LiveTargetRenderer } from './mutation-wire.js';
 import { validateMutationCsrfPosture } from './mutation/csrf-posture.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { snapshotMutationReplayStore } from './replay.js';
+import { snapshotPrincipalEpochStore } from './principal-epoch.js';
 import { layout, route, type LayoutDeclaration } from './route.js';
 import { snapshotSchemaForRuntime, type Schema } from './schema.js';
 import type { AppDiagnostic, AppErrorShellOptions, AppTaskDeclaration } from './app-types.js';
@@ -671,6 +672,10 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     source.mutationReplayStore === undefined
       ? undefined
       : snapshotMutationReplayStore(source.mutationReplayStore);
+  const principalEpochStore =
+    source.principalEpochStore === undefined
+      ? undefined
+      : snapshotPrincipalEpochStore(source.principalEpochStore);
 
   const aggregate = witnessFreeze({
     ...source,
@@ -682,6 +687,7 @@ export function closeKovoAppAggregate<App extends KovoApp>(
     liveTargetRenderers,
     mutations,
     ...(mutationReplayStore === undefined ? {} : { mutationReplayStore }),
+    ...(principalEpochStore === undefined ? {} : { principalEpochStore }),
     queries,
     routes,
     stylesheets,

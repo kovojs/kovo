@@ -22,7 +22,7 @@ import {
   CAPABILITY_TOKEN_PARAM,
   DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   createSignUrl as createSignUrlCapability,
-  createStorageDownloadEndpoint,
+  createStorageDownloadEndpoint as createStorageDownloadEndpointPrimitive,
   deriveDownloadKey,
   drainCapabilityMintFacts,
   type StorageDownloadEndpointOptions,
@@ -32,7 +32,7 @@ import {
   MAX_CAPABILITY_AUDIENCE_LENGTH,
   MAX_CAPABILITY_SCOPE_LENGTH,
   signCapability as signCapabilityPrimitive,
-  verifyCapability,
+  verifyCapability as verifyCapabilityPrimitive,
 } from './capability-url.js';
 import { runEndpoint } from './endpoint.js';
 import { renderedHtml } from './html.js';
@@ -40,6 +40,21 @@ import { route } from './route.js';
 
 const SECRET = 'capability-route-test-secret-at-least-32-characters-long';
 const BASE = DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH;
+const TEST_PRINCIPAL_EPOCH_STORE = Object.freeze({
+  advance: () => ({ changedAtMs: 0, epoch: 1, status: 'active' as const }),
+  current: () => ({ changedAtMs: 0, epoch: 1, status: 'active' as const }),
+  initialize: () => ({ changedAtMs: 0, epoch: 1, status: 'active' as const }),
+  tombstone: () => ({ changedAtMs: 1, epoch: 2, status: 'tombstoned' as const }),
+});
+
+function createStorageDownloadEndpoint(
+  options: Parameters<typeof createStorageDownloadEndpointPrimitive>[0],
+) {
+  return createStorageDownloadEndpointPrimitive({
+    ...options,
+    ...(options.scope === undefined ? {} : { principalEpochStore: TEST_PRINCIPAL_EPOCH_STORE }),
+  });
+}
 
 type TestStorageCapability = Omit<
   StorageCapability,
@@ -91,7 +106,11 @@ function createFileSystemStorage(
 }
 
 function createSignUrl(...args: Parameters<typeof createSignUrlCapability>) {
-  const signer = createSignUrlCapability(...args);
+  const [options] = args;
+  const signer = createSignUrlCapability({
+    ...options,
+    principalEpochStore: options.principalEpochStore ?? TEST_PRINCIPAL_EPOCH_STORE,
+  });
   return {
     signUrl(
       options: Omit<Parameters<typeof signer.signUrl>[0], 'key'> & { key: ScopedKey | string },
@@ -106,10 +125,26 @@ function signCapability(
   options: Parameters<typeof signCapabilityPrimitive>[1],
   now?: Parameters<typeof signCapabilityPrimitive>[2],
 ) {
-  const framedOptions = { ...options, key: testKeyFrame(options.key) };
+  const framedOptions = {
+    ...options,
+    key: testKeyFrame(options.key),
+    ...(options.scope === undefined ? {} : { principalEpochStore: TEST_PRINCIPAL_EPOCH_STORE }),
+  };
   return now === undefined
     ? signCapabilityPrimitive(secret, framedOptions)
     : signCapabilityPrimitive(secret, framedOptions, now);
+}
+
+function verifyCapability(
+  secret: Parameters<typeof verifyCapabilityPrimitive>[0],
+  token: Parameters<typeof verifyCapabilityPrimitive>[1],
+  expected: Parameters<typeof verifyCapabilityPrimitive>[2],
+  options: Parameters<typeof verifyCapabilityPrimitive>[3] = {},
+) {
+  return verifyCapabilityPrimitive(secret, token, expected, {
+    ...options,
+    ...(expected.scope === undefined ? {} : { principalEpochStore: TEST_PRINCIPAL_EPOCH_STORE }),
+  });
 }
 
 /** Seed a memory storage with one object so the route has something to (potentially) read. */
