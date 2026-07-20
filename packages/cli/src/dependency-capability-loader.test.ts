@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 import { build as viteBuild, createServer as createViteServer } from 'vite-plus';
@@ -798,6 +799,96 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  // @kovo-security-certifies C13 dependency-vite-ignore-artifact-closure
+  it.each(['relative', 'file URL'] as const)(
+    'rejects a Vite-ignored %s import that remains outside the bundle-owned artifact',
+    async (kind) => {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-vite-ignore-')));
+      const appModulePath = join(root, 'app.mjs');
+      const packageRoot = join(root, 'node_modules', 'safe-parser');
+      const helperPath = join(root, kind === 'relative' ? 'helper.mjs' : 'helper-file.mjs');
+      const outDir = join(root, 'dist');
+      const source = "import { parse } from 'safe-parser'; export const value = parse('safe');\n";
+      try {
+        mkdirSync(packageRoot, { recursive: true });
+        writeFileSync(
+          join(packageRoot, 'package.json'),
+          JSON.stringify({
+            exports: { '.': './index.mjs' },
+            name: 'safe-parser',
+            type: 'module',
+            version: '1.2.3',
+          }),
+        );
+        const specifier =
+          kind === 'relative' ? '../helper.mjs' : pathToFileURL(helperPath).href;
+        writeFileSync(
+          join(packageRoot, 'index.mjs'),
+          [
+            `await import(/* @vite-ignore */ ${JSON.stringify(specifier)});`,
+            'export const parse = value => value;',
+            '',
+          ].join('\n'),
+        );
+        writeFileSync(
+          helperPath,
+          `globalThis.__KOVO_VITE_IGNORE_${kind === 'relative' ? 'RELATIVE' : 'FILE'}__ = 'EXECUTED';\n`,
+        );
+        writeFileSync(appModulePath, source);
+        const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+        const exactManifest: AppDependencyCapabilityManifest = {
+          dependencies: [
+            {
+              entries: [
+                {
+                  conditions: installed.conditions,
+                  importers: ['app.mjs'],
+                  imports: [{ capabilities: [], disposition: 'pure', name: 'parse' }],
+                  rootKinds: ['route'],
+                  sites: ['app.mjs:1:1'],
+                  specifier: 'safe-parser',
+                },
+              ],
+              manifestFingerprint: installed.manifestFingerprint,
+              packageName: installed.packageName,
+              packageVersion: installed.packageVersion,
+              summaryVersion: 'safe-parser-review/1',
+              verdict: 'open',
+            },
+          ],
+          schema: 'kovo-app-dependency-capabilities/v1',
+        };
+
+        await expect(
+          viteBuild({
+            build: {
+              emptyOutDir: true,
+              outDir,
+              rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.mjs' } },
+              ssr: true,
+            },
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [
+              dependencyCapabilityLoaderVitePlugin(
+                appModulePath,
+                [{ fileName: 'app.mjs', source }],
+                exactManifest,
+                'build-server',
+                { allowNodeBuiltins: true },
+              ),
+            ],
+            root,
+            ssr: { noExternal: true },
+          }),
+        ).rejects.toThrow(/KV448.*unresolved module target.*bundle-owned artifact/u);
+        expect(() => readFileSync(join(outDir, 'entry.mjs'), 'utf8')).toThrow();
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   // @kovo-security-certifies C13 dependency-builtin-ssr-pre-evaluation
   it('rejects a reviewed package builtin import before supported SSR app evaluation', async () => {
