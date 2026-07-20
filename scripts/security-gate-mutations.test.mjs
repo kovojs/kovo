@@ -8,7 +8,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator after TASK B routing closure', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(287);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(290);
   });
 
   it('enrolls the dependency-loader graph, HTML, and artifact closure mutants', () => {
@@ -21,6 +21,7 @@ describe('security-gate-mutations', () => {
         'dependency-loader/allow-bare-bundle-key-collision',
         'dependency-loader/drop-artifact-url-ambiguity-closure',
         'dependency-loader/drop-cjs-loader-alias-closure',
+        'dependency-loader/drop-closed-carrier-constructor-closure',
         'dependency-loader/drop-direct-export-ownership-closure',
         'dependency-loader/drop-direct-ssr-external-overlap-closure',
         'dependency-loader/drop-executable-asset-carrier-closure',
@@ -75,7 +76,7 @@ describe('security-gate-mutations', () => {
       mutant.name.startsWith('compiler-finite-ir/'),
     );
 
-    expect(finiteIrMutants).toHaveLength(21);
+    expect(finiteIrMutants).toHaveLength(23);
     expect(finiteIrMutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
     expect(finiteIrMutants.some((mutant) => mutant.sourceOnly === true)).toBe(false);
   });
