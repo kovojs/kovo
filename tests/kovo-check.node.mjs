@@ -728,6 +728,7 @@ void test('pre-launch checklist is tracked explicitly', async () => {
     'Domain',
     'npm scope',
     'Linguistic screen',
+    'Security response readiness',
   ]);
   assert.deepEqual(
     Object.keys(fact.evidenceByCheck).toSorted((left, right) => left.localeCompare(right)),
@@ -742,6 +743,11 @@ void test('pre-launch checklist is tracked explicitly', async () => {
   assert.deepEqual(fact.evidenceReviewFacts, {
     Domain: { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
     'Linguistic screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+    'Security response readiness': {
+      date: '2026-07-19',
+      reviewer: 'Codex',
+      status: 'pending',
+    },
     'Trademark screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
     'npm scope': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
   });
@@ -755,9 +761,9 @@ void test('pre-launch checklist is tracked explicitly', async () => {
       trademarkSources: 'TBD',
     },
   );
-  assert.equal(fact.auditStatuses.Codex, 'packet ready; external evidence pending');
+  assert.equal(fact.auditStatuses.Codex, 'pending');
   assert.deepEqual(fact.runnableStatuses, ['pending', 'pending', 'pending', 'pending']);
-  assert.deepEqual(fact.evidenceStatuses, ['pending', 'pending', 'pending', 'pending']);
+  assert.deepEqual(fact.evidenceStatuses, ['pending', 'pending', 'pending', 'pending', 'pending']);
   assert.equal(
     fact.auditReadyCount,
     1,
@@ -1331,16 +1337,16 @@ import { component } from '@kovojs/core';
 export const CartRow = component({
   queries: { cart: {} },
   props: { rowId: String },
-  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <section data-row={rowId}></section>,
 });
 
 export const CartTable = component({
   render: ({ cart }) => (
-    <table>
+    <main>
       <CartRow rowId={cart.rowId}>
         <span>{cart.count}</span>
       </CartRow>
-    </table>
+    </main>
   ),
 });
 `,
@@ -1357,16 +1363,16 @@ import { component } from '@kovojs/core';
 export const CartRow = component({
   queries: { cart: {} },
   props: { rowId: String },
-  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <section data-row={rowId}></section>,
 });
 
 export const CartTable = component({
   render: ({ cart }) => (
-    <table>
+    <main>
       <CartRow rowId={cart.rowId}>
         <span>{window.location.href}</span>
       </CartRow>
-    </table>
+    </main>
   ),
 });
 `,
@@ -1511,7 +1517,7 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
       status: 404,
     },
     success: {
-      input: { id: 'p1', max: 10 },
+      input: nullPrototypeRecord({ id: 'p1', max: 10 }),
       ok: true,
       value: nullPrototypeRecord({ id: 'p1', max: 10, userId: 'u1' }),
     },
@@ -1708,7 +1714,13 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
         Vary: 'Cookie',
       }),
       result: {
-        changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
+        changes: [
+          {
+            domain: 'product',
+            input: nullPrototypeRecord({ productId: 'p1' }),
+            keys: ['p1'],
+          },
+        ],
         ok: true,
         rerunQueries: ['productDetail'],
         rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],

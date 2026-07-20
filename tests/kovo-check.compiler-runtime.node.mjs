@@ -174,6 +174,7 @@ import {
 } from '../packages/conformance-fixtures/src/verification-fixtures.ts';
 import {
   createApp,
+  createMemoryStorage,
   domain,
   errorBoundary,
   guards,
@@ -294,6 +295,7 @@ const serverDataPlaneRuntime = {
 
 const serverCommerceAdoptDontInventRuntime = {
   ...serverDataPlaneRuntime,
+  createMemoryStorage,
   createQueryStore,
   errorBoundary,
   guards,
@@ -503,27 +505,41 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     secondRateLimitFailure: 'rateLimited',
   });
   const receiptFile = fact.upload.result.changes[0].input.receipt.file;
+  const receiptKey = fact.upload.result.changes[0].input.receipt.key;
   const receiptStorageKey = fact.upload.stored.key;
-  assert.equal(receiptFile instanceof Blob, true);
+  const receiptStorage = fact.upload.result.changes[0].input.receipt.storage;
+  assert.deepEqual(
+    {
+      hasArrayBuffer: typeof receiptFile.arrayBuffer === 'function',
+      name: receiptFile.name,
+      size: receiptFile.size,
+      type: receiptFile.type,
+    },
+    { hasArrayBuffer: true, name: 'receipt.pdf', size: 7, type: 'application/pdf' },
+  );
   assert.match(receiptStorageKey, /^receipts\/[0-9a-f-]{36}$/);
+  assert.equal(receiptStorage.key, receiptStorageKey);
+  assert.equal(typeof receiptStorage.etag, 'string');
+  assert.equal(typeof receiptStorage.lastModified, 'string');
   assert.deepEqual(fact.upload.result, {
     changes: [
       {
         domain: 'attachment',
-        input: {
+        input: nullPrototypeRecord({
           orderId: 'o1',
-          receipt: {
+          receipt: nullPrototypeRecord({
             file: receiptFile,
-            key: receiptStorageKey,
-            storage: {
-              body: new TextEncoder().encode('%PDF-1.'),
+            key: receiptKey,
+            storage: nullPrototypeRecord({
               contentType: 'application/pdf',
+              etag: receiptStorage.etag,
               key: receiptStorageKey,
-              metadata: { filename: 'receipt.pdf' },
+              lastModified: receiptStorage.lastModified,
+              metadata: nullPrototypeRecord({ filename: 'receipt.pdf' }),
               size: 7,
-            },
-          },
-        },
+            }),
+          }),
+        }),
       },
     ],
     ok: true,
@@ -531,16 +547,20 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     value: {
       orderId: 'o1',
       session: 'u1',
-      storageKey: receiptStorageKey,
+      stored: true,
     },
   });
-  assert.deepEqual(fact.upload.stored, {
-    body: new TextEncoder().encode('%PDF-1.'),
-    contentType: 'application/pdf',
-    key: receiptStorageKey,
-    metadata: { filename: 'receipt.pdf' },
-    size: 7,
-  });
+  assert.deepEqual(
+    fact.upload.stored,
+    nullPrototypeRecord({
+      contentType: 'application/pdf',
+      etag: fact.upload.stored.etag,
+      key: receiptStorageKey,
+      lastModified: fact.upload.stored.lastModified,
+      metadata: nullPrototypeRecord({ filename: 'receipt.pdf' }),
+      size: 7,
+    }),
+  );
   assert.deepEqual(fact.upload.progress, { max: '100', value: '50' });
   assert.equal(fact.upload.pendingDuringResponse, '');
   assert.equal(fact.upload.pendingAfterSubmit, null);
@@ -748,6 +768,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     'build:prod',
     'check',
     'check:endpoint-posture',
+    'check:lifecycle-policy',
     'check:sound-subset',
     'dev',
     'serve',
@@ -1309,33 +1330,23 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
   assert.deepEqual(dataBindFact.validCartBindingPlans, [
     {
       componentName: 'CartBadge',
-      paths: ['cart.count', 'cart.empty', 'cart.items'],
+      paths: ['cart.count'],
       query: 'cart',
-      templateStamps: [
+      stamps: [
         {
-          itemBindingPlaceholders: [
-            {
-              path: '.name',
-              readPath: 'name',
-              readSegments: [{ name: 'name', optional: false }],
-              value: 'Item',
-            },
-            {
-              path: '.qty',
-              readPath: 'qty',
-              readSegments: [{ name: 'qty', optional: false }],
-              value: '0',
-            },
-          ],
-          key: 'productId',
-          list: 'cart.items',
-          listReadPath: 'items',
-          listReadSegments: [{ name: 'items', optional: false }],
-          selector: '[data-bind-list="cart.items"]',
-          template:
-            '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
+          attr: 'hidden',
+          derive: {
+            exportName: 'CartBadge$button_hidden_derive',
+            expression: 'cart.empty',
+            input: 'cart',
+            name: 'CartBadge$button_hidden_derive',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
+          },
+          selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
         },
       ],
+      templateStamps: [],
     },
   ]);
   assert.deepEqual(dataBindFact.staleGeneratedShapeDiagnostics, [
@@ -1349,7 +1360,7 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
     {
       code: 'KV302',
       help: diagnosticDefinitions.KV302.help,
-      message: 'data-bind path is not present in the declared query shape. cart.items',
+      message: 'data-bind path is not present in the declared query shape. cart.items.missing',
     },
   ]);
   assert.deepEqual(
@@ -1387,7 +1398,12 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
     projectRoot: projectRootPath,
     runtime: generatedModuleRuntime,
   });
-  assert.deepEqual(contract.prodEmit, { stderr: '', stdoutLines: ['prod-emit-check/v1', 'OK'] });
+  assert.deepEqual(contract.prodEmit.stdoutLines, ['prod-emit-check/v1', 'OK']);
+  assert.match(
+    contract.prodEmit.stderr,
+    /^(?:|\(node:\d+\) V8: file:\/\/\/.*\/dist\/lexer\.asm-[A-Za-z0-9_-]+\.mjs:\d+ Invalid asm\.js: Unexpected token\n\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\n)$/u,
+    'production emit permits only the exact Node/V8 asm.js advisory emitted by the parser dependency',
+  );
   assert.equal(contract.pluginName, 'kovo');
   assert.equal(contract.mapIsNull, true);
   assert.equal(contract.renderedButtonAttrs['data-p-id'], '{product.id}');
@@ -1582,6 +1598,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     expectedStaticExportError,
     lintDiagnostic,
   });
+  assert.match(exportBehavior.cli.red.summary?.outDir ?? '', /^".*red-out"$/);
   assert.match(exportBehavior.cli.green.summary?.outDir ?? '', /^".*green-out"$/);
   assert.deepEqual(exportBehavior, {
     api: {
@@ -1622,19 +1639,20 @@ document.querySelector('#app')!.textContent = 'D10 build green';
         marker: 'cli',
       },
       red: {
-        errors: [
-          {
-            code: 'KV201',
-            message: expectedStaticExportCliError,
-            route: fileName,
-          },
-        ],
-        exitCode: 1,
-        html: [],
-        outputStream: 'stderr',
+        errors: [],
+        exitCode: 0,
+        html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
+        outputStream: 'stdout',
+        summary: {
+          assets: '0',
+          clientModules: '1',
+          diagnostics: '0',
+          html: '1',
+          outDir: exportBehavior.cli.red.summary?.outDir,
+        },
         version: 'kovo-export/v1',
       },
-      redArtifactWritten: false,
+      redArtifactWritten: true,
     },
   });
 

@@ -209,6 +209,7 @@ function renderDocument({ head = '', route, title }) {
 function htmlResponse(body, headers = {}) {
   return new Response(body, {
     headers: {
+      'Cache-Control': 'no-store',
       'Content-Type': 'text/html; charset=utf-8',
       ...headers,
     },

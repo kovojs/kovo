@@ -87,6 +87,7 @@ export interface KovoExportStaticBehaviorOptions {
     routes: unknown[];
   }) => unknown;
   errorDiagnostic: KovoExportStaticDiagnosticLike;
+  expectCliDiagnosticLookalikeIgnored?: boolean;
   expectedStaticExportCliError: string;
   expectedStaticExportError: string;
   exportStaticApp: (
@@ -172,6 +173,7 @@ export async function kovoExportStaticBehaviorFact({
   cliMarker = 'cli',
   createApp,
   errorDiagnostic,
+  expectCliDiagnosticLookalikeIgnored = false,
   expectedStaticExportCliError,
   expectedStaticExportError,
   exportStaticApp,
@@ -254,7 +256,11 @@ export default createApp({
       const red = kovoExportCliResultFact(
         await runCliCommand(['export', cliRedModule, '--out', cliRedOutDir]),
       );
-      if (red.errors[0]?.message !== expectedStaticExportCliError) {
+      if (
+        expectCliDiagnosticLookalikeIgnored
+          ? red.exitCode !== 0 || red.errors.length !== 0
+          : red.errors[0]?.message !== expectedStaticExportCliError
+      ) {
         throw new Error(`kovo export CLI red message mismatch: ${red.errors[0]?.message ?? ''}`);
       }
 

@@ -229,7 +229,10 @@ describe('@kovojs/test compiler fixture facts', () => {
       compileComponentModule({ queryShapeFacts, source }) {
         compiledSources.push(source);
 
-        if (source.includes('cart.count">2</span>') && queryShapeFacts?.[0]?.query === 'cart') {
+        if (
+          (source.includes('<cart-badge>') || source.includes('<span>{cart.count}</span>')) &&
+          queryShapeFacts?.[0]?.query === 'cart'
+        ) {
           const cartShape = queryShapeFacts[0]?.shape as { count?: string; items?: unknown };
           if (cartShape.count !== 'number') {
             return {
@@ -249,24 +252,20 @@ describe('@kovojs/test compiler fixture facts', () => {
             queryUpdatePlans: [
               {
                 componentName: 'CartBadge',
-                paths: ['cart.count', 'cart.empty', 'cart.items'],
+                paths: ['cart.count'],
                 query: 'cart',
-                templateStamps: [
+                stamps: [
                   {
-                    itemBindingPlaceholders: [
-                      {
-                        path: '.qty',
-                        readPath: 'qty',
-                        readSegments: [{ name: 'qty', optional: false }],
-                        value: '0',
-                      },
-                    ],
-                    key: 'productId',
-                    list: 'cart.items',
-                    listReadPath: 'items',
-                    listReadSegments: [{ name: 'items', optional: false }],
-                    selector: '[data-bind-list="cart.items"]',
-                    template: '<li>Item</li>',
+                    attr: 'hidden',
+                    derive: {
+                      exportName: 'CartBadge$button_hidden_derive',
+                      expression: 'cart.empty',
+                      input: 'cart',
+                      name: 'CartBadge$button_hidden_derive',
+                      param: 'cart',
+                      selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
+                    },
+                    selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
                   },
                 ],
               },
@@ -274,12 +273,13 @@ describe('@kovojs/test compiler fixture facts', () => {
           };
         }
 
-        if (source.includes('data-bind=".missing"')) {
+        if (source.includes('cart.items.missing')) {
           return {
             diagnostics: [
               {
                 code: 'KV302',
-                message: 'data-bind path is not present in the declared query shape. cart.items',
+                message:
+                  'data-bind path is not present in the declared query shape. cart.items.missing',
                 severity: 'error',
               },
             ],
@@ -327,26 +327,23 @@ describe('@kovojs/test compiler fixture facts', () => {
     expect(fact.validCartBindingPlans).toEqual([
       {
         componentName: 'CartBadge',
-        paths: ['cart.count', 'cart.empty', 'cart.items'],
+        paths: ['cart.count'],
         query: 'cart',
-        templateStamps: [
+        stamps: [
           {
-            itemBindingPlaceholders: [
-              {
-                path: '.qty',
-                readPath: 'qty',
-                readSegments: [{ name: 'qty', optional: false }],
-                value: '0',
-              },
-            ],
-            key: 'productId',
-            list: 'cart.items',
-            listReadPath: 'items',
-            listReadSegments: [{ name: 'items', optional: false }],
-            selector: '[data-bind-list="cart.items"]',
-            template: '<li>Item</li>',
+            attr: 'hidden',
+            derive: {
+              exportName: 'CartBadge$button_hidden_derive',
+              expression: 'cart.empty',
+              input: 'cart',
+              name: 'CartBadge$button_hidden_derive',
+              param: 'cart',
+              selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
+            },
+            selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
           },
         ],
+        templateStamps: [],
       },
     ]);
     expect(fact.staleGeneratedShapeDiagnostics).toEqual([
@@ -358,7 +355,7 @@ describe('@kovojs/test compiler fixture facts', () => {
     expect(fact.invalidListStampDiagnostics).toEqual([
       {
         code: 'KV302',
-        message: 'data-bind path is not present in the declared query shape. cart.items',
+        message: 'data-bind path is not present in the declared query shape. cart.items.missing',
       },
     ]);
     expect(fact.optionalNullablePathDiagnostics).toEqual([]);
@@ -456,7 +453,7 @@ describe('@kovojs/test compiler fixture facts', () => {
           };
         }
 
-        if (source.includes('on:media')) {
+        if (source.includes('onMedia')) {
           return {
             diagnostics: [
               {

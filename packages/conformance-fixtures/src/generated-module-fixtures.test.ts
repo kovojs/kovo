@@ -781,20 +781,14 @@ export function renderSource() {
           CartBadge$queryUpdatePlans: {
             cart(root: FakeRoot, cart: FakeCart) {
               root.bindings[0]!.textContent = String(cart.count);
+              root.bindings[1]!.textContent = String(cart.count);
               root.elements[0]!.setAttribute('hidden', String(cart.empty));
-              root.elements[1]!.textContent = String(cart.count === 0);
-              root.elements[2]!.setAttribute('disabled', String(cart.count === 0));
-              root.elements[3]!.reconcileTemplateStamp?.(
-                cart.items.map((item) => ({
-                  html: `<li><span data-bind=".qty">${item.qty}</span> x <span data-bind=".name">${item.name}</span></li>`,
-                  key: item.productId,
-                })),
-              );
+              root.elements[1]!.setAttribute('disabled', String(cart.count === 0));
               return {
-                bindings: ['cart.count', 'cart.empty'],
-                derives: ['CartBadge$isEmpty'],
-                stamps: ['disabled'],
-                templateStamps: ['[data-bind-list="cart.items"]'],
+                bindings: ['cart.count', 'cart.count'],
+                derives: [],
+                stamps: ['disabled', 'hidden'],
+                templateStamps: [],
               };
             },
           },
@@ -803,28 +797,19 @@ export function renderSource() {
       }),
     ).toEqual({
       appliedPlan: {
-        bindings: ['cart.count', 'cart.empty'],
-        derives: ['CartBadge$isEmpty'],
-        stamps: ['disabled'],
-        templateStamps: ['[data-bind-list="cart.items"]'],
+        bindings: ['cart.count', 'cart.count'],
+        derives: [],
+        stamps: ['disabled', 'hidden'],
+        templateStamps: [],
       },
       bindingText: '2',
       booleanAttributes: { disabled: 'false', hidden: 'false' },
-      deriveText: 'false',
+      deriveText: '2',
       orderedApply: {
         order: ['derive-after-binding:6', 'stamp-after-derive:items:1'],
         stampValue: 'true',
       },
-      templateItems: [
-        {
-          html: '<li><span data-bind=".qty">1</span> x <span data-bind=".name">Coffee</span></li>',
-          key: 'p1',
-        },
-        {
-          html: '<li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>',
-          key: 'p2',
-        },
-      ],
+      templateItems: [],
     });
   });
 

@@ -359,6 +359,7 @@ export async function viteRedGreenBuildFixtureFact(
         '    alias: [',
         '      { find: /^@kovojs\\/core\\/internal\\/(.+)$/, replacement: coreInternalAlias },',
         `      { find: /^@kovojs\\/core$/, replacement: ${JSON.stringify(options.coreAlias)} },`,
+        "      { find: '@kovojs/server/jsx-runtime', replacement: jsxRuntimeAlias },",
         "      { find: 'react/jsx-dev-runtime', replacement: jsxRuntimeAlias },",
         "      { find: 'react/jsx-runtime', replacement: jsxRuntimeAlias },",
         '    ],',

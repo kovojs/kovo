@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import {
   domain,
+  createMemoryStorage,
   errorBoundary,
   guards,
   i18n,
@@ -64,6 +65,7 @@ const dataPlaneRuntime = {
 
 const commerceRuntime = {
   ...dataPlaneRuntime,
+  createMemoryStorage,
   createQueryStore,
   errorBoundary,
   guards,
@@ -370,7 +372,7 @@ describe('@kovojs/test server fixture facts', () => {
       posture: 'system',
       systemPosture: 'framework-upload',
     });
-    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e]);
+    const receiptStorageKey = scopedKeyFactsFor(receiptKey).key;
     expect(fact.upload.result).toEqual({
       changes: [
         {
@@ -378,12 +380,17 @@ describe('@kovojs/test server fixture facts', () => {
           input: {
             orderId: 'o1',
             receipt: {
-              file: expect.any(Blob),
+              file: expect.objectContaining({
+                name: 'receipt.pdf',
+                size: 7,
+                type: 'application/pdf',
+              }),
               key: receiptKey,
               storage: {
-                body: pdfBytes,
                 contentType: 'application/pdf',
-                key: receiptKey,
+                etag: expect.any(String),
+                key: receiptStorageKey,
+                lastModified: expect.any(String),
                 metadata: { filename: 'receipt.pdf' },
                 size: 7,
               },
@@ -400,9 +407,10 @@ describe('@kovojs/test server fixture facts', () => {
       },
     });
     expect(fact.upload.stored).toEqual({
-      body: pdfBytes,
       contentType: 'application/pdf',
-      key: receiptKey,
+      etag: expect.any(String),
+      key: receiptStorageKey,
+      lastModified: expect.any(Date),
       metadata: { filename: 'receipt.pdf' },
       size: 7,
     });

@@ -614,6 +614,7 @@ describe('@kovojs/test package subpath exports', () => {
       upload: { pendingAfterSubmit: string | null };
     }>();
     expectTypeOf<ServerCommerceAdoptDontInventRuntime>().toMatchTypeOf<{
+      createMemoryStorage: () => unknown;
       submitEnhancedMutation: (options: Record<string, unknown>) => Promise<unknown>;
     }>();
     expectTypeOf<VerificationLayerBehaviorFact>().toMatchTypeOf<{

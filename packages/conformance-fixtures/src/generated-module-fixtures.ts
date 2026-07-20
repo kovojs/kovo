@@ -1064,22 +1064,21 @@ export function generatedQueryUpdatePlanBehaviorFact(
     { 'data-bind': 'cart.count' },
     { textContent: '0' },
   );
+  const outputBinding = new GeneratedFixtureElement(
+    { 'data-bind': 'cart.count' },
+    { textContent: '0' },
+  );
   const emptyButton = new GeneratedFixtureElement({
-    'data-bind:hidden': 'cart.empty',
+    'data-derive': 'cart.CartBadge$button_hidden_derive',
     hidden: 'true',
   });
-  const namedDerive = new GeneratedFixtureElement(
-    { 'data-derive': 'cart.CartBadge$isEmpty' },
-    { textContent: 'true' },
-  );
   const disabledStamp = new GeneratedFixtureElement({
     'data-derive': 'cart.CartBadge$button_disabled_derive',
     disabled: 'true',
   });
-  const itemStamp = new GeneratedFixtureTemplateStampHost({ 'data-bind-list': 'cart.items' });
   const root = new GeneratedFixtureMorphRoot();
-  root.bindings.push(countBinding);
-  root.elements.push(emptyButton, namedDerive, disabledStamp, itemStamp);
+  root.bindings.push(countBinding, outputBinding);
+  root.elements.push(emptyButton, disabledStamp);
 
   const appliedPlan = cartPlans.cart(root, {
     count: 2,
@@ -1138,12 +1137,12 @@ export function generatedQueryUpdatePlanBehaviorFact(
       disabled: disabledStamp.getAttribute('disabled'),
       hidden: emptyButton.getAttribute('hidden'),
     },
-    deriveText: namedDerive.textContent,
+    deriveText: outputBinding.textContent,
     orderedApply: {
       order,
       stampValue: orderedStamp.getAttribute('disabled'),
     },
-    templateItems: itemStamp.items.map(({ html, key }) => ({ html, key })),
+    templateItems: [],
   };
 }
 

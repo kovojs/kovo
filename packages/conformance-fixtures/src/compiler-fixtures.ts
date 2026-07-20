@@ -387,14 +387,15 @@ export function compilerDataBindBehaviorFact(
     queryShapeFacts: generatedCartShapeFacts,
     source: `
 export const CartBadge = component({
-  render: () => (
+  queries: { cart: {} },
+  render: ({ cart }) => (
     <cart-badge>
-      <span data-bind="cart.count">2</span>
-      <button data-bind:hidden="cart.empty">Checkout</button>
-      <ul data-bind-list="cart.items" kovo-key="productId">
-        <template kovo-stamp>
-          <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
-        </template>
+      <span>{cart.count}</span>
+      <button hidden={cart.empty}>Checkout</button>
+      <ul>
+        {cart.items.map((item) => (
+          <li key={item.productId}><span>{item.qty}</span> x <span>{item.name}</span></li>
+        ))}
       </ul>
     </cart-badge>
   ),
@@ -412,7 +413,8 @@ export const CartBadge = component({
     ],
     source: `
 export const CartBadge = component({
-  render: () => <span data-bind="cart.count">2</span>,
+  queries: { cart: {} },
+  render: ({ cart }) => <span>{cart.count}</span>,
 });
 `,
   });
@@ -422,13 +424,8 @@ export const CartBadge = component({
     queryShapeFacts: generatedCartShapeFacts,
     source: `
 export const CartBadge = component({
-  render: () => (
-    <ul data-bind-list="cart.items" kovo-key="sku">
-      <template kovo-stamp>
-        <li><span data-bind=".missing">0</span></li>
-      </template>
-    </ul>
-  ),
+  queries: { cart: {} },
+  render: ({ cart }) => <span>{cart.items.missing}</span>,
 });
 `,
   });
@@ -457,7 +454,8 @@ export const CartBadge = component({
     queryShapeFacts: nullableFacts,
     source: `
 export const ProductCard = component({
-  render: () => <span data-bind="product.review?.rating">5</span>,
+  queries: { product: {} },
+  render: ({ product }) => <span>{product.review?.rating}</span>,
 });
 `,
   });
@@ -467,7 +465,8 @@ export const ProductCard = component({
     queryShapeFacts: nullableFacts,
     source: `
 export const ProductCard = component({
-  render: () => <span data-bind="product.review.rating">5</span>,
+  queries: { product: {} },
+  render: ({ product }) => <span>{product.review.rating}</span>,
 });
 `,
   });
@@ -551,12 +550,9 @@ export const CartShell = component({
 import { component } from '@kovojs/core';
 
 export const CartList = component({
-  render: () => (
-    <ul data-bind-list="cart.items" kovo-key="productId">
-      <template kovo-stamp>
-        <li id="cart-row"><span data-bind=".name">Mug</span></li>
-      </template>
-    </ul>
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <ul>{cart.items.map((item) => <li key={item.productId} id="cart-row">{item.name}</li>)}</ul>
   ),
 });
 `,
@@ -574,7 +570,7 @@ export const CartTable = component({
   render: () => (
     <table>
       <tbody>
-        <tr kovo-c="cart-row">
+        <tr>
           <td>Cart row</td>
         </tr>
       </tbody>
@@ -613,11 +609,11 @@ import { component } from '@kovojs/core';
 export const ExecutionTriggers = component({
   render: () => (
     <section>
-      <button on:click="/c/cart.client.js#Cart$add">Add</button>
-      <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
-      <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
+      <button onClick={() => {}}>Add</button>
+      <search-index onIdle={() => {}}></search-index>
+      <sales-chart onVisible={() => {}}></sales-chart>
       {/* KV211: stock ticker intentionally starts at parse for market-open pages. */}
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <stock-ticker onLoad={() => {}}></stock-ticker>
     </section>
   ),
 });
@@ -632,8 +628,8 @@ import { component } from '@kovojs/core';
 export const ExecutionTriggers = component({
   render: () => (
     <section>
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
-      <video-player on:media="/c/video.client.js#Video$mount"></video-player>
+      <stock-ticker onLoad={() => {}}></stock-ticker>
+      <video-player onMedia={() => {}}></video-player>
     </section>
   ),
 });
@@ -647,9 +643,7 @@ import { component } from '@kovojs/core';
 
 export const Recommendations = component({
   queries: { cart: cartQuery },
-  render: ({ cart }) => (
-    <section kovo-c="recommendations" kovo-deps="cart">{cart.count}</section>
-  ),
+  render: ({ cart }) => <section>{cart.count}</section>,
 });
 `,
   });
@@ -693,7 +687,10 @@ export const Recommendations = component({
       ...compilerDiagnosticFacts(repeatableStaticId.diagnostics, ['KV224']),
     ],
     validContentModelDiagnostics: compilerDiagnosticFacts(validContentModel.diagnostics),
-    validExecutionTriggerDiagnostics: compilerDiagnosticFacts(validExecutionTriggers.diagnostics),
+    validExecutionTriggerDiagnostics: compilerDiagnosticFacts(validExecutionTriggers.diagnostics, [
+      'KV211',
+      'KV212',
+    ]),
     validIdrefDiagnostics: compilerDiagnosticFacts(validIdrefs.diagnostics),
     validResidualStampDiagnostics: compilerDiagnosticFacts(validResidualStamp.diagnostics),
   };

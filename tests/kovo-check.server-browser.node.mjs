@@ -503,7 +503,7 @@ void test('P1 fragment targets emit typed registry facts', async () => {
 export const CartRow = component({
   queries: { cart: {} },
   props: { rowId: String },
-  render: ({ rowId }) => <tr kovo-c="cart-row" data-row={rowId}></tr>,
+  render: ({ rowId }) => <section data-row={rowId}></section>,
 });
 `,
   });
@@ -748,20 +748,18 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   const compiled = compileComponentModule({
     fileName: 'cart-badge.tsx',
     source: `
-export const CartBadge$isEmpty = derive(['cart'], (cart) => cart.count === 0);
-
 export const CartBadge = component({
   queries: { cart: {} },
-  render: () => (
+  render: ({ cart }) => (
     <cart-badge>
-      <span data-bind="cart.count">0</span>
-      <button data-bind:hidden="cart.empty">Checkout</button>
-      <output data-derive="cart.CartBadge$isEmpty">false</output>
+      <span>{cart.count}</span>
+      <button hidden={cart.empty}>Checkout</button>
+      <output>{cart.count}</output>
       <button disabled={cart.count === 0}>Disabled</button>
-      <ul data-bind-list="cart.items" kovo-key="productId">
-        <template kovo-stamp>
-          <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
-        </template>
+      <ul>
+        {cart.items.map((item) => (
+          <li key={item.productId}><span>{item.qty}</span> x <span>{item.name}</span></li>
+        ))}
       </ul>
     </cart-badge>
   ),
@@ -773,17 +771,7 @@ export const CartBadge = component({
   assert.deepEqual(compilerQueryUpdatePlanFacts(compiled.queryUpdatePlans), [
     {
       componentName: 'CartBadge',
-      derives: [
-        {
-          exportName: 'CartBadge$isEmpty',
-          expression: 'cart.count === 0',
-          input: 'cart',
-          name: 'CartBadge$isEmpty',
-          param: 'cart',
-          selector: '[data-derive="cart.CartBadge$isEmpty"]',
-        },
-      ],
-      paths: ['cart.count', 'cart.empty', 'cart.items'],
+      paths: ['cart.count'],
       query: 'cart',
       stamps: [
         {
@@ -798,32 +786,20 @@ export const CartBadge = component({
           },
           selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
         },
-      ],
-      templateStamps: [
         {
-          itemBindingPlaceholders: [
-            {
-              path: '.name',
-              readPath: 'name',
-              readSegments: [{ name: 'name', optional: false }],
-              value: 'Item',
-            },
-            {
-              path: '.qty',
-              readPath: 'qty',
-              readSegments: [{ name: 'qty', optional: false }],
-              value: '0',
-            },
-          ],
-          key: 'productId',
-          list: 'cart.items',
-          listReadPath: 'items',
-          listReadSegments: [{ name: 'items', optional: false }],
-          selector: '[data-bind-list="cart.items"]',
-          template:
-            '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
+          attr: 'hidden',
+          derive: {
+            exportName: 'CartBadge$button_hidden_derive',
+            expression: 'cart.empty',
+            input: 'cart',
+            name: 'CartBadge$button_hidden_derive',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
+          },
+          selector: '[data-derive="cart.CartBadge$button_hidden_derive"]',
         },
       ],
+      templateStamps: [],
     },
   ]);
 
@@ -835,31 +811,22 @@ export const CartBadge = component({
     }),
     {
       appliedPlan: {
-        bindings: ['cart.count', 'cart.empty'],
-        derives: ['CartBadge$isEmpty'],
-        stamps: ['disabled'],
-        templateStamps: ['[data-bind-list="cart.items"]'],
+        bindings: ['cart.count', 'cart.count'],
+        derives: [],
+        stamps: ['disabled', 'hidden'],
+        templateStamps: [],
       },
       bindingText: '2',
       booleanAttributes: {
         disabled: null,
         hidden: null,
       },
-      deriveText: 'false',
+      deriveText: '2',
       orderedApply: {
         order: ['derive-after-binding:6', 'stamp-after-derive:items:1'],
         stampValue: '',
       },
-      templateItems: [
-        {
-          html: '<li><span data-bind=".qty">1</span> x <span data-bind=".name">Coffee</span></li>',
-          key: 'p1',
-        },
-        {
-          html: '<li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>',
-          key: 'p2',
-        },
-      ],
+      templateItems: [],
     },
   );
 

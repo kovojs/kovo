@@ -1,3 +1,4 @@
+import type { StorageCapability } from '@kovojs/core';
 import { htmlElementFacts } from '@kovojs/test/html-fragment';
 
 export interface ServerMutationLifecycleRuntime {
@@ -19,6 +20,7 @@ export interface ServerMutationLifecycleRuntime {
 }
 
 export interface ServerCommerceAdoptDontInventRuntime {
+  createMemoryStorage(): StorageCapability;
   createQueryStore(): unknown;
   domain(name: string): unknown;
   errorBoundary(...args: any[]): unknown;
@@ -591,47 +593,16 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   const firstRateLimit = await guarded(authenticatedRequest);
   const secondRateLimit = await guarded(authenticatedRequest);
 
-  const storedObjects = new Map<unknown, Record<string, unknown>>();
-  const storage = {
-    async get(key: unknown) {
-      return storedObjects.get(key);
-    },
-    async put(
-      key: unknown,
-      body: ArrayBuffer | ArrayBufferView | string,
-      options: { contentType?: string; metadata?: unknown } = {},
-    ) {
-      const bytes =
-        body instanceof ArrayBuffer
-          ? new Uint8Array(body)
-          : ArrayBuffer.isView(body)
-            ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
-            : new TextEncoder().encode(String(body));
-      const stored = {
-        body: bytes,
-        contentType: options.contentType,
-        key,
-        metadata: options.metadata,
-        size: bytes.byteLength,
-      };
-      storedObjects.set(key, stored);
-      return stored;
-    },
-    async stat(key: unknown) {
-      return storedObjects.get(key);
-    },
-    async stream(key: unknown) {
-      const stored = storedObjects.get(key);
-      return stored ? { ...stored, body: new Blob([stored.body as BlobPart]).stream() } : undefined;
-    },
-  };
+  const storage = runtime.createMemoryStorage();
   let uploadedReceiptStorage: Record<string, unknown> | undefined;
   const uploadReceipt = runtime.mutation('order/receipt', {
     csrf: false,
     csrfJustification: 'conformance fixture uses a non-browser caller',
     async handler(input: any, request: unknown) {
       const session = commerceSession.parse(request) as { user: { id: string } };
-      uploadedReceiptStorage = await storage.stat(input.receipt.storage.key);
+      // SPEC §6.6: the authority-bearing key stays opaque; storage metadata exposes only the
+      // normalized app key and cannot be replayed as sink authority.
+      uploadedReceiptStorage = await storage.stat(input.receipt.key);
       return {
         orderId: input.orderId,
         session: session.user.id,

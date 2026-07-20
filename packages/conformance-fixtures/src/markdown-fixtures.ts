@@ -422,16 +422,25 @@ export function prelaunchChecklistGateFact(checklist: string): PrelaunchChecklis
   const requiredRows = markdownTableRows(markdownSection(checklist, 'Required Checks'));
   const auditRows = markdownTableRows(markdownSection(checklist, 'Dated Audit Ledger'));
   const runnableRows = markdownTableRows(markdownSection(checklist, 'Runnable Local Checklist'));
-  const evidenceByCheck = {
-    Domain: markdownTableRows(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
-    'Linguistic screen': markdownTableRows(
-      markdownSection(checklist, 'Linguistic Evidence Ledger'),
-    )[0],
-    'npm scope': markdownTableRows(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
-    'Trademark screen': markdownTableRows(
-      markdownSection(checklist, 'Trademark Evidence Ledger'),
-    )[0],
+  const evidenceSectionByCheck: Record<string, string> = {
+    Domain: 'Domain Evidence Ledger',
+    'Linguistic screen': 'Linguistic Evidence Ledger',
+    'npm scope': 'npm Scope Evidence Ledger',
+    'Security response readiness': 'Security Response Readiness Evidence Ledger',
+    'Trademark screen': 'Trademark Evidence Ledger',
   };
+  const evidenceByCheck = Object.fromEntries(
+    requiredRows.map((requiredRow) => {
+      const check = markdownRequiredTableCell(requiredRow, 'Check');
+      const section = evidenceSectionByCheck[check];
+      return [
+        check,
+        section === undefined
+          ? undefined
+          : markdownTableRows(markdownSection(checklist, section))[0],
+      ];
+    }),
+  );
 
   return {
     auditReadyCount: auditRows.filter(
