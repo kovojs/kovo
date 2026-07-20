@@ -84,7 +84,7 @@ export const COMPILE_USAGE_LINE =
 
 /** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
 export const EXPORT_USAGE =
-  'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--stylesheet-env <name>] [--skip-non-exportable]';
+  'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]';
 
 /** @internal Usage line emitted for `kovo mcp` (see `mcpUsage`). */
 export const MCP_USAGE = 'usage: kovo mcp';
@@ -326,11 +326,6 @@ export const EXPORT_ARGV_SPEC = {
       flag: '--asset-base',
       kind: 'value',
       requiresValueMessage: 'kovo: export --asset-base requires a URL path.\n',
-    },
-    {
-      flag: '--stylesheet-env',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --stylesheet-env requires a name.\n',
     },
     { flag: '--skip-non-exportable', kind: 'boolean' },
   ],
@@ -852,11 +847,6 @@ export const COMMANDS_MANIFEST = [
       {
         flag: '--asset-base <path>',
         description: 'URL path prefix for manifest asset hrefs; defaults to /.',
-      },
-      {
-        flag: '--stylesheet-env <name>',
-        description:
-          'Set an environment variable to the manifest stylesheet href before loading the app.',
       },
       {
         flag: '--skip-non-exportable',

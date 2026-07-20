@@ -89,6 +89,14 @@ const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
 );
+const compilerCapabilityClosureVerdictPath = path.join(
+  repoRoot,
+  'packages/compiler/src/security/capability-closure.ts',
+);
+const cliDependencyCapabilityLoaderPath = path.join(
+  repoRoot,
+  'packages/cli/src/dependency-capability-loader.ts',
+);
 const frameworkImplementationDigestPath = path.join(
   repoRoot,
   'packages/compiler/src/security/framework-implementation-digest.ts',
@@ -133,10 +141,7 @@ const serverRequestBodyProvenancePath = path.join(
 );
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
 const serverGuardsPath = path.join(repoRoot, 'packages/server/src/guards.ts');
-const serverGuardArgsReceiptPath = path.join(
-  repoRoot,
-  'packages/server/src/guard-args-receipt.ts',
-);
+const serverGuardArgsReceiptPath = path.join(repoRoot, 'packages/server/src/guard-args-receipt.ts');
 const serverBuildPath = path.join(repoRoot, 'packages/server/src/build.ts');
 const serverJsxRuntimePath = path.join(repoRoot, 'packages/server/src/jsx-runtime.ts');
 const serverSchemaPath = path.join(repoRoot, 'packages/server/src/schema.ts');
@@ -166,6 +171,42 @@ const schemaSecretBehavioralInstrumentation = [
 const serverBuildBehavioralInstrumentation = [
   '',
   'export const __securityMutationVercelFunctionSource = vercelFunctionSource;',
+].join('\n');
+
+const dependencyLoaderPreEvaluationModuleCensusBranch = [
+  '      if (reviewedPackage !== undefined) {',
+  '        let ast: unknown;',
+].join('\n');
+const removedDependencyLoaderPreEvaluationModuleCensusBranch = [
+  '      if (false && reviewedPackage !== undefined) {',
+  '        let ast: unknown;',
+].join('\n');
+const dependencyLoaderSsrExternalOverlapBranch = [
+  '        if (',
+  '          config.ssr.external === true ||',
+  '          config.ssr.external?.some((external) => dependencySpecifierMatches(specifier, external))',
+  '        ) {',
+].join('\n');
+const removedDependencyLoaderSsrExternalOverlapBranch = ['        if (false) {'].join('\n');
+const dependencyLoaderExternalHtmlModuleClosureBranch = [
+  '      if (',
+  "        lane === 'build-client' &&",
+  '        importerPath !== undefined &&',
+  '        loadedHtmlPaths.has(importerPath)',
+  '      ) {',
+].join('\n');
+const removedDependencyLoaderExternalHtmlModuleClosureBranch = ['      if (false) {'].join('\n');
+const compilerGeneratedWireInitializerPostureBranch = [
+  "    '@kovojs/server/internal/wire',",
+  '    {',
+  '      // mutation-wire.ts acquires the development attestation secret at module initialization.',
+  '      initializer: generatedCryptoDoor,',
+].join('\n');
+const weakenedCompilerGeneratedWireInitializerPostureBranch = [
+  "    '@kovojs/server/internal/wire',",
+  '    {',
+  '      // mutation-wire.ts acquires the development attestation secret at module initialization.',
+  '      initializer: generatedAuthorityFree,',
 ].join('\n');
 
 const runtimeSelectedExecutableReferenceClosureBranch =
@@ -1826,6 +1867,55 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 ].join('\n');
 
 export const SECURITY_GATE_MUTANTS = [
+  {
+    baseModule: {},
+    description:
+      'Deletes the pre-evaluation AST census for reviewed package module edges in Vite SSR.',
+    expectedKiller:
+      'supported SSR app evaluation must reject uncensused package children and Node builtins before execution',
+    name: 'dependency-loader/drop-ssr-pre-evaluation-module-census',
+    replacement: removedDependencyLoaderPreEvaluationModuleCensusBranch,
+    search: dependencyLoaderPreEvaluationModuleCensusBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderSsrPreEvaluationBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a direct app dependency borrow an explicitly trusted SSR host external.',
+    expectedKiller:
+      'app dependency manifests must not overlap an SSR external that bypasses loader re-witnessing',
+    name: 'dependency-loader/drop-direct-ssr-external-overlap-closure',
+    replacement: removedDependencyLoaderSsrExternalOverlapBranch,
+    search: dependencyLoaderSsrExternalOverlapBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderDirectSsrExternalBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets an external HTML module script bypass the immutable app-source snapshot.',
+    expectedKiller:
+      'client builds must reject filesystem modules introduced only by caller-authored HTML',
+    name: 'dependency-loader/drop-external-html-module-closure',
+    replacement: removedDependencyLoaderExternalHtmlModuleClosureBranch,
+    search: dependencyLoaderExternalHtmlModuleClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderExternalHtmlModuleBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Misclassifies the compiler-generated wire module initializer as authority-free.',
+    expectedKiller:
+      'the exact generated wire ABI manifest must retain its module-initializer crypto door',
+    name: 'capability-closure/weaken-generated-wire-initializer-posture',
+    replacement: weakenedCompilerGeneratedWireInitializerPostureBranch,
+    search: compilerGeneratedWireInitializerPostureBranch,
+    sourceFile: compilerCapabilityClosureVerdictPath,
+    sourceOnly: true,
+    test: assertCompilerGeneratedWireAbiPostureBehavior,
+  },
   {
     behavioralTypeScript: true,
     description:
@@ -4506,6 +4596,46 @@ function runIsolatedPackageVitestMutation({
   }
 }
 
+function assertDependencyLoaderSsrPreEvaluationBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'before supported SSR app evaluation',
+  });
+}
+
+function assertDependencyLoaderDirectSsrExternalBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'overlaps a trusted SSR host external',
+  });
+}
+
+function assertDependencyLoaderExternalHtmlModuleBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'external HTML module script',
+  });
+}
+
+function assertCompilerGeneratedWireAbiPostureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'compiler',
+    relativeSourcePath: 'security/capability-closure.ts',
+    sourceText,
+    testFile: 'packages/compiler/src/capability-closure.security.test.ts',
+    testNamePattern: 'admits only exact compiler-generated wire ABI',
+  });
+}
+
 async function assertDynamicBindingControlPlaneClosureBehavior(moduleUnderTest) {
   const reservedNames = [
     'data-bind:aria-label',
@@ -6044,7 +6174,9 @@ async function assertGuardArgsDateRejectionIsEnforced(moduleUnderTest) {
     failure = error;
   }
   if (!/Date internal slots are mutable through borrowed native mutators/u.test(String(failure))) {
-    throw new Error(`mutable Date guard-args receipt was not rejected precisely: ${String(failure)}`);
+    throw new Error(
+      `mutable Date guard-args receipt was not rejected precisely: ${String(failure)}`,
+    );
   }
 }
 

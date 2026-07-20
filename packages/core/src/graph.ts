@@ -242,6 +242,7 @@ export interface KovoCheckInput {
   authPosture?: readonly AuthPostureFact[];
   capabilities?: readonly CapabilityExplain[];
   capabilityClosure?: readonly CapabilityClosureExplainFact[];
+  dependencyCapabilities?: AppDependencyCapabilityManifest;
   cacheInfluence?: CacheInfluenceManifest;
   components?: readonly ComponentExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
@@ -944,6 +945,73 @@ export interface CapabilityClosureExplainFact {
   site: string;
   status?: 'absent' | 'contradictory' | 'stale' | 'unresolved' | 'valid';
   summaryVersion?: string;
+}
+
+/**
+ * One exact export permission retained from the SPEC §6.6 capability-closure verdict.
+ *
+ * @internal
+ */
+export interface AppDependencyCapabilityImport {
+  capabilities: readonly (
+    | 'crypto-acquisition'
+    | 'database-driver'
+    | 'digest'
+    | 'dynamic-loader'
+    | 'filesystem'
+    | 'network'
+    | 'process'
+    | 'vm'
+    | 'worker'
+  )[];
+  disposition: 'authority-free' | 'framework-door' | 'pure' | 'raw' | 'request-closed';
+  name: string;
+}
+
+/** @internal One exact package subpath admitted by the supported app loader. */
+export interface AppDependencyCapabilityEntry {
+  conditions: readonly string[];
+  /** Exact authored modules whose package edges this row admits. */
+  importers: readonly string[];
+  imports: readonly AppDependencyCapabilityImport[];
+  /** Empty only for loader-census rows outside a discovered framework root. */
+  rootKinds: readonly (
+    | 'agent-tool-callback'
+    | 'application'
+    | 'durable-task'
+    | 'endpoint'
+    | 'layout'
+    | 'mutation'
+    | 'query'
+    | 'route'
+    | 'scheduled-task'
+    | 'serialized-browser-handler'
+    | 'webhook'
+  )[];
+  sites: readonly string[];
+  specifier: string;
+}
+
+/** @internal Exact installed identity plus the loader's least-authority verdict. */
+export interface AppDependencyCapability {
+  entries: readonly AppDependencyCapabilityEntry[];
+  implementationDigest?: string;
+  manifestFingerprint?: string;
+  packageName: string;
+  packageVersion: string;
+  summaryVersion?: string;
+  verdict: 'closed' | 'open';
+}
+
+/**
+ * Compiler-derived app dependency bound emitted in `graph.json` and consumed by supported loaders.
+ * It is a fail-closed defense-in-depth floor, not a same-realm sandbox proof (SPEC §6.6).
+ *
+ * @internal
+ */
+export interface AppDependencyCapabilityManifest {
+  dependencies: readonly AppDependencyCapability[];
+  schema: 'kovo-app-dependency-capabilities/v1';
 }
 
 /**

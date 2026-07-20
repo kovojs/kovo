@@ -98,7 +98,7 @@ This file is the normative owner for the KV### diagnostic table. The generated d
 | KV448 | error    | compile-error       | An untrusted-data-reachable root reaches raw network, filesystem, process, VM, worker, database-driver, or unresolved module-loading authority; or a reachable package summary is absent, stale, contradictory, or incomplete for the installed version/conditional exports. Use the reviewed Kovo capability door or repair the exact-version summary; diagnostics include the root-to-capability provenance path (§6.6).                                                                                    |
 | KV449 | error    | compile-error       | A browser/server effect is outside the finite security IR, or its same-file-helper summary is unsupported, recursive, or over budget. Unknown operations and partial mutation forms close; server diagnostics name root, transfers, sink, and reason. Use typed `<form mutation>`, a reviewed operation, an exact immutable helper inside the bounded semantics, or a named explain-visible exceptional door (§4.3, §5.2, §6.6, §9.1). It is not a general code evaluator or a same-realm JavaScript sandbox. |
 | KV450 | error    | fail-closed-runtime | A non-database stateful sink key has no framework-witnessed owner scope, carries a forged/malformed frame, or names an unregistered system posture. Derive principal keys with `scopedKey(request, key)` or task `actAs(id).stateKey(key)`; use `publicScopedKey(key)` only for deliberately shared state. Storage and durable-task coalescing doors reject strings and casts before namespace use (§6.6, §9.6, §10.3).                                                                                       |
-| KV451 | error    | compile-error       | A compiler-derived value cannot be represented by the shared structural source-emission grammar for its exact role (`jsStringLiteral`, `jsIdentifier`, `tsPropertyKey`, or `importSpecifier`). Emission fails before writing an artifact instead of interpolating the value as executable sibling syntax (§5.2).                                                                                                                                                                                        |
+| KV451 | error    | compile-error       | A compiler-derived value cannot be represented by the shared structural source-emission grammar for its exact role (`jsStringLiteral`, `jsIdentifier`, `tsPropertyKey`, or `importSpecifier`). Emission fails before writing an artifact instead of interpolating the value as executable sibling syntax (§5.2).                                                                                                                                                                                              |
 
 The enforcement class is the code's primary SPEC §2 posture. `compile-error` means static analysis,
 build, export, or check rejects before an affected artifact is accepted. `fail-closed-runtime`
@@ -117,3 +117,11 @@ build, and static export; they may be summarized or streamed through the surface
 diagnostic channel, but they do not trigger dev teaching-error documents. MCP tools expose the same
 structured diagnostics (code, severity, message, help, and position when available) from the
 compile/check/explain APIs; MCP is a rendering/query surface, not a second diagnostic channel.
+
+Structured diagnostic provenance is runtime-registry identity, not structural shape. That private
+identity is realm-local: when a supported compiler, build, or export boundary crosses an isolate or
+bundled SSR module graph, the originating realm MUST first verify exact registry membership and
+emit a bounded own-data diagnostic wire record; the receiving realm MUST validate that record and
+reconstruct it through its own generated diagnostic constructor before collection or rendering.
+Copying a diagnostic object, sharing a public symbol brand, or accepting a wire record without the
+originating registry check cannot transfer framework diagnostic authority.

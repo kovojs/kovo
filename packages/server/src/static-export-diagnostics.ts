@@ -7,7 +7,7 @@ import {
   isDiagnosticCode,
   isRegisteredDiagnostic,
 } from '@kovojs/core/internal/diagnostics';
-import { snapshotBuildArray } from './build-security-intrinsics.js';
+import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import { witnessArrayAppend, witnessFreeze } from './security-witness-intrinsics.js';
 
 /**
@@ -93,12 +93,27 @@ export function isStaticExportDiagnostic(value: unknown): value is StaticExportD
 export function isStaticExportDiagnosticError(
   error: unknown,
 ): error is { diagnostics: readonly StaticExportDiagnostic[] } {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    Array.isArray((error as { diagnostics?: unknown }).diagnostics) &&
-    (error as { diagnostics: unknown[] }).diagnostics.every(isStaticExportDiagnostic)
-  );
+  if (typeof error !== 'object' || error === null) return false;
+  let diagnostics: ReturnType<typeof buildOwnDataProperty>;
+  try {
+    diagnostics = buildOwnDataProperty(error, 'diagnostics', 'static-export error diagnostics');
+  } catch {
+    return false;
+  }
+  if (!diagnostics.present) return false;
+  let source: readonly unknown[];
+  try {
+    source = snapshotBuildArray(
+      diagnostics.value as readonly unknown[],
+      'static-export error diagnostics',
+    );
+  } catch {
+    return false;
+  }
+  for (let index = 0; index < source.length; index += 1) {
+    if (!isStaticExportDiagnostic(source[index])) return false;
+  }
+  return true;
 }
 
 /**

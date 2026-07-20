@@ -53,7 +53,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       const end = source.indexOf('\nasync function ', start + 1);
       expect(start, `${functionName} must remain present`).toBeGreaterThanOrEqual(0);
       expect(source.slice(start, end === -1 ? undefined : end)).toContain(
-        'ssr: { noExternal: dependencyCapabilityCompleteBundleNoExternal() }',
+        'ssr: dependencyCapabilityCompleteSsrOptions()',
       );
     }
   });
@@ -378,7 +378,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         await expect(
           viteBuild({ ...config, plugins: [plugin()], ssr: { external: ['safe-parser'] } }),
         ).rejects.toThrow(
-          /KV448.*safe-parser.*(?:resolved outside its exact package export target|escaped the supported build-server)/u,
+          /KV448.*safe-parser.*(?:overlaps a trusted SSR external|resolved outside its exact package export target|escaped the supported build-server)/u,
         );
       }
     } finally {
@@ -426,7 +426,9 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           ssr: { noExternal: true },
         }),
       ).resolves.toBeDefined();
-      expect(readFileSync(join(outDir, 'app.mjs'), 'utf8')).toContain("import('./handler.mjs')");
+      expect(readFileSync(join(outDir, 'app.mjs'), 'utf8')).toMatch(
+        /import\(["']\.\/handler\.mjs["']\)/u,
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -689,7 +691,6 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     const packageRoot = join(root, 'node_modules', 'typescript');
     const executedPath = join(root, 'external-executed');
     const source = "import { value } from 'typescript'; export { value };\n";
-    let server: Awaited<ReturnType<typeof createViteServer>> | undefined;
     try {
       mkdirSync(packageRoot, { recursive: true });
       writeFileSync(
@@ -731,29 +732,26 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         ],
         schema: 'kovo-app-dependency-capabilities/v1',
       };
-      server = await createViteServer({
-        appType: 'custom',
-        configFile: false,
-        logLevel: 'silent',
-        plugins: [
-          dependencyCapabilityLoaderVitePlugin(
-            appModulePath,
-            [{ fileName: 'app.mjs', source }],
-            exactManifest,
-            'build-app',
-          ),
-        ],
-        root,
-        server: { hmr: false },
-        ssr: { external: ['typescript'], noExternal: true },
-      });
-
-      await expect(server.ssrLoadModule('/app.mjs')).rejects.toThrow(
-        /KV448.*typescript.*overlaps a trusted SSR external/u,
-      );
+      await expect(
+        createViteServer({
+          appType: 'custom',
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              'build-app',
+            ),
+          ],
+          root,
+          server: { hmr: false },
+          ssr: { external: ['typescript'], noExternal: true },
+        }),
+      ).rejects.toThrow(/KV448.*typescript.*overlaps a trusted SSR external/u);
       expect(() => readFileSync(executedPath, 'utf8')).toThrow();
     } finally {
-      await server?.close();
       rmSync(root, { force: true, recursive: true });
     }
   });

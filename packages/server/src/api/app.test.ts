@@ -1093,11 +1093,14 @@ describe('server app-shell public API barrels', () => {
       // isolated on internal/managed-db so generated registry imports cannot retain Node VM.
       'accessDecisionFor',
       'accessFactsFromApp',
+      'appEgressPosture',
       'appendFrameworkRuntimeArrayValue',
       'authorizationCorrespondenceFactsFromApp',
       'createMemoryMutationReplayStore',
+      'createRuntimeAttestationVerificationHandle',
       'endpointMatches',
       'explainGuard',
+      'exportSecurityEvents',
       'extractCompilerBoundKovoRuntimeDbMetadata',
       'guardAuditName',
       'installGeneratedTableSecurityManifestForCommand',
@@ -1106,13 +1109,16 @@ describe('server app-shell public API barrels', () => {
       'registerGeneratedCacheInfluenceManifest',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
+      'registerGeneratedRuntimePostureManifest',
       'registerGeneratedTableSecurityManifest',
       'registeredGeneratedTableSecurityManifest',
+      'registeredRuntimePostureManifest',
       'resolveLifecycleRequest',
       'runEndpoint',
       'runMutation',
       'runQuery',
       'runRoutePage',
+      'runtimeAttestationPayloadSource',
     ]);
     expect(packageInternalExecutionApi).not.toHaveProperty('managedDb');
     expect(packageInternalExecutionApi).not.toHaveProperty(

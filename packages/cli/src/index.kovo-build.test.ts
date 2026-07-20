@@ -491,7 +491,6 @@ export function ContactCard(props: { name: string }) {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
-      writeReactJsxRuntimeStub(root);
       writeFileSync(
         appPath,
         `
@@ -3008,7 +3007,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
 
@@ -3092,7 +3090,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeSplitStyleCreateComponentClientEntry(root);
       writeFileSync(appPath, splitSrcStylesheetRouteAppModuleSource(), 'utf8');
 
@@ -3148,7 +3145,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, documentShellRouteSplitAppModuleSource(), 'utf8');
       writeDocumentShellTemplate(root);
       writeSplitStyleCreateComponentClientEntry(root);
@@ -3194,7 +3190,6 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
-      writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
       writeFileSync(
@@ -4912,32 +4907,6 @@ export const ${name} = component({
   render: () => <${host} {...style.attrs(styles.root)}>${name}</${host}>,
 });
 `;
-}
-
-function writeReactJsxRuntimeStub(root: string): void {
-  const reactDir = join(root, 'node_modules/react');
-  mkdirSync(reactDir, { recursive: true });
-  writeFileSync(
-    join(reactDir, 'package.json'),
-    JSON.stringify({
-      exports: {
-        './jsx-dev-runtime': './jsx-dev-runtime.js',
-        './jsx-runtime': './jsx-runtime.js',
-      },
-      name: 'react',
-      type: 'module',
-    }),
-    'utf8',
-  );
-  const runtime = [
-    'export function jsx() { return null; }',
-    'export function jsxs() { return null; }',
-    'export function jsxDEV() { return null; }',
-    'export const Fragment = Symbol.for("react.fragment");',
-    '',
-  ].join('\n');
-  writeFileSync(join(reactDir, 'jsx-dev-runtime.js'), runtime, 'utf8');
-  writeFileSync(join(reactDir, 'jsx-runtime.js'), runtime, 'utf8');
 }
 
 function builtAssetPath(outDir: string, predicate: (path: string) => boolean): string {

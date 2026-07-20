@@ -406,18 +406,46 @@ conditional-export arm set. Every manifest-public Kovo runtime export and every 
 posture ledger with an explicit raw-authority disposition, root kind or `none`, security role,
 implementation digest, manifest-target/condition fingerprint, and threat-matrix posture. A new,
 missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
-door list is never an authority-free verdict. Explicitly reviewed framework companions use the same
-compiler-owned, version-pinned verdict model. Other packages use the committed
+door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
+subpath membership only through one compiler-owned exact table that classifies the initializer and
+every admitted member separately; that table is consulted only after the installed first-party
+manifest fingerprint and implementation digest match. A vocabulary match alone cannot mint an
+authority-free verdict. Explicitly reviewed framework companions use the same compiler-owned,
+version-pinned verdict model. Other packages use the committed
 `kovo.capabilities.json` `kovo-package-capability-summaries/v1` ledger, whose entries are versioned
 independently and may classify exports only as pure or raw. A side-effect-only import is the reserved
-`<module>` entry and MUST classify package initialization explicitly rather than relying on an empty
-export list. An absent, stale, duplicate,
+`<module>` entry. Every package import, including a named, default, or namespace import, evaluates
+that initializer and MUST consume one exact `<module>` verdict in addition to every requested export;
+an export wildcard cannot stand in for the initializer. An absent, stale, duplicate,
 contradictory, malformed, export-incomplete, condition-incomplete, or unresolved verdict fails
 closed with KV448. `kovo explain --capabilities` prints the root census, reviewed doors, exact
 package-summary versions/fingerprints, and every closed fact with the same provenance used by the
 diagnostic. This is a conservative proof about accidental authority in Kovo's supported static
 authoring subset; consistent with the trusted application-code boundary above, it is not a
 same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
+
+For every authored or compiler-derived package edge, including an initializer in a malformed or
+currently rootless module, the compiler MUST also derive one
+`kovo-app-dependency-capabilities/v1` loader manifest row containing the exact installed identity,
+specifier and conditional-export arms, retained export dispositions/capabilities, exact importer
+and sites, and the reachable root kinds. A loader-census-only row uses an explicit empty
+`rootKinds` array; that row does not invent a request root or explain fact, but its package
+initializer still cannot execute by omission. Every supported production Vite path that loads or
+bundles an approved app source MUST re-resolve that exact package identity before admitting its bare
+import and reject an absent/duplicate or malformed row, identity drift, a closed package row, or a
+retained `raw` or `request-closed` export. Pre-evaluation SSR MUST force complete dependency
+traversal and parse every admitted third-party module before execution; every bare child edge,
+including a Node builtin, and every non-literal module edge fails closed before Vite can externalize
+it. An external module edge from a loaded HTML entry MUST resolve to the immutable approved-source
+snapshot or one exact framework-owned Vite bootstrap virtual; inline HTML module proxies remain
+outside the supported source graph. An exact framework host-tool external is permitted only when no
+app dependency manifest row overlaps that package or subpath. Artifact checks distinguish
+bundle-owned chunk filenames from true unresolved externals without weakening the earlier source
+and module-graph checks. The same manifest is emitted in `graph.json`; an explicit empty manifest
+means the compiler proved that the app graph has no dependency edge. This loader check turns the
+pre-evaluation census into a fail-closed runtime/build bound for supported production artifacts, but
+it is defense-in-depth under rule (3): it does not sandbox deliberately hostile same-realm package
+code or prevent privileged host loaders from bypassing Kovo.
 
 Supported browser event handlers MUST be authored as TSX/JSX event attributes and lowered through
 the compiler-owned finite browser operation vocabulary. App-authored imperative registration — an

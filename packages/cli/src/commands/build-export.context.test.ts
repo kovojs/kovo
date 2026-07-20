@@ -15,7 +15,7 @@ function symlinkRuntimePackages(root: string): void {
   symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
 }
 
-function appModuleSource(envName: string): string {
+function appModuleSource(): string {
   return [
     "import { createApp } from '@kovojs/server';",
     "import { trustedHtml } from '@kovojs/browser';",
@@ -26,7 +26,7 @@ function appModuleSource(envName: string): string {
     '  errorShells: {},',
     '  mutations: [],',
     '  queries: [],',
-    `  routes: [{ path: '/', page: () => trustedHtml(\`<link href="\${process.env.${envName}}"><main>Home</main>\`) }],`,
+    "  routes: [{ path: '/', page: () => trustedHtml('<main>Home</main>') }],",
     '  stylesheets: [],',
     '});',
     '',
@@ -52,7 +52,7 @@ function writeManifest(root: string, fileName: string): { distDir: string; manif
 }
 
 describe('kovo build/export scoped context', () => {
-  it('restores stylesheet env overlays across repeated exports in one process', async () => {
+  it('keeps operator environment untouched across repeated manifest exports', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-context-'));
     const appPath = join(root, 'app.mjs');
     const envName = 'KOVO_TEST_SCOPED_STYLESHEET';
@@ -60,7 +60,7 @@ describe('kovo build/export scoped context', () => {
 
     try {
       symlinkRuntimePackages(root);
-      writeFileSync(appPath, appModuleSource(envName), 'utf8');
+      writeFileSync(appPath, appModuleSource(), 'utf8');
       const firstManifest = writeManifest(root, 'first.css');
       const secondManifest = writeManifest(root, 'second.css');
       process.env[envName] = 'before-export';
@@ -70,24 +70,28 @@ describe('kovo build/export scoped context', () => {
         distDir: firstManifest.distDir,
         manifestFile: firstManifest.manifestFile,
         outDir: join(root, 'out-first'),
-        stylesheetEnv: envName,
       });
       const second = await runExportCommand({
         appModulePath: appPath,
         distDir: secondManifest.distDir,
         manifestFile: secondManifest.manifestFile,
         outDir: join(root, 'out-second'),
-        stylesheetEnv: envName,
       });
 
       expect(first.exitCode).toBe(0);
       expect(second.exitCode).toBe(0);
       expect(process.env[envName]).toBe('before-export');
       expect(readFileSync(join(root, 'out-first/index.html'), 'utf8')).toContain(
-        '<link href="/assets/first.css">',
+        '<main>Home</main>',
       );
       expect(readFileSync(join(root, 'out-second/index.html'), 'utf8')).toContain(
-        '<link href="/assets/second.css">',
+        '<main>Home</main>',
+      );
+      expect(readFileSync(join(root, 'out-first/assets/first.css'), 'utf8')).toBe(
+        'html{display:block}',
+      );
+      expect(readFileSync(join(root, 'out-second/assets/second.css'), 'utf8')).toBe(
+        'html{display:block}',
       );
     } finally {
       if (previous === undefined) delete process.env[envName];

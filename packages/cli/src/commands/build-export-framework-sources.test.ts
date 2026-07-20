@@ -1,4 +1,5 @@
 import {
+  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -24,6 +25,43 @@ import {
   kovoFrameworkSourceTrustForTesting,
   kovoFrameworkSourceVitePluginForTesting,
 } from './build-export.js';
+
+function declaredWorkspaceKovoDependencyEntries(entry: string, packageName: string): string[] {
+  const entries: string[] = [];
+  const seen = new Set<string>();
+  const pending = [{ entry, packageName }];
+  for (let pendingIndex = 0; pendingIndex < pending.length; pendingIndex += 1) {
+    const context = pending[pendingIndex]!;
+    let directory = dirname(context.entry);
+    let manifest: { dependencies?: Record<string, string>; name?: string } | undefined;
+    for (let depth = 0; depth < 64; depth += 1) {
+      const manifestPath = join(directory, 'package.json');
+      if (existsSync(manifestPath)) {
+        const candidate = JSON.parse(readFileSync(manifestPath, 'utf8')) as typeof manifest;
+        if (candidate?.name === context.packageName) manifest = candidate;
+        break;
+      }
+      const parent = dirname(directory);
+      if (parent === directory) break;
+      directory = parent;
+    }
+    expect(manifest?.name).toBe(context.packageName);
+    for (const dependencyName of Object.keys(manifest?.dependencies ?? {}).sort()) {
+      if (!dependencyName.startsWith('@kovojs/')) continue;
+      let dependencyEntry: string;
+      try {
+        dependencyEntry = realpathSync(createRequire(context.entry).resolve(dependencyName));
+      } catch {
+        continue;
+      }
+      if (seen.has(dependencyEntry)) continue;
+      seen.add(dependencyEntry);
+      entries.push(dependencyEntry);
+      pending.push({ entry: dependencyEntry, packageName: dependencyName });
+    }
+  }
+  return entries;
+}
 
 function writePackage(
   installRoot: string,
@@ -136,6 +174,9 @@ describe('Kovo framework source roots', () => {
     expect(roots).toContain(dirname(browserEntry));
     expect(roots).toContain(dirname(compilerEntry));
     expect(roots).toContain(dirname(verifyEntry));
+    for (const dependencyEntry of declaredWorkspaceKovoDependencyEntries(cliEntry, '@kovojs/cli')) {
+      expect(roots).toContain(dirname(dependencyEntry));
+    }
   });
 
   it('follows only declared packed dependencies and rejects an app-planted Kovo name', () => {

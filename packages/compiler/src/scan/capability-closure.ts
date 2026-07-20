@@ -2,11 +2,13 @@ import ts from 'typescript';
 
 import type {
   CapabilityClosureSourceFile,
+  CompilerGeneratedCapabilityDependency,
   RawCapabilityKind,
   ScannedBindingAliasFact,
   ScannedBrowserHandlerFact,
   ScannedCallFact,
   ScannedCapabilityModule,
+  ScannedCompilerDependencyFact,
   ScannedExportBindingFact,
   ScannedGlobalCapabilityFact,
   ScannedImportBindingFact,
@@ -64,6 +66,64 @@ const globalNamespaceMembers = new Map<string, RawCapabilityKind>([
   ['require', 'dynamic-loader'],
 ]);
 
+const compilerGeneratedInternalModules = [
+  '@kovojs/browser/internal/output',
+  '@kovojs/server/internal/csrf',
+  '@kovojs/server/internal/escape',
+  '@kovojs/server/internal/route',
+  '@kovojs/server/internal/wire',
+] as const;
+
+/**
+ * Bind private wire imports to names added by the reviewed compiler lowering, never to authored
+ * spellings. Unknown newly emitted names remain in the fact so the finite verdict rejects them.
+ * @internal
+ */
+export function compilerGeneratedCapabilityDependencies(options: {
+  readonly authoredSource: string;
+  readonly fileName: string;
+  readonly loweredSource: string | null;
+}): CompilerGeneratedCapabilityDependency[] {
+  if (options.loweredSource === null) return [];
+  const authored = scanCapabilityClosureModule({
+    fileName: options.fileName,
+    source: options.authoredSource,
+  });
+  const lowered = scanCapabilityClosureModule({
+    fileName: options.fileName,
+    source: options.loweredSource,
+  });
+  const dependencies: CompilerGeneratedCapabilityDependency[] = [];
+  for (const specifier of compilerGeneratedInternalModules) {
+    const authoredNames = compilerInternalImportNames(authored.imports, specifier);
+    const loweredNames = compilerInternalImportNames(lowered.imports, specifier);
+    const generatedNames = [...loweredNames]
+      .filter((name) => !authoredNames.has(name))
+      .sort((left, right) => left.localeCompare(right));
+    if (generatedNames.length === 0) continue;
+    dependencies.push({
+      importer: options.fileName,
+      importedNames: generatedNames,
+      kind: 'generated-internal-abi',
+      site: `${options.fileName}:compiler-lowered`,
+      specifier,
+    });
+  }
+  return dependencies;
+}
+
+function compilerInternalImportNames(
+  imports: readonly ScannedImportFact[],
+  specifier: (typeof compilerGeneratedInternalModules)[number],
+): Set<string> {
+  const names = new Set<string>();
+  for (const imported of imports) {
+    if (imported.specifier !== specifier) continue;
+    for (const name of imported.importedNames) names.add(name);
+  }
+  return names;
+}
+
 /** Scanner/source-text boundary for the capability-closed module graph (SPEC §5.2 rule 10). */
 export function scanCapabilityClosureModules(
   files: readonly CapabilityClosureSourceFile[],
@@ -83,6 +143,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
   const aliases: ScannedBindingAliasFact[] = [];
   const browserHandlers: ScannedBrowserHandlerFact[] = [];
   const calls: ScannedCallFact[] = [];
+  const compilerDependencies: ScannedCompilerDependencyFact[] = [];
   const exports: ScannedExportBindingFact[] = [];
   const globals: ScannedGlobalCapabilityFact[] = [];
   const importBindings: ScannedImportBindingFact[] = [];
@@ -94,6 +155,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
   const globalAliases = globalNamespaceAliases(aliases);
 
   const scopes: readonly Set<string>[] = [];
+  let firstJsxSite: string | undefined;
   visitWithScopes(sourceFile, scopes, (node, activeScopes) => {
     if (ts.isCallExpression(node)) {
       collectCall(node, sourceFile, callbackCarriers, activeScopes, calls, imports);
@@ -104,9 +166,32 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
         site: sourceSite(sourceFile, node.getStart(sourceFile)),
       });
     }
+    if (
+      firstJsxSite === undefined &&
+      (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node))
+    ) {
+      firstJsxSite = sourceSite(sourceFile, node.getStart(sourceFile));
+    }
     collectGlobalCapability(node, sourceFile, activeScopes, globalAliases, globals);
   });
   collectAliasGlobalCapabilities(aliases, globals);
+
+  if (firstJsxSite !== undefined) {
+    compilerDependencies.push(
+      {
+        importedNames: ['Fragment', 'jsxDEV'],
+        kind: 'jsx-runtime',
+        site: firstJsxSite,
+        specifier: '@kovojs/server/jsx-dev-runtime',
+      },
+      {
+        importedNames: ['Fragment', 'jsx', 'jsxs'],
+        kind: 'jsx-runtime',
+        site: firstJsxSite,
+        specifier: '@kovojs/server/jsx-runtime',
+      },
+    );
+  }
 
   for (const imported of imports) {
     if (imported.specifier === undefined) continue;
@@ -123,6 +208,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
     aliases,
     browserHandlers,
     calls,
+    compilerDependencies,
     exports,
     fileName: file.fileName,
     globals: dedupeGlobals(globals),
