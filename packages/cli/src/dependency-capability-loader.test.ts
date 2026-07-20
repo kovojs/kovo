@@ -1418,6 +1418,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       '<base href="https://attacker.invalid/">',
       /KV448.*raw HTML base URL.*immutable approved-source snapshot/u,
     ],
+    [
+      'javascript URL handler',
+      '<a href="javascript:void(globalThis.__KOVO_JS_URL_PWNED__=\'EXECUTED\')">run</a>',
+      /KV448.*raw HTML javascript URL.*compiler-owned JSX lowering/u,
+    ],
   ])('rejects raw HTML %s outside compiler-owned closure', async (_label, fragment, error) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-html-execution-')));
     const appModulePath = join(root, 'src', 'client.ts');
