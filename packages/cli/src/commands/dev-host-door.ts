@@ -140,6 +140,41 @@ export function installKovoDevHostDoor(server: ViteDevServer): void {
   });
 }
 
+/**
+ * Mount the second half of the same door after Kovo's app shell and before Vite internals.
+ * Anything that falls through the closed app route table is a Vite-readable surface regardless of
+ * filename or extension, so this complete fallback—not the suffix classifier—is the source/env
+ * authentication boundary.
+ */
+export function installKovoDevSourceFallbackDoor(server: ViteDevServer): void {
+  const configuredHost = exactLoopbackHost(server.config.server.host);
+  const token = server.config.webSocketToken;
+  if (!isBase64UrlToken(token)) {
+    throw new TypeError('Kovo dev requires Vite to provide one non-empty boot websocket token.');
+  }
+  const httpServer = server.httpServer;
+  if (httpServer === null) {
+    throw new TypeError('Kovo dev requires one owned HTTP server for its source fallback door.');
+  }
+  server.middlewares.use((request, response, next) => {
+    const authority = devRequestAuthority(request, httpServer, configuredHost, false);
+    if (!authority.ok) {
+      rejectHttpDevRequest(response, authority);
+      return;
+    }
+    if (!requestHasDevAuth(request, token)) {
+      response.removeHeader('Set-Cookie');
+      rejectHttpDevRequest(response, {
+        message: 'Kovo dev Vite endpoints require the boot-authenticated browser session.',
+        ok: false,
+        status: 401,
+      });
+      return;
+    }
+    next();
+  });
+}
+
 function exactLoopbackHost(value: boolean | string | undefined): string {
   if (value === undefined || value === false) return DEFAULT_DEV_HOST;
   if (value === true || typeof value !== 'string') {

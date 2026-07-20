@@ -3304,6 +3304,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'unauthenticatedSource',
           'reboundSource',
           'authenticatedSource',
+          'unauthenticatedExtensionlessSource',
+          'authenticatedExtensionlessSource',
           'status: 401',
           'status: 403',
         ],

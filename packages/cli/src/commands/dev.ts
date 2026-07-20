@@ -36,7 +36,11 @@ import {
   buildOwnDataValue,
   buildSnapshotDenseArray,
 } from './build-security-intrinsics.js';
-import { configureKovoDevHostDoor, installKovoDevHostDoor } from './dev-host-door.js';
+import {
+  configureKovoDevHostDoor,
+  installKovoDevHostDoor,
+  installKovoDevSourceFallbackDoor,
+} from './dev-host-door.js';
 
 const NativeFunction = globalThis.Function;
 const NativeNumber = globalThis.Number;
@@ -748,6 +752,12 @@ function createDevSecurityProfilePlugins(kovoPlugin: PluginOption): {
           );
         }
         config.plugins = fixedDevPluginArray(prePlugin, kovoPlugin, isolated, postPlugin);
+      },
+    },
+    configureServer: {
+      order: 'post',
+      handler(server) {
+        installKovoDevSourceFallbackDoor(server);
       },
     },
   };

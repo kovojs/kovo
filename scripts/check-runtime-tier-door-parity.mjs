@@ -262,6 +262,7 @@ function validateDevHostSourcePins(readText, findings) {
     'packages/cli/src/commands/dev-host-door.ts': [
       'configureKovoDevHostDoor',
       'installKovoDevHostDoor',
+      'installKovoDevSourceFallbackDoor',
       "rawListeners('upgrade')",
       'Kovo-Dev-Auth',
       'timingSafeEqual',
@@ -272,6 +273,7 @@ function validateDevHostSourcePins(readText, findings) {
     'packages/cli/src/commands/dev.ts': [
       'configureKovoDevHostDoor(server);',
       'installKovoDevHostDoor(server);',
+      'installKovoDevSourceFallbackDoor(server);',
     ],
     'packages/cli/src/index.kovo-dev.test.ts': [
       '@kovo-security-certifies C13 dev-host-http-websocket-rebinding-closed',

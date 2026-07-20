@@ -193,6 +193,8 @@ throw new Error('undeclared Vite config executed');
   // @kovo-security-certifies C13 dev-host-http-websocket-rebinding-closed
   it('closes the real HTTP and HMR websocket dev-host door against DNS rebinding', async () => {
     const root = devFixture('dev-host-door');
+    mkdirSync(join(root, 'public'), { recursive: true });
+    writeFileSync(join(root, 'public/source-secret'), 'extensionless source secret', 'utf8');
     const defaultPosture = await runKovoDevWorker({
       appModulePath: join(root, 'src/app.ts'),
       mode: 'development',
@@ -265,6 +267,25 @@ throw new Error('undeclared Vite config executed');
       });
       expect.soft(authenticatedSource.status).toBe(200);
       expect.soft(authenticatedSource.body).toContain('createApp');
+
+      const unauthenticatedExtensionlessSource = await rawDevHttpRequest({
+        authority,
+        origin,
+        path: '/source-secret',
+        port,
+      });
+      expect.soft(unauthenticatedExtensionlessSource).toMatchObject({ status: 401 });
+      const authenticatedExtensionlessSource = await rawDevHttpRequest({
+        authority,
+        cookie,
+        origin,
+        path: '/source-secret',
+        port,
+      });
+      expect.soft(authenticatedExtensionlessSource).toMatchObject({
+        body: 'extensionless source secret',
+        status: 200,
+      });
 
       const reboundHost = await rawDevHttpRequest({
         authority: `attacker.example:${port}`,
