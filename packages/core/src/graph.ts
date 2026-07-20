@@ -101,6 +101,39 @@ export interface KovoArtifactProvenance {
   };
 }
 
+/** @internal Exact createApp egress posture retained in the reviewed build graph. */
+export interface EgressPostureFact {
+  allowDestinations: readonly string[];
+  allowInternal: readonly string[];
+  disabled: boolean;
+}
+
+/** @internal Auth/CSRF fact included in the signed runtime posture digest. */
+export interface RuntimePostureRequestFact {
+  auth: string;
+  csrf: string;
+  method: string;
+  name: string;
+  path: string;
+  surface: 'endpoint' | 'mutation';
+}
+
+/** @internal Canonical build facts covered by runtime posture attestation. */
+export interface RuntimePostureFacts {
+  endpointAuth: readonly RuntimePostureRequestFact[];
+  egressAllowlist: readonly string[];
+  irVersions: readonly string[];
+  trustEscapes: readonly unknown[];
+}
+
+/** @internal Build-generated, artifact-bound posture registered before authored app evaluation. */
+export interface RuntimePostureManifest {
+  artifactSubject: `sha256:${string}`;
+  facts: RuntimePostureFacts;
+  postureDigest: `sha256:${string}`;
+  schema: 'kovo-runtime-posture/v1';
+}
+
 /** @internal Serialized guard evidence paired with one concrete Postgres policy surface. */
 export type AuthorizationGuardAuditFact =
   | {
@@ -217,6 +250,7 @@ export interface KovoCheckInput {
   diagnostics?: readonly StaticDiagnosticFact[];
   endpoints?: readonly EndpointExplain[];
   endpointPosture?: readonly EndpointPostureVerificationFact[];
+  egressPosture?: EgressPostureFact;
   escapeCensus?: EscapeCensusCoverageFact;
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
@@ -233,6 +267,7 @@ export interface KovoCheckInput {
   queries?: readonly QueryReadSet[];
   queryWriteReachability?: readonly QueryWriteReachabilityFact[];
   requestProviders?: readonly RequestProviderExplain[];
+  runtimePosture?: RuntimePostureManifest;
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   revealed?: readonly RevealExplainFact[];
   scopeAudits?: readonly ScopeAuditFact[];

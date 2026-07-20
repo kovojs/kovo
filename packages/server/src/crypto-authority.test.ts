@@ -21,6 +21,8 @@ describe('SPEC §6.6 purpose-bound crypto authority', () => {
       'live-target-attestation',
       'rendered-html-coercion',
       'session-fingerprint',
+      'runtime-posture-attestation',
+      'security-event-chain',
     ]);
     expect(await import('./crypto-authority.js')).not.toHaveProperty('createCryptoHandle');
     expect(await import('./crypto-authority.js')).not.toHaveProperty('deriveKey');

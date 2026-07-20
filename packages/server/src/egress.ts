@@ -10,6 +10,7 @@ import {
   runWithIsolatedFrameworkAsyncContext,
 } from './async-context.js';
 import { activeUndiciFloorDispatcher } from './egress-undici.js';
+import { securityEvent } from './security-event.js';
 
 import {
   egressApply,
@@ -204,6 +205,16 @@ export class EgressBlockedError extends Error {
       `Outbound egress to ${where} was blocked by the Kovo private-network deny floor ` +
         `(${args.classification}; SPEC §6.6 runtime defense-in-depth). ${remediation}`,
     );
+    securityEvent({
+      reason:
+        reason === 'private-network'
+          ? 'internal-network'
+          : reason === 'unix-domain-socket' || reason === 'unconnected-datagram'
+            ? 'malformed-destination'
+            : 'policy',
+      type: 'egress-denied',
+    });
+    // @kovo-security-denial egress-denied egress-blocked-error
     this.destination = args.destination;
     this.resolvedIp = args.resolvedIp;
     this.classification = args.classification;

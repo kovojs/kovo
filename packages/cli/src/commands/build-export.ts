@@ -37,6 +37,7 @@ import {
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
 import {
   snapshotCacheInfluenceManifest,
@@ -75,6 +76,7 @@ import {
 } from '@kovojs/drizzle/internal/static';
 import type {
   AccessDecision,
+  AppEgressOptions,
   Guard,
   KovoApp,
   StaticExportCompileDiagnostic,
@@ -101,6 +103,7 @@ import {
   type StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import {
+  runtimePostureFactsFromGraph,
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
@@ -157,6 +160,7 @@ import {
   buildMapSet,
   buildObjectKeys,
   buildObservePromise,
+  buildOwnDataProperty,
   buildOwnDataValue,
   buildPromiseAll,
   buildRegExpExec,
@@ -454,6 +458,7 @@ type BuildExecutionModule = Pick<
   typeof import('@kovojs/server/internal/execution'),
   | 'accessDecisionFor'
   | 'accessFactsFromApp'
+  | 'appEgressPosture'
   | 'authorizationCorrespondenceFactsFromApp'
   | 'explainGuard'
   | 'guardAuditName'
@@ -679,6 +684,15 @@ export async function runBuildCommand(
       vercel,
       writeKovoNeutralBuild,
     } = loadAndCheck.value;
+    const graphWithProvenance: CoreGraph.KovoCheckInput = {
+      ...checkGraph,
+      provenance: artifactProvenance,
+    };
+    const runtimePosture = runtimePostureManifestForBuild(graphWithProvenance);
+    const attestedCheckGraph: CoreGraph.KovoCheckInput = {
+      ...graphWithProvenance,
+      runtimePosture,
+    };
     const outDir = resolve(invocationRoot, options.outDir);
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
     const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
@@ -724,7 +738,7 @@ export async function runBuildCommand(
       queryShapeFacts,
       runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
-        ...runtimeRegistryWireFactsFromGraph(checkGraph),
+        ...runtimeRegistryWireFactsFromGraph(attestedCheckGraph),
         ...(staticRuntimeRegistry.browserPosture === undefined
           ? {}
           : { browserPosture: staticRuntimeRegistry.browserPosture }),
@@ -747,7 +761,7 @@ export async function runBuildCommand(
       serverHandlerSource: serverHandlerBuild.source,
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
-    writeKovoBuildGraphArtifact(neutralBuild, checkGraph, artifactProvenance);
+    writeKovoBuildGraphArtifact(neutralBuild, attestedCheckGraph);
     const presetToken =
       selectedPreset.name === 'cloudflare'
         ? cloudflare()
@@ -1192,19 +1206,27 @@ type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
 function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
   graph: CoreGraph.KovoCheckInput,
-  provenance: CoreGraph.KovoArtifactProvenance,
 ): void {
   // SPEC §5.2.3/§5.3: the build-derived graph is a review/debug artifact, not just an
   // in-memory preflight input. Persist it in the neutral build metadata directory
   // so `kovo explain ...` can discover it after an ordinary scaffold build. Provenance is
   // build-owned and overwrites any untrusted graph field with the boot-time identity snapshot.
-  writeFileSync(
-    join(neutralBuild.outDir, 'graph.json'),
-    `${stringifyBuildValue({ ...graph, provenance }, 2)}\n`,
-  );
+  writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${stringifyBuildValue(graph, 2)}\n`);
   // Plan 3 §2.1: the release-bound framework certificate is an independently-checkable sibling,
   // not an app-authored graph field. Its committed canonical bytes are embedded in the CLI build.
   writeFileSync(join(neutralBuild.outDir, 'certificate.json'), kovoCertificateV1Json);
+}
+
+function runtimePostureManifestForBuild(
+  graph: CoreGraph.KovoCheckInput,
+): CoreGraph.RuntimePostureManifest {
+  const facts = runtimePostureFactsFromGraph(graph);
+  return {
+    artifactSubject: `sha256:${hash('sha256', canonicalJsonStringify(graph), 'hex')}`,
+    facts,
+    postureDigest: `sha256:${hash('sha256', canonicalJsonStringify(facts), 'hex')}`,
+    schema: 'kovo-runtime-posture/v1',
+  };
 }
 
 function buildCheckFailureOutput(output: string): string {
@@ -1701,6 +1723,7 @@ async function staticBuildCheckGraph(
           queries: queryReadSets,
           tableSecurity: drizzleFacts.runtimeTableSecurityManifest,
         });
+  const egressPosture = buildEgressPosture(options.execution.appEgressPosture(app));
 
   return {
     components: sourceGraphFacts.components,
@@ -1723,6 +1746,7 @@ async function staticBuildCheckGraph(
       ...(capabilities.length === 0 ? {} : { capabilities }),
       ...(capabilityClosure.length === 0 ? {} : { capabilityClosure }),
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
+      egressPosture,
       escapeCensus: {
         doors: ESCAPE_CENSUS_DOORS,
         schema: 'kovo.escape-census-coverage/v1',
@@ -1752,6 +1776,26 @@ async function staticBuildCheckGraph(
     queryShapeFacts,
     routePages: sourceGraphFacts.routePages,
     sourceFiles: files,
+  };
+}
+
+function buildEgressPosture(value: AppEgressOptions | undefined): CoreGraph.EgressPostureFact {
+  if (value === false) {
+    return { allowDestinations: [], allowInternal: [], disabled: true };
+  }
+  if (value !== undefined && 'enabled' in value) {
+    return { allowDestinations: [], allowInternal: [], disabled: true };
+  }
+  return {
+    allowDestinations: buildSnapshotDenseArray(
+      value?.allowDestinations ?? [],
+      'Build egress allowDestinations posture',
+    ),
+    allowInternal: buildSnapshotDenseArray(
+      value?.allowInternal ?? [],
+      'Build egress allowInternal posture',
+    ),
+    disabled: false,
   };
 }
 
@@ -4756,8 +4800,8 @@ export function kovoServerHandlerEntrySource(
 ): string {
   return buildJoinStrings(
     [
-      "import './runtime-registry.mjs';",
       "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+      "import './runtime-registry.mjs';",
       "import { appendFrameworkRuntimeArrayValue } from '@kovojs/server/internal/execution';",
       `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`,
       'const app = appModule.default ?? appModule.app;',
@@ -4838,7 +4882,7 @@ export function serializeBuildRuntimeRegistryWireModule(
 ): string {
   return buildJoinStrings(
     [
-      `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
+      `import { registerGeneratedBrowserPostureManifest, registerGeneratedCacheInfluenceManifest, registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry, registerGeneratedRuntimePostureManifest, registerGeneratedTableSecurityManifest } from '@kovojs/server/internal/execution';`,
       ...(registry.browserPosture === undefined
         ? []
         : [
@@ -4853,6 +4897,11 @@ export function serializeBuildRuntimeRegistryWireModule(
         ? []
         : [
             `registerGeneratedTableSecurityManifest(${stringifyBuildValue(registry.tableSecurity)});`,
+          ]),
+      ...(registry.runtimePosture === undefined
+        ? []
+        : [
+            `registerGeneratedRuntimePostureManifest(${stringifyBuildValue(registry.runtimePosture)});`,
           ]),
       `registerGeneratedQueryReadRegistry(${stringifyBuildValue(registry.queryReads)});`,
       `registerGeneratedMutationTouchRegistry(${stringifyBuildValue(registry.mutationTouches)});`,

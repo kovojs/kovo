@@ -16,6 +16,7 @@ import {
   runtimeRegistryFacts,
 } from './registry-facts.js';
 import {
+  runtimePostureFactsFromGraph,
   runtimeRegistryWireFactsFromGraph,
   serializeRuntimeRegistryWireModule,
 } from './internal/runtime-registry-wire.js';
@@ -341,20 +342,26 @@ describe('runtimeRegistryFacts', () => {
     expect(serializeRuntimeRegistryWireModule(facts)).toContain(
       'registerGeneratedCacheInfluenceManifest({"entries":[',
     );
-    expect(
-      serializeRuntimeRegistryWireModule({
-        ...facts,
-        browserPosture: {
-          externalOrigins: [],
-          isolationBlockers: [],
-          opaqueExternalUrls: [],
-          operations: ['browser.form.submit'],
-          schema: browserPostureManifestSchema,
-        },
-      }),
-    ).toContain(
+    const combinedPostureWire = serializeRuntimeRegistryWireModule({
+      ...facts,
+      browserPosture: {
+        externalOrigins: [],
+        isolationBlockers: [],
+        opaqueExternalUrls: [],
+        operations: ['browser.form.submit'],
+        schema: browserPostureManifestSchema,
+      },
+      runtimePosture: {
+        artifactSubject: `sha256:${'a'.repeat(64)}`,
+        facts: { endpointAuth: [], egressAllowlist: [], irVersions: [], trustEscapes: [] },
+        postureDigest: `sha256:${'b'.repeat(64)}`,
+        schema: 'kovo-runtime-posture/v1',
+      },
+    });
+    expect(combinedPostureWire).toContain(
       'registerGeneratedBrowserPostureManifest({"externalOrigins":[],"isolationBlockers":[],"opaqueExternalUrls":[],"operations":["browser.form.submit"],"schema":"kovo-browser-posture/v1"});',
     );
+    expect(combinedPostureWire).toContain('registerGeneratedRuntimePostureManifest({');
   });
 
   it('projects runtime registry authority despite late build-realm intrinsic poison', () => {
@@ -409,6 +416,58 @@ describe('runtimeRegistryFacts', () => {
         'mutations/update-account': [{ crossTable: true, domain: 'account', keys: 'arg:id' }],
       },
       queryReads: [{ domains: ['account', 'inventory'], query: 'queries/private-account' }],
+    });
+  });
+
+  it('projects effective auth, CSRF, egress, escape, and IR posture facts', () => {
+    expect(
+      runtimePostureFactsFromGraph({
+        authPosture: [
+          { guarded: true, kind: 'endpoint', name: '/account', source: 'access-posture' },
+          { guarded: false, kind: 'mutation', name: 'account/update', source: 'access-posture' },
+        ],
+        egressPosture: {
+          allowDestinations: ['https://api.example.test'],
+          allowInternal: ['otel:4318'],
+          disabled: false,
+        },
+        endpoints: [
+          { method: 'GET', path: '/account' },
+          { auth: 'machine', csrf: 'exempt', method: 'POST', path: '/hook' },
+        ],
+        mutations: [{ key: 'account/update' }],
+        trustEscapes: [{ kind: 'csrf:false', name: 'hook' }],
+      }),
+    ).toEqual({
+      endpointAuth: [
+        {
+          auth: 'guarded',
+          csrf: 'safe:read-only',
+          method: 'GET',
+          name: '/account',
+          path: '/account',
+          surface: 'endpoint',
+        },
+        {
+          auth: 'declared:machine',
+          csrf: 'exempt',
+          method: 'POST',
+          name: '/hook',
+          path: '/hook',
+          surface: 'endpoint',
+        },
+        {
+          auth: 'unguarded',
+          csrf: 'checked',
+          method: 'POST',
+          name: 'account/update',
+          path: '/_m/account/update',
+          surface: 'mutation',
+        },
+      ],
+      egressAllowlist: ['https://api.example.test', 'internal:otel:4318'],
+      irVersions: ['kovo-check/v1', 'kovo-security-operation-ir/v1', 'kovo-runtime-posture/v1'],
+      trustEscapes: [{ kind: 'csrf:false', name: 'hook' }],
     });
   });
 });

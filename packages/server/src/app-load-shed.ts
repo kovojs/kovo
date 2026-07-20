@@ -14,6 +14,7 @@ import {
 } from './request-carrier.js';
 import { securityUint8ArrayLength } from './response-security-intrinsics.js';
 import { requestDecodeUtf8, requestParseJson } from './request-body-intrinsics.js';
+import { securityEvent } from './security-event.js';
 import {
   requestStateHeaderGet,
   requestStateCanonicalClientIpValue,
@@ -205,6 +206,8 @@ export function frameworkLoadShedErrorResponse(
   if (!(error instanceof Error)) return undefined;
   const fact = witnessWeakMapGet(frameworkLoadShedErrors, error);
   if (fact === undefined) return undefined;
+  securityEvent({ reason: 'database-admission', type: 'budget-exhausted' });
+  // @kovo-security-denial budget-exhausted database-admission
   return appSystemResponse('Service Unavailable', {
     ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
     headers: {
@@ -407,6 +410,8 @@ export function preDispatchLoadShedResponse(
 
   const rateLimited = rateLimitFailure(app, request, surface, requestStateNow());
   if (rateLimited) {
+    securityEvent({ reason: 'request-rate', type: 'budget-exhausted' });
+    // @kovo-security-denial budget-exhausted request-rate
     return appSystemResponse('Too Many Requests', {
       buildToken,
       headers: {
@@ -644,6 +649,8 @@ function requestBodySizeFailure(
   const size = requestContentLength(request);
   if (size === undefined || size <= maxBodyBytes) return undefined;
 
+  securityEvent({ reason: 'request-body', type: 'budget-exhausted' });
+  // @kovo-security-denial budget-exhausted content-length
   return appSystemResponse('Payload Too Large', {
     buildToken,
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },

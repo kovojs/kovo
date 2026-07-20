@@ -1,11 +1,16 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 import {
   createCipheriv as builtinCreateCipheriv,
   createDecipheriv as builtinCreateDecipheriv,
   createHash as builtinCreateHash,
   createHmac as builtinCreateHmac,
+  createPrivateKey as builtinCreatePrivateKey,
+  createPublicKey as builtinCreatePublicKey,
   hkdfSync as builtinHkdfSync,
   randomBytes as builtinRandomBytes,
+  sign as builtinSign,
   timingSafeEqual as builtinTimingSafeEqual,
+  verify as builtinVerify,
 } from 'node:crypto';
 
 import {
@@ -46,9 +51,15 @@ type CryptoPurpose =
   | 'csrf'
   | 'live-target-attestation'
   | 'rendered-html-coercion'
+  | 'runtime-posture-attestation'
+  | 'security-event-chain'
   | 'session-fingerprint';
 
-type CryptoAlgorithm = 'aes-256-gcm' | 'hmac-sha256';
+type CryptoAlgorithm = 'aes-256-gcm' | 'ed25519' | 'hmac-sha256';
+type HmacCryptoPurpose = Exclude<
+  CryptoPurpose,
+  'confidential-at-rest' | 'runtime-posture-attestation'
+>;
 
 /** Closed, reviewable derivation registry (SPEC §6.6 C13). */
 export const cryptoPurposeRegistry = witnessFreeze([
@@ -108,6 +119,20 @@ export const cryptoPurposeRegistry = witnessFreeze([
     purpose: 'session-fingerprint',
     rootSource: 'framework-key-ring',
   }),
+  witnessFreeze({
+    algorithm: 'ed25519',
+    audience: 'bounded-deployment-identity',
+    operations: witnessFreeze(['instance-id', 'public-key', 'sign'] as const),
+    purpose: 'runtime-posture-attestation',
+    rootSource: 'deployment-key-ring',
+  }),
+  witnessFreeze({
+    algorithm: 'hmac-sha256',
+    audience: 'bounded-deployment-identity',
+    operations: witnessFreeze(['sign', 'verify'] as const),
+    purpose: 'security-event-chain',
+    rootSource: 'deployment-key-ring',
+  }),
 ] as const);
 
 export type CryptoVerifyResult =
@@ -160,17 +185,47 @@ export interface BetterAuthRateLimitCryptoHandle {
   readonly bucket: (frame: string, bucketCount: number) => string;
 }
 
+/** @internal Purpose-minimal asymmetric handle for externally pinned runtime attestations. */
+export interface RuntimeAttestationCryptoHandle {
+  readonly currentKeyId: string;
+  readonly instanceIdentity: string;
+  readonly publicKeySpki: string;
+  readonly trustAnchorFingerprint: string;
+  readonly sign: (payload: string | Uint8Array) => {
+    readonly keyId: string;
+    readonly signature: string;
+  };
+}
+
+/** @internal Purpose-minimal verifier used by the review CLI; no key material is accepted. */
+export interface RuntimeAttestationVerificationHandle {
+  readonly artifactSubject: (canonicalArtifact: string) => `sha256:${string}`;
+  readonly challengeNonce: () => string;
+  readonly postureDigest: (canonicalPosture: string) => `sha256:${string}`;
+  readonly trustAnchorFingerprint: (publicKeySpki: string) => `sha256:${string}`;
+  readonly verifySignedPayload: (
+    payload: string,
+    publicKeySpki: string,
+    signature: string,
+  ) => boolean;
+}
+
 const nativeCreateCipheriv = builtinCreateCipheriv;
 const nativeCreateDecipheriv = builtinCreateDecipheriv;
 const nativeCreateHash = builtinCreateHash;
 const nativeCreateHmac = builtinCreateHmac;
+const nativeCreatePrivateKey = builtinCreatePrivateKey;
+const nativeCreatePublicKey = builtinCreatePublicKey;
 const nativeHkdfSync = builtinHkdfSync;
 const nativeRandomBytes = builtinRandomBytes;
+const nativeSign = builtinSign;
 const nativeTimingSafeEqual = builtinTimingSafeEqual;
+const nativeVerify = builtinVerify;
 const nativeDateNow = Date.now;
 const nativeNumberToString = Number.prototype.toString;
 const HKDF_SALT = securityBufferFrom('kovo-crypto-authority-v1');
 const AUTHORITY_VERSION = 'kovo-crypto-authority-v1';
+const ED25519_PKCS8_SEED_PREFIX = securityBufferFrom('302e020100300506032b657004220420', 'hex');
 const IV_REPLAY_WINDOW = 4_096;
 const recentIvs = createWitnessSet<string>();
 const recentIvOrder: string[] = [];
@@ -247,6 +302,95 @@ export function createSessionFingerprintCryptoHandle(secret: SigningSecret): Pur
 
 export function createRenderedHtmlCryptoHandle(secret: SigningSecret): PurposeCryptoHandle {
   return createPurposeHandle(secret, 'rendered-html-coercion', 'server-rendered-html');
+}
+
+/** @internal Mint the fixed security-event chain HMAC authority. */
+export function createSecurityEventCryptoHandle(
+  secret: SigningSecret,
+  deploymentId: string,
+): PurposeCryptoHandle {
+  return createPurposeHandle(secret, 'security-event-chain', deploymentId);
+}
+
+/** @internal Mint a deployment-bound Ed25519 signer without exposing private key material. */
+export function createRuntimeAttestationCryptoHandle(
+  secret: SigningSecret,
+  deploymentId: string,
+): RuntimeAttestationCryptoHandle {
+  assertAudience(deploymentId);
+  const ring = authoritySigningKeyRing(secret, 'runtime-posture-attestation', deploymentId);
+  const active = ring.active;
+  if (active.state !== 'active' || active.secret === undefined) {
+    throw new TypeError('Kovo runtime attestation active deployment key is unavailable.');
+  }
+  const seed = derivePurposeKey(
+    active.secret,
+    'runtime-posture-attestation',
+    deploymentId,
+    'ed25519',
+  );
+  try {
+    const privateKey = nativeCreatePrivateKey({
+      format: 'der',
+      key: securityBufferConcat([ED25519_PKCS8_SEED_PREFIX, seed]),
+      type: 'pkcs8',
+    });
+    const publicKey = nativeCreatePublicKey(privateKey);
+    const publicKeyDer = securityBufferFrom(publicKey.export({ format: 'der', type: 'spki' }));
+    const fingerprintHash = nativeCreateHash('sha256');
+    witnessReflectApply(nativeHashUpdate, fingerprintHash, [publicKeyDer]);
+    const fingerprint = witnessReflectApply<string>(nativeHashDigest, fingerprintHash, ['hex']);
+    return witnessFreeze({
+      currentKeyId: active.id,
+      instanceIdentity: securityBufferToString(nativeRandomBytes(32), 'base64url'),
+      publicKeySpki: securityBufferToString(publicKeyDer, 'base64url'),
+      sign(payload: string | Uint8Array) {
+        const signature = nativeSign(null, payloadBytes(payload), privateKey);
+        return witnessFreeze({
+          keyId: active.id,
+          signature: securityBufferToString(signature, 'base64url'),
+        });
+      },
+      trustAnchorFingerprint: `sha256:${fingerprint}`,
+    });
+  } finally {
+    bestEffortWipe(seed);
+  }
+}
+
+/** @internal Acquire the fixed runtime-attestation review operations from the single crypto door. */
+export function createRuntimeAttestationVerificationHandle(): RuntimeAttestationVerificationHandle {
+  return witnessFreeze({
+    artifactSubject(canonicalArtifact: string) {
+      return sha256Digest(canonicalArtifact);
+    },
+    challengeNonce() {
+      return securityBufferToString(nativeRandomBytes(32), 'base64url');
+    },
+    postureDigest(canonicalPosture: string) {
+      return sha256Digest(canonicalPosture);
+    },
+    trustAnchorFingerprint(publicKeySpki: string) {
+      const publicKeyDer = decodeRuntimeAttestationValue(publicKeySpki, 'public key', 1_024);
+      return sha256Digest(publicKeyDer);
+    },
+    verifySignedPayload(payload: string, publicKeySpki: string, signature: string) {
+      if (typeof payload !== 'string' || payload.length > 8 * 1_024 * 1_024) return false;
+      try {
+        const publicKeyDer = decodeRuntimeAttestationValue(publicKeySpki, 'public key', 1_024);
+        const signatureBytes = decodeRuntimeAttestationValue(signature, 'signature', 128);
+        if (securityUint8ArrayLength(signatureBytes) !== 64) return false;
+        const publicKey = nativeCreatePublicKey({
+          format: 'der',
+          key: publicKeyDer,
+          type: 'spki',
+        });
+        return nativeVerify(null, payloadBytes(payload), publicKey, signatureBytes);
+      } catch {
+        return false;
+      }
+    },
+  });
 }
 
 export function createConfidentialCryptoHandle(
@@ -349,7 +493,7 @@ export function createBetterAuthRateLimitCryptoHandle(
 
 function createPurposeHandle(
   secret: SigningSecret,
-  purpose: Exclude<CryptoPurpose, 'confidential-at-rest'>,
+  purpose: HmacCryptoPurpose,
   audience: string,
 ): PurposeCryptoHandle {
   assertAudience(audience);
@@ -393,7 +537,7 @@ function createPurposeHandle(
 
 function signWithKey(
   key: AuthoritySigningKey,
-  purpose: Exclude<CryptoPurpose, 'confidential-at-rest'>,
+  purpose: HmacCryptoPurpose,
   audience: string,
   payload: string | Uint8Array,
 ): string {
@@ -410,7 +554,7 @@ function signWithKey(
 
 function signatureMatches(
   key: AuthoritySigningKey,
-  purpose: Exclude<CryptoPurpose, 'confidential-at-rest'>,
+  purpose: HmacCryptoPurpose,
   audience: string,
   payload: string | Uint8Array,
   signature: string,
@@ -484,6 +628,31 @@ function payloadBytes(payload: string | Uint8Array): Buffer {
   throw new TypeError('Crypto authority payload must be a string or Uint8Array.');
 }
 
+function sha256Digest(value: string | Uint8Array): `sha256:${string}` {
+  const hash = nativeCreateHash('sha256');
+  witnessReflectApply(nativeHashUpdate, hash, [payloadBytes(value)]);
+  return `sha256:${witnessReflectApply<string>(nativeHashDigest, hash, ['hex'])}`;
+}
+
+function decodeRuntimeAttestationValue(value: string, label: string, maximumBytes: number): Buffer {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > maximumBytes * 2 ||
+    !securityRegExpTest(/^[A-Za-z0-9_-]+$/u, value)
+  ) {
+    throw new TypeError(`Runtime attestation ${label} is invalid.`);
+  }
+  const decoded = securityBufferFrom(value, 'base64url');
+  if (
+    securityUint8ArrayLength(decoded) > maximumBytes ||
+    securityBufferToString(decoded, 'base64url') !== value
+  ) {
+    throw new TypeError(`Runtime attestation ${label} is too large.`);
+  }
+  return decoded;
+}
+
 function assertAudience(audience: string): void {
   if (typeof audience !== 'string' || audience.length === 0 || audience.length > 4_096) {
     throw new TypeError('Crypto authority audience must be non-empty bounded text.');
@@ -517,7 +686,7 @@ function keyIsEligible(key: AuthoritySigningKey): boolean {
     return true;
   }
   bestEffortWipe(key.secret);
-  key.secret = undefined;
+  delete key.secret;
   key.state = 'revoked';
   return false;
 }

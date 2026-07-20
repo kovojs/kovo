@@ -34,6 +34,10 @@ import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
 import { mutationResponseWithoutBrowserState } from './mutation.js';
+import {
+  KOVO_RUNTIME_ATTESTATION_ENDPOINT,
+  runtimePostureAttestationResponse,
+} from './generated-runtime-posture-registry.js';
 import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import { admitFrameworkManagedDbProvider } from './guards.js';
 import {
@@ -45,6 +49,7 @@ import {
 } from './request-body-intrinsics.js';
 import { requestStateIsSafeInteger } from './request-state-intrinsics.js';
 import { requestUrlLimitFailure } from './request-url-limits.js';
+import { securityEvent } from './security-event.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 
@@ -54,6 +59,8 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   if (urlLimitResponse) return urlLimitResponse;
   const appDiagnostics = blockingAppDiagnostics(app);
   if (appDiagnostics.length > 0) {
+    securityEvent({ reason: 'runtime-registry', type: 'capability-closed' });
+    // @kovo-security-denial capability-closed runtime-registry
     return routeResponseToWebResponse(renderDiagnosticDocument(appDiagnostics), request);
   }
 
@@ -96,7 +103,10 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
 
   let limitedRequest = request;
   try {
-    const maxBodyBytes = requestBodyLimitForMatch(app, match, reservedKey);
+    const maxBodyBytes =
+      urlSnapshot.pathname === KOVO_RUNTIME_ATTESTATION_ENDPOINT
+        ? 4_096
+        : requestBodyLimitForMatch(app, match, reservedKey);
     // Pre-dispatch policy callbacks need only method/URL/client-IP metadata. Give
     // every surface the same bodyless, credential-neutral carrier so a custom
     // limiter cannot accidentally become an ambient-authority consumer.
@@ -121,6 +131,18 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
         surface,
       },
       async () => {
+        if (urlSnapshot.pathname === KOVO_RUNTIME_ATTESTATION_ENDPOINT) {
+          const attestationRequest = await requestWithVerifiedBodyLimit(
+            deadlineRequest,
+            maxBodyBytes,
+          );
+          return runtimePostureAttestationResponse(attestationRequest, {
+            ...(buildToken === undefined ? {} : { buildToken }),
+            method,
+            surface,
+          });
+        }
+
         if (app.db !== undefined) await admitFrameworkManagedDbProvider(app.db);
 
         if (urlSnapshot.pathname === KOVO_CSP_REPORT_ENDPOINT) {
@@ -145,6 +167,8 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   } catch (error) {
     completeAppRequestDeadline(limitedRequest);
     if (error instanceof RequestBodyLimitExceededError) {
+      securityEvent({ reason: 'request-body', type: 'budget-exhausted' });
+      // @kovo-security-denial budget-exhausted streamed-body
       return appSystemResponse('Payload Too Large', {
         buildToken,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -243,6 +267,8 @@ export function reportAppStartupError(app: KovoApp, request: Request, error: unk
 export function appRequestUrlLimitResponse(request: Request): Response | undefined {
   const method = requestMethod(request);
   if (requestUrlLimitFailure(requestUrl(request)) === undefined) return undefined;
+  securityEvent({ reason: 'request-url', type: 'budget-exhausted' });
+  // @kovo-security-denial budget-exhausted request-url
   return appSystemResponse('URI Too Long', {
     headers: {
       'Cache-Control': 'no-store',

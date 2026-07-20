@@ -176,8 +176,8 @@ describe('build/export security bootstrap ordering', () => {
     const appImport = source.indexOf('const appModule = await runWithGeneratedLiveTargetRegistry');
 
     expect(serverImport).toBeGreaterThanOrEqual(0);
-    expect(registryImport).toBeLessThan(serverImport);
-    expect(serverImport).toBeLessThan(appImport);
+    expect(serverImport).toBeLessThan(registryImport);
+    expect(registryImport).toBeLessThan(appImport);
     expect(source).not.toContain("from '@kovojs/server';");
     expect(source).not.toContain('lockServerRequestSafeRuntimeRealm();');
     expect(source).not.toContain('import * as appModule from');

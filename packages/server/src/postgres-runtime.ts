@@ -26,6 +26,7 @@ import {
   type KovoPostgresSystemDb,
 } from '@kovojs/server/internal/postgres-capability';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
+import { securityEvent } from './security-event.js';
 
 import {
   declareSystemPrincipal,
@@ -2152,6 +2153,8 @@ async function initializeRuntimeDb(
       runtimeLoginPostureWitnessed: input.config.driver === 'node-postgres',
     });
     if (!report.ok) {
+      securityEvent({ reason: 'database-role-closure', type: 'closure-audit-refused' });
+      // @kovo-security-denial closure-audit-refused postgres-runtime-posture
       if (
         input.config.driver === 'node-postgres' &&
         report.issues[0]?.code === 'KV433_RUNTIME_ROLE'

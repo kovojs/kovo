@@ -41,6 +41,7 @@ import { layout, route, routeLayoutLiveTargetRenderers } from './route.js';
 import { task } from './task.js';
 import {
   createWitnessSet,
+  createWitnessWeakMap,
   witnessArrayAppend,
   witnessCreateNullRecord,
   witnessDefineProperty,
@@ -49,6 +50,8 @@ import {
   witnessOwnKeys,
   witnessSetAdd,
   witnessSetHas,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 import { denseOwnArrayForEach } from './registry-lookup.js';
 import { securityStringTrim } from './response-security-intrinsics.js';
@@ -111,6 +114,7 @@ import type {
 
 const nativeArrayIsArray = Array.isArray;
 const nativeNumberIsFinite = Number.isFinite;
+const appEgressPostures = createWitnessWeakMap<KovoApp, AppEgressOptions | undefined>();
 if (!nativeArrayIsArray([]) || nativeArrayIsArray({}) || !nativeNumberIsFinite(1)) {
   throw new TypeError('Kovo app snapshot controls were modified before framework initialization.');
 }
@@ -330,11 +334,18 @@ export function createApp<
     } as KovoApp<SessionValue, DbValue, RawRequest, AppRequest, EnvValue>,
     snapshotContext,
   );
+  witnessWeakMapSet(appEgressPostures, app, egress);
   registerAppLiveTargetIdentity(app, appId);
   // Validate the registry token before the app can escape. A late empty token would otherwise let a
   // mutation commit and fail only while rendering its response, so retries could duplicate writes.
   appLiveTargetAttestationAudience(app);
   return app;
+}
+
+/** @internal Return the createApp-owned egress snapshot used by build posture projection. */
+export function appEgressPosture(app: KovoApp): AppEgressOptions | undefined {
+  if (!isKovoApp(app)) throw new TypeError('Egress posture requires a Kovo app aggregate.');
+  return witnessWeakMapGet(appEgressPostures, app);
 }
 
 function rejectRemovedLiveTargetRenderersOption(source: object): void {

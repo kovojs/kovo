@@ -9,6 +9,7 @@ import {
   runExportCommand,
 } from './commands/build-export.js';
 import { parseDbArgs, runDbCommand } from './commands/db.js';
+import { parseAttestArgs, runAttestCommand } from './commands/attest.js';
 import { parseDevArgs, runDevCommand } from './commands/dev.js';
 import {
   compileUsage,
@@ -237,6 +238,11 @@ export async function mainAsync(
   security: KovoCommandSecurityDisposition = captureKovoCommandSecurityDisposition(),
 ): Promise<number> {
   const command = resolveCommand(args[0]);
+  if (command?.name === 'explain' && args.includes('--attest')) {
+    const parsed = parseAttestArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runAttestCommand(parsed.options, security.invocationCwd));
+  }
   if (!command || !isAsyncCommand(command)) {
     if (command?.name === 'check' && args[1] === 'sources-sinks') {
       const driftScan = scanSourceSinkDrift(security.invocationCwd);

@@ -20,6 +20,7 @@ import {
   type CsrfOptions,
 } from './csrf.js';
 import { invalidate, mutationRegistryChangeRecords, type ChangeRecord } from './change-record.js';
+import { securityEvent } from './security-event.js';
 import {
   explainGuard,
   guardFailureToResult,
@@ -232,6 +233,8 @@ async function executeMutationLifecycle<
     csrf === undefined ||
     (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
   ) {
+    securityEvent({ reason: 'invalid-token', type: 'csrf-rejected' });
+    // @kovo-security-denial csrf-rejected mutation-lifecycle-csrf
     return {
       failure: { error: { code: 'CSRF', payload: {} }, ok: false, status: 422 },
       kind: 'csrf-failure',
@@ -433,6 +436,8 @@ export async function runMutation<
       csrf === undefined ||
       (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
     ) {
+      securityEvent({ reason: 'invalid-token', type: 'csrf-rejected' });
+      // @kovo-security-denial csrf-rejected mutation-run-csrf
       return {
         error: { code: 'CSRF', payload: {} },
         ok: false,
