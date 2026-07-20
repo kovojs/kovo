@@ -1673,6 +1673,8 @@ const streamingTerminalBeforeReplaySettlement = [
   '              status: finalResponse.status,',
   '            });',
 ].join('\n');
+const explicitStreamingIteratorClose = '                await closeSourceIterator();';
+const removedExplicitStreamingIteratorClose = '                void sourceIterator;';
 const deterministicNoJsFailureReplayCommit =
   '      return await commitReservedMutationReplay(lifecycle.reservation, render);';
 const abortedDeterministicNoJsFailureReplay = [
@@ -5118,6 +5120,17 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertStreamingTerminalFollowsReplaySettlementBehavior,
   },
   {
+    behavioralTypeScript: true,
+    description: 'Leaves the author iterator suspended after an explicit streaming terminal.',
+    expectedKiller:
+      'stream.done() must close the author iterator so finally cleanup runs before terminal release',
+    name: 'mutation-replay/drop-explicit-stream-iterator-close',
+    replacement: removedExplicitStreamingIteratorClose,
+    search: explicitStreamingIteratorClose,
+    sourceFile: serverMutationStreamingPath,
+    test: assertExplicitStreamDoneClosesIteratorBehavior,
+  },
+  {
     behavioralInstrumentation: mutationNoJsBehavioralInstrumentation,
     behavioralTypeScript: true,
     description: 'Aborts a deterministic no-JS application failure instead of committing it.',
@@ -5598,6 +5611,39 @@ async function assertStreamingTerminalFollowsReplaySettlementBehavior(moduleUnde
     response.headers['Kovo-Stream'] !== 'true'
   ) {
     throw new Error('settled stream and same-mode replay vocabulary diverged');
+  }
+}
+
+async function assertExplicitStreamDoneClosesIteratorBehavior(moduleUnderTest) {
+  let finallyRan = false;
+  function* chunks() {
+    try {
+      yield moduleUnderTest.stream.text('assistant:a1', 'partial');
+      yield moduleUnderTest.stream.done();
+      yield moduleUnderTest.stream.text('assistant:a1', 'unreachable');
+    } finally {
+      finallyRan = true;
+    }
+  }
+  const response = moduleUnderTest.renderStreamingMutationWireResponse(chunks(), {
+    body: '',
+    headers: {
+      'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      'Kovo-Stream': 'true',
+    },
+    status: 200,
+  });
+  const body = await new Response(response.body).text();
+
+  if (!finallyRan) {
+    throw new Error('explicit stream terminal left the author iterator suspended');
+  }
+  if (
+    !body.includes('partial') ||
+    !body.includes('<kovo-done></kovo-done>') ||
+    body.includes('unreachable')
+  ) {
+    throw new Error('explicit stream iterator cleanup changed terminal wire bytes');
   }
 }
 

@@ -102,6 +102,7 @@ describe('security-gate-mutations', () => {
       'mutation-replay/drop-enhanced-delivery-marker-seal',
       'mutation-replay/drop-enhanced-delivery-match',
       'mutation-replay/drop-enhanced-failure-abort-boundary',
+      'mutation-replay/drop-explicit-stream-iterator-close',
       'mutation-replay/hash-machine-principal-as-utf8',
       'mutation-replay/release-stream-terminal-before-settlement',
       'mutation-replay/restore-machine-wide-principal-fallback',

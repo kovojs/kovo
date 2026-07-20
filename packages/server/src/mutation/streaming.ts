@@ -14,6 +14,7 @@ import {
   securityTextEncode,
   securityPromiseRace,
   securityPromiseResolve,
+  securityPromiseThen,
 } from '../response-security-intrinsics.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
 import type { ServerFragmentRenderable } from '../renderable.js';
@@ -178,6 +179,33 @@ export const renderStreamingMutationWireResponse = wireEmitter(
     };
     const source = coalesceMutationStreamChunks(sourceIterable);
     const iterator = source[Symbol.asyncIterator]();
+    let sourceIteratorClosePromise: Promise<void> | undefined;
+
+    const reportStreamingError = (error: unknown): void => {
+      if (!errorContext) return;
+      reportServerError(
+        errorContext.onError,
+        error,
+        errorContext.context as ServerErrorDiagnosticContext,
+      );
+    };
+
+    const closeSourceIterator = (): Promise<void> => {
+      if (sourceIteratorClosePromise !== undefined) return sourceIteratorClosePromise;
+      try {
+        sourceIteratorClosePromise = securityPromiseThen(
+          securityPromiseResolve(sourceIterator.return?.()),
+          () => undefined,
+          (error) => {
+            reportStreamingError(error);
+          },
+        );
+      } catch (error) {
+        reportStreamingError(error);
+        sourceIteratorClosePromise = securityPromiseResolve(undefined);
+      }
+      return sourceIteratorClosePromise;
+    };
 
     return {
       body: createSecurityReadableStream<Uint8Array>({
@@ -222,6 +250,10 @@ export const renderStreamingMutationWireResponse = wireEmitter(
               const { done, value: chunk } = await iterator.next();
               if (done) break;
               if (chunk.kind === 'done') {
+                // SPEC §9.1: an explicit terminal ends the author stream before natural
+                // exhaustion. Close the raw iterator exactly once so generator `finally`
+                // cleanup runs before the durable terminal receipt is released.
+                await closeSourceIterator();
                 await settleAndComplete(renderMutationStreamChunk(chunk));
                 return;
               }
@@ -237,13 +269,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
             // client observes a clean, in-band end-of-stream (mirroring the explicit
             // `stream.done({ reason: 'error' })` path) instead of a silent hang. The
             // mutation has already crossed its transaction boundary before streaming starts.
-            if (errorContext) {
-              reportServerError(
-                errorContext.onError,
-                error,
-                errorContext.context as ServerErrorDiagnosticContext,
-              );
-            }
+            reportStreamingError(error);
             try {
               enqueue(renderDoneWireHtml({ reason: 'error' }));
               securityStreamClose(controller);
@@ -264,7 +290,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
           // coalesced iterator) because the coalesce layer holds a pending .next() call
           // that won't resolve until the source yields — the return() must reach the
           // source generator directly to interrupt it.
-          void sourceIterator.return?.();
+          return closeSourceIterator();
         },
       }),
       headers: finalResponse.headers,
