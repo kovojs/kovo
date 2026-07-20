@@ -37,6 +37,7 @@ import {
   betterAuthResponseHeaders,
   betterAuthResponseStatus,
 } from './internal/intrinsics.js';
+import { normalizeBetterAuthAccountOperation } from './response-observation.js';
 
 const NativeError = Error;
 const betterAuthCredentialBoundaryFailureMessage =
@@ -182,7 +183,11 @@ export function betterAuthSignUpEmailMutation<
     input: betterAuthSignUpEmailInput,
     redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-up'> }) =>
       result.value.redirectTo,
-    async handler(input, request, context) {
+    async handler(input, request, _context) {
+      const accepted = {
+        redirectTo: redirectPath(input.next, defaultRedirectTo),
+        status: 'signed-up' as const,
+      };
       try {
         const response = await callBetterAuthCredentialHandler(
           pinnedAuth,
@@ -202,19 +207,13 @@ export function betterAuthSignUpEmailMutation<
           throw betterAuthCredentialBoundaryFailure();
         }
 
-        const success = await resolveBetterAuthCredentialSuccess(response, context, {
-          redirectTo: redirectPath(input.next, defaultRedirectTo),
-          status: 'signed-up',
-        });
-
-        if (success === null) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        return success;
+        // SPEC §9.2 account-creation: duplicate and newly created accounts cross the Kovo-owned
+        // credential-handler door as one generic accepted result. In particular, sign-up never
+        // forwards an account-dependent session cookie (fixed bindings use autoSignIn:false).
+        return await normalizeBetterAuthAccountOperation(response, accepted);
       } catch (error) {
         if (isBetterAuthCredentialFailureError(error)) {
-          return context.fail('INVALID_CREDENTIALS', {});
+          return accepted;
         }
 
         throw betterAuthCredentialBoundaryFailure();
