@@ -2,6 +2,7 @@ import { isUntrusted, revealUntrusted, type ScopedKey } from '@kovojs/core';
 
 import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
 import { provenPrincipalFromRequest } from '../auth-principal.js';
+import { frameworkRevealUntrustedPolicy } from '../declassification-policy.js';
 import {
   assertPrincipalEpochFresh,
   assertPrincipalEpochFreshForRequest,
@@ -574,7 +575,7 @@ function readNoJsIdemField(rawInput: unknown): MutationIdemFieldSnapshot {
   if (!('value' in descriptor)) return { present: true, value: undefined };
   const rawValue = descriptor.value;
   const value = isUntrusted(rawValue)
-    ? revealUntrusted(rawValue, 'validated request-derived no-js idempotency token')
+    ? revealUntrusted(rawValue, frameworkRevealUntrustedPolicy)
     : rawValue;
   return { present: true, value };
 }

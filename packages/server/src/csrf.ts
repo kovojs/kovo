@@ -10,6 +10,7 @@ import { serializeCookie } from './cookies.js';
 import { escapeWireAttribute, renderedHtml, type RenderedHtml } from './html.js';
 import { currentJsxFrameworkContext, type JsxAnonymousCsrfBinding } from './jsx-context.js';
 import { createCsrfCryptoHandle } from './crypto-authority.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import {
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
@@ -667,9 +668,7 @@ function readOwnCsrfInputField(rawInput: unknown, field: string): unknown {
 }
 
 function revealCsrfInput(input: unknown): unknown {
-  return isUntrusted(input)
-    ? revealUntrusted(input, 'validated request-derived CSRF token')
-    : input;
+  return isUntrusted(input) ? revealUntrusted(input, frameworkRevealUntrustedPolicy) : input;
 }
 
 export function mutationCsrfOptions<Request>(

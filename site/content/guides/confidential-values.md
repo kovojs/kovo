@@ -62,44 +62,59 @@ JSON.stringify({ token: secret('sk_live_wire_json') });
 That throws a client-wire confidentiality error telling you to reveal or redact the value
 explicitly before returning it.
 
-## Reveal it at the sink
+## Reveal it at a boot-only sink
 
-Reveal the value where you actually need the raw bytes:
+Reveal the value only where a boot-time dependency actually needs the raw bytes. The policy is a
+closed `purpose × door × owner scope` tuple, not caller-authored prose:
 
 ```text
 // Source-verified shape from packages/core/src/secret.ts
-import { revealSecret, secret } from '@kovojs/core';
+import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core';
 
-const authorization = `Bearer ${revealSecret(secret(process.env.STRIPE_SECRET_KEY!), 'call Stripe')}`;
+const authorization = `Bearer ${revealSecret(
+  secret(process.env.STRIPE_SECRET_KEY!),
+  DeclassifyPolicy.create({
+    door: 'revealSecret',
+    purpose: 'credential-use',
+    ownerScope: 'application',
+  }),
+)}`;
 ```
 
-That justification is the point. It makes the unboxing visible in code review instead of burying it
-inside a helper or a cast.
+The exact policy is the point. A string, copied object, cast, subclass, unknown tuple, or policy for
+another door cannot authorize release.
 
 For a dependency credential, reveal once inside the client factory. Keep the dependency client, not
 the raw string, for later requests:
 
 ```tsx
 // Source: packages/server/src/env.test.ts
-import { trustedReveal, type SecretValue } from '@kovojs/core';
+import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core';
 
 function createCredentialClient(apiToken: SecretValue<string>) {
-  const rawToken = trustedReveal(apiToken, {
-    justification: 'initialize the payment SDK credential once at boot',
-    method: 'arbitrary-fn',
-    source: 'app.env.API_TOKEN',
-  });
+  const rawToken = revealSecret(
+    apiToken,
+    DeclassifyPolicy.create({
+      door: 'revealSecret',
+      purpose: 'credential-use',
+      ownerScope: 'application',
+    }),
+  );
   return Object.freeze({ credentialLength: () => rawToken.length });
 }
 
 const client = createCredentialClient(app.env.API_TOKEN);
 ```
 
-Run `kovo explain --revealed`. The `trustedReveal` call appears with its source location and
-justification. The combined `--capabilities` view folds in the same fact. This is an audit trail,
-not permission to send the raw key elsewhere. Keep the options inline and literal; their order does
-not matter, and a direct import alias is supported. Dynamic options fail the build with KV426
-because Kovo cannot record an honest audit row for them.
+Run `kovo explain --revealed`. The reveal appears with its source location and exact policy. The
+combined `--capabilities` view folds in the same fact. This is an audit trail, not permission to
+send the raw key elsewhere. Keep the policy inline and literal; its field order does not matter.
+Dynamic policy construction fails the build because Kovo cannot record an honest audit row for it.
+
+Declassification is request-closed. A module reachable from an application handler—directly or
+through a helper or re-export—cannot import `DeclassifyPolicy` or a reveal door; capability closure
+stops the build. Construct dependency clients in a boot-only module and pass the
+capability-bearing client, never the raw credential, into later request work.
 
 ## Add the production shape
 
@@ -161,8 +176,9 @@ There are two failure modes to expect:
 - Runtime secret-box failures when a secret reaches JSON, headers, redirects, or another egress
   sink without an explicit reveal or redaction step.
 
-Do not solve either with a cast. Remove the secret from the projection, reveal it in a reviewed
-place, or publish a same-file primitive constant. Use props or a query for dynamic public data.
+Do not solve either with a cast. Remove the secret from the projection, reveal it only at a
+boot-time dependency boundary, or publish a same-file primitive constant. Use props or a query for
+dynamic public data.
 
 ## Next
 
@@ -182,6 +198,8 @@ Column-level secret and confidential-at-rest annotations: `packages/drizzle/src/
 `encryptAtRest(...)`: `packages/server/src/confidential-at-rest.ts`. Main diagnostic: KV435.
 `publishToClient(...)` accepts only a unique, pristine same-file `const` initialized to `string |
 number | boolean | null`; imported or mutable bindings fail closed under KV437 (SPEC §6.2/§6.6).
+Dynamic declassification policies fail with KV426; request-reachable policy or reveal-door imports
+fail with KV448 (SPEC §6.6).
 
 API reference: [@kovojs/core](/api/core/), [@kovojs/drizzle](/api/drizzle/), [@kovojs/server](/api/server/).
 

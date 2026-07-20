@@ -1224,8 +1224,8 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     keyScoping: 'not-stateful-keyed',
     mechanism: 'box',
     mechanismDetail:
-      'Secret and redacted runtime boxes refuse accidental coercion and are normalized to redacted or empty error payloads before logs, status views, or wire-visible error shells.',
-    operationKinds: [],
+      'Secret and redacted runtime boxes refuse accidental coercion; declassification additionally requires an exact-door policy from the closed purpose/owner registry before ordinary values can reach reviewed sinks.',
+    operationKinds: ['server.data.declassify'],
     owner: '@kovojs/core/secret',
     proofEvidence: [
       'packages/core/src/secret.test.ts',
@@ -1234,7 +1234,8 @@ const boundaryCrossingInventory: readonly BoundaryCrossingSinkInventoryEntry[] =
     ],
     proofGate: 'pnpm run check:tcb-boundary',
     sink: 'log/error output',
-    soleDoor: 'Secret/redacted boxes plus normalized error shell emitters',
+    soleDoor:
+      'Secret/redacted boxes + nominal DeclassifyPolicy constructor/registry + normalized error shell emitters',
     specAnchor: 'spec/10-data-plane.md §10.3; spec/11-verification.md §11.2',
   },
   {

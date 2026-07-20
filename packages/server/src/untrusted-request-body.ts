@@ -29,6 +29,7 @@ import {
   revealRequestProvenanceContainer,
   tagRequestProvenanceValue,
 } from './request-body-provenance.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import {
   securityArrayIsArray,
   securityArrayJoin,
@@ -209,10 +210,10 @@ export function tagUntrustedRequestValue(value: unknown): unknown {
 }
 
 /** @internal SPEC §5.2 rule 11: reveal request provenance tags only after a validating choke. */
-export function revealUntrustedRequestValue(value: unknown, reason: string): unknown {
+export function revealUntrustedRequestValue(value: unknown, _reason: string): unknown {
   const seen = createWitnessWeakMap<object, object>();
   const frames: RevealFrame[] = [];
-  const root = materializeRevealedRequestValue(value, reason, seen, frames);
+  const root = materializeRevealedRequestValue(value, seen, frames);
 
   while (frames.length > 0) {
     const frame = popRevealFrame(frames);
@@ -224,7 +225,6 @@ export function revealUntrustedRequestValue(value: unknown, reason: string): unk
     securityArrayPush(frames, frame);
     const child = materializeRevealedRequestValue(
       stableRecordValue(frame.source, property),
-      reason,
       seen,
       frames,
     );
@@ -254,12 +254,11 @@ interface RevealFrame {
 
 function materializeRevealedRequestValue(
   value: unknown,
-  reason: string,
   seen: WeakMap<object, object>,
   frames: RevealFrame[],
 ): unknown {
-  value = revealRequestValue(value, reason);
-  if (requestIsFormData(value)) return revealUntrustedFormData(value, reason);
+  value = revealRequestValue(value);
+  if (requestIsFormData(value)) return revealUntrustedFormData(value);
   if (!securityArrayIsArray(value) && !requestIsPlainRecord(value)) return value;
 
   const cached = witnessWeakMapGet(seen, value);
@@ -279,10 +278,10 @@ function materializeRevealedRequestValue(
   return target;
 }
 
-function revealRequestValue(value: unknown, reason: string): unknown {
+function revealRequestValue(value: unknown): unknown {
   for (let depth = 0; depth < 16; depth += 1) {
     if (isUntrusted(value)) {
-      value = revealUntrusted(value, reason);
+      value = revealUntrusted(value, frameworkRevealUntrustedPolicy);
       continue;
     }
     return revealRequestProvenanceContainer(value);
@@ -290,12 +289,12 @@ function revealRequestValue(value: unknown, reason: string): unknown {
   throw new TypeError('Kovo refused an unbounded request provenance carrier.');
 }
 
-function revealUntrustedFormData(value: FormData, reason: string): FormData {
+function revealUntrustedFormData(value: FormData): FormData {
   const revealed = requestCreateFormData();
   const entries = requestFormDataEntries(value);
   for (let index = 0; index < entries.length; index += 1) {
     const pair = entries[index]!;
-    const entryValue = revealRequestValue(pair[1], reason);
+    const entryValue = revealRequestValue(pair[1]);
     if (typeof entryValue === 'string' || requestIsBlob(entryValue)) {
       requestFormDataAppend(revealed, pair[0], entryValue);
     }

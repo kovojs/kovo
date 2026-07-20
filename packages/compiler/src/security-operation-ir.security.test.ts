@@ -716,7 +716,7 @@ export const verify = mutation({
   it('accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations', () => {
     const diagnostics = kv449Project(
       `
-import { secret, trustedReveal } from '@kovojs/core';
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
 import { sql, trustedSql } from '@kovojs/drizzle';
 import { endpoint, declareSecretReadCapability } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
@@ -744,11 +744,14 @@ export const report = endpoint('/report', {
       .from(owned)
       .innerJoin(items, eq(items.accountId, owned.id))
       .union(db.select({ classified: accounts.classified, id: accounts.id }).from(accounts));
-    const reviewed = trustedReveal(secret(rows[0]?.classified ?? rawRows[0]?.classified), {
-      justification: 'publish the reviewed fixture projection',
-      method: 'server-projection',
-      source: 'accounts.classified',
-    });
+    const reviewed = trustedReveal(
+      secret(rows[0]?.classified ?? rawRows[0]?.classified),
+      DeclassifyPolicy.create({
+        door: 'trustedReveal',
+        ownerScope: 'application',
+        purpose: 'public-projection',
+      }),
+    );
     return Response.json({ reviewed });
   },
 });
@@ -779,23 +782,25 @@ export const items = pgTable('items', {
     [
       'attacker-controlled enabling condition',
       `if (input.expose) {
-         return trustedReveal(secret('server-owned'), {
-           justification: 'publish a fixed reviewed projection',
-           method: 'server-projection',
-         });
+         return trustedReveal(secret('server-owned'), DeclassifyPolicy.create({
+           door: 'trustedReveal',
+           ownerScope: 'application',
+           purpose: 'public-projection',
+         }));
        }
        return { reviewed: false };`,
     ],
     [
       'attacker-controlled released value',
-      `return trustedReveal(secret(input.value), {
-         justification: 'publish a request-selected projection',
-         method: 'server-projection',
-       });`,
+      `return trustedReveal(secret(input.value), DeclassifyPolicy.create({
+         door: 'trustedReveal',
+         ownerScope: 'application',
+         purpose: 'public-projection',
+       }));`,
     ],
   ])('rejects a declassification with an %s', (_label, statement) => {
     const diagnostics = kv449(`
-import { secret, trustedReveal } from '@kovojs/core';
+import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core';
 import { endpoint } from '@kovojs/server';
 export const report = endpoint('/report', {
   handler(input) {
@@ -895,18 +900,18 @@ export const report = query({ async load(_input, context) {
     ],
     [
       'an aliased trustedReveal import',
-      `import { trustedReveal as reveal } from '@kovojs/core';`,
-      `return reveal(input.value, { justification: 'renamed reveal' });`,
+      `import { DeclassifyPolicy, trustedReveal as reveal } from '@kovojs/core';`,
+      `return reveal(input.value, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));`,
     ],
     [
-      'a dynamically justified trustedReveal',
-      `import { trustedReveal } from '@kovojs/core';`,
-      `return trustedReveal(input.value, { justification: input.reason });`,
+      'a dynamically defined trustedReveal policy',
+      `import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(input.value, DeclassifyPolicy.create(input.policy));`,
     ],
     [
       'authority passed to trustedReveal',
-      `import { trustedReveal } from '@kovojs/core';`,
-      `return trustedReveal(context.db, { justification: 'authority laundering' });`,
+      `import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';`,
+      `return trustedReveal(context.db, DeclassifyPolicy.create({ door: 'trustedReveal', ownerScope: 'application', purpose: 'public-projection' }));`,
     ],
     [
       'an aliased secret constructor',

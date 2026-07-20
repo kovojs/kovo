@@ -13,6 +13,7 @@ export const packageCapabilitySummarySchema = 'kovo-package-capabilities/v1' as 
 export type RawCapabilityKind =
   | 'crypto-acquisition'
   | 'database-driver'
+  | 'declassification'
   | 'digest'
   | 'dynamic-loader'
   | 'filesystem'

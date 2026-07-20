@@ -6,21 +6,21 @@ import {
   collectStaticBuildTrustFactsFromProject,
 } from './trust-escapes-static.js';
 
-describe('runtime trustedReveal fact collector (SPEC §6.6, audit-only)', () => {
-  it('records the exact reveal-once config credential pattern', () => {
+describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () => {
+  it('records one exact typed credential policy', () => {
     expect(
       collectRuntimeRevealFactsFromProject({
         files: [
           {
             fileName: 'payment.ts',
             source: [
-              `import { trustedReveal, type SecretValue } from '@kovojs/core';`,
+              `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core';`,
               `export function createPaymentClient(key: SecretValue<string>) {`,
-              `  const raw = trustedReveal(key, {`,
-              `    justification: 'initialize payment SDK once at boot',`,
-              `    method: 'arbitrary-fn',`,
-              `    source: 'app.env.PAYMENT_API_KEY',`,
-              `  });`,
+              `  const raw = revealSecret(key, DeclassifyPolicy.create({`,
+              `    door: 'revealSecret',`,
+              `    ownerScope: 'application',`,
+              `    purpose: 'credential-use',`,
+              `  }));`,
               `  return new PaymentClient(raw);`,
               `}`,
             ].join('\n'),
@@ -30,13 +30,13 @@ describe('runtime trustedReveal fact collector (SPEC §6.6, audit-only)', () => 
     ).toMatchObject([
       {
         grade: 'audit',
-        justification: 'initialize payment SDK once at boot',
+        justification: 'credential-use:revealSecret:application',
         method: 'arbitrary-fn',
-        path: 'app.env.PAYMENT_API_KEY',
+        path: 'key',
         query: 'runtime',
         selectedSecret: true,
         site: 'payment.ts:3',
-        source: 'app.env.PAYMENT_API_KEY',
+        source: 'key',
       },
     ]);
   });
@@ -48,20 +48,20 @@ describe('runtime trustedReveal fact collector (SPEC §6.6, audit-only)', () => 
           {
             fileName: 'alias.ts',
             source: [
-              `import { trustedReveal as reveal } from '@kovojs/core';`,
-              `reveal(secretValue, {`,
-              `  source: 'app.env.PAYMENT_API_KEY',`,
-              `  method: 'arbitrary-fn',`,
-              `  justification: 'initialize payment SDK once at boot',`,
-              `});`,
+              `import { DeclassifyPolicy as Policy, trustedReveal as reveal } from '@kovojs/core';`,
+              `reveal(secretValue, Policy.create({`,
+              `  purpose: 'public-projection',`,
+              `  ownerScope: 'current-tenant',`,
+              `  door: 'trustedReveal',`,
+              `}));`,
             ].join('\n'),
           },
         ],
       }),
     ).toMatchObject([
       {
-        justification: 'initialize payment SDK once at boot',
-        path: 'app.env.PAYMENT_API_KEY',
+        justification: 'public-projection:trustedReveal:current-tenant',
+        path: 'secretValue',
         site: 'alias.ts:2',
       },
     ]);
@@ -101,7 +101,7 @@ describe('runtime trustedReveal fact collector (SPEC §6.6, audit-only)', () => 
       },
     ]);
     expect(() => collectRuntimeRevealFactsFromProject({ files })).toThrow(
-      /KV426 dynamic\.ts:2[\s\S]*dynamic options cannot be recorded/u,
+      /KV426 dynamic\.ts:2[\s\S]*dynamic policy cannot be recorded/u,
     );
 
     const namespaceAudit = collectRuntimeRevealAuditFromProject({
@@ -122,6 +122,29 @@ describe('runtime trustedReveal fact collector (SPEC §6.6, audit-only)', () => 
         site: 'dynamic-namespace.ts:2',
       },
     ]);
+
+    const wrongDoorAudit = collectRuntimeRevealAuditFromProject({
+      files: [
+        {
+          fileName: 'wrong-door.ts',
+          source: [
+            `import { DeclassifyPolicy, revealSecret } from '@kovojs/core';`,
+            `revealSecret(secretValue, DeclassifyPolicy.create({`,
+            `  door: 'trustedReveal',`,
+            `  ownerScope: 'application',`,
+            `  purpose: 'public-projection',`,
+            `}));`,
+          ].join('\n'),
+        },
+      ],
+    });
+    expect(wrongDoorAudit.revealed).toEqual([]);
+    expect(wrongDoorAudit.diagnostics).toMatchObject([
+      {
+        code: 'KV426',
+        site: 'wrong-door.ts:2',
+      },
+    ]);
   });
 
   it('retains the same fact in the one-project production-build aggregate', () => {
@@ -129,12 +152,12 @@ describe('runtime trustedReveal fact collector (SPEC §6.6, audit-only)', () => 
       {
         fileName: 'payment.ts',
         source: [
-          `import { trustedReveal } from '@kovojs/core';`,
-          `trustedReveal(app.env.PAYMENT_API_KEY, {`,
-          `  justification: 'initialize payment SDK once at boot',`,
-          `  method: 'arbitrary-fn',`,
-          `  source: 'app.env.PAYMENT_API_KEY',`,
-          `});`,
+          `import { DeclassifyPolicy, revealSecret } from '@kovojs/core';`,
+          `revealSecret(app.env.PAYMENT_API_KEY, DeclassifyPolicy.create({`,
+          `  door: 'revealSecret',`,
+          `  ownerScope: 'application',`,
+          `  purpose: 'credential-use',`,
+          `}));`,
         ].join('\n'),
       },
     ];

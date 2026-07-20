@@ -24,7 +24,7 @@ describe('provenance closure artifact gate', () => {
         browserStates: 20,
         closedReasons: 8,
         memberClasses: 56,
-        relationPairs: 2_184,
+        relationPairs: 2_240,
         serverStates: 39,
       },
     });

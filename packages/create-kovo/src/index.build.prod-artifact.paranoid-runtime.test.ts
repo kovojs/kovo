@@ -83,11 +83,6 @@ const allowedReadCases = [
     leaksSecret: false,
     witness: 'PUBLIC LABEL',
   },
-  {
-    key: 'queries/sqlite-secret-reveal-query',
-    leaksSecret: true,
-    witness: 'runtime-secret-value:revealed',
-  },
 ] as const;
 
 const blockedWriteCases = [

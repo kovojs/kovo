@@ -11,6 +11,8 @@ import {
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
+
 import {
   createGuardArgsFileReceipt,
   registerGuardArgsNativeFileReceipt,
@@ -1894,13 +1896,10 @@ function stableSchemaArrayValue(values: readonly unknown[], index: number): unkn
   return descriptor.value;
 }
 
-const SCHEMA_UNTRUSTED_REVEAL_REASON =
-  'validated request-derived input through Kovo schema parsing';
-
 function revealSchemaInput(input: unknown): unknown {
   input = revealRequestProvenanceContainer(input);
   if (isUntrusted(input)) {
-    input = revealUntrusted(input, SCHEMA_UNTRUSTED_REVEAL_REASON);
+    input = revealUntrusted(input, frameworkRevealUntrustedPolicy);
   }
   return revealRequestProvenanceContainer(input);
 }

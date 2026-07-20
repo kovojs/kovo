@@ -13,6 +13,7 @@ import {
   revealUntrustedRequestValue,
   tagUntrustedRequestValue,
 } from './untrusted-request-body.js';
+import { testRevealUntrustedPolicy } from './declassification-policy.test-support.js';
 
 describe('untrusted request body parser', () => {
   it('tags Kovo-owned request header and cookie accessors for validation provenance', () => {
@@ -48,9 +49,9 @@ describe('untrusted request body parser', () => {
     if (!parsed.ok) return;
     const value = parsed.value as { id: unknown; nested: { ok: unknown } };
     expect(isUntrusted(value.id)).toBe(true);
-    expect(revealUntrusted(value.id, 'test validates webhook id')).toBe('evt_1');
+    expect(revealUntrusted(value.id, testRevealUntrustedPolicy)).toBe('evt_1');
     expect(isUntrusted(value.nested.ok)).toBe(true);
-    expect(revealUntrusted(value.nested.ok, 'test validates nested flag')).toBe(true);
+    expect(revealUntrusted(value.nested.ok, testRevealUntrustedPolicy)).toBe(true);
   });
 
   it('does not erase signed raw JSON after a late typed-array length poison', () => {
@@ -68,9 +69,9 @@ describe('untrusted request body parser', () => {
       const parsed = parseUntrustedJsonBodyBytes(body);
       expect(parsed.ok).toBe(true);
       if (!parsed.ok) return;
-      expect(
-        revealUntrusted((parsed.value as { id: unknown }).id, 'test validates poisoned webhook id'),
-      ).toBe('evt_signed');
+      expect(revealUntrusted((parsed.value as { id: unknown }).id, testRevealUntrustedPolicy)).toBe(
+        'evt_signed',
+      );
     } finally {
       Object.defineProperty(typedArrayPrototype, 'byteLength', descriptor!);
     }
@@ -143,8 +144,8 @@ describe('untrusted request body parser', () => {
     expect(isUntrusted(firstRead)).toBe(true);
     expect(isUntrusted(secondRead)).toBe(true);
     expect(firstRead).not.toBe(secondRead);
-    expect(revealUntrusted(firstRead, 'test validates lazy request leaf')).toBe(0);
-    expect(revealUntrusted(secondRead, 'test validates lazy request leaf')).toBe(0);
+    expect(revealUntrusted(firstRead, testRevealUntrustedPolicy)).toBe(0);
+    expect(revealUntrusted(secondRead, testRevealUntrustedPolicy)).toBe(0);
   });
 
   it('tags and reveals a deeply nested provenance tree iteratively', () => {
@@ -199,7 +200,7 @@ describe('untrusted request body parser', () => {
     expect(() => String(value.name)).toThrow(/KV426/);
     expect(() => JSON.stringify(result.value)).toThrow(/KV426/);
     expect(inspect(value.name)).toBe('[untrusted]');
-    expect(revealUntrusted(value.name, 'test validates request body name')).toBe('Ada');
+    expect(revealUntrusted(value.name, testRevealUntrustedPolicy)).toBe('Ada');
   });
 
   it('keeps every app-visible FormData scalar read behind the provenance membrane', async () => {

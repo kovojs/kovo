@@ -106,6 +106,7 @@ export interface BrowserPostureManifest {
  */
 export const serverSecurityOperationKinds = freezeSecurityValue([
   'server.authority.scope',
+  'server.data.declassify',
   'server.database.read',
   'server.database.trusted-sql',
   'server.database.write',
@@ -184,6 +185,7 @@ function agentMinimumIntegrityForOperation(kind: ServerSecurityOperationKind): A
     case 'server.storage.read':
       return 'retrieved';
     case 'server.authority.scope':
+    case 'server.data.declassify':
     case 'server.database.trusted-sql':
     case 'server.database.write':
     case 'server.egress.request':
@@ -252,6 +254,7 @@ export type SecurityOperationDoor =
   | 'compiler-state'
   | 'context.setCookie'
   | 'delegated-event'
+  | 'declassify'
   | 'framework-storage'
   | 'framework-timer'
   | 'handler-root'
@@ -408,6 +411,8 @@ export function securityOperationDoorForKind(kind: SecurityOperationKind): Secur
       return 'framework-timer';
     case 'server.authority.scope':
       return 'principal-scope';
+    case 'server.data.declassify':
+      return 'declassify';
     case 'server.egress.request':
       return 'ctx.fetch';
     case 'server.helper.call':
@@ -468,6 +473,7 @@ export function isServerSecurityOperationKind(
 ): value is ServerSecurityOperationKind {
   switch (value) {
     case 'server.authority.scope':
+    case 'server.data.declassify':
     case 'server.database.read':
     case 'server.database.trusted-sql':
     case 'server.database.write':
@@ -492,6 +498,7 @@ export function isServerSecurityOperationKind(
 /** @internal */
 export function securityOperationNeedsJustification(kind: SecurityOperationKind): boolean {
   return (
+    kind === 'server.data.declassify' ||
     kind === 'server.database.trusted-sql' ||
     kind === 'server.output.trusted-html' ||
     kind === 'server.response.raw'

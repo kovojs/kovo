@@ -260,6 +260,7 @@ const frameworkImplementationBindings = new Set<FrameworkImplementationBinding>(
 const frameworkRawCapabilities = new Set<RawCapabilityKind>([
   'crypto-acquisition',
   'database-driver',
+  'declassification',
   'digest',
   'dynamic-loader',
   'filesystem',
@@ -268,6 +269,19 @@ const frameworkRawCapabilities = new Set<RawCapabilityKind>([
   'vm',
   'worker',
 ]);
+
+const requestClosedDeclassificationExports = new Set([
+  'DeclassifyPolicy',
+  'revealSecret',
+  'revealUntrusted',
+  'trustedReveal',
+]);
+const requestClosedDeclassificationPermission: FrameworkPermission = {
+  capabilities: ['declassification'],
+  disposition: 'request-closed',
+  reason:
+    '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+};
 const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
   'agent-tool-callback',
   'application',
@@ -1229,6 +1243,17 @@ function frameworkPackageVerdict(
 
   const appendPermission = (name: string): void => {
     const id = frameworkMemberId(packageName, subpath, name);
+    if (
+      packageName === '@kovojs/core' &&
+      subpath === '.' &&
+      requestClosedDeclassificationExports.has(name)
+    ) {
+      // SPEC §6.6: construction and use of a declassification door are both transitively closed
+      // from request-reachable code. This compiler-owned rule is independent of generated API
+      // posture so a newly exported constructor cannot briefly become authority-free.
+      permissions.set(id, requestClosedDeclassificationPermission);
+      return;
+    }
     const permission = frameworkPostureRegistry.permissions.get(id);
     if (permission === undefined) {
       closed.push({
@@ -1253,6 +1278,9 @@ function frameworkPackageVerdict(
         continue;
       }
       for (const [id, permission] of namespaceMembers) permissions.set(id, permission);
+      if (packageName === '@kovojs/core' && subpath === '.') {
+        for (const name of requestClosedDeclassificationExports) appendPermission(name);
+      }
       continue;
     }
     appendPermission(importedName);

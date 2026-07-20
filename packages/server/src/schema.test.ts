@@ -17,6 +17,8 @@ import {
 } from '@kovojs/core/internal/storage';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
 
+import { testRevealSecretPolicy } from './declassification-policy.test-support.js';
+
 import { runMutation } from './mutation.js';
 import {
   type Schema,
@@ -190,7 +192,7 @@ describe('server schemas', () => {
     };
 
     expect(isSecret(parsed.passwordHash)).toBe(true);
-    expect(revealSecret(parsed.passwordHash, 'schema test credential consumer')).toBe('hash-1');
+    expect(revealSecret(parsed.passwordHash, testRevealSecretPolicy)).toBe('hash-1');
     expect(() => `${parsed.passwordHash}`).toThrow(/KV435/u);
     expect(() => JSON.stringify(parsed)).toThrow(/KV435/u);
     expect(() => structuredClone(parsed)).toThrow(/KV435/u);
@@ -213,7 +215,7 @@ describe('server schemas', () => {
     const asyncParsed = await parseSchemaAsync(s.secret(asyncInner), 'hash-2');
     expect(syncCalls).toBe(0);
     expect(isSecret(asyncParsed)).toBe(true);
-    expect(revealSecret(asyncParsed, 'async schema test credential consumer')).toBe('hash-2-async');
+    expect(revealSecret(asyncParsed, testRevealSecretPolicy)).toBe('hash-2-async');
   });
 
   it('coerces FormData once through the declared schema', async () => {

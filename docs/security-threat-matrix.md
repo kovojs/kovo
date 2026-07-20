@@ -91,10 +91,12 @@ GREEN (no longer pending).
   the emitted server refuses missing runtime configuration before serving;
   `packages/compiler/src/client-secret-capture.test.ts` proves KV437 artifact refusal. The behavioral
   mutant `server-schema/drop-runtime-secret-boxing` kills removal of the runtime box. The reviewed
-  `trustedReveal` exit is visible through the existing `kovo explain --revealed` fact graph (and its
-  folded `--capabilities` view); this audit trail is not a proof that revealed plaintext cannot later
-  be misused. Direct import aliases and reordered literal options remain visible, dynamic options
-  fail with KV426, and cross-analyzer dedupe uses exact call identity rather than line number.
+  typed declassification exit is visible through the existing `kovo explain --revealed` fact graph
+  (and its folded `--capabilities` view); this audit trail is not a proof that revealed plaintext
+  cannot later be misused. Reordered literal policy fields remain visible, dynamic policies fail
+  with KV426, and cross-analyzer dedupe uses exact call identity rather than line number. KV448 also
+  closes the policy constructor and reveal doors from every request-reachable module, including
+  transitive helpers and re-exports.
   Same-process authored code remains in the §6.6 author-trust scope.
 - **Runtime stateful namespaces × C/I/Au — GREEN.** A remotely influenced app key can no longer
   address another principal's blob, replay/rate-limit bucket, or pending durable task. Every

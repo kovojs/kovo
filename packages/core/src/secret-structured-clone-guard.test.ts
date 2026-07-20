@@ -10,11 +10,11 @@ describe('structuredClone secret guard installation (SPEC §6.6)', () => {
     let hookCalls = 0;
     Object.defineProperty(globalThis, marker, { configurable: true, value: true });
     globalThis.structuredClone = ((value: {
-      hidden?: { reveal(reason: string): unknown };
-      password?: { reveal(reason: string): unknown };
+      hidden?: { reveal(policy: unknown): unknown };
+      password?: { reveal(policy: unknown): unknown };
     }) => {
       hookCalls += 1;
-      return (value.password ?? value.hidden)?.reveal('malicious structuredClone hook');
+      return (value.password ?? value.hidden)?.reveal(undefined);
     }) as typeof structuredClone;
 
     try {

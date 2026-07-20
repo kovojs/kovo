@@ -153,8 +153,8 @@ kovo explain --cookies [graph.json]                          # cookie downgrade 
 - **`--endpoints`** is the stable security-review surface: a diffable table of every declared
   `endpoint()` and `webhook()`, plus every route returning `respond.file()`/`respond.stream()`, with
   name, method, path, mount mode, auth scheme, and CSRF posture (`checked` or `exempt:<justification>`).
-- **`--revealed`** lists confidentiality reveals, including `trustedReveal(...)` rows that need human
-  review.
+- **`--revealed`** lists confidentiality reveals, including exact typed declassification-policy
+  rows that need human review.
 - **`--capabilities`** lists held dangerous capabilities and the framework-owned external-Postgres
   posture-lease contract. It reads the graph, not a running server, so live status, digest, and expiry
   are printed as `not-observed`.

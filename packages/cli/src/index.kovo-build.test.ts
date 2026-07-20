@@ -1616,7 +1616,7 @@ export default createApp({
     }
   });
 
-  it('persists trustedReveal audit facts through a normal build and both explain views', async () => {
+  it('request-closes a declassification door imported by the application root', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -1632,11 +1632,11 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { secret, trustedReveal } from '@kovojs/core';",
+          "import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core';",
           "import { createApp } from '@kovojs/server';",
           '',
           "const configSecret = secret('build-only-payment-key');",
-          "const credential = trustedReveal(configSecret, { justification: 'initialize payment SDK once at boot', method: 'arbitrary-fn', source: 'app.env.PAYMENT_API_KEY' });",
+          "const credential = revealSecret(configSecret, DeclassifyPolicy.create({ door: 'revealSecret', ownerScope: 'application', purpose: 'credential-use' }));",
           'void credential;',
           '',
           'export default createApp({ routes: [] });',
@@ -1647,39 +1647,12 @@ export default createApp({
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(0);
-      expect(stderr).not.toHaveBeenCalled();
-
-      const graphPath = join(outDir, '.kovo/graph.json');
-      const graph = JSON.parse(readFileSync(graphPath, 'utf8')) as {
-        revealed?: readonly Record<string, unknown>[];
-      };
-      expect(graph.revealed).toEqual([
-        {
-          grade: 'audit',
-          justification: 'initialize payment SDK once at boot',
-          method: 'arbitrary-fn',
-          path: 'app.env.PAYMENT_API_KEY',
-          query: 'runtime',
-          selectedSecret: true,
-          site: 'app.mjs:5',
-          source: 'app.env.PAYMENT_API_KEY',
-        },
-      ]);
-
-      stdout.mockClear();
-      expect(main(['explain', '--revealed', graphPath])).toBe(0);
-      const revealedOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(revealedOutput).toContain(
-        'REVEAL grade=audit method=arbitrary-fn query=runtime path=app.env.PAYMENT_API_KEY site=app.mjs:5',
+      expect(exitCode).toBe(1);
+      expect(errorOutput).toContain('ERROR KV448 app.mjs:1');
+      expect(errorOutput).toContain(
+        'declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
       );
-
-      stdout.mockClear();
-      expect(main(['explain', '--capabilities', graphPath])).toBe(0);
-      const capabilityOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(capabilityOutput).toContain(
-        'CAPABILITY kind=trustedReveal site=app.mjs:5 module=- target=runtime.app.env.PAYMENT_API_KEY justification="initialize payment SDK once at boot"',
-      );
+      expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

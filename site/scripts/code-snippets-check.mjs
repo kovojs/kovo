@@ -863,6 +863,8 @@ declare global {
   var themeScript: any;
   var token: any;
   var toast: any;
+  var DeclassifyPolicy: any;
+  var revealSecret: any;
   var trustedReveal: any;
   var tx: any;
   var qty: any;
@@ -1073,6 +1075,8 @@ export const StaleVersionError: any;
 export const stylesheet: any;
 export const toNodeHandler: any;
 export const tokens: any;
+export const DeclassifyPolicy: any;
+export const revealSecret: any;
 export const trustedHtml: any;
 export const trustedReveal: any;
 export const trustedUrl: any;
@@ -1169,6 +1173,8 @@ export const webhook = anyFn;
 export const webhookReplayIdentity = anyFn;
 export const write = anyFn;
 export const tokens = new Proxy({}, { get: () => 'var(--kovo-snippet-token)' }) as any;
+export const DeclassifyPolicy = { create: anyFn };
+export const revealSecret = anyFn;
 
 export const guards = {
   all: anyFn,

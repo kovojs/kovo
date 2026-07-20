@@ -2,6 +2,7 @@ import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import {
+  DeclassifyPolicy,
   declareOffWire,
   drainSecretRevealAuditFacts,
   isRedacted,
@@ -25,6 +26,31 @@ import {
 } from './index.js';
 
 const MARKER = '[secret]';
+const SECRET_REVEAL_POLICY = DeclassifyPolicy.create({
+  door: 'secret.reveal',
+  ownerScope: 'application',
+  purpose: 'server-computation',
+});
+const REVEAL_SECRET_POLICY = DeclassifyPolicy.create({
+  door: 'revealSecret',
+  ownerScope: 'application',
+  purpose: 'server-computation',
+});
+const TRUSTED_REVEAL_POLICY = DeclassifyPolicy.create({
+  door: 'trustedReveal',
+  ownerScope: 'application',
+  purpose: 'public-projection',
+});
+const UNTRUSTED_REVEAL_POLICY = DeclassifyPolicy.create({
+  door: 'untrusted.reveal',
+  ownerScope: 'application',
+  purpose: 'request-validation',
+});
+const REVEAL_UNTRUSTED_POLICY = DeclassifyPolicy.create({
+  door: 'revealUntrusted',
+  ownerScope: 'application',
+  purpose: 'request-validation',
+});
 
 describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
   it('throws on every accidental coercion path', () => {
@@ -130,46 +156,100 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
     drainSecretRevealAuditFacts();
     const s = secret('hunter2');
-    expect(() => s.reveal('')).toThrow(
-      'Secret/Untrusted reveal requires a non-empty justification.',
+    expect(() => s.reveal('' as never)).toThrow(
+      'secret.reveal requires a validated DeclassifyPolicy for that exact door.',
     );
-    expect(s.reveal('needed for HMAC comparison')).toBe('hunter2');
-    expect(revealSecret(s, { justification: 'needed for HMAC comparison' })).toBe('hunter2');
+    expect(s.reveal(SECRET_REVEAL_POLICY)).toBe('hunter2');
+    expect(revealSecret(s, REVEAL_SECRET_POLICY)).toBe('hunter2');
     expect(drainSecretRevealAuditFacts()).toMatchObject([
-      { kind: 'secret-reveal', reason: 'needed for HMAC comparison' },
-      { kind: 'secret-reveal', reason: 'needed for HMAC comparison' },
+      {
+        door: 'secret.reveal',
+        kind: 'secret-reveal',
+        ownerScope: 'application',
+        purpose: 'server-computation',
+      },
+      {
+        door: 'revealSecret',
+        kind: 'secret-reveal',
+        ownerScope: 'application',
+        purpose: 'server-computation',
+      },
     ]);
   });
 
-  it('does not inherit or execute reveal and audit justifications from prototypes/accessors', () => {
+  it('requires a nominal exact-door policy and never executes option accessors', () => {
     const value = secret('hunter2');
-    Object.defineProperty(Object.prototype, 'justification', {
-      configurable: true,
-      value: 'inherited audit bypass',
-    });
-    try {
-      expect(() => value.reveal({} as { justification: string })).toThrow(
-        'Secret/Untrusted reveal requires a non-empty justification.',
-      );
-      expect(() => trustedReveal(value, {} as { justification: string })).toThrow(
-        'trustedReveal requires a non-empty justification.',
-      );
-      expect(() => declareOffWire(() => {}, {} as { justification: string })).toThrow(
-        'declareOffWire requires a non-empty justification.',
-      );
-    } finally {
-      delete (Object.prototype as { justification?: unknown }).justification;
-    }
+    const structuralForgery = {
+      door: 'secret.reveal',
+      ownerScope: 'application',
+      purpose: 'server-computation',
+    };
+    expect(() => value.reveal(structuralForgery as never)).toThrow(/validated DeclassifyPolicy/u);
+    expect(() => value.reveal(REVEAL_SECRET_POLICY as never)).toThrow(/exact door/u);
 
     let reads = 0;
-    const reason = Object.defineProperty({}, 'justification', {
+    const options = Object.defineProperty({}, 'door', {
       get() {
         reads += 1;
-        return 'accessor audit bypass';
+        return 'secret.reveal';
       },
-    }) as { justification: string };
-    expect(() => value.reveal(reason)).toThrow(/own data property/u);
+    });
+    Object.defineProperties(options, {
+      ownerScope: { enumerable: true, value: 'application' },
+      purpose: { enumerable: true, value: 'server-computation' },
+    });
+    expect(() => DeclassifyPolicy.create(options as never)).toThrow(/exactly|own data property/u);
     expect(reads).toBe(0);
+  });
+
+  it('accepts only the closed door, purpose, and owner-scope registries', () => {
+    const policy = DeclassifyPolicy.create({
+      door: 'revealSecret',
+      ownerScope: 'current-tenant',
+      purpose: 'credential-use',
+    });
+    expect(policy).toMatchObject({
+      door: 'revealSecret',
+      ownerScope: 'current-tenant',
+      purpose: 'credential-use',
+    });
+    expect(Object.isFrozen(policy)).toBe(true);
+
+    for (const options of [
+      { door: 'unknown', ownerScope: 'application', purpose: 'credential-use' },
+      { door: 'trustedReveal', ownerScope: 'application', purpose: 'credential-use' },
+      { door: 'revealSecret', ownerScope: 'anyone', purpose: 'credential-use' },
+      {
+        door: 'revealSecret',
+        ownerScope: 'application',
+        purpose: 'credential-use',
+        reason: 'structural extension',
+      },
+    ]) {
+      expect(() => DeclassifyPolicy.create(options as never)).toThrow(/declassif|exactly/iu);
+    }
+  });
+
+  it('makes string reasons and structurally forged policies fail typechecking', () => {
+    const value = secret('hunter2');
+    const requestValue = untrusted('request');
+    const compileOnly = (): void => {
+      // @ts-expect-error SPEC §6.6: free-form reveal reasons are no longer a policy.
+      value.reveal('some string');
+      // @ts-expect-error SPEC §6.6: every public reveal function requires an exact-door policy.
+      revealSecret(value, 'some string');
+      // @ts-expect-error SPEC §6.6: trustedReveal does not accept caller-authored prose.
+      trustedReveal(value, 'some string');
+      // @ts-expect-error SPEC §6.6: request validation uses a closed policy, not a reason string.
+      revealUntrusted(requestValue, 'some string');
+      // @ts-expect-error SPEC §6.6: a structural object is not a nominal DeclassifyPolicy.
+      value.reveal({
+        door: 'secret.reveal',
+        ownerScope: 'application',
+        purpose: 'server-computation',
+      });
+    };
+    expect(compileOnly).toBeTypeOf('function');
   });
 
   it('pins secret reveal audit timestamps against late Date replacement', () => {
@@ -181,7 +261,7 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
         return new NativeDate(0);
       } as unknown as DateConstructor;
       NativeDate.prototype.toISOString = () => 'forged-date';
-      secret('hunter2').reveal('audit timestamp control');
+      secret('hunter2').reveal(SECRET_REVEAL_POLICY);
     } finally {
       globalThis.Date = NativeDate;
       NativeDate.prototype.toISOString = originalToISOString;
@@ -195,13 +275,13 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     drainSecretRevealAuditFacts();
     const value = secret('bounded');
     for (let index = 0; index < 10_000; index += 1) {
-      value.reveal(`bounded reveal ${index}`);
+      value.reveal(SECRET_REVEAL_POLICY);
     }
 
     const facts = drainSecretRevealAuditFacts();
     expect(facts).toHaveLength(256);
-    expect(facts[0]).toMatchObject({ reason: 'bounded reveal 9744' });
-    expect(facts.at(-1)).toMatchObject({ reason: 'bounded reveal 9999' });
+    expect(facts[0]).toMatchObject({ reason: 'server-computation:secret.reveal:application' });
+    expect(facts.at(-1)).toMatchObject({ reason: 'server-computation:secret.reveal:application' });
     expect(drainSecretRevealAuditFacts()).toEqual([]);
   });
 
@@ -210,7 +290,7 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     const prefix = key.map((k) => k.slice(0, 7));
     expect(isSecret(prefix)).toBe(true);
     expect(() => String(prefix)).toThrow(/KV435/);
-    expect(prefix.reveal('test assertion')).toBe('sk_live');
+    expect(prefix.reveal(SECRET_REVEAL_POLICY)).toBe('sk_live');
   });
 
   it('compares in constant time via equals(), accepting raw or wrapped operands', () => {
@@ -292,7 +372,7 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
   it('is idempotent: secret(secret(x)) does not double-wrap', () => {
     const inner = secret('x');
     expect(secret(inner)).toBe(inner);
-    expect(secret(inner).reveal('test assertion')).toBe('x');
+    expect(secret(inner).reveal(SECRET_REVEAL_POLICY)).toBe('x');
   });
 
   it('isSecret recognizes only module-registered boxes', () => {
@@ -332,19 +412,19 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
   it('revealSecret passes a non-box Secret-typed value through unchanged', () => {
     // A Drizzle column is typed Secret<T> but is a raw value at runtime.
     const rawColumn = 'plain-hash' as unknown as Secret<string>;
-    expect(revealSecret(rawColumn, 'static column projection')).toBe('plain-hash');
+    expect(revealSecret(rawColumn, REVEAL_SECRET_POLICY)).toBe('plain-hash');
   });
 
   it('trustedReveal unwraps a runtime box', () => {
     const s = secret('hunter2');
-    expect(trustedReveal(s, { justification: 'test' })).toBe('hunter2');
+    expect(trustedReveal(s, TRUSTED_REVEAL_POLICY)).toBe('hunter2');
   });
 
   it('declareOffWire runs a justified server-only block without returning a value', () => {
     const calls: string[] = [];
     const result = declareOffWire(
       () => {
-        calls.push(revealSecret(secret('server-only-token'), 'server-only cache partition'));
+        calls.push(revealSecret(secret('server-only-token'), REVEAL_SECRET_POLICY));
       },
       { justification: 'used only to choose an internal cache partition' },
     );
@@ -386,14 +466,14 @@ describe('runtime Untrusted provenance wrapper (SPEC §5.2 rule 11)', () => {
 
   it('reveals only with a non-empty validation reason and maps without losing provenance', () => {
     const value = untrusted('Ada Lovelace');
-    expect(() => value.reveal('')).toThrow(
-      'Secret/Untrusted reveal requires a non-empty justification.',
+    expect(() => value.reveal('' as never)).toThrow(
+      'untrusted.reveal requires a validated DeclassifyPolicy for that exact door.',
     );
-    expect(value.reveal('validated as display name')).toBe('Ada Lovelace');
+    expect(value.reveal(UNTRUSTED_REVEAL_POLICY)).toBe('Ada Lovelace');
     const first = value.map((name) => name.split(' ')[0]);
     expect(isUntrusted(first)).toBe(true);
-    expect(first.reveal({ justification: 'validated as display name' })).toBe('Ada');
-    expect(revealUntrusted(first, 'validated as display name')).toBe('Ada');
+    expect(first.reveal(UNTRUSTED_REVEAL_POLICY)).toBe('Ada');
+    expect(revealUntrusted(first, REVEAL_UNTRUSTED_POLICY)).toBe('Ada');
   });
 
   it('is idempotent, unforgeable through Symbol.for, and not JsonValue', () => {

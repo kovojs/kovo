@@ -99,6 +99,7 @@ const DECLARE_SECRET_READ_CAPABILITY_IDENTITY = frameworkExport(
   'declareSecretReadCapability',
 );
 const SECRET_IDENTITY = frameworkExport('@kovojs/core', 'secret');
+const DECLASSIFY_POLICY_IDENTITY = frameworkExport('@kovojs/core', 'DeclassifyPolicy');
 const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
 const DRIZZLE_ALIAS_IDENTITY = frameworkExport('drizzle-orm', 'alias');
 const TRUSTED_HTML_IDENTITIES = [
@@ -3434,9 +3435,58 @@ function classifyServerCall(
     // public constructor and immutable trustedSql statement shape.
     return;
   }
-  if (serverCallIsExactTrustedReveal(sourceFile, call, aliases)) {
-    // trustedReveal is an audited value projection, not capability authority. Its strict options
-    // and direct import shape mirror the confidentiality analyzer's reviewed escape.
+  if (serverCallIsExactDeclassifyPolicyConstructor(sourceFile, call)) {
+    // The runtime constructor independently validates and registers the immutable policy. Static
+    // admission requires the same direct class import and closed literal registry tuple.
+    return;
+  }
+  if (frameworkExportEquals(frameworkIdentity, TRUSTED_REVEAL_IDENTITY)) {
+    const policy = serverExactTrustedRevealPolicy(sourceFile, call);
+    const released = call.arguments[0];
+    const releaseProvenance = released
+      ? serverDeclassifyExpressionProvenance(sourceFile, released, aliases)
+      : 'unknown-authority';
+    const condition = serverDeclassifyEnablingCondition(call, aliases);
+    if (
+      !serverCallUsesExactNamedFrameworkImport(
+        sourceFile,
+        call,
+        callee,
+        'trustedReveal',
+        TRUSTED_REVEAL_IDENTITY,
+      ) ||
+      call.arguments.length !== 2 ||
+      policy === undefined
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        'trustedReveal declassification requires an exact named import and inline validated DeclassifyPolicy.create tuple',
+      );
+    } else if (!serverDeclassifyProvenanceIsRobust(releaseProvenance)) {
+      appendViolation(
+        released ?? call,
+        'computed-security-operation',
+        `declassification released expression has attacker-controlled or unknown integrity (${releaseProvenance})`,
+      );
+    } else if (condition !== undefined) {
+      appendViolation(
+        condition.node,
+        'computed-security-operation',
+        `declassification enabling condition has attacker-controlled or unknown integrity (${condition.provenance})`,
+      );
+    } else if (
+      serverArgumentsContainAuthority(call.arguments, aliases) ||
+      serverArgumentsContainForeignExecutable(call.arguments, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        'declassification cannot receive server authority or foreign executable values',
+      );
+    } else {
+      appendOperation('server.data.declassify', call, 'trustedReveal', policy.label);
+    }
     return;
   }
   if (serverCallIsExactSecretBox(sourceFile, call, aliases)) {
@@ -3806,24 +3856,186 @@ function serverCallIsExactDeclaredSecretReadCapability(
   return ts.isCallExpression(raw) && serverCallIsExactTrustedSqlRaw(sourceFile, raw);
 }
 
-function serverCallIsExactTrustedReveal(
+interface ServerExactDeclassifyPolicy {
+  readonly door: 'trustedReveal';
+  readonly label: string;
+  readonly ownerScope: 'application' | 'current-principal' | 'current-tenant' | 'framework';
+  readonly purpose: 'public-projection';
+}
+
+function serverExactTrustedRevealPolicy(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerExactDeclassifyPolicy | undefined {
+  if (call.arguments.length !== 2) return undefined;
+  const policyExpression = unwrapExpression(call.arguments[1]!);
+  if (!ts.isCallExpression(policyExpression)) return undefined;
+  return serverExactDeclassifyPolicy(sourceFile, policyExpression, 'trustedReveal');
+}
+
+function serverCallIsExactDeclassifyPolicyConstructor(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
 ): boolean {
+  return serverExactDeclassifyPolicy(sourceFile, call, 'trustedReveal') !== undefined;
+}
+
+function serverExactDeclassifyPolicy(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  expectedDoor: 'trustedReveal',
+): ServerExactDeclassifyPolicy | undefined {
   const callee = unwrapExpression(call.expression);
-  return !!(
-    serverCallUsesExactNamedFrameworkImport(
-      sourceFile,
-      call,
-      callee,
-      'trustedReveal',
-      TRUSTED_REVEAL_IDENTITY,
-    ) &&
-    call.arguments.length === 2 &&
-    !serverArgumentsContainAuthority(call.arguments, aliases) &&
-    !serverArgumentsContainForeignExecutable(call.arguments, aliases) &&
-    serverExpressionIsExactTrustedRevealOptions(call.arguments[1]!)
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'create') return undefined;
+  const receiver = unwrapExpression(callee.expression);
+  if (
+    !ts.isIdentifier(receiver) ||
+    receiver.text !== 'DeclassifyPolicy' ||
+    !frameworkExportEquals(
+      canonicalFrameworkExportForExpression(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        receiver,
+      ),
+      DECLASSIFY_POLICY_IDENTITY,
+    ) ||
+    !securityIrExpressionUsesDirectImportBinding(sourceFile, receiver) ||
+    !securityIrMemberCallableIsStable(sourceFile, callee, call) ||
+    call.arguments.length !== 1
+  ) {
+    return undefined;
+  }
+  const options = unwrapExpression(call.arguments[0]!);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 3) return undefined;
+  let door: string | undefined;
+  let ownerScope: string | undefined;
+  let purpose: string | undefined;
+  const seen = compilerCreateSet<string>();
+  const properties = compilerSnapshotDenseArray(
+    options.properties,
+    'Finite DeclassifyPolicy options',
+  );
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+      return undefined;
+    }
+    const name = staticPropertyName(property.name);
+    const value = unwrapExpression(property.initializer);
+    if (
+      !name ||
+      (name !== 'door' && name !== 'ownerScope' && name !== 'purpose') ||
+      compilerSetHas(seen, name) ||
+      !ts.isStringLiteralLike(value)
+    ) {
+      return undefined;
+    }
+    compilerSetAdd(seen, name);
+    if (name === 'door') door = value.text;
+    else if (name === 'ownerScope') ownerScope = value.text;
+    else purpose = value.text;
+  }
+  if (
+    door !== expectedDoor ||
+    purpose !== 'public-projection' ||
+    (ownerScope !== 'application' &&
+      ownerScope !== 'current-principal' &&
+      ownerScope !== 'current-tenant' &&
+      ownerScope !== 'framework')
+  ) {
+    return undefined;
+  }
+  return {
+    door,
+    label: `${purpose}:${door}:${ownerScope}`,
+    ownerScope,
+    purpose,
+  };
+}
+
+function serverDeclassifyExpressionProvenance(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerValueProvenance {
+  const current = unwrapExpression(expression);
+  if (ts.isCallExpression(current)) {
+    if (serverCallIsExactSecretBox(sourceFile, current, aliases)) {
+      const value = current.arguments[0];
+      return value === undefined
+        ? 'unknown-authority'
+        : serverDeclassifyExpressionProvenance(sourceFile, value, aliases);
+    }
+    const callee = serverExpressionProvenance(current.expression, aliases);
+    if (callee === 'foreign-executable' || callee === 'unknown-authority') {
+      return 'unknown-authority';
+    }
+  }
+  return serverExpressionProvenance(current, aliases);
+}
+
+function serverDeclassifyProvenanceIsRobust(provenance: ServerValueProvenance): boolean {
+  return (
+    provenance !== 'foreign-executable' &&
+    provenance !== 'unsafe-wire-data' &&
+    provenance !== 'unknown-authority'
+  );
+}
+
+interface ServerDeclassifyClosedCondition {
+  readonly node: ts.Node;
+  readonly provenance: ServerValueProvenance;
+}
+
+function serverDeclassifyEnablingCondition(
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, ServerValueProvenance>,
+): ServerDeclassifyClosedCondition | undefined {
+  let child: ts.Node = call;
+  for (let parent = call.parent; parent; child = parent, parent = parent.parent) {
+    if (isSecurityIrFunctionScope(parent)) return undefined;
+    let condition: ts.Expression | undefined;
+    if (ts.isIfStatement(parent) && !serverNodeContains(parent.expression, child)) {
+      condition = parent.expression;
+    } else if (ts.isConditionalExpression(parent) && !serverNodeContains(parent.condition, child)) {
+      condition = parent.condition;
+    } else if (
+      ts.isBinaryExpression(parent) &&
+      parent.right === child &&
+      (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+        parent.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+        parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+    ) {
+      condition = parent.left;
+    } else if (
+      (ts.isWhileStatement(parent) || ts.isDoStatement(parent)) &&
+      !serverNodeContains(parent.expression, child)
+    ) {
+      condition = parent.expression;
+    } else if (
+      ts.isForStatement(parent) &&
+      parent.condition !== undefined &&
+      !serverNodeContains(parent.condition, child)
+    ) {
+      condition = parent.condition;
+    } else if (ts.isSwitchStatement(parent) && !serverNodeContains(parent.expression, child)) {
+      condition = parent.expression;
+    } else if (ts.isCatchClause(parent)) {
+      return { node: parent, provenance: 'unknown-authority' };
+    }
+    if (condition === undefined) continue;
+    const provenance = serverExpressionProvenance(condition, aliases);
+    if (!serverDeclassifyProvenanceIsRobust(provenance)) {
+      return { node: condition, provenance };
+    }
+  }
+  return undefined;
+}
+
+function serverNodeContains(container: ts.Node, candidate: ts.Node): boolean {
+  return (
+    candidate.getStart(container.getSourceFile()) >=
+      container.getStart(container.getSourceFile()) && candidate.getEnd() <= container.getEnd()
   );
 }
 
@@ -4064,43 +4276,6 @@ function serverExpressionIsExactSecretReadDeclaration(expression: ts.Expression)
     }
   }
   return true;
-}
-
-function serverExpressionIsExactTrustedRevealOptions(expression: ts.Expression): boolean {
-  const options = unwrapExpression(expression);
-  if (
-    !ts.isObjectLiteralExpression(options) ||
-    options.properties.length < 1 ||
-    options.properties.length > 3
-  ) {
-    return false;
-  }
-  const expectedOrder = ['justification', 'method', 'source'] as const;
-  let lastIndex = -1;
-  let sawJustification = false;
-  const properties = compilerSnapshotDenseArray(options.properties, 'Finite trustedReveal options');
-  for (let index = 0; index < properties.length; index += 1) {
-    const property = properties[index]!;
-    if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name))
-      return false;
-    const name = staticPropertyName(property.name);
-    const optionIndex = name ? expectedOrder.indexOf(name as (typeof expectedOrder)[number]) : -1;
-    if (optionIndex <= lastIndex || optionIndex < 0) return false;
-    lastIndex = optionIndex;
-    const value = unwrapExpression(property.initializer);
-    if (!serverExpressionIsNonEmptyStaticString(value)) return false;
-    if (name === 'justification') {
-      sawJustification = true;
-    } else if (
-      name === 'method' &&
-      ts.isStringLiteralLike(value) &&
-      value.text !== 'arbitrary-fn' &&
-      value.text !== 'server-projection'
-    ) {
-      return false;
-    }
-  }
-  return sawJustification;
 }
 
 function serverExpressionIsNonEmptyStaticString(expression: ts.Expression): boolean {

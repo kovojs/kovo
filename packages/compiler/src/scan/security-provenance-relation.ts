@@ -76,6 +76,7 @@ export const serverBaseProvenanceStates = [
 
 export const serverOperationProvenanceStates = [
   'operation:server.authority.scope',
+  'operation:server.data.declassify',
   'operation:server.database.read',
   'operation:server.database.trusted-sql',
   'operation:server.database.write',
@@ -170,7 +171,7 @@ export const provenanceDomainHonesty = {
     'browser provenance is censused here but its syntax-dependent transfer relation is not claimed decidable by this table',
   ],
   planSnapshotDrift:
-    'the current compiler has 39 server states: scoped-key-call is explicit and unsafe-wire-data carries request/error body provenance without pretending data is capability authority',
+    'the current compiler has 40 server states: declassification is explicit, scoped-key-call is explicit, and unsafe-wire-data carries request/error body provenance without pretending data is capability authority',
 } as const;
 
 /** Static names whose behavior is not represented solely by the two DB-operation predicates. */
@@ -335,6 +336,7 @@ const operation = (kind: ServerSecurityOperationKind): `operation:${ServerSecuri
 /** C9 owner relation for every server operation sink/control edge in this finite domain. */
 export const serverOperationDoorRelation = {
   'server.authority.scope': 'principal-scope',
+  'server.data.declassify': 'declassify',
   'server.database.read': 'managed-db',
   'server.database.trusted-sql': 'trustedSql',
   'server.database.write': 'managed-db',

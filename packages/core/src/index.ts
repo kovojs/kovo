@@ -22,6 +22,7 @@ export type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '.
 export type { JsonValue } from './json.js';
 export {
   declareOffWire,
+  DeclassifyPolicy,
   drainSecretRevealAuditFacts,
   isRedacted,
   isSecret,
@@ -36,17 +37,19 @@ export {
   untrusted,
 } from './secret.js';
 export type {
+  DeclassifyDoorId,
+  DeclassifyOwnerScope,
+  DeclassifyPolicyOptions,
+  DeclassifyPurpose,
+  DeclassifyPurposeFor,
   DeclareOffWireOptions,
   PublishToClientOptions,
   Redacted,
   RedactedOptions,
   RedactedValue,
   Secret,
-  SecretRevealReason,
   SecretRevealAuditFact,
   SecretValue,
-  TrustedRevealMethod,
-  TrustedRevealOptions,
   TrustedRevealValue,
   Untrusted,
   UntrustedValue,

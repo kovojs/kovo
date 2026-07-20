@@ -2,6 +2,7 @@ import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
 import { provenPrincipalFromRequest, requestPrincipalSnapshot } from './auth-principal.js';
+import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import { snapshotGuardArgsReceipt } from './guard-args-receipt.js';
 import {
   isExactlyOnceAdapterSettlementAmbiguousError,
@@ -1570,9 +1571,7 @@ function hasSubmittedCsrfTokenShape(rawInput: unknown, field: string): boolean {
 }
 
 function revealCsrfTokenInput(input: unknown): unknown {
-  return isUntrusted(input)
-    ? revealUntrusted(input, 'validated request-derived CSRF token shape')
-    : input;
+  return isUntrusted(input) ? revealUntrusted(input, frameworkRevealUntrustedPolicy) : input;
 }
 
 function mutationGuardFailureToResult(guardFailure: ResolvedGuardFailure): MutationFail {

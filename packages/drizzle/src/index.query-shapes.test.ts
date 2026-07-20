@@ -1216,14 +1216,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection vault.row.id reads a secret-classified column or unresolved projection from secret-classified table(s): vaults. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection vault.row.id reads a secret-classified column or unresolved projection from secret-classified table(s): vaults. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'vault.queries.ts:9',
       },
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection vault.row.token reads a secret-classified column or unresolved projection from secret-classified table(s): vaults. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection vault.row.token reads a secret-classified column or unresolved projection from secret-classified table(s): vaults. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'vault.queries.ts:9',
       },
@@ -1756,7 +1756,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.count reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.count reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'user.queries.ts:12',
       },
@@ -2244,13 +2244,13 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ).toEqual([]);
   });
 
-  it('recognizes audited trustedReveal calls imported from @kovojs/core', () => {
+  it('records audited trustedReveal calls without suppressing the request-wire gate', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { trustedReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2260,10 +2260,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userDetail = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      passwordDigest: trustedReveal(users.passwordHash, {',
-            '        justification: "one-way digest shown to admins",',
-            '        source: "users.passwordHash",',
-            '      }),',
+            '      passwordDigest: trustedReveal(users.passwordHash, DeclassifyPolicy.create({',
+            '        door: "trustedReveal",',
+            '        ownerScope: "application",',
+            '        purpose: "public-projection",',
+            '      })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2272,14 +2273,21 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       ],
     });
 
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining(
+          'Query projection user.passwordDigest reads a secret-classified',
+        ),
+      }),
+    ]);
     expect(facts[0]?.shape).toMatchObject({
       passwordDigest: {
         kind: 'revealed',
         reveal: {
           grade: 'audit',
-          justification: 'one-way digest shown to admins',
-          method: 'arbitrary-fn',
+          justification: 'public-projection:trustedReveal:application',
+          method: 'server-projection',
           selectedSecret: true,
           site: 'user.queries.ts:11',
           source: 'users.passwordHash',
@@ -2290,8 +2298,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       {
         grade: 'audit',
-        justification: 'one-way digest shown to admins',
-        method: 'arbitrary-fn',
+        justification: 'public-projection:trustedReveal:application',
+        method: 'server-projection',
         path: 'passwordDigest',
         query: 'user',
         selectedSecret: true,
@@ -2317,11 +2325,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userStats = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      publicId: core.trustedReveal(users.id, {',
-            '        method: "server-projection",',
-            '        justification: "server projects a public identifier",',
-            '        source: "users.id",',
-            '      }),',
+            '      publicId: core.trustedReveal(users.id, core.DeclassifyPolicy.create({',
+            '        purpose: "public-projection",',
+            '        door: "trustedReveal",',
+            '        ownerScope: "application",',
+            '      })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2336,7 +2344,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         kind: 'revealed',
         reveal: {
           grade: 'proof',
-          justification: 'server projects a public identifier',
+          justification: 'public-projection:trustedReveal:application',
           method: 'server-projection',
           selectedSecret: false,
           site: 'user.queries.ts:11',
@@ -2348,7 +2356,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       {
         grade: 'proof',
-        justification: 'server projects a public identifier',
+        justification: 'public-projection:trustedReveal:application',
         method: 'server-projection',
         path: 'publicId',
         query: 'user',
@@ -2364,15 +2372,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       files: [
         {
           fileName: 'core-barrel.ts',
-          source: 'export { trustedReveal as barrelReveal } from "@kovojs/core";',
+          source:
+            'export { DeclassifyPolicy as BarrelPolicy, trustedReveal as barrelReveal } from "@kovojs/core";',
         },
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { trustedReveal as reveal } from "@kovojs/core";',
-            'import { barrelReveal } from "./core-barrel";',
+            'import { DeclassifyPolicy as Policy, trustedReveal as reveal } from "@kovojs/core";',
+            'import { BarrelPolicy, barrelReveal } from "./core-barrel";',
             '',
             'const localReveal = reveal;',
+            'const LocalPolicy = Policy;',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
             '  passwordHash: text("password_hash").notNull(),',
@@ -2381,9 +2391,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userDetail = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      aliasDigest: reveal(users.passwordHash, { justification: "alias reveal", source: "users.passwordHash" }),',
-            '      localDigest: localReveal(users.passwordHash, { justification: "local reveal", source: "users.passwordHash" }),',
-            '      barrelDigest: barrelReveal(users.passwordHash, { justification: "barrel reveal", source: "users.passwordHash" }),',
+            '      aliasDigest: reveal(users.passwordHash, Policy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
+            '      localDigest: localReveal(users.passwordHash, LocalPolicy.create({ door: "trustedReveal", ownerScope: "current-principal", purpose: "public-projection" })),',
+            '      barrelDigest: barrelReveal(users.passwordHash, BarrelPolicy.create({ door: "trustedReveal", ownerScope: "current-tenant", purpose: "public-projection" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2392,12 +2402,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       ],
     });
 
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({ code: 'KV435', message: expect.stringContaining('aliasDigest') }),
+      expect.objectContaining({ code: 'KV435', message: expect.stringContaining('barrelDigest') }),
+      expect.objectContaining({ code: 'KV435', message: expect.stringContaining('localDigest') }),
+    ]);
     expect(
       revealFactsFromQueryFacts(facts)
         .map((fact) => fact.justification)
         .sort(),
-    ).toEqual(['alias reveal', 'barrel reveal', 'local reveal']);
+    ).toEqual([
+      'public-projection:trustedReveal:application',
+      'public-projection:trustedReveal:current-principal',
+      'public-projection:trustedReveal:current-tenant',
+    ]);
   });
 
   it('keeps a local trustedReveal shadow untrusted even when the real import is present', () => {
@@ -2406,7 +2424,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { trustedReveal as realReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal as realReveal } from "@kovojs/core";',
             '',
             'function trustedReveal<T>(value: T): T { return value; }',
             'export const users = pgTable("users", {',
@@ -2418,7 +2436,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      fakePublic: trustedReveal(users.id),',
-            '      realDigest: realReveal(users.passwordHash, { justification: "real reveal", source: "users.passwordHash" }),',
+            '      realDigest: realReveal(users.passwordHash, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2428,6 +2446,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
 
     expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining(
+          'Query projection user.realDigest reads a secret-classified',
+        ),
+      }),
       {
         code: 'KV406',
         message: expect.stringContaining('Query projection user.fakePublic could not be resolved'),
@@ -2440,7 +2464,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
     expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       expect.objectContaining({
-        justification: 'real reveal',
+        justification: 'public-projection:trustedReveal:application',
         path: 'realDigest',
       }),
     ]);
@@ -2462,11 +2486,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userStats = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      passwordDigest: core.trustedReveal(sql<string>`substr(password_hash, 1, 8)`, {',
-            '        method: "server-projection",',
-            '        justification: "server projects a digest prefix",',
-            '        source: "users.passwordHash",',
-            '      }),',
+            '      passwordDigest: core.trustedReveal(sql<string>`substr(password_hash, 1, 8)`, core.DeclassifyPolicy.create({',
+            '        door: "trustedReveal",',
+            '        ownerScope: "application",',
+            '        purpose: "public-projection",',
+            '      })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2480,11 +2504,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         kind: 'revealed',
         reveal: {
           grade: 'audit',
-          justification: 'server projects a digest prefix',
+          justification: 'public-projection:trustedReveal:application',
           method: 'server-projection',
           selectedSecret: false,
           site: 'user.queries.ts:11',
-          source: 'users.passwordHash',
         },
         shape: 'string',
       },
@@ -2497,17 +2520,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         severity: 'error',
         site: 'user.queries.ts:8',
       },
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining(
+          'Query projection user.passwordDigest reads a secret-classified',
+        ),
+      }),
     ]);
     expect(revealFactsFromQueryFacts(facts)).toMatchObject([
       {
         grade: 'audit',
-        justification: 'server projects a digest prefix',
+        justification: 'public-projection:trustedReveal:application',
         method: 'server-projection',
         path: 'passwordDigest',
         query: 'user',
         selectedSecret: false,
         site: 'user.queries.ts:11',
-        source: 'users.passwordHash',
       },
     ]);
   });
@@ -2549,7 +2577,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { trustedReveal as realReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal as realReveal } from "@kovojs/core";',
             '',
             'function reveal<T>(value: T): T { return value; }',
             '',
@@ -2562,7 +2590,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      fakeDigest: reveal(users.passwordHash),',
-            '      realDigest: realReveal(users.passwordHash, { justification: "real reveal", source: "users.passwordHash" }),',
+            '      realDigest: realReveal(users.passwordHash, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2592,7 +2620,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
     expect(revealFactsFromQueryFacts(facts)).toEqual([
       expect.objectContaining({
-        justification: 'real reveal',
+        justification: 'public-projection:trustedReveal:application',
         path: 'realDigest',
       }),
     ]);
@@ -2647,13 +2675,13 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     );
   });
 
-  it('requires a non-empty static trustedReveal justification before emitting reveal facts', () => {
+  it('requires an exact closed trustedReveal policy before emitting reveal facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { trustedReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2663,7 +2691,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userDetail = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      passwordDigest: trustedReveal(users.passwordHash, { justification: "   " }),',
+            '      passwordDigest: trustedReveal(users.passwordHash, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "server-computation" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2710,14 +2738,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'user.queries.ts:13',
       },
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.spread:publicColumns reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.spread:publicColumns reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'user.queries.ts:14',
       },
@@ -3522,14 +3550,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV435',
             message:
-              'Secret query value reaches the client wire. Query projection users.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+              'Secret query value reaches the client wire. Query projection users.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
             severity: 'error',
             site: 'user.queries.ts:13',
           },
           {
             code: 'KV435',
             message:
-              'Secret query value reaches the client wire. Query projection users.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+              'Secret query value reaches the client wire. Query projection users.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
             severity: 'error',
             site: 'user.queries.ts:16',
           },
@@ -3586,14 +3614,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection users.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection users.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'user.queries.ts:13',
       },
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection users.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection users.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'user.queries.ts:16',
       },
@@ -3646,14 +3674,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV435',
             message:
-              'Secret query value reaches the client wire. Query projection posts.author.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+              'Secret query value reaches the client wire. Query projection posts.author.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
             severity: 'error',
             site: 'post.queries.ts:23',
           },
           {
             code: 'KV435',
             message:
-              'Secret query value reaches the client wire. Query projection posts.author.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+              'Secret query value reaches the client wire. Query projection posts.author.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
             severity: 'error',
             site: 'post.queries.ts:24',
           },
@@ -3711,14 +3739,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection posts.author.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection posts.author.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'post.queries.ts:23',
       },
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection posts.author.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection posts.author.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove that only public columns cross the query wire; declassification doors are request-closed.',
         severity: 'error',
         site: 'post.queries.ts:24',
       },

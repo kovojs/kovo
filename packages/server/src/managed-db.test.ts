@@ -16,6 +16,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/pglite';
 import { integer, pgTable, text, withReplicas as withPostgresReplicas } from 'drizzle-orm/pg-core';
 import { getTableConfig, sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
+import { testSecretRevealPolicy } from './declassification-policy.test-support.js';
 
 // @kovo-security-classifier-corpus postgres-identity-posture
 import {
@@ -4365,7 +4366,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('records reveal audit facts when a revealed Secret is intentionally written', async () => {
     drainSecretRevealAuditFacts();
     const log: unknown[] = [];
-    const token = secret('sk_live').reveal('copy token into audited internal sink');
+    const token = secret('sk_live').reveal(testSecretRevealPolicy);
     const handle = managedDb(
       {
         insert(_table: string) {
@@ -4386,7 +4387,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(handle.insert('contacts').values({ token })).resolves.toBeUndefined();
     expect(log).toEqual([{ token: 'sk_live' }]);
     expect(drainSecretRevealAuditFacts()).toMatchObject([
-      { kind: 'secret-reveal', reason: 'copy token into audited internal sink' },
+      {
+        door: 'secret.reveal',
+        kind: 'secret-reveal',
+        ownerScope: 'application',
+        purpose: 'server-computation',
+      },
     ]);
   });
 
