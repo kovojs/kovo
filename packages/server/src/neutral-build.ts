@@ -1,10 +1,13 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 
 import { clientModulePath } from '@kovojs/core/internal/client-module-url';
 import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
+  createFrameworkFileSystemBoundary,
   createFrameworkOutputFileSystemBoundary,
+  pathRelativeToRoot,
   type ConfinedFileSystemEntry,
+  type FrameworkFileSystemBoundary,
   type FrameworkOutputFileSystemBoundary,
 } from '@kovojs/core/internal/filesystem';
 
@@ -42,6 +45,8 @@ import { witnessReflectApply } from './security-witness-intrinsics.js';
 import {
   createSecurityMap,
   securityArrayJoin,
+  securityDecodeUtf8Fatal,
+  securityIsUint8Array,
   securityMapForEach,
   securityMapGet,
   securityMapHas,
@@ -231,7 +236,6 @@ export async function writeKovoNeutralBuild(
       | undefined,
   );
   const neutralOutput = createFrameworkOutputFileSystemBoundary(outDir);
-  await neutralOutput.ensureDirectory();
   const clientDir = neutralPathJoin(outDir, 'client');
   const serverDir = neutralPathJoin(outDir, 'server');
   const manifestFilePath =
@@ -271,6 +275,17 @@ export async function writeKovoNeutralBuild(
     clientModules: buildClientModules,
     routeHints: snapshotBuildArray(appShellBuild.routeHints, 'neutral build route hints'),
   };
+  // SPEC §6.6/§9.5: local stylesheet declarations are a reviewed filesystem door, not
+  // ambient read authority. Resolve and descriptor-snapshot their bytes under the explicit app
+  // source root before any artifact write or authored static-export replay can mutate the source.
+  const stylesheetAssets = await materializeNeutralStylesheetAssets({
+    app: buildWithRegisteredClientModules.app,
+    assets: buildWithRegisteredClientModules.assets,
+    buildStylesheetCss,
+    manifestDistDir,
+    stylesheetSourceRoot,
+  });
+  await neutralOutput.ensureDirectory();
 
   await writeKovoAppShellViteBuildOutput(buildWithRegisteredClientModules, {
     outDir: clientDir,
@@ -282,14 +297,7 @@ export async function writeKovoNeutralBuild(
     await neutralOutput.writeFile('server/handler.mjs', serverHandlerSource);
   }
   await copyNeutralStaticAssets(appShellBuild.assets, clientDir, manifestDistDir);
-  await materializeNeutralStylesheetAssets({
-    app: appShellBuild.app,
-    assets: appShellBuild.assets,
-    buildStylesheetCss,
-    manifestDistDir,
-    rootDir: clientDir,
-    stylesheetSourceRoot,
-  });
+  await writeNeutralStylesheetAssets(stylesheetAssets, clientDir);
 
   const manifestPath = neutralPathJoin(outDir, 'manifest.json');
   const routesPath = neutralPathJoin(outDir, 'routes.json');
@@ -306,14 +314,7 @@ export async function writeKovoNeutralBuild(
     neutralPathJoin(outDir, 'public'),
   );
   if (staticOutput !== undefined) {
-    await materializeNeutralStylesheetAssets({
-      app: buildWithRegisteredClientModules.app,
-      assets: buildWithRegisteredClientModules.assets,
-      buildStylesheetCss,
-      manifestDistDir,
-      rootDir: staticOutput.dir,
-      stylesheetSourceRoot,
-    });
+    await writeNeutralStylesheetAssets(stylesheetAssets, staticOutput.dir);
   }
   // SPEC §6.6/§9.5: static replay above executes authored code in this realm. Commit the deployment
   // authority ledgers below through boot-pinned own-data operations, including their array copies.
@@ -753,13 +754,17 @@ function skipNeutralPublicAsset(relativePath: string, entry: { name: string }): 
   return entry.name === '.DS_Store';
 }
 
-interface MaterializeNeutralStylesheetAssetsOptions {
+interface SnapshotNeutralStylesheetAssetsOptions {
   app: KovoApp;
   assets: readonly KovoNeutralBuild['staticAssets'][number][];
   buildStylesheetCss: readonly { css: string; href: string }[];
   manifestDistDir: string | undefined;
-  rootDir: string;
   stylesheetSourceRoot: string | undefined;
+}
+
+interface NeutralStylesheetAssetSnapshot {
+  readonly assetPath: string;
+  readonly css: string;
 }
 
 async function materializeNeutralStylesheetAssets({
@@ -767,12 +772,11 @@ async function materializeNeutralStylesheetAssets({
   assets,
   buildStylesheetCss,
   manifestDistDir,
-  rootDir,
   stylesheetSourceRoot,
-}: MaterializeNeutralStylesheetAssetsOptions): Promise<void> {
+}: SnapshotNeutralStylesheetAssetsOptions): Promise<readonly NeutralStylesheetAssetSnapshot[]> {
   const cssByPath = stylesheetCssByPath(app, assets, buildStylesheetCss);
   const viteCssBySourceFile = sourceFileByStylesheetAssetPath(assets);
-  const localCssByPath = stylesheetSourceByPath(app, stylesheetSourceRoot);
+  const localCssByPath = stylesheetSourceByPath(app);
   const stylesheetEntries: { assetPath: string; cssChunks: readonly string[] }[] = [];
   securityMapForEach(cssByPath, (cssChunks, assetPath) => {
     commitBuildArrayValue(
@@ -788,11 +792,11 @@ async function materializeNeutralStylesheetAssets({
     stylesheetEntries,
     'pinned neutral stylesheet materialization entries',
   );
-  const output = createFrameworkOutputFileSystemBoundary(rootDir);
+  let sourceFileSystem: FrameworkFileSystemBoundary | undefined;
+  const snapshot: NeutralStylesheetAssetSnapshot[] = [];
 
   for (let index = 0; index < pinnedEntries.length; index += 1) {
     const { assetPath, cssChunks } = pinnedEntries[index]!;
-    const outputPath = neutralClientOutputPath(rootDir, assetPath);
     // M2 (bugs-part4 L12-1): compute each stylesheet's content purely from the
     // *current* build's inputs (declared/critical CSS, build-owned CSS, and the
     // Vite-emitted CSS read from this build's Vite output dir). Reading the
@@ -805,21 +809,46 @@ async function materializeNeutralStylesheetAssets({
       viteSourceFile === undefined || manifestDistDir === undefined
         ? ''
         : await readExistingStylesheet(viteDistSourcePath(manifestDistDir, viteSourceFile));
-    const localSourceFile = securityMapGet(localCssByPath, assetPath);
+    const localSource = securityMapGet(localCssByPath, assetPath);
     const localCss =
-      viteCss || cssChunks.length > 0 || localSourceFile === undefined
+      viteCss || cssChunks.length > 0 || localSource === undefined
         ? ''
-        : await readRequiredStylesheet(localSourceFile, assetPath);
+        : await readRequiredStylesheet(
+            localSource,
+            assetPath,
+            stylesheetSourceRoot,
+            (sourceFileSystem ??= await requiredStylesheetSourceFileSystem(
+              stylesheetSourceRoot,
+              assetPath,
+            )),
+          );
     const dedupedCss = dedupeCssChunks(
       concatenateNeutralBuildArrays(cssChunks, [localCss, viteCss], 'neutral stylesheet chunks'),
     );
     const mergedCss = securityArrayJoin(dedupedCss, '\n');
     if (!mergedCss) continue;
-
-    await output.writeFile(
-      neutralPathRelative(rootDir, outputPath),
-      `${mergedCss}${securityStringEndsWith(mergedCss, '\n') ? '' : '\n'}`,
+    commitBuildArrayValue(
+      snapshot,
+      {
+        assetPath,
+        css: `${mergedCss}${securityStringEndsWith(mergedCss, '\n') ? '' : '\n'}`,
+      },
+      'neutral stylesheet source snapshot',
     );
+  }
+  return snapshotBuildArray(snapshot, 'pinned neutral stylesheet source snapshot');
+}
+
+async function writeNeutralStylesheetAssets(
+  stylesheetAssets: readonly NeutralStylesheetAssetSnapshot[],
+  rootDir: string,
+): Promise<void> {
+  const source = snapshotBuildArray(stylesheetAssets, 'neutral stylesheet asset snapshot');
+  const output = createFrameworkOutputFileSystemBoundary(rootDir);
+  for (let index = 0; index < source.length; index += 1) {
+    const asset = source[index]!;
+    const outputPath = neutralClientOutputPath(rootDir, asset.assetPath);
+    await output.writeFile(neutralPathRelative(rootDir, outputPath), asset.css);
   }
 }
 
@@ -887,14 +916,11 @@ function stylesheetCssByPath(
   return cssByPath;
 }
 
-function stylesheetSourceByPath(
-  app: KovoApp,
-  stylesheetSourceRoot: string | undefined,
-): Map<string, string> {
-  const sources = createSecurityMap<string, string>();
+function stylesheetSourceByPath(app: KovoApp): Map<string, StylesheetAsset> {
+  const sources = createSecurityMap<string, StylesheetAsset>();
   const appStylesheets = snapshotBuildArray(app.stylesheets, 'neutral source app stylesheets');
   for (let index = 0; index < appStylesheets.length; index += 1) {
-    addStylesheetSource(sources, appStylesheets[index]!, stylesheetSourceRoot);
+    addStylesheetSource(sources, appStylesheets[index]!);
   }
   const routes = snapshotBuildArray(app.routes, 'neutral source stylesheet routes');
   for (let routeIndex = 0; routeIndex < routes.length; routeIndex += 1) {
@@ -903,47 +929,47 @@ function stylesheetSourceByPath(
       `neutral source route ${routeIndex} stylesheets`,
     );
     for (let index = 0; index < routeStylesheets.length; index += 1) {
-      addStylesheetSource(sources, routeStylesheets[index]!, stylesheetSourceRoot);
+      addStylesheetSource(sources, routeStylesheets[index]!);
     }
   }
   return sources;
 }
 
 function addStylesheetSource(
-  sources: Map<string, string>,
+  sources: Map<string, StylesheetAsset>,
   asset: string | StylesheetAsset,
-  stylesheetSourceRoot: string | undefined,
 ): void {
   if (typeof asset === 'string') return;
 
   const assetPath = localStylesheetAssetPath(asset.href);
   if (!assetPath) return;
-  const sourceFile =
-    stylesheetSourceFile(asset) ??
-    stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot, assetPath);
-  if (sourceFile === undefined) return;
-  if (!securityMapHas(sources, assetPath)) securityMapSet(sources, assetPath, sourceFile);
+  if (stylesheetSourceFile(asset) === undefined && stylesheetSourcePath(asset) === undefined)
+    return;
+  if (!securityMapHas(sources, assetPath)) securityMapSet(sources, assetPath, asset);
 }
 
-function stylesheetSourceFileFromRoot(
+function stylesheetSourceRelativePath(
   asset: StylesheetAsset,
-  stylesheetSourceRoot: string | undefined,
+  stylesheetSourceRoot: string,
+  canonicalStylesheetSourceRoot: string,
   assetPath: string,
-): string | undefined {
+): string {
   const sourcePath = stylesheetSourcePath(asset);
-  if (sourcePath === undefined || stylesheetSourceRoot === undefined) return undefined;
-  const sourceFile = neutralPathResolve(stylesheetSourceRoot, sourcePath);
-  const relativeToRoot = neutralPathRelative(stylesheetSourceRoot, sourceFile);
-  if (
-    relativeToRoot === '' ||
-    securityStringStartsWith(relativeToRoot, '..') ||
-    neutralPathIsAbsolute(relativeToRoot)
-  ) {
-    throw new Error(
-      `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${sourcePath}' outside stylesheetSourceRoot '${stylesheetSourceRoot}'. SPEC §9.5 static export writes referenced static assets with route documents.`,
-    );
-  }
-  return sourceFile;
+  const sourceFile = stylesheetSourceFile(asset);
+  const candidate =
+    sourceFile ??
+    (sourcePath === undefined ? undefined : neutralPathResolve(stylesheetSourceRoot, sourcePath));
+  const relativeToRoot =
+    candidate === undefined
+      ? undefined
+      : (pathRelativeToRoot(stylesheetSourceRoot, candidate) ??
+        pathRelativeToRoot(canonicalStylesheetSourceRoot, candidate));
+  if (relativeToRoot !== undefined) return relativeToRoot;
+
+  const displayedSource = sourceFile ?? sourcePath ?? '<unknown>';
+  throw new Error(
+    `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${displayedSource}' outside stylesheetSourceRoot '${stylesheetSourceRoot}'. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
+  );
 }
 
 function buildStylesheetCssHref(
@@ -1007,14 +1033,62 @@ async function readExistingStylesheet(fileName: string): Promise<string> {
   }
 }
 
-async function readRequiredStylesheet(fileName: string, assetPath: string): Promise<string> {
+async function requiredStylesheetSourceFileSystem(
+  stylesheetSourceRoot: string | undefined,
+  assetPath: string,
+): Promise<FrameworkFileSystemBoundary> {
+  if (stylesheetSourceRoot === undefined) {
+    throw new Error(
+      `KV229 neutral build cannot materialize local stylesheet '${assetPath}' without stylesheetSourceRoot. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
+    );
+  }
   try {
-    const sourceStat = await stat(fileName);
-    if (!sourceStat.isFile()) throw new Error('not a file');
-    return await readFile(fileName, 'utf8');
+    return await createFrameworkFileSystemBoundary(stylesheetSourceRoot);
   } catch (error) {
     throw new Error(
-      `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${fileName}'. SPEC §9.5 static export writes referenced static assets with route documents.`,
+      `KV229 neutral build cannot establish stylesheetSourceRoot '${stylesheetSourceRoot}'. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
+      { cause: error },
+    );
+  }
+}
+
+async function readRequiredStylesheet(
+  asset: StylesheetAsset,
+  assetPath: string,
+  stylesheetSourceRoot: string | undefined,
+  sourceFileSystem: FrameworkFileSystemBoundary,
+): Promise<string> {
+  if (stylesheetSourceRoot === undefined) {
+    throw new Error(
+      `KV229 neutral build cannot materialize local stylesheet '${assetPath}' without stylesheetSourceRoot. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
+    );
+  }
+  const relativePath = stylesheetSourceRelativePath(
+    asset,
+    stylesheetSourceRoot,
+    sourceFileSystem.root,
+    assetPath,
+  );
+  let source: Awaited<ReturnType<FrameworkFileSystemBoundary['readFile']>>;
+  try {
+    source = await sourceFileSystem.readFile(relativePath, { requireSingleLink: true });
+  } catch (error) {
+    throw new Error(
+      `KV229 neutral build cannot read stylesheet '${assetPath}' through stylesheetSourceRoot '${stylesheetSourceRoot}'. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
+      { cause: error },
+    );
+  }
+  const displayedSource = stylesheetSourceFile(asset) ?? stylesheetSourcePath(asset) ?? '<unknown>';
+  if (source === undefined || !securityIsUint8Array(source.body)) {
+    throw new Error(
+      `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${displayedSource}': source is not a stable root-confined regular file. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
+    );
+  }
+  try {
+    return securityDecodeUtf8Fatal(source.body);
+  } catch (error) {
+    throw new Error(
+      `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${displayedSource}': source is not valid UTF-8. SPEC §6.6 confines reviewed filesystem doors to the immutable app source snapshot; SPEC §9.5 writes only referenced static assets.`,
       { cause: error },
     );
   }

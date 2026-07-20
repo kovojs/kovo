@@ -983,7 +983,7 @@ export default createRequestHandler(app);
       };
       const outDir = join(root, 'dist', '.kovo');
 
-      await writeKovoNeutralBuild({ app, outDir });
+      await writeKovoNeutralBuild({ app, outDir, stylesheetSourceRoot: srcDir });
 
       await expect(readFile(join(outDir, 'client/assets/local.css'), 'utf8')).resolves.toBe(
         '.local-source { color: teal; }\n',
@@ -993,6 +993,227 @@ export default createRequestHandler(app);
       );
       await expect(readFile(join(outDir, 'static/index.html'), 'utf8')).resolves.toContain(
         'href="/assets/local.css"',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects stack-derived stylesheet traversal outside the app source root before output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-provenance-traversal-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      const routeDir = join(srcDir, 'routes');
+      const outsideSource = join(root, 'hosts');
+      const outDir = join(root, 'dist', '.kovo');
+      await mkdir(routeDir, { recursive: true });
+      await writeFile(outsideSource, 'BUILD_HOST_SECRET=must-not-ship\n', 'utf8');
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(routeDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('../../hosts')],",
+          "      page: () => trustedHtml('<main>Home</main>'),",
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+
+      await expect(
+        writeKovoNeutralBuild({ app, outDir, stylesheetSourceRoot: srcDir }),
+      ).rejects.toThrow(/KV229.*outside stylesheetSourceRoot.*SPEC §6\.6/u);
+      await expect(stat(outDir)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(readFile(outsideSource, 'utf8')).resolves.toBe(
+        'BUILD_HOST_SECRET=must-not-ship\n',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects absolute caller provenance outside the configured app source root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-provenance-absolute-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      const externalDir = join(root, 'external-module');
+      const outDir = join(root, 'dist', '.kovo');
+      await mkdir(srcDir, { recursive: true });
+      await mkdir(externalDir, { recursive: true });
+      const externalCss = join(externalDir, 'private.css');
+      await writeFile(externalCss, '.private { content: "BUILD_HOST_SECRET"; }\n', 'utf8');
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(externalDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('./private.css')],",
+          "      page: () => trustedHtml('<main>Home</main>'),",
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+
+      await expect(
+        writeKovoNeutralBuild({ app, outDir, stylesheetSourceRoot: srcDir }),
+      ).rejects.toThrow(`outside stylesheetSourceRoot '${srcDir}'`);
+      await expect(stat(outDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects stack-derived stylesheet provenance through an outside-root symlink', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-provenance-symlink-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      const outsideDir = join(root, 'outside');
+      const outDir = join(root, 'dist', '.kovo');
+      await mkdir(srcDir, { recursive: true });
+      await mkdir(outsideDir, { recursive: true });
+      await writeFile(join(outsideDir, 'private.css'), '.private { color: red; }\n', 'utf8');
+      await symlink(join(outsideDir, 'private.css'), join(srcDir, 'linked.css'));
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(srcDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('./linked.css')],",
+          "      page: () => trustedHtml('<main>Home</main>'),",
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+
+      await expect(
+        writeKovoNeutralBuild({ app, outDir, stylesheetSourceRoot: srcDir }),
+      ).rejects.toThrow(/KV229.*not a stable root-confined regular file/u);
+      await expect(stat(outDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects stack-derived stylesheet provenance through an outside-root hardlink', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-provenance-hardlink-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      const outsideDir = join(root, 'outside');
+      const outDir = join(root, 'dist', '.kovo');
+      await mkdir(srcDir, { recursive: true });
+      await mkdir(outsideDir, { recursive: true });
+      const outsideCss = join(outsideDir, 'private.css');
+      await writeFile(outsideCss, '.private { color: red; }\n', 'utf8');
+      await link(outsideCss, join(srcDir, 'linked.css'));
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(srcDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('./linked.css')],",
+          "      page: () => trustedHtml('<main>Home</main>'),",
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+
+      await expect(
+        writeKovoNeutralBuild({ app, outDir, stylesheetSourceRoot: srcDir }),
+      ).rejects.toThrow(/KV229.*not a stable root-confined regular file/u);
+      await expect(stat(outDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('pins one root-confined stylesheet snapshot before authored static replay', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-source-snapshot-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      const outDir = join(root, 'dist', '.kovo');
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(join(srcDir, 'local.css'), '.approved { color: teal; }\n', 'utf8');
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(srcDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          "import { writeFileSync } from 'node:fs';",
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('./local.css')],",
+          '      page: () => {',
+          "        writeFileSync(new URL('./local.css', import.meta.url), '.late { color: red; }\\n');",
+          '        return trustedHtml(\'<main class="approved">Home</main>\');',
+          '      },',
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+
+      await writeKovoNeutralBuild({ app, outDir, stylesheetSourceRoot: srcDir });
+
+      await expect(readFile(join(outDir, 'client/assets/local.css'), 'utf8')).resolves.toBe(
+        '.approved { color: teal; }\n',
+      );
+      await expect(readFile(join(outDir, 'static/assets/local.css'), 'utf8')).resolves.toBe(
+        '.approved { color: teal; }\n',
+      );
+      await expect(readFile(join(srcDir, 'local.css'), 'utf8')).resolves.toBe(
+        '.late { color: red; }\n',
       );
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -1090,7 +1311,11 @@ export default createRequestHandler(app);
       };
 
       await expect(
-        writeKovoNeutralBuild({ app, outDir: join(root, 'dist', '.kovo') }),
+        writeKovoNeutralBuild({
+          app,
+          outDir: join(root, 'dist', '.kovo'),
+          stylesheetSourceRoot: srcDir,
+        }),
       ).rejects.toThrow(
         "KV229 neutral build cannot materialize stylesheet '/assets/missing.css' from local source",
       );
