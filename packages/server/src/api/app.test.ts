@@ -160,6 +160,13 @@ type RootErrorShellRenderer = import('../index.js').ErrorShellRenderer;
 type RootRequestHandler = import('../index.js').RequestHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootNodeHandlerOptions = import('../index.js').NodeHandlerOptions;
+const fixedNodeOrigin: RootNodeHandlerOptions = { origin: 'https://app.example' };
+void fixedNodeOrigin;
+const removedDynamicNodeOrigin: RootNodeHandlerOptions = {
+  // @ts-expect-error SPEC §9.5: request-derived origin selection is not an adapter authority door.
+  origin: (_request: unknown) => 'https://attacker.example',
+};
+void removedDynamicNodeOrigin;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootNodeRequestHandler = import('../index.js').NodeRequestHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.

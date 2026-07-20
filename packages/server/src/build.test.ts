@@ -66,7 +66,7 @@ interface NodeAdapterModule {
   nodeRequestToWebRequest(
     request: IncomingMessage,
     options?: {
-      origin?: string | ((request: IncomingMessage) => string);
+      origin?: string;
       trustedProxy?: boolean;
     },
     response?: ServerResponse,
@@ -5785,6 +5785,18 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     expect(reconstructed.headers.get('host')).toBe('canonical.example:8443');
   }
 
+  const dynamicOrigin = () => 'https://attacker.example';
+  expect(() =>
+    liveNodeRequestToWebRequest(adapterParityRequest(), {
+      origin: dynamicOrigin,
+    } as unknown as Parameters<typeof liveNodeRequestToWebRequest>[1]),
+  ).toThrow('Kovo Node adapter origin must be one fixed string.');
+  expect(() =>
+    adapter.nodeRequestToWebRequest(adapterParityRequest(), {
+      origin: dynamicOrigin,
+    } as unknown as { origin: string }),
+  ).toThrow('Kovo Node adapter origin must be one fixed string.');
+
   for (const convert of [
     (request: IncomingMessage) => liveNodeRequestToWebRequest(request),
     (request: IncomingMessage) => adapter.nodeRequestToWebRequest(request),
@@ -5879,22 +5891,17 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
     );
   }
 
-  let invalidTargetOriginCalls = 0;
   for (const target of ['http://[::1', 'https://attacker.test:99999/_m/a/b', 'foo://[']) {
     const invalidAbsoluteRequest = adapterParityRequest();
     invalidAbsoluteRequest.url = target;
     expect(() =>
       adapter.nodeRequestToWebRequest(invalidAbsoluteRequest, {
-        origin() {
-          invalidTargetOriginCalls += 1;
-          return 'https://h1.example.test';
-        },
+        origin: 'https://h1.example.test',
       }),
     ).toThrow(
       'Kovo Node adapter request target must be one canonical origin-form or matching HTTP(S) absolute-form target.',
     );
   }
-  expect(invalidTargetOriginCalls).toBe(0);
 
   const originalIncludes = String.prototype.includes;
   const originalRegExpTest = RegExp.prototype.test;

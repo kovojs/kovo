@@ -340,6 +340,9 @@ snapshotted and validated before the authored handler graph is imported. Invalid
 ambiguous, or combined posture fails process boot. Authentication deployments MUST additionally
 satisfy §6.6's exact configured-origin binding, so a trusted forwarded scheme paired with the wrong
 host or port is rejected before auth state is read or changed.
+The public Node adapter accepts only an absent origin or one fixed origin string. A per-request
+origin callback is not a reviewed authority door: it could reinterpret `Origin`, forwarded, or other
+hostile request fields as the trusted Web origin and is therefore rejected before it can run.
 The deployment's proxy, TLS-edge, cache, cookie-domain, schema-writer, and bootstrap assumptions are
 reported through the door-derived `kovo check env` contract in §11.4; configuring this adapter does
 not by itself discharge facts the command cannot observe.

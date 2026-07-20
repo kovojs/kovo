@@ -34,6 +34,7 @@ import {
   nodeRequestPreloadIngressRejection,
   nodeRequestToWebRequest,
   toNodeHandler,
+  type NodeHandlerOptions,
   writeWebResponseToNode,
 } from './node.js';
 import { query } from './query.js';
@@ -57,6 +58,23 @@ function nodeRequest(url: string): IncomingMessage {
 }
 
 describe('server node adapter', () => {
+  it('rejects per-request origin callbacks before they can reinterpret hostile request state', () => {
+    const origin = vi.fn(() => 'https://attacker.example');
+    expect(() =>
+      toNodeHandler(async () => new Response('unreachable'), {
+        origin,
+      } as unknown as NodeHandlerOptions),
+    ).toThrow('Kovo Node adapter origin must be one fixed string.');
+    expect(origin).not.toHaveBeenCalled();
+
+    expect(() =>
+      nodeRequestToWebRequest(nodeRequest('/origin-callback'), {
+        origin,
+      } as unknown as NodeHandlerOptions),
+    ).toThrow('Kovo Node adapter origin must be one fixed string.');
+    expect(origin).not.toHaveBeenCalled();
+  });
+
   it('projects the complete preload verdict for response-less adapter doors', () => {
     const ambiguousAuthority = nodeRequest('/ambiguous-authority');
     ambiguousAuthority.rawHeaders = ['Host', 'internal.example', 'Host', 'internal.example'];
@@ -148,18 +166,15 @@ describe('server node adapter', () => {
     }
   });
 
-  it('rejects raw request-target limits before Request construction or origin callbacks', () => {
-    const origin = vi.fn(() => 'https://app.example');
+  it('rejects raw request-target limits before Request or pinned-origin construction', () => {
     const tooManyEntries = `/?${'a&'.repeat(MAX_REQUEST_QUERY_ENTRIES)}a`;
     const tooManyCharacters = `/${'a'.repeat(MAX_REQUEST_URL_CHARACTERS)}`;
 
-    expect(() => nodeRequestToWebRequest(nodeRequest(tooManyEntries), { origin })).toThrow(
-      'Kovo Node request target exceeds the SPEC §9.5 resource ceiling.',
-    );
-    expect(() => nodeRequestToWebRequest(nodeRequest(tooManyCharacters), { origin })).toThrow(
-      'Kovo Node request target exceeds the SPEC §9.5 resource ceiling.',
-    );
-    expect(origin).not.toHaveBeenCalled();
+    for (const target of [tooManyEntries, tooManyCharacters]) {
+      expect(() =>
+        nodeRequestToWebRequest(nodeRequest(target), { origin: 'https://app.example' }),
+      ).toThrow('Kovo Node request target exceeds the SPEC §9.5 resource ceiling.');
+    }
   });
 
   it('uses a pinned origin only after an absolute-form target agrees with selected ingress', () => {
@@ -1629,14 +1644,12 @@ describe('toNodeHandler incomplete request transport closure', () => {
     ).toBe('https://internal.example/_m/a/b');
   });
 
-  it('fails closed on invalid scheme-bearing targets before consulting request authority', () => {
-    const origin = vi.fn(() => 'https://internal.example');
+  it('fails closed on invalid scheme-bearing targets under a fixed public origin', () => {
     for (const target of ['http://[::1', 'https://attacker.test:99999/_m/a/b', 'foo://[']) {
-      expect(() => nodeRequestToWebRequest(nodeRequest(target), { origin })).toThrow(
-        /canonical origin-form or matching HTTP\(S\) absolute-form/u,
-      );
+      expect(() =>
+        nodeRequestToWebRequest(nodeRequest(target), { origin: 'https://internal.example' }),
+      ).toThrow(/canonical origin-form or matching HTTP\(S\) absolute-form/u);
     }
-    expect(origin).not.toHaveBeenCalled();
   });
 
   it('keeps raw mutation target classification after String, RegExp, and Math poisoning', () => {

@@ -52,7 +52,8 @@ export interface NodeHandlerOptions {
   /** Compress eligible text responses by default; set `false` to opt out. */
   compression?: boolean;
   earlyHints?: boolean;
-  origin?: string | ((request: IncomingMessage) => string);
+  /** One operator-pinned public origin. Per-request origin callbacks are intentionally unsupported. */
+  origin?: string;
   /** Trust forwarded scheme headers when constructing Request URLs. Disabled by default. */
   trustedProxy?: boolean;
 }
@@ -452,7 +453,7 @@ function requiredNodeResponseFunction(
 interface PinnedNodeHandlerOptions {
   readonly compression?: boolean;
   readonly earlyHints?: boolean;
-  readonly origin?: string | ((request: IncomingMessage) => string);
+  readonly origin?: string;
   readonly trustedProxy?: boolean;
 }
 
@@ -512,8 +513,8 @@ function snapshotNodeHandlerOptions(options: NodeHandlerOptions): PinnedNodeHand
   if (earlyHints !== undefined && typeof earlyHints !== 'boolean') {
     throw new TypeError('Kovo Node adapter earlyHints must be a boolean.');
   }
-  if (origin !== undefined && typeof origin !== 'string' && typeof origin !== 'function') {
-    throw new TypeError('Kovo Node adapter origin must be a string or function.');
+  if (origin !== undefined && typeof origin !== 'string') {
+    throw new TypeError('Kovo Node adapter origin must be one fixed string.');
   }
   if (trustedProxy !== undefined && typeof trustedProxy !== 'boolean') {
     throw new TypeError('Kovo Node adapter trustedProxy must be a boolean.');
@@ -521,9 +522,7 @@ function snapshotNodeHandlerOptions(options: NodeHandlerOptions): PinnedNodeHand
   return witnessFreeze({
     ...(compression === undefined ? {} : { compression }),
     ...(earlyHints === undefined ? {} : { earlyHints }),
-    ...(origin === undefined
-      ? {}
-      : { origin: origin as string | ((request: IncomingMessage) => string) }),
+    ...(origin === undefined ? {} : { origin }),
     ...(trustedProxy === undefined ? {} : { trustedProxy }),
   });
 }
@@ -897,7 +896,7 @@ function nodeRequestToWebRequestFromPrepared(
   const pinnedNodeRequest = prepared.request;
   const ingress = prepared.decision;
   const method = ingress.method;
-  const requestTarget = nodeRequestUrl(pinnedNodeRequest, prepared.options, ingress);
+  const requestTarget = nodeRequestUrl(prepared.options, ingress);
   const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority);
   // E3 (SPEC §9.5): bridge a client disconnect into the Web `Request.signal` so handlers,
   // queries, webhooks, and any downstream `fetch(url, { signal: request.signal })` abort
@@ -1709,14 +1708,10 @@ function requestIngressFailureMessage(issue: NodeRequestIngressIssue): string {
 }
 
 function nodeRequestUrl(
-  request: PinnedNodeRequest,
   options: PinnedNodeHandlerOptions,
   ingress: Extract<RequestIngressDecision, { ok: true }>,
 ): { readonly authority: string; readonly href: string } {
-  const origin =
-    typeof options.origin === 'function'
-      ? options.origin(request.carrier)
-      : (options.origin ?? defaultOrigin(ingress));
+  const origin = options.origin ?? defaultOrigin(ingress);
 
   const originUrl = new NativeURL(origin);
   const pinnedOrigin = urlOrigin(originUrl);

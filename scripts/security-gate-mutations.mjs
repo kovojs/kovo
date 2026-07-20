@@ -1506,6 +1506,10 @@ const weakenedRequestBodyBeforeDbAdmissionBranch = [
   '            ? await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes)',
   '            : deadlineRequest;',
 ].join('\n');
+const fixedNodeOriginAdmissionBranch =
+  "  if (origin !== undefined && typeof origin !== 'string') {";
+const weakenedNodeOriginAdmissionBranch =
+  "  if (origin !== undefined && typeof origin !== 'string' && typeof origin !== 'function') {";
 const nodeBodylessPayloadAdmissionBranch = [
   '  if (pinnedNodeRequestHasBodylessPayload(request)) {',
   "    return { issue: 'bodyless-payload', ok: false };",
@@ -5325,6 +5329,32 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description:
+      'Restores the live Node adapter accepting callable per-request origin authority.',
+    expectedKiller:
+      'the public Node adapter must reject dynamic origin callbacks before request handling',
+    name: 'server-node/restore-dynamic-origin-callback',
+    replacement: weakenedNodeOriginAdmissionBranch,
+    search: fixedNodeOriginAdmissionBranch,
+    sourceFile: serverNodePath,
+    sourceOnly: true,
+    test: assertNodeDynamicOriginCallbackRejectionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Restores the emitted Node and Vercel adapter accepting callable per-request origin authority.',
+    expectedKiller:
+      'generated Node and Vercel adapters must reject dynamic origin callbacks',
+    name: 'server-build/restore-emitted-dynamic-origin-callback',
+    replacement: weakenedNodeOriginAdmissionBranch,
+    search: fixedNodeOriginAdmissionBranch,
+    sourceFile: serverBuildPath,
+    sourceOnly: true,
+    test: assertEmittedNodeDynamicOriginCallbackRejectionBehavior,
+  },
+  {
+    baseModule: {},
+    description:
       'Drops Node GET/HEAD payload-framing admission before the Web Request body-erasure boundary.',
     expectedKiller:
       'body-framed GET and HEAD must be rejected before handler, app database, task startup, or app code',
@@ -6649,6 +6679,31 @@ function assertRequestBodyPrecedesDbAdmissionBehavior(_moduleUnderTest, { source
     testFile: 'packages/server/src/postgres-posture-load-shed.test.ts',
     testNamePattern:
       'rejects oversized method-mismatch route bodies before managed database admission',
+  });
+}
+
+function assertNodeDynamicOriginCallbackRejectionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'node.ts',
+    sourceText,
+    testFile: 'packages/server/src/node.test.ts',
+    testNamePattern:
+      'rejects per-request origin callbacks before they can reinterpret hostile request state',
+  });
+}
+
+function assertEmittedNodeDynamicOriginCallbackRejectionBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'build.ts',
+    sourceText,
+    testFile: 'packages/server/src/build.test.ts',
+    testNamePattern:
+      'emits a standalone node server that serves immutable client files before route fallback|emits Vercel Build Output API v3 with static files and a Node function',
   });
 }
 

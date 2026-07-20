@@ -1314,7 +1314,7 @@ export function preparedNodeRequestToWebRequest(prepared, nodeResponse) {
   const pinnedNodeRequest = prepared.request;
   const ingress = prepared.decision;
   const method = ingress.method;
-  const requestTarget = nodeRequestUrl(pinnedNodeRequest, prepared.options, ingress);
+  const requestTarget = nodeRequestUrl(prepared.options, ingress);
   const headers = nodeHeadersToWebHeaders(pinnedNodeRequest.headers, requestTarget.authority);
   const controller = new NativeAbortController();
   const signal = apply(nativeAbortControllerSignalGetter, controller, []);
@@ -1426,8 +1426,8 @@ function transportManagedNodeRequestBody(nodeRequest) {
 function snapshotNodeHandlerOptions(options) {
   const origin = optionalOwnDataProperty(options, 'origin');
   const trustedProxy = optionalOwnDataProperty(options, 'trustedProxy');
-  if (origin !== undefined && typeof origin !== 'string' && typeof origin !== 'function') {
-    throw new TypeError('Kovo Node adapter origin must be a string or function.');
+  if (origin !== undefined && typeof origin !== 'string') {
+    throw new TypeError('Kovo Node adapter origin must be one fixed string.');
   }
   if (trustedProxy !== undefined && typeof trustedProxy !== 'boolean') {
     throw new TypeError('Kovo Node adapter trustedProxy must be a boolean.');
@@ -1940,11 +1940,8 @@ function requestIngressFailureMessage(issue) {
   return 'Kovo platform request scheme must be http or https.';
 }
 
-function nodeRequestUrl(nodeRequest, options, ingress) {
-  const origin =
-    typeof options.origin === 'function'
-      ? options.origin(nodeRequest.carrier)
-      : (options.origin ?? defaultOrigin(ingress));
+function nodeRequestUrl(options, ingress) {
+  const origin = options.origin ?? defaultOrigin(ingress);
 
   const originUrl = new NativeURL(origin);
   const pinnedOrigin = urlOrigin(originUrl);
