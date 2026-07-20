@@ -84,6 +84,61 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).not.toContain('now()');
   });
 
+  it('confines hostile queue/import/comment data and rejects hostile emitted identifiers', () => {
+    const queue = "serial'; owned: true, tail: 'queue";
+    const importPath = "../../app.js'; const importedOwned = true; //";
+    const override = 'cart\nexport const overrideOwned = true;';
+    const source = serializeDerivedOptimistic({
+      complete: false,
+      constName: 'safePlan',
+      entries: [{ program: cartProgram, query: 'cart' }],
+      formImport: { name: 'addToCartForm', path: importPath },
+      overrides: [override],
+      queue,
+    });
+    const parsed = ts.createSourceFile(
+      'generated/optimistic.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const leaves: string[] = [];
+    const identifiers: string[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isStringLiteral(node)) leaves.push(node.text);
+      if (ts.isIdentifier(node)) identifiers.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+
+    expect(parsed.parseDiagnostics).toEqual([]);
+    expect(leaves.filter((value) => value === queue)).toHaveLength(1);
+    expect(leaves.filter((value) => value === importPath)).toHaveLength(1);
+    expect(identifiers).not.toContain('importedOwned');
+    expect(identifiers).not.toContain('overrideOwned');
+
+    expect(() =>
+      serializeDerivedOptimistic({
+        complete: false,
+        constName: 'safe; export const constOwned = true',
+        entries: [],
+        formImport: { name: 'addToCartForm', path: '../../app.js' },
+      }),
+    ).toThrow(/KV451/u);
+    expect(() =>
+      serializeDerivedOptimistic({
+        complete: false,
+        constName: 'safePlan',
+        entries: [],
+        formImport: {
+          name: 'safe; export const importNameOwned = true',
+          path: '../../app.js',
+        },
+      }),
+    ).toThrow(/KV451/u);
+  });
+
   it('typechecks and executes an emitted transform that exercises every placeholder import', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-derived-optimistic-emitted-'));
     try {
@@ -259,7 +314,7 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).toContain('orderHistory: (draft, _$input) =>');
     expect(source).not.toContain('satisfies OptimisticFor');
     expect(source).toContain(
-      'Overridden in the mutation module (derivation suppressed): cart, productGrid.',
+      "Overridden in the mutation module (derivation suppressed): 'cart', 'productGrid'.",
     );
   });
 

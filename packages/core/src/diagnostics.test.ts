@@ -152,6 +152,7 @@ describe('diagnostic registry', () => {
       'KV448',
       'KV449',
       'KV450',
+      'KV451',
     ]);
   });
 
@@ -934,6 +935,15 @@ describe('diagnostic registry', () => {
           "message": "Stateful sink key lacks framework-witnessed owner scope.",
           "severity": "error",
         },
+        "KV451": {
+          "code": "KV451",
+          "help": "Would lower to: one grammar-validated JavaScript/TypeScript leaf produced by the shared structural emission constructor for the exact source role.
+      Blocked reason: the value is not valid for that grammar role, so direct interpolation could create executable sibling syntax or an ambiguous generated artifact.
+      Fixes: derive a valid source identifier/specifier, keep data in a jsStringLiteral/tsPropertyKey leaf, or repair the typed fact producer before emission.
+      SPEC §5.2 requires generated artifacts to remain valid, auditable Kovo source and security-sensitive emission to fail closed.",
+          "message": "Compiler-derived value is outside the structural source-emission grammar.",
+          "severity": "error",
+        },
       }
     `);
   });
@@ -942,7 +952,10 @@ describe('diagnostic registry', () => {
     type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
       (code): code is CompilerTeachingCode =>
-        code === 'KV201' || code === 'KV449' || (code !== 'KV313' && /^KV[23]\d\d$/.test(code)),
+        code === 'KV201' ||
+        code === 'KV449' ||
+        code === 'KV451' ||
+        (code !== 'KV313' && /^KV[23]\d\d$/.test(code)),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);

@@ -384,11 +384,11 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '5319ea04035ff51d9e3de651fefb8cd41cc0e2743e421b10a45f895dd358a730',
+    '383734dbb9eaeab763cc0a5481be54e040a4b13341f0b05c8e5e0c2a387ce16f',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
-    '12a9d9dca676615f074ffd1206211e0e2dc401202a6b1afda68e016a8b968334',
+    'ee61fe6440f3266d2f3732b3790df3f1a912e8add405e0c8ff836bb225bb0a84',
   ],
   [
     'packages/core/src/internal/security-markers.ts',

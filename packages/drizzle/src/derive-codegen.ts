@@ -1,4 +1,10 @@
 import type { PatchOp, PatchProgram, SymbolicValue } from '@kovojs/core/internal/derivation';
+import {
+  importSpecifier,
+  jsIdentifier,
+  jsStringLiteral,
+  tsPropertyKey,
+} from '@kovojs/core/internal/emission';
 
 // SPEC.md §10.4/§10.5 Phase 3 — lower a Stage-3 PatchProgram into a committed,
 // reviewable, overridable transform module (`generated/optimistic/*.ts`). This is
@@ -44,6 +50,9 @@ const DO_NOT_EDIT = [
  * hand-written entry ⇒ the next generation re-emits the derived entry.
  */
 export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOptions): string {
+  const constName = jsIdentifier(options.constName);
+  const formImportName = jsIdentifier(options.formImport.name);
+  const formImportPath = importSpecifier(options.formImport.path);
   const sorted = [...options.entries].sort((left, right) => left.query.localeCompare(right.query));
   const awaitFragments = [...(options.awaitFragments ?? [])].sort();
   const usesTempId = sorted.some((entry) => programUses(entry.program, 'tempId'));
@@ -58,14 +67,14 @@ export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOp
       : `import type { OptimisticFor } from '@kovojs/browser/generated';`;
 
   const transforms = [
-    ...sorted.map((entry) => `${propertyKey(entry.query)}: ${lowerTransform(entry.program)},`),
-    ...awaitFragments.map((query) => `${propertyKey(query)}: 'await-fragment',`),
+    ...sorted.map((entry) => `${tsPropertyKey(entry.query)}: ${lowerTransform(entry.program)},`),
+    ...awaitFragments.map((query) => `${tsPropertyKey(query)}: 'await-fragment',`),
   ]
     .map((line) => indent(line, 4))
     .join('\n');
 
   const planBody = [
-    options.queue === undefined ? null : indent(`queue: '${options.queue}',`, 2),
+    options.queue === undefined ? null : indent(`queue: ${jsStringLiteral(options.queue)},`, 2),
     indent('transforms: {', 2),
     transforms,
     indent('},', 2),
@@ -73,22 +82,21 @@ export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOp
     .filter((line): line is string => line !== null)
     .join('\n');
 
-  const satisfies = options.complete
-    ? ` satisfies OptimisticFor<typeof ${options.formImport.name}>`
-    : '';
+  const satisfies = options.complete ? ` satisfies OptimisticFor<typeof ${formImportName}>` : '';
   const overrideNote =
     options.overrides && options.overrides.length > 0
       ? `\n// Overridden in the mutation module (derivation suppressed): ${[...options.overrides]
           .sort()
+          .map((name) => jsStringLiteral(name))
           .join(', ')}.`
       : '';
 
   return `${DO_NOT_EDIT}
 ${runtimeImport}
 
-import type { ${options.formImport.name} } from '${options.formImport.path}';${overrideNote}
+import type { ${formImportName} } from ${formImportPath};${overrideNote}
 
-export const ${options.constName} = {
+export const ${constName} = {
 ${planBody}
 }${satisfies};
 `;
@@ -144,7 +152,7 @@ const REGISTRY_DO_NOT_EDIT = [
 export function serializeCoreRegistryModule(options: SerializeCoreRegistryModuleOptions): string {
   const queryLines = [...options.queries]
     .sort((left, right) => left.name.localeCompare(right.name))
-    .map((entry) => indent(`${propertyKey(entry.name)}: ${entry.type};`, 4))
+    .map((entry) => indent(`${tsPropertyKey(entry.name)}: ${entry.type};`, 4))
     .join('\n');
   const invalidationLines = registryUnionLines(options.invalidations);
   const derivationLines = registryUnionLines(options.derivations ?? {});
@@ -176,9 +184,9 @@ function registryUnionLines(map: Readonly<Record<string, readonly string[]>>): s
       const union =
         [...new Set(queries)]
           .sort()
-          .map((query) => `'${query}'`)
+          .map((query) => jsStringLiteral(query))
           .join(' | ') || 'never';
-      return indent(`${propertyKey(key)}: ${union};`, 4);
+      return indent(`${tsPropertyKey(key)}: ${union};`, 4);
     })
     .join('\n');
 }
@@ -259,7 +267,7 @@ function lowerOp(op: PatchOp): string[] {
 
 function lowerPush(op: Extract<PatchOp, { op: 'push-row' }>): string[] {
   const rowLiteral = `{ ${Object.entries(op.row)
-    .map(([column, value]) => `${propertyKey(column)}: ${lowerValue(value)}`)
+    .map(([column, value]) => `${tsPropertyKey(column)}: ${lowerValue(value)}`)
     .join(', ')} }`;
   if (op.position === 'start') return [`draft.${op.path}.unshift(${rowLiteral});`];
   if (op.position === 'end') return [`draft.${op.path}.push(${rowLiteral});`];
@@ -420,10 +428,6 @@ function rowUses(
   return Object.values(row).some(
     (value) => value.kind === 'placeholder' && value.placeholder === placeholder,
   );
-}
-
-function propertyKey(name: string): string {
-  return /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name);
 }
 
 function indent(text: string, spaces: number): string {
