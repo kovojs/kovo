@@ -337,7 +337,7 @@ function readArtifactPosture(invocationCwd: string, inputPath: string): Artifact
     typed.graphSchemaVersion,
     'graph provenance graphSchemaVersion',
   );
-  if (graphSchemaVersion !== 'kovo.graph/v1') {
+  if (graphSchemaVersion !== 'kovo.graph/v2') {
     throw new TypeError('graph provenance graphSchemaVersion is unsupported by this checker');
   }
   const packages = denseArray(typed.frameworkPackages, 'graph provenance frameworkPackages', 128);

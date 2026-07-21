@@ -466,7 +466,13 @@ describe('runtimeRegistryFacts', () => {
         },
       ],
       egressAllowlist: ['https://api.example.test', 'internal:otel:4318'],
-      irVersions: ['kovo-check/v1', 'kovo-security-operation-ir/v1', 'kovo-runtime-posture/v1'],
+      irVersions: [
+        'kovo-check/v1',
+        'kovo-security-semantic-graph/v3',
+        'kovo-security-operation-ir/v1',
+        'kovo.graph/v2',
+        'kovo-runtime-posture/v1',
+      ],
       trustEscapes: [{ kind: 'csrf:false', name: 'hook' }],
     });
   });

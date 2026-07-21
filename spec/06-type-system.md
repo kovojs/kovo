@@ -423,11 +423,14 @@ provider signing material out of public verifier metadata. Types and private bra
 the runtime witness, closed registry, and acquisition gates are the enforcement.
 
 The runtime-posture Ed25519 trust anchor also verifies detached privileged-write reviews from
-§10.3. An escape-review signature is domain-separated by the exact
+§10.3 and detached Metric E escape-root reviews from §11. An escape-review signature is
+domain-separated by the exact
 `kovo.escape-obligation-review/v1` subject and binds one scanner-owned call-span identity, one
 structured obligation, and one reviewed artifact subject. This reuses the runtime-attestation
-fingerprint; a second review root is forbidden. Build emits only unsigned subjects, and its import
-graph plus the app-facing/internal execution surface expose verification but no signing handle.
+fingerprint; a second review root is forbidden. A Metric E signature is separately domain-separated
+by `kovo.escape-census-review/v1` and binds the exact reviewed artifact, closed door, counted root,
+and complete canonical producer-site set. Build emits only unsigned subjects, and its import graph
+plus the app-facing/internal execution surface expose verification but no signing handle.
 Signing authority belongs to the out-of-band review/deployment process and is absent from the build
 environment and coding-agent capability set. A valid signature is evidence that the pinned key
 holder approved those exact bytes. It is not evidence that the asserted guard or policy exists,
@@ -492,8 +495,17 @@ the equivalent compiler-created separation and bootstrap order.
 **TASK B layered routing (normative).** The pre-evaluation request/process check MUST consume the
 capability-closure result, dependency manifest, finite-operation diagnostics, and normalized
 semantic graphs derived from the same immutable source snapshot; running those analyzers beside an
-unbound legacy pass is not sufficient. The internal `kovo-task-b-closure/v1` carrier repeats the
-exact source census, capability root rows, and `kovo-app-dependency-capabilities/v1` manifest. TASK B
+unbound legacy pass is not sufficient. The internal `kovo-task-b-closure/v2` carrier repeats the
+exact source census, capability root rows, and `kovo-app-dependency-capabilities/v1` manifest. It
+also carries one immutable `kovo-task-b-finite-verdict/v1` snapshot taken at the compiler-result
+boundary. That snapshot MUST retain every KV449, KV450, and KV452 diagnostic with its exact site,
+start, length, message, and severity, and MUST bind the complete diagnostic census plus normalized
+semantic-source carrier with a canonical SHA-256 digest. TASK B accepts only an empty diagnostic
+census, an `accepted` status consistent with that census, and a digest recomputed over the exact
+carrier it consumes. Omitting or substituting any diagnostic or semantic trace after the snapshot
+fails KV424. This transport-integrity proof does not replace the independent compiler soundness
+oracles and does not claim resistance to coherent same-realm forgery outside the trusted
+application-code boundary above. TASK B
 MUST reconstruct each enrolled `createApp`, endpoint, layout, mutation, query, route, task, and
 webhook invocation from its independent parser view and require exactly one capability root at the
 same module and call site plus the same root kind in that module's dependency-manifest entries. A
@@ -501,13 +513,15 @@ missing, duplicate, byte-mismatched, or differently rooted row fails KV424 with 
 `root -> transfers -> sink -> closed verdict` trace; it never falls back to a syntax-only allow.
 
 For endpoint, mutation, query, task, and webhook effect handlers, TASK B MUST additionally require
-one exact `kovo-security-semantic-graph/v2` root whose factory call span, callable span, callback,
+one exact `kovo-security-semantic-graph/v3` root whose factory call span, callable span, callback,
 root identity, all-path verdict, helper summaries, and terminal inventory match the authored root.
 A missing graph, closed trace, closed helper summary, unknown transfer, or terminal mismatch is
 KV424 even when the residual analyzer would otherwise find no named sink. KV448 remains the primary
 diagnostic for raw/module/package authority and KV449 remains the primary diagnostic for a finite-IR
 operation that cannot lower; the KV424 correspondence check prevents either result from being
-silently omitted between compiler phases. Existing request/process predicates may remain as a
+silently omitted between compiler phases. KV450 and KV452 are likewise authoritative closed
+verdicts for scoped-key and derived-dataset provenance and MUST remain in the same finite verdict.
+Existing request/process predicates may remain as a
 conservative residual and independent C13 oracle until their exact root-and-terminal
 correspondence is proved, but they MUST NOT discharge a missing L1/L2/L3 proof or mint an allow
 verdict. The specialized Drizzle KV406/owner-predicate proof remains a separate data-plane
@@ -567,9 +581,13 @@ JavaScript/TypeScript module suffix — `.cjs`, `.cts`, `.js`, `.jsx`, `.mjs`, `
 `.tsx` — in both its lexical resolver identity and canonical realpath. Extensionless modules, JSON,
 CSS, SVG/HTML, WASM/native modules, and image/font/media resources remain closed until a separate
 pinned semantic and provenance lane admits them; Vite cannot reinterpret reviewed bytes as an
-asset, stylesheet, executable document, or worker payload. Query/fragment variants, direct
-`Worker`/`SharedWorker` construction, and every `new URL(..., import.meta.url)` asset carrier from a
-reviewed package likewise fail closed before Vite can create a secondary module/resource graph. An
+asset, stylesheet, executable document, or worker payload. Query/fragment variants fail closed at
+the pre-evaluation module-edge census. Direct `Worker`/`SharedWorker` construction, dynamic-code or
+timer-handler recovery, and every retained `new URL(..., import.meta.url)` executable-asset carrier
+from a reviewed package MUST fail closed in the complete build-client artifact before that artifact
+can be published or executed. Vite MAY transform or stage bytes during an ultimately rejected build;
+tree-shaken source that is absent from the retained artifact creates no executable secondary graph.
+This retained-artifact rule does not weaken the earlier pre-evaluation package/module-edge census. An
 external module edge from a loaded HTML entry MUST resolve to the immutable approved-source
 snapshot or one exact framework-owned Vite bootstrap virtual; inline HTML module proxies remain
 outside the supported source graph. Before Vite resolution, Kovo MUST parse raw HTML with one
@@ -719,7 +737,7 @@ interpreter defined next; the edge preserves that obligation rather than guessin
 verdict.
 
 **Normalized helper provenance (normative, narrow abstract interpreter).** The compiler MUST
-discharge every `server.helper.call` over `kovo-security-semantic-graph/v2`, a normalized graph whose
+discharge every `server.helper.call` over `kovo-security-semantic-graph/v3`, a normalized graph whose
 nodes are enrolled handler roots, exact same-file callables, finite operations, and explicit closed
 verdicts. This is not a JavaScript evaluator, SSA optimizer, or type-inference engine. Its complete
 value lattice is: plain local data; request/context authority; managed database, structured-header,
@@ -732,10 +750,12 @@ non-engine sink cannot erase owner/governed provenance merely by reshaping a val
 the only raw-syntax boundary; validation, emission, graph, and explain consumers decide from these
 typed facts (SPEC §5.2 rule 10).
 
-Version 2 is unconditional; consumers MUST reject version 1 rather than enter a compatibility
+Version 3 is unconditional; consumers MUST reject versions 1 and 2 rather than enter a compatibility
 posture. Every semantic root carries an exact binding to its full root identity, factory family,
 callback name, factory-call `[start,end)` span, and callback-callable `[start,end)` span in the same
-byte-exact source snapshot. Every helper transfer carries its exact invocation and ordered argument
+UTF-16 source snapshot. Every proved terminal additionally carries the SHA-256 hash of the exact
+UTF-16LE source slice selected by its JavaScript code-unit `[start,end)` span. Every helper transfer
+carries its exact invocation and ordered argument
 spans, callable name and declaration span, complete ordered root-to-helper transfer prefix, authority-input vector,
 terminal-operation inventory, and verdict. A consumer may admit a helper summary only when an exact
 invocation fact has the same callable identity and span, authority-input vector, terminal inventory,

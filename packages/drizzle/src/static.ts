@@ -109,6 +109,9 @@ export {
 /** @internal */
 /** @internal */ export type {
   CompilerSecuritySemanticSource,
+  CompilerTaskBClosureProof,
+  CompilerTaskBFiniteVerdict,
+  CompilerTaskBSourceOperation,
   TrustEscapeProjectOptions,
   TrustEscapeSourceFileInput,
 } from './trust-escapes-static.js';
@@ -121,6 +124,7 @@ export {
   collectStaticBuildTrustFactsFromProject,
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
+  snapshotCompilerTaskBFiniteVerdict,
 } from './trust-escapes-static.js';
 import {
   extractMassAssignmentFromProjectExtraction,

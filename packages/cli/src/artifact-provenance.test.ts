@@ -45,7 +45,7 @@ describe('build artifact provenance', () => {
           { name: '@kovojs/server', version: '2.0.0' },
         ],
       }),
-      create({ graphSchemaVersion: 'kovo.graph/v2' }),
+      create({ graphSchemaVersion: 'kovo.graph/v3' }),
       create({ pnpmLockBytes: 'lockfileVersion: 9\n# changed\n' }),
       create({
         securityGuarantees: {
@@ -122,7 +122,7 @@ describe('build artifact provenance', () => {
           { name: '@kovojs/core', version: '2.0.0' },
           { name: '@kovojs/server', version: '2.0.0' },
         ],
-        graphSchemaVersion: 'kovo.graph/v1',
+        graphSchemaVersion: 'kovo.graph/v2',
         pnpmLock: {
           contentHash: `sha256:${hash('sha256', 'lockfileVersion: 9.0\n', 'hex')}`,
         },

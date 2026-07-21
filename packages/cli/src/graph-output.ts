@@ -626,12 +626,15 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
           trace.verdict === 'proved'
             ? `${trace.sink.kind}:${trace.sink.target ?? trace.sink.door}`
             : trace.sink;
+        const sinkSpan =
+          trace.verdict === 'proved' ? `${trace.sink.span.start}:${trace.sink.span.end}` : '-';
         lines.push(
           [
             'SEMANTIC-TRACE',
             `root=${trace.root}`,
             `transfers=${list(trace.transfers)}`,
             `sink=${sink}`,
+            `sink-span=${sinkSpan}`,
             `verdict=${trace.verdict === 'closed' ? `closed:${trace.reason}` : 'proved'}`,
           ].join(' '),
         );

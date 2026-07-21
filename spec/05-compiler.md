@@ -68,7 +68,7 @@ Every successful `kovo build` MUST add a top-level `provenance` object to the em
 `dist/.kovo/graph.json`. The object has schema `kovo.artifact.provenance/v1` and contains exactly the
 path-independent inputs later certificates and advisories use to identify the framework posture:
 
-- `graphSchemaVersion` is the compiler-owned graph grammar identifier (`kovo.graph/v1` initially).
+- `graphSchemaVersion` is the compiler-owned graph grammar identifier (`kovo.graph/v2`).
   Any incompatible meaning or shape change in the graph moves this value.
 - `frameworkPackages` is the unique, ascending sequence of `{name, version}` pairs for resolved
   `@kovojs/*` packages. Resolution starts from the executing `@kovojs/cli` package and the nearest app

@@ -36,7 +36,7 @@ const pathToFileURL = builtinPathToFileURL;
 type NodeRequire = ReturnType<typeof builtinCreateRequire>;
 
 export const KOVO_ARTIFACT_PROVENANCE_SCHEMA = 'kovo.artifact.provenance/v1' as const;
-export const KOVO_GRAPH_SCHEMA_VERSION = 'kovo.graph/v1';
+export const KOVO_GRAPH_SCHEMA_VERSION = 'kovo.graph/v2';
 
 const KOVO_GUARANTEE_REGISTER_SCHEMA = 'kovo.security.guarantees/v1' as const;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;

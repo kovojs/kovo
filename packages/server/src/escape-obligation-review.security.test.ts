@@ -1,4 +1,6 @@
 // @kovo-security-certifies C13 structured-escape-review-signature
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,6 +9,7 @@ import {
 } from './crypto-authority.js';
 import {
   createEscapeObligationReviewEnvelope,
+  escapeObligationReviewPayload,
   verifyEscapeObligationReviewEnvelope,
 } from './escape-obligation-review.js';
 import * as internalExecution from './internal/execution.js';
@@ -112,6 +115,45 @@ describe('escape-obligation review signatures (SPEC §§6.6, 11.2)', () => {
           signature: `${envelope.signature[0] === 'A' ? 'B' : 'A'}${envelope.signature.slice(1)}`,
         },
         options,
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a 64-byte RSA-512 signature instead of labeling it Ed25519', () => {
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 512 });
+    const publicKeyDer = publicKey.export({ format: 'der', type: 'spki' });
+    const publicKeySpki = publicKeyDer.toString('base64url');
+    const trustAnchorFingerprint = `sha256:${createHash('sha256').update(publicKeyDer).digest('hex')}`;
+    const keyId = 'rsa-512-negative-control';
+    const authority = createRuntimeAttestationCryptoHandle(
+      'escape-review-test-secret-0123456789abcdef0123456789abcdef',
+      'deployment:test',
+    );
+    const legitimate = createEscapeObligationReviewEnvelope(
+      { artifactSubject, obligation, siteIdentity: 'src/mutations.ts:44:99' },
+      authority,
+    );
+    const signature = sign(
+      null,
+      Buffer.from(escapeObligationReviewPayload(legitimate.subject, keyId), 'utf8'),
+      privateKey,
+    );
+
+    expect(signature).toHaveLength(64);
+    expect(
+      verifyEscapeObligationReviewEnvelope(
+        {
+          keyId,
+          publicKeySpki,
+          signature: signature.toString('base64url'),
+          subject: legitimate.subject,
+          trustAnchorFingerprint,
+        },
+        {
+          artifactSubject,
+          trustAnchorFingerprint,
+          verification: createRuntimeAttestationVerificationHandle(),
+        },
       ),
     ).toBe(false);
   });

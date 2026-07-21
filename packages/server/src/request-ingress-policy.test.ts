@@ -217,9 +217,7 @@ describe('SPEC §9.5 finite request-ingress classifier', () => {
       classifier.classify(http1({ rawTarget: 'http://app.example/absolute?x=1' })),
     ).toMatchObject({ ok: true, target: '/absolute?x=1', targetForm: 'absolute' });
     expect(
-      classifier.classify(
-        http1({ rawTarget: 'http://app.example/absolute?next=%2Faccount' }),
-      ),
+      classifier.classify(http1({ rawTarget: 'http://app.example/absolute?next=%2Faccount' })),
     ).toMatchObject({
       ok: true,
       target: '/absolute?next=%2Faccount',
@@ -298,9 +296,7 @@ describe('SPEC §9.5 finite request-ingress classifier', () => {
       ok: false,
     });
     expect(
-      classifier.classify(
-        platformFetch({ rawTarget: 'https://app.example/assets%2fcart.css' }),
-      ),
+      classifier.classify(platformFetch({ rawTarget: 'https://app.example/assets%2fcart.css' })),
     ).toEqual({ issue: 'target', ok: false });
   });
 

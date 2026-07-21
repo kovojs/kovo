@@ -626,7 +626,7 @@ function parseCampaignWorkflowSteps(source, findings) {
   let current;
   for (let index = stepsStart + 1; index < jobEnd; index += 1) {
     const line = lines[index];
-    if (/^      - /u.test(line)) {
+    if (line.startsWith('      - ')) {
       current = [];
       blocks.push(current);
     }

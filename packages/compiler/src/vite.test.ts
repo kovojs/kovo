@@ -1323,6 +1323,7 @@ export const RealKv437 = component({
     ]);
   });
 
+  // @kovo-security-certifies C13 dependency-browser-css-collector-boundary
   it('collects component CSS through an inert browser module boundary', async () => {
     const root = process.cwd();
     const plugin = createFrameworkKovoCssCollectorVitePlugin();
@@ -1365,7 +1366,7 @@ export const CssOnlyBoundary = component({
       }),
     ]);
     // The collector is genuine compiler code, but cannot satisfy the server-render plugin proof.
-    expect(isFrameworkKovoVitePluginOwnerForSourceRoot(plugin, root)).toBe(false);
+    expect(isFrameworkKovoVitePluginOwnerForSourceRoot(plugin, 'src')).toBe(false);
   });
 
   it('uses the resolved Vite root for build CSS asset names', async () => {

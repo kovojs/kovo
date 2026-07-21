@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Buffer.from is a static intrinsic and does not use this. */
 // SPEC.md §6.6 (trust surface, AUDIT-ONLY): static collectors that surface every
 // app-authored trust escape and unsupported request/process authority for `kovo explain --trust`
 // (KV426) and `kovo check` (KV424). These passes ENFORCE NOTHING by themselves — they
@@ -13,9 +14,12 @@
 // produced by `lineForIndex`. They use a self-contained syntactic ts-morph Project (no
 // type-checker dependency) because every signal here is recognizable at the AST level.
 
-import { Node, Project, SyntaxKind, VariableDeclarationKind, ts, type SourceFile } from 'ts-morph';
+import { Buffer as builtinBuffer } from 'node:buffer';
+import { hash as builtinHash } from 'node:crypto';
 import { builtinModules as builtinNodeModules } from 'node:module';
 import { posix as nodePath } from 'node:path';
+
+import { Node, Project, SyntaxKind, VariableDeclarationKind, ts, type SourceFile } from 'ts-morph';
 import type {
   AppDependencyCapabilityManifest,
   CapabilityClosureExplainFact,
@@ -26,10 +30,15 @@ import type {
   TrustEscapeExplain,
   UnregisteredSinkFact,
 } from '@kovojs/core/internal/graph';
+
+const bufferFrom = builtinBuffer.from;
+const hash = builtinHash;
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   securityOperationDoorForKind,
   serverSecurityOperationKinds,
+  type SecurityOperationDoor,
   type SecuritySemanticGraph,
   type SecuritySemanticRootBinding,
   type ServerSecurityOperationKind,
@@ -42,11 +51,13 @@ import {
 import {
   runtimeArrayLength,
   runtimeArrayValue,
+  runtimeFreeze,
   runtimeMap,
   runtimeRegExpTest,
   runtimeSet,
   runtimeSetAdd,
   runtimeSetHas,
+  runtimeSnapshotArray,
 } from './runtime-security-intrinsics.js';
 import { structuredTrustedAssignObligation } from './static/structured-audit-obligation.js';
 
@@ -66,7 +77,17 @@ export interface TrustEscapeSourceFileInput {
 export interface CompilerSecuritySemanticSource {
   fileName: string;
   graphs: readonly SecuritySemanticGraph[];
+  operations: readonly CompilerTaskBSourceOperation[];
   source: string;
+}
+
+/** Exact spanful compiler sibling denominator for one authored TASK B root. @internal */
+export interface CompilerTaskBSourceOperation {
+  readonly door: SecurityOperationDoor;
+  readonly kind: ServerSecurityOperationKind;
+  readonly root: string;
+  readonly span: Readonly<{ readonly end: number; readonly start: number }>;
+  readonly target?: string;
 }
 
 /**
@@ -82,8 +103,51 @@ export interface CompilerSecuritySemanticSource {
 export interface CompilerTaskBClosureProof {
   readonly capabilityFacts: readonly CapabilityClosureExplainFact[];
   readonly dependencyManifest: AppDependencyCapabilityManifest;
+  readonly finiteVerdict: CompilerTaskBFiniteVerdict;
   readonly files: readonly TrustEscapeSourceFileInput[];
-  readonly schema: 'kovo-task-b-closure/v1';
+  readonly schema: 'kovo-task-b-closure/v2';
+}
+
+/** Exact compiler verdict bound to the semantic carrier consumed by TASK B. @internal */
+export interface CompilerTaskBFiniteVerdict {
+  readonly analysisCarrierSha256: `sha256:${string}`;
+  readonly blockingDiagnostics: readonly StaticDiagnosticFact[];
+  readonly schema: 'kovo-task-b-finite-verdict/v1';
+  readonly status: 'accepted' | 'rejected';
+}
+
+/**
+ * Snapshot the compiler-owned finite verdict before TASK B independently parses the same source.
+ * The semantic digest makes omission or substitution of any compiler trace fail closed; the
+ * diagnostic status preserves the compiler abstract interpreter's explicit closed verdicts
+ * without duplicating that finite language in Drizzle (SPEC §6.6).
+ *
+ * @internal
+ */
+export function snapshotCompilerTaskBFiniteVerdict(options: {
+  readonly blockingDiagnostics: readonly StaticDiagnosticFact[];
+  readonly semanticSources: readonly CompilerSecuritySemanticSource[];
+}): CompilerTaskBFiniteVerdict {
+  const blockingDiagnostics = runtimeSnapshotArray(
+    options.blockingDiagnostics.map((diagnostic) =>
+      runtimeFreeze({
+        ...diagnostic,
+        ...(diagnostic.start === undefined
+          ? {}
+          : { start: runtimeFreeze({ ...diagnostic.start }) }),
+      }),
+    ),
+    'TASK B compiler blocking diagnostics',
+  );
+  return runtimeFreeze({
+    analysisCarrierSha256: requestTaskBAnalysisCarrierSha256(
+      options.semanticSources,
+      blockingDiagnostics,
+    ),
+    blockingDiagnostics,
+    schema: 'kovo-task-b-finite-verdict/v1',
+    status: blockingDiagnostics.length === 0 ? 'accepted' : 'rejected',
+  });
 }
 
 /** @internal */
@@ -221,6 +285,7 @@ function staticJsxPragmaOverrideSinks(
   const facts: UnregisteredSinkFact[] = [];
   for (const pragma of staticJsxPragmaFacts(sourceFile, file.source)) {
     if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    if (pragma.kind === 'jsxRuntime' && pragma.value === 'automatic') continue;
     facts.push({
       safePath: 'use the compiler-owned automatic @kovojs/server JSX runtime',
       sink: 'compiler.jsx-runtime-override',
@@ -387,12 +452,14 @@ function buildTrustedCallEscape(
     leadingJustification(call);
   const owner = TRUSTED_CALL_OWNER[name];
   const site = siteFor(file, call);
+  const sourceBinding = sourceBindingForNode(file, call);
   return {
     kind,
     ...(owner ? { owner } : {}),
     safePath: TRUSTED_CALL_SAFE_PATH[name] ?? name,
-    root: site,
+    root: sourceRootIdentity(file, sourceBinding),
     site,
+    sourceBinding,
     ...(args[0] ? { source: shortSource(args[0]) } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -409,12 +476,14 @@ function buildRawEndpointEscape(file: TrustEscapeSourceFileInput, call: Node): T
       : undefined) ?? leadingJustification(call);
   const path = args[0] && isStringLiteralLike(args[0]) ? args[0].getLiteralText() : undefined;
   const site = siteFor(file, call);
+  const sourceBinding = sourceBindingForNode(file, call);
   return {
     kind: 'rawEndpoint',
     owner: 'ingress.endpoint.raw',
     safePath: 'endpoint(...)',
-    root: site,
+    root: sourceRootIdentity(file, sourceBinding),
     site,
+    sourceBinding,
     ...(path ? { source: path } : args[0] ? { source: shortSource(args[0]) } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -438,12 +507,14 @@ function buildWebhookVerifyNoneEscape(
   const nameArg = args[0];
   const source = nameArg && isStringLiteralLike(nameArg) ? nameArg.getLiteralText() : undefined;
   const site = siteFor(file, call);
+  const sourceBinding = sourceBindingForNode(file, call);
   return {
     kind: 'webhookVerifyNone',
     owner: 'ingress.endpoint.webhook',
     safePath: 'webhook({verify:none})',
-    root: site,
+    root: sourceRootIdentity(file, sourceBinding),
     site,
+    sourceBinding,
     ...(source ? { source } : {}),
     ...(justification === undefined ? {} : { justification }),
   };
@@ -454,13 +525,15 @@ function buildAnalyzerSummaryEscape(
   call: import('ts-morph').CallExpression,
 ): TrustEscapeExplain {
   const site = siteFor(file, call);
+  const sourceBinding = sourceBindingForNode(file, call);
   const helper = call.getArguments()[0];
   return {
     kind: 'kovoAnalyzerSummary',
     owner: 'compiler.provenance.summary',
-    root: site,
+    root: sourceRootIdentity(file, sourceBinding),
     safePath: 'kovoAnalyzerSummary',
     site,
+    sourceBinding,
     ...(helper === undefined ? {} : { source: shortSource(helper) }),
   };
 }
@@ -480,13 +553,15 @@ function buildAllowControlCharsEscape(
   call: import('ts-morph').CallExpression,
 ): TrustEscapeExplain {
   const site = siteFor(file, call);
+  const sourceBinding = sourceBindingForNode(file, call);
   return {
     kind: 'allowControlChars',
     owner: 'ingress.schema.control-characters',
-    root: site,
+    root: sourceRootIdentity(file, sourceBinding),
     safePath: 's.string().allowControlChars()',
     site,
     source: shortSource(call),
+    sourceBinding,
   };
 }
 
@@ -519,6 +594,7 @@ function buildCsrfFalseEscape(
     safePath: 'mutation({csrf:false})',
     site,
     source,
+    sourceBinding: sourceBindingForNode(file, call),
     ...(justification === undefined ? {} : { justification }),
   };
 }
@@ -567,6 +643,37 @@ function objectStringProperty(object: Node, propertyName: string): string | unde
 function shortSource(node: Node): string {
   const text = node.getText().replace(/\s+/g, ' ').trim();
   return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function sourceBindingForNode(
+  file: TrustEscapeSourceFileInput,
+  node: Node,
+): TrustEscapeExplain['sourceBinding'] {
+  const start = node.getStart();
+  const end = node.getEnd();
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end <= start ||
+    end > file.source.length
+  ) {
+    throw new TypeError(`trust escape ${file.fileName} has an invalid authored source span`);
+  }
+  return {
+    encoding: 'utf16le',
+    file: file.fileName,
+    sliceHash: `sha256:${hash('sha256', bufferFrom(file.source.slice(start, end), 'utf16le'), 'hex')}`,
+    sourceHash: `sha256:${hash('sha256', bufferFrom(file.source, 'utf16le'), 'hex')}`,
+    span: { end, start },
+  };
+}
+
+function sourceRootIdentity(
+  file: TrustEscapeSourceFileInput,
+  binding: TrustEscapeExplain['sourceBinding'],
+): string {
+  return `${file.fileName}:${binding.span.start}:${binding.span.end}`;
 }
 
 // =====================================================================================
@@ -1468,6 +1575,10 @@ interface RequestCallable {
   readonly compilerOwnedJsxEventHandlers?: boolean;
   /** Exact byte/span-bound compiler summary proved this helper under the attached input roles. */
   readonly compilerSemanticHelper?: boolean;
+  /** Helper parameters independently joined to compiler-proved request context authority. */
+  readonly compilerSemanticContextParameters?: readonly number[];
+  /** Helper parameters independently joined to compiler-proved ctx.fetch authority. */
+  readonly compilerSemanticEgressParameters?: readonly number[];
   /** Exact universally closed module-local helper reached only from declared framework roots. */
   readonly declaredRootHelper?: boolean;
   readonly declaration: Node;
@@ -1516,7 +1627,10 @@ interface RequestCompilerSemanticInventoryNode {
   readonly operationKinds: Set<ServerSecurityOperationKind>;
 }
 
+type RequestCompilerSemanticEgressProvenance = 'context' | 'fetch';
+
 interface RequestCompilerSemanticProofIndex {
+  readonly egressCallSpansByCallable: ReadonlyMap<string, ReadonlySet<string>>;
   readonly helperProofs: ReadonlyMap<string, readonly RequestCompilerSemanticHelperProof[]>;
   readonly invalidReason?: string;
   readonly rootsByCallable: ReadonlyMap<string, readonly SecuritySemanticGraph['roots'][number][]>;
@@ -1580,6 +1694,7 @@ interface RequestProvenanceSession {
     string,
     ReadonlySet<ServerSecurityOperationKind> | null
   >;
+  readonly compilerSemanticEgressCallSpans: ReadonlyMap<string, ReadonlySet<string>>;
   readonly declaredRootHelperActive: Set<string>;
   readonly declaredRootHelperMemo: Map<string, readonly RequestCallable[] | null>;
   readonly drizzleTablePristineMemo: Map<string, boolean>;
@@ -1624,6 +1739,7 @@ function createRequestProvenanceSession(
     string,
     readonly RequestCompilerSemanticHelperProof[]
   > = new Map(),
+  compilerSemanticEgressCallSpans: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
 ): RequestProvenanceSession {
   return {
     assignedBindingMemo: new Map(),
@@ -1639,6 +1755,7 @@ function createRequestProvenanceSession(
     carrierActive: new Set(),
     carrierMemo: new Map(),
     compilerSemanticDatabaseOperationsMemo: new Map(),
+    compilerSemanticEgressCallSpans,
     compilerSemanticHelperProofs,
     declaredRootHelperActive: new Set(),
     declaredRootHelperMemo: new Map(),
@@ -1714,13 +1831,21 @@ function requestProcessSinksForProject(
     compilerSecuritySemanticSources,
   );
   const taskBClosure = compilerTaskBClosure
-    ? requestTaskBClosureState(files, compilerTaskBClosure, semanticProofs)
+    ? requestTaskBClosureState(
+        files,
+        compilerTaskBClosure,
+        compilerSecuritySemanticSources,
+        semanticProofs,
+      )
     : undefined;
   const context: RequestProcessScanContext = {
     ...(buildConfigEntryFileName === undefined ? {} : { buildConfigEntryFileName }),
     facts: [],
     filesByPath,
-    provenance: createRequestProvenanceSession(semanticProofs.helperProofs),
+    provenance: createRequestProvenanceSession(
+      semanticProofs.helperProofs,
+      semanticProofs.egressCallSpansByCallable,
+    ),
     retainedConfigTargets: new Set(),
     scanned: new Set(),
     ...(taskBClosure === undefined ? {} : { taskBClosure }),
@@ -1809,6 +1934,7 @@ function requestProcessSinksForProject(
 function requestTaskBClosureState(
   files: readonly TrustEscapeSourceFileInput[],
   proof: CompilerTaskBClosureProof,
+  semanticSources: readonly CompilerSecuritySemanticSource[] | undefined,
   semanticProofs: RequestCompilerSemanticProofIndex,
 ): RequestTaskBClosureState {
   const invalid = (invalidReason: string): RequestTaskBClosureState => ({
@@ -1819,8 +1945,43 @@ function requestTaskBClosureState(
     invalidReason,
     semanticRootsByCallable: semanticProofs.rootsByCallable,
   });
-  if (proof.schema !== 'kovo-task-b-closure/v1') {
+  if (proof.schema !== 'kovo-task-b-closure/v2') {
     return invalid(`unsupported TASK B closure carrier ${String(proof.schema)}`);
+  }
+  if (
+    proof.finiteVerdict?.schema !== 'kovo-task-b-finite-verdict/v1' ||
+    (proof.finiteVerdict.status !== 'accepted' && proof.finiteVerdict.status !== 'rejected') ||
+    !Array.isArray(proof.finiteVerdict.blockingDiagnostics) ||
+    typeof proof.finiteVerdict.analysisCarrierSha256 !== 'string' ||
+    !/^sha256:[a-f0-9]{64}$/u.test(proof.finiteVerdict.analysisCarrierSha256)
+  ) {
+    return invalid('compiler finite verdict is malformed');
+  }
+  if (
+    proof.finiteVerdict.status !==
+    (proof.finiteVerdict.blockingDiagnostics.length === 0 ? 'accepted' : 'rejected')
+  ) {
+    return invalid('compiler finite verdict status disagrees with its diagnostic census');
+  }
+  if (proof.finiteVerdict.status !== 'accepted') {
+    return invalid(
+      `compiler finite verdict rejected ${proof.finiteVerdict.blockingDiagnostics.length} operation(s)`,
+    );
+  }
+  if (semanticSources === undefined) {
+    return invalid('compiler semantic source carrier is absent');
+  }
+  let analysisCarrierSha256: `sha256:${string}`;
+  try {
+    analysisCarrierSha256 = requestTaskBAnalysisCarrierSha256(
+      semanticSources,
+      proof.finiteVerdict.blockingDiagnostics,
+    );
+  } catch {
+    return invalid('compiler analysis carrier is not canonical JSON');
+  }
+  if (analysisCarrierSha256 !== proof.finiteVerdict.analysisCarrierSha256) {
+    return invalid('compiler analysis carrier does not match its finite verdict');
   }
   if (proof.files.length !== files.length) {
     return invalid(
@@ -1919,6 +2080,18 @@ function requestTaskBClosureState(
   };
 }
 
+function requestTaskBAnalysisCarrierSha256(
+  semanticSources: readonly CompilerSecuritySemanticSource[],
+  blockingDiagnostics: readonly StaticDiagnosticFact[],
+): `sha256:${string}` {
+  const canonical = canonicalJsonStringify({
+    blockingDiagnostics,
+    schema: 'kovo-task-b-analysis-carrier/v1',
+    semanticSources,
+  });
+  return `sha256:${hash('sha256', bufferFrom(canonical, 'utf8'), 'hex')}`;
+}
+
 function requestTaskBNormalizeModule(value: string): string {
   const normalized: string[] = [];
   for (const part of value.replaceAll('\\', '/').split('/')) {
@@ -2014,6 +2187,7 @@ function requestCompilerSemanticProofIndex(
   semanticSources: readonly CompilerSecuritySemanticSource[] | undefined,
 ): RequestCompilerSemanticProofIndex {
   const invalid = (invalidReason: string): RequestCompilerSemanticProofIndex => ({
+    egressCallSpansByCallable: new Map(),
     helperProofs: new Map(),
     invalidReason,
     rootsByCallable: new Map(),
@@ -2033,6 +2207,7 @@ function requestCompilerSemanticProofIndex(
   }
 
   const proofs = new Map<string, RequestCompilerSemanticHelperProof[]>();
+  const egressCallSpansByCallable = new Map<string, Set<string>>();
   const rootsByCallable = new Map<string, SecuritySemanticGraph['roots'][number][]>();
   const invalidProofKeys = new Set<string>();
   for (const [index, file] of files.entries()) {
@@ -2040,6 +2215,14 @@ function requestCompilerSemanticProofIndex(
     const semanticSource = sourcesByName.get(file.fileName);
     if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {
       return invalid(`compiler semantic source bytes do not match ${file.fileName}`);
+    }
+    if (
+      !requestCompilerSemanticSourceOperationsAreExact(
+        semanticSource.operations,
+        file.source.length,
+      )
+    ) {
+      return invalid(`compiler semantic source operations do not match ${file.fileName}`);
     }
     const callsBySpan = new Map<string, import('ts-morph').CallExpression>();
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
@@ -2049,20 +2232,88 @@ function requestCompilerSemanticProofIndex(
       }
       callsBySpan.set(key, call);
     }
+    const callablesBySpan = new Map<string, Node>();
+    for (const candidate of sourceFile.getDescendants()) {
+      if (!requestCompilerSemanticIsCallableNode(candidate)) continue;
+      const key = `${candidate.getStart()}:${candidate.getEnd()}`;
+      if (callablesBySpan.has(key)) {
+        return invalid(`compiler semantic callable census duplicates ${file.fileName}:${key}`);
+      }
+      callablesBySpan.set(key, candidate);
+    }
+    const graphRootNames = new Set<string>();
     for (const graph of semanticSource.graphs) {
-      if (graph.schema !== 'kovo-security-semantic-graph/v2') {
-        return invalid(`compiler semantic graph for ${file.fileName} is not version 2`);
+      for (const root of graph.roots) {
+        if (graphRootNames.has(root.root)) {
+          return invalid(`compiler semantic root census duplicates ${file.fileName}:${root.root}`);
+        }
+        graphRootNames.add(root.root);
+      }
+    }
+    for (const operation of semanticSource.operations) {
+      if (!graphRootNames.has(operation.root)) {
+        return invalid(
+          `compiler semantic source operation has no exact root ${file.fileName}:${operation.root}`,
+        );
+      }
+    }
+    for (const graph of semanticSource.graphs) {
+      if (
+        graph.schema !== 'kovo-security-semantic-graph/v3' ||
+        graph.sourceFile !== file.fileName
+      ) {
+        return invalid(
+          `compiler semantic graph for ${file.fileName} lacks its exact version-3 source identity`,
+        );
       }
       for (const root of graph.roots) {
         if (
           !requestCompilerSemanticRootFactsAreExact(
             root,
-            file.source.length,
+            file.source,
             file.fileName,
             callsBySpan,
+            callablesBySpan,
+            semanticSource.operations,
           )
         ) {
           return invalid(`compiler semantic root ${root.root} does not match ${file.fileName}`);
+        }
+        for (const trace of root.traces) {
+          if (
+            trace.verdict !== 'proved' ||
+            trace.sink.kind !== 'server.egress.request' ||
+            trace.sink.door !== 'ctx.fetch'
+          ) {
+            continue;
+          }
+          let callableSpan = root.binding.callableSpan;
+          if (trace.transfers.length > 0) {
+            const owners = root.helperInvocations.filter(
+              (invocation) =>
+                invocation.verdict === 'proved' &&
+                invocation.transfers.length === trace.transfers.length &&
+                invocation.transfers.every(
+                  (transfer, transferIndex) => transfer === trace.transfers[transferIndex],
+                ),
+            );
+            if (owners.length !== 1) {
+              return invalid(
+                `compiler semantic egress trace in ${file.fileName} has no exact callable owner`,
+              );
+            }
+            callableSpan = owners[0]!.callableSpan;
+          }
+          const callableKey = `${sourceFile.getFilePath()}:${callableSpan.start}:${callableSpan.end}`;
+          const spans = egressCallSpansByCallable.get(callableKey) ?? new Set<string>();
+          const spanKey = `${trace.sink.span.start}:${trace.sink.span.end}`;
+          if (spans.has(spanKey)) {
+            return invalid(
+              `compiler semantic egress trace in ${file.fileName} duplicates ${spanKey}`,
+            );
+          }
+          spans.add(spanKey);
+          egressCallSpansByCallable.set(callableKey, spans);
         }
         const rootKey = `${sourceFile.getFilePath()}:${root.binding.callableSpan.start}:${root.binding.callableSpan.end}`;
         const roots = rootsByCallable.get(rootKey) ?? [];
@@ -2102,15 +2353,18 @@ function requestCompilerSemanticProofIndex(
     }
   }
   for (const key of invalidProofKeys) proofs.delete(key);
-  return { helperProofs: proofs, rootsByCallable };
+  return { egressCallSpansByCallable, helperProofs: proofs, rootsByCallable };
 }
 
 function requestCompilerSemanticRootFactsAreExact(
   root: SecuritySemanticGraph['roots'][number],
-  sourceLength: number,
+  source: string,
   fileName: string,
   callsBySpan: ReadonlyMap<string, import('ts-morph').CallExpression>,
+  callablesBySpan: ReadonlyMap<string, Node>,
+  sourceOperations: readonly CompilerTaskBSourceOperation[],
 ): boolean {
+  const sourceLength = source.length;
   const binding = root.binding;
   const factoryCall = callsBySpan.get(
     `${binding.factoryCallSpan.start}:${binding.factoryCallSpan.end}`,
@@ -2190,6 +2444,20 @@ function requestCompilerSemanticRootFactsAreExact(
 
   for (const trace of root.traces) {
     if (trace.root !== root.root) return false;
+    if (
+      trace.verdict === 'proved' &&
+      (!requestCompilerSemanticSpanIsValid(trace.sink.span, sourceLength) ||
+        trace.sink.sliceHash !==
+          `sha256:${hash(
+            'sha256',
+            bufferFrom(source.slice(trace.sink.span.start, trace.sink.span.end), 'utf16le'),
+            'hex',
+          )}` ||
+        (trace.sink.door === 'ctx.fetch' &&
+          !requestCompilerSemanticCtxFetchTraceIsExact(root, trace, callsBySpan, callablesBySpan)))
+    ) {
+      return false;
+    }
     let node = invocationTree;
     for (const transfer of trace.transfers) {
       const child = node.children.get(transfer);
@@ -2209,6 +2477,82 @@ function requestCompilerSemanticRootFactsAreExact(
     ) {
       return false;
     }
+  }
+
+  const expectedCtxFetchTraces = requestCompilerSemanticExpectedCtxFetchTraces(
+    root,
+    callsBySpan,
+    callablesBySpan,
+  );
+  if (!expectedCtxFetchTraces) return false;
+  const actualCtxFetchTraceKeys = root.traces.flatMap((trace) => {
+    if (
+      trace.verdict !== 'proved' ||
+      trace.sink.kind !== 'server.egress.request' ||
+      trace.sink.door !== 'ctx.fetch'
+    ) {
+      return [];
+    }
+    return [requestCompilerSemanticCtxFetchTraceKey(trace.transfers, trace.sink.span)];
+  });
+  if (
+    new Set(actualCtxFetchTraceKeys).size !== actualCtxFetchTraceKeys.length ||
+    actualCtxFetchTraceKeys.length !== expectedCtxFetchTraces.size ||
+    actualCtxFetchTraceKeys.some((key) => !expectedCtxFetchTraces.has(key))
+  ) {
+    return false;
+  }
+
+  const expectedTerminalKeys = new Set(
+    sourceOperations.flatMap((operation) =>
+      operation.root === root.root &&
+      runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, operation.kind)
+        ? [requestCompilerSemanticTerminalInventoryKey(operation)]
+        : [],
+    ),
+  );
+  const actualTerminalKeys = new Set(
+    root.traces.flatMap((trace) =>
+      trace.verdict === 'proved' &&
+      runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, trace.sink.kind)
+        ? [
+            requestCompilerSemanticTerminalInventoryKey({
+              door: trace.sink.door,
+              kind: trace.sink.kind,
+              root: trace.root,
+              span: trace.sink.span,
+              ...(trace.sink.target === undefined ? {} : { target: trace.sink.target }),
+            }),
+          ]
+        : [],
+    ),
+  );
+  const actualTraceIdentities = new Set<string>();
+  for (const trace of root.traces) {
+    if (
+      trace.verdict !== 'proved' ||
+      !runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, trace.sink.kind)
+    ) {
+      continue;
+    }
+    const identity = canonicalJsonStringify([
+      requestCompilerSemanticTerminalInventoryKey({
+        door: trace.sink.door,
+        kind: trace.sink.kind,
+        root: trace.root,
+        span: trace.sink.span,
+        ...(trace.sink.target === undefined ? {} : { target: trace.sink.target }),
+      }),
+      trace.transfers,
+    ]);
+    if (actualTraceIdentities.has(identity)) return false;
+    actualTraceIdentities.add(identity);
+  }
+  if (
+    expectedTerminalKeys.size !== actualTerminalKeys.size ||
+    [...expectedTerminalKeys].some((key) => !actualTerminalKeys.has(key))
+  ) {
+    return false;
   }
 
   for (const summary of root.summaries) {
@@ -2231,6 +2575,527 @@ function requestCompilerSemanticRootFactsAreExact(
     }
   }
   return true;
+}
+
+function requestCompilerSemanticSourceOperationsAreExact(
+  operations: readonly CompilerTaskBSourceOperation[] | undefined,
+  sourceLength: number,
+): boolean {
+  if (!Array.isArray(operations)) return false;
+  const identities = new Set<string>();
+  for (const operation of operations) {
+    if (
+      !operation ||
+      typeof operation !== 'object' ||
+      typeof operation.root !== 'string' ||
+      operation.root.length === 0 ||
+      (operation.kind !== 'server.handler.root' &&
+        operation.kind !== 'server.helper.call' &&
+        !runtimeSetHas(REQUEST_COMPILER_SEMANTIC_TERMINAL_KINDS, operation.kind)) ||
+      operation.door !== securityOperationDoorForKind(operation.kind) ||
+      !requestCompilerSemanticSpanIsValid(operation.span, sourceLength) ||
+      (operation.target !== undefined && typeof operation.target !== 'string')
+    ) {
+      return false;
+    }
+    const identity = requestCompilerSemanticTerminalInventoryKey(operation);
+    if (identities.has(identity)) return false;
+    identities.add(identity);
+  }
+  return true;
+}
+
+function requestCompilerSemanticTerminalInventoryKey(
+  operation: CompilerTaskBSourceOperation,
+): string {
+  return canonicalJsonStringify([
+    operation.root,
+    operation.kind,
+    operation.door,
+    operation.span.start,
+    operation.span.end,
+    operation.target ?? null,
+  ]);
+}
+
+function requestCompilerSemanticIsCallableNode(node: Node): boolean {
+  return (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isMethodDeclaration(node)
+  );
+}
+
+function requestCompilerSemanticCtxFetchTraceIsExact(
+  root: SecuritySemanticGraph['roots'][number],
+  trace: SecuritySemanticGraph['roots'][number]['traces'][number],
+  callsBySpan: ReadonlyMap<string, import('ts-morph').CallExpression>,
+  callablesBySpan: ReadonlyMap<string, Node>,
+): boolean {
+  if (trace.verdict !== 'proved' || trace.sink.door !== 'ctx.fetch') return false;
+  const rootCallable = callablesBySpan.get(
+    `${root.binding.callableSpan.start}:${root.binding.callableSpan.end}`,
+  );
+  if (!rootCallable) return false;
+  const contextIndex = root.binding.factory === 'mutation' ? 2 : 1;
+  let owner = rootCallable;
+  let environment = requestCompilerSemanticEgressEnvironment(
+    rootCallable,
+    new Map([[contextIndex, 'context']]),
+  );
+  if (!environment) return false;
+
+  for (let depth = 0; depth < trace.transfers.length; depth += 1) {
+    const prefix = trace.transfers.slice(0, depth + 1);
+    const matches = root.helperInvocations.filter(
+      (invocation) =>
+        invocation.verdict === 'proved' &&
+        invocation.transfers.length === prefix.length &&
+        invocation.transfers.every((transfer, index) => transfer === prefix[index]),
+    );
+    // A transfer identity that collapses multiple call sites cannot identify which authority
+    // reached this terminal. Close rather than accepting a convenient carrier-selected path.
+    if (matches.length !== 1) return false;
+    const invocation = matches[0]!;
+    const call = callsBySpan.get(`${invocation.callSpan.start}:${invocation.callSpan.end}`);
+    const callable = callablesBySpan.get(
+      `${invocation.callableSpan.start}:${invocation.callableSpan.end}`,
+    );
+    if (
+      !call ||
+      !callable ||
+      !requestCompilerSemanticNodeBelongsToCallable(call, owner) ||
+      !requestCompilerSemanticCallResolvesToCallable(call, callable)
+    ) {
+      return false;
+    }
+    const parameters = requestCompilerSemanticCallableParameters(callable);
+    if (!parameters) return false;
+    const argumentsList = call.getArguments();
+    const seeds = new Map<number, RequestCompilerSemanticEgressProvenance>();
+    const egressAuthorityInputs: string[] = [];
+    for (let index = 0; index < argumentsList.length; index += 1) {
+      const argument = argumentsList[index];
+      if (!argument || Node.isSpreadElement(argument)) return false;
+      const provenance = requestCompilerSemanticEgressExpression(argument, environment);
+      if (!provenance) continue;
+      seeds.set(index, provenance);
+      egressAuthorityInputs.push(
+        `arg${index}=${provenance === 'context' ? 'context' : 'operation:server.egress.request'}`,
+      );
+    }
+    const claimedEgressInputs = invocation.authorityInputs.filter(
+      (authority) =>
+        authority.endsWith('=context') || authority.endsWith('=operation:server.egress.request'),
+    );
+    if (
+      egressAuthorityInputs.length !== claimedEgressInputs.length ||
+      egressAuthorityInputs.some((authority, index) => authority !== claimedEgressInputs[index]) ||
+      invocation.callable !== `local:${requestCompilerSemanticCallableName(callable) ?? ''}` ||
+      prefix[depth] !== `${invocation.callable}[${invocation.authorityInputs.join(',')}]`
+    ) {
+      return false;
+    }
+    owner = callable;
+    environment = requestCompilerSemanticEgressEnvironment(callable, seeds);
+    if (!environment) return false;
+  }
+
+  const sinkCall = callsBySpan.get(`${trace.sink.span.start}:${trace.sink.span.end}`);
+  return !!(
+    sinkCall &&
+    !sinkCall.getQuestionDotTokenNode() &&
+    requestCompilerSemanticNodeBelongsToCallable(sinkCall, owner) &&
+    requestCompilerSemanticEgressExpression(sinkCall.getExpression(), environment) === 'fetch' &&
+    typeof trace.sink.target === 'string' &&
+    requestCompilerSemanticExpressionPath(sinkCall.getExpression()) === trace.sink.target
+  );
+}
+
+function requestCompilerSemanticExpectedCtxFetchTraces(
+  root: SecuritySemanticGraph['roots'][number],
+  callsBySpan: ReadonlyMap<string, import('ts-morph').CallExpression>,
+  callablesBySpan: ReadonlyMap<string, Node>,
+): ReadonlySet<string> | undefined {
+  const rootCallable = callablesBySpan.get(
+    `${root.binding.callableSpan.start}:${root.binding.callableSpan.end}`,
+  );
+  if (!rootCallable) return undefined;
+  const contextIndex = root.binding.factory === 'mutation' ? 2 : 1;
+  const rootParameters = requestCompilerSemanticCallableParameters(rootCallable);
+  if (!rootParameters) return undefined;
+  // A handler with no context slot has an empty egress language. It must reject any carried
+  // ctx.fetch trace, but its otherwise authority-free semantic graph remains a valid proof.
+  if (rootParameters[contextIndex] === undefined) return new Set();
+  const environment = requestCompilerSemanticEgressEnvironment(
+    rootCallable,
+    new Map([[contextIndex, 'context']]),
+  );
+  if (!environment) return undefined;
+  const result = new Set<string>();
+  const active = new Set<string>();
+  let remaining = 1_024;
+  const visit = (
+    callable: Node,
+    aliases: ReadonlyMap<string, RequestCompilerSemanticEgressProvenance>,
+    transfers: readonly string[],
+  ): boolean => {
+    remaining -= 1;
+    if (remaining < 0 || transfers.length > 16) return false;
+    const activeKey = `${callable.getStart()}:${callable.getEnd()}:${transfers.join('\u0000')}`;
+    if (active.has(activeKey)) return false;
+    active.add(activeKey);
+    try {
+      const body = requestCompilerSemanticCallableBody(callable);
+      if (!body || requestCompilerSemanticHasUnconsumedEgress(body, aliases)) return false;
+      const calls = [...callsBySpan.values()]
+        .filter((call) => requestCompilerSemanticNodeBelongsToCallable(call, callable))
+        .sort((left, right) => left.getStart() - right.getStart());
+      for (const call of calls) {
+        const calleeProvenance = requestCompilerSemanticEgressExpression(
+          call.getExpression(),
+          aliases,
+        );
+        if (calleeProvenance === 'fetch') {
+          if (call.getQuestionDotTokenNode()) return false;
+          result.add(
+            requestCompilerSemanticCtxFetchTraceKey(transfers, {
+              end: call.getEnd(),
+              start: call.getStart(),
+            }),
+          );
+          continue;
+        }
+        const argumentsList = call.getArguments();
+        const seeds = new Map<number, RequestCompilerSemanticEgressProvenance>();
+        const derivedEgressInputs: string[] = [];
+        for (let index = 0; index < argumentsList.length; index += 1) {
+          const argument = argumentsList[index];
+          if (!argument || Node.isSpreadElement(argument)) return false;
+          const provenance = requestCompilerSemanticEgressExpression(argument, aliases);
+          if (!provenance) continue;
+          seeds.set(index, provenance);
+          derivedEgressInputs.push(
+            `arg${index}=${
+              provenance === 'context' ? 'context' : 'operation:server.egress.request'
+            }`,
+          );
+        }
+        if (derivedEgressInputs.length === 0) continue;
+        const nested = requestCompilerSemanticCallableForCall(call, callablesBySpan);
+        if (!nested) return false;
+        const nestedName = requestCompilerSemanticCallableName(nested);
+        if (!nestedName) return false;
+        const candidates = root.helperInvocations.filter(
+          (invocation) =>
+            invocation.verdict === 'proved' &&
+            invocation.callSpan.start === call.getStart() &&
+            invocation.callSpan.end === call.getEnd() &&
+            invocation.callableSpan.start === nested.getStart() &&
+            invocation.callableSpan.end === nested.getEnd() &&
+            invocation.callable === `local:${nestedName}` &&
+            invocation.transfers.length === transfers.length + 1 &&
+            invocation.transfers
+              .slice(0, transfers.length)
+              .every((transfer, index) => transfer === transfers[index]) &&
+            invocation.transfers[transfers.length] ===
+              `${invocation.callable}[${invocation.authorityInputs.join(',')}]` &&
+            derivedEgressInputs.every((authority) =>
+              invocation.authorityInputs.includes(authority),
+            ) &&
+            invocation.authorityInputs.filter(
+              (authority) =>
+                authority.endsWith('=context') ||
+                authority.endsWith('=operation:server.egress.request'),
+            ).length === derivedEgressInputs.length,
+        );
+        if (candidates.length !== 1) return false;
+        const nestedEnvironment = requestCompilerSemanticEgressEnvironment(nested, seeds);
+        if (!nestedEnvironment || !visit(nested, nestedEnvironment, candidates[0]!.transfers)) {
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      active.delete(activeKey);
+    }
+  };
+  return visit(rootCallable, environment, []) ? result : undefined;
+}
+
+function requestCompilerSemanticCtxFetchTraceKey(
+  transfers: readonly string[],
+  span: { readonly end: number; readonly start: number },
+): string {
+  return `${transfers.join('\u0000')}\u0001${span.start}:${span.end}`;
+}
+
+function requestCompilerSemanticCallableForCall(
+  call: import('ts-morph').CallExpression,
+  callablesBySpan: ReadonlyMap<string, Node>,
+): Node | undefined {
+  const expression = unwrapStaticExpression(call.getExpression());
+  if (!Node.isIdentifier(expression)) return undefined;
+  const symbol = requestIdentifierValueSymbol(expression) ?? expression.getSymbol();
+  if (!symbol) return undefined;
+  const key = requestSymbolKey(symbol);
+  const matches = [...callablesBySpan.values()].filter((candidate) => {
+    const binding = requestCompilerSemanticCallableBindingSymbol(candidate);
+    return binding !== undefined && requestSymbolKey(binding) === key;
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function requestCompilerSemanticCallableParameters(
+  node: Node,
+): readonly import('ts-morph').ParameterDeclaration[] | undefined {
+  if (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isMethodDeclaration(node)
+  ) {
+    return node.getParameters();
+  }
+  return undefined;
+}
+
+function requestCompilerSemanticCallableBody(node: Node): Node | undefined {
+  if (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isMethodDeclaration(node)
+  ) {
+    return node.getBody();
+  }
+  return undefined;
+}
+
+function requestCompilerSemanticHasUnconsumedEgress(
+  node: Node,
+  environment: ReadonlyMap<string, RequestCompilerSemanticEgressProvenance>,
+): boolean {
+  if (Node.isVariableDeclaration(node)) {
+    const initializer = node.getInitializer();
+    if (!initializer) return false;
+    const provenance = requestCompilerSemanticEgressExpression(initializer, environment);
+    if (provenance !== undefined) {
+      return !requestCompilerSemanticPatternHasEgressBinding(
+        node.getNameNode(),
+        provenance,
+        environment,
+      );
+    }
+    return requestCompilerSemanticHasUnconsumedEgress(initializer, environment);
+  }
+  if (Node.isCallExpression(node)) {
+    const calleeProvenance = requestCompilerSemanticEgressExpression(
+      node.getExpression(),
+      environment,
+    );
+    if (calleeProvenance === 'fetch' && node.getQuestionDotTokenNode()) return true;
+    if (calleeProvenance !== undefined && calleeProvenance !== 'fetch') {
+      return true;
+    }
+    for (const argument of node.getArguments()) {
+      if (Node.isSpreadElement(argument)) {
+        if (requestCompilerSemanticHasUnconsumedEgress(argument.getExpression(), environment)) {
+          return true;
+        }
+        continue;
+      }
+      if (
+        requestCompilerSemanticEgressExpression(argument, environment) === undefined &&
+        requestCompilerSemanticHasUnconsumedEgress(argument, environment)
+      ) {
+        return true;
+      }
+    }
+    return calleeProvenance === undefined
+      ? requestCompilerSemanticHasUnconsumedEgress(node.getExpression(), environment)
+      : false;
+  }
+  if (Node.isPropertyAccessExpression(node)) {
+    const receiver = requestCompilerSemanticEgressExpression(node.getExpression(), environment);
+    if (receiver === 'context' && node.getName() !== 'fetch') return false;
+  }
+  if (requestCompilerSemanticEgressExpression(node, environment) !== undefined) return true;
+  for (const child of node.getChildren()) {
+    if (requestCompilerSemanticHasUnconsumedEgress(child, environment)) return true;
+  }
+  return false;
+}
+
+function requestCompilerSemanticPatternHasEgressBinding(
+  pattern: Node,
+  provenance: RequestCompilerSemanticEgressProvenance,
+  environment: ReadonlyMap<string, RequestCompilerSemanticEgressProvenance>,
+): boolean {
+  if (Node.isIdentifier(pattern)) {
+    const symbol = pattern.getSymbol();
+    return !!symbol && environment.get(requestSymbolKey(symbol)) === provenance;
+  }
+  if (!Node.isObjectBindingPattern(pattern) || provenance !== 'context') return false;
+  return pattern.getElements().every((element) => {
+    if (element.getDotDotDotToken() || element.getInitializer()) return false;
+    const member = staticMemberName(element.getPropertyNameNode() ?? element.getNameNode());
+    if (member !== 'fetch') return true;
+    const name = element.getNameNode();
+    if (!Node.isIdentifier(name)) return false;
+    const symbol = name.getSymbol();
+    return !!symbol && environment.get(requestSymbolKey(symbol)) === 'fetch';
+  });
+}
+
+function requestCompilerSemanticNodeBelongsToCallable(node: Node, callable: Node): boolean {
+  let current: Node | undefined = node;
+  while (current) {
+    if (requestNodesAreSame(current, callable)) return true;
+    if (!requestNodesAreSame(current, node) && requestCompilerSemanticIsCallableNode(current)) {
+      return false;
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
+function requestCompilerSemanticCallResolvesToCallable(
+  call: import('ts-morph').CallExpression,
+  callable: Node,
+): boolean {
+  const expression = unwrapStaticExpression(call.getExpression());
+  if (!Node.isIdentifier(expression)) return false;
+  const callee = requestIdentifierValueSymbol(expression) ?? expression.getSymbol();
+  const expected = requestCompilerSemanticCallableBindingSymbol(callable);
+  return !!callee && !!expected && requestSymbolKey(callee) === requestSymbolKey(expected);
+}
+
+function requestCompilerSemanticCallableBindingSymbol(
+  node: Node,
+): import('ts-morph').Symbol | undefined {
+  if (Node.isFunctionDeclaration(node)) return node.getNameNode()?.getSymbol();
+  if (Node.isFunctionExpression(node) && node.getNameNode()) return node.getNameNode()!.getSymbol();
+  const parent = node.getParent();
+  if (Node.isVariableDeclaration(parent) && Node.isIdentifier(parent.getNameNode())) {
+    return parent.getNameNode().getSymbol();
+  }
+  return undefined;
+}
+
+function requestCompilerSemanticEgressEnvironment(
+  callable: Node,
+  parameterSeeds: ReadonlyMap<number, RequestCompilerSemanticEgressProvenance>,
+): Map<string, RequestCompilerSemanticEgressProvenance> | undefined {
+  const parameters = requestCompilerSemanticCallableParameters(callable);
+  if (!parameters) return undefined;
+  const environment = new Map<string, RequestCompilerSemanticEgressProvenance>();
+  for (const [index, provenance] of parameterSeeds) {
+    const parameter = parameters[index];
+    if (
+      !parameter ||
+      parameter.getInitializer() ||
+      parameter.isRestParameter() ||
+      !requestCompilerSemanticBindEgressPattern(parameter.getNameNode(), provenance, environment)
+    ) {
+      return undefined;
+    }
+  }
+
+  const declarations = callable
+    .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+    .filter(
+      (declaration) =>
+        requestCompilerSemanticNodeBelongsToCallable(declaration, callable) &&
+        declaration.getVariableStatement()?.getDeclarationKind() === VariableDeclarationKind.Const,
+    );
+  for (let pass = 0; pass <= declarations.length; pass += 1) {
+    let changed = false;
+    for (const declaration of declarations) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const provenance = requestCompilerSemanticEgressExpression(initializer, environment);
+      if (!provenance) continue;
+      const before = environment.size;
+      if (
+        !requestCompilerSemanticBindEgressPattern(
+          declaration.getNameNode(),
+          provenance,
+          environment,
+        )
+      ) {
+        return undefined;
+      }
+      if (environment.size !== before) changed = true;
+    }
+    if (!changed) break;
+  }
+  return environment;
+}
+
+function requestCompilerSemanticBindEgressPattern(
+  pattern: Node,
+  provenance: RequestCompilerSemanticEgressProvenance,
+  environment: Map<string, RequestCompilerSemanticEgressProvenance>,
+): boolean {
+  if (Node.isIdentifier(pattern)) {
+    const symbol = pattern.getSymbol();
+    if (!symbol || requestAssignedBindingProjections(symbol).length !== 0) return false;
+    const key = requestSymbolKey(symbol);
+    const existing = environment.get(key);
+    if (existing !== undefined && existing !== provenance) return false;
+    environment.set(key, provenance);
+    return true;
+  }
+  if (!Node.isObjectBindingPattern(pattern) || provenance !== 'context') return false;
+  for (const element of pattern.getElements()) {
+    if (element.getDotDotDotToken() || element.getInitializer()) return false;
+    const member = staticMemberName(element.getPropertyNameNode() ?? element.getNameNode());
+    if (member !== 'fetch' || !Node.isIdentifier(element.getNameNode())) continue;
+    if (!requestCompilerSemanticBindEgressPattern(element.getNameNode(), 'fetch', environment)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function requestCompilerSemanticEgressExpression(
+  expression: Node,
+  environment: ReadonlyMap<string, RequestCompilerSemanticEgressProvenance>,
+): RequestCompilerSemanticEgressProvenance | undefined {
+  const current = unwrapStaticExpression(expression);
+  if (Node.isIdentifier(current)) {
+    const symbol = requestIdentifierValueSymbol(current) ?? current.getSymbol();
+    return symbol ? environment.get(requestSymbolKey(symbol)) : undefined;
+  }
+  if (Node.isPropertyAccessExpression(current)) {
+    const member = staticMemberName(current.getNameNode());
+    const receiver = current.getExpression();
+    if (
+      member === 'fetch' &&
+      requestCompilerSemanticEgressExpression(receiver, environment) === 'context' &&
+      requestAssignedMemberExpressions(receiver, 'fetch').length === 0
+    ) {
+      return 'fetch';
+    }
+  }
+  return undefined;
+}
+
+function requestCompilerSemanticExpressionPath(expression: Node): string | undefined {
+  const current = unwrapStaticExpression(expression);
+  if (Node.isIdentifier(current)) return current.getText();
+  if (Node.isPropertyAccessExpression(current)) {
+    const receiver = requestCompilerSemanticExpressionPath(current.getExpression());
+    return receiver === undefined ? undefined : `${receiver}.${current.getName()}`;
+  }
+  if (Node.isElementAccessExpression(current)) {
+    const member = staticMemberName(current.getArgumentExpression());
+    const receiver = requestCompilerSemanticExpressionPath(current.getExpression());
+    return member === undefined || receiver === undefined ? undefined : `${receiver}.${member}`;
+  }
+  return undefined;
 }
 
 function requestCompilerSemanticRootForFactoryCall(
@@ -15283,6 +16148,11 @@ function scanRequestDestructuringPattern(
   }
 
   if (Node.isObjectBindingPattern(node)) {
+    if (
+      requestDestructuringIsExactCompilerEgressBinding(node, source, callable, context.provenance)
+    ) {
+      return;
+    }
     scanRequestGetterConsumer(source, node, callable, context, 'destructuring-getters');
     for (const element of node.getElements()) {
       if (Node.isOmittedExpression(element)) continue;
@@ -15319,6 +16189,48 @@ function scanRequestDestructuringPattern(
       }
     }
   }
+}
+
+function requestDestructuringIsExactCompilerEgressBinding(
+  pattern: import('ts-morph').ObjectBindingPattern,
+  source: Node,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): boolean {
+  if (!requestExpressionIsFrameworkContextParameter(source, callable)) return false;
+  const callableKey = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.declaration.getEnd()}`;
+  const exactSpans = session.compilerSemanticEgressCallSpans.get(callableKey);
+  if (!exactSpans || exactSpans.size === 0) return false;
+  const aliases: import('ts-morph').Symbol[] = [];
+  for (const element of pattern.getElements()) {
+    if (
+      element.getDotDotDotToken() ||
+      element.getInitializer() ||
+      staticMemberName(element.getPropertyNameNode() ?? element.getNameNode()) !== 'fetch' ||
+      !Node.isIdentifier(element.getNameNode())
+    ) {
+      return false;
+    }
+    const symbol = element.getNameNode().getSymbol();
+    if (!symbol || requestAssignedBindingProjections(symbol, session).length !== 0) return false;
+    aliases.push(symbol);
+  }
+  if (aliases.length === 0) return false;
+  const matched = new Set<string>();
+  for (const call of callable.body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (
+      !nodeBelongsToRequestCallable(call, callable) ||
+      !exactSpans.has(`${call.getStart()}:${call.getEnd()}`)
+    ) {
+      continue;
+    }
+    const target = unwrapStaticExpression(call.getExpression());
+    if (!Node.isIdentifier(target)) continue;
+    const symbol = requestIdentifierValueSymbol(target) ?? target.getSymbol();
+    const match = aliases.find((alias) => alias === symbol);
+    if (match) matched.add(requestSymbolKey(match));
+  }
+  return aliases.every((alias) => matched.has(requestSymbolKey(alias)));
 }
 
 function requestDestructuredValueCandidates(
@@ -30187,15 +31099,26 @@ function requestExpressionIsExactFrameworkContext(
   callable: RequestCallable,
   session: RequestProvenanceSession,
 ): boolean {
+  return (
+    requestExpressionIsFrameworkContextParameter(expression, callable) &&
+    requestRootCapabilityMethodIsPristine(expression, callable, session)
+  );
+}
+
+function requestExpressionIsFrameworkContextParameter(
+  expression: Node,
+  callable: RequestCallable,
+): boolean {
   const node = unwrapStaticExpression(expression);
   if (!Node.isIdentifier(node)) return false;
   const symbol = node.getSymbol();
   if (!symbol) return false;
-  const contextIndexes = new Set(
-    (callable.rootCarriers ?? [])
+  const contextIndexes = new Set([
+    ...(callable.rootCarriers ?? [])
       .filter((carrier) => carrier.carrier === 'context')
       .map((carrier) => carrier.index),
-  );
+    ...(callable.compilerSemanticContextParameters ?? []),
+  ]);
   // Durable task `run(input, ctx)` is the normative positive egress door (SPEC §6.6). Its
   // context intentionally is not a request-wire carrier, so name that exact callback slot here
   // instead of broadening every generic capability parameter into a fetch authority.
@@ -30214,7 +31137,7 @@ function requestExpressionIsExactFrameworkContext(
     ) {
       continue;
     }
-    return requestRootCapabilityMethodIsPristine(node, callable, session);
+    return true;
   }
   return false;
 }
@@ -30244,8 +31167,22 @@ function requestReviewedFetchInvocation(
 ): RequestNormalizedInvocation | undefined {
   return (
     requestGovernedFetchInvocation(call) ??
-    requestExactFrameworkContextFetchInvocation(call, callable, session)
+    requestExactFrameworkContextFetchInvocation(call, callable, session) ??
+    requestExactCompilerSemanticHelperFetchInvocation(call, callable, session)
   );
+}
+
+function requestExactCompilerSemanticHelperFetchInvocation(
+  call: import('ts-morph').CallExpression,
+  callable: RequestCallable,
+  session: RequestProvenanceSession,
+): RequestNormalizedInvocation | undefined {
+  if (call.getQuestionDotTokenNode()) return undefined;
+  const callableKey = `${callable.declaration.getSourceFile().getFilePath()}:${callable.declaration.getStart()}:${callable.declaration.getEnd()}`;
+  const exactSpans = session.compilerSemanticEgressCallSpans.get(callableKey);
+  return exactSpans?.has(`${call.getStart()}:${call.getEnd()}`)
+    ? requestNormalizedCall(call)
+    : undefined;
 }
 
 function requestCallIsReviewedFetch(
@@ -32836,17 +33773,28 @@ function requestExactClosedDeclaredRootHelperContexts(
       const roleKey = roles.join(',');
       if (expectedRoles !== undefined && expectedRoles !== roleKey) return reject();
       expectedRoles = roleKey;
+      const semanticProof = requestCompilerSemanticProofForContext(
+        compilerProofs,
+        roles,
+        declaration,
+        root,
+        call,
+        session,
+      );
       contexts.push({
         ...direct,
-        ...(requestCompilerSemanticProofMatchesContext(
-          compilerProofs,
-          roles,
-          declaration,
-          root,
-          call,
-          session,
-        )
-          ? { compilerSemanticHelper: true }
+        ...(semanticProof
+          ? {
+              compilerSemanticContextParameters: requestCompilerSemanticAuthorityParameterIndexes(
+                semanticProof.authorityInputs,
+                'context',
+              ),
+              compilerSemanticEgressParameters: requestCompilerSemanticAuthorityParameterIndexes(
+                semanticProof.authorityInputs,
+                'operation:server.egress.request',
+              ),
+              compilerSemanticHelper: true,
+            }
           : {}),
         declaredRootHelper: true,
         rootParameterRoles: roles,
@@ -32873,14 +33821,14 @@ function requestCompilerSemanticProofsForDeclaration(
   return session.compilerSemanticHelperProofs.get(key) ?? [];
 }
 
-function requestCompilerSemanticProofMatchesContext(
+function requestCompilerSemanticProofForContext(
   proofs: readonly RequestCompilerSemanticHelperProof[],
   roles: readonly RequestRootParameterRole[],
   declaration: Node,
   root: RequestCallable,
   call: import('ts-morph').CallExpression,
   session: RequestProvenanceSession,
-): boolean {
+): RequestCompilerSemanticHelperProof | undefined {
   // SPEC §6.6 normalized-helper provenance: this Drizzle consumer uses semantic facts only to
   // admit the exact DB/plain-data helper grammar. Reconstruct the root, authority arguments, and
   // complete DB terminal projection from the authored AST; non-DB terminal claims remain audit
@@ -32888,18 +33836,18 @@ function requestCompilerSemanticProofMatchesContext(
   const callableName = requestCompilerSemanticCallableName(declaration);
   const rootFactory = root.rootFactory;
   if (!callableName || !rootFactory || !requestCompilerSemanticRootCallbackMatches(root)) {
-    return false;
+    return undefined;
   }
   const rootFactoryCall = requestExactDirectRootFactoryCall(root, session);
-  if (!rootFactoryCall) return false;
+  if (!rootFactoryCall) return undefined;
   const expectedAuthorityInputs = requestCompilerSemanticAuthorityInputsForCall(call, root, roles);
-  if (!expectedAuthorityInputs) return false;
+  if (!expectedAuthorityInputs) return undefined;
   const expectedDatabaseOperations = requestCompilerSemanticDatabaseOperationsForDeclaration(
     declaration,
     roles,
     session,
   );
-  if (!expectedDatabaseOperations) return false;
+  if (!expectedDatabaseOperations) return undefined;
   const exactRoot = proofs[0]?.root;
   if (
     !exactRoot ||
@@ -32907,9 +33855,9 @@ function requestCompilerSemanticProofMatchesContext(
     exactRoot.length === rootFactory.length + 1 ||
     proofs.some((proof) => proof.root !== exactRoot)
   ) {
-    return false;
+    return undefined;
   }
-  return proofs.some((proof) => {
+  return proofs.find((proof) => {
     const binding = proof.rootBinding;
     if (
       proof.callable !== `local:${callableName}` ||
@@ -32939,6 +33887,20 @@ function requestCompilerSemanticProofMatchesContext(
     }
     return true;
   });
+}
+
+function requestCompilerSemanticAuthorityParameterIndexes(
+  authorityInputs: readonly string[],
+  authority: string,
+): readonly number[] {
+  const result: number[] = [];
+  for (const input of authorityInputs) {
+    const match = /^arg(\d+)=(.+)$/u.exec(input);
+    if (match?.[2] !== authority) continue;
+    const index = Number(match[1]);
+    if (Number.isSafeInteger(index)) result.push(index);
+  }
+  return result;
 }
 
 function requestCompilerSemanticDatabaseOperationsForDeclaration(
@@ -33043,6 +34005,12 @@ function requestCompilerSemanticExactArgumentProvenance(
       (member === 'headers' || member === 'request' || member === 'respond' || member === 'storage')
     ) {
       return member;
+    }
+    if (
+      member === 'fetch' &&
+      requestExpressionIsDirectRootParameterWithRole(receiver, root, 'capability')
+    ) {
+      return 'operation:server.egress.request';
     }
   }
   if (requestExpressionIsDirectRootParameterWithRole(node, root, 'capability')) return 'context';
@@ -33149,6 +34117,39 @@ function verifyRequestTaskBSemanticRoot(
     return;
   }
   const root = matches[0]!;
+  const independentlyReviewedFetchSpans = callable.body
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .filter(
+      (call) =>
+        nodeBelongsToRequestCallable(call, callable) &&
+        requestCallIsReviewedFetch(call, callable, context.provenance),
+    )
+    .map((call) => `${call.getStart()}:${call.getEnd()}`)
+    .sort();
+  const carriedDirectFetchSpans = root.traces
+    .flatMap((trace) => {
+      if (
+        trace.verdict !== 'proved' ||
+        trace.sink.kind !== 'server.egress.request' ||
+        trace.sink.door !== 'ctx.fetch' ||
+        trace.transfers.length !== 0
+      ) {
+        return [];
+      }
+      return [`${trace.sink.span.start}:${trace.sink.span.end}`];
+    })
+    .sort();
+  if (
+    independentlyReviewedFetchSpans.length !== carriedDirectFetchSpans.length ||
+    independentlyReviewedFetchSpans.some((span, index) => span !== carriedDirectFetchSpans[index])
+  ) {
+    appendRequestTaskBRouteFailure(
+      context,
+      callable.declaration,
+      `root=${root.root}; transfers=<direct>; sink=ctx.fetch; verdict=closed:semantic egress traces differ from exact reviewed fetch calls`,
+    );
+    return;
+  }
   const closed = root.traces.find((trace) => trace.verdict === 'closed');
   if (closed) {
     appendRequestTaskBRouteFailure(
@@ -35198,20 +36199,29 @@ function requestExactDirectRootDefinition(
   session: RequestProvenanceSession,
 ): import('ts-morph').ObjectLiteralExpression | undefined {
   const owner = callable.declaration;
-  let property: import('ts-morph').MethodDeclaration | import('ts-morph').PropertyAssignment;
+  let property:
+    | import('ts-morph').MethodDeclaration
+    | import('ts-morph').PropertyAssignment
+    | import('ts-morph').ShorthandPropertyAssignment;
   let definition: Node | undefined;
   if (Node.isMethodDeclaration(owner)) {
     property = owner;
     definition = owner.getParent();
   } else {
     const parent = owner.getParent();
-    if (!Node.isPropertyAssignment(parent)) return undefined;
-    const initializer = parent.getInitializer();
-    if (!initializer || !requestNodesAreSame(unwrapStaticExpression(initializer), owner)) {
-      return undefined;
+    if (Node.isPropertyAssignment(parent)) {
+      const initializer = parent.getInitializer();
+      if (!initializer || !requestNodesAreSame(unwrapStaticExpression(initializer), owner)) {
+        return undefined;
+      }
+      property = parent;
+      definition = parent.getParent();
+    } else {
+      const referenced = requestExactSameFileRootReference(owner, session);
+      if (!referenced) return undefined;
+      property = referenced.property;
+      definition = referenced.definition;
     }
-    property = parent;
-    definition = parent.getParent();
   }
   if (
     !Node.isObjectLiteralExpression(definition) ||
@@ -35236,6 +36246,102 @@ function requestExactDirectRootDefinition(
     (invocation) => invocation.factory.exportName === callable.rootFactory,
   );
   return exactRoot ? definition : undefined;
+}
+
+interface RequestExactSameFileRootReference {
+  readonly definition: import('ts-morph').ObjectLiteralExpression;
+  readonly property:
+    | import('ts-morph').PropertyAssignment
+    | import('ts-morph').ShorthandPropertyAssignment;
+}
+
+const REQUEST_SAME_FILE_VALUE_REFERENCE_INDEX = new WeakMap<
+  object,
+  ReadonlyMap<string, readonly import('ts-morph').Identifier[]>
+>();
+
+/**
+ * SPEC §6.6: the finite security IR admits one exact immutable same-file callable reference. Keep
+ * this independent consumer equally narrow: one const declaration, no authored reassignment or
+ * alias use, and exactly one direct handler/load/run property whose factory identity is checked by
+ * the caller. Any ambiguity retains the closed TASK-B verdict.
+ */
+function requestExactSameFileRootReference(
+  owner: Node,
+  session: RequestProvenanceSession,
+): RequestExactSameFileRootReference | undefined {
+  const declaration = owner.getParentIfKind(SyntaxKind.VariableDeclaration);
+  const name = declaration?.getNameNode();
+  const initializer = declaration?.getInitializer();
+  if (
+    !declaration ||
+    !name ||
+    !Node.isIdentifier(name) ||
+    declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const ||
+    !initializer ||
+    !requestNodesAreSame(unwrapStaticExpression(initializer), owner)
+  ) {
+    return undefined;
+  }
+  const symbol = requestIdentifierValueSymbol(name) ?? name.getSymbol();
+  if (
+    !symbol ||
+    symbol.getDeclarations().length !== 1 ||
+    !requestNodesAreSame(symbol.getDeclarations()[0], declaration) ||
+    requestAssignedBindingProjections(symbol, session).length > 0
+  ) {
+    return undefined;
+  }
+
+  const references = requestSameFileValueReferences(symbol, owner.getSourceFile()).filter(
+    (reference) => !requestNodesAreSame(reference, name),
+  );
+  if (references.length !== 1 || !requestProvenanceStep(session, references[0]!)) {
+    return undefined;
+  }
+  const reference = references[0]!;
+  const parent = reference.getParent();
+  let property:
+    | import('ts-morph').PropertyAssignment
+    | import('ts-morph').ShorthandPropertyAssignment;
+  if (Node.isPropertyAssignment(parent)) {
+    const propertyInitializer = parent.getInitializer();
+    if (
+      !propertyInitializer ||
+      !requestNodesAreSame(unwrapStaticExpression(propertyInitializer), reference)
+    ) {
+      return undefined;
+    }
+    property = parent;
+  } else if (Node.isShorthandPropertyAssignment(parent)) {
+    if (!requestNodesAreSame(parent.getNameNode(), reference)) return undefined;
+    property = parent;
+  } else {
+    return undefined;
+  }
+  const definition = property.getParent();
+  return Node.isObjectLiteralExpression(definition) ? { definition, property } : undefined;
+}
+
+function requestSameFileValueReferences(
+  symbol: NonNullable<ReturnType<Node['getSymbol']>>,
+  sourceFile: SourceFile,
+): readonly import('ts-morph').Identifier[] {
+  let index = REQUEST_SAME_FILE_VALUE_REFERENCE_INDEX.get(sourceFile);
+  if (!index) {
+    const mutable = new Map<string, import('ts-morph').Identifier[]>();
+    for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      const valueSymbol = requestIdentifierValueSymbol(identifier) ?? identifier.getSymbol();
+      if (!valueSymbol) continue;
+      const key = requestSymbolKey(valueSymbol);
+      const values = mutable.get(key) ?? [];
+      values.push(identifier);
+      mutable.set(key, values);
+    }
+    index = mutable;
+    REQUEST_SAME_FILE_VALUE_REFERENCE_INDEX.set(sourceFile, index);
+  }
+  return index.get(requestSymbolKey(symbol)) ?? [];
 }
 
 /**

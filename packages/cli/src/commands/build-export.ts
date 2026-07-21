@@ -1,4 +1,6 @@
+/* oxlint-disable typescript/unbound-method -- Buffer.from is a static intrinsic and does not use this. */
 import { execFile as builtinExecFile } from 'node:child_process';
+import { Buffer as builtinBuffer } from 'node:buffer';
 import { hash as builtinHash } from 'node:crypto';
 import {
   existsSync as builtinExistsSync,
@@ -56,9 +58,12 @@ import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  componentTaskBSourceOperationFacts,
   compilerGeneratedCapabilityDependencies,
+  createFrameworkKovoCssCollectorVitePlugin,
   cssRouteDeliveryGate,
   dedupeCss,
+  deriveRegistryIdentity,
   lowerStandaloneSourceDerivedRegistryDeclarations,
   mutationHandlerFingerprintFromRuntimeSource,
   mutationSessionAuthorityFacts,
@@ -75,7 +80,9 @@ import { createCompilerSourceFileSystem } from '@kovojs/compiler/internal/source
 import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
 import {
   collectStaticBuildTrustFactsFromProject,
+  snapshotCompilerTaskBFiniteVerdict,
   type CompilerSecuritySemanticSource,
+  type CompilerTaskBFiniteVerdict,
 } from '@kovojs/drizzle/internal/static';
 import type {
   AccessDecision,
@@ -92,7 +99,7 @@ import type {
   KovoBuildPresetContext,
   KovoBuildPresetDiagnostic,
 } from '@kovojs/server/internal/build-preset';
-import type { EscapeObligationReviewSubject } from '@kovojs/server/internal/execution';
+import { type EscapeObligationReviewSubject } from '@kovojs/server/internal/execution';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { assertDocumentCspConfigMatchesBrowserPosture } from '@kovojs/server/internal/csp';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
@@ -127,6 +134,7 @@ import {
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { kovoCertificateV1Json } from '../certificate.js';
+import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
 import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
@@ -181,6 +189,7 @@ import {
 } from './build-security-intrinsics.js';
 
 const execFile = builtinExecFile;
+const bufferFrom = builtinBuffer.from;
 const hash = builtinHash;
 const existsSync = builtinExistsSync;
 const lstatSync = builtinLstatSync;
@@ -239,6 +248,25 @@ const KOVO_FRAMEWORK_SOURCE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 const trustedKovoFrameworkSourceRoots = resolveKovoFrameworkSourceRoots(
   fileURLToPath(new URL('../index.ts', import.meta.url)),
   requireFromCli,
+);
+// Vite/OXC can present manifest main entries and its framework-configured automatic JSX runtime
+// as resolved absolute paths rather than authored bare specifiers. Keep the exception finite and
+// boot-pinned; arbitrary package internals are intentionally absent.
+const trustedKovoDirectFrameworkEntrySources = buildCreateSet<string>();
+for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
+  const packageName = kovoFrameworkSourcePackages[index]!;
+  try {
+    buildSetAdd(
+      trustedKovoDirectFrameworkEntrySources,
+      realpathSync(requireFromCli.resolve(packageName)),
+    );
+  } catch {
+    // Optional first-party packages that are not in this CLI installation add no trusted entry.
+  }
+}
+buildSetAdd(
+  trustedKovoDirectFrameworkEntrySources,
+  realpathSync(requireFromCli.resolve('@kovojs/server/jsx-runtime')),
 );
 
 const execFileAsync = promisify(execFile);
@@ -711,6 +739,7 @@ export async function runBuildCommand(
     if (!loadAndCheck.ok) throw loadAndCheck.error;
     const {
       app,
+      approvedClientEntry,
       approvedSourceFiles,
       buildStylesheetCss,
       checkGraph,
@@ -725,6 +754,12 @@ export async function runBuildCommand(
     } = loadAndCheck.value;
     const graphWithProvenance: CoreGraph.KovoCheckInput = {
       ...checkGraph,
+      analysisInputs: buildAnalysisInputs({
+        appSources: approvedSourceFiles,
+        clientEntrySources: approvedClientEntry === undefined ? [] : [approvedClientEntry],
+        configSources: approvedConfig?.files ?? [],
+        runtimeTarget: selectedPreset.name,
+      }),
       provenance: artifactProvenance,
     };
     const runtimePosture = runtimePostureManifestForBuild(graphWithProvenance);
@@ -734,12 +769,15 @@ export async function runBuildCommand(
     };
     // Validate every trustedAssign review subject before any client/server artifact is emitted.
     const escapeObligationManifest = escapeObligationManifestForBuild(attestedCheckGraph);
+    // Metric E signatures are a separate domain-separated subject family under the same anchor.
+    const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(attestedCheckGraph);
     const outDir = resolve(invocationRoot, options.outDir);
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
     const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
       resolvedAppModulePath,
       clientRoot,
       approvedSourceFiles,
+      invocationRoot,
     );
     const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
       resolvedAppModulePath,
@@ -761,11 +799,13 @@ export async function runBuildCommand(
       clientRoot,
       resolvedAppModulePath,
       {
+        ...(approvedClientEntry === undefined ? {} : { approvedClientEntry }),
         approvedSourceFiles,
         cache: options.cache,
         dependencyCapabilities,
         projectMutationFacts: clientProjectMutationFacts,
         queryShapeFacts,
+        sourceIdentityRoot: invocationRoot,
       },
     );
     const buildCssAssets = mergeKovoBuildStylesheetAssets([
@@ -804,7 +844,12 @@ export async function runBuildCommand(
       serverHandlerSource: serverHandlerBuild.source,
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
-    writeKovoBuildGraphArtifact(neutralBuild, attestedCheckGraph, escapeObligationManifest);
+    writeKovoBuildGraphArtifact(
+      neutralBuild,
+      attestedCheckGraph,
+      escapeObligationManifest,
+      escapeCensusReviewManifest,
+    );
     const presetToken =
       selectedPreset.name === 'cloudflare'
         ? cloudflare()
@@ -918,6 +963,7 @@ async function loadAndCheckBuildApp(
   });
   return {
     app,
+    approvedClientEntry: preEvaluationStaticTrust.clientEntry,
     approvedSourceFiles: preEvaluationStaticTrust.approvedSourceFiles,
     buildStylesheetCss,
     checkGraph: buildCheck.graph,
@@ -935,6 +981,7 @@ async function loadAndCheckBuildApp(
 interface PreEvaluationStaticTrust {
   readonly approvedSourceFiles: readonly BuildCheckSourceFile[];
   readonly capabilityClosure: AnalyzeCapabilityClosureResult;
+  readonly clientEntry?: BuildCheckSourceFile;
   readonly facts: ReturnType<typeof collectStaticBuildTrustFactsFromProject>;
   readonly files: readonly BuildCheckSourceFile[];
   readonly sourceGraphFacts: SourceGraphFacts;
@@ -956,8 +1003,16 @@ function runPreEvaluationBuildConfigTrustPreflight(
   // module execution and deferred preset methods, and only then permit Vite to evaluate those same
   // bytes. Config discovery is intentionally performed once by the caller so an extension swap
   // cannot select a different file after approval.
-  const files = buildCheckSourceGraphFiles(configPath, root);
-  const entryFileName = relative(dirname(configPath), configPath) || basename(configPath);
+  const configRoot = dirname(configPath);
+  const files = buildMapDense(
+    buildCheckSourceGraphFiles(configPath, root),
+    'Project-root-relative pre-evaluation config sources',
+    (file) => ({
+      fileName: slashPath(relative(root, resolve(configRoot, file.fileName))),
+      source: file.source,
+    }),
+  );
+  const entryFileName = relative(root, configPath) || basename(configPath);
   const facts = collectStaticBuildTrustFactsFromProject({
     buildConfigEntryFileName: slashPath(entryFileName),
     files,
@@ -992,6 +1047,7 @@ function runPreEvaluationStaticTrustPreflight(
   // authored tooling such as vite.config.ts into app runtime authority.
   const files = preEvaluationAppSourceFiles(appModulePath, root);
   const approvedSourceFiles = preEvaluationApprovedBuildFiles(appModulePath, root, files);
+  const clientEntry = preEvaluationClientEntryFile(appModulePath, root);
   // Parse and lower this exact snapshot before deriving the loader manifest. Private ABI rows are
   // admitted only when the reviewed compiler added their exact names; authored spellings remain
   // ordinary closed package edges (SPEC §5.2 rule 10 / §6.6).
@@ -1008,11 +1064,16 @@ function runPreEvaluationStaticTrustPreflight(
   });
   // The same typed component/semantic facts are retained for graph assembly below; neither the
   // verdict nor framework identity is re-derived from disk.
+  const compilerDiagnostics = buildPreflightComponentDiagnostics(sourceGraphFacts.components);
   const compilerSecurityDiagnostics = buildMapDense(
     buildFilterDense(
-      buildPreflightComponentDiagnostics(sourceGraphFacts.components),
+      compilerDiagnostics,
       'Pre-evaluation compiler security diagnostics',
-      (diagnostic) => diagnostic.code === 'KV449',
+      (diagnostic) =>
+        diagnostic.code === 'KV235' ||
+        diagnostic.code === 'KV449' ||
+        diagnostic.code === 'KV450' ||
+        diagnostic.code === 'KV452',
     ),
     'Pre-evaluation compiler security diagnostic facts',
     staticDiagnosticFact,
@@ -1035,12 +1096,21 @@ function runPreEvaluationStaticTrustPreflight(
           compilerTaskBClosure: {
             capabilityFacts: capabilityClosure.facts,
             dependencyManifest: capabilityClosure.dependencyManifest,
+            finiteVerdict: sourceGraphFacts.compilerTaskBFiniteVerdict,
             files,
-            schema: 'kovo-task-b-closure/v1',
+            schema: 'kovo-task-b-closure/v2',
           },
           files,
         });
-  const accessGuardDiagnostics = preEvaluationAccessGuardDiagnostics(files);
+  const accessGuardDiagnostics = buildMapDense(
+    buildFilterDense(
+      compilerDiagnostics,
+      'Pre-evaluation compiler access/guard diagnostics',
+      (diagnostic) => diagnostic.code === 'KV436',
+    ),
+    'Pre-evaluation compiler access/guard diagnostic facts',
+    staticDiagnosticFact,
+  );
   const capabilityClosureDiagnostics = buildMapDense(
     capabilityClosure.diagnostics,
     'Capability-closure diagnostics',
@@ -1062,7 +1132,14 @@ function runPreEvaluationStaticTrustPreflight(
     'Pre-evaluation compiler and runtime-reveal audit diagnostics',
   );
   if (unregisteredSinks.length === 0 && allPreEvaluationDiagnostics.length === 0) {
-    return { approvedSourceFiles, capabilityClosure, facts, files, sourceGraphFacts };
+    return {
+      approvedSourceFiles,
+      capabilityClosure,
+      ...(clientEntry === undefined ? {} : { clientEntry }),
+      facts,
+      files,
+      sourceGraphFacts,
+    };
   }
 
   const result = kovoCheck(
@@ -1075,52 +1152,67 @@ function runPreEvaluationStaticTrustPreflight(
     { paranoidStaticAdvisory },
   );
   if (result.exitCode === 0) {
-    return { approvedSourceFiles, capabilityClosure, facts, files, sourceGraphFacts };
+    return {
+      approvedSourceFiles,
+      capabilityClosure,
+      ...(clientEntry === undefined ? {} : { clientEntry }),
+      facts,
+      files,
+      sourceGraphFacts,
+    };
   }
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
-    return { approvedSourceFiles, capabilityClosure, facts, files, sourceGraphFacts };
+    return {
+      approvedSourceFiles,
+      capabilityClosure,
+      ...(clientEntry === undefined ? {} : { clientEntry }),
+      facts,
+      files,
+      sourceGraphFacts,
+    };
   }
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
 }
 
-function preEvaluationAccessGuardDiagnostics(
-  files: readonly BuildCheckSourceFile[],
-): CoreGraph.StaticDiagnosticFact[] {
-  const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
-  const sourceFiles = buildSnapshotDenseArray(files, 'Pre-evaluation access/guard source files');
-  for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
-    const file = sourceFiles[fileIndex]!;
-    const compiled = compileRouteModule({ fileName: file.fileName, source: file.source });
-    const compileDiagnostics = buildSnapshotDenseArray(
-      compiled.diagnostics,
-      `Pre-evaluation access/guard diagnostics for ${file.fileName}`,
-    );
-    for (
-      let diagnosticIndex = 0;
-      diagnosticIndex < compileDiagnostics.length;
-      diagnosticIndex += 1
-    ) {
-      const diagnostic = compileDiagnostics[diagnosticIndex]!;
-      if (diagnostic.code !== 'KV436') continue;
-      buildSecurityArrayAppend(
-        diagnostics,
-        staticDiagnosticFact(diagnostic),
-        'Pre-evaluation access/guard diagnostics',
-      );
-    }
+function preEvaluationClientEntryFile(
+  appModulePath: string,
+  root: string,
+): BuildCheckSourceFile | undefined {
+  const clientRoot = kovoClientBuildRoot(appModulePath, root);
+  const entryPath = resolve(clientRoot, 'index.html');
+  const fileSystem = createCompilerSourceFileSystem(clientRoot);
+  if (fileSystem === null) {
+    throw new TypeError(`Kovo client root is unavailable or unstable: ${clientRoot}`);
   }
-  return diagnostics;
+  const kind = fileSystem.kind(entryPath);
+  if (kind === 'other' && !existsSync(entryPath)) return undefined;
+  if (kind !== 'file') {
+    throw new TypeError(`Kovo client entry is not a stable regular file: ${entryPath}`);
+  }
+  const source = fileSystem.readFile(entryPath);
+  if (source === null) {
+    throw new TypeError(`Kovo client entry is unavailable or unstable: ${entryPath}`);
+  }
+  return { fileName: slashPath(relative(root, entryPath)), source };
 }
 
 function preEvaluationAppSourceFiles(appModulePath: string, root: string): BuildCheckSourceFile[] {
   const sourceRoot = dirname(appModulePath);
-  const files = buildCheckSourceGraphFiles(appModulePath, root);
+  const graphFiles = buildCheckSourceGraphFiles(appModulePath, root);
+  const files = buildMapDense(
+    graphFiles,
+    'Project-root-relative pre-evaluation app sources',
+    (file) => ({
+      fileName: slashPath(relative(root, resolve(sourceRoot, file.fileName))),
+      source: file.source,
+    }),
+  );
   const clientRoot = kovoClientBuildRoot(appModulePath, root);
   const clientFiles = dataPlaneSourceFiles(resolve(clientRoot, 'src'), root);
   for (let index = 0; index < clientFiles.length; index += 1) {
     const clientFile = clientFiles[index]!;
-    const fileName = slashPath(relative(sourceRoot, resolve(root, clientFile.fileName)));
+    const fileName = slashPath(relative(root, resolve(root, clientFile.fileName)));
     let existing: BuildCheckSourceFile | undefined;
     for (let candidateIndex = 0; candidateIndex < files.length; candidateIndex += 1) {
       if (files[candidateIndex]!.fileName === fileName) {
@@ -1148,11 +1240,10 @@ function preEvaluationApprovedBuildFiles(
   root: string,
   sourceFiles: readonly BuildCheckSourceFile[],
 ): BuildCheckSourceFile[] {
-  const sourceRoot = dirname(appModulePath);
   const files = buildSnapshotDenseArray(sourceFiles, 'Pre-evaluation approved module sources');
   const stylesheetFiles = preEvaluationClientStylesheetFiles(
     kovoClientBuildRoot(appModulePath, root),
-    sourceRoot,
+    root,
   );
   for (let index = 0; index < stylesheetFiles.length; index += 1) {
     const stylesheet = stylesheetFiles[index]!;
@@ -1371,6 +1462,7 @@ function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
   graph: CoreGraph.KovoCheckInput,
   escapeObligations: ReturnType<typeof escapeObligationManifestForBuild>,
+  escapeCensusReviews: ReturnType<typeof escapeCensusReviewManifestForBuild>,
 ): void {
   // SPEC §5.2.3/§5.3: the build-derived graph is a review/debug artifact, not just an
   // in-memory preflight input. Persist it in the neutral build metadata directory
@@ -1386,6 +1478,13 @@ function writeKovoBuildGraphArtifact(
   writeFileSync(
     join(neutralBuild.outDir, 'escape-obligations.json'),
     `${stringifyBuildValue(escapeObligations, 2)}\n`,
+  );
+  // Plan 3 §4.1–4.2: every counted escape root gets one unsigned, artifact-bound subject. The
+  // out-of-band reviewer may sign these bytes with the existing runtime-posture anchor; build owns
+  // neither signing authority nor a second trust root.
+  writeFileSync(
+    join(neutralBuild.outDir, 'escape-census-review-subjects.json'),
+    `${stringifyBuildValue(escapeCensusReviews, 2)}\n`,
   );
 }
 
@@ -1436,6 +1535,117 @@ function runtimePostureManifestForBuild(
     postureDigest: `sha256:${hash('sha256', canonicalJsonStringify(facts), 'hex')}`,
     schema: 'kovo-runtime-posture/v1',
   };
+}
+
+/**
+ * Retain every exact source snapshot that was admitted before app/config evaluation. The runtime
+ * posture subject hashes this manifest together with the derived graph, so a same-path/same-length
+ * semantic source edit invalidates detached review evidence. This is deliberately an analyzed-input
+ * identity; emitted-code and host identity remain explicit attestation nonclaims (SPEC §11.2).
+ */
+function buildAnalysisInputs(options: {
+  appSources: readonly BuildCheckSourceFile[];
+  clientEntrySources: readonly BuildCheckSourceFile[];
+  configSources: readonly BuildCheckSourceFile[];
+  runtimeTarget: KovoBuildPresetName;
+}): CoreGraph.KovoAnalysisInputs {
+  const sources: CoreGraph.KovoAnalysisInputSource[] = [];
+  appendAnalysisInputSources(sources, options.appSources, 'app');
+  appendAnalysisInputSources(sources, options.clientEntrySources, 'client-entry');
+  appendAnalysisInputSources(sources, options.configSources, 'config');
+  return {
+    runtimeTarget: options.runtimeTarget,
+    schema: 'kovo.analysis.inputs/v1',
+    sources,
+  };
+}
+
+function appendAnalysisInputSources(
+  target: CoreGraph.KovoAnalysisInputSource[],
+  values: readonly BuildCheckSourceFile[],
+  role: CoreGraph.KovoAnalysisInputSource['role'],
+): void {
+  const sources = buildSnapshotDenseArray(values, `Build analysis ${role} source inputs`);
+  for (let index = 0; index < sources.length; index += 1) {
+    const source = sources[index]!;
+    if (typeof source.fileName !== 'string' || !exactBuildAnalysisPath(source.fileName)) {
+      throw new TypeError(`Build analysis ${role} source path is not a stable relative identity.`);
+    }
+    insertAnalysisInputSource(target, {
+      codeUnitLength: source.source.length,
+      contentHash: `sha256:${hash('sha256', bufferFrom(source.source, 'utf16le'), 'hex')}`,
+      encoding: 'utf16le',
+      path: source.fileName,
+      role,
+    });
+  }
+}
+
+function exactBuildAnalysisPath(value: string): boolean {
+  if (
+    value.length === 0 ||
+    value.length > 4_096 ||
+    value.trim() !== value ||
+    isAbsolute(value) ||
+    value.startsWith('/') ||
+    value.includes('\\') ||
+    value.includes(':')
+  ) {
+    return false;
+  }
+  const parts = value.split('/');
+  if (parts.some((part) => part.length === 0 || part === '.' || part === '..')) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (
+      code <= 0x1f ||
+      (code >= 0x7f && code <= 0x9f) ||
+      code === 0x061c ||
+      (code >= 0x200b && code <= 0x200f) ||
+      (code >= 0x2028 && code <= 0x202e) ||
+      (code >= 0x2060 && code <= 0x206f) ||
+      code === 0xfeff
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function insertAnalysisInputSource(
+  target: CoreGraph.KovoAnalysisInputSource[],
+  source: CoreGraph.KovoAnalysisInputSource,
+): void {
+  for (let index = 0; index < target.length; index += 1) {
+    const existing = target[index]!;
+    if (existing.role === source.role && existing.path === source.path) {
+      if (
+        existing.codeUnitLength !== source.codeUnitLength ||
+        existing.contentHash !== source.contentHash
+      ) {
+        throw new TypeError(
+          `Build analysis ${source.role} source snapshot conflicts for ${source.path}.`,
+        );
+      }
+      return;
+    }
+  }
+  buildSecurityArrayAppend(target, source, 'Sorted build analysis source inputs');
+  let insertAt = target.length - 1;
+  while (insertAt > 0 && compareArtifactInputSources(source, target[insertAt - 1]!) < 0) {
+    target[insertAt] = target[insertAt - 1]!;
+    insertAt -= 1;
+  }
+  target[insertAt] = source;
+}
+
+function compareArtifactInputSources(
+  left: CoreGraph.KovoAnalysisInputSource,
+  right: CoreGraph.KovoAnalysisInputSource,
+): number {
+  const leftKey = `${left.role}\u0000${left.path}`;
+  const rightKey = `${right.role}\u0000${right.path}`;
+  return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 }
 
 function buildCheckFailureOutput(output: string): string {
@@ -1831,11 +2041,26 @@ function staticDiagnosticFact(
   assertRegisteredDiagnostic(diagnostic, 'Build compiler diagnostic projection');
   return {
     code: diagnostic.code,
+    ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
     message: diagnostic.message,
     severity: diagnostic.severity ?? 'error',
     site: diagnostic.fileName,
     ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
   };
+}
+
+function appendBuildTaskBFiniteDiagnostics(
+  target: CoreGraph.StaticDiagnosticFact[],
+  diagnostics: readonly CompileResult['diagnostics'][number][],
+  label: string,
+): void {
+  const snapshot = buildSnapshotDenseArray(diagnostics, label);
+  for (let diagnosticIndex = 0; diagnosticIndex < snapshot.length; diagnosticIndex += 1) {
+    const diagnostic = snapshot[diagnosticIndex]!;
+    if (diagnostic.code === 'KV449' || diagnostic.code === 'KV450' || diagnostic.code === 'KV452') {
+      buildSecurityArrayAppend(target, staticDiagnosticFact(diagnostic), label);
+    }
+  }
 }
 
 async function staticBuildCheckGraph(
@@ -1963,7 +2188,7 @@ async function staticBuildCheckGraph(
       egressPosture,
       escapeCensus: {
         doors: ESCAPE_CENSUS_DOORS,
-        schema: 'kovo.escape-census-coverage/v1',
+        schema: 'kovo.escape-census-coverage/v2',
         sources: {
           allowControlChars: 'trustEscapes',
           'csrf:false': 'trustEscapes',
@@ -2017,36 +2242,53 @@ function completeBuildTrustEscapes(
   staticFacts: readonly CoreGraph.TrustEscapeExplain[],
   mutations: readonly CoreGraph.MutationExplain[],
 ): CoreGraph.TrustEscapeExplain[] {
-  const result = buildSnapshotDenseArray(staticFacts, 'Static build trust-escape facts');
-  const roots = buildCreateSet<string>();
-  for (let index = 0; index < result.length; index += 1) {
-    const root = result[index]?.root;
-    if (root !== undefined) buildSetAdd(roots, root);
-  }
   const mutationSnapshot = buildSnapshotDenseArray(mutations, 'Build mutation escape facts');
+  const executableCsrfRoots = buildCreateSet<string>();
+  for (let index = 0; index < mutationSnapshot.length; index += 1) {
+    const mutation = mutationSnapshot[index]!;
+    if (mutation.csrf === 'exempt') buildSetAdd(executableCsrfRoots, `mutation:${mutation.key}`);
+  }
+  const staticSnapshot = buildSnapshotDenseArray(staticFacts, 'Static build trust-escape facts');
+  const result: CoreGraph.TrustEscapeExplain[] = [];
+  const linkedCsrfRoots = buildCreateSet<string>();
+  for (let index = 0; index < staticSnapshot.length; index += 1) {
+    const fact = staticSnapshot[index]!;
+    const countedRoot =
+      fact.kind === 'csrfFalse'
+        ? countedCsrfRootForStaticFact(fact, executableCsrfRoots)
+        : undefined;
+    const linked =
+      fact.kind !== 'csrfFalse'
+        ? fact
+        : countedRoot === undefined
+          ? { ...fact, countedRootDisposition: 'proven-unreachable' as const }
+          : { ...fact, countedRoot, countedRootDisposition: 'linked' as const };
+    buildSecurityArrayAppend(result, linked, 'Static build trust-escape facts');
+    if (countedRoot !== undefined) buildSetAdd(linkedCsrfRoots, countedRoot);
+  }
   for (let index = 0; index < mutationSnapshot.length; index += 1) {
     const mutation = mutationSnapshot[index]!;
     if (mutation.csrf !== 'exempt') continue;
     const root = `mutation:${mutation.key}`;
-    if (buildSetHas(roots, root)) continue;
-    buildSetAdd(roots, root);
-    buildSecurityArrayAppend(
-      result,
-      {
-        kind: 'csrfFalse',
-        owner: 'ingress.mutation.csrf',
-        root,
-        safePath: 'mutation({csrf:false})',
-        site: `app-registry:${mutation.key}`,
-        source: mutation.key,
-        ...(mutation.csrfJustification === undefined
-          ? {}
-          : { justification: mutation.csrfJustification }),
-      },
-      'Build mutation escape facts',
-    );
+    if (!buildSetHas(linkedCsrfRoots, root)) {
+      throw new TypeError(
+        `Build mutation escape ${mutation.key} lacks an exact analyzer-owned source binding.`,
+      );
+    }
   }
   return result;
+}
+
+function countedCsrfRootForStaticFact(
+  fact: CoreGraph.TrustEscapeExplain,
+  executableRoots: ReadonlySet<string>,
+): string | undefined {
+  if (fact.root !== undefined && buildSetHas(executableRoots, fact.root)) return fact.root;
+  if (typeof fact.source !== 'string' || typeof fact.site !== 'string') return undefined;
+  const match = buildRegExpExec(/^(.+):[0-9]+$/u, fact.site);
+  if (match === null || typeof match[1] !== 'string') return undefined;
+  const candidate = `mutation:${deriveRegistryIdentity(match[1], fact.source).key}`;
+  return buildSetHas(executableRoots, candidate) ? candidate : undefined;
 }
 
 /** @internal */ export function mergeBuildRevealFacts(
@@ -2109,6 +2351,7 @@ function compareBuildRevealFacts(
 interface SourceGraphFacts {
   compilerDependencies: CompilerGeneratedCapabilityDependency[];
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
+  compilerTaskBFiniteVerdict: CompilerTaskBFiniteVerdict;
   components: SourceComponentGraphFacts[];
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
@@ -2331,6 +2574,7 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
 function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
   const compilerDependencies: CompilerGeneratedCapabilityDependency[] = [];
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
+  const compilerTaskBBlockingDiagnostics: CoreGraph.StaticDiagnosticFact[] = [];
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
@@ -2363,6 +2607,11 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       sourceProvenance: 'app',
     } as const;
     const component = compileComponentModule(componentOptions);
+    appendBuildTaskBFiniteDiagnostics(
+      compilerTaskBBlockingDiagnostics,
+      component.diagnostics,
+      'TASK B component compiler finite diagnostics',
+    );
     const standaloneRegistrySource = lowerStandaloneSourceDerivedRegistryDeclarations({
       fileName: file.fileName,
       source: file.source,
@@ -2399,27 +2648,53 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       {
         fileName: file.fileName,
         graphs: semanticGraphs,
+        operations: componentTaskBSourceOperationFacts(
+          parseComponentModule(
+            file.fileName,
+            file.source,
+            extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+          ),
+        ),
         source: file.source,
       },
       'CLI compiler semantic source carriers',
     );
+    const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    const routeDiagnostics = buildSnapshotDenseArray(
+      routePage.diagnostics,
+      `Compiler route diagnostics for ${file.fileName}`,
+    );
+    appendBuildTaskBFiniteDiagnostics(
+      compilerTaskBBlockingDiagnostics,
+      routeDiagnostics,
+      'TASK B route compiler finite diagnostics',
+    );
+    const mergedComponent: SourceComponentGraphFacts =
+      routeDiagnostics.length === 0
+        ? component
+        : {
+            ...component,
+            diagnostics: buildConcatDense(
+              component.diagnostics,
+              routeDiagnostics,
+              `Component and route diagnostics for ${file.fileName}`,
+            ),
+          };
     if (
-      component.componentGraphFacts.length > 0 ||
-      component.agentGraphFacts.length > 0 ||
-      component.diagnostics.length > 0 ||
-      component.handlerWriteSinkFacts.length > 0 ||
-      component.publishToClientFacts.length > 0 ||
-      component.taskGraphFacts.length > 0 ||
-      component.updateCoverage.length > 0
+      mergedComponent.componentGraphFacts.length > 0 ||
+      mergedComponent.agentGraphFacts.length > 0 ||
+      mergedComponent.diagnostics.length > 0 ||
+      mergedComponent.handlerWriteSinkFacts.length > 0 ||
+      mergedComponent.publishToClientFacts.length > 0 ||
+      mergedComponent.taskGraphFacts.length > 0 ||
+      mergedComponent.updateCoverage.length > 0
     ) {
       buildSecurityArrayAppend(
         components,
-        component,
+        mergedComponent,
         'CLI packages/cli/src/commands/build-export.ts collection',
       );
     }
-
-    const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
     const routeFiles = buildSnapshotDenseArray(
       routePage.files,
       `Compiler-emitted route files for ${file.fileName}`,
@@ -2467,10 +2742,32 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   return {
     compilerDependencies,
     compilerSecuritySemanticSources,
+    compilerTaskBFiniteVerdict: snapshotCompilerTaskBFiniteVerdict({
+      blockingDiagnostics: compilerTaskBBlockingDiagnostics,
+      semanticSources: compilerSecuritySemanticSources,
+    }),
     components,
     routeOutcomes,
     routePages,
   };
+}
+
+/** Internal executable seam for the TASK B caller-carrier mutation gate (SPEC §6.6). */
+export function snapshotBuildCompilerTaskBFiniteVerdictForTests(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): CompilerTaskBFiniteVerdict {
+  return sourceGraphFactsFromFiles(files).compilerTaskBFiniteVerdict;
+}
+
+/** Internal executable seam proving ordinary build diagnostics retain the route compiler census. */
+export function snapshotBuildCompilerDiagnosticsForTests(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): CoreGraph.StaticDiagnosticFact[] {
+  return buildMapDense(
+    buildPreflightComponentDiagnostics(sourceGraphFactsFromFiles(files).components),
+    'Build compiler diagnostic test seam',
+    staticDiagnosticFact,
+  );
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
@@ -3194,6 +3491,7 @@ async function loadBuildAppModule(
         approvedSourceFiles,
         dependencyCapabilities,
         'build-app',
+        { sourceRoot: root },
       ),
       sourceDerivedRegistryVitePlugin(
         appModulePath,
@@ -3565,15 +3863,24 @@ async function buildKovoClientManifest(
   root: string,
   appModulePath: string,
   options: {
+    approvedClientEntry?: BuildCheckSourceFile;
     approvedSourceFiles: readonly BuildCheckSourceFile[];
     cache: boolean;
     dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
+    sourceIdentityRoot: string;
   },
 ): Promise<KovoClientManifestBuild> {
-  const viteAssetPlugin = kovoVitePlugin({
-    include: [kovoBuildApprovedSourceFilter(appModulePath, root, options.approvedSourceFiles)],
+  const viteAssetPlugin = createFrameworkKovoCssCollectorVitePlugin({
+    include: [
+      kovoBuildApprovedSourceFilter(
+        appModulePath,
+        root,
+        options.approvedSourceFiles,
+        options.sourceIdentityRoot,
+      ),
+    ],
     queryShapeFacts: options.queryShapeFacts,
     registryFacts: options.projectMutationFacts,
   });
@@ -3591,6 +3898,11 @@ async function buildKovoClientManifest(
     build: {
       emptyOutDir: true,
       manifest: true,
+      // Vite's compatibility polyfill imperatively walks document collections. Kovo emits native
+      // modulepreload hints and ESM remains functional when a browser ignores that performance
+      // hint, so do not retain an unreviewed executable DOM carrier in production artifacts
+      // (SPEC §5.2/§6.6; C13).
+      modulePreload: { polyfill: false },
       outDir,
     },
     configFile: false,
@@ -3602,12 +3914,21 @@ async function buildKovoClientManifest(
       },
     },
     plugins: [
-      approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+      approvedBuildSourcesVitePlugin(
+        appModulePath,
+        root,
+        options.approvedSourceFiles,
+        'app',
+        trustedKovoFrameworkSourceRoots,
+        options.approvedClientEntry,
+        options.sourceIdentityRoot,
+      ),
       dependencyCapabilityLoaderVitePlugin(
         appModulePath,
         options.approvedSourceFiles,
         options.dependencyCapabilities,
         'build-client',
+        { sourceRoot: options.sourceIdentityRoot },
       ),
       viteAssetPlugin,
     ],
@@ -3653,7 +3974,12 @@ async function buildKovoClientManifest(
 
   return {
     assets: splitStylesheetAssets,
-    clientModules: componentBuild.getClientModules?.() ?? [],
+    // The inert CSS-enrollment transform must not discard compiler-emitted handlers for a
+    // component reached through the client entry. Merge its metadata with the app-graph pass.
+    clientModules: uniqueKovoCompiledClientModules([
+      ...(viteAssetPlugin.getClientModules?.() ?? []),
+      ...(componentBuild.getClientModules?.() ?? []),
+    ]),
     manifestFile: join(outDir, '.vite/manifest.json'),
     stylesheetCss: [
       ...(monolithAppCss ? [{ css: monolithAppCss, href: '/assets/styles.css' }] : []),
@@ -3671,6 +3997,7 @@ async function buildKovoComponentClientModules(
     dependencyCapabilities: AppDependencyCapabilityManifest;
     projectMutationFacts: ProjectMutationRegistryFacts;
     queryShapeFacts: readonly QueryShapeFact[];
+    sourceIdentityRoot: string;
   },
 ): Promise<{
   getClientModules?: () => readonly KovoAppShellCompiledClientModule[];
@@ -3679,7 +4006,14 @@ async function buildKovoComponentClientModules(
   >['getCssAssetManifest'];
 }> {
   const kovoPlugin = kovoVitePlugin({
-    include: [kovoBuildApprovedSourceFilter(appModulePath, root, options.approvedSourceFiles)],
+    include: [
+      kovoBuildApprovedSourceFilter(
+        appModulePath,
+        root,
+        options.approvedSourceFiles,
+        options.sourceIdentityRoot,
+      ),
+    ],
     queryShapeFacts: options.queryShapeFacts,
     registryFacts: options.projectMutationFacts,
   });
@@ -3725,7 +4059,15 @@ async function buildKovoComponentClientModules(
         },
       },
       plugins: [
-        approvedBuildSourcesVitePlugin(appModulePath, root, options.approvedSourceFiles),
+        approvedBuildSourcesVitePlugin(
+          appModulePath,
+          root,
+          options.approvedSourceFiles,
+          'app',
+          trustedKovoFrameworkSourceRoots,
+          undefined,
+          options.sourceIdentityRoot,
+        ),
         dependencyCapabilityLoaderVitePlugin(
           appModulePath,
           options.approvedSourceFiles,
@@ -3734,6 +4076,7 @@ async function buildKovoComponentClientModules(
           {
             allowNodeBuiltins: true,
             allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+            sourceRoot: options.sourceIdentityRoot,
           },
         ),
         kovoBuildLoweringVitePlugin(kovoPlugin),
@@ -4206,12 +4549,13 @@ function approvedBuildSourcesVitePlugin(
   sourceFiles: readonly BuildCheckSourceFile[],
   sourceLabel: 'app' | 'config' = 'app',
   frameworkSourceRoots: readonly KovoFrameworkSourceRoot[] = trustedKovoFrameworkSourceRoots,
+  approvedClientEntry?: BuildCheckSourceFile,
+  sourceIdentityRoot: string = buildRoot,
 ): Plugin {
   const approvedByPath = buildCreateMap<string, string>();
   const appSourcePaths = buildCreateSet<string>();
   const pinnedFrameworkSourcePaths = buildCreateSet<string>();
   const approvedFiles = buildSnapshotDenseArray(sourceFiles, 'Approved build source files');
-  const sourceRoot = dirname(appModulePath);
   for (let index = 0; index < approvedFiles.length; index += 1) {
     const file = approvedFiles[index];
     if (!file || typeof file !== 'object') {
@@ -4224,7 +4568,7 @@ function approvedBuildSourcesVitePlugin(
         `Approved build source file[${index}] must contain own string fileName/source values.`,
       );
     }
-    const absoluteFileName = resolve(sourceRoot, fileName);
+    const absoluteFileName = resolve(sourceIdentityRoot, fileName);
     if (
       buildMapHas(approvedByPath, absoluteFileName) &&
       buildMapGet(approvedByPath, absoluteFileName) !== source
@@ -4235,10 +4579,29 @@ function approvedBuildSourcesVitePlugin(
     buildSetAdd(appSourcePaths, absoluteFileName);
   }
 
-  const appSourceRoot = resolve(buildRoot);
+  const appSourceRoot = resolve(sourceIdentityRoot);
+  const expectedClientEntry = slashPath(relative(appSourceRoot, resolve(buildRoot, 'index.html')));
   return {
     enforce: 'pre',
     name: 'kovo-approved-build-sources',
+    ...(approvedClientEntry === undefined
+      ? {}
+      : {
+          transformIndexHtml: {
+            order: 'pre' as const,
+            handler(html: string) {
+              if (
+                approvedClientEntry.fileName !== expectedClientEntry ||
+                html !== approvedClientEntry.source
+              ) {
+                throw new Error(
+                  'Kovo build refused changed client index.html; its bytes no longer match the security-preflight snapshot (SPEC §5.2/§6.6).',
+                );
+              }
+              return undefined;
+            },
+          },
+        }),
     load(id) {
       const fileName = viteBuildSourceFileName(id);
       if (fileName === undefined || buildMapHas(approvedByPath, fileName)) return null;
@@ -4275,8 +4638,40 @@ function approvedBuildSourcesVitePlugin(
       if (importerFileName === undefined || !buildSetHas(appSourcePaths, importerFileName)) {
         return null;
       }
-      if (isApprovedBuildVirtualSpecifier(source) || isBuildBareModuleSpecifier(source))
+      if (isApprovedBuildVirtualSpecifier(source)) return null;
+      if (isBuildBareModuleSpecifier(source)) {
+        if (!buildStringStartsWith(source, '@kovojs/')) return null;
+        // Resolve reviewed framework packages through the remaining plugin chain first. That
+        // preserves dependency-capability enforcement while preventing Vite from re-presenting
+        // an approved bare edge as an unexplained absolute app-source edge.
+        const frameworkResolution = await this.resolve(source, importer, { skipSelf: true });
+        if (frameworkResolution === null || frameworkResolution.external === true) return null;
+        const frameworkFileName = viteBuildSourceFileName(frameworkResolution.id);
+        if (
+          frameworkFileName !== undefined &&
+          classifyKovoFrameworkSourcePath(frameworkSourceRoots, frameworkFileName).kind ===
+            'trusted'
+        ) {
+          return frameworkResolution;
+        }
         return null;
+      }
+      const directSourceFileName = viteBuildSourceFileName(source);
+      if (directSourceFileName !== undefined) {
+        const frameworkSource = classifyKovoFrameworkSourcePath(
+          frameworkSourceRoots,
+          directSourceFileName,
+        );
+        if (frameworkSource.kind === 'invalid') {
+          throw new Error(
+            `Kovo build refused unrecognized framework source ${relative(buildRoot, directSourceFileName) || directSourceFileName}; the file was not in the boot-time declared-package snapshot (SPEC §5.2/§6.6).`,
+          );
+        }
+        // The dependency-capability plugin independently admits this only when it is the exact
+        // configured alias target for one compiler-derived package entry owned by this importer.
+        // Returning null here prevents this source-snapshot plugin from preempting that exact join.
+        if (frameworkSource.kind === 'trusted') return null;
+      }
       const resolved = await this.resolve(source, importer, { skipSelf: true });
       if (resolved === null || resolved.external === true) {
         throw new Error(
@@ -4289,7 +4684,10 @@ function approvedBuildSourcesVitePlugin(
           `Kovo build refused virtual ${sourceLabel} module edge ${source}; it is outside the security-preflight snapshot (SPEC \u00a75.2/\u00a76.6).`,
         );
       }
-      if (!buildMapHas(approvedByPath, resolvedFileName)) {
+      const trustedDirectFrameworkEntry =
+        buildSetHas(trustedKovoDirectFrameworkEntrySources, resolvedFileName) &&
+        classifyKovoFrameworkSourcePath(frameworkSourceRoots, resolvedFileName).kind === 'trusted';
+      if (!buildMapHas(approvedByPath, resolvedFileName) && !trustedDirectFrameworkEntry) {
         throw unapprovedBuildSourceError(buildRoot, resolvedFileName, sourceLabel);
       }
       return resolved;
@@ -4911,6 +5309,7 @@ async function bundleKovoServerHandler(
           {
             allowNodeBuiltins: true,
             allowRuntimeExternal: isKovoServerHandlerExternalDependency,
+            sourceRoot: options.buildRoot,
           },
         ),
         kovoBuildLoweringVitePlugin(kovoPlugin),
@@ -5001,12 +5400,12 @@ function uniqueKovoCompiledClientModules(
 
 function kovoBuildApprovedSourceFilter(
   appModulePath: string,
-  root: string,
+  buildRoot: string,
   sourceFiles: readonly BuildCheckSourceFile[],
+  sourceIdentityRoot: string = buildRoot,
 ): (fileName: string) => boolean {
   const approved = buildCreateSet<string>();
-  const sourceRoot = dirname(appModulePath);
-  buildSetAdd(approved, kovoBuildFilterFileName(appModulePath, root));
+  buildSetAdd(approved, kovoBuildFilterFileName(appModulePath, buildRoot));
   const files = buildSnapshotDenseArray(sourceFiles, 'Approved compiler source files');
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
@@ -5017,18 +5416,21 @@ function kovoBuildApprovedSourceFilter(
     if (typeof fileName !== 'string') {
       throw new TypeError(`Approved compiler source file[${index}].fileName must be a string.`);
     }
-    buildSetAdd(approved, kovoBuildFilterFileName(resolve(sourceRoot, fileName), root));
+    buildSetAdd(
+      approved,
+      kovoBuildFilterFileName(resolve(sourceIdentityRoot, fileName), buildRoot),
+    );
   }
-  return (fileName) => buildSetHas(approved, kovoBuildFilterFileName(fileName, root));
+  return (fileName) => buildSetHas(approved, kovoBuildFilterFileName(fileName, buildRoot));
 }
 
 function projectMutationRegistryFactsForBuild(
   appModulePath: string,
   buildRoot: string,
   sourceFiles: readonly BuildCheckSourceFile[],
+  sourceIdentityRoot: string = buildRoot,
 ): ProjectMutationRegistryFacts {
   const files = buildSnapshotDenseArray(sourceFiles, 'Project mutation build source files');
-  const sourceRoot = dirname(appModulePath);
   const viteFiles: BuildCheckSourceFile[] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
@@ -5053,7 +5455,7 @@ function projectMutationRegistryFactsForBuild(
     buildSecurityArrayAppend(
       viteFiles,
       {
-        fileName: kovoBuildFilterFileName(resolve(sourceRoot, fileName), buildRoot),
+        fileName: kovoBuildFilterFileName(resolve(sourceIdentityRoot, fileName), buildRoot),
         source,
       },
       'Project mutation Vite source files',
@@ -5486,6 +5888,7 @@ async function loadExportAppModule(
         approvedSourceFiles,
         dependencyCapabilities,
         'export',
+        { sourceRoot: root },
       ),
     ],
     oxc: {

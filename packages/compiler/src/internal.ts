@@ -13,6 +13,10 @@ export {
 export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
+  componentTaskBSourceOperationFacts,
+  type CompilerTaskBSourceOperation,
+} from './security-operation-facts.js';
+export {
   analyzeCapabilityClosure,
   appDependencyCapabilityManifestSchema,
   collectCapabilityPackageRequests,
@@ -164,7 +168,7 @@ export {
   lowerStandaloneServerSource,
   lowerStandaloneSourceDerivedRegistryDeclarations,
 } from './source-derived-lowering.js';
-export { viteFrameworkIdentityFiles } from './vite.js';
+export { createFrameworkKovoCssCollectorVitePlugin, viteFrameworkIdentityFiles } from './vite.js';
 export type {
   KovoHmrEventName,
   KovoHmrEventPayload,

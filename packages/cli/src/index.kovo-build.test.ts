@@ -42,6 +42,9 @@ import {
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
+const cliSecurityGuaranteeHash = JSON.parse(
+  readFileSync(join(repoRoot, 'packages/cli/package.json'), 'utf8'),
+).kovoBuildProvenance.securityGuarantees.canonicalHash as string;
 const BUILD_FIXTURE_CSRF_SECRET = 'build-fixture-csrf-secret-0123456789abcdef0123456789';
 const BUILD_FIXTURE_WEBHOOK_HMAC_SECRET = 'b0b1b2b3b4b5b6b7b8b9babbbcbdbebf';
 const BUILD_FIXTURE_CSRF_SESSION_ID = 'build-fixture-session';
@@ -222,6 +225,17 @@ describe('kovo build', () => {
         readFileSync(join(repoRoot, 'security/kovo-certificate-v1.json'), 'utf8'),
       );
       const graph = JSON.parse(first) as {
+        analysisInputs?: {
+          runtimeTarget: string;
+          schema: string;
+          sources: readonly {
+            codeUnitLength: number;
+            contentHash: string;
+            encoding: string;
+            path: string;
+            role: string;
+          }[];
+        };
         provenance?: {
           frameworkPackages: readonly { name: string; version: string }[];
           graphSchemaVersion: string;
@@ -242,16 +256,44 @@ describe('kovo build', () => {
           { name: '@kovojs/cli', version: '0.2.0' },
           { name: '@kovojs/server', version: '0.2.0' },
         ]),
-        graphSchemaVersion: 'kovo.graph/v1',
+        graphSchemaVersion: 'kovo.graph/v2',
         pnpmLock: {
           contentHash: `sha256:${createHash('sha256').update(lockBytes).digest('hex')}`,
         },
         schema: 'kovo.artifact.provenance/v1',
         securityGuarantees: {
-          canonicalHash: 'sha256:3d01b8455b5a772930b63b89c5b5713e71ac7e3961d9d65329ea3b581e562547',
+          canonicalHash: cliSecurityGuaranteeHash,
           schema: 'kovo.security.guarantees/v1',
         },
       });
+      expect(graph.analysisInputs).toMatchObject({
+        runtimeTarget: 'node',
+        schema: 'kovo.analysis.inputs/v1',
+        sources: expect.arrayContaining([
+          expect.objectContaining({
+            codeUnitLength: expect.any(Number),
+            contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+            encoding: 'utf16le',
+            path: 'app.mjs',
+            role: 'app',
+          }),
+          expect.objectContaining({
+            codeUnitLength: expect.any(Number),
+            contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+            encoding: 'utf16le',
+            path: 'index.html',
+            role: 'client-entry',
+          }),
+          expect.objectContaining({
+            codeUnitLength: expect.any(Number),
+            contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+            encoding: 'utf16le',
+            path: 'kovo.config.ts',
+            role: 'config',
+          }),
+        ]),
+      });
+      expect(JSON.stringify(graph.analysisInputs)).not.toContain(root);
       expect(JSON.stringify(graph.provenance)).not.toContain(root);
       expect(graph.runtimePosture).toMatchObject({
         artifactSubject: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
@@ -455,7 +497,7 @@ export function ContactCard(props: { name: string }) {
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -782,7 +824,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
@@ -823,7 +865,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
@@ -864,7 +906,7 @@ export default createApp({ routes: [page] });
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
@@ -939,7 +981,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
@@ -988,7 +1030,7 @@ export default {};
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
@@ -1137,7 +1179,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
       expect(exitCode).toBe(1);
@@ -1200,14 +1242,9 @@ export default app;
         'utf8',
       );
 
-      const exitCode = await mainAsync([
-        'build',
-        appPath,
-        '--out',
-        outDir,
-        '--check',
-        '--no-cache',
-      ]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--check', '--no-cache']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
       // SPEC §6.6: app-authored control replacement is rejected before module evaluation.
@@ -1260,14 +1297,9 @@ export default createApp({ mutations: [unsafe] });
         'utf8',
       );
 
-      const exitCode = await mainAsync([
-        'build',
-        appPath,
-        '--out',
-        outDir,
-        '--check',
-        '--no-cache',
-      ]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--check', '--no-cache']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
       // SPEC §6.6: app-authored control replacement is rejected before module evaluation.
@@ -1311,17 +1343,22 @@ const dynamicKey = mutation(runtimeKey, {
   },
 });
 
+throw new Error('dynamic registry-key fixture must not be evaluated');
 export default createApp({ mutations: [dynamicKey] });
 `,
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/runtime-key');
+      expect(errorOutput).toContain('ERROR KV235 app.mjs:5');
+      expect(errorOutput).toContain(
+        'App source hard-codes a mutation registry identity; use the source-derived object form.',
+      );
+      expect(errorOutput).not.toContain('dynamic registry-key fixture must not be evaluated');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -1347,7 +1384,7 @@ export default createApp({ mutations: [dynamicKey] });
         join(root, 'unsafe.mjs'),
         `
 import { mutation, publicAccess, s } from '@kovojs/server';
-export const outside = mutation('auth/outside-scan', {
+export const outside = mutation({
   access: publicAccess('outside-scan callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1364,7 +1401,7 @@ export const outside = mutation('auth/outside-scan', {
         join(appRoot, 'safe-decoy.mjs'),
         `
 import { mutation, publicAccess, s } from '@kovojs/server';
-export const decoy = mutation('auth/outside-scan', {
+export const decoy = mutation({
   access: publicAccess('unreachable safe decoy'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
@@ -1386,12 +1423,12 @@ export default createApp({ mutations: [outside] });
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
-      expect(errorOutput).toContain('ERROR KV418 MUTATION auth/outside-scan');
+      expect(errorOutput).toContain('ERROR KV418 MUTATION unsafe/outside');
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -1512,15 +1549,7 @@ export default createApp({ mutations: [actual] });
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-    try {
-      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
-      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
-      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
-      writeClientEntry(root);
-      writeFileSync(
-        appPath,
-        `
+    const appSource = `
 import { createApp, guards, mutation, query, route, s, trustedHtml } from '@kovojs/server';
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
@@ -1553,11 +1582,41 @@ export default createApp({
     }),
   ],
 });
-`,
-        'utf8',
-      );
+`;
+    const exactSite = (start: number, end: number) => ({
+      encoding: 'utf16le',
+      file: 'app.mjs',
+      sliceHash: `sha256:${createHash('sha256')
+        .update(Buffer.from(appSource.slice(start, end), 'utf16le'))
+        .digest('hex')}`,
+      sourceHash: `sha256:${createHash('sha256')
+        .update(Buffer.from(appSource, 'utf16le'))
+        .digest('hex')}`,
+      sourceLength: appSource.length,
+      span: { end, start },
+    });
+    const allowStart = appSource.indexOf('s.string().allowControlChars()');
+    const allowEnd = allowStart + 's.string().allowControlChars()'.length;
+    const csrfStart = appSource.indexOf("mutation('admin/update'");
+    const csrfEnd = appSource.indexOf('\n});', csrfStart) + '\n})'.length;
+    const htmlStart = appSource.indexOf(
+      "trustedHtml('<main>Admin</main>', 'build access fixture')",
+    );
+    const htmlEnd = htmlStart + "trustedHtml('<main>Admin</main>', 'build access fixture')".length;
+    const allowSite = exactSite(allowStart, allowEnd);
+    const csrfSite = exactSite(csrfStart, csrfEnd);
+    const htmlSite = exactSite(htmlStart, htmlEnd);
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, appSource, 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', outDir]),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('UNGUARDED');
@@ -1565,7 +1624,15 @@ export default createApp({
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
         escapeCensus?: Record<string, unknown>;
         mutations?: readonly Record<string, unknown>[];
+        runtimePosture?: { artifactSubject: string };
         trustEscapes?: readonly Record<string, unknown>[];
+      };
+      const censusReviewSubjects = JSON.parse(
+        readFileSync(join(outDir, '.kovo/escape-census-review-subjects.json'), 'utf8'),
+      ) as {
+        artifactSubject: string;
+        schema: string;
+        subjects: readonly Record<string, unknown>[];
       };
       expect(graph.escapeCensus).toEqual({
         doors: [
@@ -1576,7 +1643,7 @@ export default createApp({
           'trustedHtml',
           'trustedSql',
         ],
-        schema: 'kovo.escape-census-coverage/v1',
+        schema: 'kovo.escape-census-coverage/v2',
         sources: {
           allowControlChars: 'trustEscapes',
           'csrf:false': 'trustEscapes',
@@ -1597,7 +1664,7 @@ export default createApp({
         expect.arrayContaining([
           expect.objectContaining({
             kind: 'allowControlChars',
-            root: 'app.mjs:18',
+            root: `app.mjs:${allowStart}:${allowEnd}`,
           }),
           expect.objectContaining({
             kind: 'csrfFalse',
@@ -1605,9 +1672,40 @@ export default createApp({
           }),
           expect.objectContaining({
             kind: 'trustedHtml',
-            root: 'app.mjs:30',
+            root: `app.mjs:${htmlStart}:${htmlEnd}`,
           }),
         ]),
+      );
+      expect(censusReviewSubjects).toMatchObject({
+        artifactSubject: graph.runtimePosture?.artifactSubject,
+        schema: 'kovo.escape-census-review-subjects/v1',
+        subjects: expect.arrayContaining([
+          expect.objectContaining({
+            artifactSubject: graph.runtimePosture?.artifactSubject,
+            door: 'allowControlChars',
+            root: `app.mjs:${allowStart}:${allowEnd}`,
+            schema: 'kovo.escape-census-review/v1',
+            sites: [allowSite],
+          }),
+          expect.objectContaining({
+            artifactSubject: graph.runtimePosture?.artifactSubject,
+            door: 'csrf:false',
+            root: 'mutation:admin/update',
+            schema: 'kovo.escape-census-review/v1',
+            sites: [csrfSite],
+          }),
+          expect.objectContaining({
+            artifactSubject: graph.runtimePosture?.artifactSubject,
+            door: 'trustedHtml',
+            root: `app.mjs:${htmlStart}:${htmlEnd}`,
+            schema: 'kovo.escape-census-review/v1',
+            sites: [htmlSite],
+          }),
+        ]),
+      });
+      expect(censusReviewSubjects.subjects).toHaveLength(3);
+      expect(JSON.stringify(censusReviewSubjects)).not.toMatch(
+        /private|publicKey|signature|keyId/u,
       );
     } finally {
       stdout.mockRestore();
@@ -1615,6 +1713,104 @@ export default createApp({
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('binds nested app imports and client entry to invocation-root-relative source identities', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-nested-analysis-inputs-'));
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const appSource = [
+      "import { createApp } from '@kovojs/server';",
+      "import { sharedRoute } from '../shared.mjs';",
+      'export default createApp({ routes: [sharedRoute] });',
+      '',
+    ].join('\n');
+    const sharedSource = [
+      "import { guards, route, trustedHtml } from '@kovojs/server';",
+      "const allow = guards.rateLimit({ max: 10, per: 'global' });",
+      "export const sharedRoute = route('/shared', {",
+      '  guard: allow,',
+      "  page: () => trustedHtml('<main>Shared</main>', 'nested source identity fixture'),",
+      '});',
+      '',
+    ].join('\n');
+    const clientSource = 'export const client = true;\n';
+    const clientEntry =
+      '<!doctype html><html><body><script type="module" src="/src/client.ts"></script></body></html>';
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      mkdirSync(join(root, 'src/src'), { recursive: true });
+      writeFileSync(join(root, 'src/app.mjs'), appSource, 'utf8');
+      writeFileSync(join(root, 'shared.mjs'), sharedSource, 'utf8');
+      writeFileSync(join(root, 'src/src/client.ts'), clientSource, 'utf8');
+      writeFileSync(join(root, 'src/index.html'), clientEntry, 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.mjs', '--out', 'dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+
+      const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        analysisInputs: {
+          schema: string;
+          sources: readonly {
+            codeUnitLength: number;
+            contentHash: string;
+            encoding: string;
+            path: string;
+            role: string;
+          }[];
+        };
+      };
+      expect(graph.analysisInputs.schema).toBe('kovo.analysis.inputs/v1');
+      expect(graph.analysisInputs.sources).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: 'shared.mjs', role: 'app' }),
+          expect.objectContaining({ path: 'src/app.mjs', role: 'app' }),
+          expect.objectContaining({ path: 'src/index.html', role: 'client-entry' }),
+        ]),
+      );
+      const sourceKeys = graph.analysisInputs.sources.map(
+        (source) => `${source.role}\u0000${source.path}`,
+      );
+      expect(sourceKeys).toEqual([...sourceKeys].sort());
+      for (const source of graph.analysisInputs.sources) {
+        expect(source.path).not.toMatch(/^(?:\/|[A-Za-z]:|\\)/u);
+        expect(source.path).not.toContain('\\');
+        expect(source.path.split('/')).not.toEqual(expect.arrayContaining(['', '.', '..']));
+        const exactSource = readFileSync(join(root, source.path), 'utf8');
+        expect(source).toMatchObject({
+          codeUnitLength: exactSource.length,
+          contentHash: `sha256:${createHash('sha256')
+            .update(Buffer.from(exactSource, 'utf16le'))
+            .digest('hex')}`,
+          encoding: 'utf16le',
+        });
+      }
+
+      const reviewManifest = JSON.parse(
+        readFileSync(join(outDir, '.kovo/escape-census-review-subjects.json'), 'utf8'),
+      ) as { subjects: readonly { door: string; sites: readonly Record<string, unknown>[] }[] };
+      const trustedHtml = reviewManifest.subjects.find((subject) => subject.door === 'trustedHtml');
+      expect(trustedHtml?.sites).toEqual([
+        expect.objectContaining({
+          encoding: 'utf16le',
+          file: 'shared.mjs',
+          sourceHash: `sha256:${createHash('sha256')
+            .update(Buffer.from(sharedSource, 'utf16le'))
+            .digest('hex')}`,
+        }),
+      ]);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
 
   it('request-closes a declassification door imported by the application root', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-'));
@@ -1645,7 +1841,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(errorOutput).toContain('ERROR KV448 app.mjs:1');
@@ -1665,6 +1861,7 @@ export default createApp({
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
     const invalidOutDir = join(root, 'invalid-dist');
+    const changedOutDir = join(root, 'changed-dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
@@ -1674,13 +1871,12 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
-      writeFileSync(
-        appPath,
+      const reviewedSource = (field: 'name' | 'role') =>
         [
           "import { createApp, trustedAssign } from '@kovojs/server';",
           '',
           'export function reviewedGrant(input) {',
-          '  return trustedAssign(input.role, {',
+          `  return trustedAssign(input.${field}, {`,
           `    evidence: { digest: 'sha256:${'a'.repeat(64)}', kind: 'test', reference: 'tests/authz/admin-role-grant' },`,
           "    invariant: 'governed-write.authorized-principal',",
           "    why: { guard: 'guards.role:admin', kind: 'guard-chain' },",
@@ -1688,14 +1884,25 @@ export default createApp({
           '}',
           'export default createApp({ routes: [] });',
           '',
-        ].join('\n'),
-        'utf8',
-      );
+        ].join('\n');
+      expect(reviewedSource('name')).toHaveLength(reviewedSource('role').length);
+      writeFileSync(appPath, reviewedSource('role'), 'utf8');
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir, '--no-cache']);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--no-cache']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
+        analysisInputs: {
+          sources: readonly {
+            codeUnitLength: number;
+            contentHash: string;
+            encoding: string;
+            path: string;
+            role: string;
+          }[];
+        };
         capabilities: readonly {
           obligation: unknown;
           site: string;
@@ -1729,6 +1936,31 @@ export default createApp({
       const manifestSource = JSON.stringify(manifest);
       expect(manifestSource).not.toMatch(/private|publicKey|signature|keyId/u);
 
+      // @kovo-security-certifies C13 build-input-subject-source-binding
+      // SPEC §§11.2: a same-path/same-length semantic source edit must invalidate every
+      // detached review subject even when the capability graph retains the same site/obligation.
+      writeFileSync(appPath, reviewedSource('name'), 'utf8');
+      stderr.mockClear();
+      await expect(
+        withCwd(root, () => mainAsync(['build', appPath, '--out', changedOutDir, '--no-cache'])),
+      ).resolves.toBe(0);
+      const changedGraph = JSON.parse(
+        readFileSync(join(changedOutDir, '.kovo/graph.json'), 'utf8'),
+      ) as typeof graph;
+      const changedManifest = JSON.parse(
+        readFileSync(join(changedOutDir, '.kovo/escape-obligations.json'), 'utf8'),
+      ) as typeof manifest;
+      const sourceHash = (value: typeof graph) =>
+        value.analysisInputs.sources.find(
+          (source) => source.role === 'app' && source.path === 'app.mjs',
+        )?.contentHash;
+      expect(sourceHash(changedGraph)).not.toBe(sourceHash(graph));
+      expect(changedGraph.runtimePosture.artifactSubject).not.toBe(
+        graph.runtimePosture.artifactSubject,
+      );
+      expect(changedManifest.artifactSubject).toBe(changedGraph.runtimePosture.artifactSubject);
+      expect(changedManifest.subjects).not.toEqual(manifest.subjects);
+
       writeFileSync(
         appPath,
         [
@@ -1741,7 +1973,7 @@ export default createApp({
       );
       stderr.mockClear();
       await expect(
-        mainAsync(['build', appPath, '--out', invalidOutDir, '--no-cache']),
+        withCwd(root, () => mainAsync(['build', appPath, '--out', invalidOutDir, '--no-cache'])),
       ).resolves.toBe(1);
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(
         /KV438.*structured obligation/u,
@@ -1786,7 +2018,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('env.KOVO_BUILD_SENTINEL_SECRET');
@@ -1830,7 +2062,9 @@ export default createApp({
         'utf8',
       );
 
-      await expect(mainAsync(['build', appPath, '--out', outDir])).resolves.toBe(1);
+      await expect(
+        withCwd(root, () => mainAsync(['build', appPath, '--out', outDir])),
+      ).resolves.toBe(1);
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         'ERROR KV426 app.mjs:5',
       );
@@ -1937,7 +2171,7 @@ export async function search(input, db) {
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
       expect(errorOutput).toMatch(/ERROR KV422[\s\S]*src\/search\.js/);
@@ -2009,14 +2243,9 @@ export async function unsafe(db, input) {
       );
 
       // SPEC §6.6: reject an authored ambient-control replacement before trusting KV422 analysis.
-      const exitCode = await mainAsync([
-        'build',
-        appPath,
-        '--out',
-        outDir,
-        '--check',
-        '--no-cache',
-      ]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--check', '--no-cache']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(1);
       expect(errorOutput).toMatch(
@@ -2478,6 +2707,7 @@ export default createApp({
         join(root, 'app.ts'),
         `
 import { createApp } from '@kovojs/server';
+import './schema.js';
 export default createApp({});
 `,
         'utf8',
@@ -2812,7 +3042,7 @@ export default createApp({ endpoints: [download] });
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('KV423');
@@ -2887,7 +3117,7 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('KV423');
@@ -2962,7 +3192,7 @@ export default createApp({ endpoints: [forgedEndpoint] });
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
@@ -3026,7 +3256,7 @@ export async function resetFixture() {
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(errorOutput).not.toContain('KV406');
@@ -3098,8 +3328,11 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeFileSync(appPath, staticStylesheetRouteComponentAppModuleSource(), 'utf8');
       writeStyledComponentClientEntry(root);
+      writeRetentionProofConfig(root);
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.tsx', '--out', './dist']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -3118,6 +3351,31 @@ export async function resetFixture() {
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
       );
+      const clientJavaScriptAssets = neutralClientAssets(outDir, (href) => href.endsWith('.js'));
+      const clientJavaScript = clientJavaScriptAssets
+        .map((asset) => readFileSync(asset.filePath, 'utf8'))
+        .join('\n');
+      // SPEC §5.2/§6.6: importing an authored component only to enroll its compiled CSS cannot
+      // retain its server descriptor, JSX renderer, diagnostics, or security/crypto graph in the
+      // executable browser artifact. Native ESM needs no compatibility preload shim, so this
+      // CSS-only client pass emits no executable JavaScript at all.
+      expect(clientJavaScriptAssets).toEqual([]);
+      expect(clientJavaScript).not.toContain('Unknown component() definition field');
+      expect(clientJavaScript).not.toContain(
+        'Would lower to: a client-bundled copy of the component render function',
+      );
+      expect(clientJavaScript).not.toContain('KV318');
+
+      const neutralManifest = readBuildJson(join(outDir, '.kovo/manifest.json')) as {
+        clientModules?: readonly { file: string; path: string }[];
+      };
+      const autoCssClientModules = (neutralManifest.clientModules ?? []).filter((module) =>
+        module.path.endsWith('/src/auto-css-card.client.js'),
+      );
+      expect(autoCssClientModules).toHaveLength(1);
+      expect(
+        readFileSync(join(outDir, '.kovo/client', autoCssClientModules[0]!.file), 'utf8'),
+      ).toContain('AutoCssCard$button_click');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -3141,7 +3399,7 @@ export async function resetFixture() {
       writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -3224,7 +3482,7 @@ export async function resetFixture() {
       writeSplitStyleCreateComponentClientEntry(root);
       writeFileSync(appPath, splitSrcStylesheetRouteAppModuleSource(), 'utf8');
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -3280,7 +3538,7 @@ export async function resetFixture() {
       writeDocumentShellTemplate(root);
       writeSplitStyleCreateComponentClientEntry(root);
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -3344,7 +3602,7 @@ export const homeQuery = {
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -4000,14 +4258,9 @@ export const homeQuery = {
       writeFileSync(appPath, databaseEnvAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
-      const exitCode = await mainAsync([
-        'build',
-        appPath,
-        '--out',
-        outDir,
-        '--preset',
-        'cloudflare',
-      ]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', outDir, '--preset', 'cloudflare']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
       expect(exitCode, errorOutput).toBe(0);
@@ -4038,14 +4291,9 @@ export const homeQuery = {
       writeFileSync(appPath, blockedCloudflareApiAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
-      const exitCode = await mainAsync([
-        'build',
-        appPath,
-        '--out',
-        outDir,
-        '--preset',
-        'cloudflare',
-      ]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--preset', 'cloudflare']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
       expect(exitCode).toBe(1);
@@ -4622,7 +4870,7 @@ import { component } from '@kovojs/core';
 import { publicAccess, query, s } from '@kovojs/server';
 import { trustedHtml, trustedUrl } from './safe-html.js';
 
-export const postQuery = query('post', {
+export const postQuery = query({
   access: publicAccess('trustedHtml barrel build preflight fixture'),
   load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
   output: s.object({ body: s.string(), href: s.string() }),
@@ -4648,7 +4896,7 @@ import { publicAccess, query, s } from '@kovojs/server';
 import * as browser from '@kovojs/browser';
 import * as safeHtml from './safe-html.js';
 
-export const postQuery = query('post', {
+export const postQuery = query({
   access: publicAccess('trustedHtml star barrel build preflight fixture'),
   load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
   output: s.object({ body: s.string(), href: s.string() }),
@@ -4870,10 +5118,15 @@ function writeStyledComponentClientEntry(root: string): void {
 import { component } from '@kovojs/core';
 
 export const AutoCssCard = component({
+  state: () => ({ count: 0 }),
   css: \`
     auto-css-card { color: teal; }
   \`,
-  render: () => <auto-css-card>Auto CSS</auto-css-card>,
+  render: (_queries, state) => (
+    <auto-css-card>
+      <button type="button" onClick={() => { state.count += 1; }}>{state.count}</button>
+    </auto-css-card>
+  ),
 });
 `,
     'utf8',

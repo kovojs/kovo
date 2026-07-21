@@ -2,8 +2,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from '@kovojs/compiler';
-import { analyzeCapabilityClosure } from '@kovojs/compiler/internal';
-import { collectUnregisteredSinksFromProject } from '@kovojs/drizzle/internal/static';
+import {
+  analyzeCapabilityClosure,
+  componentTaskBSourceOperationFacts,
+  parseComponentModule,
+} from '@kovojs/compiler/internal';
+import {
+  collectUnregisteredSinksFromProject,
+  snapshotCompilerTaskBFiniteVerdict,
+} from '@kovojs/drizzle/internal/static';
 
 const source = `
 import { createApp, endpoint, layout, mutation, query, route, task, webhook } from '@kovojs/server';
@@ -28,29 +35,36 @@ function routedFacts(options: { dropCapabilityRoot?: 'mutation'; dropSemanticRoo
   const graphs = compiled.componentGraphFacts.flatMap((fact) =>
     fact.securitySemanticGraph ? [fact.securitySemanticGraph] : [],
   );
+  const operations = componentTaskBSourceOperationFacts(parseComponentModule('app.tsx', source));
+  const semanticSources = [
+    {
+      fileName: 'app.tsx',
+      graphs:
+        options.dropSemanticRoot === 'mutation'
+          ? graphs.map((graph) => ({
+              ...graph,
+              roots: graph.roots.filter((root) => root.binding.factory !== 'mutation'),
+            }))
+          : graphs,
+      operations,
+      source,
+    },
+  ] as const;
   const closure = analyzeCapabilityClosure({ files });
   return collectUnregisteredSinksFromProject({
-    compilerSecuritySemanticSources: [
-      {
-        fileName: 'app.tsx',
-        graphs:
-          options.dropSemanticRoot === 'mutation'
-            ? graphs.map((graph) => ({
-                ...graph,
-                roots: graph.roots.filter((root) => root.binding.factory !== 'mutation'),
-              }))
-            : graphs,
-        source,
-      },
-    ],
+    compilerSecuritySemanticSources: semanticSources,
     compilerTaskBClosure: {
       capabilityFacts:
         options.dropCapabilityRoot === 'mutation'
           ? closure.facts.filter((fact) => !(fact.kind === 'root' && fact.rootKind === 'mutation'))
           : closure.facts,
       dependencyManifest: closure.dependencyManifest,
+      finiteVerdict: snapshotCompilerTaskBFiniteVerdict({
+        blockingDiagnostics: [],
+        semanticSources,
+      }),
       files,
-      schema: 'kovo-task-b-closure/v1',
+      schema: 'kovo-task-b-closure/v2',
     },
     files,
   });
@@ -70,7 +84,7 @@ describe('Phase 3C TASK B compiler routing', () => {
     );
     expect(routedFacts({ dropSemanticRoot: 'mutation' })).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ source: expect.stringContaining('sink=finite-ir') }),
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
       ]),
     );
   });

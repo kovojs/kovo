@@ -183,7 +183,7 @@ export function evaluateEscapeCensus(options) {
     report: {
       apps: appReports,
       packages: packageReports,
-      schema: 'kovo.escape-census/v1',
+      schema: 'kovo.escape-census/v2',
     },
   };
 }
@@ -194,8 +194,10 @@ function inspectGraph(graph, app, roots, findings) {
     return;
   }
   validateCoverage(graph.escapeCensus, app, findings);
+  const analyzedAppSources = validateAnalysisInputs(graph.analysisInputs, app, findings);
+  const executableCsrfRoots = executableCsrfRootsFromGraph(graph.mutations, app, findings);
 
-  const trustKinds = new Set();
+  const trustBindingsByKind = new Map();
   const declaredCsrfRoots = new Set();
   const trustEscapes = graph.trustEscapes;
   if (!Array.isArray(trustEscapes)) {
@@ -211,7 +213,22 @@ function inspectGraph(graph, app, roots, findings) {
         findings.push(`${app}: unsupported trust-escape kind ${escape.kind}`);
         continue;
       }
-      trustKinds.add(escape.kind);
+      if (!validateTrustEscapeSourceBinding(escape, label, analyzedAppSources, findings)) continue;
+      if (escape.kind === 'trustedHtml' || escape.kind === 'trustedSql') {
+        const exactBindings = trustBindingsByKind.get(escape.kind) ?? new Map();
+        const identity = `${escape.sourceBinding.sourceHash}\u0000${escape.sourceBinding.sliceHash}`;
+        const previous = exactBindings.get(escape.root);
+        if (previous !== undefined && previous.identity !== identity) {
+          findings.push(`${label} conflicts with the exact source binding for ${escape.root}`);
+        } else {
+          exactBindings.set(escape.root, {
+            identity,
+            sliceHash: escape.sourceBinding.sliceHash,
+            sourceHash: escape.sourceBinding.sourceHash,
+          });
+        }
+        trustBindingsByKind.set(escape.kind, exactBindings);
+      }
       const door = trustKindToDoor[escape.kind];
       if (!door) continue;
       if (!nonBlank(escape.site)) findings.push(`${label} must carry a non-blank site`);
@@ -219,38 +236,52 @@ function inspectGraph(graph, app, roots, findings) {
         findings.push(`${label} must carry a source-derived escape root`);
         continue;
       }
-      // TSX compilation emits both source-binding and generated-registry witnesses for csrf:false.
-      // Metric E counts the reachable mutation authority once, using the registry key that the
-      // runtime executes, rather than treating provenance fanout as two distinct escape doors.
       if (door === 'csrf:false') {
-        declaredCsrfRoots.add(escape.root);
+        const expectedCountedRoot = exactCountedCsrfRoot(escape, executableCsrfRoots);
+        if (
+          escape.countedRootDisposition === 'linked' &&
+          nonBlank(escape.countedRoot) &&
+          escape.countedRoot === expectedCountedRoot
+        ) {
+          declaredCsrfRoots.add(escape.countedRoot);
+        } else if (
+          escape.countedRootDisposition === 'proven-unreachable' &&
+          escape.countedRoot === undefined &&
+          expectedCountedRoot === undefined
+        ) {
+          // Closed source fact: it cannot contribute to an executable Metric E root.
+        } else {
+          findings.push(`${label} must carry a closed counted-root disposition`);
+        }
         continue;
       }
       roots.get(door).add(escape.root);
     }
   }
 
-  const semanticTrustDoors = new Set();
   const components = graph.components;
   if (!Array.isArray(components)) {
     findings.push(`${app}: authoritative components array is absent`);
   } else {
     for (const [index, component] of components.entries()) {
+      let componentIdentity = `components[${index}]`;
+      if (record(component) && component.name !== undefined) {
+        if (nonBlank(component.name)) {
+          componentIdentity = component.name;
+        } else {
+          findings.push(`${app}: components[${index}].name must be bounded printable text`);
+        }
+      }
       inspectComponent(
         component,
-        `${app}/${component?.name ?? `components[${index}]`}`,
+        `${app}/${componentIdentity}`,
         roots,
-        semanticTrustDoors,
+        trustBindingsByKind,
+        analyzedAppSources,
         findings,
       );
     }
   }
-  for (const kind of ['trustedHtml', 'trustedSql']) {
-    if (semanticTrustDoors.has(kind) && !trustKinds.has(kind)) {
-      findings.push(`${app}: semantic ${kind} reachability has no ${kind} trust-escape fact`);
-    }
-  }
-
   const mutations = graph.mutations;
   if (!Array.isArray(mutations)) {
     findings.push(`${app}: authoritative mutations array is absent`);
@@ -275,9 +306,74 @@ function inspectGraph(graph, app, roots, findings) {
       roots.get('csrf:false').add(expectedRoot);
     }
   }
+  for (const declaredRoot of declaredCsrfRoots) {
+    if (!executableCsrfRoots.has(declaredRoot)) {
+      findings.push(`${app}: csrf producer relation names an uncounted root ${declaredRoot}`);
+    }
+  }
 }
 
-function inspectComponent(component, label, roots, semanticTrustDoors, findings) {
+function executableCsrfRootsFromGraph(value, app, findings) {
+  const roots = new Set();
+  if (!Array.isArray(value)) return roots;
+  for (const [index, mutation] of value.entries()) {
+    if (!record(mutation)) continue;
+    if (mutation.csrf !== 'exempt') continue;
+    if (!nonBlank(mutation.key)) {
+      findings.push(`${app}: csrf-exempt mutation at index ${index} has no key`);
+      continue;
+    }
+    roots.add(`mutation:${mutation.key}`);
+  }
+  return roots;
+}
+
+function exactCountedCsrfRoot(escape, executableRoots) {
+  if (nonBlank(escape.root) && executableRoots.has(escape.root)) return escape.root;
+  if (!nonBlank(escape.source) || !record(escape.sourceBinding)) return undefined;
+  const candidate = `mutation:${derivedRegistryKey(escape.sourceBinding.file, escape.source)}`;
+  return executableRoots.has(candidate) ? candidate : undefined;
+}
+
+function derivedRegistryKey(file, binding) {
+  const normalized = file.replace(/\\/gu, '/').replace(/\.[^./]+$/u, '');
+  const parts = normalized.split('/').filter((part) => part.length > 0);
+  let root = -1;
+  for (let index = 0; index < parts.length; index += 1) {
+    if (parts[index] === 'src') root = index;
+    if (
+      index <= parts.length - 3 &&
+      parts[index] === 'tests' &&
+      parts[index + 1] === 'integration' &&
+      parts[index + 2] === 'fixtures'
+    ) {
+      root = index + 2;
+      break;
+    }
+  }
+  const namespace = parts
+    .slice(root + 1)
+    .map(kebabRegistryPart)
+    .join('/');
+  const leaf = kebabRegistryPart(binding);
+  return namespace.length === 0 ? leaf : `${namespace}/${leaf}`;
+}
+
+function kebabRegistryPart(value) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/gu, '$1-$2')
+    .replace(/_/gu, '-')
+    .toLowerCase();
+}
+
+function inspectComponent(
+  component,
+  label,
+  roots,
+  trustBindingsByKind,
+  analyzedAppSources,
+  findings,
+) {
   if (!record(component)) {
     findings.push(`${label}: component must be an object`);
     return;
@@ -286,14 +382,19 @@ function inspectComponent(component, label, roots, semanticTrustDoors, findings)
   if (component.securityOperations !== undefined && !Array.isArray(component.securityOperations)) {
     findings.push(`${label}: securityOperations must be an array when present`);
   } else {
-    for (const operation of component.securityOperations ?? []) {
-      if (
-        record(operation) &&
-        operation.kind === 'server.handler.root' &&
-        nonBlank(operation.root)
-      ) {
-        handlerRoots.add(operation.root);
+    for (const [operationIndex, operation] of (component.securityOperations ?? []).entries()) {
+      if (!record(operation) || operation.kind !== 'server.handler.root') continue;
+      if (!nonBlank(operation.target)) {
+        findings.push(
+          `${label}: securityOperations[${operationIndex}] handler root must carry a bounded printable target`,
+        );
+        continue;
       }
+      if (handlerRoots.has(operation.target)) {
+        findings.push(`${label}: duplicate server handler root ${operation.target}`);
+        continue;
+      }
+      handlerRoots.add(operation.target);
     }
   }
   const semantic = component.securitySemanticGraph;
@@ -305,7 +406,11 @@ function inspectComponent(component, label, roots, semanticTrustDoors, findings)
     }
     return;
   }
-  if (!record(semantic) || semantic.schema !== 'kovo-security-semantic-graph/v2') {
+  if (
+    !record(semantic) ||
+    semantic.schema !== 'kovo-security-semantic-graph/v3' ||
+    !exactRelativeAnalysisPath(semantic.sourceFile)
+  ) {
     findings.push(`${label}: unsupported or malformed securitySemanticGraph schema`);
     return;
   }
@@ -331,6 +436,10 @@ function inspectComponent(component, label, roots, semanticTrustDoors, findings)
     }
     if (!record(root.binding) || root.binding.root !== root.root) {
       findings.push(`${rootLabel}.binding must bind the same exact root`);
+    }
+    if (semanticRoots.has(root.root)) {
+      findings.push(`${rootLabel} duplicates semantic root ${root.root}`);
+      continue;
     }
     semanticRoots.add(root.root);
     if (!Array.isArray(root.traces)) {
@@ -361,13 +470,59 @@ function inspectComponent(component, label, roots, semanticTrustDoors, findings)
         findings.push(`${traceLabel}.sink must carry a non-blank door`);
         continue;
       }
+      if (trace.sink.target !== undefined && !nonBlank(trace.sink.target)) {
+        findings.push(`${traceLabel}.sink.target must be a bounded printable identity`);
+        continue;
+      }
+      if (
+        typeof trace.sink.sliceHash !== 'string' ||
+        !/^sha256:[a-f0-9]{64}$/u.test(trace.sink.sliceHash) ||
+        !record(trace.sink.span) ||
+        !Number.isSafeInteger(trace.sink.span.start) ||
+        !Number.isSafeInteger(trace.sink.span.end) ||
+        trace.sink.span.start < 0 ||
+        trace.sink.span.end <= trace.sink.span.start
+      ) {
+        findings.push(`${traceLabel}.sink must carry an exact authored span`);
+        continue;
+      }
       if (!knownSemanticDoors.has(trace.sink.door)) {
         findings.push(`${label}: unsupported semantic door ${trace.sink.door}`);
         continue;
       }
       if (trace.sink.door === 'ctx.fetch') roots.get('ctx.fetch').add(root.root);
       if (trace.sink.door === 'trustedHtml' || trace.sink.door === 'trustedSql') {
-        semanticTrustDoors.add(trace.sink.door);
+        const sourceFile = semantic.sourceFile;
+        const source = nonBlank(sourceFile) ? analyzedAppSources.get(sourceFile) : undefined;
+        const exactRoot = nonBlank(sourceFile)
+          ? `${sourceFile}:${trace.sink.span.start}:${trace.sink.span.end}`
+          : undefined;
+        const exactBinding =
+          exactRoot === undefined
+            ? undefined
+            : trustBindingsByKind.get(trace.sink.door)?.get(exactRoot);
+        if (
+          !exactRelativeAnalysisPath(sourceFile) ||
+          source === undefined ||
+          trace.sink.span.end > source.codeUnitLength ||
+          exactRoot === undefined ||
+          exactBinding === undefined ||
+          exactBinding.sourceHash !== source.contentHash ||
+          exactBinding.sliceHash !== trace.sink.sliceHash
+        ) {
+          findings.push(`${traceLabel} lacks its exact ${trace.sink.door} trust-escape fact`);
+        }
+      }
+      if (trace.sink.door === 'ctx.fetch') {
+        const sourceFile = semantic.sourceFile;
+        const source = nonBlank(sourceFile) ? analyzedAppSources.get(sourceFile) : undefined;
+        if (
+          !exactRelativeAnalysisPath(sourceFile) ||
+          source === undefined ||
+          trace.sink.span.end > source.codeUnitLength
+        ) {
+          findings.push(`${traceLabel} lacks its exact analyzed source`);
+        }
       }
     }
   }
@@ -376,11 +531,129 @@ function inspectComponent(component, label, roots, semanticTrustDoors, findings)
       findings.push(`${label}: server handler root ${handlerRoot} is absent from semantic graph`);
     }
   }
+  for (const semanticRoot of semanticRoots) {
+    if (!handlerRoots.has(semanticRoot)) {
+      findings.push(`${label}: semantic root ${semanticRoot} has no server handler-root operation`);
+    }
+  }
+}
+
+function validateTrustEscapeSourceBinding(value, label, analyzedAppSources, findings) {
+  const binding = value.sourceBinding;
+  if (
+    !record(binding) ||
+    !exactRecordKeys(binding, ['encoding', 'file', 'sliceHash', 'sourceHash', 'span']) ||
+    binding.encoding !== 'utf16le' ||
+    !nonBlank(binding.file) ||
+    typeof binding.sourceHash !== 'string' ||
+    !/^sha256:[a-f0-9]{64}$/u.test(binding.sourceHash) ||
+    typeof binding.sliceHash !== 'string' ||
+    !/^sha256:[a-f0-9]{64}$/u.test(binding.sliceHash) ||
+    !record(binding.span) ||
+    !exactRecordKeys(binding.span, ['end', 'start']) ||
+    !Number.isSafeInteger(binding.span.start) ||
+    !Number.isSafeInteger(binding.span.end) ||
+    binding.span.start < 0 ||
+    binding.span.end <= binding.span.start ||
+    !exactRelativeAnalysisPath(binding.file) ||
+    analyzedAppSources.get(binding.file) === undefined ||
+    binding.sourceHash !== analyzedAppSources.get(binding.file)?.contentHash ||
+    binding.span.end > analyzedAppSources.get(binding.file).codeUnitLength ||
+    typeof value.site !== 'string' ||
+    !value.site.startsWith(`${binding.file}:`) ||
+    !/^[1-9][0-9]*$/u.test(value.site.slice(binding.file.length + 1)) ||
+    (value.kind !== 'csrfFalse' &&
+      value.root !== `${binding.file}:${binding.span.start}:${binding.span.end}`)
+  ) {
+    findings.push(`${label} must carry an exact UTF-16 source binding`);
+    return false;
+  }
+  return true;
+}
+
+function validateAnalysisInputs(value, app, findings) {
+  const appSources = new Map();
+  if (
+    !record(value) ||
+    !exactRecordKeys(value, ['runtimeTarget', 'schema', 'sources']) ||
+    value.schema !== 'kovo.analysis.inputs/v1' ||
+    !['cloudflare', 'node', 'vercel'].includes(value.runtimeTarget) ||
+    !Array.isArray(value.sources)
+  ) {
+    findings.push(`${app}: missing exact kovo.analysis.inputs/v1 manifest`);
+    return appSources;
+  }
+  let previousKey;
+  for (const [index, source] of value.sources.entries()) {
+    if (
+      !record(source) ||
+      !exactRecordKeys(source, ['codeUnitLength', 'contentHash', 'encoding', 'path', 'role']) ||
+      !Number.isSafeInteger(source.codeUnitLength) ||
+      source.codeUnitLength < 0 ||
+      typeof source.contentHash !== 'string' ||
+      !/^sha256:[a-f0-9]{64}$/u.test(source.contentHash) ||
+      source.encoding !== 'utf16le' ||
+      !exactRelativeAnalysisPath(source.path) ||
+      !['app', 'client-entry', 'config'].includes(source.role)
+    ) {
+      findings.push(`${app}: analysisInputs.sources[${index}] is malformed`);
+      continue;
+    }
+    const key = `${source.role}\u0000${source.path}`;
+    if (previousKey !== undefined && compareStrings(previousKey, key) >= 0) {
+      findings.push(`${app}: analysis input sources must be uniquely code-unit sorted`);
+    }
+    previousKey = key;
+    if (source.role === 'app') {
+      appSources.set(source.path, {
+        codeUnitLength: source.codeUnitLength,
+        contentHash: source.contentHash,
+      });
+    }
+  }
+  if (appSources.size === 0) findings.push(`${app}: analysis inputs contain no app source`);
+  return appSources;
+}
+
+function exactRelativeAnalysisPath(value) {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 4_096 ||
+    value.trim() !== value ||
+    value.startsWith('/') ||
+    value.includes('\\') ||
+    value.includes(':')
+  ) {
+    return false;
+  }
+  const parts = value.split('/');
+  if (parts.some((part) => part.length === 0 || part === '.' || part === '..')) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (
+      code <= 0x1f ||
+      (code >= 0x7f && code <= 0x9f) ||
+      code === 0x061c ||
+      (code >= 0x200b && code <= 0x200f) ||
+      (code >= 0x2028 && code <= 0x202e) ||
+      (code >= 0x2060 && code <= 0x206f) ||
+      code === 0xfeff
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function exactRecordKeys(value, expected) {
+  const keys = Object.keys(value).sort();
+  return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
 }
 
 function validateCoverage(value, app, findings) {
-  if (!record(value) || value.schema !== 'kovo.escape-census-coverage/v1') {
-    findings.push(`${app}: missing kovo.escape-census-coverage/v1 producer witness`);
+  if (!record(value) || value.schema !== 'kovo.escape-census-coverage/v2') {
+    findings.push(`${app}: missing kovo.escape-census-coverage/v2 producer witness`);
     return;
   }
   if (
@@ -422,7 +695,7 @@ function validateBudgetDocument(value, label, findings) {
   }
   for (const [packageName, limits] of Object.entries(value.packages)) {
     if (!nonBlank(packageName) || !record(limits)) {
-      findings.push(`${label}: invalid package budget ${packageName || '<empty>'}`);
+      findings.push(`${label}: invalid package budget <invalid>`);
       continue;
     }
     const keys = Object.keys(limits);
@@ -480,7 +753,30 @@ function record(value) {
 }
 
 function nonBlank(value) {
-  return typeof value === 'string' && value.trim().length > 0;
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 4_096 ||
+    value.trim() !== value
+  ) {
+    return false;
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    if (auditIdentityControl(value.charCodeAt(index))) return false;
+  }
+  return true;
+}
+
+function auditIdentityControl(code) {
+  return (
+    code <= 0x1f ||
+    (code >= 0x7f && code <= 0x9f) ||
+    code === 0x061c ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x2028 && code <= 0x202e) ||
+    (code >= 0x2060 && code <= 0x206f) ||
+    code === 0xfeff
+  );
 }
 
 function compareStrings(left, right) {
@@ -488,17 +784,17 @@ function compareStrings(left, right) {
 }
 
 export function formatEscapeCensusReport(report) {
-  const lines = ['kovo.escape-census/v1'];
+  const lines = ['kovo.escape-census/v2'];
   for (const app of report.apps) {
     for (const door of ESCAPE_CENSUS_DOORS) {
       lines.push(
-        `ESCAPE app=${app.app} package=${app.package} door=${door} roots=${app.doors[door]} rootIds=${app.roots[door].join(',') || '-'}`,
+        `ESCAPE app=${JSON.stringify(app.app)} package=${JSON.stringify(app.package)} door=${JSON.stringify(door)} roots=${app.doors[door]} rootIds=${JSON.stringify(app.roots[door])}`,
       );
     }
   }
   for (const entry of report.packages) {
     lines.push(
-      `PACKAGE package=${entry.package} total=${ESCAPE_CENSUS_DOORS.reduce((sum, door) => sum + entry.doors[door], 0)}`,
+      `PACKAGE package=${JSON.stringify(entry.package)} total=${ESCAPE_CENSUS_DOORS.reduce((sum, door) => sum + entry.doors[door], 0)}`,
     );
   }
   return `${lines.join('\n')}\n`;

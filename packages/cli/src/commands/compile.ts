@@ -1201,8 +1201,9 @@ async function runCompileDrizzleStaticCommand(
         compilerTaskBClosure: {
           capabilityFacts: compilerVerdict.capabilityClosure.facts,
           dependencyManifest: compilerVerdict.capabilityClosure.dependencyManifest,
+          finiteVerdict: compilerVerdict.finiteVerdict,
           files,
-          schema: 'kovo-task-b-closure/v1',
+          schema: 'kovo-task-b-closure/v2',
         },
         files,
       });
@@ -1294,11 +1295,35 @@ async function runCompileDrizzleStaticCommand(
 interface StaticHandlerSecurityVerdict {
   capabilityClosure: import('@kovojs/compiler/internal').AnalyzeCapabilityClosureResult;
   diagnostics: CoreGraph.StaticDiagnosticFact[];
+  finiteVerdict: import('@kovojs/drizzle/internal/static').CompilerTaskBFiniteVerdict;
   semanticSources: {
     fileName: string;
     graphs: NonNullable<CoreGraph.ComponentExplain['securitySemanticGraph']>[];
+    operations: import('@kovojs/drizzle/internal/static').CompilerTaskBSourceOperation[];
     source: string;
   }[];
+}
+
+function appendCompileTaskBFiniteDiagnostics(
+  compilerDiagnostics: CompileResult['diagnostics'],
+  diagnostics: CoreGraph.StaticDiagnosticFact[],
+  blockingDiagnostics: CoreGraph.StaticDiagnosticFact[],
+): void {
+  for (const diagnostic of compilerDiagnostics) {
+    if (diagnostic.code !== 'KV449' && diagnostic.code !== 'KV450' && diagnostic.code !== 'KV452') {
+      continue;
+    }
+    const fact: CoreGraph.StaticDiagnosticFact = {
+      code: diagnostic.code,
+      ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
+      message: diagnostic.message,
+      severity: diagnostic.severity ?? 'error',
+      site: diagnostic.fileName,
+      ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+    };
+    diagnostics.push(fact);
+    blockingDiagnostics.push(fact);
+  }
 }
 
 async function compileStaticHandlerSecurityVerdict(
@@ -1306,12 +1331,17 @@ async function compileStaticHandlerSecurityVerdict(
   root: string,
   importerPath: string,
 ): Promise<StaticHandlerSecurityVerdict> {
+  const { compileRouteModule } = await import('@kovojs/compiler');
   const {
     analyzeCapabilityClosure,
     collectCapabilityPackageRequests,
+    componentTaskBSourceOperationFacts,
     compilerGeneratedCapabilityDependencies,
+    parseComponentModule,
   } = await import('@kovojs/compiler/internal');
+  const { snapshotCompilerTaskBFiniteVerdict } = await import('@kovojs/drizzle/internal/static');
   const diagnostics: CoreGraph.StaticDiagnosticFact[] = [];
+  const blockingDiagnostics: CoreGraph.StaticDiagnosticFact[] = [];
   const compilerDependencies: import('@kovojs/compiler/internal').CompilerGeneratedCapabilityDependency[] =
     [];
   const semanticSources: StaticHandlerSecurityVerdict['semanticSources'] = [];
@@ -1331,27 +1361,37 @@ async function compileStaticHandlerSecurityVerdict(
       result.diagnostics,
       `CLI static handler diagnostics for ${file.fileName}`,
     );
-    for (const diagnostic of result.diagnostics) {
-      if (diagnostic.code !== 'KV449') continue;
-      diagnostics.push({
-        code: diagnostic.code,
-        message: diagnostic.message,
-        severity: diagnostic.severity ?? 'error',
-        site: diagnostic.fileName,
-        ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
-      });
-    }
-    for (const dependency of compilerGeneratedCapabilityDependencies({
-      authoredSource: file.source,
-      fileName: file.fileName,
-      loweredSource: result.loweredSource,
-    })) {
-      compilerDependencies.push(dependency);
+    const routeResult = compileRouteModule({ fileName: file.fileName, source: file.source });
+    assertCompileResultDiagnostics(
+      routeResult.diagnostics,
+      `CLI static route diagnostics for ${file.fileName}`,
+    );
+    appendCompileTaskBFiniteDiagnostics(result.diagnostics, diagnostics, blockingDiagnostics);
+    appendCompileTaskBFiniteDiagnostics(routeResult.diagnostics, diagnostics, blockingDiagnostics);
+    const loweredSources = [
+      result.loweredSource,
+      ...routeResult.files.map((routeFile) => routeFile.source),
+    ];
+    for (const loweredSource of loweredSources) {
+      for (const dependency of compilerGeneratedCapabilityDependencies({
+        authoredSource: file.source,
+        fileName: file.fileName,
+        loweredSource,
+      })) {
+        compilerDependencies.push(dependency);
+      }
     }
     semanticSources.push({
       fileName: file.fileName,
       graphs: result.componentGraphFacts.flatMap((fact) =>
         fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph],
+      ),
+      operations: componentTaskBSourceOperationFacts(
+        parseComponentModule(
+          file.fileName,
+          file.source,
+          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+        ),
       ),
       source: file.source,
     });
@@ -1370,13 +1410,31 @@ async function compileStaticHandlerSecurityVerdict(
   for (const diagnostic of capabilityClosure.diagnostics) {
     diagnostics.push({
       code: diagnostic.code,
+      ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
       message: diagnostic.message,
       severity: diagnostic.severity ?? 'error',
       site: diagnostic.fileName,
       ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
     });
   }
-  return { capabilityClosure, diagnostics, semanticSources };
+  return {
+    capabilityClosure,
+    diagnostics,
+    finiteVerdict: snapshotCompilerTaskBFiniteVerdict({
+      blockingDiagnostics,
+      semanticSources,
+    }),
+    semanticSources,
+  };
+}
+
+/** Internal executable seam for the TASK B caller-carrier mutation gate (SPEC §6.6). */
+export async function snapshotCompileCompilerTaskBFiniteVerdictForTests(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+  root: string,
+  importerPath: string,
+): Promise<import('@kovojs/drizzle/internal/static').CompilerTaskBFiniteVerdict> {
+  return (await compileStaticHandlerSecurityVerdict(files, root, importerPath)).finiteVerdict;
 }
 
 interface SqlSafetyDiagnosticLike {

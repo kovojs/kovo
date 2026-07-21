@@ -40,7 +40,7 @@ function advisory(overrides: Record<string, unknown> = {}): Record<string, unkno
   return {
     affectedRange: '>=0.1.0 <0.3.0',
     fixedIn: '0.3.0',
-    graphSchemaVersion: 'kovo.graph/v1',
+    graphSchemaVersion: 'kovo.graph/v2',
     id: 'GHSA-test-0001',
     retracts: ['explicit-secret-query-wire-egress'],
     schema: KOVO_ADVISORY_SCHEMA,
@@ -91,7 +91,7 @@ function bundle(feedBytes: Uint8Array, overrides: Record<string, unknown> = {}):
   };
 }
 
-function writeGraph(root: string, version = '0.2.0', graphSchemaVersion = 'kovo.graph/v1'): void {
+function writeGraph(root: string, version = '0.2.0', graphSchemaVersion = 'kovo.graph/v2'): void {
   mkdirSync(join(root, '.kovo'), { recursive: true });
   writeFileSync(
     join(root, '.kovo/graph.json'),
@@ -113,7 +113,7 @@ function writeGraph(root: string, version = '0.2.0', graphSchemaVersion = 'kovo.
   );
 }
 
-function rootWithGraph(version = '0.2.0', graphSchemaVersion = 'kovo.graph/v1'): string {
+function rootWithGraph(version = '0.2.0', graphSchemaVersion = 'kovo.graph/v2'): string {
   const root = mkdtempSync(join(tmpdir(), 'kovo-advisories-'));
   writeGraph(root, version, graphSchemaVersion);
   return root;
@@ -375,7 +375,7 @@ describe('authenticated advisory evaluation', () => {
   });
 
   it('returns UNKNOWN for a graph schema this checker does not understand', async () => {
-    const result = await check(rootWithGraph('0.2.0', 'kovo.graph/v2'), feed());
+    const result = await check(rootWithGraph('0.2.0', 'kovo.graph/v3'), feed());
     expect(result.exitCode).toBe(2);
     expect('output' in result ? result.output : '').toContain(
       'graph provenance graphSchemaVersion is unsupported',

@@ -186,7 +186,9 @@ export function runtimePostureFactsFromGraph(
     egressAllowlist: freezeBuildSecurityValue(egressAllowlist),
     irVersions: freezeBuildSecurityValue([
       'kovo-check/v1',
+      'kovo-security-semantic-graph/v3',
       'kovo-security-operation-ir/v1',
+      'kovo.graph/v2',
       'kovo-runtime-posture/v1',
     ]),
     trustEscapes: freezeBuildSecurityValue(trustEscapes),

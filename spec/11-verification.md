@@ -326,9 +326,29 @@ capability, `--escape-reviews <reviews.json>` is mandatory. The detached file ha
 `kovo.escape-obligation-review/v1` subject; missing, duplicate, surplus, malformed, stale-artifact,
 replacement-key, wrong-anchor, and invalid-signature rows all fail closed. The same out-of-band
 fingerprint MUST verify both the escape envelopes and the nonce-bound live deployment response.
-Success reports the number of verified reviews and explicitly states the non-claim: a signature
-does not prove an obligation true or executed-code/host integrity. `.kovo/escape-obligations.json`
-is the unsigned reviewer input emitted by build; it is not itself approval evidence.
+The build also emits `.kovo/escape-census-review-subjects.json`, schema
+`kovo.escape-census-review-subjects/v1`: one unsigned subject for every exact
+`(artifactSubject, door, root)` counted by Metric E, with the complete canonically sorted set of
+producer sites collapsed into that root. Each site is the exact record
+`{ encoding: "utf16le", file, sourceHash, sourceLength, sliceHash, span: { start, end } }`.
+`file` is a canonical invocation-root-relative POSIX path; lengths and spans are JavaScript UTF-16
+code units; `sourceHash` hashes the full UTF-16LE source; and `sliceHash` hashes exactly
+`source.slice(start, end)` as UTF-16LE. Absolute paths, backslashes, empty/`.`/`..` components,
+control characters, and bidirectional controls are invalid. Every source-root door other than
+`csrf:false` and `ctx.fetch` has exactly one site and its root is `file:start:end`; the two
+relation-root doors retain every canonically sorted unique producer site. Metric E series v2
+re-reads each site as a regular blob from the retained `codeSubjectSha` and rejects any source,
+length, span, or slice mismatch before accepting review evidence. When this set is non-empty,
+`--escape-census-reviews <reviews.json>` is mandatory. Its
+`kovo.escape-census-reviews/v1` file MUST contain exactly one valid, domain-separated
+`kovo.escape-census-review/v1` envelope per emitted subject under that same trust anchor. A missing,
+duplicate, surplus, malformed, stale-artifact, wrong-anchor, or invalid-signature envelope fails the
+whole set; partial signature coverage never reduces the unsigned count. Build, app code, and the
+app-facing/internal execution graph expose subject construction and verification but no signer.
+Success reports both verified review counts and explicitly states the non-claim: a signature records
+only that the pinned key holder approved those exact bytes; it does not prove an obligation true,
+identify an independent human, or prove executed-code/host integrity. The two build-emitted subject
+files are unsigned reviewer inputs, not approval evidence.
 
 `kovo explain --endpoints` is the stable machine-ingress audit. Its diffable table lists every declared endpoint and webhook, every `mutation()`, plus every route that returns `respond.file()`/`respond.stream()`: source-derived registry identity where applicable, method, path, mount mode, auth scheme (`session+guard`, `verifier:<resolved scheme>`, `custom:<name>`, or `none:<justification>`), CSRF/effect posture, and for webhooks the write→domain chain. Endpoint posture is `safe:read-only` for the closed `GET`/`HEAD`/`OPTIONS` set from §9.1, `checked` when an unsafe method receives the default synchronizer-token check, or `exempt:<justification>` when an unsafe endpoint explicitly opts out. Mutation posture remains `checked` or `exempt:<justification>`; a `csrf: false` mutation appears here with the latter posture, and KV418 (§6.6) guarantees it references no ambient session. The pre-dispatch coarse limiter posture (§9.5) is enrolled and printed here too. The command is snapshot-locked with the rest of P8 output so security review can answer "what can reach this app, and what can it touch?" without executing a browser.
 

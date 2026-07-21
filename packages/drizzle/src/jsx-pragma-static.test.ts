@@ -73,11 +73,12 @@ export const Safe = <div>{examples.length + pattern.source.length}</div>;
   });
 
   it.each(['tsx', 'jsx'])(
-    'accepts only the exact framework JSX import source throughout authored .%s comments',
+    'accepts the exact framework automatic JSX directives throughout authored .%s comments',
     (extension) => {
       const source = `
 'use strict';
 const marker = 0; /** @jsxImportSource @kovojs/server */
+/** @jsxRuntime automatic */
 export const Safe = <div />;
 `;
 

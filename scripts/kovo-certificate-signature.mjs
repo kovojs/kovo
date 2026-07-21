@@ -67,6 +67,22 @@ export function verifyKovoCertificateSignature(certificateBytes, envelope) {
   }
 }
 
+/** Verify exact Ed25519 bytes through the existing script-side crypto acquisition door. */
+export function verifyEd25519Spki(payloadBytes, publicKeySpki, signatureBytes) {
+  try {
+    const publicKey = createPublicKey({
+      format: 'der',
+      key: Buffer.from(publicKeySpki),
+      type: 'spki',
+    });
+    const signature = Buffer.from(signatureBytes);
+    if (publicKey.asymmetricKeyType !== 'ed25519' || signature.length !== 64) return false;
+    return verifySignature(null, Buffer.from(payloadBytes), publicKey, signature);
+  } catch {
+    return false;
+  }
+}
+
 function validSha512(value) {
   if (typeof value !== 'string' || !value.startsWith('sha512-')) return false;
   try {

@@ -608,15 +608,19 @@ function appLocalGeneratedImportDiagnostic({
 function keyFirstRegistryCall(
   call: ComponentModuleModel['calls'][number],
 ): KeyFirstRegistryCall | null {
-  if (!call.exportedConstName) return null;
-  if (call.name !== 'mutation' && call.name !== 'query') {
+  if (call.frameworkFactory !== 'mutation' && call.frameworkFactory !== 'query') {
     return null;
   }
-  if (typeof call.argumentStaticValues[0] !== 'string') return null;
+  const argumentCount = compilerArrayLength(call.arguments, 'Key-first registry call arguments');
+  const staticKey = typeof call.argumentStaticValues[0] === 'string';
+  // SPEC §4.1: an exported declaration always has a compiler-derived identity. A legacy private
+  // declaration may retain an exact literal identity, but a computed key cannot be joined to the
+  // compiler-owned security root and therefore closes before application evaluation.
+  if ((!call.exportedConstName && staticKey) || (argumentCount < 2 && !staticKey)) return null;
   const span = call.argumentSpans[0] ?? { end: call.end, start: call.start };
   return {
     length: span.end - span.start,
-    primitive: call.name,
+    primitive: call.frameworkFactory,
     start: span.start,
   };
 }

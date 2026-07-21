@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import dns from 'node:dns';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
@@ -107,6 +108,20 @@ const cliDependencyCapabilityLoaderPath = path.join(
   repoRoot,
   'packages/cli/src/dependency-capability-loader.ts',
 );
+const cliEscapeCensusReviewSubjectsPath = path.join(
+  repoRoot,
+  'packages/cli/src/escape-census-review-subjects.ts',
+);
+const cliBuildExportPath = path.join(repoRoot, 'packages/cli/src/commands/build-export.ts');
+const cliCompilePath = path.join(repoRoot, 'packages/cli/src/commands/compile.ts');
+const serverCryptoAuthorityPath = path.join(repoRoot, 'packages/server/src/crypto-authority.ts');
+const serverEscapeCensusReviewPath = path.join(
+  repoRoot,
+  'packages/server/src/escape-census-review.ts',
+);
+const escapeCensusBaselinePath = path.join(scriptsDir, 'escape-census-baseline.mjs');
+const escapeCensusGatePath = path.join(scriptsDir, 'escape-census-gate.mjs');
+const metricERoundsGatePath = path.join(scriptsDir, 'metric-e-rounds-gate.mjs');
 const cliDevHostDoorPath = path.join(repoRoot, 'packages/cli/src/commands/dev-host-door.ts');
 const frameworkImplementationDigestPath = path.join(
   repoRoot,
@@ -255,6 +270,306 @@ const taskRuntimeBehavioralInstrumentation = [
   '}',
 ].join('\n');
 
+const dependencyLoaderConfiguredAliasIdentityJoinBranch =
+  '          approvedSourceContainsUnadmittedAliasTarget(';
+const removedDependencyLoaderConfiguredAliasIdentityJoinBranch =
+  '          false && approvedSourceContainsUnadmittedAliasTarget(';
+const dependencyLoaderClientLaneCarrierBranch =
+  "          lane === 'build-client' ? reviewedExecutableBrowserCarrier(outputAst) : undefined;";
+const widenedDependencyLoaderClientLaneCarrierBranch =
+  '          reviewedExecutableBrowserCarrier(outputAst);';
+const dependencyLoaderCallableRecursionBranch = [
+  '  if (state.callableStack?.has(callable.node) === true) {',
+  '    (state.budget ?? index.analysisBudget).recursive = true;',
+  "    return [{ kind: 'closed' }];",
+  '  }',
+].join('\n');
+const weakenedDependencyLoaderCallableRecursionBranch = [
+  '  if (state.callableStack?.has(callable.node) === true) {',
+  "    return [{ kind: 'plain' }];",
+  '  }',
+].join('\n');
+const dependencyLoaderFiniteEvaluationBudgetBranch =
+  'const maxBrowserStaticEvaluationSteps = 100_000;';
+const weakenedDependencyLoaderFiniteEvaluationBudgetBranch =
+  'const maxBrowserStaticEvaluationSteps = 1_000_000;';
+
+const runtimeReviewEd25519KeyTypeBranch =
+  "        if (publicKey.asymmetricKeyType !== 'ed25519') return false;";
+const removedRuntimeReviewEd25519KeyTypeBranch = '        if (false) return false;';
+const escapeCensusDuplicateRootIdentityBranch =
+  '  if (new Set(rootIdentityKeys).size !== rootIdentityKeys.length) {';
+const removedEscapeCensusDuplicateRootIdentityBranch = '  if (false) {';
+const escapeCensusProducerSiteBoundBranch = '    sites.length > MAX_ESCAPE_CENSUS_REVIEW_SITES';
+const removedEscapeCensusProducerSiteBoundBranch = '    false';
+
+const escapeCensusEmitterClosedDispositionBranch = [
+  '        throw new TypeError(',
+  "          'Escape-census review csrf:false producer lacks a closed counted-root disposition.',",
+  '        );',
+].join('\n');
+const removedEscapeCensusEmitterClosedDispositionBranch = '        continue;';
+const escapeCensusEmitterExactRootSitesBranch =
+  '    const exactSites = csrfSitesByCountedRoot.get(countedRoot);';
+const widenedEscapeCensusEmitterExactRootSitesBranch = [
+  '    const exactSites = new Set(',
+  '      [...csrfSitesByCountedRoot.values()].flatMap((sites) => [...sites]),',
+  '    );',
+].join('\n');
+
+const escapeCensusIndependentProducerOracleBranch = [
+  '  requireExact(',
+  '    reviewSubjects,',
+  '    producerSubjects,',
+  "    'escape census review subjects versus independent producer oracle',",
+  '  );',
+].join('\n');
+const removedEscapeCensusIndependentProducerOracleBranch = [
+  '  requireExact(',
+  '    producerSubjects,',
+  '    producerSubjects,',
+  "    'escape census review subjects versus independent producer oracle',",
+  '  );',
+].join('\n');
+const escapeCensusArtifactSubjectRecomputationBranch =
+  '  if (computedArtifactSubject !== artifactSubject) {';
+const removedEscapeCensusArtifactSubjectRecomputationBranch = '  if (false) {';
+const escapeCensusColonPathClosureBranch = [
+  "    value.includes('\\\\') ||",
+  "    value.includes(':')",
+].join('\n');
+const removedEscapeCensusColonPathClosureBranch = "    value.includes('\\\\')";
+const escapeCensusInvisiblePathClosureBranch = [
+  '      code === 0x061c ||',
+  '      (code >= 0x200b && code <= 0x200f) ||',
+  '      (code >= 0x2028 && code <= 0x202e) ||',
+  '      (code >= 0x2060 && code <= 0x206f) ||',
+  '      code === 0xfeff',
+].join('\n');
+const removedEscapeCensusInvisiblePathClosureBranch = '      false';
+const escapeCensusAuditIdentityControlBranch =
+  '    if (auditIdentityControl(value.charCodeAt(index))) return false;';
+const removedEscapeCensusAuditIdentityControlBranch = '    if (false) return false;';
+const escapeCensusSinkTargetIdentityBranch =
+  '      if (trace.sink.target !== undefined && !nonBlank(trace.sink.target)) {';
+const removedEscapeCensusSinkTargetIdentityBranch = '      if (false) {';
+const escapeCensusHandlerTargetBranch = '      if (!nonBlank(operation.target)) {';
+const weakenedEscapeCensusHandlerTargetBranch = '      if (!nonBlank(operation.root)) {';
+const escapeCensusEmitterHandlerTargetBranch = [
+  '      const handlerRoot = exactAuditText(',
+  '        operation.target,',
+  '        `Escape-census review components[${componentIndex}].securityOperations[${operationIndex}].target`,',
+  '      );',
+].join('\n');
+const weakenedEscapeCensusEmitterHandlerTargetBranch = [
+  '      const handlerRoot = exactAuditText(',
+  '        operation.root,',
+  '        `Escape-census review components[${componentIndex}].securityOperations[${operationIndex}].target`,',
+  '      );',
+].join('\n');
+const escapeCensusBaselineHandlerTargetBranch = [
+  '      const handlerRoot = reviewAuditText(',
+  '        operation.target,',
+  '        `${label} components[${componentIndex}].securityOperations[${operationIndex}].target`,',
+  '      );',
+].join('\n');
+const weakenedEscapeCensusBaselineHandlerTargetBranch = [
+  '      const handlerRoot = reviewAuditText(',
+  '        operation.root,',
+  '        `${label} components[${componentIndex}].securityOperations[${operationIndex}].target`,',
+  '      );',
+].join('\n');
+const escapeCensusSemanticSurplusClosureBranch = [
+  '    for (const semanticRoot of semanticRoots) {',
+  '      if (!handlerRoots.has(semanticRoot)) {',
+].join('\n');
+const removedEscapeCensusSemanticSurplusClosureBranch = [
+  '    for (const semanticRoot of semanticRoots) {',
+  '      if (false) {',
+].join('\n');
+const escapeCensusGateSemanticSurplusClosureBranch = [
+  '  for (const semanticRoot of semanticRoots) {',
+  '    if (!handlerRoots.has(semanticRoot)) {',
+].join('\n');
+const removedEscapeCensusGateSemanticSurplusClosureBranch = [
+  '  for (const semanticRoot of semanticRoots) {',
+  '    if (false) {',
+].join('\n');
+const escapeCensusExactBoundaryWhitespaceBranch = [
+  'function nonBlank(value) {',
+  '  if (',
+  "    typeof value !== 'string' ||",
+  '    value.length === 0 ||',
+  '    value.length > 4_096 ||',
+  '    value.trim() !== value',
+].join('\n');
+const weakenedEscapeCensusExactBoundaryWhitespaceBranch = [
+  'function nonBlank(value) {',
+  '  if (',
+  "    typeof value !== 'string' ||",
+  '    value.length === 0 ||',
+  '    value.length > 4_096 ||',
+  '    value.trim().length === 0',
+].join('\n');
+const escapeCensusJsonQuotedReportBranch = 'app=${JSON.stringify(app.app)}';
+const weakenedEscapeCensusJsonQuotedReportBranch = 'app=${app.app}';
+
+const metricERuntimeReviewVerifierBranch = [
+  '    const verified = metricEAttestationVerification.verifySignedPayload(',
+  '      canonicalMetricEReviewJson({ keyId: envelope.keyId, subject }),',
+  '      envelope.publicKeySpki,',
+  '      envelope.signature,',
+  '    );',
+].join('\n');
+const removedMetricERuntimeReviewVerifierBranch = '    const verified = true;';
+const metricECallerAnchorNonqualifyingBranch = '    reviewedEscapeSignatures: 0,';
+const weakenedMetricECallerAnchorNonqualifyingBranch =
+  '    reviewedEscapeSignatures: cryptographicallyValidEscapeSignatures,';
+const metricEAuthenticatedReviewQualificationBranch = [
+  'function metricERoundHasAuthenticatedIndependentReview(_round) {',
+  '  // The v2 retained-review schema deliberately labels every review as unauthenticated and',
+  '  // independence as self-declared. Such evidence remains useful audit input, but cannot satisfy',
+  "  // the plan's outside-party review requirement. Keep qualification closed until a later schema",
+  '  // defines and verifies an authenticated independent-review mechanism end to end.',
+  '  return false;',
+  '}',
+].join('\n');
+const weakenedMetricEAuthenticatedReviewQualificationBranch = [
+  'function metricERoundHasAuthenticatedIndependentReview(_round) {',
+  '  return true;',
+  '}',
+].join('\n');
+const metricETimestampEpochOrderingBranch = [
+  '      if (',
+  "        Date.parse(round?.reviewer?.reviewedAt ?? '') <=",
+  "        Date.parse(previous?.reviewer?.reviewedAt ?? '')",
+  '      ) {',
+].join('\n');
+const weakenedMetricETimestampEpochOrderingBranch = [
+  '      if (round?.reviewer?.reviewedAt <= previous?.reviewer?.reviewedAt) {',
+].join('\n');
+const metricERealCalendarDateBranch =
+  '  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;';
+const weakenedMetricERealCalendarDateBranch = '  return Number.isFinite(timestamp);';
+const metricECodeSubjectAncestryBranch = '        assertCodeSubjectDescendsFrom({';
+const removedMetricECodeSubjectAncestryBranch =
+  '        if (false) assertCodeSubjectDescendsFrom({';
+const metricEExactSeriesShapeBranch =
+  "  if (!exactObjectKeys(document, ['rounds', 'schema', 'series', 'status', 'subjectProtocol'])) {";
+const removedMetricEExactSeriesShapeBranch =
+  "  if (false && !exactObjectKeys(document, ['rounds', 'schema', 'series', 'status', 'subjectProtocol'])) {";
+const metricEBuildExportComparabilityBranch = [
+  'export const metricEComparabilityInputPaths = Object.freeze([',
+  "  'package.json',",
+  "  'packages/better-auth/package.json',",
+  "  'packages/browser/package.json',",
+  "  'packages/cli/package.json',",
+  "  'packages/cli/src/commands/build-export.ts',",
+].join('\n');
+const removedMetricEBuildExportComparabilityBranch = [
+  'export const metricEComparabilityInputPaths = Object.freeze([',
+  "  'package.json',",
+  "  'packages/better-auth/package.json',",
+  "  'packages/browser/package.json',",
+  "  'packages/cli/package.json',",
+  '  // packages/cli/src/commands/build-export.ts omitted by mutant',
+].join('\n');
+const metricECoreDoorComparabilityBranch = [
+  "  'packages/core/package.json',",
+  "  'packages/core/src/internal/framework-identity.ts',",
+  "  'packages/core/src/internal/json.ts',",
+  "  'packages/core/src/internal/security-operation-ir.ts',",
+].join('\n');
+const removedMetricECoreDoorComparabilityBranch = [
+  "  'packages/core/package.json',",
+  "  'packages/core/src/internal/framework-identity.ts',",
+  "  'packages/core/src/internal/json.ts',",
+  '  // packages/core/src/internal/security-operation-ir.ts omitted by mutant',
+].join('\n');
+const metricECompilerTreeComparabilityBranch = [
+  'export const metricEComparabilityInputRoots = Object.freeze([',
+  "  'packages/better-auth/src',",
+  "  'packages/browser/src',",
+  "  'packages/cli/src',",
+  "  'packages/compiler/src',",
+].join('\n');
+const removedMetricECompilerTreeComparabilityBranch = [
+  'export const metricEComparabilityInputRoots = Object.freeze([',
+  "  'packages/better-auth/src',",
+  "  'packages/browser/src',",
+  "  'packages/cli/src',",
+  '  // packages/compiler/src omitted by mutant',
+].join('\n');
+const metricERetainedSourceBindingBranch = [
+  '  if (',
+  '    source.sourceLength !== site.sourceLength ||',
+  '    source.sourceHash !== site.sourceHash ||',
+  '    site.span.end > source.sourceLength ||',
+  '    sliceHash !== site.sliceHash',
+  '  ) {',
+].join('\n');
+const removedMetricERetainedSourceBindingBranch = [
+  '  if (',
+  '    source.sourceLength !== site.sourceLength ||',
+  '    source.sourceHash !== site.sourceHash ||',
+  '    site.span.end > source.sourceLength ||',
+  '    false',
+  '  ) {',
+].join('\n');
+const metricERetainedSourceHashBindingBranch = [
+  '  if (',
+  '    source.sourceLength !== site.sourceLength ||',
+  '    source.sourceHash !== site.sourceHash ||',
+  '    site.span.end > source.sourceLength ||',
+  '    sliceHash !== site.sliceHash',
+  '  ) {',
+].join('\n');
+const removedMetricERetainedSourceHashBindingBranch = [
+  '  if (',
+  '    source.sourceLength !== site.sourceLength ||',
+  '    site.span.end > source.sourceLength ||',
+  '    sliceHash !== site.sliceHash',
+  '  ) {',
+].join('\n');
+const metricERetainedSourceLengthBindingBranch = [
+  '  if (',
+  '    source.sourceLength !== site.sourceLength ||',
+  '    source.sourceHash !== site.sourceHash ||',
+  '    site.span.end > source.sourceLength ||',
+  '    sliceHash !== site.sliceHash',
+  '  ) {',
+].join('\n');
+const removedMetricERetainedSourceLengthBindingBranch = [
+  '  if (',
+  '    source.sourceHash !== site.sourceHash ||',
+  '    site.span.end > source.sourceLength ||',
+  '    sliceHash !== site.sliceHash',
+  '  ) {',
+].join('\n');
+const metricERetainedSourceVerificationWiringBranch = [
+  '        sourceRoot,',
+  '        verifySource: true,',
+].join('\n');
+const removedMetricERetainedSourceVerificationWiringBranch = [
+  '        sourceRoot,',
+  '        verifySource: false,',
+].join('\n');
+const metricEAppPackageAggregationBranch =
+  '        canonicalJson(roots) !== canonicalJson(expectedRoots)';
+const removedMetricEAppPackageAggregationBranch = '        false';
+const metricECeilingPackageDenominatorBranch = [
+  '  if (',
+  '    canonicalJson(reportPackageNames) !== canonicalJson(ceilingPackageNames) ||',
+  '    new Set(reportPackageNames).size !== reportPackageNames.length',
+  '  ) {',
+].join('\n');
+const removedMetricECeilingPackageDenominatorBranch = [
+  '  if (',
+  '    false ||',
+  '    new Set(reportPackageNames).size !== reportPackageNames.length',
+  '  ) {',
+].join('\n');
+
 const dependencyLoaderPreEvaluationModuleCensusBranch = [
   '      if (reviewedPackage !== undefined) {',
   '        let ast: unknown;',
@@ -355,10 +670,148 @@ const dependencyLoaderExecutableAssetCarrierClosureBranch =
   "    if (atom.kind === 'asset') return { kind: 'asset', name: atom.carrier };";
 const removedDependencyLoaderExecutableAssetCarrierClosureBranch =
   "    if (false && atom.kind === 'asset') return { kind: 'asset', name: atom.carrier };";
-const dependencyLoaderClosedCarrierConstructorClosureBranch =
-  "  if (calleeAtoms.some((atom) => atom.kind === 'closed' || atom.kind === 'dynamic-code')) {";
-const removedDependencyLoaderClosedCarrierConstructorClosureBranch =
-  "  if (calleeAtoms.some((atom) => atom.kind === 'dynamic-code')) {";
+const dependencyLoaderUrlConstructorAliasBranch =
+  "  if (name === 'URL') return [{ kind: 'url-constructor' }];";
+const weakenedDependencyLoaderUrlConstructorAliasBranch =
+  "  if (name === 'URL') return [{ kind: 'plain' }];";
+const dependencyLoaderModuleMetaProjectionBranch = [
+  '        atoms.push(',
+  "          property === 'url' ? { kind: 'module-meta-url' } : { kind: 'module-meta-member' },",
+  '        );',
+].join('\n');
+const weakenedDependencyLoaderModuleMetaUrlProjectionBranch = [
+  '        atoms.push(',
+  "          property === 'url' ? { kind: 'plain' } : { kind: 'module-meta-member' },",
+  '        );',
+].join('\n');
+const weakenedDependencyLoaderModuleMetaMemberProjectionBranch = [
+  '        atoms.push(',
+  "          property === 'url' ? { kind: 'module-meta-url' } : { kind: 'plain' },",
+  '        );',
+].join('\n');
+const dependencyLoaderModuleMetaStructuredClosureBranch =
+  "      } else if (atom.kind === 'module-meta' || atom.kind === 'module-meta-member') {";
+const removedDependencyLoaderModuleMetaStructuredClosureBranch =
+  "      } else if (false && (atom.kind === 'module-meta' || atom.kind === 'module-meta-member')) {";
+const dependencyLoaderCallableModuleMetaCaptureBranch = '      browserAstIsImportMeta(record) &&';
+const removedDependencyLoaderCallableModuleMetaCaptureBranch =
+  '      false && browserAstIsImportMeta(record) &&';
+const dependencyLoaderUnresolvedAmbientGlobalBranch =
+  "    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'ambient-global' }];";
+const removedDependencyLoaderUnresolvedAmbientGlobalBranch =
+  "    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'plain' }];";
+const dependencyLoaderAmbientGlobalMemberBranch = [
+  "      } else if (receiver.kind === 'ambient-global') {",
+  "        atoms.push({ kind: 'ambient-global' });",
+].join('\n');
+const removedDependencyLoaderAmbientGlobalMemberBranch = [
+  "      } else if (receiver.kind === 'ambient-global') {",
+  "        atoms.push({ kind: 'plain' });",
+].join('\n');
+const dependencyLoaderStructuredOpacityValueIdentifierBranch = [
+  '    if (',
+  '      isAstRecord(candidate) &&',
+  "      candidate.type === 'Identifier' &&",
+  '      parent !== undefined &&',
+  '      !browserIdentifierIsValueReference(candidate, parent, key, index.bindingIdentifiers)',
+  '    ) {',
+  '      continue;',
+  '    }',
+].join('\n');
+const removedDependencyLoaderStructuredOpacityValueIdentifierBranch = [
+  '    if (',
+  '      false &&',
+  '      isAstRecord(candidate) &&',
+  "      candidate.type === 'Identifier' &&",
+  '      parent !== undefined &&',
+  '      !browserIdentifierIsValueReference(candidate, parent, key, index.bindingIdentifiers)',
+  '    ) {',
+  '      continue;',
+  '    }',
+].join('\n');
+const dependencyLoaderUrlBaseJoinBranch = '  return argumentAtoms;';
+const removedDependencyLoaderUrlBaseJoinBranch = "  return [{ kind: 'plain' }];";
+const dependencyLoaderUrlSpreadArgumentBranch =
+  "    if (!isAstRecord(argument) || argument.type !== 'SpreadElement') {";
+const removedDependencyLoaderUrlSpreadArgumentBranch = [
+  "    if (isAstRecord(argument) && argument.type === 'SpreadElement') continue;",
+  "    if (!isAstRecord(argument) || argument.type !== 'SpreadElement') {",
+].join('\n');
+const dependencyLoaderClassSuperclassAuthorityBranch =
+  '    atoms.push(...superclass.filter(browserClassRetainsSuperclassAuthority));';
+const removedDependencyLoaderClassSuperclassAuthorityBranch =
+  '    atoms.push(...superclass.filter(() => false));';
+const dependencyLoaderSuperclassInvocationAuthorityBranch = [
+  '    return index.opaqueConstructors.has(superclass.enclosingClass)',
+  "      ? [...atoms, { kind: 'closed' }]",
+  '      : atoms;',
+].join('\n');
+const removedDependencyLoaderSuperclassInvocationAuthorityBranch =
+  "    return [{ kind: 'plain' }];";
+const dependencyLoaderOpaqueTemplateLiteralBranch =
+  "    if (strings === undefined) return [{ kind: 'closed' }];";
+const weakenedDependencyLoaderOpaqueTemplateLiteralBranch =
+  "    if (strings === undefined) return [{ kind: 'plain' }];";
+const dependencyLoaderClosedCarrierConstructorClosureBranch = [
+  '    calleeAtoms.some(',
+  '      (atom) =>',
+  "        atom.kind === 'closed' ||",
+  "        atom.kind === 'constructor-value' ||",
+  "        atom.kind === 'dynamic-code' ||",
+  "        atom.kind === 'timer',",
+].join('\n');
+const removedDependencyLoaderClosedCarrierConstructorClosureBranch = [
+  '    calleeAtoms.some(',
+  '      (atom) =>',
+  "        atom.kind === 'constructor-value' ||",
+  "        atom.kind === 'dynamic-code' ||",
+  "        atom.kind === 'timer',",
+].join('\n');
+const dependencyLoaderClosedReceiverConstructorBridgeBranch = [
+  "      } else if (receiver.kind === 'closed') {",
+  "        if (property === 'constructor') {",
+].join('\n');
+const removedDependencyLoaderClosedReceiverConstructorBridgeBranch = [
+  "      } else if (receiver.kind === 'closed') {",
+  "        if (false && property === 'constructor') {",
+].join('\n');
+const dependencyLoaderDynamicCodeCarrierClosureBranch = [
+  "    if (atom.kind === 'dynamic-code') {",
+  "      return { kind: 'asset', name: 'opaque browser executable carrier' };",
+].join('\n');
+const removedDependencyLoaderDynamicCodeCarrierClosureBranch = [
+  "    if (false && atom.kind === 'dynamic-code') {",
+  "      return { kind: 'asset', name: 'opaque browser executable carrier' };",
+].join('\n');
+const dependencyLoaderConstructorValueCallClosureBranch =
+  "    calleeAtoms.some((atom) => atom.kind === 'constructor-value' || atom.kind === 'dynamic-code')";
+const removedDependencyLoaderConstructorValueCallClosureBranch =
+  "    calleeAtoms.some((atom) => atom.kind === 'dynamic-code')";
+const dependencyLoaderProvedTimerCallbackClosureBranch = '    if (!provedCallableCallback) {';
+const removedDependencyLoaderProvedTimerCallbackClosureBranch =
+  '    if (false && !provedCallableCallback) {';
+const dependencyLoaderKnownCallableConstructorBridgeBranch = [
+  "        property === 'constructor' &&",
+  "        (receiver.kind === 'object-builtin' ||",
+  "          receiver.kind === 'object-define-property' ||",
+  "          receiver.kind === 'object-freeze' ||",
+  "          receiver.kind === 'proxy-constructor' ||",
+  "          receiver.kind === 'reflect-construct' ||",
+  "          receiver.kind === 'reflect-define-property' ||",
+  "          receiver.kind === 'reflect-get' ||",
+  "          receiver.kind === 'timer')",
+].join('\n');
+const removedDependencyLoaderKnownCallableConstructorBridgeBranch = [
+  "        false && property === 'constructor' &&",
+  "        (receiver.kind === 'object-builtin' ||",
+  "          receiver.kind === 'object-define-property' ||",
+  "          receiver.kind === 'object-freeze' ||",
+  "          receiver.kind === 'proxy-constructor' ||",
+  "          receiver.kind === 'reflect-construct' ||",
+  "          receiver.kind === 'reflect-define-property' ||",
+  "          receiver.kind === 'reflect-get' ||",
+  "          receiver.kind === 'timer')",
+].join('\n');
 const dependencyLoaderLocalCallableEffectClosureBranch = [
   '  const receiverAffected = collectBrowserAffectedInvocationArguments(',
   '    localCallables,',
@@ -393,18 +846,82 @@ const removedDependencyLoaderIterationAssignmentEffectClosureBranch = [
   '      false &&',
   "      (record.type === 'ForInStatement' || record.type === 'ForOfStatement') &&",
 ].join('\n');
-const dependencyLoaderStructuredArgumentDepthClosureBranch = [
-  '  const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {',
-  '    if (depth > 48) {',
-  '      index.effectAnalysisClosed = true;',
+const dependencyLoaderAuthorityEscapeClosureBranch =
+  '  collectBrowserAuthorityEscapes(ast, index);';
+const removedDependencyLoaderAuthorityEscapeClosureBranch = '  void ast;';
+const dependencyLoaderStructuredReturnOriginClosureBranch =
+  '      if (retainsStructuredOrigins) addDeepOrigins(record.argument, recordScope);';
+const removedDependencyLoaderStructuredReturnOriginClosureBranch =
+  '      void retainsStructuredOrigins;';
+const dependencyLoaderDirectSafeTimerPrecisionBranch = '      const directSafeTimerCallee =';
+const removedDependencyLoaderDirectSafeTimerPrecisionBranch =
+  '      const directSafeTimerCallee = false &&';
+const dependencyLoaderImperativeEventRegistrationClosureBranch = [
+  "  if (name === 'addEventListener') {",
+  "    return [{ carrier: 'opaque browser executable carrier', kind: 'asset' }];",
+  '  }',
 ].join('\n');
-const removedDependencyLoaderStructuredArgumentDepthClosureBranch = [
-  '  const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {',
-  '    if (depth > 48) {',
+const removedDependencyLoaderImperativeEventRegistrationClosureBranch = [
+  "  if (name === 'addEventListener') {",
+  "    return [{ kind: 'plain' }];",
+  '  }',
 ].join('\n');
 const dependencyLoaderArrayJoinCoercionClosureBranch =
   '    collectBrowserArrayJoinCoercionEffects(calleeMember.object, scope, index, state);';
 const removedDependencyLoaderArrayJoinCoercionClosureBranch = '    true;';
+const dependencyLoaderStructuredOpacityCacheHitBranch = [
+  '  if (memo?.generation === generation && (memo.modes & requiredModes) === requiredModes) {',
+  '    return false;',
+  '  }',
+].join('\n');
+const removedDependencyLoaderStructuredOpacityCacheHitBranch = [
+  '  if (memo?.generation === generation && (memo.modes & requiredModes) === requiredModes) {',
+  '    return true;',
+  '  }',
+].join('\n');
+const dependencyLoaderStructuredOpacityDeferredCallEffectBranch = [
+  '      deferredEffects.push(() =>',
+  '        collectBrowserOpaqueCallArguments(record, scope, index, definePropertyProvenanceCalls),',
+  '      );',
+].join('\n');
+const immediateDependencyLoaderStructuredOpacityCallEffectBranch =
+  '      collectBrowserOpaqueCallArguments(record, scope, index, definePropertyProvenanceCalls);';
+const dependencyLoaderStructuredOpacityModeBranch = [
+  '  const requiredModes = inspectClosure',
+  '    ? browserStructuredOpaqueValueMode | browserStructuredOpaqueClosureMode',
+  '    : browserStructuredOpaqueValueMode;',
+].join('\n');
+const removedDependencyLoaderStructuredOpacityModeBranch =
+  '  const requiredModes = browserStructuredOpaqueValueMode;';
+const dependencyLoaderStructuredOpacityStaticPathIdentityBranch =
+  '    const memoIdentity = browserStructuredOpaqueMemoIdentity(candidate, candidateScope, index);';
+const removedDependencyLoaderStructuredOpacityStaticPathIdentityBranch =
+  '    const memoIdentity = { identity: candidate, scope: candidateScope };';
+const dependencyLoaderDirectLocalCallableCacheRecheckBranch = [
+  '  if (cached?.generation === index.sourceGeneration) {',
+  '    return cached.callables?.some((callable) => index.opaqueConstructors.has(callable.node)) ===',
+  '      true',
+  '      ? undefined',
+  '      : cached.callables;',
+  '  }',
+].join('\n');
+const removedDependencyLoaderDirectLocalCallableCacheRecheckBranch = [
+  '  if (cached?.generation === index.sourceGeneration) {',
+  '    return cached.callables;',
+  '  }',
+].join('\n');
+const dependencyLoaderStructuredOpacityCallableCaptureBranch = [
+  '  index.callableStructuredCaptures.set(callable, captures);',
+  '  return captures;',
+].join('\n');
+const removedDependencyLoaderStructuredOpacityCallableCaptureBranch = [
+  '  index.callableStructuredCaptures.set(callable, []);',
+  '  return [];',
+].join('\n');
+const dependencyLoaderCallableSelfCaptureBranch =
+  '          (binding === selfBinding || !browserScopeIsWithin(binding.scope, callableScope)) &&';
+const removedDependencyLoaderCallableSelfCaptureBranch =
+  '          !browserScopeIsWithin(binding.scope, callableScope) &&';
 const dependencyLoaderReturnedCallableCaptureClosureBranch = [
   "      type === 'ReturnStatement' &&",
   '      record.argument !== null &&',
@@ -415,6 +932,41 @@ const removedDependencyLoaderReturnedCallableCaptureClosureBranch = [
   "      type === 'ReturnStatement' &&",
   '      record.argument !== null &&',
   '      record.argument !== undefined',
+].join('\n');
+const dependencyLoaderOwnedChunkImportIdentityBranch = [
+  '  const atoms: BrowserStaticAtom[] = binding.opaque',
+  "    ? [{ kind: 'closed' }]",
+  '    : binding.imported',
+  "      ? [{ kind: 'plain', sharedImport: binding }]",
+  '      : [];',
+].join('\n');
+const removedDependencyLoaderOwnedChunkImportIdentityBranch = [
+  '  const atoms: BrowserStaticAtom[] = binding.opaque',
+  "    ? [{ kind: 'closed' }]",
+  '    : binding.imported',
+  "      ? [{ kind: 'plain' }]",
+  '      : [];',
+].join('\n');
+const dependencyLoaderOpaqueImportResultClosureBranch = [
+  "      } else if (atom.kind === 'plain' && atom.opaqueImportResult === true) {",
+  '        // Without a cross-chunk callable summary, an imported call/constructor result may alias',
+  '        // any other live export from that chunk. Reject its opaque transfer rather than inventing',
+  '        // a fresh-result guarantee the current artifact proof does not carry.',
+  '        index.effectAnalysisClosed = true;',
+].join('\n');
+const removedDependencyLoaderOpaqueImportResultClosureBranch = [
+  "      } else if (false && atom.kind === 'plain' && atom.opaqueImportResult === true) {",
+  '        // Without a cross-chunk callable summary, an imported call/constructor result may alias',
+  '        // any other live export from that chunk. Reject its opaque transfer rather than inventing',
+  '        // a fresh-result guarantee the current artifact proof does not carry.',
+  '        index.effectAnalysisClosed = true;',
+].join('\n');
+const dependencyLoaderOwnedChunkImportRegistrationBranch =
+  '  ensureBrowserBinding(pattern.name, scope, index).imported = true;';
+const overclosedDependencyLoaderOwnedChunkImportRegistrationBranch = [
+  '  const importedBinding = ensureBrowserBinding(pattern.name, scope, index);',
+  '  importedBinding.imported = true;',
+  '  importedBinding.opaque = true;',
 ].join('\n');
 const dependencyLoaderConstructorAffectedArgumentClosureBranch = [
   '  collectBrowserAffectedInvocationArguments(',
@@ -444,9 +996,16 @@ const removedDependencyLoaderSetterAffectedArgumentClosureBranch = [
   '  const receiverAffected = collectBrowserAffectedInvocationArguments(',
   '    [],',
 ].join('\n');
-const dependencyLoaderDirectExportOwnershipClosureBranch =
-  '        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)';
-const removedDependencyLoaderDirectExportOwnershipClosureBranch = '        false';
+const dependencyLoaderDirectExportOwnershipClosureBranch = [
+  '        resolvedPath === undefined ||',
+  '        packageRoot === undefined ||',
+  '        !sourceBelongsToPackageRoot(packageRoot, resolvedPath)',
+].join('\n');
+const removedDependencyLoaderDirectExportOwnershipClosureBranch = [
+  '        resolvedPath === undefined ||',
+  '        packageRoot === undefined ||',
+  '        false',
+].join('\n');
 const dependencyLoaderNonliteralArtifactClosureBranch =
   '        if (artifactModuleEdges.some((edge) => edge.specifier === undefined)) {';
 const removedDependencyLoaderNonliteralArtifactClosureBranch =
@@ -589,6 +1148,20 @@ const authoredExecutableReferenceClosureBranch = [
 ].join('\n');
 const removedAuthoredExecutableReferenceClosureBranch =
   '    // authored executable-reference provenance closure removed by mutant';
+const computedKeyFirstRegistryClosureBranch = [
+  "  const staticKey = typeof call.argumentStaticValues[0] === 'string';",
+  '  // SPEC §4.1: an exported declaration always has a compiler-derived identity. A legacy private',
+  '  // declaration may retain an exact literal identity, but a computed key cannot be joined to the',
+  '  // compiler-owned security root and therefore closes before application evaluation.',
+  '  if ((!call.exportedConstName && staticKey) || (argumentCount < 2 && !staticKey)) return null;',
+].join('\n');
+const weakenedComputedKeyFirstRegistryClosureBranch = [
+  "  const staticKey = typeof call.argumentStaticValues[0] === 'string';",
+  '  // SPEC §4.1: an exported declaration always has a compiler-derived identity. A legacy private',
+  '  // declaration may retain an exact literal identity, but a computed key cannot be joined to the',
+  '  // compiler-owned security root and therefore closes before application evaluation.',
+  '  if (!call.exportedConstName || (argumentCount < 2 && !staticKey)) return null;',
+].join('\n');
 const lifecyclePrivateScopeCarrierPinBranch =
   '  return pinnedPrivateScopeRequestCarrier(lifecycleRequest) as LifecycleRequest<';
 const removedLifecyclePrivateScopeCarrierPinBranch =
@@ -1980,9 +2553,18 @@ const semanticGraphBehavioralInstrumentation = [
 const semanticV2SourceByteEqualityBranch =
   '    if (!sourceFile || !semanticSource || semanticSource.source !== file.source) {';
 const weakenedSemanticV2SourceByteEqualityBranch = '    if (!sourceFile || !semanticSource) {';
-const semanticV2SchemaBranch = "      if (graph.schema !== 'kovo-security-semantic-graph/v2') {";
-const weakenedSemanticV2SchemaBranch =
-  "      if (false && graph.schema !== 'kovo-security-semantic-graph/v2') {";
+const semanticV2SchemaBranch = [
+  '      if (',
+  "        graph.schema !== 'kovo-security-semantic-graph/v3' ||",
+  '        graph.sourceFile !== file.fileName',
+  '      ) {',
+].join('\n');
+const weakenedSemanticV2SchemaBranch = [
+  '      if (',
+  '        false ||',
+  '        graph.sourceFile !== file.fileName',
+  '      ) {',
+].join('\n');
 const semanticV2FactoryRootBranch = [
   '    requestCompilerSemanticRootForFactoryCall(binding.factory, factoryCall, fileName) !==',
   '      root.root ||',
@@ -2535,6 +3117,95 @@ const taskBSemanticRootCorrespondenceBranch =
   '  verifyRequestTaskBSemanticRoot(context, callable);';
 const removedTaskBSemanticRootCorrespondenceBranch =
   '  // TASK B semantic-root correspondence removed by mutant';
+const taskBSameFileRootReferenceBranch = [
+  '    } else {',
+  '      const referenced = requestExactSameFileRootReference(owner, session);',
+  '      if (!referenced) return undefined;',
+  '      property = referenced.property;',
+  '      definition = referenced.definition;',
+  '    }',
+].join('\n');
+const removedTaskBSameFileRootReferenceBranch = [
+  '    } else {',
+  '      return undefined;',
+  '    }',
+].join('\n');
+const taskBFiniteVerdictRejectionBranch = "  if (proof.finiteVerdict.status !== 'accepted') {";
+const removedTaskBFiniteVerdictRejectionBranch =
+  "  if (false && proof.finiteVerdict.status !== 'accepted') {";
+const taskBAnalysisCarrierDigestBranch =
+  '  if (analysisCarrierSha256 !== proof.finiteVerdict.analysisCarrierSha256) {';
+const removedTaskBAnalysisCarrierDigestBranch =
+  '  if (false && analysisCarrierSha256 !== proof.finiteVerdict.analysisCarrierSha256) {';
+const taskBTerminalCorrespondenceBranch = [
+  '  if (',
+  '    expectedTerminalKeys.size !== actualTerminalKeys.size ||',
+  '    [...expectedTerminalKeys].some((key) => !actualTerminalKeys.has(key))',
+  '  ) {',
+].join('\n');
+const removedTaskBTerminalCorrespondenceBranch = '  if (false) {';
+const taskBDuplicateTerminalTraceClosureBranch =
+  '    if (actualTraceIdentities.has(identity)) return false;';
+const removedTaskBDuplicateTerminalTraceClosureBranch =
+  '    if (false && actualTraceIdentities.has(identity)) return false;';
+const buildTaskBFiniteDiagnosticEnrollmentBranch =
+  "    if (diagnostic.code === 'KV449' || diagnostic.code === 'KV450' || diagnostic.code === 'KV452') {";
+const buildTaskBFiniteDiagnosticEnrollmentWithoutKv450 =
+  "    if (diagnostic.code === 'KV449' || diagnostic.code === 'KV452') {";
+const buildTaskBFiniteDiagnosticEnrollmentWithoutKv449 =
+  "    if (diagnostic.code === 'KV450' || diagnostic.code === 'KV452') {";
+const buildTaskBFiniteDiagnosticEnrollmentWithoutKv452 =
+  "    if (diagnostic.code === 'KV449' || diagnostic.code === 'KV450') {";
+const buildPreEvaluationKv235EnrollmentBranch = "        diagnostic.code === 'KV235' ||";
+const removedBuildPreEvaluationKv235EnrollmentBranch = '        false ||';
+const compileTaskBFiniteDiagnosticEnrollmentBranch =
+  "    if (diagnostic.code !== 'KV449' && diagnostic.code !== 'KV450' && diagnostic.code !== 'KV452') {";
+const compileTaskBFiniteDiagnosticEnrollmentWithoutKv450 =
+  "    if (diagnostic.code !== 'KV449' && diagnostic.code !== 'KV452') {";
+const compileTaskBFiniteDiagnosticEnrollmentWithoutKv449 =
+  "    if (diagnostic.code !== 'KV450' && diagnostic.code !== 'KV452') {";
+const compileTaskBFiniteDiagnosticEnrollmentWithoutKv452 =
+  "    if (diagnostic.code !== 'KV449' && diagnostic.code !== 'KV450') {";
+const buildTaskBFiniteVerdictCarrierBranch =
+  '      blockingDiagnostics: compilerTaskBBlockingDiagnostics,';
+const removedBuildTaskBFiniteVerdictCarrierBranch = '      blockingDiagnostics: [],';
+const compileTaskBFiniteVerdictCarrierBranch = [
+  '    finiteVerdict: snapshotCompilerTaskBFiniteVerdict({',
+  '      blockingDiagnostics,',
+  '      semanticSources,',
+  '    }),',
+].join('\n');
+const removedCompileTaskBFiniteVerdictCarrierBranch = [
+  '    finiteVerdict: snapshotCompilerTaskBFiniteVerdict({',
+  '      blockingDiagnostics: [],',
+  '      semanticSources,',
+  '    }),',
+].join('\n');
+const buildRouteTaskBFiniteDiagnosticCarrierBranch = [
+  '    appendBuildTaskBFiniteDiagnostics(',
+  '      compilerTaskBBlockingDiagnostics,',
+  '      routeDiagnostics,',
+  "      'TASK B route compiler finite diagnostics',",
+  '    );',
+].join('\n');
+const removedBuildRouteTaskBFiniteDiagnosticCarrierBranch =
+  '    // TASK B route compiler diagnostics removed by mutant';
+const compileRouteTaskBFiniteDiagnosticCarrierBranch =
+  '    appendCompileTaskBFiniteDiagnostics(routeResult.diagnostics, diagnostics, blockingDiagnostics);';
+const removedCompileRouteTaskBFiniteDiagnosticCarrierBranch =
+  '    // TASK B route compiler diagnostics removed by mutant';
+const buildRouteOrdinaryDiagnosticCarrierBranch = '      routeDiagnostics.length === 0';
+const removedBuildRouteOrdinaryDiagnosticCarrierBranch = '      true';
+const cliCssCollectorSelectionBranch =
+  '  const viteAssetPlugin = createFrameworkKovoCssCollectorVitePlugin({';
+const restoredCliCssCollectorServerPluginBranch = '  const viteAssetPlugin = kovoVitePlugin({';
+const cliNativeEsmModulePreloadBranch = '      modulePreload: { polyfill: false },';
+const restoredCliModulePreloadPolyfillBranch = '      modulePreload: { polyfill: true },';
+const compilerCssCollectorTransformBoundaryBranch = "    purpose === 'css-collector'";
+const removedCompilerCssCollectorTransformBoundaryBranch = '    false';
+const compilerCssCollectorServerOwnerRejectionBranch =
+  "  if (authority.purpose !== 'server') return false;";
+const removedCompilerCssCollectorServerOwnerRejectionBranch = '  if (false) return false;';
 
 const reviewedCommandCapabilityDoorBranch =
   '  if (frameworkExportEquals(frameworkIdentity, RUN_COMMAND_IDENTITY)) {';
@@ -2641,6 +3312,439 @@ const weakenedThreatMatrixMissingPublicSurfaceDenominatorBranch = [
 export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
+    description:
+      'Lets an authored unadmitted edge borrow the exact target of a reviewed Vite alias.',
+    expectedKiller:
+      'configured aliases must join the authored specifier to the exact reviewed package identity',
+    name: 'dependency-loader/drop-configured-alias-identity-join',
+    replacement: removedDependencyLoaderConfiguredAliasIdentityJoinBranch,
+    search: dependencyLoaderConfiguredAliasIdentityJoinBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderConfiguredAliasIdentityJoinBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Runs browser-only carrier classification over server artifacts.',
+    expectedKiller: 'browser executable-carrier evaluation must remain limited to client artifacts',
+    name: 'dependency-loader/widen-browser-carrier-to-server-lane',
+    replacement: widenedDependencyLoaderClientLaneCarrierBranch,
+    search: dependencyLoaderClientLaneCarrierBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderClientLaneCarrierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats a recursive local callable as a harmless plain value.',
+    expectedKiller: 'recursive local-callable evaluation must close browser carrier analysis',
+    name: 'dependency-loader/weaken-callable-recursion-closure',
+    replacement: weakenedDependencyLoaderCallableRecursionBranch,
+    search: dependencyLoaderCallableRecursionBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderCallableRecursionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Widens the finite browser static-evaluation budget past its reviewed ceiling.',
+    expectedKiller: 'browser carrier evaluation must fail closed at the exact shared step budget',
+    name: 'dependency-loader/widen-browser-static-evaluation-budget',
+    replacement: weakenedDependencyLoaderFiniteEvaluationBudgetBranch,
+    search: dependencyLoaderFiniteEvaluationBudgetBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderFiniteEvaluationBudgetBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Accepts a 64-byte RSA-512 signature through the runtime Ed25519 verifier.',
+    expectedKiller: 'runtime review verification must require an Ed25519 SPKI key',
+    name: 'runtime-review/drop-ed25519-key-type-closure',
+    replacement: removedRuntimeReviewEd25519KeyTypeBranch,
+    search: runtimeReviewEd25519KeyTypeBranch,
+    sourceFile: serverCryptoAuthorityPath,
+    sourceOnly: true,
+    test: assertRuntimeReviewEd25519KeyTypeBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets one Metric E root identity appear multiple times under split site arrays.',
+    expectedKiller: 'review evidence must bind one exact subject for each artifact door and root',
+    name: 'escape-census-review/drop-duplicate-root-identity-closure',
+    replacement: removedEscapeCensusDuplicateRootIdentityBranch,
+    search: escapeCensusDuplicateRootIdentityBranch,
+    sourceFile: serverEscapeCensusReviewPath,
+    sourceOnly: true,
+    test: assertEscapeCensusDuplicateRootIdentityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Removes the finite producer-site bound from Metric E review subjects.',
+    expectedKiller: 'each exact producer-site set must remain bounded before evidence indexing',
+    name: 'escape-census-review/drop-producer-site-bound',
+    replacement: removedEscapeCensusProducerSiteBoundBranch,
+    search: escapeCensusProducerSiteBoundBranch,
+    sourceFile: serverEscapeCensusReviewPath,
+    sourceOnly: true,
+    test: assertEscapeCensusProducerSiteBoundBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Silently omits a CSRF producer whose counted-root disposition is ambiguous.',
+    expectedKiller: 'every CSRF source fact must carry a closed counted-root disposition',
+    name: 'escape-census-emitter/drop-closed-root-disposition',
+    replacement: removedEscapeCensusEmitterClosedDispositionBranch,
+    search: escapeCensusEmitterClosedDispositionBranch,
+    sourceFile: cliEscapeCensusReviewSubjectsPath,
+    sourceOnly: true,
+    test: assertEscapeCensusEmitterClosedDispositionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Cross-joins every CSRF producer site into every executable mutation root.',
+    expectedKiller: 'CSRF review subjects must bind sites only through their exact counted root',
+    name: 'escape-census-emitter/widen-sites-across-counted-roots',
+    replacement: widenedEscapeCensusEmitterExactRootSitesBranch,
+    search: escapeCensusEmitterExactRootSitesBranch,
+    sourceFile: cliEscapeCensusReviewSubjectsPath,
+    sourceOnly: true,
+    test: assertEscapeCensusEmitterExactRootSitesBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Bypasses the independent graph-producer oracle for persisted census subjects.',
+    expectedKiller: 'the baseline must rederive exact root and site subjects independently',
+    name: 'escape-census-baseline/drop-independent-producer-oracle',
+    replacement: removedEscapeCensusIndependentProducerOracleBranch,
+    search: escapeCensusIndependentProducerOracleBranch,
+    sourceFile: escapeCensusBaselinePath,
+    sourceOnly: true,
+    test: assertEscapeCensusIndependentProducerOracleBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Trusts a coordinated forged graph artifact subject without recomputing it.',
+    expectedKiller: 'the baseline must bind review subjects to the exact canonical graph',
+    name: 'escape-census-baseline/drop-artifact-subject-recomputation',
+    replacement: removedEscapeCensusArtifactSubjectRecomputationBranch,
+    search: escapeCensusArtifactSubjectRecomputationBranch,
+    sourceFile: escapeCensusBaselinePath,
+    sourceOnly: true,
+    test: assertEscapeCensusArtifactSubjectRecomputationBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows colon-bearing analysis-input paths into the standalone escape census.',
+    expectedKiller: 'Metric E source identities must remain canonical portable relative paths',
+    name: 'escape-census-gate/drop-colon-path-closure',
+    replacement: removedEscapeCensusColonPathClosureBranch,
+    search: escapeCensusColonPathClosureBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusAuditSafePathBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows invisible and bidirectional controls into standalone census paths.',
+    expectedKiller: 'Metric E source identities must remain unambiguous in audit output',
+    name: 'escape-census-gate/drop-invisible-path-closure',
+    replacement: removedEscapeCensusInvisiblePathClosureBranch,
+    search: escapeCensusInvisiblePathClosureBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusAuditSafePathBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows control and bidirectional text to forge standalone census audit rows.',
+    expectedKiller: 'all audit-visible census identities must remain bounded printable text',
+    name: 'escape-census-gate/drop-audit-identity-control-closure',
+    replacement: removedEscapeCensusAuditIdentityControlBranch,
+    search: escapeCensusAuditIdentityControlBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusAuditIdentityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows an unsafe semantic sink target to reach standalone census diagnostics.',
+    expectedKiller: 'semantic sink target identities must remain bounded printable text',
+    name: 'escape-census-gate/drop-sink-target-identity-closure',
+    replacement: removedEscapeCensusSinkTargetIdentityBranch,
+    search: escapeCensusSinkTargetIdentityBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusAuditIdentityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Reads the legacy root field instead of the emitted handler target identity.',
+    expectedKiller: 'standalone census handler roots must come from operation.target',
+    name: 'escape-census-gate/read-legacy-handler-root-field',
+    replacement: weakenedEscapeCensusHandlerTargetBranch,
+    search: escapeCensusHandlerTargetBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusHandlerCorrespondenceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Reads the legacy root field in the build review-subject emitter.',
+    expectedKiller: 'build review subjects must reconcile operation.target to semantic roots',
+    name: 'escape-census-emitter/read-legacy-handler-root-field',
+    replacement: weakenedEscapeCensusEmitterHandlerTargetBranch,
+    search: escapeCensusEmitterHandlerTargetBranch,
+    sourceFile: cliEscapeCensusReviewSubjectsPath,
+    sourceOnly: true,
+    test: assertEscapeCensusEmitterHandlerCorrespondenceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Reads the legacy root field in the independent baseline oracle.',
+    expectedKiller: 'the independent oracle must reconcile operation.target to semantic roots',
+    name: 'escape-census-baseline/read-legacy-handler-root-field',
+    replacement: weakenedEscapeCensusBaselineHandlerTargetBranch,
+    search: escapeCensusBaselineHandlerTargetBranch,
+    sourceFile: escapeCensusBaselinePath,
+    sourceOnly: true,
+    test: assertEscapeCensusBaselineHandlerCorrespondenceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows semantic roots without compiler-emitted handler-root operations.',
+    expectedKiller: 'standalone census roots must match handler operations bidirectionally',
+    name: 'escape-census-gate/drop-semantic-root-surplus-closure',
+    replacement: removedEscapeCensusGateSemanticSurplusClosureBranch,
+    search: escapeCensusGateSemanticSurplusClosureBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusHandlerCorrespondenceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets the build emitter accept semantic roots without handler operations.',
+    expectedKiller: 'build review subjects must reject surplus semantic roots',
+    name: 'escape-census-emitter/drop-semantic-root-surplus-closure',
+    replacement: removedEscapeCensusSemanticSurplusClosureBranch,
+    search: escapeCensusSemanticSurplusClosureBranch,
+    sourceFile: cliEscapeCensusReviewSubjectsPath,
+    sourceOnly: true,
+    test: assertEscapeCensusEmitterHandlerCorrespondenceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets the independent oracle accept semantic roots without handler operations.',
+    expectedKiller: 'the independent oracle must reject surplus semantic roots',
+    name: 'escape-census-baseline/drop-semantic-root-surplus-closure',
+    replacement: removedEscapeCensusSemanticSurplusClosureBranch,
+    search: escapeCensusSemanticSurplusClosureBranch,
+    sourceFile: escapeCensusBaselinePath,
+    sourceOnly: true,
+    test: assertEscapeCensusBaselineHandlerCorrespondenceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Accepts leading or trailing whitespace in audit-visible census identities.',
+    expectedKiller: 'audit-visible census identities must have exact whitespace boundaries',
+    name: 'escape-census-gate/weaken-identity-boundary-whitespace',
+    replacement: weakenedEscapeCensusExactBoundaryWhitespaceBranch,
+    search: escapeCensusExactBoundaryWhitespaceBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusBoundaryWhitespaceBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Emits an unquoted app identity into the line-oriented census report.',
+    expectedKiller: 'printable report identities must remain JSON-quoted and unambiguous',
+    name: 'escape-census-gate/drop-json-report-identity-quoting',
+    replacement: weakenedEscapeCensusJsonQuotedReportBranch,
+    search: escapeCensusJsonQuotedReportBranch,
+    sourceFile: escapeCensusGatePath,
+    sourceOnly: true,
+    test: assertEscapeCensusJsonReportQuotingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Bypasses the purpose-minimal runtime-attestation verifier for Metric E evidence.',
+    expectedKiller: 'Metric E detached evidence must execute the pinned Ed25519 verifier',
+    name: 'metric-e/drop-runtime-review-verifier',
+    replacement: removedMetricERuntimeReviewVerifierBranch,
+    search: metricERuntimeReviewVerifierBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricERuntimeReviewVerifierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Counts caller-anchored cryptographic signatures as independently reviewed roots.',
+    expectedKiller: 'caller-supplied anchors must remain explicitly nonqualifying',
+    name: 'metric-e/count-caller-anchor-as-reviewed',
+    replacement: weakenedMetricECallerAnchorNonqualifyingBranch,
+    search: metricECallerAnchorNonqualifyingBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricECallerAnchorNonqualifyingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Qualifies unauthenticated self-declared review artifacts as independent rounds.',
+    expectedKiller: 'the v1 unauthenticated reviewer schema must never increment qualifying rounds',
+    name: 'metric-e/qualify-unauthenticated-independent-review',
+    replacement: weakenedMetricEAuthenticatedReviewQualificationBranch,
+    search: metricEAuthenticatedReviewQualificationBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEAuthenticatedReviewQualificationBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Orders mixed-precision UTC timestamps lexicographically instead of chronologically.',
+    expectedKiller: 'review timestamps must be compared by parsed epoch milliseconds',
+    name: 'metric-e/weaken-timestamp-order-to-lexicographic',
+    replacement: weakenedMetricETimestampEpochOrderingBranch,
+    search: metricETimestampEpochOrderingBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricETimestampEpochOrderingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Accepts normalized impossible calendar dates in a Metric E round.',
+    expectedKiller: 'round dates must name a real UTC calendar day',
+    name: 'metric-e/drop-real-calendar-date-closure',
+    replacement: weakenedMetricERealCalendarDateBranch,
+    search: metricERealCalendarDateBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricERealCalendarDateBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a later Metric E round point to code outside predecessor history.',
+    expectedKiller: 'each round code subject must descend from its predecessor subject',
+    name: 'metric-e/drop-code-subject-ancestry-closure',
+    replacement: removedMetricECodeSubjectAncestryBranch,
+    search: metricECodeSubjectAncestryBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricECodeSubjectAncestryBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Accepts misleading top-level fields in the Metric E series document.',
+    expectedKiller: 'Metric E ledgers must retain an exact closed document shape',
+    name: 'metric-e/drop-exact-series-shape-closure',
+    replacement: removedMetricEExactSeriesShapeBranch,
+    search: metricEExactSeriesShapeBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEExactSeriesShapeBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Omits the build-time CSRF root join from Metric E comparability.',
+    expectedKiller: 'measurement-producer changes must force a new comparable series',
+    name: 'metric-e/drop-build-export-comparability-input',
+    replacement: removedMetricEBuildExportComparabilityBranch,
+    search: metricEBuildExportComparabilityBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEMeasurementProducerComparabilityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Omits the core semantic door vocabulary from Metric E comparability.',
+    expectedKiller: 'transitive measurement vocabulary changes must force a new comparable series',
+    name: 'metric-e/drop-core-door-comparability-input',
+    replacement: removedMetricECoreDoorComparabilityBranch,
+    search: metricECoreDoorComparabilityBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEMeasurementProducerComparabilityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Omits the complete compiler source tree from Metric E comparability.',
+    expectedKiller:
+      'app-graph and measurement-producer membership changes must force a new comparable series',
+    name: 'metric-e/drop-compiler-source-tree-comparability',
+    replacement: removedMetricECompilerTreeComparabilityBranch,
+    search: metricECompilerTreeComparabilityBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEMeasurementProducerComparabilityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Stops binding a Metric E review span to its exact retained UTF-16 slice.',
+    expectedKiller: 'Metric E review sites must match exact retained source bytes',
+    name: 'metric-e/drop-retained-source-slice-binding',
+    replacement: removedMetricERetainedSourceBindingBranch,
+    search: metricERetainedSourceBindingBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricERetainedSourceBindingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Stops binding a Metric E review site to the exact retained source hash.',
+    expectedKiller: 'Metric E review sites must match the exact retained UTF-16 source hash',
+    name: 'metric-e/drop-retained-source-hash-binding',
+    replacement: removedMetricERetainedSourceHashBindingBranch,
+    search: metricERetainedSourceHashBindingBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricERetainedSourceBindingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Stops binding a Metric E review site to the exact retained source length.',
+    expectedKiller: 'Metric E review sites must match the exact retained UTF-16 source length',
+    name: 'metric-e/drop-retained-source-length-binding',
+    replacement: removedMetricERetainedSourceLengthBindingBranch,
+    search: metricERetainedSourceLengthBindingBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricERetainedSourceBindingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Skips retained-source verification while loading Metric E review subjects.',
+    expectedKiller: 'Metric E baseline subjects must always re-read their retained source blobs',
+    name: 'metric-e/drop-retained-source-verification-wiring',
+    replacement: removedMetricERetainedSourceVerificationWiringBranch,
+    search: metricERetainedSourceVerificationWiringBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricERetainedSourceBindingBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Stops joining package roots to the exact aggregation of app roots.',
+    expectedKiller: 'Metric E must reject app/package report split views',
+    name: 'metric-e/drop-app-package-root-join',
+    replacement: removedMetricEAppPackageAggregationBranch,
+    search: metricEAppPackageAggregationBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEAppPackageAggregationBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows surplus ceiling packages outside the measured report denominator.',
+    expectedKiller: 'Metric E report and ceiling package denominators must be exact',
+    name: 'metric-e/drop-ceiling-package-denominator',
+    replacement: removedMetricECeilingPackageDenominatorBranch,
+    search: metricECeilingPackageDenominatorBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricECeilingPackageDenominatorBehavior,
+  },
+  {
+    baseModule: {},
     description: 'Lets a Vite alias retarget a reviewed package child edge after review.',
     expectedKiller:
       'reviewed package child edges must remain independent of application Vite aliases',
@@ -2713,6 +3817,182 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
+    description:
+      'Skips the fail-closed pass for browser invocation authority stored in structured values.',
+    expectedKiller:
+      'reviewed packages must close object, array, class, Proxy, iterator, tag, and timer authority escapes',
+    name: 'dependency-loader/drop-authority-escape-closure',
+    replacement: removedDependencyLoaderAuthorityEscapeClosureBranch,
+    search: dependencyLoaderAuthorityEscapeClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderAuthorityEscapeBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats bare imperative event registration as an ordinary local invocation.',
+    expectedKiller:
+      'unshadowed imperative event registration is outside the finite request-handler language',
+    name: 'dependency-loader/drop-imperative-event-registration-closure',
+    replacement: removedDependencyLoaderImperativeEventRegistrationClosureBranch,
+    search: dependencyLoaderImperativeEventRegistrationClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderImperativeEventRegistrationBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats an unshadowed URL constructor alias as an ordinary local value.',
+    expectedKiller: 'retained URL constructor aliases must remain executable-asset carriers',
+    name: 'dependency-loader/drop-url-constructor-alias-closure',
+    replacement: weakenedDependencyLoaderUrlConstructorAliasBranch,
+    search: dependencyLoaderUrlConstructorAliasBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderUrlConstructorAliasBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops import.meta.url provenance when its base is projected through an alias.',
+    expectedKiller: 'retained module-relative URL bases must survive finite alias projection',
+    name: 'dependency-loader/drop-module-meta-url-projection',
+    replacement: weakenedDependencyLoaderModuleMetaUrlProjectionBranch,
+    search: dependencyLoaderModuleMetaProjectionBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderModuleMetaUrlProjectionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats an opaque transfer of mutable import.meta as a fresh local value.',
+    expectedKiller:
+      'opaque structured transfers must close mutable per-module import.meta authority',
+    name: 'dependency-loader/drop-module-meta-structured-closure',
+    replacement: removedDependencyLoaderModuleMetaStructuredClosureBranch,
+    search: dependencyLoaderModuleMetaStructuredClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderModuleMetaStructuredClosureBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops import.meta from the free captures of a summarized local callable.',
+    expectedKiller:
+      'local callable summaries must retain mutable import.meta when it can be returned to opaque code',
+    name: 'dependency-loader/drop-callable-module-meta-capture',
+    replacement: removedDependencyLoaderCallableModuleMetaCaptureBranch,
+    search: dependencyLoaderCallableModuleMetaCaptureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderCallableModuleMetaCaptureBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lowers arbitrary import.meta member projections to proved plain values.',
+    expectedKiller:
+      'arbitrary import.meta members must retain mutable shared-member provenance through aliases',
+    name: 'dependency-loader/drop-module-meta-member-provenance',
+    replacement: weakenedDependencyLoaderModuleMetaMemberProjectionBranch,
+    search: dependencyLoaderModuleMetaProjectionBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderModuleMetaMemberProjectionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lowers unresolved browser globals to proved plain values before opaque transfer.',
+    expectedKiller:
+      'unresolved browser bindings must retain ambient shared-global provenance until classified',
+    name: 'dependency-loader/drop-unresolved-ambient-global-provenance',
+    replacement: removedDependencyLoaderUnresolvedAmbientGlobalBranch,
+    search: dependencyLoaderUnresolvedAmbientGlobalBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderUnresolvedAmbientGlobalBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lowers a member of an unresolved ambient global to a proved plain value.',
+    expectedKiller:
+      'ambient-global member projections must preserve their shared unresolved origin through opaque calls',
+    name: 'dependency-loader/drop-ambient-global-member-provenance',
+    replacement: removedDependencyLoaderAmbientGlobalMemberBranch,
+    search: dependencyLoaderAmbientGlobalMemberBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderAmbientGlobalMemberBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Treats syntax-only identifiers as ambient global captures during closure traversal.',
+    expectedKiller:
+      'structured-opacity traversal must distinguish AST value references from class and property keys',
+    name: 'dependency-loader/drop-structured-opacity-value-reference-filter',
+    replacement: removedDependencyLoaderStructuredOpacityValueIdentifierBranch,
+    search: dependencyLoaderStructuredOpacityValueIdentifierBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredOpacityValueIdentifierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats every analyzed URL constructor argument as an ordinary local value.',
+    expectedKiller:
+      'finite constructor joins must preserve module-relative URL base provenance before an artifact can ship',
+    name: 'dependency-loader/drop-url-base-constructor-join',
+    replacement: removedDependencyLoaderUrlBaseJoinBranch,
+    search: dependencyLoaderUrlBaseJoinBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderUrlBaseJoinBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Skips the selected elements of an aliased URL constructor spread vector.',
+    expectedKiller: 'URL base provenance must survive finite spread-argument expansion',
+    name: 'dependency-loader/drop-url-spread-argument-expansion',
+    replacement: removedDependencyLoaderUrlSpreadArgumentBranch,
+    search: dependencyLoaderUrlSpreadArgumentBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderUrlSpreadArgumentBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops retained executable-constructor authority from class superclasses.',
+    expectedKiller: 'URL and Worker subclasses must retain executable-constructor authority',
+    name: 'dependency-loader/drop-class-superclass-authority-closure',
+    replacement: removedDependencyLoaderClassSuperclassAuthorityBranch,
+    search: dependencyLoaderClassSuperclassAuthorityBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderClassSuperclassAuthorityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats superclass constructor calls as ordinary local invocations.',
+    expectedKiller: 'super calls must retain the enclosing executable-constructor authority',
+    name: 'dependency-loader/drop-superclass-invocation-authority-closure',
+    replacement: removedDependencyLoaderSuperclassInvocationAuthorityBranch,
+    search: dependencyLoaderSuperclassInvocationAuthorityBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderSuperclassInvocationAuthorityBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats a non-finite template literal as an ordinary URL base.',
+    expectedKiller: 'URL base provenance must survive template-literal coercion',
+    name: 'dependency-loader/weaken-opaque-template-literal-closure',
+    replacement: weakenedDependencyLoaderOpaqueTemplateLiteralBranch,
+    search: dependencyLoaderOpaqueTemplateLiteralBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderOpaqueTemplateLiteralBehavior,
+  },
+  {
+    baseModule: {},
     description: 'Lets a reviewed package construct a CLOSED browser carrier transfer.',
     expectedKiller:
       'reviewed packages must close opaque browser carrier transfers at constructor sinks',
@@ -2722,6 +4002,78 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderClosedCarrierConstructorBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops the Function-constructor bridge from an unknown browser object.',
+    expectedKiller:
+      'closed browser values must preserve value.constructor.constructor as dynamic-code authority',
+    name: 'dependency-loader/drop-closed-receiver-constructor-bridge',
+    replacement: removedDependencyLoaderClosedReceiverConstructorBridgeBranch,
+    search: dependencyLoaderClosedReceiverConstructorBridgeBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderClosedReceiverConstructorBridgeBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Stops treating retained eval and Function references as executable authority.',
+    expectedKiller:
+      'dynamic-code authority must close through call, apply, bind, tagged, and Reflect adapters',
+    name: 'dependency-loader/drop-dynamic-code-carrier-closure',
+    replacement: removedDependencyLoaderDynamicCodeCarrierClosureBranch,
+    search: dependencyLoaderDynamicCodeCarrierClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderDynamicCodeCarrierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets an unknown constructor capability execute as an ordinary callable.',
+    expectedKiller:
+      'constructor-value invocation must close before recovering the Function constructor',
+    name: 'dependency-loader/drop-constructor-value-call-closure',
+    replacement: removedDependencyLoaderConstructorValueCallClosureBranch,
+    search: dependencyLoaderConstructorValueCallClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderConstructorValueCallBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats every direct timer callback value as a proved callable.',
+    expectedKiller:
+      'TimerHandler callbacks must be proved local callables before non-callable DOMString coercion',
+    name: 'dependency-loader/drop-proved-timer-callback-closure',
+    replacement: removedDependencyLoaderProvedTimerCallbackClosureBranch,
+    search: dependencyLoaderProvedTimerCallbackClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderProvedTimerCallbackBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Removes the exact-callee precision exemption for a proved direct timer callback.',
+    expectedKiller:
+      'proved direct timer callbacks must remain inside the finite language without admitting escaped timers',
+    name: 'dependency-loader/drop-direct-safe-timer-precision',
+    replacement: removedDependencyLoaderDirectSafeTimerPrecisionBranch,
+    search: dependencyLoaderDirectSafeTimerPrecisionBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderDirectSafeTimerPrecisionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Drops Function-constructor provenance from a known callable builtin.',
+    expectedKiller:
+      'known callable atoms must preserve their constructor bridge into dynamic-code authority',
+    name: 'dependency-loader/drop-known-callable-constructor-bridge',
+    replacement: removedDependencyLoaderKnownCallableConstructorBridgeBranch,
+    search: dependencyLoaderKnownCallableConstructorBridgeBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderKnownCallableConstructorBridgeBehavior,
   },
   {
     baseModule: {},
@@ -2773,15 +4125,15 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
-    description: 'Silently truncates structured argument traversal at its depth budget.',
+    description: 'Drops retained parameter origins from a structured helper return.',
     expectedKiller:
-      'structured carrier-effect traversal must fail closed when its finite depth budget is exhausted',
-    name: 'dependency-loader/drop-structured-argument-depth-closure',
-    replacement: removedDependencyLoaderStructuredArgumentDepthClosureBranch,
-    search: dependencyLoaderStructuredArgumentDepthClosureBranch,
+      'structured returns must retain the origins needed to close authority passed through local helpers',
+    name: 'dependency-loader/drop-structured-return-origin-closure',
+    replacement: removedDependencyLoaderStructuredReturnOriginClosureBranch,
+    search: dependencyLoaderStructuredReturnOriginClosureBranch,
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
-    test: assertDependencyLoaderStructuredArgumentDepthBehavior,
+    test: assertDependencyLoaderStructuredReturnOriginBehavior,
   },
   {
     baseModule: {},
@@ -2794,6 +4146,91 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderArrayJoinCoercionBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Re-expands a previously summarized structured browser carrier.',
+    expectedKiller:
+      'exact AST, scope, generation, and inspection-mode cache hits must prune repeated finite traversal',
+    name: 'dependency-loader/drop-structured-opacity-cache-hit-pruning',
+    replacement: removedDependencyLoaderStructuredOpacityCacheHitBranch,
+    search: dependencyLoaderStructuredOpacityCacheHitBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredOpacityCacheHitBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Runs structured browser call effects before provenance reaches its fixed point.',
+    expectedKiller:
+      'structured-opacity summaries must run only after the finite provenance generation stabilizes',
+    name: 'dependency-loader/collapse-structured-opacity-provenance-phase',
+    replacement: immediateDependencyLoaderStructuredOpacityCallEffectBranch,
+    search: dependencyLoaderStructuredOpacityDeferredCallEffectBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredOpacityProvenancePhaseBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Reuses a value-only summary when a whole callable closure must be inspected.',
+    expectedKiller: 'value and whole-closure structured-opacity summaries must remain distinct',
+    name: 'dependency-loader/drop-structured-opacity-mode-separation',
+    replacement: removedDependencyLoaderStructuredOpacityModeBranch,
+    search: dependencyLoaderStructuredOpacityModeBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredOpacityModeBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Treats syntactically repeated stable paths as unrelated opacity identities.',
+    expectedKiller:
+      'stable binding and member paths must normalize to one finite structured-opacity identity',
+    name: 'dependency-loader/drop-structured-opacity-static-path-identity',
+    replacement: removedDependencyLoaderStructuredOpacityStaticPathIdentityBranch,
+    search: dependencyLoaderStructuredOpacityStaticPathIdentityBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredOpacityStaticPathIdentityBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Reuses a direct local-callee summary after later prototype replacement makes the callable opaque.',
+    expectedKiller:
+      'cached direct local callables must be rechecked against late opaque-constructor enrollment',
+    name: 'dependency-loader/drop-direct-local-callable-cache-recheck',
+    replacement: removedDependencyLoaderDirectLocalCallableCacheRecheckBranch,
+    search: dependencyLoaderDirectLocalCallableCacheRecheckBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderDirectLocalCallableCacheRecheckBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Discards the free captures retained by a transferred local callable.',
+    expectedKiller:
+      'inline and aliased callable transfers must close every independently reachable free capture',
+    name: 'dependency-loader/drop-structured-opacity-callable-free-captures',
+    replacement: removedDependencyLoaderStructuredOpacityCallableCaptureBranch,
+    search: dependencyLoaderStructuredOpacityCallableCaptureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderStructuredOpacityCallableCaptureBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Treats a named function expression self binding as purely local after returning the function object.',
+    expectedKiller:
+      'returned named function self aliases must close the independently reachable outer callable',
+    name: 'dependency-loader/drop-returned-function-self-capture',
+    replacement: removedDependencyLoaderCallableSelfCaptureBranch,
+    search: dependencyLoaderCallableSelfCaptureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderReturnedFunctionSelfCaptureBehavior,
   },
   {
     baseModule: {},
@@ -2819,6 +4256,43 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderReturnedCallableCaptureBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Forgets the live binding identity carried by an owned sibling chunk import.',
+    expectedKiller:
+      'opaque consumers must taint the exact imported live binding before later projections',
+    name: 'dependency-loader/drop-owned-chunk-import-live-identity',
+    replacement: removedDependencyLoaderOwnedChunkImportIdentityBranch,
+    search: dependencyLoaderOwnedChunkImportIdentityBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderOwnedChunkImportIdentityBehavior,
+  },
+  {
+    baseModule: {},
+    description:
+      'Treats opaque imported call and constructor results as fresh values across chunk boundaries.',
+    expectedKiller:
+      'opaque imported invocation results must close when they may alias another live export',
+    name: 'dependency-loader/drop-owned-chunk-import-result-closure',
+    replacement: removedDependencyLoaderOpaqueImportResultClosureBranch,
+    search: dependencyLoaderOpaqueImportResultClosureBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderOwnedChunkImportResultBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Closes every owned sibling chunk import before an opaque transfer occurs.',
+    expectedKiller:
+      'an unexposed owned-chunk binding must retain the reviewed PLAIN-compatible positive verdict',
+    name: 'dependency-loader/overclose-owned-chunk-import-at-load',
+    replacement: overclosedDependencyLoaderOwnedChunkImportRegistrationBranch,
+    search: dependencyLoaderOwnedChunkImportRegistrationBranch,
+    sourceFile: cliDependencyCapabilityLoaderPath,
+    sourceOnly: true,
+    test: assertDependencyLoaderOwnedChunkImportPositiveControlBehavior,
   },
   {
     baseModule: {},
@@ -3090,6 +4564,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: authoredExecutableReferenceClosureBranch,
     sourceFile: compilerAuthoringSurfaceValidatorPath,
     test: assertAuthoredExecutableReferenceClosureBehavior,
+  },
+  {
+    behavioralEntryFile: compilerBehavioralEntryPath,
+    behavioralTypeScript: true,
+    description: 'Lets a computed private mutation/query registry key evade KV235.',
+    expectedKiller:
+      'computed key-first registry calls must close before runtime identity can diverge from compiler roots',
+    name: 'compiler-authoring/drop-computed-registry-key-closure',
+    replacement: weakenedComputedKeyFirstRegistryClosureBranch,
+    search: computedKeyFirstRegistryClosureBranch,
+    sourceFile: compilerAuthoringSurfaceValidatorPath,
+    test: assertComputedKeyFirstRegistryClosureBehavior,
   },
   {
     behavioralTypeScript: true,
@@ -4079,6 +5565,17 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description: 'Drops the exact immutable same-file handler-to-root correspondence.',
+    expectedKiller:
+      'one compiler-proved same-file handler reference must join to the same exact TASK B root',
+    name: 'drizzle-task-b/drop-same-file-root-reference',
+    replacement: removedTaskBSameFileRootReferenceBranch,
+    search: taskBSameFileRootReferenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBSameFileRootReferenceIsAccepted,
+  },
+  {
+    behavioralTypeScript: true,
     description: 'Deletes exact package-summary root correspondence from TASK B.',
     expectedKiller:
       'TASK B must reject a capability root omitted from one reachable package-summary entry',
@@ -4087,6 +5584,209 @@ export const SECURITY_GATE_MUTANTS = [
     search: taskBPackageRootCorrespondenceBranch,
     sourceFile: drizzleTrustEscapesPath,
     test: assertTaskBPackageRootCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Admits a compiler finite verdict that retained blocking diagnostics.',
+    expectedKiller: 'TASK B must retain the explicit rejected finite-verdict branch',
+    name: 'drizzle-task-b/drop-finite-verdict-rejection',
+    replacement: removedTaskBFiniteVerdictRejectionBranch,
+    search: taskBFiniteVerdictRejectionBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBFiniteVerdictRejectionIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Stops binding the compiler diagnostic census and semantic graphs by digest.',
+    expectedKiller: 'TASK B must reject a tampered analysis carrier after the compiler snapshot',
+    name: 'drizzle-task-b/drop-analysis-carrier-digest',
+    replacement: removedTaskBAnalysisCarrierDigestBranch,
+    search: taskBAnalysisCarrierDigestBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBAnalysisCarrierDigestIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Accepts a coherently snapshotted TASK B carrier that omits a finite terminal.',
+    expectedKiller:
+      'TASK B must exactly join every proved semantic terminal to the independent source-operation denominator',
+    name: 'drizzle-task-b/drop-complete-terminal-correspondence',
+    replacement: removedTaskBTerminalCorrespondenceBranch,
+    search: taskBTerminalCorrespondenceBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBCompleteTerminalCorrespondenceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Collapses duplicate proved TASK B traces into a set.',
+    expectedKiller: 'TASK B must reject duplicate full terminal-and-transfer identities',
+    name: 'drizzle-task-b/drop-duplicate-terminal-trace-closure',
+    replacement: removedTaskBDuplicateTerminalTraceClosureBranch,
+    search: taskBDuplicateTerminalTraceClosureBranch,
+    sourceFile: drizzleTrustEscapesPath,
+    test: assertTaskBDuplicateTerminalTraceClosureIsEnforced,
+  },
+  {
+    description: 'Restores the server compiler plugin to the browser-only CSS collection pass.',
+    expectedKiller:
+      'the CSS-only pass must emit no executable browser artifact while retaining CSS and handlers',
+    name: 'cli-build/restore-css-collector-server-plugin',
+    replacement: restoredCliCssCollectorServerPluginBranch,
+    search: cliCssCollectorSelectionBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertCliCssCollectorArtifactBoundary,
+  },
+  {
+    description: "Re-enables Vite's executable modulepreload compatibility shim.",
+    expectedKiller: 'the native-ESM CSS-only pass must retain zero executable JavaScript assets',
+    name: 'cli-build/restore-css-modulepreload-polyfill',
+    replacement: restoredCliModulePreloadPolyfillBranch,
+    search: cliNativeEsmModulePreloadBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertCliCssCollectorArtifactBoundary,
+  },
+  {
+    description: 'Returns server descriptor source from the compiler-owned CSS collector.',
+    expectedKiller:
+      'the collector transform must retain metadata but expose only an inert browser module',
+    name: 'compiler-vite/drop-css-collector-inert-transform',
+    replacement: removedCompilerCssCollectorTransformBoundaryBranch,
+    search: compilerCssCollectorTransformBoundaryBranch,
+    sourceFile: compilerVitePath,
+    sourceOnly: true,
+    test: assertCompilerCssCollectorBoundary,
+  },
+  {
+    description: 'Allows the CSS collector to satisfy the private server-plugin authority proof.',
+    expectedKiller: 'CSS collection authority must never witness server-render ownership',
+    name: 'compiler-vite/allow-css-collector-server-owner',
+    replacement: removedCompilerCssCollectorServerOwnerRejectionBranch,
+    search: compilerCssCollectorServerOwnerRejectionBranch,
+    sourceFile: compilerVitePath,
+    sourceOnly: true,
+    test: assertCompilerCssCollectorBoundary,
+  },
+  {
+    description: 'Drops KV449 from the build command finite-verdict diagnostic census.',
+    expectedKiller: 'build TASK B must enroll KV449, KV450, and KV452 together',
+    name: 'cli-task-b-build/drop-kv449-finite-diagnostic',
+    replacement: buildTaskBFiniteDiagnosticEnrollmentWithoutKv449,
+    search: buildTaskBFiniteDiagnosticEnrollmentBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildTaskBFiniteDiagnosticEnrollmentIsPinned,
+  },
+  {
+    description: 'Drops KV450 from the build command finite-verdict diagnostic census.',
+    expectedKiller: 'build TASK B must enroll KV449, KV450, and KV452 together',
+    name: 'cli-task-b-build/drop-kv450-finite-diagnostic',
+    replacement: buildTaskBFiniteDiagnosticEnrollmentWithoutKv450,
+    search: buildTaskBFiniteDiagnosticEnrollmentBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildTaskBFiniteDiagnosticEnrollmentIsPinned,
+  },
+  {
+    description: 'Drops KV452 from the build command finite-verdict diagnostic census.',
+    expectedKiller: 'build TASK B must enroll KV449, KV450, and KV452 together',
+    name: 'cli-task-b-build/drop-kv452-finite-diagnostic',
+    replacement: buildTaskBFiniteDiagnosticEnrollmentWithoutKv452,
+    search: buildTaskBFiniteDiagnosticEnrollmentBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildTaskBFiniteDiagnosticEnrollmentIsPinned,
+  },
+  {
+    description: 'Drops KV235 from the pre-evaluation build diagnostic census.',
+    expectedKiller: 'build preflight must reject authored registry authority before app evaluation',
+    name: 'cli-build/drop-pre-evaluation-kv235-enrollment',
+    replacement: removedBuildPreEvaluationKv235EnrollmentBranch,
+    search: buildPreEvaluationKv235EnrollmentBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildPreEvaluationKv235EnrollmentIsPinned,
+  },
+  {
+    description: 'Drops the build compiler diagnostic census at the finite-verdict snapshot.',
+    expectedKiller: 'build TASK B must carry its exact blocking diagnostics into the snapshot',
+    name: 'cli-task-b-build/drop-finite-diagnostic-carrier',
+    replacement: removedBuildTaskBFiniteVerdictCarrierBranch,
+    search: buildTaskBFiniteVerdictCarrierBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildTaskBFiniteVerdictCarrierIsPinned,
+  },
+  {
+    description: 'Drops route-page diagnostics before the build finite-verdict snapshot.',
+    expectedKiller: 'build TASK B must retain route-page KV449/KV450/KV452 diagnostics',
+    name: 'cli-task-b-build/drop-route-finite-diagnostic-carrier',
+    replacement: removedBuildRouteTaskBFiniteDiagnosticCarrierBranch,
+    search: buildRouteTaskBFiniteDiagnosticCarrierBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildRouteTaskBFiniteDiagnosticCarrierIsPinned,
+  },
+  {
+    description: 'Drops route-page diagnostics from the ordinary build preflight carrier.',
+    expectedKiller: 'ordinary build diagnostics must retain the route-page compiler census',
+    name: 'cli-task-b-build/drop-route-ordinary-diagnostic-carrier',
+    replacement: removedBuildRouteOrdinaryDiagnosticCarrierBranch,
+    search: buildRouteOrdinaryDiagnosticCarrierBranch,
+    sourceFile: cliBuildExportPath,
+    sourceOnly: true,
+    test: assertBuildRouteTaskBFiniteDiagnosticCarrierIsPinned,
+  },
+  {
+    description: 'Drops KV449 from the compile command finite-verdict diagnostic census.',
+    expectedKiller: 'compile TASK B must enroll KV449, KV450, and KV452 together',
+    name: 'cli-task-b-compile/drop-kv449-finite-diagnostic',
+    replacement: compileTaskBFiniteDiagnosticEnrollmentWithoutKv449,
+    search: compileTaskBFiniteDiagnosticEnrollmentBranch,
+    sourceFile: cliCompilePath,
+    sourceOnly: true,
+    test: assertCompileTaskBFiniteDiagnosticEnrollmentIsPinned,
+  },
+  {
+    description: 'Drops KV450 from the compile command finite-verdict diagnostic census.',
+    expectedKiller: 'compile TASK B must enroll KV449, KV450, and KV452 together',
+    name: 'cli-task-b-compile/drop-kv450-finite-diagnostic',
+    replacement: compileTaskBFiniteDiagnosticEnrollmentWithoutKv450,
+    search: compileTaskBFiniteDiagnosticEnrollmentBranch,
+    sourceFile: cliCompilePath,
+    sourceOnly: true,
+    test: assertCompileTaskBFiniteDiagnosticEnrollmentIsPinned,
+  },
+  {
+    description: 'Drops the compile diagnostic census at the finite-verdict snapshot.',
+    expectedKiller: 'compile TASK B must carry its exact blocking diagnostics into the snapshot',
+    name: 'cli-task-b-compile/drop-finite-diagnostic-carrier',
+    replacement: removedCompileTaskBFiniteVerdictCarrierBranch,
+    search: compileTaskBFiniteVerdictCarrierBranch,
+    sourceFile: cliCompilePath,
+    sourceOnly: true,
+    test: assertCompileTaskBFiniteVerdictCarrierIsPinned,
+  },
+  {
+    description: 'Drops KV452 from the compile command finite-verdict diagnostic census.',
+    expectedKiller: 'compile TASK B must enroll KV449, KV450, and KV452 together',
+    name: 'cli-task-b-compile/drop-kv452-finite-diagnostic',
+    replacement: compileTaskBFiniteDiagnosticEnrollmentWithoutKv452,
+    search: compileTaskBFiniteDiagnosticEnrollmentBranch,
+    sourceFile: cliCompilePath,
+    sourceOnly: true,
+    test: assertCompileTaskBFiniteDiagnosticEnrollmentIsPinned,
+  },
+  {
+    description: 'Drops route-page diagnostics from standalone compile and its finite verdict.',
+    expectedKiller: 'standalone compile must retain route-page KV449/KV450/KV452 diagnostics',
+    name: 'cli-task-b-compile/drop-route-finite-diagnostic-carrier',
+    replacement: removedCompileRouteTaskBFiniteDiagnosticCarrierBranch,
+    search: compileRouteTaskBFiniteDiagnosticCarrierBranch,
+    sourceFile: cliCompilePath,
+    sourceOnly: true,
+    test: assertCompileRouteTaskBFiniteDiagnosticCarrierIsPinned,
   },
   {
     behavioralEntryFile: compilerBehavioralEntryPath,
@@ -6706,6 +8406,14 @@ function runIsolatedPackageVitestMutation({
   testFile,
   testNamePattern,
 }) {
+  const cacheKey = [
+    packageName,
+    relativeSourcePath,
+    testFile,
+    testNamePattern,
+    createHash('sha256').update(sourceText).digest('hex'),
+  ].join('\0');
+  if (isolatedPackageVitestPasses.has(cacheKey)) return;
   const tempRoot = mkdtempSync(path.join(tmpdir(), `kovo-${packageName}-mutation-behavior-`));
   try {
     const packageRoot = path.join(tempRoot, 'packages', packageName);
@@ -6717,6 +8425,10 @@ function runIsolatedPackageVitestMutation({
       path.join(repoRoot, `packages/${packageName}/package.json`),
       path.join(packageRoot, 'package.json'),
     );
+    const packageTestRoot = path.join(repoRoot, `packages/${packageName}/test`);
+    if (existsSync(packageTestRoot)) {
+      cpSync(packageTestRoot, path.join(packageRoot, 'test'), { recursive: true });
+    }
     symlinkSync(
       path.join(repoRoot, `packages/${packageName}/node_modules`),
       path.join(packageRoot, 'node_modules'),
@@ -6736,6 +8448,23 @@ function runIsolatedPackageVitestMutation({
         );
       }
     }
+    if (packageName === 'cli') {
+      symlinkSync(path.join(repoRoot, 'security'), path.join(tempRoot, 'security'), 'dir');
+      // CLI integration regressions intentionally exercise sibling framework packages through
+      // repo-relative fixtures. Keep the mutated CLI copy isolated while exposing read-only
+      // first-party package and policy subjects at the same workspace paths.
+      for (const sibling of ['browser', 'compiler', 'core', 'server', 'style']) {
+        symlinkSync(
+          path.join(repoRoot, 'packages', sibling),
+          path.join(tempRoot, 'packages', sibling),
+          'dir',
+        );
+      }
+      for (const subject of ['SECURITY.md', 'SPEC.md', 'pnpm-lock.yaml', 'rules']) {
+        const source = path.join(repoRoot, subject);
+        if (existsSync(source)) symlinkSync(source, path.join(tempRoot, subject));
+      }
+    }
     symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
     writeFileSync(path.join(packageRoot, 'src', relativeSourcePath), sourceText, 'utf8');
     writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
@@ -6748,13 +8477,14 @@ function runIsolatedPackageVitestMutation({
         testFile,
         '--testNamePattern',
         testNamePattern,
+        '--testTimeout=60000',
         '--reporter=dot',
       ],
       {
         cwd: tempRoot,
         encoding: 'utf8',
         env: { ...process.env, FORCE_COLOR: '0' },
-        timeout: 60_000,
+        timeout: 120_000,
       },
     );
     if (result.error) throw result.error;
@@ -6763,9 +8493,306 @@ function runIsolatedPackageVitestMutation({
         `isolated ${packageName} mutation regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
       );
     }
+    isolatedPackageVitestPasses.add(cacheKey);
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
+}
+
+function runIsolatedRootVitestMutation({
+  relativeSourcePath,
+  sourceText,
+  testFile,
+  testNamePattern,
+}) {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-root-mutation-behavior-'));
+  try {
+    cpSync(path.join(repoRoot, 'scripts'), path.join(tempRoot, 'scripts'), { recursive: true });
+    symlinkSync(path.join(repoRoot, 'packages'), path.join(tempRoot, 'packages'), 'dir');
+    symlinkSync(path.join(repoRoot, 'security'), path.join(tempRoot, 'security'), 'dir');
+    symlinkSync(path.join(repoRoot, 'node_modules'), path.join(tempRoot, 'node_modules'), 'dir');
+    for (const name of ['pnpm-lock.yaml', 'pnpm-workspace.yaml', 'tsconfig.json']) {
+      cpSync(path.join(repoRoot, name), path.join(tempRoot, name));
+    }
+    writeFileSync(path.join(tempRoot, relativeSourcePath), sourceText, 'utf8');
+    writeFileSync(path.join(tempRoot, 'package.json'), '{"private":true,"type":"module"}\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'node_modules/vitest/vitest.mjs'),
+        '--run',
+        testFile,
+        '--testNamePattern',
+        testNamePattern,
+        '--testTimeout=60000',
+        '--reporter=dot',
+      ],
+      {
+        cwd: tempRoot,
+        encoding: 'utf8',
+        env: { ...process.env, FORCE_COLOR: '0' },
+        timeout: 120_000,
+      },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(
+        `isolated root mutation regression:\n${result.stdout ?? ''}${result.stderr ?? ''}`,
+      );
+    }
+  } finally {
+    rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
+
+function assertDependencyLoaderConfiguredAliasIdentityJoinBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'enforces the manifest in a real Vite import path',
+  });
+}
+
+function assertDependencyLoaderClientLaneCarrierBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'limits browser carrier evaluation to client artifacts',
+  });
+}
+
+function assertDependencyLoaderCallableRecursionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'recursive-callable-budget Worker',
+  });
+}
+
+function assertDependencyLoaderFiniteEvaluationBudgetBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'exhausts its shared step budget',
+  });
+}
+
+function assertRuntimeReviewEd25519KeyTypeBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'crypto-authority.ts',
+    sourceText,
+    testFile: 'packages/server/src/escape-obligation-review.security.test.ts',
+    testNamePattern: 'rejects a 64-byte RSA-512 signature',
+  });
+}
+
+function assertEscapeCensusDuplicateRootIdentityBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'escape-census-review.ts',
+    sourceText,
+    testFile: 'packages/server/src/escape-census-review.security.test.ts',
+    testNamePattern: 'requires an exact one-to-one set',
+  });
+}
+
+function assertEscapeCensusProducerSiteBoundBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'server',
+    relativeSourcePath: 'escape-census-review.ts',
+    sourceText,
+    testFile: 'packages/server/src/escape-census-review.security.test.ts',
+    testNamePattern: 'bounds each exact producer-site set',
+  });
+}
+
+function assertEscapeCensusEmitterClosedDispositionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'escape-census-review-subjects.ts',
+    sourceText,
+    testFile: 'packages/cli/src/commands/build-export.escape-census-reviews.test.ts',
+    testNamePattern: 'fails closed on missing coverage',
+  });
+}
+
+function assertEscapeCensusEmitterExactRootSitesBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'escape-census-review-subjects.ts',
+    sourceText,
+    testFile: 'packages/cli/src/commands/build-export.escape-census-reviews.test.ts',
+    testNamePattern: 'emits one artifact-bound subject per counted root',
+  });
+}
+
+function assertEscapeCensusIndependentProducerOracleBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-baseline.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-baseline.test.mjs',
+    testNamePattern: 'independently rejects omitted or cross-root producer sites',
+  });
+}
+
+function assertEscapeCensusArtifactSubjectRecomputationBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-baseline.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-baseline.test.mjs',
+    testNamePattern: 'recomputes the graph artifact subject',
+  });
+}
+
+function assertEscapeCensusAuditSafePathBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-gate.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-gate.test.mjs',
+    testNamePattern: 'rejects audit-ambiguous analysis-input path character',
+  });
+}
+
+function assertEscapeCensusAuditIdentityBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-gate.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-gate.test.mjs',
+    testNamePattern: 'rejects audit-line injection through census identities',
+  });
+}
+
+function assertEscapeCensusHandlerCorrespondenceBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-gate.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-gate.test.mjs',
+    testNamePattern: 'requires exact one-to-one handler targets and semantic roots',
+  });
+}
+
+function assertEscapeCensusEmitterHandlerCorrespondenceBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'escape-census-review-subjects.ts',
+    sourceText,
+    testFile: 'packages/cli/src/commands/build-export.escape-census-reviews.test.ts',
+    testNamePattern: 'emits one artifact-bound subject per counted root',
+  });
+}
+
+function assertEscapeCensusBaselineHandlerCorrespondenceBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-baseline.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-baseline.test.mjs',
+    testNamePattern: 'independently rejects omitted or cross-root producer sites',
+  });
+}
+
+function assertEscapeCensusBoundaryWhitespaceBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-gate.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-gate.test.mjs',
+    testNamePattern: 'census identity boundaries',
+  });
+}
+
+function assertEscapeCensusJsonReportQuotingBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/escape-census-gate.mjs',
+    sourceText,
+    testFile: 'scripts/escape-census-gate.test.mjs',
+    testNamePattern: 'JSON-quotes printable identity whitespace',
+  });
+}
+
+function runMetricERoundsMutation(sourceText, testNamePattern) {
+  runIsolatedRootVitestMutation({
+    relativeSourcePath: 'scripts/metric-e-rounds-gate.mjs',
+    sourceText,
+    testFile: 'scripts/metric-e-rounds-gate.test.mjs',
+    testNamePattern,
+  });
+}
+
+function assertMetricERuntimeReviewVerifierBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(sourceText, 'rejects a 64-byte RSA-512 signature');
+}
+
+function assertMetricECallerAnchorNonqualifyingBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'records an exact detached Ed25519 set without treating its caller-supplied anchor',
+  );
+}
+
+function assertMetricEAuthenticatedReviewQualificationBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'does not qualify zero-escape rounds backed only by self-declared unauthenticated reviews',
+  );
+}
+
+function assertMetricETimestampEpochOrderingBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects reverse-history subjects, nonmonotone review times, and misleading extra fields',
+  );
+}
+
+function assertMetricERealCalendarDateBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects reverse-history subjects, nonmonotone review times, and misleading extra fields',
+  );
+}
+
+function assertMetricECodeSubjectAncestryBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects reverse-history subjects, nonmonotone review times, and misleading extra fields',
+  );
+}
+
+function assertMetricEExactSeriesShapeBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects reverse-history subjects, nonmonotone review times, and misleading extra fields',
+  );
+}
+
+function assertMetricEMeasurementProducerComparabilityBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(sourceText, 'requires a new series when the measurement producer');
+}
+
+function assertMetricERetainedSourceBindingBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'verifies every review site against exact retained UTF-16 source bytes',
+  );
+}
+
+function assertMetricEAppPackageAggregationBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(sourceText, 'rejects app/package split views and surplus ceiling');
+}
+
+function assertMetricECeilingPackageDenominatorBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(sourceText, 'rejects app/package split views and surplus ceiling');
 }
 
 function assertTaskChildSchemaAdmissionBehavior(_moduleUnderTest, { sourceText }) {
@@ -6985,7 +9012,7 @@ function assertDependencyLoaderProxyConstructorArgumentBehavior(_moduleUnderTest
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
     testNamePattern:
-      'reviewed package audit-(Proxy-set-trap|Object-freeze-Proxy-trap)-written Worker before Vite copies',
+      'reviewed package audit-(Proxy-set-trap|Object-freeze-Proxy-trap)-written Worker before a supported artifact can ship',
   });
 }
 
@@ -6996,7 +9023,7 @@ function assertDependencyLoaderInvocationReceiverEffectBehavior(_moduleUnderTest
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
     testNamePattern:
-      'reviewed package audit-(method-this|static-setter-this)-written Worker before Vite copies',
+      'reviewed package audit-(method-this|static-setter-this)-written Worker before a supported artifact can ship',
   });
 }
 
@@ -7010,7 +9037,7 @@ function assertDependencyLoaderUnsupportedCallTargetEffectBehavior(
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
     testNamePattern:
-      'reviewed package audit-(array-callback|timer-extra-argument)-written Worker before Vite copies',
+      'reviewed package audit-(array-callback|timer-extra-argument)-written Worker before a supported artifact can ship',
   });
 }
 
@@ -7021,18 +9048,7 @@ function assertDependencyLoaderIterationAssignmentEffectBehavior(_moduleUnderTes
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
     testNamePattern:
-      'reviewed package audit-for-(of-member-target|await-member-target)-written Worker before Vite copies',
-  });
-}
-
-function assertDependencyLoaderStructuredArgumentDepthBehavior(_moduleUnderTest, { sourceText }) {
-  runIsolatedPackageVitestMutation({
-    packageName: 'cli',
-    relativeSourcePath: 'dependency-capability-loader.ts',
-    sourceText,
-    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern:
-      'reviewed package audit-deep-structured-argument-written Worker before Vite copies',
+      'reviewed package audit-for-(of-member-target|await-member-target)-written Worker before a supported artifact can ship',
   });
 }
 
@@ -7042,7 +9058,94 @@ function assertDependencyLoaderArrayJoinCoercionBehavior(_moduleUnderTest, { sou
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package audit-array-join-coercion-written Worker before Vite copies',
+    testNamePattern:
+      'reviewed package audit-array-join-coercion-written Worker before a supported artifact can ship',
+  });
+}
+
+function assertDependencyLoaderStructuredOpacityCacheHitBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern:
+      'admits a wide safe closure transferred repeatedly through structured arguments',
+  });
+}
+
+function assertDependencyLoaderStructuredOpacityProvenancePhaseBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'admits a repeated wide safe closure across unrelated assignment provenance',
+  });
+}
+
+function assertDependencyLoaderStructuredOpacityModeBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'distinguishes a value-only callable summary from whole-closure inspection',
+  });
+}
+
+function assertDependencyLoaderStructuredOpacityStaticPathIdentityBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'admits a repeated safe closure through one stable binding',
+  });
+}
+
+function assertDependencyLoaderDirectLocalCallableCacheRecheckBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'invalidates a direct local-callee summary after prototype replacement',
+  });
+}
+
+function assertDependencyLoaderStructuredOpacityCallableCaptureBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes a captured object transferred through an inline closure',
+  });
+}
+
+function assertDependencyLoaderReturnedFunctionSelfCaptureBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes a named local function returned through its self binding',
   });
 }
 
@@ -7052,7 +9155,7 @@ function assertDependencyLoaderLocalCallableEffectBehavior(_moduleUnderTest, { s
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package helper-written Worker before Vite copies',
+    testNamePattern: 'reviewed package helper-written Worker before a supported artifact can ship',
   });
 }
 
@@ -7062,7 +9165,41 @@ function assertDependencyLoaderReturnedCallableCaptureBehavior(_moduleUnderTest,
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package nested-returned-helper-written Worker before Vite copies',
+    testNamePattern:
+      'reviewed package nested-returned-helper-written Worker before a supported artifact can ship',
+  });
+}
+
+function assertDependencyLoaderOwnedChunkImportIdentityBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes a mutable binding retained across owned client chunks',
+  });
+}
+
+function assertDependencyLoaderOwnedChunkImportResultBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes an opaque imported-(call|constructor) result',
+  });
+}
+
+function assertDependencyLoaderOwnedChunkImportPositiveControlBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'retains plain compatibility for an unexposed owned-chunk binding',
   });
 }
 
@@ -7075,7 +9212,8 @@ function assertDependencyLoaderConstructorAffectedArgumentBehavior(
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package constructor-written Worker before Vite copies',
+    testNamePattern:
+      'reviewed package constructor-written Worker before a supported artifact can ship',
   });
 }
 
@@ -7085,7 +9223,8 @@ function assertDependencyLoaderSetterAffectedArgumentBehavior(_moduleUnderTest, 
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package setter-argument-written Worker before Vite copies',
+    testNamePattern:
+      'reviewed package setter-argument-written Worker before a supported artifact can ship',
   });
 }
 
@@ -7150,13 +9289,262 @@ function assertDependencyLoaderExecutableAssetCarrierBehavior(_moduleUnderTest, 
   });
 }
 
+function assertDependencyLoaderAuthorityEscapeBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'rejects retained invocation authority through (object storage|class field and getter|Proxy trap receiver|iterator receiver|tag substitution|timer destructuring default|timer generator yield|Proxy-returned timer|Proxy-set timer)',
+  });
+}
+
+function assertDependencyLoaderImperativeEventRegistrationBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'rejects retained invocation authority through imperative event registration',
+  });
+}
+
+function assertDependencyLoaderUrlConstructorAliasBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'minified URL-constructor alias',
+  });
+}
+
+function assertDependencyLoaderModuleMetaUrlProjectionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'minified import.meta.url base alias',
+  });
+}
+
+function assertDependencyLoaderModuleMetaStructuredClosureBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes mutable import.meta after an opaque structured transfer',
+  });
+}
+
+function assertDependencyLoaderCallableModuleMetaCaptureBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes import.meta returned through a summarized local callable',
+  });
+}
+
+function assertDependencyLoaderModuleMetaMemberProjectionBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes an aliased mutable member of import.meta',
+  });
+}
+
+function assertDependencyLoaderUnresolvedAmbientGlobalBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'closes an unresolved global after an opaque structured transfer',
+  });
+}
+
+function assertDependencyLoaderAmbientGlobalMemberBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'retains unresolved-global origin through an opaque member transfer',
+  });
+}
+
+function assertDependencyLoaderStructuredOpacityValueIdentifierBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
+    testNamePattern: 'does not treat a class method key as an unresolved global capture',
+  });
+}
+
+function assertDependencyLoaderUrlBaseJoinBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'discarded finite-join module-relative URL',
+  });
+}
+
+function assertDependencyLoaderUrlSpreadArgumentBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'rejects spread URL base provenance through its dedicated finite-language branch',
+  });
+}
+
+function assertDependencyLoaderClassSuperclassAuthorityBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'minified URL subclass|reviewed package Worker subclass',
+  });
+}
+
+function assertDependencyLoaderSuperclassInvocationAuthorityBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'rejects superclass invocation authority through its dedicated finite-language branch',
+  });
+}
+
+function assertDependencyLoaderOpaqueTemplateLiteralBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'minified URL subclass .*template-literal base',
+  });
+}
+
 function assertDependencyLoaderClosedCarrierConstructorBehavior(_moduleUnderTest, { sourceText }) {
   runIsolatedPackageVitestMutation({
     packageName: 'cli',
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
-    testNamePattern: 'reviewed package descriptor Worker before Vite copies',
+    testNamePattern:
+      'rejects closed constructor target through its dedicated finite-language branch',
+  });
+}
+
+function assertDependencyLoaderClosedReceiverConstructorBridgeBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'rejects closed receiver constructor bridge through its dedicated finite-language branch',
+  });
+}
+
+function assertDependencyLoaderDynamicCodeCarrierBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'rejects retained dynamic-code authority through its dedicated finite-language branch',
+  });
+}
+
+function assertDependencyLoaderConstructorValueCallBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package array-method constructor dynamic Worker',
+  });
+}
+
+function assertDependencyLoaderProvedTimerCallbackBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package setTimeout array callback',
+  });
+}
+
+function assertDependencyLoaderDirectSafeTimerPrecisionBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'keeps lexical URL aliases and authority-free helper results inside the finite language',
+  });
+}
+
+function assertDependencyLoaderKnownCallableConstructorBridgeBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern: 'reviewed package Object constructor dynamic Worker',
+  });
+}
+
+function assertDependencyLoaderStructuredReturnOriginBehavior(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'dependency-capability-loader.ts',
+    sourceText,
+    testFile: 'packages/cli/src/dependency-capability-loader.test.ts',
+    testNamePattern:
+      'rejects retained invocation authority through structured (helper|closure) return',
   });
 }
 
@@ -7623,6 +10011,30 @@ export const Raw = component({
   }
 }
 
+function assertComputedKeyFirstRegistryClosureBehavior(moduleUnderTest) {
+  const result = compileFiniteIrFixture(
+    moduleUnderTest,
+    `
+import { mutation, query } from '@kovojs/server';
+const mutationKey = 'runtime/mutation';
+const queryKey = 'runtime/query';
+const privateMutation = mutation(mutationKey, { handler() { return { ok: true }; } });
+const privateQuery = query(queryKey, { load() { return { ok: true }; }, reads: [] });
+void privateMutation;
+void privateQuery;
+`,
+  );
+  const messages = result.diagnostics
+    .filter((diagnostic) => diagnostic.code === 'KV235')
+    .map((diagnostic) => diagnostic.message);
+  if (
+    !messages.some((message) => message.includes('mutation registry identity')) ||
+    !messages.some((message) => message.includes('query registry identity'))
+  ) {
+    throw new Error(`computed key-first registry authority remained open: ${messages.join(' | ')}`);
+  }
+}
+
 function compileFiniteIrFixture(moduleUnderTest, source, extraFiles = []) {
   return moduleUnderTest.compileComponentModule({
     ...(extraFiles.length > 0 ? { extraFiles } : {}),
@@ -7751,6 +10163,7 @@ function assertFiniteIrCloses(moduleUnderTest, source, extraFiles = []) {
 }
 
 const behavioralTypeScriptBaselineModules = new Map();
+const isolatedPackageVitestPasses = new Set();
 
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
   // Imported ESM bundle records cannot be evicted from a live process. Keep the complete forcing
@@ -8437,6 +10850,10 @@ export const account = pgTable('account', {
     span(argument, decoyCallSpan.start),
   );
   const callableSpan = span(helper);
+  const sinkSpan = span('db\n        .update(account)');
+  const sinkSliceHash = `sha256:${createHash('sha256')
+    .update(Buffer.from(source.slice(sinkSpan.start, sinkSpan.end), 'utf16le'))
+    .digest('hex')}`;
   const root = 'mutation:summary-carrier/update';
   const transfer = 'local:nestedWrite[arg0=database]';
   const graph = {
@@ -8478,6 +10895,8 @@ export const account = pgTable('account', {
             sink: {
               door: 'managed-db',
               kind: 'server.database.write',
+              sliceHash: sinkSliceHash,
+              span: sinkSpan,
               target: 'db.update',
             },
             transfers: [transfer],
@@ -8486,7 +10905,8 @@ export const account = pgTable('account', {
         ],
       },
     ],
-    schema: 'kovo-security-semantic-graph/v2',
+    schema: 'kovo-security-semantic-graph/v3',
+    sourceFile: 'summary-carrier.ts',
   };
   return {
     decoyArgumentSpans,
@@ -8506,8 +10926,13 @@ export const account = pgTable('account', {
 function semanticV2Sinks(moduleUnderTest, fixture, graph, semanticSource = fixture.source) {
   return moduleUnderTest.collectUnregisteredSinksFromProject({
     compilerSecuritySemanticSources: [
-      { fileName: 'summary-carrier.ts', graphs: [graph], source: semanticSource },
-      { fileName: 'schema.ts', graphs: [], source: fixture.schemaSource },
+      {
+        fileName: 'summary-carrier.ts',
+        graphs: [graph],
+        operations: taskBSourceOperationsForGraph(fixture.graph),
+        source: semanticSource,
+      },
+      { fileName: 'schema.ts', graphs: [], operations: [], source: fixture.schemaSource },
     ],
     files: fixture.files,
   });
@@ -8612,7 +11037,7 @@ async function assertSemanticV2OperationInventoryIsReconstructed(moduleUnderTest
   root.summaries[0].operationKinds = ['server.database.read'];
   root.helperInvocations[0].operationKinds = ['server.database.read'];
   root.traces[0].sink = {
-    door: 'managed-db',
+    ...root.traces[0].sink,
     kind: 'server.database.read',
     target: 'db.select',
   };
@@ -9924,6 +12349,96 @@ async function assertTrustedAssignNestedReviewIsPinned(_moduleUnderTest, { sourc
   }
 }
 
+function assertCliCssCollectorArtifactBoundary(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'commands/build-export.ts',
+    sourceText,
+    testFile: 'packages/cli/src/index.kovo-build.test.ts',
+    testNamePattern: 'auto-collects compiled component CSS without acquiring a foreign JSX runtime',
+  });
+}
+
+function assertCompilerCssCollectorBoundary(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'compiler',
+    relativeSourcePath: 'vite.ts',
+    sourceText,
+    testFile: 'packages/compiler/src/vite.test.ts',
+    testNamePattern: 'collects component CSS through an inert browser module boundary',
+  });
+}
+
+async function assertBuildTaskBFiniteDiagnosticEnrollmentIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(buildTaskBFiniteDiagnosticEnrollmentBranch)) {
+    throw new Error('build TASK B no longer enrolls the complete finite diagnostic census');
+  }
+}
+
+async function assertBuildPreEvaluationKv235EnrollmentIsPinned(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(buildPreEvaluationKv235EnrollmentBranch)) {
+    throw new Error('build preflight no longer enrolls KV235 before application evaluation');
+  }
+}
+
+async function assertCompileTaskBFiniteDiagnosticEnrollmentIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  if (!sourceText.includes(compileTaskBFiniteDiagnosticEnrollmentBranch)) {
+    throw new Error('compile TASK B no longer enrolls the complete finite diagnostic census');
+  }
+}
+
+async function assertBuildTaskBFiniteVerdictCarrierIsPinned(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'commands/build-export.ts',
+    sourceText,
+    testFile: 'packages/cli/src/task-b-finite-verdict-carrier.test.ts',
+    testNamePattern: 'executes the build caller with the complete finite diagnostic census',
+  });
+}
+
+async function assertCompileTaskBFiniteVerdictCarrierIsPinned(_moduleUnderTest, { sourceText }) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'commands/compile.ts',
+    sourceText,
+    testFile: 'packages/cli/src/task-b-finite-verdict-carrier.test.ts',
+    testNamePattern: 'executes the compile caller with the complete finite diagnostic census',
+  });
+}
+
+async function assertBuildRouteTaskBFiniteDiagnosticCarrierIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'commands/build-export.ts',
+    sourceText,
+    testFile: 'packages/cli/src/task-b-finite-verdict-carrier.test.ts',
+    testNamePattern: 'retains route-page finite diagnostics in the build verdict',
+  });
+}
+
+async function assertCompileRouteTaskBFiniteDiagnosticCarrierIsPinned(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'cli',
+    relativeSourcePath: 'commands/compile.ts',
+    sourceText,
+    testFile: 'packages/cli/src/task-b-finite-verdict-carrier.test.ts',
+    testNamePattern: 'retains route-page finite diagnostics in the standalone compile verdict',
+  });
+}
+
 async function assertStaticBuildAuthoritativeProjectIsExecuted(moduleUnderTest) {
   const facts = moduleUnderTest.collectStaticBuildTrustFactsFromProject({
     files: [
@@ -9959,7 +12474,14 @@ element.addEventListener('click', () => element.focus());
   }
 }
 
-function taskBMutationProof(files, capabilityFacts, rootKinds) {
+function taskBMutationProof(
+  moduleUnderTest,
+  files,
+  semanticSources,
+  capabilityFacts,
+  rootKinds,
+  blockingDiagnostics = [],
+) {
   return {
     capabilityFacts: [
       ...capabilityFacts,
@@ -9991,17 +12513,46 @@ function taskBMutationProof(files, capabilityFacts, rootKinds) {
       ],
       schema: 'kovo-app-dependency-capabilities/v1',
     },
+    finiteVerdict: moduleUnderTest.snapshotCompilerTaskBFiniteVerdict({
+      blockingDiagnostics,
+      semanticSources,
+    }),
     files,
-    schema: 'kovo-task-b-closure/v1',
+    schema: 'kovo-task-b-closure/v2',
   };
+}
+
+function taskBSourceOperationsForGraph(graph) {
+  return graph.roots.flatMap((root) =>
+    root.traces.flatMap((trace) =>
+      trace.verdict === 'proved'
+        ? [
+            {
+              door: trace.sink.door,
+              kind: trace.sink.kind,
+              root: trace.root,
+              span: trace.sink.span,
+              ...(trace.sink.target === undefined ? {} : { target: trace.sink.target }),
+            },
+          ]
+        : [],
+    ),
+  );
 }
 
 async function assertTaskBCapabilityRootCorrespondenceIsEnforced(moduleUnderTest) {
   const source = "import { createApp } from '@kovojs/server';\nexport const app = createApp({});";
   const files = [{ fileName: 'app.ts', source }];
+  const semanticSources = [{ fileName: 'app.ts', graphs: [], operations: [], source }];
   const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
-    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
-    compilerTaskBClosure: taskBMutationProof(files, [], ['application']),
+    compilerSecuritySemanticSources: semanticSources,
+    compilerTaskBClosure: taskBMutationProof(
+      moduleUnderTest,
+      files,
+      semanticSources,
+      [],
+      ['application'],
+    ),
     files,
   });
   if (
@@ -10022,10 +12573,13 @@ async function assertTaskBPackageRootCorrespondenceIsEnforced(moduleUnderTest) {
   const prefix = source.slice(0, offset);
   const line = prefix.split('\n').length;
   const column = offset - prefix.lastIndexOf('\n');
+  const semanticSources = [{ fileName: 'app.ts', graphs: [], operations: [], source }];
   const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
-    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerSecuritySemanticSources: semanticSources,
     compilerTaskBClosure: taskBMutationProof(
+      moduleUnderTest,
       files,
+      semanticSources,
       [
         {
           kind: 'root',
@@ -10058,10 +12612,13 @@ async function assertTaskBSemanticRootCorrespondenceIsEnforced(moduleUnderTest) 
   const prefix = source.slice(0, offset);
   const line = prefix.split('\n').length;
   const column = offset - prefix.lastIndexOf('\n');
+  const semanticSources = [{ fileName: 'app.ts', graphs: [], operations: [], source }];
   const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
-    compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+    compilerSecuritySemanticSources: semanticSources,
     compilerTaskBClosure: taskBMutationProof(
+      moduleUnderTest,
       files,
+      semanticSources,
       [
         {
           kind: 'root',
@@ -10082,6 +12639,240 @@ async function assertTaskBSemanticRootCorrespondenceIsEnforced(moduleUnderTest) 
     )
   ) {
     throw new Error('TASK B admitted a handler absent from the exact semantic root census');
+  }
+}
+
+async function assertTaskBSameFileRootReferenceIsAccepted(moduleUnderTest) {
+  const source = `import { mutation } from '@kovojs/server';
+const saveHandler = (_input, request) => ({ signature: request.headers.get('X-Signature') });
+export const save = mutation({ handler: saveHandler });`;
+  const fileName = 'app.ts';
+  const files = [{ fileName, source }];
+  const { compileComponentModule } = await behavioralTypeScriptBaselineModule(
+    compilerSecuritySemanticGraphPath,
+    readFileSync(compilerSecuritySemanticGraphPath, 'utf8'),
+    compilerBehavioralEntryPath,
+  );
+  const compiled = compileComponentModule({ fileName, source });
+  const graph = compiled.componentGraphFacts
+    .map((fact) => fact.securitySemanticGraph)
+    .find((candidate) => candidate !== undefined);
+  if (!graph) throw new Error('compiler did not emit the referenced-handler semantic root');
+  const semanticSources = [
+    { fileName, graphs: [graph], operations: taskBSourceOperationsForGraph(graph), source },
+  ];
+  const offset = source.indexOf('mutation({');
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: semanticSources,
+    compilerTaskBClosure: taskBMutationProof(
+      moduleUnderTest,
+      files,
+      semanticSources,
+      [
+        {
+          kind: 'root',
+          module: fileName,
+          name: 'save',
+          rootKind: 'mutation',
+          site: `${fileName}:${line}:${column}`,
+        },
+      ],
+      ['mutation'],
+    ),
+    files,
+  });
+  const finiteClosure = sinks.find(
+    (sink) =>
+      sink.sink === 'request-handler.opaque-source' && sink.source?.includes('sink=finite-ir'),
+  );
+  if (finiteClosure) {
+    throw new Error(
+      `exact referenced handler failed TASK B correspondence: ${finiteClosure.source}`,
+    );
+  }
+}
+
+function taskBMutationBlockingDiagnostic(code) {
+  return {
+    code,
+    length: 1,
+    message: `${code} mutation witness`,
+    severity: 'error',
+    site: 'app.ts',
+    start: { column: 1, line: 1 },
+  };
+}
+
+async function assertTaskBFiniteVerdictRejectionIsEnforced(moduleUnderTest) {
+  const source = 'export const marker = 1;';
+  const files = [{ fileName: 'app.ts', source }];
+  const semanticSources = [{ fileName: 'app.ts', graphs: [], operations: [], source }];
+  const proof = taskBMutationProof(
+    moduleUnderTest,
+    files,
+    semanticSources,
+    [],
+    [],
+    [taskBMutationBlockingDiagnostic('KV450')],
+  );
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: semanticSources,
+    compilerTaskBClosure: proof,
+    files,
+  });
+  if (!sinks.some((sink) => sink.source?.includes('sink=compiler-route'))) {
+    throw new Error('TASK B admitted a rejected compiler finite verdict');
+  }
+}
+
+async function assertTaskBAnalysisCarrierDigestIsEnforced(moduleUnderTest) {
+  const source = 'export const marker = 1;';
+  const files = [{ fileName: 'app.ts', source }];
+  const semanticSources = [{ fileName: 'app.ts', graphs: [], operations: [], source }];
+  const proof = taskBMutationProof(
+    moduleUnderTest,
+    files,
+    semanticSources,
+    [],
+    [],
+    [taskBMutationBlockingDiagnostic('KV452')],
+  );
+  const tamperedProof = {
+    ...proof,
+    finiteVerdict: {
+      ...proof.finiteVerdict,
+      blockingDiagnostics: [],
+      status: 'accepted',
+    },
+  };
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: semanticSources,
+    compilerTaskBClosure: tamperedProof,
+    files,
+  });
+  if (!sinks.some((sink) => sink.source?.includes('sink=compiler-route'))) {
+    throw new Error('TASK B admitted a tampered compiler analysis carrier');
+  }
+}
+
+async function assertTaskBCompleteTerminalCorrespondenceIsEnforced(moduleUnderTest) {
+  const source = `import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    ctx.headers.set('Cache-Control', 'no-store');
+    return Response.json({ ok: true });
+  },
+});`;
+  const fileName = 'app.ts';
+  const files = [{ fileName, source }];
+  const { compileComponentModule } = await behavioralTypeScriptBaselineModule(
+    compilerSecuritySemanticGraphPath,
+    readFileSync(compilerSecuritySemanticGraphPath, 'utf8'),
+    compilerBehavioralEntryPath,
+  );
+  const compiled = compileComponentModule({ fileName, source });
+  const graph = compiled.componentGraphFacts
+    .map((fact) => fact.securitySemanticGraph)
+    .find((candidate) => candidate !== undefined);
+  if (!graph) throw new Error('compiler did not emit the TASK B terminal witness graph');
+  const operations = taskBSourceOperationsForGraph(graph);
+  const omittedGraph = {
+    ...graph,
+    roots: graph.roots.map((root) => ({
+      ...root,
+      traces: root.traces.filter(
+        (trace) => !(trace.verdict === 'proved' && trace.sink.kind === 'server.response.header'),
+      ),
+    })),
+  };
+  const semanticSources = [{ fileName, graphs: [omittedGraph], operations, source }];
+  const offset = source.indexOf("endpoint('/report'");
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: semanticSources,
+    compilerTaskBClosure: taskBMutationProof(
+      moduleUnderTest,
+      files,
+      semanticSources,
+      [
+        {
+          kind: 'root',
+          module: fileName,
+          name: 'report',
+          rootKind: 'endpoint',
+          site: `${fileName}:${line}:${column}`,
+        },
+      ],
+      ['endpoint'],
+    ),
+    files,
+  });
+  if (!sinks.some((sink) => sink.source?.includes('sink=compiler-route'))) {
+    throw new Error('TASK B admitted a coherently snapshotted omitted finite terminal');
+  }
+}
+
+async function assertTaskBDuplicateTerminalTraceClosureIsEnforced(moduleUnderTest) {
+  const source = `import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    ctx.headers.set('Cache-Control', 'no-store');
+    return Response.json({ ok: true });
+  },
+});`;
+  const fileName = 'app.ts';
+  const files = [{ fileName, source }];
+  const { compileComponentModule } = await behavioralTypeScriptBaselineModule(
+    compilerSecuritySemanticGraphPath,
+    readFileSync(compilerSecuritySemanticGraphPath, 'utf8'),
+    compilerBehavioralEntryPath,
+  );
+  const compiled = compileComponentModule({ fileName, source });
+  const graph = compiled.componentGraphFacts
+    .map((fact) => fact.securitySemanticGraph)
+    .find((candidate) => candidate !== undefined);
+  if (!graph) throw new Error('compiler did not emit the TASK B duplicate-trace witness graph');
+  const operations = taskBSourceOperationsForGraph(graph);
+  const duplicatedGraph = {
+    ...graph,
+    roots: graph.roots.map((root) => {
+      const terminal = root.traces.find(
+        (trace) => trace.verdict === 'proved' && trace.sink.kind === 'server.response.header',
+      );
+      return terminal === undefined ? root : { ...root, traces: [...root.traces, terminal] };
+    }),
+  };
+  const semanticSources = [{ fileName, graphs: [duplicatedGraph], operations, source }];
+  const offset = source.indexOf("endpoint('/report'");
+  const prefix = source.slice(0, offset);
+  const line = prefix.split('\n').length;
+  const column = offset - prefix.lastIndexOf('\n');
+  const sinks = moduleUnderTest.collectUnregisteredSinksFromProject({
+    compilerSecuritySemanticSources: semanticSources,
+    compilerTaskBClosure: taskBMutationProof(
+      moduleUnderTest,
+      files,
+      semanticSources,
+      [
+        {
+          kind: 'root',
+          module: fileName,
+          name: 'report',
+          rootKind: 'endpoint',
+          site: `${fileName}:${line}:${column}`,
+        },
+      ],
+      ['endpoint'],
+    ),
+    files,
+  });
+  if (!sinks.some((sink) => sink.source?.includes('sink=compiler-route'))) {
+    throw new Error('TASK B admitted a duplicate full terminal trace identity');
   }
 }
 

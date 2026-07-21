@@ -4,8 +4,11 @@ import { resolve as builtinResolve } from 'node:path';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   createRuntimeAttestationVerificationHandle,
-  verifyEscapeObligationReviewEnvelope,
   runtimeAttestationPayloadSource,
+  verifyEscapeCensusReviewSet,
+  verifyEscapeObligationReviewEnvelope,
+  type EscapeCensusReviewEnvelope,
+  type EscapeCensusReviewSubject,
   type EscapeObligationReviewEnvelope,
   type EscapeObligationReviewSubject,
 } from '@kovojs/server/internal/execution';
@@ -17,6 +20,7 @@ import {
   parsedStringOption,
   parseCommandArgv,
 } from '../commands-manifest.js';
+import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
 import type { CliCommandResult } from '../shared.js';
 
 const readFileSync = builtinReadFileSync;
@@ -32,6 +36,7 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 interface AttestOptions {
   artifactPath: string;
+  escapeCensusReviewsPath?: string;
   escapeReviewsPath?: string;
   trustAnchor: string;
   url: string;
@@ -49,8 +54,10 @@ export function parseAttestArgs(
   const url = parsedStringOption(parsed.value, '--attest');
   const artifactPath = parsedStringOption(parsed.value, '--artifact');
   const trustAnchor = parsedStringOption(parsed.value, '--trust-anchor');
+  const escapeCensusReviewsPath = parsedStringOption(parsed.value, '--escape-census-reviews');
   const escapeReviewsPath = parsedStringOption(parsed.value, '--escape-reviews');
-  const expectedOptionCount = escapeReviewsPath === undefined ? 3 : 4;
+  const expectedOptionCount =
+    3 + (escapeReviewsPath === undefined ? 0 : 1) + (escapeCensusReviewsPath === undefined ? 0 : 1);
   if (
     url === undefined ||
     artifactPath === undefined ||
@@ -66,6 +73,7 @@ export function parseAttestArgs(
     ok: true,
     options: {
       artifactPath,
+      ...(escapeCensusReviewsPath === undefined ? {} : { escapeCensusReviewsPath }),
       ...(escapeReviewsPath === undefined ? {} : { escapeReviewsPath }),
       trustAnchor,
       url,
@@ -85,6 +93,13 @@ export async function runAttestCommand(
       options.escapeReviewsPath === undefined
         ? undefined
         : resolve(invocationCwd, options.escapeReviewsPath),
+      options.trustAnchor,
+    );
+    const reviewedCensusEscapes = verifyReviewedEscapeCensusRoots(
+      artifact.escapeCensusReviews,
+      options.escapeCensusReviewsPath === undefined
+        ? undefined
+        : resolve(invocationCwd, options.escapeCensusReviewsPath),
       options.trustAnchor,
     );
     const endpoint = attestationEndpoint(options.url);
@@ -114,9 +129,12 @@ export async function runAttestCommand(
         `ARTIFACT subject=${envelope.payload.artifactSubject}`,
         `POSTURE digest=${envelope.payload.postureDigest}`,
         `ESCAPE-REVIEWS verified=${reviewedEscapes}`,
+        `ESCAPE-CENSUS-REVIEWS verified=${reviewedCensusEscapes}`,
         'CLAIM one key-holding responding instance reported the reviewed posture at the signed time',
         'CLAIM each listed escape review was signed by the same out-of-band deployment trust anchor',
-        'NONCLAIM an escape obligation signature does not prove its justification true',
+        'CLAIM each Metric E escape-root review was signed by that same trust anchor',
+        'CLAIM each review signature records only that the pinned key holder approved the exact subject bytes',
+        'NONCLAIM a review signature does not prove an obligation true or identify an independent human',
         'NONCLAIM executed-code identity is not proved',
         'NONCLAIM host integrity is not proved',
         'NONCLAIM telemetry completeness is not proved',
@@ -134,6 +152,7 @@ export async function runAttestCommand(
 
 interface ReviewedArtifact {
   artifactSubject: string;
+  escapeCensusReviews: readonly EscapeCensusReviewSubject[];
   escapeObligations: readonly EscapeObligationReviewSubject[];
   postureDigest: string;
   postureFacts: unknown;
@@ -177,10 +196,48 @@ function readReviewedArtifact(path: string): ReviewedArtifact {
   }
   return {
     artifactSubject,
+    escapeCensusReviews: escapeCensusReviewManifestForBuild(
+      record as unknown as import('@kovojs/core/internal/graph').KovoCheckInput,
+    ).subjects,
     escapeObligations: escapeObligationsFromGraph(record, artifactSubject),
     postureDigest,
     postureFacts: posture.facts,
   };
+}
+
+function verifyReviewedEscapeCensusRoots(
+  expected: readonly EscapeCensusReviewSubject[],
+  reviewPath: string | undefined,
+  trustAnchorFingerprint: string,
+): number {
+  if (reviewPath === undefined) {
+    if (expected.length > 0) {
+      throw new Error(
+        `reviewed artifact has ${expected.length} Metric E escape root(s); --escape-census-reviews is required`,
+      );
+    }
+    return 0;
+  }
+  const reviews = readEscapeCensusReviewFile(reviewPath);
+  return verifyEscapeCensusReviewSet(expected, reviews, {
+    trustAnchorFingerprint,
+    verification: attestationVerification,
+  }).count;
+}
+
+function readEscapeCensusReviewFile(path: string): EscapeCensusReviewEnvelope[] {
+  if (statSync(path).size > MAX_ARTIFACT_BYTES) {
+    throw new Error('escape-census review file exceeds the artifact size limit');
+  }
+  const value = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  const record = requireRecord(value, 'escape-census review file');
+  if (record.schema !== 'kovo.escape-census-reviews/v1' || !Array.isArray(record.reviews)) {
+    throw new Error('escape-census review file has an unsupported schema');
+  }
+  if (record.reviews.length > 4_096) {
+    throw new Error('escape-census review file exceeds 4096 reviews');
+  }
+  return record.reviews as EscapeCensusReviewEnvelope[];
 }
 
 function escapeObligationsFromGraph(

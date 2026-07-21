@@ -823,16 +823,40 @@ export function endpointWrites(
 }
 
 export function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
+  const binding = trustEscapeSourceBindingText(escape);
   return [
     'TRUST',
     `kind=${escape.kind}`,
     `root=${escape.root ?? escape.site}`,
     `site=${escape.site}`,
     `source=${escape.source ?? '-'}`,
+    `source-binding=${binding}`,
     `owner=${escape.owner ?? '-'}`,
     `safePath=${escape.safePath ?? '-'}`,
     `justification=${stableValue(escape.justification)}`,
   ].join(' ');
+}
+
+function trustEscapeSourceBindingText(escape: CoreGraph.TrustEscapeExplain): string {
+  const binding = escape.sourceBinding;
+  if (
+    binding.encoding !== 'utf16le' ||
+    typeof binding.file !== 'string' ||
+    binding.file.trim() === '' ||
+    !/^sha256:[a-f0-9]{64}$/u.test(binding.sliceHash) ||
+    !/^sha256:[a-f0-9]{64}$/u.test(binding.sourceHash) ||
+    !Number.isSafeInteger(binding.span.start) ||
+    !Number.isSafeInteger(binding.span.end) ||
+    binding.span.start < 0 ||
+    binding.span.end <= binding.span.start ||
+    !escape.site.startsWith(`${binding.file}:`) ||
+    !/^[1-9][0-9]*$/u.test(escape.site.slice(binding.file.length + 1)) ||
+    (escape.kind !== 'csrfFalse' &&
+      escape.root !== `${binding.file}:${binding.span.start}:${binding.span.end}`)
+  ) {
+    throw new TypeError(`Trust escape ${escape.site} lacks an exact UTF-16 source binding.`);
+  }
+  return `${binding.file}:${binding.span.start}:${binding.span.end}:${binding.encoding}:source=${binding.sourceHash}:slice=${binding.sliceHash}`;
 }
 
 /**
@@ -1098,7 +1122,8 @@ export function compareTrustEscape(
   return (
     left.kind.localeCompare(right.kind) ||
     left.site.localeCompare(right.site) ||
-    (left.source ?? '').localeCompare(right.source ?? '')
+    (left.source ?? '').localeCompare(right.source ?? '') ||
+    trustEscapeSourceBindingText(left).localeCompare(trustEscapeSourceBindingText(right))
   );
 }
 

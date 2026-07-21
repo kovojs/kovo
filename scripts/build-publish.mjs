@@ -96,9 +96,9 @@ export function derivePublishPlan(pkgJson) {
     binTargets.set(name, sourceStem(target));
   }
 
-  for (const target of pkgJson.kovo?.publishExtraEntries ?? []) {
+  for (const target of pkgJson.kovoPublish?.extraEntries ?? []) {
     if (!isSourceTarget(target)) {
-      throw new Error(`kovo.publishExtraEntries target does not target ./src: ${target}`);
+      throw new Error(`kovoPublish.extraEntries target does not target ./src: ${target}`);
     }
     entries.add(target.replace(/^\.\//, ''));
     extraStems.add(sourceStem(target));

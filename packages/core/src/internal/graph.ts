@@ -39,6 +39,8 @@ export type {
   HandlerExplain,
   KovoArtifactFrameworkPackage,
   KovoArtifactProvenance,
+  KovoAnalysisInputSource,
+  KovoAnalysisInputs,
   KovoCheckInput,
   KovoExplainInput,
   MassAssignmentFact,

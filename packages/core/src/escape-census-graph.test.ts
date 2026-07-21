@@ -4,7 +4,7 @@ import { ESCAPE_CENSUS_DOORS, validateKovoExplainInput } from './graph.js';
 
 const coverage = {
   doors: ESCAPE_CENSUS_DOORS,
-  schema: 'kovo.escape-census-coverage/v1' as const,
+  schema: 'kovo.escape-census-coverage/v2' as const,
   sources: {
     allowControlChars: 'trustEscapes',
     'csrf:false': 'trustEscapes',

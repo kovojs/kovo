@@ -120,7 +120,7 @@ describe('core package selective side effects (SPEC §6.6)', () => {
   it('declares only the audited capture modules and emits stable dist entries for them', () => {
     const manifest = readCoreManifest();
     expect(manifest.sideEffects).toEqual(auditedSideEffects);
-    expect(manifest.kovo.publishExtraEntries).toEqual(auditedPublishExtraEntries);
+    expect(manifest.kovoPublish.extraEntries).toEqual(auditedPublishExtraEntries);
   });
 
   it('tree-shakes an ordinary source consumer while retaining used initialization and guards', () => {
@@ -215,7 +215,7 @@ describe('core package selective side effects (SPEC §6.6)', () => {
 });
 
 interface CoreManifest {
-  kovo: { publishExtraEntries: readonly string[] };
+  kovoPublish: { extraEntries: readonly string[] };
   sideEffects: readonly string[];
   version: string;
 }

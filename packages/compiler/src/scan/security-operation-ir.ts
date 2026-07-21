@@ -37,6 +37,7 @@ import {
   compilerSetDelete,
   compilerSetForEach,
   compilerSetHas,
+  compilerSha256Utf16leHex,
   compilerSnapshotDenseArray,
   compilerStringEndsWith,
   compilerStringSlice,
@@ -1825,6 +1826,10 @@ function analyzeServerSecurityCallable(options: {
             sink: {
               door: operation.door,
               kind: operation.kind,
+              sliceHash: `sha256:${compilerSha256Utf16leHex(
+                compilerStringSlice(sourceFile.text, operation.span.start, operation.span.end),
+              )}`,
+              span: { end: operation.span.end, start: operation.span.start },
               ...(operation.target === undefined ? {} : { target: operation.target }),
             },
             transfers: compilerSnapshotDenseArray(transfers, 'Semantic transfer path'),
@@ -2432,7 +2437,7 @@ function dedupeSemanticTraces(values: readonly SecuritySemanticTrace[]): Securit
   return dedupeByKey(values, (value) => {
     const sink =
       value.verdict === 'proved'
-        ? `${value.sink.kind}\0${value.sink.door}\0${value.sink.target ?? ''}`
+        ? `${value.sink.kind}\0${value.sink.door}\0${value.sink.sliceHash}\0${value.sink.span.start}\0${value.sink.span.end}\0${value.sink.target ?? ''}`
         : `${value.reason}\0${value.sink}\0${value.detail}`;
     return `${value.root}\0${compilerArrayJoin(value.transfers, '\0')}\0${value.verdict}\0${sink}`;
   });

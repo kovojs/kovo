@@ -109,8 +109,8 @@ describe('package export resolver', () => {
         exports: {
           '.': './src/index.ts',
         },
-        kovo: {
-          publishExtraEntries: ['./src/compile.ts'],
+        kovoPublish: {
+          extraEntries: ['./src/compile.ts'],
         },
       }),
     ).toEqual({
@@ -131,11 +131,11 @@ describe('package export resolver', () => {
         exports: {
           '.': './src/index.ts',
         },
-        kovo: {
-          publishExtraEntries: ['./dist/compile.mjs'],
+        kovoPublish: {
+          extraEntries: ['./dist/compile.mjs'],
         },
       }),
-    ).toThrow('kovo.publishExtraEntries target does not target ./src');
+    ).toThrow('kovoPublish.extraEntries target does not target ./src');
   });
 
   it('keeps the workspace-only server Vite resolver out of published packages', () => {

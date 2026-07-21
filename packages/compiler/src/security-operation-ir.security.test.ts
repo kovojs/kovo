@@ -84,7 +84,7 @@ export const api = endpoint('/api', {
     expect(serverSource).toContain(
       '{"door":"Response","kind":"server.response.raw","target":"Response.json","justification":"endpoint access/CSRF posture"}',
     );
-    expect(serverSource).not.toContain('"span"');
+    expect(serverSource).toContain('"span":');
     expect(result.componentGraphFacts[0]?.securityOperations).toEqual(
       expect.arrayContaining([
         {
@@ -1428,7 +1428,7 @@ export const report = endpoint('/report', {
     const semanticGraph = result.componentGraphFacts[0]?.securitySemanticGraph;
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
-    expect(serverSource).toContain('kovo-security-semantic-graph/v2');
+    expect(serverSource).toContain('kovo-security-semantic-graph/v3');
     expect(serverSource).toContain('local:consume[arg0=context]');
     expect(serverSource).toContain('local:dial[arg0=operation:server.egress.request]');
     expect(semanticGraph?.roots).toContainEqual(
@@ -1490,6 +1490,8 @@ export const report = endpoint('/report', {
             sink: {
               door: 'ctx.fetch',
               kind: 'server.egress.request',
+              sliceHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+              span: expect.objectContaining({ end: expect.any(Number), start: expect.any(Number) }),
               target: 'outbound',
             },
             transfers: [
@@ -1501,6 +1503,42 @@ export const report = endpoint('/report', {
         ]),
       }),
     );
+  });
+
+  it('preserves every authored ctx.fetch sink occurrence in the semantic graph', () => {
+    const secondFetch = "    await ctx.fetch('https://api.example.test/two');\n";
+    const padding = `    //${' '.repeat(secondFetch.length - 7)}\n`;
+    expect(padding).toHaveLength(secondFetch.length);
+    const source = (secondLine: string) => `
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  async handler(_input, ctx) {
+    await ctx.fetch('https://api.example.test/one');
+${secondLine}    return Response.json({ ok: true });
+  },
+});
+`;
+    const onceSource = source(padding);
+    const twiceSource = source(secondFetch);
+    expect(onceSource).toHaveLength(twiceSource.length);
+
+    const once = compile(onceSource);
+    const twice = compile(twiceSource);
+    const ctxFetchTraces = (result: ReturnType<typeof compile>) =>
+      result.componentGraphFacts[0]?.securitySemanticGraph?.roots[0]?.traces.filter(
+        (trace) => trace.verdict === 'proved' && trace.sink.door === 'ctx.fetch',
+      ) ?? [];
+
+    expect(once.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(twice.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(ctxFetchTraces(once)).toHaveLength(1);
+    expect(ctxFetchTraces(twice)).toHaveLength(2);
+    expect(ctxFetchTraces(twice).map((trace) => trace.sink.span)).toEqual([
+      expect.objectContaining({ end: expect.any(Number), start: expect.any(Number) }),
+      expect.objectContaining({ end: expect.any(Number), start: expect.any(Number) }),
+    ]);
+    expect(ctxFetchTraces(twice)[0]?.sink.span).not.toEqual(ctxFetchTraces(twice)[1]?.sink.span);
+    expect(once.componentGraphFacts).not.toEqual(twice.componentGraphFacts);
   });
 
   it('binds every semantic-v2 span to authored bytes across structural lowering', () => {

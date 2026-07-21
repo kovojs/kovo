@@ -800,6 +800,47 @@ export const update = mutation({ handler() { return RawResponse.json({ ok: true 
       expect(closed.diagnostics?.[0]?.message).toContain('semantic root=mutation:');
       expect(closed.diagnostics?.[0]?.message).toContain('verdict=closed:');
 
+      writeFileSync(
+        inputPath,
+        JSON.stringify({
+          extract: ['unregisteredSinks'],
+          files: [
+            {
+              fileName: 'src/routes.tsx',
+              source: `
+import { createFileSystemStorage, respond, route, type ScopedKey } from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const report = route('/report', {
+  async page(context) {
+    await storage.stat(context.params.key);
+    await context.signUrl({ key: context.params.key as ScopedKey });
+    return respond.storedFile(storage, context.params.key as ScopedKey);
+  },
+});
+`,
+            },
+          ],
+        }),
+        'utf8',
+      );
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+      const routeClosed = JSON.parse(readFileSync(outPath, 'utf8')) as {
+        diagnostics?: readonly { code: string; message: string }[];
+      };
+      expect(routeClosed.diagnostics).toHaveLength(3);
+      expect(routeClosed.diagnostics?.every((diagnostic) => diagnostic.code === 'KV450')).toBe(
+        true,
+      );
+      expect(routeClosed.diagnostics?.map((diagnostic) => diagnostic.message)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('storage.stat requires a key derived'),
+          expect.stringContaining('context.signUrl requires a key derived'),
+          expect.stringContaining('respond.storedFile requires a key derived'),
+        ]),
+      );
+
       // @kovo-security-certifies C13 cross-file-zero-authority-helper-closes
       writeFileSync(
         inputPath,

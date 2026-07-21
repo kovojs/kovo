@@ -1129,6 +1129,7 @@ describe('server app-shell public API barrels', () => {
       'createRuntimeAttestationVerificationHandle',
       'createSecurityEventRecordVerifier',
       'endpointMatches',
+      'escapeCensusReviewPayload',
       'escapeObligationReviewPayload',
       'explainGuard',
       'exportSecurityEvents',
@@ -1150,6 +1151,9 @@ describe('server app-shell public API barrels', () => {
       'runQuery',
       'runRoutePage',
       'runtimeAttestationPayloadSource',
+      'snapshotEscapeCensusReviewSubject',
+      'verifyEscapeCensusReviewEnvelope',
+      'verifyEscapeCensusReviewSet',
       'verifyEscapeObligationReviewEnvelope',
     ]);
     expect(packageInternalExecutionApi).not.toHaveProperty('managedDb');

@@ -20,7 +20,7 @@ export const securityOperationIrSchema = 'kovo-security-operation-ir/v1' as cons
  *
  * @internal
  */
-export const securitySemanticGraphSchema = 'kovo-security-semantic-graph/v2' as const;
+export const securitySemanticGraphSchema = 'kovo-security-semantic-graph/v3' as const;
 
 /** @internal Closed browser-effect inventory; C9 maps every entry to one reviewed boundary owner. */
 export const browserSecurityOperationKinds = freezeSecurityValue([
@@ -312,6 +312,10 @@ export interface SecuritySemanticProvedTrace {
   readonly sink: {
     readonly door: SecurityOperationDoor;
     readonly kind: ServerSecurityOperationKind;
+    /** SHA-256 over the exact UTF-16LE sink slice named by span. */
+    readonly sliceHash: `sha256:${string}`;
+    /** Exact authored sink occurrence in the immutable component source snapshot. */
+    readonly span: { readonly end: number; readonly start: number };
     readonly target?: string;
   };
   readonly transfers: readonly string[];
@@ -380,6 +384,8 @@ export interface SecuritySemanticGraph {
   readonly budgets: SecuritySemanticBudgets;
   readonly roots: readonly SecuritySemanticRoot[];
   readonly schema: typeof securitySemanticGraphSchema;
+  /** Exact analyzed app-source path that owns every UTF-16 span in this graph. */
+  readonly sourceFile: string;
 }
 
 /**

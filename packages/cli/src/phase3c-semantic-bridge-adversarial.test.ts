@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from '@kovojs/compiler';
 import {
+  componentTaskBSourceOperationFacts,
+  parseComponentModule,
+} from '@kovojs/compiler/internal';
+import {
   collectStaticBuildTrustFactsFromProject,
   type CompilerSecuritySemanticSource,
 } from '@kovojs/drizzle/internal/static';
@@ -15,8 +19,9 @@ function compilerSemanticSources(
   files: readonly SourceFile[],
 ): readonly CompilerSecuritySemanticSource[] {
   return files.map((file, index) => {
+    const extraFiles = files.filter((_, candidate) => candidate !== index);
     const result = compileComponentModule({
-      extraFiles: files.filter((_, candidate) => candidate !== index),
+      extraFiles,
       fileName: file.fileName,
       source: file.source,
       sourceProvenance: 'app',
@@ -26,6 +31,11 @@ function compilerSemanticSources(
       fileName: file.fileName,
       graphs: result.componentGraphFacts.flatMap((fact) =>
         fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph],
+      ),
+      operations: componentTaskBSourceOperationFacts(
+        parseComponentModule(file.fileName, file.source, {
+          frameworkIdentityFiles: extraFiles,
+        }),
       ),
       source: file.source,
     };

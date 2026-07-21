@@ -6,6 +6,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { kovoExplain, main } from './index.js';
 
+const testTrustSource = (file: string) => ({
+  root: `${file}:1:2`,
+  sourceBinding: {
+    encoding: 'utf16le' as const,
+    file,
+    sliceHash: `sha256:${'b'.repeat(64)}` as const,
+    sourceHash: `sha256:${'a'.repeat(64)}` as const,
+    span: { end: 2, start: 1 },
+  },
+});
+
 describe('kovo explain', () => {
   it('explains component handlers, query consumers, and fragment targets', () => {
     expect(
@@ -117,6 +128,8 @@ describe('kovo explain', () => {
                         sink: {
                           door: 'ctx.fetch',
                           kind: 'server.egress.request',
+                          sliceHash: `sha256:${'c'.repeat(64)}`,
+                          span: { end: 80, start: 70 },
                           target: 'outbound',
                         },
                         transfers: ['local:consume[arg0=context]'],
@@ -125,7 +138,8 @@ describe('kovo explain', () => {
                     ],
                   },
                 ],
-                schema: 'kovo-security-semantic-graph/v2',
+                schema: 'kovo-security-semantic-graph/v3',
+                sourceFile: 'app/report.ts',
               },
               styleRules: [
                 {
@@ -166,7 +180,7 @@ describe('kovo explain', () => {
         'SEMANTIC-ROOT root=endpoint:/report factory=endpoint callback=handler factory-span=40:100 callable-span=50:90',
         'SEMANTIC-INVOKE root=endpoint:/report call-span=60:80 argument-spans=68:75 callable=local:consume callable-span=10:30 authority-inputs=arg0=context effects=server.egress.request transfers=local:consume[arg0=context] verdict=proved',
         'SEMANTIC-SUMMARY root=endpoint:/report callable=local:consume authority-inputs=arg0=context effects=server.egress.request verdict=proved',
-        'SEMANTIC-TRACE root=endpoint:/report transfers=local:consume[arg0=context] sink=server.egress.request:outbound verdict=proved',
+        'SEMANTIC-TRACE root=endpoint:/report transfers=local:consume[arg0=context] sink=server.egress.request:outbound sink-span=70:80 verdict=proved',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         'DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]',
         'TRIGGER visible export=CartBadge$mountChart ref=/c/cart-badge.client.js#CartBadge$mountChart deps=cart justification=chart boots when visible',
@@ -1157,6 +1171,7 @@ export const save = mutation('cart/save', {
       {
         trustEscapes: [
           {
+            ...testTrustSource('app/promo.tsx'),
             justification: 'cms sanitizer owns rich text',
             kind: 'trustedHtml',
             owner: 'html.dom.output',
@@ -1165,6 +1180,7 @@ export const save = mutation('cart/save', {
             source: 'cms.promo.body',
           },
           {
+            ...testTrustSource('app/webhook.ts'),
             justification: 'provider retries unsigned local dev',
             kind: 'webhookVerifyNone',
             owner: 'ingress.endpoint.webhook',
@@ -1173,6 +1189,7 @@ export const save = mutation('cart/save', {
             source: 'stripe',
           },
           {
+            ...testTrustSource('app/export.ts'),
             justification: 'tenant export root mounted by deploy',
             kind: 'staticExportPathOverride',
             owner: 'file.storage.static-export',
@@ -1189,9 +1206,9 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       TRUST
-      TRUST kind=staticExportPathOverride root=app/export.ts:4 site=app/export.ts:4 source=EXPORT_ROOT owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
-      TRUST kind=trustedHtml root=app/promo.tsx:12 site=app/promo.tsx:12 source=cms.promo.body owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
-      TRUST kind=webhookVerifyNone root=app/webhook.ts:8 site=app/webhook.ts:8 source=stripe owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
+      TRUST kind=staticExportPathOverride root=app/export.ts:1:2 site=app/export.ts:4 source=EXPORT_ROOT source-binding=app/export.ts:1:2:utf16le:source=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:slice=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
+      TRUST kind=trustedHtml root=app/promo.tsx:1:2 site=app/promo.tsx:12 source=cms.promo.body source-binding=app/promo.tsx:1:2:utf16le:source=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:slice=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
+      TRUST kind=webhookVerifyNone root=app/webhook.ts:1:2 site=app/webhook.ts:8 source=stripe source-binding=app/webhook.ts:1:2:utf16le:source=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:slice=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
       SUMMARY total=3
       "
     `);
@@ -1614,6 +1631,7 @@ export const save = mutation('cart/save', {
       {
         trustEscapes: [
           {
+            ...testTrustSource('app/document.tsx'),
             justification: 'reviewed document rich text island',
             kind: 'trustedHtml',
             owner: 'document.shell.output',
@@ -1622,6 +1640,7 @@ export const save = mutation('cart/save', {
             source: 'cms.documentChrome',
           },
           {
+            ...testTrustSource('app/page.tsx'),
             justification: 'route content sanitizer',
             kind: 'trustedHtml',
             owner: 'html.dom.output',
@@ -1640,7 +1659,7 @@ export const save = mutation('cart/save', {
       'SINK source=app-document-TSX|inline-script-source|inline-style-source|font-preload-url|modulepreload-url|body-end-ui sink=document.shell.output',
     );
     expect(result.output).toContain(
-      'TRUST kind=trustedHtml root=app/document.tsx:12 site=app/document.tsx:12 source=cms.documentChrome owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
+      'TRUST kind=trustedHtml root=app/document.tsx:1:2 site=app/document.tsx:12 source=cms.documentChrome source-binding=app/document.tsx:1:2:utf16le:source=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:slice=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
     );
     expect(result.output).not.toContain('cms.page');
     expect(result.output).toContain('SUMMARY sinks=1 trustEscapes=1');
@@ -1746,6 +1765,7 @@ export const save = mutation('cart/save', {
         JSON.stringify({
           trustEscapes: [
             {
+              ...testTrustSource('app/link.tsx'),
               justification: 'reviewed external redirect',
               kind: 'trustedUrl',
               owner: 'url.navigation.selector',
@@ -1767,7 +1787,7 @@ export const save = mutation('cart/save', {
       [
         'kovo-explain/v1',
         'TRUST',
-        'TRUST kind=trustedUrl root=app/link.tsx:3 site=app/link.tsx:3 source=partner.redirect owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
+        'TRUST kind=trustedUrl root=app/link.tsx:1:2 site=app/link.tsx:3 source=partner.redirect source-binding=app/link.tsx:1:2:utf16le:source=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:slice=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
         'SUMMARY total=1',
         '',
       ].join('\n'),
@@ -1789,6 +1809,7 @@ export const save = mutation('cart/save', {
         JSON.stringify({
           trustEscapes: [
             {
+              ...testTrustSource('app/document.tsx'),
               justification: 'reviewed document shell escape',
               kind: 'trustedHtml',
               owner: 'document.shell.output',

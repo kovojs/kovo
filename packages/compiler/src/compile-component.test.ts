@@ -1564,10 +1564,13 @@ export const ForgedApp = component({ render: () => <main>blocked</main> });
     ]);
   });
 
+  // @kovo-security-certifies C13 computed-key-first-registry-identity-closure
   it('reports KV235 for app-authored key-first registry identities', () => {
     const result = compileComponentModule({
       fileName: 'cart-model.ts',
       source: `
+import { mutation as defineMutation, query as defineQuery } from '@kovojs/server';
+
 export const addToCart = mutation('cart/add', {
   input: {},
   handler() {},
@@ -1576,10 +1579,36 @@ export const cartQuery = query('cart', {
   load: () => ({ count: 0 }),
   reads: [],
 });
+const runtimeMutationKey = 'cart/runtime-add';
+const runtimeQueryKey = 'cart/runtime';
+const runtimeAdd = defineMutation(runtimeMutationKey, {
+  input: {},
+  handler() {},
+});
+export const runtimeCart = defineQuery(runtimeQueryKey, {
+  load: () => ({ count: 0 }),
+  reads: [],
+});
 `,
     });
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toMatchObject([
+      {
+        code: 'KV235',
+        fileName: 'cart-model.ts',
+        help: expect.stringContaining('use `mutation({ input, handler })`'),
+        message:
+          'App source hard-codes a mutation registry identity; use the source-derived object form.',
+        severity: 'error',
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-model.ts',
+        help: expect.stringContaining('use `query({ load, reads })`'),
+        message:
+          'App source hard-codes a query registry identity; use the source-derived object form.',
+        severity: 'error',
+      },
       {
         code: 'KV235',
         fileName: 'cart-model.ts',

@@ -8,11 +8,31 @@ import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createRuntimeAttestationCryptoHandle } from '../../../server/src/crypto-authority.js';
+import { createEscapeCensusReviewEnvelope } from '../../../server/src/escape-census-review.js';
 import { createEscapeObligationReviewEnvelope } from '../../../server/src/escape-obligation-review.js';
 import { createRuntimePostureAttestor } from '../../../server/src/runtime-attestation.js';
 import { parseAttestArgs, runAttestCommand } from './attest.js';
 
 const roots: string[] = [];
+const escapeCensusCoverage = {
+  doors: [
+    'allowControlChars',
+    'csrf:false',
+    'ctx.fetch',
+    'kovoAnalyzerSummary',
+    'trustedHtml',
+    'trustedSql',
+  ],
+  schema: 'kovo.escape-census-coverage/v2',
+  sources: {
+    allowControlChars: 'trustEscapes',
+    'csrf:false': 'trustEscapes',
+    'ctx.fetch': 'securitySemanticGraph',
+    kovoAnalyzerSummary: 'trustEscapes',
+    trustedHtml: 'trustEscapes',
+    trustedSql: 'trustEscapes',
+  },
+} as const;
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
@@ -30,6 +50,8 @@ describe('kovo explain --attest', () => {
         `sha256:${'a'.repeat(64)}`,
         '--escape-reviews',
         'reviews.json',
+        '--escape-census-reviews',
+        'census-reviews.json',
       ]),
     ).toMatchObject({ ok: true });
     expect(
@@ -45,14 +67,30 @@ describe('kovo explain --attest', () => {
     ).toMatchObject({ ok: false });
   });
 
+  // @kovo-security-certifies C13 metric-e-attestation-composition
   it('verifies the caller nonce, artifact subject, posture digest, Ed25519 key, and signature', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-attest-'));
     roots.push(root);
+    const analyzedSource = `${'x'.repeat(44)}${'y'.repeat(44)}${'z'.repeat(32)}`;
+    const sourceBinding = {
+      encoding: 'utf16le' as const,
+      file: 'src/export.tsx',
+      sliceHash: sha256Utf16le(analyzedSource.slice(44, 88)),
+      sourceHash: sha256Utf16le(analyzedSource),
+      span: { end: 88, start: 44 },
+    };
     const facts = {
       endpointAuth: [],
       egressAllowlist: ['https://api.example.test:443'],
       irVersions: ['kovo-security-operation-ir/v1'],
-      trustEscapes: [],
+      trustEscapes: [
+        {
+          kind: 'trustedHtml',
+          root: 'src/export.tsx:44:88',
+          site: 'src/export.tsx:3',
+          sourceBinding,
+        },
+      ],
     };
     const obligation = {
       evidence: {
@@ -64,6 +102,19 @@ describe('kovo explain --attest', () => {
       why: { guard: 'guards.role:admin', kind: 'guard-chain' as const },
     };
     const subjectGraph = {
+      analysisInputs: {
+        runtimeTarget: 'node' as const,
+        schema: 'kovo.analysis.inputs/v1' as const,
+        sources: [
+          {
+            codeUnitLength: analyzedSource.length,
+            contentHash: sha256Utf16le(analyzedSource),
+            encoding: 'utf16le' as const,
+            path: 'src/export.tsx',
+            role: 'app' as const,
+          },
+        ],
+      },
       capabilities: [
         {
           kind: 'serverValue',
@@ -73,7 +124,11 @@ describe('kovo explain --attest', () => {
           target: 'trustedAssign',
         },
       ],
+      components: [],
       egressPosture: { allowDestinations: [], allowInternal: [], disabled: false },
+      escapeCensus: escapeCensusCoverage,
+      mutations: [],
+      trustEscapes: facts.trustEscapes,
     };
     const posture = {
       artifactSubject: sha256(canonicalJsonStringify(subjectGraph)),
@@ -101,6 +156,28 @@ describe('kovo explain --attest', () => {
       reviewsPath,
       JSON.stringify({ reviews: [review], schema: 'kovo.escape-obligation-reviews/v1' }),
     );
+    const censusReviewsPath = join(root, 'census-reviews.json');
+    const censusReview = createEscapeCensusReviewEnvelope(
+      {
+        artifactSubject: posture.artifactSubject,
+        door: 'trustedHtml',
+        root: 'src/export.tsx:44:88',
+        sites: [
+          {
+            ...sourceBinding,
+            sourceLength: analyzedSource.length,
+          },
+        ],
+      },
+      authority,
+    );
+    const writeCensusReviews = (reviews: readonly unknown[]): void => {
+      writeFileSync(
+        censusReviewsPath,
+        JSON.stringify({ reviews, schema: 'kovo.escape-census-reviews/v1' }),
+      );
+    };
+    writeCensusReviews([censusReview]);
     let egressFloor = true;
     let attestationNow = Date.now();
     const attestor = createRuntimePostureAttestor({
@@ -142,6 +219,7 @@ describe('kovo explain --attest', () => {
       const result = await runAttestCommand(
         {
           artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
           escapeReviewsPath: reviewsPath,
           trustAnchor: authority.trustAnchorFingerprint,
           url: `http://127.0.0.1:${address.port}`,
@@ -153,7 +231,11 @@ describe('kovo explain --attest', () => {
       expect(result.output).toContain('VERIFIED deployment=deployment:test');
       expect(result.output).toContain('NONCLAIM executed-code identity is not proved');
       expect(result.output).toContain('ESCAPE-REVIEWS verified=1');
-      expect(result.output).toContain('does not prove its justification true');
+      expect(result.output).toContain('ESCAPE-CENSUS-REVIEWS verified=1');
+      expect(result.output).toContain('pinned key holder approved the exact subject bytes');
+      expect(result.output).toContain(
+        'does not prove an obligation true or identify an independent human',
+      );
 
       const missingReview = await runAttestCommand(
         {
@@ -167,10 +249,55 @@ describe('kovo explain --attest', () => {
       if (!('error' in missingReview)) throw new Error(missingReview.output);
       expect(missingReview.error).toContain('--escape-reviews is required');
 
+      const missingCensusReview = await runAttestCommand(
+        {
+          artifactPath: graphPath,
+          escapeReviewsPath: reviewsPath,
+          trustAnchor: authority.trustAnchorFingerprint,
+          url: `http://127.0.0.1:${address.port}`,
+        },
+        root,
+      );
+      expect(missingCensusReview).toMatchObject({ exitCode: 1 });
+      if (!('error' in missingCensusReview)) throw new Error(missingCensusReview.output);
+      expect(missingCensusReview.error).toContain('--escape-census-reviews is required');
+
+      writeCensusReviews([censusReview, censusReview]);
+      const duplicateCensusReview = await runAttestCommand(
+        {
+          artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
+          escapeReviewsPath: reviewsPath,
+          trustAnchor: authority.trustAnchorFingerprint,
+          url: `http://127.0.0.1:${address.port}`,
+        },
+        root,
+      );
+      expect(duplicateCensusReview).toMatchObject({ exitCode: 1 });
+      if (!('error' in duplicateCensusReview)) throw new Error(duplicateCensusReview.output);
+      expect(duplicateCensusReview.error).toContain('count mismatch');
+
+      writeCensusReviews([{ ...censusReview, signature: 'not-a-signature' }]);
+      const forgedCensusReview = await runAttestCommand(
+        {
+          artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
+          escapeReviewsPath: reviewsPath,
+          trustAnchor: authority.trustAnchorFingerprint,
+          url: `http://127.0.0.1:${address.port}`,
+        },
+        root,
+      );
+      expect(forgedCensusReview).toMatchObject({ exitCode: 1 });
+      if (!('error' in forgedCensusReview)) throw new Error(forgedCensusReview.output);
+      expect(forgedCensusReview.error).toContain('signature is invalid');
+      writeCensusReviews([censusReview]);
+
       egressFloor = false;
       const failedBootWitness = await runAttestCommand(
         {
           artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
           escapeReviewsPath: reviewsPath,
           trustAnchor: authority.trustAnchorFingerprint,
           url: `http://127.0.0.1:${address.port}`,
@@ -186,6 +313,7 @@ describe('kovo explain --attest', () => {
       const stale = await runAttestCommand(
         {
           artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
           escapeReviewsPath: reviewsPath,
           trustAnchor: authority.trustAnchorFingerprint,
           url: `http://127.0.0.1:${address.port}`,
@@ -200,6 +328,7 @@ describe('kovo explain --attest', () => {
       const rejected = await runAttestCommand(
         {
           artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
           escapeReviewsPath: reviewsPath,
           trustAnchor: `sha256:${'a'.repeat(64)}`,
           url: `http://127.0.0.1:${address.port}`,
@@ -214,6 +343,7 @@ describe('kovo explain --attest', () => {
       const oversized = await runAttestCommand(
         {
           artifactPath: graphPath,
+          escapeCensusReviewsPath: censusReviewsPath,
           escapeReviewsPath: reviewsPath,
           trustAnchor: authority.trustAnchorFingerprint,
           url: `http://127.0.0.1:${address.port}`,
@@ -233,4 +363,8 @@ describe('kovo explain --attest', () => {
 
 function sha256(value: string): `sha256:${string}` {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function sha256Utf16le(value: string): `sha256:${string}` {
+  return `sha256:${createHash('sha256').update(Buffer.from(value, 'utf16le')).digest('hex')}`;
 }

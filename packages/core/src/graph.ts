@@ -103,6 +103,28 @@ export interface KovoArtifactProvenance {
   };
 }
 
+/** @internal One exact authored input admitted before a production build evaluates app code. */
+export interface KovoAnalysisInputSource {
+  codeUnitLength: number;
+  /** SHA-256 over the exact UTF-16 code units admitted by the pre-evaluation analyzer. */
+  contentHash: `sha256:${string}`;
+  encoding: 'utf16le';
+  /** Invocation-root-relative POSIX path; absolute or non-canonical paths are forbidden. */
+  path: string;
+  role: 'app' | 'client-entry' | 'config';
+}
+
+/**
+ * @internal Path-independent build-input identity bound into the runtime posture artifact subject.
+ * This identifies analyzed inputs, not the final emitted bytes or the executing host (SPEC
+ * §§5.2.3 and 11.2).
+ */
+export interface KovoAnalysisInputs {
+  runtimeTarget: 'cloudflare' | 'node' | 'vercel';
+  schema: 'kovo.analysis.inputs/v1';
+  sources: readonly KovoAnalysisInputSource[];
+}
+
 /** @internal Exact createApp egress posture retained in the reviewed build graph. */
 export interface EgressPostureFact {
   allowDestinations: readonly string[];
@@ -260,6 +282,7 @@ export interface KovoCheckInput {
   agents?: readonly AgentExplainFact[];
   authorizationCorrespondence?: readonly AuthorizationCorrespondenceExplainFact[];
   authPosture?: readonly AuthPostureFact[];
+  analysisInputs?: KovoAnalysisInputs;
   capabilities?: readonly CapabilityExplain[];
   capabilityClosure?: readonly CapabilityClosureExplainFact[];
   dependencyCapabilities?: AppDependencyCapabilityManifest;
@@ -893,7 +916,7 @@ export type EscapeCensusDoor = (typeof ESCAPE_CENSUS_DOORS)[number];
  */
 export interface EscapeCensusCoverageFact {
   doors: readonly EscapeCensusDoor[];
-  schema: 'kovo.escape-census-coverage/v1';
+  schema: 'kovo.escape-census-coverage/v2';
   sources: {
     readonly allowControlChars: 'trustEscapes';
     readonly 'csrf:false': 'trustEscapes';
@@ -906,6 +929,10 @@ export interface EscapeCensusCoverageFact {
 
 /** @internal */
 export interface TrustEscapeExplain {
+  /** Analyzer-owned join from source provenance to the exact executable root counted by Metric E. */
+  countedRoot?: string;
+  /** Closed disposition for every csrfFalse source fact; absence is never interpreted as safe. */
+  countedRootDisposition?: 'linked' | 'proven-unreachable';
   justification?: string;
   kind: (typeof AUDITED_TRUST_ESCAPE_KINDS)[number];
   owner?: string;
@@ -914,6 +941,14 @@ export interface TrustEscapeExplain {
   safePath?: string;
   site: string;
   source?: string;
+  /** Exact authored UTF-16 code-unit slice retained independently from the display-only excerpt. */
+  sourceBinding: {
+    readonly encoding: 'utf16le';
+    readonly file: string;
+    readonly sliceHash: `sha256:${string}`;
+    readonly sourceHash: `sha256:${string}`;
+    readonly span: { readonly end: number; readonly start: number };
+  };
 }
 
 /** @internal */
@@ -2617,7 +2652,7 @@ function validateEscapeCensusCoverage(
     ownGraphData(value, 'schema', `${path}.schema`),
     `${path}.schema`,
     'escapeCensus.schema',
-    ['kovo.escape-census-coverage/v1'],
+    ['kovo.escape-census-coverage/v2'],
     errors,
   );
   const doors = ownGraphData(value, 'doors', `${path}.doors`);

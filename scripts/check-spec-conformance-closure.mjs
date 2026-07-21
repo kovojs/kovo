@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '26b1b7277a896c3d488d76a3d63b9558bf462ac35b0169ae1459b334a6bc6aa7';
+  '89d7810b2c70f5c6b1ec1cf2c1e8941ad89db840d71925c4e35056292f2fac28';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   'f13c6210b08259959c03ae1942ee0cdf6846fd079c4ad37c2650dbcd3ba3993d';
 const expectedDiagnosticActualLayerReviewDigest =
-  'bec1f270221aa9b8f8b9ea4bc02597ffe21f41fe218d473fd89487a8f4e53704';
+  'fa34ea34fb35520661923ddce412ad9cc53588ba070d188c01b4615ba4f26e22';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -101,13 +101,7 @@ const expectedCoreBuildDistCommand =
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
-  'packages/browser/src/inline-loader.ts#fe077646c148f9549c06040f0837738a4efe4d97394c4c3cc0a75c865c31e56b#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#3b2fbaed304404bb191701b08b79947a7869566df27f18520e91925ff3bc2d31',
-  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#f3f265afd66e69c25580b7ce0942eaf5bd8e36b1c3b9ec15d8a8cac80eba3836',
-  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#bc216e52c412c8b193eb048ec65ffe9acb38280f67773837203ae1f164ba01a2',
-  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#1c6d930e4e45cf09d26898686ca29ac9f739589a667ca73b6b77a70dfd7744ec',
-  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#666bd656e7c42491b16f3d6f97fb64bef5faaf31813e8ac4ecdd5f3df6eb104d',
-  'packages/cli/src/commands/build-export.ts#19462dc306389910064d3b2f0ce9ffb924bc4e97835164190e72356dde2b5c9a#606f565bbb48636a234c79a4289dac3cf14d662050180563b00a61a266db42aa',
+  'packages/browser/src/inline-loader.ts#130d8a7cf55bb8dc5ddcb53e279bda823fc9de2a9060528ac22f9325a5e17fd2#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
@@ -123,7 +117,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/artifact-provenance.ts',
-    'da1736683f02aa22445aebda0d43cc64c3a80f2b41a9de4810c0a9901a653060',
+    '2a14bd933c62e9544c02cd0cd525f92c95021461ee1796623e50e4ad9457d928',
   ],
   [
     'packages/cli/src/capability-closure-packages.ts',
@@ -132,19 +126,19 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '1d98e30c50e8fd8ce2bbe489d56fcbd0df3042d49c1a38d03dcfdd635a77a088'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'c48db7d20de2963aea983c58322879ba5a8f4347f07e3b9d9eb622bce86049c3',
+    '510345aa4ca4f21575157dd4a10ab2d2e62e8254710d68d5df7cf28d05c7ae7b',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '5534abf475805e3c2d3243af249fe6ccd252868b079b1465c5f83ac50bcf2f9b',
+    'b23edbc7195e62e9ebe8c601997ba66b0719510d5d659a88d432e685b03c40b4',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '8b290a6f16a508bc5e2dddaf2d181c451bba0f47b345b63cdf010c5b852e5d28',
+    '40058910c2c25b41db42b29017d309c902a3e0b7a7c26ef2a36d3a931da8c9fe',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    '913a100ac2b6a12c38ac50cac6020a709f7d8e1b882576d2e84d4e86a1f2d5c1',
+    '32535adaff7947e78f603950c1747e6e4ae8a533be8ac8727082a1fcb9f2ae1a',
   ],
   [
     'packages/compiler/src/ts-api.ts',
@@ -164,7 +158,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    '829c7729109edc83e983f77ef990c983f004e2cf56b7bd4585b95f2ac6bd3805',
+    'b4b621f70fc7610e0e3e003798cfda7236263f6dfcbbcc6079014d3d42b48082',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -203,15 +197,15 @@ const reviewedExcludedSourceReachability = new Set([
 // outer-owner digests; any new shape or owner edit must be reviewed explicitly.
 const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
-    'packages/cli/src/commands/build-export.ts#literal#a209f13a3241aa94fc75527ddecacbd22892f71c957ec29711008fa69148dc72#cd7da4c29ffb6674b361e1a9a4efb4ab5e213b65e3289bad20eba374622ed2f6',
+    'packages/cli/src/commands/build-export.ts#literal#5a87391d0ef0e56239bd18530c212e8579a9935ef567ce1b48212149b66d386b#58a0b16ea437f43a43903be9c7b70f0cd5f652b934c66534eed982e5efca03b2',
     'Registry-derived compiler diagnostic projection for the build-export result protocol.',
   ],
   [
-    'packages/cli/src/commands/compile.ts#literal#46266841b02836a4b1a875f9222807db4ebb2e7bee8d197868ac210207efe2ac#22b7e55be74451af3ef543a558c504f8544d37057b37fd5664fe9f385a262c85',
+    'packages/cli/src/commands/compile.ts#literal#d6f772521c5d7f3a2068579f07b0229f2633d14d0b05ac3024033fb17c10a633#97b529171f62a2412be77517f99fa7c44ae8ac3f209dbf6519e5dd0665eee9c7',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
-    'packages/cli/src/commands/compile.ts#literal#cfdea11064fabff0b302c4d536e741b1291bc50a27aea6646451d6f6706b6511#22b7e55be74451af3ef543a558c504f8544d37057b37fd5664fe9f385a262c85',
+    'packages/cli/src/commands/compile.ts#literal#d6f772521c5d7f3a2068579f07b0229f2633d14d0b05ac3024033fb17c10a633#6e57e31ea6f82f5d8ac7771a5b0878254216a287f5cc437155a0b74eb273db40',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
@@ -433,7 +427,7 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '9374d59aaac27aedbb744d06b6f824250aeceec5ecaa41d03996ff67a3e441ea',
+    '73cc618b78eebad1ac1680e178f3ec1496c6ab0e85b96bdae68a31ef69086efc',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -441,7 +435,7 @@ const diagnosticLiteralExemptions = new Map([
   ],
   [
     'packages/core/src/internal/security-markers.ts',
-    'f8fb3738500b06b5231b5d867ca68725f08a2917dc5a98095af71f408232bfae',
+    'd75bb917e18841ebb759f6ccaa1791a2295fe4327bdb0532d67e99ea38f1105f',
   ],
   [
     'packages/core/src/internal/source-sink-registry.ts',
@@ -2952,6 +2946,9 @@ function diagnosticLiteralShape(expression, context, seen) {
   if (ts.isCallExpression(value) && context.expandDiagnosticShapeCalls === true) {
     const functionLike = localFunctionLikeForCall(value, context, new Set());
     if (functionLike !== undefined) {
+      if (seen.has(functionLike)) return empty();
+      const callSeen = new Set(seen);
+      callSeen.add(functionLike);
       const bindings = new Map(context.diagnosticShapeBindings ?? []);
       for (let index = 0; index < functionLike.parameters.length; index += 1) {
         const parameter = functionLike.parameters[index];
@@ -2971,7 +2968,7 @@ function diagnosticLiteralShape(expression, context, seen) {
         if (returned !== undefined) {
           mergeDiagnosticLiteralShape(
             result,
-            diagnosticLiteralShape(returned, nestedContext, new Set(seen)),
+            diagnosticLiteralShape(returned, nestedContext, new Set(callSeen)),
           );
         }
       }
@@ -3606,15 +3603,23 @@ function everyWrapperReturnDerivesFromRoot(declaration, key, analysis, edges) {
 
 function directReturnExpressions(body) {
   const returns = [];
-  const visit = (node) => {
-    if (node !== body && ts.isFunctionLike(node)) return;
+  const pending = [body];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) continue;
+    if (node !== body && ts.isFunctionLike(node)) continue;
     if (ts.isReturnStatement(node)) {
       returns.push(node.expression);
-      return;
+      continue;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(body);
+    const children = [];
+    ts.forEachChild(node, (child) => {
+      children.push(child);
+    });
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      pending.push(children[index]);
+    }
+  }
   return returns;
 }
 

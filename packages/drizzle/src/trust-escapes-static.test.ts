@@ -1,18 +1,29 @@
 import * as nodeFs from 'node:fs';
 import * as nodeFsPromises from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { builtinModules as nodeBuiltinModules } from 'node:module';
 
 import { ts } from 'ts-morph';
 import { describe, expect, it } from 'vitest';
 import type { SecuritySemanticGraph } from '@kovojs/core/internal/security-operation-ir';
+import { compileComponentModule } from '../../compiler/src/index.js';
+import {
+  analyzeCapabilityClosure,
+  componentTaskBSourceOperationFacts,
+  parseComponentModule,
+} from '../../compiler/src/internal.js';
 
 import {
   collectStaticBuildTrustFactsFromProject,
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
+  snapshotCompilerTaskBFiniteVerdict,
 } from '@kovojs/drizzle/internal/static';
-import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
-import type { CompilerTaskBClosureProof } from '@kovojs/drizzle/internal/static';
+import type {
+  CompilerSecuritySemanticSource,
+  CompilerTaskBClosureProof,
+  TrustEscapeSourceFileInput,
+} from '@kovojs/drizzle/internal/static';
 
 function trustEscapesFor(source: string, fileName = 'app.tsx') {
   return collectTrustEscapesFromProject({ files: [{ fileName, source }] });
@@ -30,13 +41,31 @@ function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
 }
 
+function compilerSemanticSource(
+  fileName: string,
+  source: string,
+  graphs: readonly SecuritySemanticGraph[],
+): CompilerSecuritySemanticSource {
+  return {
+    fileName,
+    graphs,
+    operations: componentTaskBSourceOperationFacts(parseComponentModule(fileName, source)),
+    source,
+  };
+}
+
 function taskBClosureProof(
   files: readonly TrustEscapeSourceFileInput[],
   options: {
+    blockingDiagnostics?: CompilerTaskBClosureProof['finiteVerdict']['blockingDiagnostics'];
     facts?: CompilerTaskBClosureProof['capabilityFacts'];
-    rootKinds?: readonly ('application' | 'mutation')[];
+    rootKinds?: readonly ('application' | 'mutation' | 'query')[];
+    semanticSources?: readonly CompilerSecuritySemanticSource[];
   } = {},
 ): CompilerTaskBClosureProof {
+  const semanticSources =
+    options.semanticSources ??
+    files.map((file) => compilerSemanticSource(file.fileName, file.source, []));
   return {
     capabilityFacts: [
       ...(options.facts ?? []),
@@ -68,8 +97,45 @@ function taskBClosureProof(
       ],
       schema: 'kovo-app-dependency-capabilities/v1',
     },
+    finiteVerdict: snapshotCompilerTaskBFiniteVerdict({
+      blockingDiagnostics: options.blockingDiagnostics ?? [],
+      semanticSources,
+    }),
     files,
-    schema: 'kovo-task-b-closure/v1',
+    schema: 'kovo-task-b-closure/v2',
+  };
+}
+
+function exactCompilerTaskBClosureProof(
+  files: readonly TrustEscapeSourceFileInput[],
+  semanticSources: readonly CompilerSecuritySemanticSource[],
+  blockingDiagnostics: CompilerTaskBClosureProof['finiteVerdict']['blockingDiagnostics'] = [],
+): CompilerTaskBClosureProof {
+  const closure = analyzeCapabilityClosure({ files });
+  return {
+    capabilityFacts: closure.facts,
+    dependencyManifest: closure.dependencyManifest,
+    files,
+    finiteVerdict: snapshotCompilerTaskBFiniteVerdict({
+      blockingDiagnostics,
+      semanticSources,
+    }),
+    schema: 'kovo-task-b-closure/v2',
+  };
+}
+
+function rebindCompilerTaskBFiniteVerdict(
+  proof: CompilerTaskBClosureProof,
+  semanticSources: readonly CompilerSecuritySemanticSource[],
+  blockingDiagnostics: CompilerTaskBClosureProof['finiteVerdict']['blockingDiagnostics'] = proof
+    .finiteVerdict.blockingDiagnostics,
+): CompilerTaskBClosureProof {
+  return {
+    ...proof,
+    finiteVerdict: snapshotCompilerTaskBFiniteVerdict({
+      blockingDiagnostics,
+      semanticSources,
+    }),
   };
 }
 
@@ -78,6 +144,35 @@ function starterTemplateSource(relativePath: string): string {
 }
 
 describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
+  // @kovo-security-certifies C13 trust-escape-exact-source-binding
+  it('binds exact same-line trust calls and all UTF-16 code units independently of display excerpts', () => {
+    const prefix = 'a'.repeat(120);
+    const source = [
+      "import { trustedHtml } from '@kovojs/browser';",
+      `export const body = trustedHtml('${prefix}X') + trustedHtml('${prefix}Y');`,
+    ].join('\n');
+    const escapes = trustEscapesFor(source);
+
+    expect(escapes).toHaveLength(2);
+    expect(escapes[0]?.site).toBe('app.tsx:2');
+    expect(escapes[1]?.site).toBe('app.tsx:2');
+    expect(new Set(escapes.map((escape) => escape.root)).size).toBe(2);
+    expect(escapes[0]?.source).toBe(escapes[1]?.source);
+    expect(escapes[0]?.sourceBinding.sourceHash).toBe(escapes[1]?.sourceBinding.sourceHash);
+    for (const escape of escapes) {
+      const { end, start } = escape.sourceBinding.span;
+      expect(escape.sourceBinding.encoding).toBe('utf16le');
+      expect(escape.root).toBe(`app.tsx:${start}:${end}`);
+      expect(escape.sourceBinding.sourceHash).toBe(
+        `sha256:${createHash('sha256').update(source, 'utf16le').digest('hex')}`,
+      );
+    }
+
+    const surrogateBinding = (value: string) =>
+      trustEscapesFor(`trustedHtml('${value}');`)[0]?.sourceBinding.sourceHash;
+    expect(surrogateBinding('\uD800')).not.toBe(surrogateBinding('\uD801'));
+  });
+
   it('emits a trustedHtml escape with no justification when none is provided', () => {
     const escapes = trustEscapesFor(`
       import { trustedHtml } from '@kovojs/browser';
@@ -368,7 +463,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       rootKind: 'application' as const,
       site: `app.ts:${position.line + 1}:${position.character + 1}`,
     };
-    const semanticSources = [{ fileName: 'app.ts', graphs: [], source }] as const;
+    const semanticSources = [compilerSemanticSource('app.ts', source, [])];
 
     expect(
       collectUnregisteredSinksFromProject({
@@ -451,7 +546,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       rootKinds: ['mutation'],
     });
     const missingSemanticRoot = collectUnregisteredSinksFromProject({
-      compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [], source }],
+      compilerSecuritySemanticSources: [compilerSemanticSource('app.ts', source, [])],
       compilerTaskBClosure: proof,
       files,
     });
@@ -459,7 +554,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
       expect.arrayContaining([
         expect.objectContaining({
           sink: 'request-handler.opaque-source',
-          source: expect.stringContaining('sink=finite-ir'),
+          source: expect.stringContaining('sink=compiler-route'),
         }),
       ]),
     );
@@ -482,15 +577,554 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           traces: [],
         },
       ],
-      schema: 'kovo-security-semantic-graph/v2',
+      schema: 'kovo-security-semantic-graph/v3',
+      sourceFile: 'app.ts',
     };
     expect(
       collectUnregisteredSinksFromProject({
-        compilerSecuritySemanticSources: [{ fileName: 'app.ts', graphs: [graph], source }],
+        compilerSecuritySemanticSources: [compilerSemanticSource('app.ts', source, [graph])],
+        compilerTaskBClosure: taskBClosureProof(files, {
+          facts: proof.capabilityFacts.filter((fact) => fact.kind === 'root'),
+          rootKinds: ['mutation'],
+          semanticSources: [compilerSemanticSource('app.ts', source, [graph])],
+        }),
+        files,
+      }),
+    ).toEqual([]);
+  });
+
+  // @kovo-security-certifies C13 same-file-root-reference-correspondence
+  it('joins one immutable same-file handler reference to its exact finite-IR root', () => {
+    const source = `import { mutation } from '@kovojs/server';
+const saveHandler = (_input, request) => ({ signature: request.headers.get('X-Signature') });
+export const save = mutation({ handler: saveHandler });`;
+    const fileName = 'referenced-handler.ts';
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    const semanticSources = [compilerSemanticSource(fileName, source, [graph!])];
+
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
+        compilerTaskBClosure: exactCompilerTaskBClosureProof(files, semanticSources),
+        files,
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a ctx.fetch trace retargeted to an unrelated in-owner call', () => {
+    const source = `import { query } from '@kovojs/server';
+export const report = query('report', {
+  async load(_input, ctx) {
+    await ctx.fetch('https://api.example.test/write');
+    return { value: JSON.stringify({ ok: true }) };
+  },
+});`;
+    const fileName = 'egress-carrier.ts';
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    const parsed = ts.createSourceFile(
+      fileName,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let queryCall: import('typescript').CallExpression | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'query'
+      ) {
+        queryCall = node;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(queryCall).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(queryCall!.getStart(parsed));
+    const closure = taskBClosureProof(files, {
+      facts: [
+        {
+          kind: 'root',
+          module: fileName,
+          name: 'report',
+          rootKind: 'query',
+          site: `${fileName}:${position.line + 1}:${position.character + 1}`,
+        },
+      ],
+      rootKinds: ['query'],
+      semanticSources: [compilerSemanticSource(fileName, source, [graph!])],
+    });
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [compilerSemanticSource(fileName, source, [graph!])],
+        compilerTaskBClosure: closure,
+        files,
+      }),
+    ).toEqual([]);
+
+    const unrelated = 'JSON.stringify({ ok: true })';
+    const start = source.indexOf(unrelated);
+    expect(start).toBeGreaterThan(0);
+    const end = start + unrelated.length;
+    const forged: SecuritySemanticGraph = {
+      ...graph!,
+      roots: graph!.roots.map((root) => ({
+        ...root,
+        traces: root.traces.map((trace) =>
+          trace.verdict === 'proved' && trace.sink.door === 'ctx.fetch'
+            ? {
+                ...trace,
+                sink: {
+                  ...trace.sink,
+                  sliceHash: `sha256:${createHash('sha256')
+                    .update(source.slice(start, end), 'utf16le')
+                    .digest('hex')}`,
+                  span: { end, start },
+                  target: 'JSON.stringify',
+                },
+              }
+            : trace,
+        ),
+      })),
+    };
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [compilerSemanticSource(fileName, source, [forged])],
+        compilerTaskBClosure: closure,
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=compiler-route'),
+        }),
+      ]),
+    );
+    const forgedSources = [compilerSemanticSource(fileName, source, [forged])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: forgedSources,
+        compilerTaskBClosure: rebindCompilerTaskBFiniteVerdict(closure, forgedSources, []),
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+  });
+
+  it('binds mixed database and egress helper authority to every ctx.fetch terminal', () => {
+    const source = `import { query } from '@kovojs/server';
+async function dial(db, outbound) {
+  await db.select();
+  await outbound('https://api.example.test/read');
+}
+export const report = query('report', {
+  async load(_input, ctx) {
+    await dial(ctx.db, ctx.fetch);
+    return { ok: true };
+  },
+});`;
+    const fileName = 'egress-helper-carrier.ts';
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    const parsed = ts.createSourceFile(
+      fileName,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let queryCall: import('typescript').CallExpression | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'query'
+      ) {
+        queryCall = node;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(queryCall).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(queryCall!.getStart(parsed));
+    const closure = taskBClosureProof(files, {
+      facts: [
+        {
+          kind: 'root',
+          module: fileName,
+          name: 'report',
+          rootKind: 'query',
+          site: `${fileName}:${position.line + 1}:${position.character + 1}`,
+        },
+      ],
+      rootKinds: ['query'],
+      semanticSources: [compilerSemanticSource(fileName, source, [graph!])],
+    });
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [compilerSemanticSource(fileName, source, [graph!])],
+        compilerTaskBClosure: closure,
+        files,
+      }),
+    ).toEqual([]);
+
+    const omitted: SecuritySemanticGraph = {
+      ...graph!,
+      roots: graph!.roots.map((root) => ({
+        ...root,
+        traces: root.traces.filter(
+          (trace) => !(trace.verdict === 'proved' && trace.sink.door === 'ctx.fetch'),
+        ),
+      })),
+    };
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [compilerSemanticSource(fileName, source, [omitted])],
+        compilerTaskBClosure: closure,
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: expect.stringContaining('sink=compiler-route'),
+        }),
+      ]),
+    );
+    const omittedSources = [compilerSemanticSource(fileName, source, [omitted])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: omittedSources,
+        compilerTaskBClosure: rebindCompilerTaskBFiniteVerdict(closure, omittedSources, []),
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+  });
+
+  it('retains exact compiler-proved destructured ctx.fetch aliases without widening alias authority', () => {
+    const source = `import { query } from '@kovojs/server';
+export const report = query('report', {
+  async load(_input, context) {
+    const { fetch: outbound } = context;
+    await outbound('https://api.example.test/read');
+    return { ok: true };
+  },
+});`;
+    const fileName = 'egress-destructured-alias.ts';
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    expect(compiled.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    const semanticSources = [compilerSemanticSource(fileName, source, [graph!])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
+        compilerTaskBClosure: exactCompilerTaskBClosureProof(files, semanticSources),
+        files,
+      }),
+    ).toEqual([]);
+
+    const omitted: SecuritySemanticGraph = {
+      ...graph!,
+      roots: graph!.roots.map((root) => ({
+        ...root,
+        traces: root.traces.filter(
+          (trace) => !(trace.verdict === 'proved' && trace.sink.door === 'ctx.fetch'),
+        ),
+      })),
+    };
+    const omittedSources = [compilerSemanticSource(fileName, source, [omitted])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: omittedSources,
+        compilerTaskBClosure: exactCompilerTaskBClosureProof(files, omittedSources),
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+  });
+
+  // @kovo-security-certifies C13 task-b-complete-terminal-correspondence
+  it('binds every non-egress finite terminal to an independent same-source denominator', () => {
+    const source = `import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler(_input, ctx) {
+    ctx.headers.set('Cache-Control', 'no-store');
+    return Response.json({ ok: true });
+  },
+});`;
+    const fileName = 'structured-header-carrier.ts';
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    const semanticSources = [compilerSemanticSource(fileName, source, [graph!])];
+    const proof = exactCompilerTaskBClosureProof(files, semanticSources);
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
         compilerTaskBClosure: proof,
         files,
       }),
     ).toEqual([]);
+
+    const omitted: SecuritySemanticGraph = {
+      ...graph!,
+      roots: graph!.roots.map((root) => ({
+        ...root,
+        traces: root.traces.filter(
+          (trace) => !(trace.verdict === 'proved' && trace.sink.kind === 'server.response.header'),
+        ),
+      })),
+    };
+    const omittedSources = [compilerSemanticSource(fileName, source, [omitted])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: omittedSources,
+        compilerTaskBClosure: exactCompilerTaskBClosureProof(files, omittedSources),
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+
+    const duplicated: SecuritySemanticGraph = {
+      ...graph!,
+      roots: graph!.roots.map((root) => {
+        const terminal = root.traces.find(
+          (trace) => trace.verdict === 'proved' && trace.sink.kind === 'server.response.header',
+        );
+        return terminal === undefined ? root : { ...root, traces: [...root.traces, terminal] };
+      }),
+    };
+    const duplicatedSources = [compilerSemanticSource(fileName, source, [duplicated])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: duplicatedSources,
+        compilerTaskBClosure: exactCompilerTaskBClosureProof(files, duplicatedSources),
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+  });
+
+  it.each([
+    {
+      code: 'KV450' as const,
+      fileName: 'scoped-key-carrier.ts',
+      source: `import { createFileSystemStorage, mutation } from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
+export const read = mutation('read', {
+  async handler(input) {
+    await storage.get(input.key);
+    return { ok: true };
+  },
+});`,
+    },
+    {
+      code: 'KV452' as const,
+      fileName: 'derived-dataset-carrier.ts',
+      source: `import { createFileSystemStorage, endpoint, publicScopedKey } from '@kovojs/server';
+const storage = createFileSystemStorage({ root: '/srv/kovo-derived' });
+const documents = {};
+export const persist = endpoint('/persist', {
+  access: { kind: 'public', reason: 'classifier fixture' },
+  async handler(_input, ctx) {
+    const rows = await ctx.db.select().from(documents);
+    await storage.put(publicScopedKey('unsafe-export'), JSON.stringify(rows));
+    return { ok: true };
+  },
+});`,
+    },
+  ])('retains $code in the hashed finite-diagnostic verdict', ({ code, fileName, source }) => {
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    const blockingDiagnostics = compiled.diagnostics
+      .filter(
+        (diagnostic) =>
+          diagnostic.code === 'KV449' || diagnostic.code === 'KV450' || diagnostic.code === 'KV452',
+      )
+      .map((diagnostic) => ({
+        code: diagnostic.code,
+        ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
+        message: diagnostic.message,
+        severity: diagnostic.severity ?? 'error',
+        site: diagnostic.fileName,
+        ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+      }));
+    expect(blockingDiagnostics.some((diagnostic) => diagnostic.code === code)).toBe(true);
+    const semanticSources = [compilerSemanticSource(fileName, source, [graph!])];
+    const proof = exactCompilerTaskBClosureProof(files, semanticSources, blockingDiagnostics);
+    expect(proof.finiteVerdict.analysisCarrierSha256).toMatch(/^sha256:[a-f0-9]{64}$/u);
+    expect(proof.finiteVerdict.status).toBe('rejected');
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
+        compilerTaskBClosure: proof,
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+
+    const tamperedProof: CompilerTaskBClosureProof = {
+      ...proof,
+      finiteVerdict: {
+        ...proof.finiteVerdict,
+        blockingDiagnostics: [],
+        status: 'accepted',
+      },
+    };
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: semanticSources,
+        compilerTaskBClosure: tamperedProof,
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+  });
+
+  it('independently retains closed ctx.fetch authority-containment verdicts', () => {
+    const source = `import { query } from '@kovojs/server';
+export const report = query('report', {
+  load(_input, ctx) {
+    const holder = [ctx.fetch];
+    return { ok: Boolean(holder) };
+  },
+});`;
+    const fileName = 'egress-closed-carrier.ts';
+    const files = [{ fileName, source }] as const;
+    const compiled = compileComponentModule({ fileName, source });
+    const graph = compiled.componentGraphFacts
+      .map((fact) => fact.securitySemanticGraph)
+      .find((candidate): candidate is SecuritySemanticGraph => candidate !== undefined);
+    expect(graph).toBeDefined();
+    const blockingDiagnostics = compiled.diagnostics
+      .filter((diagnostic) => diagnostic.code === 'KV449')
+      .map((diagnostic) => ({
+        code: diagnostic.code,
+        message: diagnostic.message,
+        severity: diagnostic.severity ?? 'error',
+        site: diagnostic.fileName,
+        ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+      }));
+    expect(blockingDiagnostics.length).toBeGreaterThan(0);
+    expect(
+      graph!.roots.some((root) => root.traces.some((trace) => trace.verdict === 'closed')),
+    ).toBe(true);
+    const parsed = ts.createSourceFile(
+      fileName,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    let queryCall: import('typescript').CallExpression | undefined;
+    const visit = (node: import('typescript').Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'query'
+      ) {
+        queryCall = node;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed);
+    expect(queryCall).toBeDefined();
+    const position = parsed.getLineAndCharacterOfPosition(queryCall!.getStart(parsed));
+    const closure = taskBClosureProof(files, {
+      blockingDiagnostics,
+      facts: [
+        {
+          kind: 'root',
+          module: fileName,
+          name: 'report',
+          rootKind: 'query',
+          site: `${fileName}:${position.line + 1}:${position.character + 1}`,
+        },
+      ],
+      rootKinds: ['query'],
+      semanticSources: [compilerSemanticSource(fileName, source, [graph!])],
+    });
+    const routeClosed = (candidate: SecuritySemanticGraph) =>
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [compilerSemanticSource(fileName, source, [candidate])],
+        compilerTaskBClosure: closure,
+        files,
+      });
+    expect(routeClosed(graph!)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+    const omitted: SecuritySemanticGraph = {
+      ...graph!,
+      roots: graph!.roots.map((root) => ({ ...root, traces: [] })),
+    };
+    expect(routeClosed(omitted)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
+    const omittedSources = [compilerSemanticSource(fileName, source, [omitted])];
+    expect(
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: omittedSources,
+        compilerTaskBClosure: rebindCompilerTaskBFiniteVerdict(closure, omittedSources, []),
+        files,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: expect.stringContaining('sink=compiler-route') }),
+      ]),
+    );
   });
 
   it('does not duplicate compiler-owned JSX innerHTML closure in TASK B', () => {
@@ -14677,11 +15311,18 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     let mutationCall: import('typescript').CallExpression | undefined;
     let nestedWrite: import('typescript').FunctionDeclaration | undefined;
     let nestedWriteCall: import('typescript').CallExpression | undefined;
+    let databaseWriteCall: import('typescript').CallExpression | undefined;
     const visit = (node: import('typescript').Node): void => {
       if (ts.isFunctionDeclaration(node) && node.name?.text === 'nestedWrite') {
         nestedWrite = node;
       } else if (ts.isMethodDeclaration(node) && node.name.getText(parsed) === 'handler') {
         handler = node;
+      } else if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === 'update'
+      ) {
+        databaseWriteCall = node;
       } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
         if (node.expression.text === 'mutation') mutationCall = node;
         if (node.expression.text === 'nestedWrite') nestedWriteCall = node;
@@ -14693,6 +15334,7 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(mutationCall).toBeDefined();
     expect(nestedWrite).toBeDefined();
     expect(nestedWriteCall).toBeDefined();
+    expect(databaseWriteCall).toBeDefined();
     const callableSpan = {
       end: nestedWrite!.getEnd(),
       start: nestedWrite!.getStart(parsed),
@@ -14750,6 +15392,16 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
               sink: {
                 door: 'managed-db',
                 kind: 'server.database.write',
+                sliceHash: `sha256:${createHash('sha256')
+                  .update(
+                    source.slice(databaseWriteCall!.getStart(parsed), databaseWriteCall!.getEnd()),
+                    'utf16le',
+                  )
+                  .digest('hex')}`,
+                span: {
+                  end: databaseWriteCall!.getEnd(),
+                  start: databaseWriteCall!.getStart(parsed),
+                },
                 target: 'db.update',
               },
               transfers: [transfer],
@@ -14758,7 +15410,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
           ],
         },
       ],
-      schema: 'kovo-security-semantic-graph/v2' as const,
+      schema: 'kovo-security-semantic-graph/v3' as const,
+      sourceFile: 'summary-carrier.ts',
     };
     const schemaSource = `
       import { pgTable, text } from 'drizzle-orm/pg-core';
@@ -14774,8 +15427,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     const closed = collectUnregisteredSinksFromProject({
       compilerSecuritySemanticSources: [
-        { fileName: 'summary-carrier.ts', graphs: [graph], source },
-        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+        compilerSemanticSource('summary-carrier.ts', source, [graph]),
+        compilerSemanticSource('schema.ts', schemaSource, []),
       ],
       files,
     });
@@ -14783,8 +15436,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     const byteMismatched = collectUnregisteredSinksFromProject({
       compilerSecuritySemanticSources: [
-        { fileName: 'summary-carrier.ts', graphs: [graph], source: `${source}\n` },
-        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+        compilerSemanticSource('summary-carrier.ts', `${source}\n`, [graph]),
+        compilerSemanticSource('schema.ts', schemaSource, []),
       ],
       files,
     });
@@ -14796,22 +15449,18 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
 
     const verdictClosed = collectUnregisteredSinksFromProject({
       compilerSecuritySemanticSources: [
-        {
-          fileName: 'summary-carrier.ts',
-          graphs: [
-            {
-              ...graph,
-              roots: [
-                {
-                  ...graph.roots[0]!,
-                  summaries: [{ ...graph.roots[0]!.summaries[0]!, verdict: 'closed' as const }],
-                },
-              ],
-            },
-          ],
-          source,
-        },
-        { fileName: 'schema.ts', graphs: [], source: schemaSource },
+        compilerSemanticSource('summary-carrier.ts', source, [
+          {
+            ...graph,
+            roots: [
+              {
+                ...graph.roots[0]!,
+                summaries: [{ ...graph.roots[0]!.summaries[0]!, verdict: 'closed' as const }],
+              },
+            ],
+          },
+        ]),
+        compilerSemanticSource('schema.ts', schemaSource, []),
       ],
       files,
     });
@@ -14824,8 +15473,8 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     const semanticSinks = (candidate: SecuritySemanticGraph) =>
       collectUnregisteredSinksFromProject({
         compilerSecuritySemanticSources: [
-          { fileName: 'summary-carrier.ts', graphs: [candidate], source },
-          { fileName: 'schema.ts', graphs: [], source: schemaSource },
+          compilerSemanticSource('summary-carrier.ts', source, [candidate]),
+          compilerSemanticSource('schema.ts', schemaSource, []),
         ],
         files,
       });

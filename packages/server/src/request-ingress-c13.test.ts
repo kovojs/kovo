@@ -181,9 +181,8 @@ describe('SPEC §9.5 request-ingress closed corpus', () => {
       'http://app.example/probe?x=1',
     );
     expect(
-      nodeRequestToWebRequest(
-        http1Carrier({ url: 'http://app.example/probe?next=%2Faccount' }),
-      ).url,
+      nodeRequestToWebRequest(http1Carrier({ url: 'http://app.example/probe?next=%2Faccount' }))
+        .url,
     ).toBe('http://app.example/probe?next=%2Faccount');
 
     for (const target of [

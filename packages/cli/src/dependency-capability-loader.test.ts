@@ -166,12 +166,17 @@ function deepStructuredArgumentCarrierExpression(assetPath: string): string {
   return `(() => { const box = {}; const root = ${nested}; function install(value) { value${'.next'.repeat(depth)}.box.platform = globalThis; } install(root); return new box.platform.Worker('${assetPath}'); })()`;
 }
 
-async function buildReviewedBrowserPackageArtifact(dependencySource: string): Promise<string> {
+async function buildReviewedBrowserPackageArtifact(
+  dependencySource: string,
+  options: { readonly invoke?: boolean; readonly minify?: boolean } = {},
+): Promise<string> {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-browser-authority-escape-')));
   const appModulePath = join(root, 'client.mjs');
   const packageRoot = join(root, 'node_modules', 'safe-parser');
   const outDir = join(root, 'dist');
-  const appSource = "import { inspect } from 'safe-parser'; export const value = inspect();\n";
+  const appSource = `import { inspect } from 'safe-parser'; export const value = ${
+    options.invoke === false ? 'inspect' : 'inspect()'
+  };\n`;
   try {
     mkdirSync(packageRoot, { recursive: true });
     writeFileSync(
@@ -211,7 +216,7 @@ async function buildReviewedBrowserPackageArtifact(dependencySource: string): Pr
     await viteBuild({
       build: {
         emptyOutDir: true,
-        minify: true,
+        minify: options.minify ?? true,
         outDir,
         rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
       },
@@ -269,6 +274,17 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     expect(componentScan).toContain('rmSync(tempDir, { force: true, recursive: true })');
     expect(source.slice(0, start)).not.toContain("'component-scan'");
     expect(source.slice(end)).not.toContain("'component-scan'");
+  });
+
+  // @kovo-security-certifies C13 dependency-client-modulepreload-polyfill-closure
+  it('keeps Vite compatibility DOM code out of retained production client artifacts', () => {
+    const source = readFileSync(new URL('./commands/build-export.ts', import.meta.url), 'utf8');
+    const start = source.indexOf('async function buildKovoClientManifest(');
+    const end = source.indexOf('\nasync function ', start + 1);
+    const clientBuild = source.slice(start, end === -1 ? undefined : end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(clientBuild).toContain('modulePreload: { polyfill: false }');
   });
 
   // @kovo-security-certifies C13 dependency-capability-loader-identity
@@ -3021,6 +3037,49 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     expect(artifact).toContain('safe');
   });
 
+  // @kovo-security-certifies C13 dependency-browser-carrier-branch-independence
+  it.each([
+    [
+      'spread URL base provenance',
+      "const args = ['./payload.mjs', import.meta.url]; export const inspect = new URL(...args);",
+      false,
+    ],
+    [
+      'superclass invocation authority',
+      "class RetainedURL extends URL { constructor() { super('./payload.mjs', import.meta.url); } } export const inspect = new RetainedURL();",
+      false,
+    ],
+    [
+      'closed constructor target',
+      'const target = unknownConstructor(); export const inspect = new target();',
+      false,
+    ],
+    [
+      'closed receiver constructor bridge',
+      "const value = unknownValue(); export const inspect = value.constructor.constructor('return 1')();",
+      false,
+    ],
+    [
+      'retained dynamic-code authority',
+      'document.title = typeof eval; export const inspect = () => 1;',
+      true,
+    ],
+    [
+      'opaque Reflect.construct target',
+      'const target = unknownConstructor(); export const inspect = Reflect.construct(target, []);',
+      false,
+    ],
+  ] as const)(
+    'rejects %s through its dedicated finite-language branch',
+    async (_kind, source, invoke) => {
+      await expect(
+        buildReviewedBrowserPackageArtifact(source, { invoke, minify: false }),
+      ).rejects.toThrow(
+        /KV448.*supported build-client artifact.*retains an? opaque (?:new-URL|browser executable carrier) executable asset/u,
+      );
+    },
+  );
+
   // @kovo-security-certifies C13 dependency-approved-worker-subgraph-closure
   it.each(['query import', 'constructor', 'computed constructor', 'service worker'] as const)(
     'rejects an approved app %s worker subgraph that omits dependency closure',
@@ -3497,6 +3556,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'closed-browser-value constructor-chain dynamic Worker',
       closedBrowserValueDynamicWorkerExpression('/payload.mjs'),
       /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'discarded finite-join module-relative URL',
+      "(() => { class LocalURL extends URL {} const U = globalThis.__KOVO_URL_CHOICE__ ? URL : LocalURL; new U('./payload.mjs', import.meta.url); return 1; })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
     ],
     [
       'minified URL-constructor alias',

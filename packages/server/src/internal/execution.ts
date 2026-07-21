@@ -36,6 +36,16 @@ export {
   type EscapeObligationReviewEnvelope,
   type EscapeObligationReviewSubject,
 } from '../escape-obligation-review.js';
+export {
+  escapeCensusReviewPayload,
+  snapshotEscapeCensusReviewSubject,
+  verifyEscapeCensusReviewEnvelope,
+  verifyEscapeCensusReviewSet,
+  type EscapeCensusReviewEnvelope,
+  type EscapeCensusReviewSite,
+  type EscapeCensusReviewSubject,
+  type EscapeCensusReviewVerification,
+} from '../escape-census-review.js';
 export { exportSecurityEvents } from '../security-event-export.js';
 export {
   createSecurityEventRecordVerifier,

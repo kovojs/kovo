@@ -72,8 +72,8 @@
     "@kovojs/server": "workspace:*",
     "vitest": "4.1.8"
   },
-  "kovo": {
-    "publishExtraEntries": [
+  "kovoPublish": {
+    "extraEntries": [
       "./src/compile.ts"
     ]
   }

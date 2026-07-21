@@ -188,6 +188,14 @@
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
     {
+      "id": "crypto-door-drizzle-trust-source-binding",
+      "file": "packages/drizzle/src/trust-escapes-static.ts",
+      "kind": "digest",
+      "operations": ["hash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digest over analyzer-owned UTF-16 source code units; it binds trust-escape provenance without acquiring entropy, key material, or a keyed operation."
+    },
+    {
       "id": "crypto-door-024",
       "file": "packages/create-kovo/src/index.ts",
       "kind": "crypto-acquisition",
@@ -384,6 +392,14 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-escape-census-baseline",
+      "file": "scripts/escape-census-baseline.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digest binds representative build artifacts and review subjects; it acquires no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-061",
       "file": "scripts/escape-census-gate.mjs",
       "kind": "digest",
@@ -440,6 +456,14 @@
       "review": "Certificate generation hashes reviewed source and artifact bytes only; it never acquires secret-key or random authority."
     },
     {
+      "id": "crypto-door-security-evidence-subject",
+      "file": "scripts/lib/security-evidence-subject.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind retained Git blobs, complete source-tree membership, and canonical evidence bytes; this helper acquires no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-052",
       "file": "scripts/pack-public-packages.mjs",
       "kind": "digest",
@@ -470,6 +494,14 @@
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+    },
+    {
+      "id": "crypto-door-security-gate-mutations",
+      "file": "scripts/security-gate-mutations.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digest keys isolated-test baseline reuse by immutable source bytes; it acquires no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-056",

@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 278,
+    "historicalWitnesses": 326,
     "productions": 12
   },
   "productions": [
@@ -646,6 +646,24 @@
       "reason": "The same-snapshot capability, package-root, finite-IR, and semantic facts form one closed structural correspondence proof."
     },
     {
+      "anchor": "task-b-analysis-carrier-and-finite-diagnostic-census",
+      "corpus": "kv424-request-process",
+      "production": "structural-closure",
+      "reason": "The immutable compiler verdict binds the exact KV449, KV450, and KV452 census together with every normalized semantic graph consumed by TASK B."
+    },
+    {
+      "anchor": "task-b-complete-terminal-correspondence",
+      "corpus": "kv424-request-process",
+      "production": "structural-closure",
+      "reason": "Every non-egress finite terminal must correspond one-to-one with an independent same-source compiler operation fact, so omissions and duplicates retain the closed compiler-route verdict."
+    },
+    {
+      "anchor": "same-file-root-reference-correspondence",
+      "corpus": "kv424-request-process",
+      "production": "root-registration",
+      "reason": "One exact immutable same-file callable reference joins to the compiler-owned handler root; aliases, ambiguity, and reassignment retain the closed verdict."
+    },
+    {
       "anchor": "existing-dangerous-sink-closed-verdicts",
       "corpus": "kv424-request-process",
       "production": "exact-operation",
@@ -994,6 +1012,42 @@
       "reason": "This witness prevents closed, raw, or request-closed dependency rows from becoming loader authority."
     },
     {
+      "anchor": "dependency-browser-css-collector-boundary",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "The compiler-owned CSS collector preserves CSS and generated handler metadata while exposing an inert browser module and remaining ineligible for server-plugin authority."
+    },
+    {
+      "anchor": "dependency-browser-opacity-owned-chunk-import",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "A live binding imported from an owned sibling chunk retains its exact shared identity when opaque code can mutate it before a later executable-carrier projection."
+    },
+    {
+      "anchor": "dependency-browser-opacity-owned-chunk-import-variants",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Default and namespace-member imports preserve the same live cross-chunk identity as named imports instead of laundering it through a fresh plain-value verdict."
+    },
+    {
+      "anchor": "dependency-browser-opacity-owned-chunk-call-result",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Without a reviewed cross-chunk callable summary, an imported call result remains able to alias another live export and closes at an opaque transfer."
+    },
+    {
+      "anchor": "dependency-browser-opacity-owned-chunk-constructor-result",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Without a reviewed cross-chunk constructor summary, an imported construction result remains able to alias another live export and closes at an opaque transfer."
+    },
+    {
+      "anchor": "dependency-browser-opacity-owned-chunk-positive-control",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "An owned sibling chunk binding that never crosses an opaque boundary remains PLAIN-compatible, preventing eager closure of every imported local class."
+    },
+    {
       "anchor": "compiler-generated-wire-abi-provenance",
       "corpus": "capability-closure",
       "production": "module-boundary",
@@ -1148,6 +1202,12 @@
       "corpus": "browser-posture",
       "production": "module-boundary",
       "reason": "This witness binds compiler production, generated registry transport, and document response consumption across package boundaries."
+    },
+    {
+      "anchor": "computed-key-first-registry-identity-closure",
+      "corpus": "finite-security-operation-ir",
+      "production": "root-registration",
+      "reason": "A computed key-first mutation or query cannot diverge runtime identity from the compiler-owned root and therefore closes before application evaluation."
     },
     {
       "anchor": "derived-dataset-persistent-sink-provenance",
@@ -1724,6 +1784,234 @@
       "corpus": "drizzle-analyzer-provenance",
       "production": "positive-control",
       "reason": "This witness keeps a reviewed safe construction accepted without widening the classifier."
+    },
+    {
+      "anchor": "raw-response-refresh-compiler-closure",
+      "corpus": "response-transport-headers",
+      "production": "structural-closure",
+      "reason": "The compiler closes every finite raw Response header construction that can emit HTTP Refresh navigation."
+    },
+    {
+      "anchor": "browser-response-disposition-grammar",
+      "corpus": "browser-posture",
+      "production": "encoding-variant",
+      "reason": "Equivalent Content-Disposition casing, separators, and malformed parameter encodings reach one exact browser-response parser."
+    },
+    {
+      "anchor": "enhanced-navigation-download-boundary",
+      "corpus": "browser-posture",
+      "production": "platform-differential",
+      "reason": "Enhanced navigation preserves the browser download boundary instead of materializing attachment bytes as live DOM."
+    },
+    {
+      "anchor": "enhanced-mutation-attachment-boundary",
+      "corpus": "browser-posture",
+      "production": "runtime-floor",
+      "reason": "The browser runtime rejects attachment mutation bodies before any live-state sink can read them."
+    },
+    {
+      "anchor": "lifecycle-attachment-boundary",
+      "corpus": "browser-posture",
+      "production": "runtime-floor",
+      "reason": "Lifecycle refresh paths reload before attachment bodies can enter live-target or query state."
+    },
+    {
+      "anchor": "typed-read-attachment-boundary",
+      "corpus": "browser-posture",
+      "production": "runtime-floor",
+      "reason": "Typed reads refuse to materialize query truth from an attachment response body."
+    },
+    {
+      "anchor": "metric-e-review-subject-emission",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "The build analyzer binds every source and registry producer site to one exact counted Metric E root through a closed disposition."
+    },
+    {
+      "anchor": "metric-e-attestation-composition",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "The attestation CLI composes exact root review evidence with the runtime posture anchor while preserving explicit nonclaims about reviewer identity."
+    },
+    {
+      "anchor": "metric-e-escape-review-signature",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Detached review subjects cross the signer-excluded build boundary only through exact verification under the retained deployment anchor."
+    },
+    {
+      "anchor": "metric-e-round-signature-join",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "The round gate joins every retained measured root to one exact signed subject but leaves caller-supplied trust anchors explicitly unverified and nonqualifying."
+    },
+    {
+      "anchor": "dependency-configured-alias-identity-join",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "A configured Vite alias is admitted only when its authored edge, package export, manifest row, and resolved module identity join exactly."
+    },
+    {
+      "anchor": "dependency-browser-carrier-recursion-budget",
+      "corpus": "capability-closure",
+      "production": "budget-edge",
+      "reason": "Recursive callable evaluation reaches a shared finite step ceiling and returns a named opaque closed verdict."
+    },
+    {
+      "anchor": "dependency-browser-carrier-finite-budget",
+      "corpus": "capability-closure",
+      "production": "budget-edge",
+      "reason": "A large finite callable expansion reaches the exact shared evaluation-step ceiling and returns the named opaque closed verdict."
+    },
+    {
+      "anchor": "dependency-browser-opacity-finite-summary",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "A scope- and mode-sensitive finite summary admits a wide safe closure without raising the unchanged fail-closed analysis budget."
+    },
+    {
+      "anchor": "dependency-browser-opacity-stable-provenance-batch",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "A stable provenance batch reuses one finite safe summary while the repeated wide closure remains accepted."
+    },
+    {
+      "anchor": "dependency-browser-opacity-stable-binding-memo",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "Five thousand opaque transfers of one proved safe binding reuse a stable finite identity without widening the unchanged closed-analysis budget."
+    },
+    {
+      "anchor": "dependency-browser-opacity-late-member-alias",
+      "corpus": "capability-closure",
+      "production": "alias-or-binding",
+      "reason": "A member write through a later receiver alias resolves back to the exact object binding before the Worker sink is classified."
+    },
+    {
+      "anchor": "dependency-browser-opacity-mode-separation",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "Value-only callable inspection and whole-closure inspection retain distinct finite summary identities, so a safe projection cannot mask a poisoned capture."
+    },
+    {
+      "anchor": "dependency-browser-opacity-inline-closure-capture",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "An inline closure capture contributes its captured object to the closed structural graph before opaque transfer reaches the Worker sink."
+    },
+    {
+      "anchor": "dependency-browser-opacity-nested-return-capture",
+      "corpus": "capability-closure",
+      "production": "helper-transfer",
+      "reason": "A local callable returned through another local helper retains its free capture when the resulting callable enters an opaque container."
+    },
+    {
+      "anchor": "dependency-browser-opacity-direct-call-cache-invalidation",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "A cached local-callee summary is rechecked after prototype replacement enrolls the callable as an opaque constructor, so the later argument closes at the Worker sink."
+    },
+    {
+      "anchor": "dependency-browser-opacity-first-call-opaque-constructor",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "A first direct local-callee summary rejects a callable already enrolled as an opaque constructor, closing its structured argument before the retained Worker sink."
+    },
+    {
+      "anchor": "dependency-browser-opacity-returned-function-self",
+      "corpus": "capability-closure",
+      "production": "helper-transfer",
+      "reason": "A named function expression's self binding aliases the independently reachable outer function object, so returning it into an opaque container retains that closure."
+    },
+    {
+      "anchor": "dependency-browser-opacity-module-meta",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "The mutable per-module import.meta singleton closes when transferred to opaque code instead of being summarized as a fresh plain value."
+    },
+    {
+      "anchor": "dependency-browser-opacity-module-meta-return",
+      "corpus": "capability-closure",
+      "production": "helper-transfer",
+      "reason": "A local callable summary retains import.meta as a free module capture when the callable returns it into an opaque structured transfer."
+    },
+    {
+      "anchor": "dependency-browser-opacity-module-meta-member-alias",
+      "corpus": "capability-closure",
+      "production": "alias-or-binding",
+      "reason": "Arbitrary import.meta members preserve shared mutable provenance through a local alias and close at an opaque call boundary."
+    },
+    {
+      "anchor": "dependency-browser-opacity-unresolved-global",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "An unresolved browser binding retains ambient shared-global provenance and closes after opaque transfer instead of being laundered to a local plain value."
+    },
+    {
+      "anchor": "dependency-browser-opacity-unresolved-global-member",
+      "corpus": "capability-closure",
+      "production": "alias-or-binding",
+      "reason": "Member projections of an unresolved browser global retain the same ambient origin through an opaque transfer and later Worker sink."
+    },
+    {
+      "anchor": "dependency-browser-opacity-unresolved-global-return",
+      "corpus": "capability-closure",
+      "production": "helper-transfer",
+      "reason": "A summarized local callable preserves an unresolved ambient global capture when returning it into an opaque container."
+    },
+    {
+      "anchor": "dependency-browser-opacity-syntax-key-not-global",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "Parent-aware AST traversal excludes syntax-only class method keys from ambient-global capture while retaining real value references."
+    },
+    {
+      "anchor": "dependency-browser-opacity-poison-first",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "A poison observed before repeated safe transfers remains in the monotone browser-authority graph and cannot be overwritten by a cached safe summary."
+    },
+    {
+      "anchor": "dependency-browser-opacity-poison-late",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "A late provenance generation invalidates an older structured-opacity summary and replays the exact AST state to the Worker sink."
+    },
+    {
+      "anchor": "dependency-browser-opacity-shadowed-authority",
+      "corpus": "capability-closure",
+      "production": "alias-or-binding",
+      "reason": "Lexical scope is part of the memo identity, so locally shadowed Reflect and URL bindings cannot borrow ambient platform authority."
+    },
+    {
+      "anchor": "dependency-retained-browser-carrier-closure",
+      "corpus": "capability-closure",
+      "production": "alias-or-binding",
+      "reason": "Minified URL-constructor and import.meta.url base aliases remain joined at the retained client-artifact sink while local constructors and static URL bases remain accepted."
+    },
+    {
+      "anchor": "dependency-real-drizzle-noncarrier",
+      "corpus": "capability-closure",
+      "production": "positive-control",
+      "reason": "The retained real Drizzle eq graph remains admitted while client artifacts still close browser executable-carrier sinks."
+    },
+    {
+      "anchor": "dependency-closed-constructor-chain",
+      "corpus": "capability-closure",
+      "production": "helper-transfer",
+      "reason": "An unknown browser object preserves the value.constructor.constructor bridge into the dynamic-code sink."
+    },
+    {
+      "anchor": "dependency-invocation-adapter-closure",
+      "corpus": "capability-closure",
+      "production": "helper-transfer",
+      "reason": "Dynamic code, constructor capabilities, timers, and Reflect construction remain closed through invocation adapters while proved callback timers stay open."
+    },
+    {
+      "anchor": "dependency-browser-carrier-client-lane",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Browser executable-carrier evaluation is bound to client artifacts while server artifacts retain literal module-edge closure."
     }
   ]
 }

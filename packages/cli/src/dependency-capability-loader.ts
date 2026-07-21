@@ -1338,7 +1338,9 @@ type BrowserStaticAtom =
   | { readonly kind: 'dynamic-code'; readonly name: 'Function' | 'eval' }
   | { readonly kind: 'frames' }
   | { readonly kind: 'global' }
+  | { readonly kind: 'ambient-global' }
   | { readonly kind: 'module-meta' }
+  | { readonly kind: 'module-meta-member' }
   | { readonly kind: 'module-meta-url' }
   | {
       readonly constructor: {
@@ -1370,6 +1372,8 @@ type BrowserStaticAtom =
       readonly callArgumentIndex?: number;
       readonly callReceiver?: true;
       readonly kind: 'plain';
+      readonly opaqueImportResult?: true;
+      readonly sharedImport?: BrowserStaticBinding;
     }
   | { readonly kind: 'proxy-constructor' }
   | {
@@ -1399,6 +1403,7 @@ interface BrowserBindingSource {
 }
 
 interface BrowserStaticBinding {
+  imported: boolean;
   readonly scope: BrowserStaticScope;
   readonly sources: BrowserBindingSource[];
   opaque: boolean;
@@ -1415,6 +1420,17 @@ interface BrowserStaticIndex {
   readonly bindings: BrowserStaticBinding[];
   readonly bindingIdentifiers: WeakSet<object>;
   readonly callableEffects: WeakMap<object, BrowserStaticCallableEffects>;
+  readonly callableStructuredCaptures: WeakMap<
+    object,
+    readonly { readonly scope: BrowserStaticScope; readonly value: object }[]
+  >;
+  readonly directLocalCallables: WeakMap<
+    BrowserStaticBinding,
+    {
+      readonly callables?: readonly Extract<BrowserStaticAtom, { kind: 'namespace' }>[];
+      readonly generation: number;
+    }
+  >;
   readonly globalBindings: Map<string, BrowserStaticBinding>;
   readonly memberSources: WeakMap<object, Map<string, BrowserBindingSource[]>>;
   readonly opaqueConstructors: WeakSet<object>;
@@ -1427,6 +1443,8 @@ interface BrowserStaticIndex {
     object,
     WeakMap<BrowserStaticScope, BrowserStructuredOpaqueMemo>
   >;
+  readonly structuredOpaqueMemberIdentities: WeakMap<object, Map<string, object>>;
+  readonly structuredOpaqueGlobalIdentities: Map<string, object>;
   readonly superclassSources: WeakMap<
     object,
     {
@@ -2141,6 +2159,8 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
     bindings: [],
     bindingIdentifiers: new WeakSet(),
     callableEffects: new WeakMap(),
+    callableStructuredCaptures: new WeakMap(),
+    directLocalCallables: new WeakMap(),
     effectAnalysisClosed: false,
     globalBindings: new Map(),
     memberSources: new WeakMap(),
@@ -2151,6 +2171,8 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
     root,
     scopeByNode: new WeakMap(),
     structuredOpaqueMemo: new WeakMap(),
+    structuredOpaqueMemberIdentities: new WeakMap(),
+    structuredOpaqueGlobalIdentities: new Map(),
     superclassSources: new WeakMap(),
     opaqueGlobalBindings: false,
     sourceGeneration: 0,
@@ -2450,7 +2472,7 @@ function ensureBrowserBinding(
 ): BrowserStaticBinding {
   const existing = scope.bindings.get(name);
   if (existing !== undefined) return existing;
-  const binding: BrowserStaticBinding = { opaque: false, scope, sources: [] };
+  const binding: BrowserStaticBinding = { imported: false, opaque: false, scope, sources: [] };
   scope.bindings.set(name, binding);
   index.bindings.push(binding);
   return binding;
@@ -2459,7 +2481,12 @@ function ensureBrowserBinding(
 function ensureBrowserGlobalBinding(name: string, index: BrowserStaticIndex): BrowserStaticBinding {
   const existing = index.globalBindings.get(name);
   if (existing !== undefined) return existing;
-  const binding: BrowserStaticBinding = { opaque: false, scope: index.root, sources: [] };
+  const binding: BrowserStaticBinding = {
+    imported: false,
+    opaque: false,
+    scope: index.root,
+    sources: [],
+  };
   index.globalBindings.set(name, binding);
   return binding;
 }
@@ -2564,12 +2591,12 @@ function addPlainBrowserPattern(
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
 ): void {
-  addBrowserPatternBindings(
-    pattern,
-    scope,
-    { expression: { type: 'Literal', value: null }, projections: [], scope },
-    index,
-  );
+  if (!isAstRecord(pattern) || pattern.type !== 'Identifier' || typeof pattern.name !== 'string') {
+    addOpaqueBrowserPattern(pattern, scope, index);
+    return;
+  }
+  index.bindingIdentifiers.add(pattern);
+  ensureBrowserBinding(pattern.name, scope, index).imported = true;
 }
 
 function addBrowserPatternBindings(
@@ -2687,13 +2714,6 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
           member: record.left,
           scope,
         });
-        collectBrowserMemberAssignment(
-          record.left,
-          record.right,
-          record.operator === '=',
-          scope,
-          index,
-        );
       }
       if (record.operator === '=') {
         addBrowserAssignmentPattern(record.left, record.right, scope, index);
@@ -2730,7 +2750,6 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
           member: record.argument,
           scope,
         });
-        collectBrowserMemberAssignment(record.argument, undefined, false, scope, index);
       }
       markBrowserAssignmentPatternBindingsOpaque(record.argument, scope, index);
       deferredEffects.push(() => {
@@ -2894,11 +2913,17 @@ function collectBrowserOpaqueCallArguments(
   const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
   const calleeMember =
     isAstRecord(call.callee) && call.callee.type === 'MemberExpression' ? call.callee : undefined;
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  // A direct zero-argument call exposes no receiver or argument for the effect pass to taint. Its
+  // body assignments were already collected flow-insensitively, and the sink pass still reviews
+  // the invocation target itself (SPEC §6.6; C13).
+  if (calleeMember === undefined && args.length === 0) return;
+  const directLocalCallables =
+    calleeMember === undefined ? browserDirectLocalCallables(call, scope, index, state) : undefined;
   const calleeProperties =
     calleeMember === undefined
       ? undefined
       : browserStaticPropertyNames(calleeMember, scope, index, state);
-  const args = Array.isArray(call.arguments) ? call.arguments : [];
   if (
     calleeMember !== undefined &&
     (calleeProperties === undefined ||
@@ -2913,7 +2938,8 @@ function collectBrowserOpaqueCallArguments(
     for (const argument of args) markBrowserStructuredArgumentOpaque(argument, scope, index, state);
     return;
   }
-  const callee = evaluateBrowserStaticValue(call.callee, scope, index, state);
+  const callee =
+    directLocalCallables ?? evaluateBrowserStaticValue(call.callee, scope, index, state);
   if (
     callee.length > 0 &&
     callee.every(
@@ -3117,9 +3143,10 @@ function collectBrowserOpaqueConstructorArguments(
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
 ): void {
+  const args = Array.isArray(expression.arguments) ? expression.arguments : [];
+  if (args.length === 0) return;
   const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
   const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);
-  const args = Array.isArray(expression.arguments) ? expression.arguments : [];
   const affectedArguments = new Set<number>();
   const callables: Extract<BrowserStaticAtom, { kind: 'namespace' }>[] = [];
   let closed = callee.length === 0;
@@ -3630,15 +3657,37 @@ function markBrowserStructuredArgumentOpaque(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): void {
+  if (browserExpressionIsDefinitelyPrimitive(value)) return;
   const worklist: Array<{
     readonly candidate: unknown;
     readonly inspectClosure: boolean;
+    readonly key?: string;
+    readonly parent?: Readonly<Record<string, unknown>>;
     readonly scope: BrowserStaticScope;
   }> = [{ candidate: value, inspectClosure: false, scope }];
   while (worklist.length > 0) {
-    const { candidate, inspectClosure, scope: candidateScope } = worklist.pop()!;
+    const { candidate, inspectClosure, key, parent, scope: candidateScope } = worklist.pop()!;
     if (typeof candidate !== 'object' || candidate === null) continue;
-    if (!claimBrowserStructuredOpaqueState(candidate, candidateScope, inspectClosure, index)) {
+    if (
+      isAstRecord(candidate) &&
+      candidate.type === 'Identifier' &&
+      parent !== undefined &&
+      !browserIdentifierIsValueReference(candidate, parent, key, index.bindingIdentifiers)
+    ) {
+      continue;
+    }
+    if (!inspectClosure && browserExpressionIsDefinitelyPrimitive(candidate)) continue;
+    const inspectCandidateClosure =
+      inspectClosure || (isAstRecord(candidate) && browserAstFunctionType(String(candidate.type)));
+    const memoIdentity = browserStructuredOpaqueMemoIdentity(candidate, candidateScope, index);
+    if (
+      !claimBrowserStructuredOpaqueState(
+        memoIdentity.identity,
+        memoIdentity.scope,
+        inspectCandidateClosure,
+        index,
+      )
+    ) {
       continue;
     }
     if (!consumeBrowserStaticEvaluationStep(index, state)) {
@@ -3650,6 +3699,8 @@ function markBrowserStructuredArgumentOpaque(
         worklist.push({
           candidate: child,
           inspectClosure,
+          key,
+          parent,
           scope: isAstRecord(child)
             ? (index.scopeByNode.get(child) ?? candidateScope)
             : candidateScope,
@@ -3658,10 +3709,45 @@ function markBrowserStructuredArgumentOpaque(
       continue;
     }
     const record = candidate as Record<string, unknown>;
+    if (record.type === 'ArrayExpression') {
+      // The literal itself is the fresh heap root exposed to the opaque consumer. Closing that
+      // root closes every later projection through it; only leaves that can also be reached by an
+      // independent alias require their own opacity state.
+      index.opaqueMemberSources.add(record);
+      const elements = Array.isArray(record.elements) ? record.elements : [];
+      collectBrowserStructuredOpacityLeaves(elements, candidateScope, index, state, worklist);
+      continue;
+    }
+    if (record.type === 'ObjectExpression') {
+      index.opaqueMemberSources.add(record);
+      const properties = Array.isArray(record.properties) ? record.properties : [];
+      const children: unknown[] = [];
+      for (const property of properties) {
+        if (!isAstRecord(property)) continue;
+        children.push(property.type === 'Property' ? property.value : property.argument);
+      }
+      collectBrowserStructuredOpacityLeaves(children, candidateScope, index, state, worklist);
+      continue;
+    }
     const expression = record.type === 'SpreadElement' ? record.argument : record;
     for (const atom of evaluateBrowserStaticValue(expression, candidateScope, index, state)) {
       if (atom.kind === 'global') {
         index.opaqueGlobalBindings = true;
+      } else if (atom.kind === 'plain' && atom.opaqueImportResult === true) {
+        // Without a cross-chunk callable summary, an imported call/constructor result may alias
+        // any other live export from that chunk. Reject its opaque transfer rather than inventing
+        // a fresh-result guarantee the current artifact proof does not carry.
+        index.effectAnalysisClosed = true;
+      } else if (atom.kind === 'plain' && atom.sharedImport !== undefined) {
+        // An owned sibling chunk is reviewed, but its live ESM export remains independently
+        // reachable across the chunk boundary. Preserve the binding identity through PLAIN-like
+        // evaluation so an opaque consumer cannot mutate it and have a later projection regain a
+        // trusted verdict (SPEC §6.6; C13).
+        markBrowserBindingOpaque(atom.sharedImport, index);
+      } else if (atom.kind === 'module-meta' || atom.kind === 'module-meta-member') {
+        // `import.meta` is a mutable per-module singleton. Its arbitrary host-defined members may
+        // also be shared objects, so an opaque transfer cannot be summarized as a fresh value.
+        index.effectAnalysisClosed = true;
       } else if (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') {
         index.opaqueMemberSources.add(atom.node);
         if (atom.node !== record) {
@@ -3677,34 +3763,365 @@ function markBrowserStructuredArgumentOpaque(
         index.opaqueMemberSources.add(atom.constructor.node);
       }
     }
-    if (inspectClosure) {
+    if (inspectCandidateClosure && browserAstFunctionType(String(record.type))) {
+      for (const capture of browserStaticCallableStructuredCaptures(record, index)) {
+        worklist.push({
+          candidate: capture.value,
+          inspectClosure: true,
+          scope: capture.scope,
+        });
+      }
+    } else if (inspectCandidateClosure) {
       for (const [key, child] of Object.entries(record)) {
         if (browserAstMetadataKeys.has(key)) continue;
         const childScope = isAstRecord(child)
           ? (index.scopeByNode.get(child) ?? candidateScope)
           : candidateScope;
-        worklist.push({ candidate: child, inspectClosure: true, scope: childScope });
-      }
-    } else if (record.type === 'ArrayExpression') {
-      const elements = Array.isArray(record.elements) ? record.elements : [];
-      for (const child of elements) {
-        const childScope = isAstRecord(child)
-          ? (index.scopeByNode.get(child) ?? candidateScope)
-          : candidateScope;
-        worklist.push({ candidate: child, inspectClosure: false, scope: childScope });
-      }
-    } else if (record.type === 'ObjectExpression') {
-      const properties = Array.isArray(record.properties) ? record.properties : [];
-      for (const property of properties) {
-        if (!isAstRecord(property)) continue;
-        const child = property.type === 'Property' ? property.value : property.argument;
-        const childScope = isAstRecord(child)
-          ? (index.scopeByNode.get(child) ?? candidateScope)
-          : candidateScope;
-        worklist.push({ candidate: child, inspectClosure: false, scope: childScope });
+        worklist.push({
+          candidate: child,
+          inspectClosure: true,
+          key,
+          parent: record,
+          scope: childScope,
+        });
       }
     }
   }
+}
+
+/**
+ * Flatten fresh literal containers before entering the budgeted opacity worklist. Once their root
+ * is opaque, every projection through that root is already CLOSED; separately marking each nested
+ * literal cannot strengthen that verdict. Only externally aliasable leaves and closures need their
+ * own opacity state so a later use outside the root projection remains closed (SPEC §6.6; C13).
+ */
+function collectBrowserStructuredOpacityLeaves(
+  values: readonly unknown[],
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+  worklist: Array<{
+    readonly candidate: unknown;
+    readonly inspectClosure: boolean;
+    readonly key?: string;
+    readonly parent?: Readonly<Record<string, unknown>>;
+    readonly scope: BrowserStaticScope;
+  }>,
+): void {
+  const pending = values.map((value) => ({ scope, value }));
+  const seenContainers = new Set<object>();
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (browserExpressionIsDefinitelyPrimitive(current.value)) continue;
+    if (!isAstRecord(current.value)) continue;
+    const candidateScope = index.scopeByNode.get(current.value) ?? current.scope;
+    if (current.value.type === 'CallExpression') {
+      const localCallables = browserDirectLocalCallables(
+        current.value,
+        candidateScope,
+        index,
+        state,
+      );
+      if (localCallables !== undefined) {
+        const args = Array.isArray(current.value.arguments) ? current.value.arguments : [];
+        for (const argument of args) pending.push({ scope: candidateScope, value: argument });
+        for (const callable of localCallables) {
+          for (const capture of browserStaticCallableStructuredCaptures(callable.node, index)) {
+            worklist.push({
+              candidate: capture.value,
+              inspectClosure: true,
+              scope: capture.scope,
+            });
+          }
+        }
+        continue;
+      }
+    }
+    if (current.value.type === 'SpreadElement') {
+      pending.push({ scope: candidateScope, value: current.value.argument });
+      continue;
+    }
+    if (current.value.type === 'ArrayExpression') {
+      if (seenContainers.has(current.value)) continue;
+      seenContainers.add(current.value);
+      const elements = Array.isArray(current.value.elements) ? current.value.elements : [];
+      for (const element of elements) pending.push({ scope: candidateScope, value: element });
+      continue;
+    }
+    if (current.value.type === 'ObjectExpression') {
+      if (seenContainers.has(current.value)) continue;
+      seenContainers.add(current.value);
+      const properties = Array.isArray(current.value.properties) ? current.value.properties : [];
+      for (const property of properties) {
+        if (!isAstRecord(property)) continue;
+        pending.push({
+          scope: candidateScope,
+          value: property.type === 'Property' ? property.value : property.argument,
+        });
+      }
+      continue;
+    }
+    worklist.push({ candidate: current.value, inspectClosure: false, scope: candidateScope });
+  }
+}
+
+function browserDirectLocalCallables(
+  call: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): readonly Extract<BrowserStaticAtom, { kind: 'namespace' }>[] | undefined {
+  if (!isAstRecord(call.callee) || call.callee.type !== 'Identifier') return undefined;
+  if (typeof call.callee.name !== 'string' || call.callee.name === 'arguments') return undefined;
+  const binding = lookupBrowserBinding(call.callee.name, scope);
+  if (binding === undefined || binding.opaque) return undefined;
+  const cached = index.directLocalCallables.get(binding);
+  if (cached?.generation === index.sourceGeneration) {
+    return cached.callables?.some((callable) => index.opaqueConstructors.has(callable.node)) ===
+      true
+      ? undefined
+      : cached.callables;
+  }
+  const atoms = evaluateBrowserBinding(binding, index, state);
+  const callables = atoms.every(
+    (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
+      atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type)),
+  )
+    ? atoms
+    : undefined;
+  index.directLocalCallables.set(
+    binding,
+    callables === undefined
+      ? { generation: index.sourceGeneration }
+      : { callables, generation: index.sourceGeneration },
+  );
+  return callables;
+}
+
+function browserStaticCallableStructuredCaptures(
+  callable: object,
+  index: BrowserStaticIndex,
+): readonly { readonly scope: BrowserStaticScope; readonly value: object }[] {
+  const cached = index.callableStructuredCaptures.get(callable);
+  if (cached !== undefined) return cached;
+  if (!isAstRecord(callable) || !isAstRecord(callable.body)) return [];
+  const bodyScope = index.scopeByNode.get(callable.body) ?? index.root;
+  const callableScope = nearestBrowserFunctionScope(bodyScope);
+  const selfBinding =
+    callable.type === 'FunctionExpression' &&
+    isAstRecord(callable.id) &&
+    callable.id.type === 'Identifier' &&
+    typeof callable.id.name === 'string'
+      ? callableScope.bindings.get(callable.id.name)
+      : undefined;
+  const captures: { readonly scope: BrowserStaticScope; readonly value: object }[] = [];
+  const capturedBindings = new Set<BrowserStaticBinding>();
+  const capturedGlobals = new Set<string>();
+  const seen = new Set<object>();
+  const pending: Array<{
+    readonly key?: string;
+    readonly parent?: Readonly<Record<string, unknown>>;
+    readonly value: unknown;
+  }> = [
+    { key: 'body', parent: callable, value: callable.body },
+    ...(Array.isArray(callable.params)
+      ? callable.params.map((value) => ({ key: 'params', parent: callable, value }))
+      : []),
+  ];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (typeof current.value !== 'object' || current.value === null) continue;
+    if (Array.isArray(current.value)) {
+      for (const child of current.value) {
+        pending.push({ key: current.key, parent: current.parent, value: child });
+      }
+      continue;
+    }
+    const record = current.value as Record<string, unknown>;
+    if (seen.has(record)) continue;
+    seen.add(record);
+    const recordScope = index.scopeByNode.get(record) ?? bodyScope;
+    if (
+      browserAstIsImportMeta(record) &&
+      !browserImportMetaIsDirectUrlProjection(record, current.parent, current.key) &&
+      !capturedGlobals.has('import.meta')
+    ) {
+      capturedGlobals.add('import.meta');
+      captures.push({ scope: recordScope, value: record });
+    }
+    if (
+      record.type === 'Identifier' &&
+      typeof record.name === 'string' &&
+      browserIdentifierIsValueReference(
+        record,
+        current.parent,
+        current.key,
+        index.bindingIdentifiers,
+      )
+    ) {
+      const binding =
+        record.name === 'arguments'
+          ? lookupBrowserArgumentsBinding(recordScope)
+          : lookupBrowserBinding(record.name, recordScope);
+      if (binding !== undefined) {
+        // A named function expression's local name resolves inside the callable scope, but its
+        // value is still the same function object independently reachable through the outer
+        // binding. Returning that self value to an opaque consumer must therefore close the outer
+        // alias just like an ordinary free capture (SPEC §6.6; C13).
+        if (
+          (binding === selfBinding || !browserScopeIsWithin(binding.scope, callableScope)) &&
+          !capturedBindings.has(binding)
+        ) {
+          capturedBindings.add(binding);
+          captures.push({ scope: recordScope, value: record });
+        }
+      } else if (!capturedGlobals.has(record.name)) {
+        capturedGlobals.add(record.name);
+        captures.push({ scope: recordScope, value: record });
+      }
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (!browserAstMetadataKeys.has(key)) pending.push({ key, parent: record, value: child });
+    }
+  }
+  index.callableStructuredCaptures.set(callable, captures);
+  return captures;
+}
+
+function browserStructuredOpaqueMemoIdentity(
+  candidate: object,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): { readonly identity: object; readonly scope: BrowserStaticScope } {
+  const path = browserStructuredOpaqueStaticPath(candidate, scope, index, 0);
+  if (path === undefined) return { identity: candidate, scope };
+  if (path.properties.length === 0) return { identity: path.root, scope: path.scope };
+  let identities = index.structuredOpaqueMemberIdentities.get(path.root);
+  if (identities === undefined) {
+    identities = new Map();
+    index.structuredOpaqueMemberIdentities.set(path.root, identities);
+  }
+  const pathKey = JSON.stringify(path.properties);
+  let identity = identities.get(pathKey);
+  if (identity === undefined) {
+    identity = {};
+    identities.set(pathKey, identity);
+  }
+  return { identity, scope: path.scope };
+}
+
+function browserStructuredOpaqueStaticPath(
+  candidate: object,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  depth: number,
+):
+  | {
+      readonly properties: readonly string[];
+      readonly root: object;
+      readonly scope: BrowserStaticScope;
+    }
+  | undefined {
+  if (!isAstRecord(candidate) || depth > 48) return undefined;
+  if (candidate.type === 'ChainExpression' && isAstRecord(candidate.expression)) {
+    return browserStructuredOpaqueStaticPath(candidate.expression, scope, index, depth + 1);
+  }
+  if (candidate.type === 'Identifier' && typeof candidate.name === 'string') {
+    const binding =
+      candidate.name === 'arguments'
+        ? lookupBrowserArgumentsBinding(scope)
+        : lookupBrowserBinding(candidate.name, scope);
+    const stableBinding = binding ?? index.globalBindings.get(candidate.name);
+    if (stableBinding !== undefined) {
+      return { properties: [], root: stableBinding, scope: stableBinding.scope };
+    }
+    if (candidate.name === 'arguments') return undefined;
+    let globalIdentity = index.structuredOpaqueGlobalIdentities.get(candidate.name);
+    if (globalIdentity === undefined) {
+      globalIdentity = {};
+      index.structuredOpaqueGlobalIdentities.set(candidate.name, globalIdentity);
+    }
+    return { properties: [], root: globalIdentity, scope: index.root };
+  }
+  if (candidate.type !== 'MemberExpression' || !isAstRecord(candidate.object)) return undefined;
+  const parent = browserStructuredOpaqueStaticPath(candidate.object, scope, index, depth + 1);
+  if (parent === undefined) return undefined;
+  const property = browserSyntacticStaticPropertyName(candidate);
+  return property === undefined
+    ? undefined
+    : { ...parent, properties: [...parent.properties, property] };
+}
+
+function browserSyntacticStaticPropertyName(
+  member: Readonly<Record<string, unknown>>,
+): string | undefined {
+  if (
+    member.computed !== true &&
+    isAstRecord(member.property) &&
+    member.property.type === 'Identifier' &&
+    typeof member.property.name === 'string'
+  ) {
+    return member.property.name;
+  }
+  return literalAstString(member.property);
+}
+
+function browserAstIsImportMeta(value: unknown): value is Record<string, unknown> {
+  return (
+    isAstRecord(value) &&
+    value.type === 'MetaProperty' &&
+    isAstRecord(value.meta) &&
+    value.meta.type === 'Identifier' &&
+    value.meta.name === 'import' &&
+    isAstRecord(value.property) &&
+    value.property.type === 'Identifier' &&
+    value.property.name === 'meta'
+  );
+}
+
+function browserImportMetaIsDirectUrlProjection(
+  moduleMeta: object,
+  parent: Readonly<Record<string, unknown>> | undefined,
+  key: string | undefined,
+): boolean {
+  return (
+    key === 'object' &&
+    parent?.type === 'MemberExpression' &&
+    parent.object === moduleMeta &&
+    browserSyntacticStaticPropertyName(parent) === 'url'
+  );
+}
+
+function browserExpressionIsDefinitelyPrimitive(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return true;
+  if (!isAstRecord(value)) return false;
+  if (value.type === 'SpreadElement') return browserExpressionIsDefinitelyPrimitive(value.argument);
+  if (value.type === 'Literal') {
+    return (
+      value.regex === undefined &&
+      (value.value === null ||
+        typeof value.value === 'bigint' ||
+        typeof value.value === 'boolean' ||
+        typeof value.value === 'number' ||
+        typeof value.value === 'string')
+    );
+  }
+  if (
+    value.type === 'BinaryExpression' ||
+    value.type === 'TemplateLiteral' ||
+    value.type === 'UnaryExpression' ||
+    value.type === 'UpdateExpression'
+  ) {
+    return true;
+  }
+  if (value.type === 'SequenceExpression') {
+    const expressions = Array.isArray(value.expressions) ? value.expressions : [];
+    return expressions.length > 0 && browserExpressionIsDefinitelyPrimitive(expressions.at(-1));
+  }
+  if (value.type === 'AssignmentExpression') {
+    return browserExpressionIsDefinitelyPrimitive(value.right);
+  }
+  return false;
 }
 
 function claimBrowserStructuredOpaqueState(
@@ -4352,7 +4769,7 @@ function evaluateBrowserBinding(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): BrowserStaticAtom[] {
-  if (!binding.opaque && binding.sources.length === 0) {
+  if (!binding.opaque && !binding.imported && binding.sources.length === 0) {
     state.provenanceDependencies?.bindings.add(binding);
   }
   if (!consumeBrowserStaticEvaluationStep(index, state)) return [{ kind: 'closed' }];
@@ -4369,7 +4786,11 @@ function evaluateBrowserBinding(
   const bindingStack = new Set(state.bindingStack);
   bindingStack.add(binding);
   const nextState = nextBrowserStaticEvaluationState(state, bindingStack);
-  const atoms: BrowserStaticAtom[] = binding.opaque ? [{ kind: 'closed' }] : [];
+  const atoms: BrowserStaticAtom[] = binding.opaque
+    ? [{ kind: 'closed' }]
+    : binding.imported
+      ? [{ kind: 'plain', sharedImport: binding }]
+      : [];
   for (const source of binding.sources) {
     let projected = evaluateBrowserStaticValue(source.expression, source.scope, index, nextState);
     for (const projection of source.projections) {
@@ -4412,15 +4833,7 @@ function evaluateBrowserStaticValue(
       ? [...atoms, { kind: 'closed' }]
       : atoms;
   }
-  if (
-    value.type === 'MetaProperty' &&
-    isAstRecord(value.meta) &&
-    value.meta.type === 'Identifier' &&
-    value.meta.name === 'import' &&
-    isAstRecord(value.property) &&
-    value.property.type === 'Identifier' &&
-    value.property.name === 'meta'
-  ) {
+  if (browserAstIsImportMeta(value)) {
     return [{ kind: 'module-meta' }];
   }
   if (value.type === 'ThisExpression') {
@@ -4444,7 +4857,7 @@ function evaluateBrowserStaticValue(
     const ambient = browserAmbientIdentifierAtoms(value.name);
     if (ambient !== undefined) return ambient;
     state.provenanceDependencies?.globals.add(value.name);
-    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'plain' }];
+    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'ambient-global' }];
   }
   const literal = literalAstString(value);
   if (literal !== undefined) return [{ kind: 'string', value: literal }];
@@ -4553,6 +4966,9 @@ function evaluateBrowserStaticValue(
         evaluateBrowserStaticCallable(atom, args, scope, index, nextState),
       );
     }
+    if (callee.some((atom) => atom.kind === 'plain' && atom.sharedImport !== undefined)) {
+      return [{ kind: 'plain', opaqueImportResult: true }];
+    }
     return [{ kind: 'closed' }];
   }
   if (value.type === 'NewExpression') {
@@ -4595,6 +5011,9 @@ function evaluateBrowserStaticValue(
     );
     if (localConstructors.length > 0 && localConstructors.length === callee.length) {
       return localConstructors.map((constructor) => ({ constructor, kind: 'instance' }));
+    }
+    if (callee.some((atom) => atom.kind === 'plain' && atom.sharedImport !== undefined)) {
+      return [{ kind: 'plain', opaqueImportResult: true }];
     }
     return [{ kind: 'closed' }];
   }
@@ -4779,6 +5198,13 @@ function browserMemberAtoms(
   for (const receiver of receivers) {
     if (properties === undefined) {
       if (
+        receiver.kind === 'plain' &&
+        (receiver.opaqueImportResult === true || receiver.sharedImport !== undefined)
+      ) {
+        atoms.push(receiver);
+      } else if (receiver.kind === 'ambient-global') {
+        atoms.push({ kind: 'ambient-global' });
+      } else if (
         receiver.kind === 'global' ||
         receiver.kind === 'navigator' ||
         receiver.kind === 'css' ||
@@ -4786,7 +5212,11 @@ function browserMemberAtoms(
         receiver.kind === 'frames'
       ) {
         atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
-      } else if (receiver.kind === 'closed' || receiver.kind === 'module-meta') {
+      } else if (
+        receiver.kind === 'closed' ||
+        receiver.kind === 'module-meta' ||
+        receiver.kind === 'module-meta-member'
+      ) {
         atoms.push({ kind: 'closed' });
       } else {
         atoms.push({ kind: 'plain' });
@@ -4809,7 +5239,13 @@ function browserMemberAtoms(
         continue;
       }
       if (receiver.kind === 'module-meta') {
-        atoms.push(property === 'url' ? { kind: 'module-meta-url' } : { kind: 'plain' });
+        atoms.push(
+          property === 'url' ? { kind: 'module-meta-url' } : { kind: 'module-meta-member' },
+        );
+      } else if (receiver.kind === 'module-meta-member') {
+        atoms.push({ kind: 'module-meta-member' });
+      } else if (receiver.kind === 'ambient-global') {
+        atoms.push({ kind: 'ambient-global' });
       } else if (receiver.kind === 'global') {
         if (property === 'Worker' || property === 'SharedWorker') {
           atoms.push({ kind: 'worker', name: property });
@@ -4953,6 +5389,11 @@ function browserMemberAtoms(
           atoms.push(receiver);
         } else if (property === 'constructor') {
           atoms.push({ kind: 'constructor-value' });
+          if (receiver.opaqueImportResult === true || receiver.sharedImport !== undefined) {
+            atoms.push(receiver);
+          }
+        } else if (receiver.opaqueImportResult === true || receiver.sharedImport !== undefined) {
+          atoms.push(receiver);
         } else {
           atoms.push({ kind: 'plain' });
         }

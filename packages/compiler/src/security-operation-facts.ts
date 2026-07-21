@@ -18,6 +18,69 @@ import type { MutationHandlerModel, ServerSecurityOperationModel } from './scan/
 import { serverSecuritySemanticBudgets } from './scan/security-operation-ir.js';
 import type { BrowserSecurityOperationFact, HandlerLowering } from './types.js';
 
+/** Spanful compiler sibling facts retained solely for TASK B terminal correspondence. @internal */
+export interface CompilerTaskBSourceOperation {
+  readonly door: ServerSecurityOperationModel['door'];
+  readonly kind: ServerSecurityOperationModel['kind'];
+  readonly root: string;
+  readonly span: Readonly<ServerSecurityOperationModel['span']>;
+  readonly target?: string;
+}
+
+/**
+ * Preserve the exact per-root source operations before the public graph projection strips spans.
+ * TASK B binds this sibling denominator into its finite-verdict digest and independently compares
+ * it with every proved semantic terminal (SPEC §6.6).
+ *
+ * @internal
+ */
+export function componentTaskBSourceOperationFacts(
+  model: ComponentModuleModel,
+): CompilerTaskBSourceOperation[] {
+  const operations: CompilerTaskBSourceOperation[] = [];
+  appendTaskBHandlerSourceOperations(operations, model.mutationHandlers, 'Mutation TASK B source');
+  appendTaskBHandlerSourceOperations(operations, model.endpointHandlers, 'Endpoint TASK B source');
+  appendTaskBHandlerSourceOperations(operations, model.queryHandlers, 'Query TASK B source');
+  appendTaskBHandlerSourceOperations(operations, model.webhookHandlers, 'Webhook TASK B source');
+  appendTaskBHandlerSourceOperations(operations, model.taskRunHandlers, 'Task TASK B source');
+  appendTaskBHandlerSourceOperations(operations, model.agentHandlers, 'Agent TASK B source');
+  return operations;
+}
+
+function appendTaskBHandlerSourceOperations(
+  target: CompilerTaskBSourceOperation[],
+  handlers: readonly MutationHandlerModel[],
+  label: string,
+): void {
+  const handlerSnapshot = compilerSnapshotDenseArray(handlers, `${label} handlers`);
+  for (let handlerIndex = 0; handlerIndex < handlerSnapshot.length; handlerIndex += 1) {
+    const handler = handlerSnapshot[handlerIndex]!;
+    const operationSnapshot = compilerSnapshotDenseArray(
+      handler.securityOperations ?? [],
+      `${label} operations`,
+    );
+    if (operationSnapshot.length === 0) continue;
+    const root = handler.securitySemanticRoot?.root;
+    if (root === undefined) {
+      throw new TypeError(`${label}[${handlerIndex}] has operations without one semantic root.`);
+    }
+    for (let operationIndex = 0; operationIndex < operationSnapshot.length; operationIndex += 1) {
+      const operation = operationSnapshot[operationIndex]! as ServerSecurityOperationModel;
+      compilerArrayAppend(
+        target,
+        {
+          door: operation.door,
+          kind: operation.kind,
+          root,
+          span: { end: operation.span.end, start: operation.span.start },
+          ...(operation.target === undefined ? {} : { target: operation.target }),
+        },
+        label,
+      );
+    }
+  }
+}
+
 /** Compiler-owned, span-free operation facts suitable for generated artifacts and explain JSON. */
 export function componentSecurityOperationFacts(
   model: ComponentModuleModel,
@@ -72,6 +135,7 @@ export function componentSecuritySemanticGraphFacts(
     budgets: serverSecuritySemanticBudgets(),
     roots,
     schema: securitySemanticGraphSchema,
+    sourceFile: model.sourceFile.fileName,
   };
 }
 

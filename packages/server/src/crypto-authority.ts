@@ -403,6 +403,7 @@ export function createRuntimeAttestationVerificationHandle(): RuntimeAttestation
           key: publicKeyDer,
           type: 'spki',
         });
+        if (publicKey.asymmetricKeyType !== 'ed25519') return false;
         return nativeVerify(null, payloadBytes(payload), publicKey, signatureBytes);
       } catch {
         return false;

@@ -10,7 +10,137 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(337);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(431);
+  });
+
+  it('enrolls finite structured-opacity summary forcing mutants', () => {
+    const names = [
+      'dependency-loader/collapse-structured-opacity-provenance-phase',
+      'dependency-loader/drop-direct-local-callable-cache-recheck',
+      'dependency-loader/drop-returned-function-self-capture',
+      'dependency-loader/drop-structured-opacity-cache-hit-pruning',
+      'dependency-loader/drop-structured-opacity-callable-free-captures',
+      'dependency-loader/drop-structured-opacity-mode-separation',
+      'dependency-loader/drop-structured-opacity-static-path-identity',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
+  });
+
+  it('enrolls computed registry identity and complete TASK B correspondence forcing mutants', () => {
+    const expected = [
+      'cli-build/drop-pre-evaluation-kv235-enrollment',
+      'compiler-authoring/drop-computed-registry-key-closure',
+      'drizzle-task-b/drop-complete-terminal-correspondence',
+      'drizzle-task-b/drop-duplicate-terminal-trace-closure',
+      'drizzle-task-b/drop-same-file-root-reference',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => expected.includes(mutant.name));
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(expected.sort());
+    expect(
+      mutants.filter((mutant) => mutant.behavioralTypeScript === true).map((mutant) => mutant.name),
+    ).toEqual(
+      expect.arrayContaining([
+        'compiler-authoring/drop-computed-registry-key-closure',
+        'drizzle-task-b/drop-same-file-root-reference',
+      ]),
+    );
+  });
+
+  it('enrolls the CSS-only client artifact boundary forcing mutants', () => {
+    const expected = [
+      'cli-build/restore-css-collector-server-plugin',
+      'cli-build/restore-css-modulepreload-polyfill',
+      'compiler-vite/allow-css-collector-server-owner',
+      'compiler-vite/drop-css-collector-inert-transform',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => expected.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(expected.sort());
+    expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
+  });
+
+  it('enrolls the dependency-loader and Metric E exact-evidence closure mutants', () => {
+    const names = [
+      'dependency-loader/drop-configured-alias-identity-join',
+      'dependency-loader/drop-ambient-global-member-provenance',
+      'dependency-loader/drop-callable-module-meta-capture',
+      'dependency-loader/drop-authority-escape-closure',
+      'dependency-loader/drop-class-superclass-authority-closure',
+      'dependency-loader/drop-closed-receiver-constructor-bridge',
+      'dependency-loader/drop-constructor-value-call-closure',
+      'dependency-loader/drop-dynamic-code-carrier-closure',
+      'dependency-loader/drop-direct-safe-timer-precision',
+      'dependency-loader/drop-imperative-event-registration-closure',
+      'dependency-loader/drop-known-callable-constructor-bridge',
+      'dependency-loader/drop-module-meta-url-projection',
+      'dependency-loader/drop-module-meta-member-provenance',
+      'dependency-loader/drop-module-meta-structured-closure',
+      'dependency-loader/drop-superclass-invocation-authority-closure',
+      'dependency-loader/drop-structured-return-origin-closure',
+      'dependency-loader/drop-structured-opacity-value-reference-filter',
+      'dependency-loader/drop-unresolved-ambient-global-provenance',
+      'dependency-loader/drop-proved-timer-callback-closure',
+      'dependency-loader/drop-url-constructor-alias-closure',
+      'dependency-loader/drop-url-base-constructor-join',
+      'dependency-loader/drop-url-spread-argument-expansion',
+      'dependency-loader/weaken-callable-recursion-closure',
+      'dependency-loader/weaken-opaque-template-literal-closure',
+      'dependency-loader/widen-browser-carrier-to-server-lane',
+      'dependency-loader/widen-browser-static-evaluation-budget',
+      'escape-census-baseline/drop-independent-producer-oracle',
+      'escape-census-baseline/drop-artifact-subject-recomputation',
+      'escape-census-baseline/drop-semantic-root-surplus-closure',
+      'escape-census-baseline/read-legacy-handler-root-field',
+      'escape-census-gate/drop-audit-identity-control-closure',
+      'escape-census-gate/drop-colon-path-closure',
+      'escape-census-gate/drop-invisible-path-closure',
+      'escape-census-gate/drop-json-report-identity-quoting',
+      'escape-census-gate/drop-semantic-root-surplus-closure',
+      'escape-census-gate/drop-sink-target-identity-closure',
+      'escape-census-gate/read-legacy-handler-root-field',
+      'escape-census-gate/weaken-identity-boundary-whitespace',
+      'escape-census-emitter/drop-semantic-root-surplus-closure',
+      'escape-census-emitter/read-legacy-handler-root-field',
+      'escape-census-emitter/drop-closed-root-disposition',
+      'escape-census-emitter/widen-sites-across-counted-roots',
+      'escape-census-review/drop-duplicate-root-identity-closure',
+      'escape-census-review/drop-producer-site-bound',
+      'cli-task-b-build/drop-finite-diagnostic-carrier',
+      'cli-task-b-build/drop-kv449-finite-diagnostic',
+      'cli-task-b-build/drop-kv450-finite-diagnostic',
+      'cli-task-b-build/drop-kv452-finite-diagnostic',
+      'cli-task-b-build/drop-route-finite-diagnostic-carrier',
+      'cli-task-b-build/drop-route-ordinary-diagnostic-carrier',
+      'cli-task-b-compile/drop-finite-diagnostic-carrier',
+      'cli-task-b-compile/drop-kv449-finite-diagnostic',
+      'cli-task-b-compile/drop-kv450-finite-diagnostic',
+      'cli-task-b-compile/drop-kv452-finite-diagnostic',
+      'cli-task-b-compile/drop-route-finite-diagnostic-carrier',
+      'metric-e/count-caller-anchor-as-reviewed',
+      'metric-e/drop-app-package-root-join',
+      'metric-e/drop-build-export-comparability-input',
+      'metric-e/drop-ceiling-package-denominator',
+      'metric-e/drop-code-subject-ancestry-closure',
+      'metric-e/drop-compiler-source-tree-comparability',
+      'metric-e/drop-core-door-comparability-input',
+      'metric-e/drop-runtime-review-verifier',
+      'metric-e/drop-exact-series-shape-closure',
+      'metric-e/drop-real-calendar-date-closure',
+      'metric-e/drop-retained-source-hash-binding',
+      'metric-e/drop-retained-source-length-binding',
+      'metric-e/drop-retained-source-slice-binding',
+      'metric-e/drop-retained-source-verification-wiring',
+      'metric-e/qualify-unauthenticated-independent-review',
+      'metric-e/weaken-timestamp-order-to-lexicographic',
+      'runtime-review/drop-ed25519-key-type-closure',
+    ];
+    const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
+
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual(names.sort());
+    expect(mutants.every((mutant) => mutant.sourceOnly === true)).toBe(true);
   });
 
   it('bounds behavioral bundle retention without dropping a forcing mutant', () => {
@@ -33,37 +163,72 @@ describe('security-gate-mutations', () => {
     expect(mutants.map((mutant) => mutant.name).sort()).toEqual(
       [
         'dependency-loader/allow-bare-bundle-key-collision',
+        'dependency-loader/drop-ambient-global-member-provenance',
+        'dependency-loader/collapse-structured-opacity-provenance-phase',
+        'dependency-loader/drop-authority-escape-closure',
+        'dependency-loader/drop-configured-alias-identity-join',
         'dependency-loader/drop-artifact-url-ambiguity-closure',
         'dependency-loader/drop-array-join-coercion-closure',
         'dependency-loader/drop-cjs-loader-alias-closure',
+        'dependency-loader/drop-class-superclass-authority-closure',
+        'dependency-loader/drop-callable-module-meta-capture',
         'dependency-loader/drop-closed-carrier-constructor-closure',
+        'dependency-loader/drop-closed-receiver-constructor-bridge',
+        'dependency-loader/drop-constructor-value-call-closure',
         'dependency-loader/drop-constructor-affected-argument-closure',
         'dependency-loader/drop-direct-export-ownership-closure',
+        'dependency-loader/drop-direct-local-callable-cache-recheck',
+        'dependency-loader/drop-direct-safe-timer-precision',
         'dependency-loader/drop-direct-ssr-external-overlap-closure',
         'dependency-loader/drop-executable-asset-carrier-closure',
+        'dependency-loader/drop-dynamic-code-carrier-closure',
         'dependency-loader/drop-external-html-module-closure',
         'dependency-loader/drop-html-base-target-closure',
         'dependency-loader/drop-html-element-control-closure',
         'dependency-loader/drop-html-nested-document-closure',
         'dependency-loader/drop-html-public-shadow-closure',
         'dependency-loader/drop-html-smil-closure',
+        'dependency-loader/drop-imperative-event-registration-closure',
         'dependency-loader/drop-invocation-receiver-effect-closure',
+        'dependency-loader/drop-known-callable-constructor-bridge',
         'dependency-loader/drop-iteration-assignment-effect-closure',
         'dependency-loader/drop-local-callable-effect-closure',
+        'dependency-loader/drop-module-meta-url-projection',
+        'dependency-loader/drop-module-meta-member-provenance',
+        'dependency-loader/drop-module-meta-structured-closure',
         'dependency-loader/drop-nested-package-boundary-closure',
         'dependency-loader/drop-nonliteral-artifact-closure',
+        'dependency-loader/drop-owned-chunk-import-live-identity',
+        'dependency-loader/drop-owned-chunk-import-result-closure',
         'dependency-loader/drop-retained-artifact-target-closure',
         'dependency-loader/drop-returned-callable-capture-closure',
+        'dependency-loader/drop-returned-function-self-capture',
+        'dependency-loader/drop-proved-timer-callback-closure',
         'dependency-loader/drop-reviewed-child-alias-closure',
         'dependency-loader/drop-reviewed-extension-order-closure',
         'dependency-loader/drop-reviewed-module-suffix-closure',
         'dependency-loader/drop-reviewed-worker-constructor-closure',
         'dependency-loader/drop-setter-affected-argument-closure',
         'dependency-loader/drop-ssr-pre-evaluation-module-census',
-        'dependency-loader/drop-structured-argument-depth-closure',
+        'dependency-loader/drop-structured-return-origin-closure',
+        'dependency-loader/drop-structured-opacity-cache-hit-pruning',
+        'dependency-loader/drop-structured-opacity-callable-free-captures',
+        'dependency-loader/drop-structured-opacity-mode-separation',
+        'dependency-loader/drop-structured-opacity-static-path-identity',
+        'dependency-loader/drop-structured-opacity-value-reference-filter',
+        'dependency-loader/drop-superclass-invocation-authority-closure',
+        'dependency-loader/drop-url-constructor-alias-closure',
+        'dependency-loader/drop-url-base-constructor-join',
+        'dependency-loader/drop-url-spread-argument-expansion',
         'dependency-loader/drop-unsupported-subgraph-suffix-closure',
         'dependency-loader/drop-unsupported-call-target-effect-closure',
+        'dependency-loader/drop-unresolved-ambient-global-provenance',
+        'dependency-loader/overclose-owned-chunk-import-at-load',
         'dependency-loader/restore-proxy-constructor-argument-exemption',
+        'dependency-loader/weaken-callable-recursion-closure',
+        'dependency-loader/weaken-opaque-template-literal-closure',
+        'dependency-loader/widen-browser-carrier-to-server-lane',
+        'dependency-loader/widen-browser-static-evaluation-budget',
         'dependency-loader/widen-bundle-owned-chunk-kind',
       ].sort(),
     );

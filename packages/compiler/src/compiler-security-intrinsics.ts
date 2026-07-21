@@ -658,6 +658,20 @@ export function compilerSha256Hex(value: string): string {
   return digest;
 }
 
+/** SHA-256 over exact JavaScript UTF-16 code units, including lone surrogates. */
+export function compilerSha256Utf16leHex(value: string): string {
+  assertCompilerSecurityIntrinsics();
+  if (typeof value !== 'string') throw new NativeTypeError('Compiler hash input must be a string.');
+  const bytes = apply<Buffer>(nativeBufferFrom, BuiltinBuffer, [value, 'utf16le']);
+  const hash = nativeCreateHash('sha256');
+  apply(nativeHashUpdate!, hash, [bytes]);
+  const digest = apply<string>(nativeHashDigest!, hash, ['hex']);
+  if (!isLowerHexDigest(digest)) {
+    throw new NativeTypeError('Kovo compiler UTF-16LE SHA-256 digest has an invalid shape.');
+  }
+  return digest;
+}
+
 export function compilerSha256Base64(value: string): string {
   assertCompilerSecurityIntrinsics();
   if (typeof value !== 'string') throw new NativeTypeError('Compiler hash input must be a string.');

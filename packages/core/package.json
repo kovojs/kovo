@@ -215,8 +215,8 @@
   "devDependencies": {
     "vitest": "4.1.8"
   },
-  "kovo": {
-    "publishExtraEntries": [
+  "kovoPublish": {
+    "extraEntries": [
       "./src/internal/client-module-url-intrinsics.ts",
       "./src/internal/filesystem-intrinsics.ts",
       "./src/internal/render-plan-token-intrinsics.ts",

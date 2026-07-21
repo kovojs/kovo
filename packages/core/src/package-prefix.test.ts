@@ -53,6 +53,15 @@ describe('package component prefix manifest discovery', () => {
     });
   });
 
+  it('does not confuse publish-only tooling metadata with component-package identity', () => {
+    expect(
+      packageComponentPrefixFactFromPackageManifest({
+        kovoPublish: { extraEntries: ['./src/internal/bootstrap.ts'] },
+        name: '@kovojs/core',
+      }),
+    ).toBeNull();
+  });
+
   it('ignores inherited manifest and option fields', () => {
     const inheritedManifest = Object.create({
       kovo: { prefix: 'forged-' },
