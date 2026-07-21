@@ -2637,6 +2637,20 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'dependency-import-equals-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-import-equals-closure',
+          'closes runtime TypeScript import-equals authority and follows its local module edge',
+          "import fs = require('node:fs')",
+          "import helper = require('./helper.js')",
+          'keeps type-only import-equals inert while closing exported and entity-name aliases',
+          'export import route = server.route',
+          "import type fs = require('node:fs')",
+          'does not let a runtime import-equals precede custom-adapter bootstrap',
+        ],
+      },
+      {
         id: 'dependency-transitive-bundle-closure',
         file: 'packages/cli/src/dependency-capability-loader.test.ts',
         snippets: [

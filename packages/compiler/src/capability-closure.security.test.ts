@@ -579,6 +579,81 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ).toEqual(['filesystem', 'network']);
   });
 
+  // @kovo-security-certifies C13 dependency-import-equals-closure
+  it('closes runtime TypeScript import-equals authority and follows its local module edge', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import fs = require('node:fs');
+          import helper = require('./helper.js');
+          export const page = route('/import-equals', {
+            render() { return fs.readFileSync('/etc/hosts', 'utf8') + helper.read(); },
+          });
+        `,
+      },
+      {
+        fileName: 'helper.ts',
+        source: `export function read() { return process.env.SECRET; }`,
+      },
+    ]);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'require:./helper.js@app.ts',
+    );
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.capability)
+        .sort(),
+    ).toEqual(['filesystem', 'process']);
+  });
+
+  it('keeps type-only import-equals inert while closing exported and entity-name aliases', () => {
+    const typeOnly = analyze([
+      {
+        fileName: 'types.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import type fs = require('node:fs');
+          type Stat = ReturnType<typeof fs.statSync>;
+          export const page = route('/types', { render() { return null; } });
+          export type { Stat };
+        `,
+      },
+    ]);
+    expect(typeOnly.diagnostics).toEqual([]);
+
+    const exported = analyze([
+      {
+        fileName: 'bridge.ts',
+        source: `
+          import * as server from '@kovojs/server';
+          export import route = server.route;
+          export import fs = require('node:fs');
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { fs, route } from './bridge.js';
+          export const page = route('/exported-import-equals', {
+            render() { return fs.readFileSync('/etc/hosts', 'utf8'); },
+          });
+        `,
+      },
+    ]);
+    expect(exported.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/exported-import-equals', rootKind: 'route' }),
+    );
+    expect(exported.facts).toContainEqual(
+      expect.objectContaining({ capability: 'filesystem', kind: 'closed' }),
+    );
+    expect(exported.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {
@@ -1510,6 +1585,31 @@ describe('SPEC §6.6 capability-closed module graph', () => {
 
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]!.message).toContain(
+      'must import @kovojs/server/runtime-bootstrap as its exact literal first side-effect import',
+    );
+  });
+
+  it('does not let a runtime import-equals precede custom-adapter bootstrap', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import fs = require('node:fs');
+          import '@kovojs/server/runtime-bootstrap';
+          import { createServer } from 'node:http';
+          import { toNodeHandler } from '@kovojs/server';
+          import { handler } from './handler.js';
+          fs.statSync('.');
+          createServer(toNodeHandler(handler)).listen(3000);
+        `,
+      },
+      {
+        fileName: 'handler.ts',
+        source: `export const handler = async () => new Response('ok');`,
+      },
+    ]);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
       'must import @kovojs/server/runtime-bootstrap as its exact literal first side-effect import',
     );
   });

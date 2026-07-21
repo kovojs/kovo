@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 326,
+    "historicalWitnesses": 327,
     "productions": 12
   },
   "productions": [
@@ -1052,6 +1052,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "This witness distinguishes exact private ABI imports added by reviewed compiler lowering from identical authored spellings and unknown generated names."
+    },
+    {
+      "anchor": "dependency-import-equals-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Runtime TypeScript import-equals forms enter the same raw-package and local-module closure as ESM imports, while type-only forms remain inert and entity-name aliases preserve their original binding provenance."
     },
     {
       "anchor": "dependency-transitive-bundle-closure",

@@ -209,6 +209,28 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  // @kovo-security-certifies KV448 production-import-equals-capability-closure
+  it('blocks runtime TypeScript import-equals authority in production preflight', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-import-equals-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Import Equals Capability Proof' });
+      linkStarterBuildDependencies(root);
+      const appPath = join(root, 'src', 'app.tsx');
+      writeFileSync(
+        appPath,
+        `import fs = require('node:fs');\nvoid fs.readFileSync;\n${readFileSync(appPath, 'utf8')}`,
+      );
+
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV448');
+      expect(output).toContain('raw filesystem authority');
+      expect(output).toContain('node:fs');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV435 runtime-secret-view-egress
   it('refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode', async () => {
     const tempParent = tmpdir();

@@ -223,7 +223,9 @@ function collectStaticImportsAndExports(
   bindings: ScannedImportBindingFact[],
   exports: ScannedExportBindingFact[],
 ): void {
-  const firstImport = sourceFile.statements.find((statement) => ts.isImportDeclaration(statement));
+  const firstImport = sourceFile.statements.find(
+    (statement) => ts.isImportDeclaration(statement) || ts.isImportEqualsDeclaration(statement),
+  );
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       const clause = statement.importClause;
@@ -261,6 +263,34 @@ function collectStaticImportsAndExports(
         site: sourceSite(sourceFile, statement.moduleSpecifier.getStart(sourceFile)),
         specifier,
       });
+      continue;
+    }
+
+    if (ts.isImportEqualsDeclaration(statement)) {
+      if (statement.isTypeOnly) continue;
+      if (ts.isExternalModuleReference(statement.moduleReference)) {
+        const expression = statement.moduleReference.expression;
+        const specifier =
+          expression && ts.isStringLiteralLike(expression) ? expression.text : undefined;
+        imports.push({
+          ...(statement === firstImport ? { firstImport: true } : {}),
+          importedNames: ['*'],
+          kind: 'require',
+          site: sourceSite(sourceFile, statement.moduleReference.getStart(sourceFile)),
+          ...(specifier === undefined ? {} : { specifier }),
+        });
+        if (specifier !== undefined) {
+          bindings.push({
+            imported: '*',
+            local: statement.name.text,
+            namespace: true,
+            specifier,
+          });
+        }
+      }
+      if (hasExportModifier(statement)) {
+        exports.push({ exported: statement.name.text, local: statement.name.text });
+      }
       continue;
     }
 
@@ -322,6 +352,17 @@ function collectBindingAliases(
   aliases: ScannedBindingAliasFact[],
 ): void {
   visitWithScopes(sourceFile, [], (node, scopes) => {
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      !node.isTypeOnly &&
+      !ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      aliases.push({
+        local: node.name.text,
+        site: sourceSite(sourceFile, node.getStart(sourceFile)),
+        source: entityNameBindingKey(node.moduleReference),
+      });
+    }
     if (ts.isParameter(node) && node.initializer) {
       collectAliasFromBindingName(
         node.name,
@@ -584,6 +625,8 @@ function lexicalBindings(node: ts.Node): Set<string> | undefined {
         } else if (namedBindings && ts.isNamedImports(namedBindings)) {
           for (const element of namedBindings.elements) names.add(element.name.text);
         }
+      } else if (ts.isImportEqualsDeclaration(statement) && !statement.isTypeOnly) {
+        names.add(statement.name.text);
       }
     }
   } else if (ts.isFunctionLike(node)) {
@@ -620,8 +663,15 @@ function declaredStatementNames(statement: ts.Statement): string[] {
     statement.name
   ) {
     names.add(statement.name.text);
+  } else if (ts.isImportEqualsDeclaration(statement) && !statement.isTypeOnly) {
+    names.add(statement.name.text);
   }
   return [...names];
+}
+
+function entityNameBindingKey(name: ts.EntityName): string {
+  if (ts.isIdentifier(name)) return name.text;
+  return `${entityNameBindingKey(name.left)}.${name.right.text}`;
 }
 
 function collectBindingNames(name: ts.BindingName, names: Set<string>): void {

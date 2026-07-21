@@ -1479,6 +1479,15 @@ const weakenedBrowserRtcNetworkCapabilityBranch = [
   "  ['Function', 'vm'],",
 ].join('\n');
 
+const importEqualsCapabilityClosureBranch = [
+  '    if (ts.isImportEqualsDeclaration(statement)) {',
+  '      if (statement.isTypeOnly) continue;',
+].join('\n');
+const removedImportEqualsCapabilityClosureBranch = [
+  '    if (ts.isImportEqualsDeclaration(statement)) {',
+  '      continue;',
+].join('\n');
+
 const exactFrameworkImplementationDigestBranch =
   '  return installedDigest !== undefined && reviewedDigests.includes(installedDigest);';
 const deletedFrameworkImplementationDigestBranch = '  return true;';
@@ -5653,6 +5662,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: browserRtcNetworkCapabilityBranch,
     sourceFile: compilerCapabilityClosureScannerPath,
     test: assertBrowserRtcNetworkCapabilityIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes runtime TypeScript import-equals from capability and module closure.',
+    expectedKiller:
+      'capability closure must retain raw, relative, and entity-name import-equals provenance',
+    name: 'compiler-capability-closure/drop-import-equals-closure',
+    replacement: removedImportEqualsCapabilityClosureBranch,
+    search: importEqualsCapabilityClosureBranch,
+    sourceFile: compilerCapabilityClosureScannerPath,
+    test: assertImportEqualsCapabilityClosureIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -10716,6 +10736,36 @@ async function assertBrowserRtcNetworkCapabilityIsEnforced(moduleUnderTest) {
     throw new Error(
       `capability closure emitted ${rtcFacts.length} direct RTCPeerConnection network facts`,
     );
+  }
+}
+
+async function assertImportEqualsCapabilityClosureIsEnforced(moduleUnderTest) {
+  const [scanned] = moduleUnderTest.scanCapabilityClosureModules([
+    {
+      fileName: 'app.ts',
+      source: [
+        "import * as server from '@kovojs/server';",
+        "import fs = require('node:fs');",
+        "import helper = require('./helper.js');",
+        'import route = server.route;',
+        "import type path = require('node:path');",
+      ].join('\n'),
+    },
+  ]);
+  const runtimeImports =
+    scanned?.imports.filter((fact) => fact.kind === 'require').map((fact) => fact.specifier) ?? [];
+  if (
+    runtimeImports.length !== 2 ||
+    !runtimeImports.includes('node:fs') ||
+    !runtimeImports.includes('./helper.js') ||
+    runtimeImports.includes('node:path')
+  ) {
+    throw new Error(
+      `capability closure emitted invalid import-equals edges ${JSON.stringify(runtimeImports)}`,
+    );
+  }
+  if (!scanned?.aliases.some((fact) => fact.local === 'route' && fact.source === 'server.route')) {
+    throw new Error('capability closure dropped entity-name import-equals provenance');
   }
 }
 

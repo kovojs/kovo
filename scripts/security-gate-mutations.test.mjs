@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(439);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(440);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -339,6 +339,7 @@ describe('security-gate-mutations', () => {
 
   it('executes framework-identity and compiler-resolution mutants against behavioral verdicts', () => {
     const behavioralNames = [
+      'compiler-capability-closure/drop-import-equals-closure',
       'compiler-capability-closure/drop-webrtc-network-global',
       'compiler-compile/drop-framework-identity-project-registration',
       'compiler-render-equivalence/drop-project-identity-files',
@@ -522,6 +523,10 @@ describe('security-gate-mutations', () => {
         }),
         expect.objectContaining({
           name: 'compiler-capability-closure/invert-installed-implementation-digest-comparison',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-capability-closure/drop-import-equals-closure',
           status: 'killed',
         }),
         expect.objectContaining({
