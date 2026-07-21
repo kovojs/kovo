@@ -468,6 +468,59 @@ describe('inline loader enhanced navigation fallback', () => {
     },
   );
 
+  it.each(inlineSourceInstallCases)(
+    'preserves the browser download boundary for HTML attachment responses through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const currentSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'current',
+          'kovo-nav-segment': 'layout:current',
+        },
+        '<main>current</main>',
+      );
+      const attachmentSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'attachment',
+          'kovo-nav-segment': 'layout:attachment',
+        },
+        '<main><script data-kovo-csp-hash src="/uploads/attacker.js"></script></main>',
+      );
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument: createTestShell({ replaceWith, segments: [currentSegment] }),
+        documents: [createTestShell({ segments: [attachmentSegment] })],
+        fetch: vi.fn(async () => ({
+          headers: {
+            get(name: string) {
+              const normalized = name.toLowerCase();
+              if (normalized === 'content-type') return 'text/html; charset=utf-8';
+              if (normalized === 'content-disposition') {
+                return 'attachment; filename="attacker.html"';
+              }
+              return null;
+            },
+          },
+          text: async () => '<!doctype html><html></html>',
+          url: 'http://app.test/uploads/attacker.html',
+        })),
+        href: 'http://app.test/uploads/attacker.html',
+        async assert({ assign, dispatchEvent, pushState }) {
+          await vi.waitFor(() =>
+            expect(assign).toHaveBeenCalledWith('http://app.test/uploads/attacker.html'),
+          );
+          expect(replaceWith).not.toHaveBeenCalled();
+          expect(pushState).not.toHaveBeenCalled();
+          expect(dispatchEvent).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'kovo:navigate' }),
+          );
+        },
+      });
+    },
+  );
+
   it.each(
     inlineSourceInstallCases.flatMap(([name, installSource]) =>
       (
