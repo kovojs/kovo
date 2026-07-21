@@ -1000,6 +1000,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/server/src/build.test.ts',
       'packages/server/src/static-export-headers.test.ts',
       'packages/server/src/http-header-roundtrip-property-oracle.test.ts',
+      'packages/compiler/src/security-operation-ir.security.test.ts',
     ],
     verdictAnchors: [
       {
@@ -1018,7 +1019,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "'trailer'",
           "'transfer-encoding'",
           "'upgrade'",
+          "'refresh'",
           'MissingTransportOwnedResponseHeaderName',
+          'MissingBrowserNavigationResponseHeaderName',
+          'rejects browser-navigation header %s independently of value %s',
         ],
       },
       {
@@ -1028,6 +1032,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'rejects the transport-owned response-header corpus for structured and raw endpoints',
           'finalizeServerResponse',
           'finalizeRawWebResponse',
+          'rejects HTTP Refresh browser navigation for structured and raw responses',
         ],
       },
       {
@@ -1045,13 +1050,28 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'assertSafeTransportResponseHeaderEntries',
           'expectAdapterTransportHeaderRejection',
+          'expectAdapterBrowserNavigationHeaderRejection',
+          'finalizeCloudflareResponse(await handler(dispatchRequest))',
           "for (const httpVersion of ['1.0', '1.1', '2.0'])",
+        ],
+      },
+      {
+        id: 'raw-response-refresh-compiler-closure',
+        file: 'packages/compiler/src/security-operation-ir.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 raw-response-refresh-header-closed',
+          'closes raw Response init HTTP Refresh through %s',
+          'keeps an exact later safe ResponseInit headers overwrite open',
+          'closes HTTP Refresh in %s',
         ],
       },
       {
         id: 'static-export-transport-policy',
         file: 'packages/server/src/static-export-headers.test.ts',
-        snippets: ['rejects transport-owned framing and hop-by-hop static metadata with KV415'],
+        snippets: [
+          'rejects transport-owned framing and hop-by-hop static metadata with KV415',
+          'rejects HTTP Refresh browser navigation in static metadata with KV415',
+        ],
       },
       {
         id: 'real-http-header-reconstruction-oracle',

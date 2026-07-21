@@ -17,6 +17,9 @@ export type TransportOwnedResponseHeaderName =
   | 'transfer-encoding'
   | 'upgrade';
 
+/** Browser navigation metadata that app response channels may never emit. */
+export type BrowserNavigationResponseHeaderName = 'refresh';
+
 /** One stable response-header field observed before an HTTP adapter owns wire framing. */
 export interface TransportResponseHeaderEntry {
   readonly name: string;
@@ -26,7 +29,7 @@ export interface TransportResponseHeaderEntry {
 export interface TransportResponseHeaderViolation {
   readonly detail: string;
   readonly headerName: string;
-  readonly kind: 'hop-by-hop' | 'message-framing';
+  readonly kind: 'browser-navigation' | 'hop-by-hop' | 'message-framing';
 }
 
 interface TransportResponseHeaderClassifierControls {
@@ -38,19 +41,24 @@ export type TransportResponseHeaderClassifier = (
 ) => TransportResponseHeaderViolation | undefined;
 
 /**
- * Build the single response transport-header classifier used by source and generated runtimes.
+ * Build the single forbidden response-header classifier used by source and generated runtimes.
  *
- * The generated Node/Vercel adapters embed this reviewed function body through the build source
- * serializer. Keeping the verdict function here prevents the live and emitted transports from
- * growing independent framing allowlists (SPEC §9.1.1 / §9.5; KV415).
+ * The generated Node/Vercel/Cloudflare adapters embed this reviewed function body through the
+ * build source serializer. Keeping the verdict function here prevents live and emitted response
+ * paths from growing independent framing or browser-navigation deny sets (SPEC §9.1.1 / §9.5;
+ * KV415).
  *
  * @internal
  */
 export function createTransportResponseHeaderClassifier(
   controls: TransportResponseHeaderClassifierControls,
 ): TransportResponseHeaderClassifier {
-  function transportOwnedKind(name: string): 'hop-by-hop' | 'message-framing' | undefined {
+  function forbiddenResponseHeaderKind(
+    name: string,
+  ): 'browser-navigation' | 'hop-by-hop' | 'message-framing' | undefined {
     switch (name) {
+      case 'refresh':
+        return 'browser-navigation';
       case 'content-length':
       case 'transfer-encoding':
         return 'message-framing';
@@ -75,16 +83,18 @@ export function createTransportResponseHeaderClassifier(
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
       const entry = entries[entryIndex]!;
       const normalizedName = controls.lowerCase(entry.name);
-      const kind = transportOwnedKind(normalizedName);
+      const kind = forbiddenResponseHeaderKind(normalizedName);
       if (kind === undefined) continue;
       return {
         detail:
-          `Response header "${entry.name}" is ${
-            kind === 'message-framing' ? 'message-framing' : 'hop-by-hop'
-          } metadata owned by the HTTP adapter; ` +
-          (normalizedName === 'connection'
-            ? 'the field and every header it nominates are rejected before adapter mutation.'
-            : 'application response channels cannot supply it.'),
+          kind === 'browser-navigation'
+            ? `Response header "${entry.name}" triggers browser navigation outside Kovo's typed Location redirect posture; application response channels cannot supply it.`
+            : `Response header "${entry.name}" is ${
+                kind === 'message-framing' ? 'message-framing' : 'hop-by-hop'
+              } metadata owned by the HTTP adapter; ` +
+              (normalizedName === 'connection'
+                ? 'the field and every header it nominates are rejected before adapter mutation.'
+                : 'application response channels cannot supply it.'),
         headerName: entry.name,
         kind,
       };
@@ -106,7 +116,7 @@ export class ResponseHeaderChannelError extends Error {
   }
 }
 
-/** @internal Reject app-authored message-framing and hop-by-hop response metadata. */
+/** @internal Reject app-authored browser navigation, message-framing, and hop-by-hop metadata. */
 export function assertSafeTransportResponseHeaders(
   entries: readonly TransportResponseHeaderEntry[],
   classifyTransportResponseHeaders: TransportResponseHeaderClassifier,

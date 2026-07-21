@@ -76,6 +76,15 @@ describe('server static export header sink', () => {
     }
   });
 
+  it('rejects HTTP Refresh browser navigation in static metadata with KV415', () => {
+    expect(() =>
+      staticExportHeaders(
+        { rEfReSh: '0; url=https://attacker.example/phish' },
+        { path: '/assets/app.css' },
+      ),
+    ).toThrow(/KV229 KV415.*refresh.*browser navigation/iu);
+  });
+
   it('pins the header map write after name/value validation', () => {
     const originalSet = Map.prototype.set;
     try {

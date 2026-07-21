@@ -1030,12 +1030,12 @@ export const report = endpoint('/report', {
 
   // @kovo-security-certifies C13 raw-response-refresh-header-closed
   it.each([
-    ["Refresh: '0;url=https://attacker.example/phish'", 'direct identifier'],
-    ["'rEfReSh': ' 0 ; url = https://attacker.example/phish '", 'quoted mixed case'],
-    ["['REFRESH']: '5'", 'computed literal'],
-    ["refresh: '5; URL=/account'", 'numeric delay and relative URL'],
-    ["Refresh: '0; url=//attacker.example/phish'", 'scheme-relative URL'],
-  ])('closes raw Response init HTTP Refresh through %s', (header, _label) => {
+    ['direct identifier', "Refresh: '0;url=https://attacker.example/phish'"],
+    ['quoted mixed case', "'rEfReSh': ' 0 ; url = https://attacker.example/phish '"],
+    ['computed literal', "['REFRESH']: '5'"],
+    ['numeric delay and relative URL', "refresh: '5; URL=/account'"],
+    ['scheme-relative URL', "Refresh: '0; url=//attacker.example/phish'"],
+  ])('closes raw Response init HTTP Refresh through %s', (_label, header) => {
     const diagnostics = kv449(`
 import { endpoint } from '@kovojs/server';
 export const report = endpoint('/report', {
@@ -1047,11 +1047,102 @@ export const report = endpoint('/report', {
 });
 `);
 
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        message: expect.stringMatching(/Response init.*Refresh.*browser navigation/iu),
-      }),
-    ]);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringMatching(/Response init.*Refresh.*browser navigation/iu),
+        }),
+      ]),
+    );
+  });
+
+  it('keeps an exact later safe ResponseInit headers overwrite open', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+const badInit = { headers: { Refresh: '0; url=https://attacker.example/phish' } };
+export const report = endpoint('/report', {
+  handler() {
+    return new Response('safe', { ...badInit, headers: { 'X-Safe': 'yes' } });
+  },
+});
+`),
+    ).toEqual([]);
+  });
+
+  it('keeps an exact later safe ResponseInit spread overwrite open', () => {
+    expect(
+      kv449(`
+import { endpoint } from '@kovojs/server';
+const safeInit = { headers: { 'X-Safe': 'yes' } };
+export const report = endpoint('/report', {
+  handler() {
+    return new Response('safe', {
+      headers: { Refresh: '0; url=https://attacker.example/phish' },
+      ...safeInit,
+    });
+  },
+});
+`),
+    ).toEqual([]);
+  });
+
+  it('closes a later ResponseInit spread that overwrites earlier safe headers with Refresh', () => {
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+const badInit = { headers: { Refresh: '0; url=https://attacker.example/phish' } };
+export const report = endpoint('/report', {
+  handler() {
+    return new Response('blocked', { headers: { 'X-Safe': 'yes' }, ...badInit });
+  },
+});
+`);
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringMatching(/Response init.*Refresh.*browser navigation/iu),
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    [
+      'immutable init aliases',
+      `const headers = { Refresh: '0; url=https://attacker.example/phish' };
+       const init = { headers };
+       return new Response('blocked', init);`,
+    ],
+    [
+      'Headers tuple input',
+      `return new Response('blocked', {
+         headers: new Headers([['Refresh', '5; URL=/account']]),
+       });`,
+    ],
+    [
+      'Response.json init',
+      `return Response.json({ ok: true }, {
+         headers: { Refresh: '0; url=//attacker.example/phish' },
+       });`,
+    ],
+  ])('closes HTTP Refresh in %s', (_label, outcome) => {
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler() {
+    ${outcome}
+  },
+});
+`);
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringMatching(/Response init.*Refresh.*browser navigation/iu),
+        }),
+      ]),
+    );
   });
 
   it('classifies exact module and global Response aliases as reviewed endpoint outcomes', () => {

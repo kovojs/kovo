@@ -668,8 +668,8 @@ describe('diagnostic registry', () => {
         "KV415": {
           "code": "KV415",
           "help": "Would lower to: a typed response header record that serializes only framework-allowed header names and cookie values produced by the typed cookie builder.
-      Blocked reason: arbitrary header names/values can smuggle forbidden response metadata, override adapter-owned framing/hop-by-hop fields, or split headers when they contain CR/LF/NUL/control characters.
-      Fixes: keep direct structured headers to Cache-Control/Last-Modified/Vary; use contentType, etag, filename/disposition, redirect(), or the typed cookie builder for dedicated fields; remove transport-owned writes.
+      Blocked reason: arbitrary header names/values can trigger browser navigation outside the typed redirect posture, smuggle forbidden response metadata, override adapter-owned framing/hop-by-hop fields, or split headers when they contain CR/LF/NUL/control characters.
+      Fixes: remove Refresh; keep direct structured headers to Cache-Control/Last-Modified/Vary; use contentType, etag, filename/disposition, redirect(), or the typed cookie builder for dedicated fields; remove transport-owned writes.
       SPEC §9.1.1 keeps response headers in a typed channel so generated wire responses remain auditable.",
           "message": "Response header channel contains a forbidden header name or unsafe header value.",
           "severity": "error",

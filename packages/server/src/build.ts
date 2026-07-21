@@ -2472,9 +2472,7 @@ function requestUrlLimitFailure(value) {
 `;
 }
 
-function cloudflareWorkerSource(
-  options: Readonly<{ staticOnly?: boolean }> = {},
-): string {
+function cloudflareWorkerSource(options: Readonly<{ staticOnly?: boolean }> = {}): string {
   const staticOnly = options.staticOnly === true;
   const handlerStateSource = staticOnly ? '' : 'let handlerPromise;';
   const assetResponseConditionSource = staticOnly ? 'true' : 'status !== 404';
@@ -2488,7 +2486,7 @@ function cloudflareWorkerSource(
       statusText: 'Not Found',
     });`
     : `const handler = await loadHandler();
-    return handler(dispatchRequest);`;
+    return finalizeCloudflareResponse(await handler(dispatchRequest));`;
   const handlerLoaderSource = staticOnly
     ? ''
     : `async function importHandler() {
@@ -2515,6 +2513,7 @@ const nativeDecodeURIComponent = globalThis.decodeURIComponent;
 const nativeReflectApply = Reflect.apply;
 const nativeArrayIsArray = NativeArray.isArray;
 const nativeHeadersAppend = NativeHeaders.prototype.append;
+const nativeHeadersDelete = NativeHeaders.prototype.delete;
 const nativeHeadersForEach = NativeHeaders.prototype.forEach;
 const nativeHeadersGet = NativeHeaders.prototype.get;
 const nativeHeadersGetSetCookie = NativeHeaders.prototype.getSetCookie;
@@ -2535,6 +2534,7 @@ const nativeStringCharCodeAt = String.prototype.charCodeAt;
 const nativeStringIndexOf = String.prototype.indexOf;
 const nativeStringSlice = String.prototype.slice;
 const nativeStringStartsWith = String.prototype.startsWith;
+const nativeStringToLowerCase = String.prototype.toLowerCase;
 const nativeStringTrim = String.prototype.trim;
 const nativeUrlHostnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hostname').get;
 const nativeUrlHashGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'hash').get;
@@ -2546,6 +2546,11 @@ const nativeUrlPathnameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.p
 const nativeUrlProtocolGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'protocol').get;
 const nativeUrlSearchGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'search').get;
 const nativeUrlUsernameGetter = nativeObjectGetOwnPropertyDescriptor(NativeURL.prototype, 'username').get;
+const classifyTransportResponseHeaders = (${generatedTransportResponseHeaderClassifierSource})({
+  lowerCase(value) {
+    return apply(nativeStringToLowerCase, value, []);
+  },
+});
 const requestIngressClassifier = (${generatedRequestIngressClassifierSource})({
   canonicalClientIp(value) {
     return canonicalPlatformIpAddress(value);
@@ -2656,6 +2661,7 @@ export default {
         } else {
           applyHeaders(headers, documentStaticHeaders);
         }
+        normalizeCloudflareAssetResponseHeaders(headers);
         return new NativeResponse(apply(nativeResponseBodyGetter, assetResponse, []), {
           headers,
           status,
@@ -2842,6 +2848,51 @@ function platformSingleHeaderValue(value) {
 }
 
 ${handlerLoaderSource}
+
+// SPEC §9.1/§9.5: Cloudflare's Fetch-native adapter owns the final dynamic Response boundary just
+// as the generated Node and Vercel adapters own writeHead(). Reconstruct once and apply the same
+// forbidden-header verdict before returning browser-visible metadata to the platform.
+function finalizeCloudflareResponse(response) {
+  const headers = cloneHeaders(apply(nativeResponseHeadersGetter, response, []));
+  assertSafeTransportResponseHeaderEntries(transportResponseHeaderEntries(headers));
+  return new NativeResponse(apply(nativeResponseBodyGetter, response, []), {
+    headers,
+    status: apply(nativeResponseStatusGetter, response, []),
+    statusText: apply(nativeResponseStatusTextGetter, response, []),
+  });
+}
+
+function transportResponseHeaderEntries(headers) {
+  const entries = [];
+  apply(nativeHeadersForEach, headers, [(value, name) => {
+    entries[entries.length] = { name, value };
+  }]);
+  return entries;
+}
+
+function assertSafeTransportResponseHeaderEntries(entries) {
+  const violation = classifyTransportResponseHeaders(entries);
+  if (violation === undefined) return;
+  throw new TypeError(
+    'KV415 Response header channel contains a forbidden header name or unsafe header value. ' +
+      violation.detail,
+  );
+}
+
+function normalizeCloudflareAssetResponseHeaders(headers) {
+  const entries = transportResponseHeaderEntries(headers);
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const violation = classifyTransportResponseHeaders([entry]);
+    if (violation === undefined) continue;
+    if (violation.kind === 'browser-navigation') {
+      assertSafeTransportResponseHeaderEntries([entry]);
+    }
+    // Cloudflare ASSETS owns its original framing/hop-by-hop metadata. Drop that platform
+    // metadata before Kovo constructs a fresh Response whose framing the platform will recalculate.
+    apply(nativeHeadersDelete, headers, [entry.name]);
+  }
+}
 
 function cloneHeaders(source) {
   const headers = new NativeHeaders();

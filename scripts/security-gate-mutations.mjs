@@ -154,6 +154,10 @@ const serverRequestBodyProvenancePath = path.join(
   'packages/server/src/request-body-provenance.ts',
 );
 const serverResponsePosturePath = path.join(repoRoot, 'packages/server/src/response-posture.ts');
+const serverResponseTransportHeadersPath = path.join(
+  repoRoot,
+  'packages/server/src/response-transport-headers.ts',
+);
 const serverMutationReplayPolicyPath = path.join(
   repoRoot,
   'packages/server/src/mutation/replay-policy.ts',
@@ -885,6 +889,12 @@ const endpointResponsePostureChokeBranch =
   '  assertEndpointResponsePosture(definition, response, options);';
 const removedEndpointResponsePostureChokeBranch =
   '  // endpoint response-posture choke removed by mutant';
+const httpRefreshResponseHeaderRejectionBranch = [
+  "      case 'refresh':",
+  "        return 'browser-navigation';",
+].join('\n');
+const removedHttpRefreshResponseHeaderRejectionBranch =
+  '      // HTTP Refresh browser-navigation rejection removed by mutant';
 
 const canonicalPostMethodBranch =
   "    if (equalsAsciiCaseInsensitive(method, 'post')) return method === 'POST';";
@@ -4956,6 +4966,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: endpointResponsePostureChokeBranch,
     sourceFile: serverResponsePosturePath,
     test: assertEndpointResponsePostureChokeBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Deletes HTTP Refresh from the shared live/generated response-header deny set.',
+    expectedKiller:
+      'HTTP Refresh must fail closed before bypassing the typed Location redirect posture',
+    name: 'response-transport-headers/drop-http-refresh-rejection',
+    replacement: removedHttpRefreshResponseHeaderRejectionBranch,
+    search: httpRefreshResponseHeaderRejectionBranch,
+    sourceFile: serverResponseTransportHeadersPath,
+    test: assertHttpRefreshResponseHeaderRejectionBehavior,
   },
   {
     baseModule: requestIngressPolicy,
@@ -10521,6 +10542,18 @@ function assertEndpointResponsePostureChokeBehavior(moduleUnderTest) {
     throw error;
   }
   throw new Error('endpoint posture/header-snapshot choke admitted a mismatched raw Response');
+}
+
+function assertHttpRefreshResponseHeaderRejectionBehavior(moduleUnderTest) {
+  const classify = moduleUnderTest.createTransportResponseHeaderClassifier({
+    lowerCase: (value) => value.toLowerCase(),
+  });
+  for (const name of ['Refresh', 'rEfReSh', 'REFRESH']) {
+    const violation = classify([{ name, value: '0; url=https://attacker.example/phish' }]);
+    if (violation?.kind !== 'browser-navigation') {
+      throw new Error(`HTTP Refresh response header remained open through ${name}`);
+    }
+  }
 }
 
 async function assertRequestIngressMethodIdentityIsClosed(moduleUnderTest) {

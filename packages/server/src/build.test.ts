@@ -4472,6 +4472,17 @@ export default async function handler(request) {
       await expect(platformCanonicalAuthority!.response.text()).resolves.toBe(
         'PLATFORM_CANONICAL_AUTHORITY',
       );
+      expect(
+        runGeneratedCloudflareWorkerFailure(staticWorkerPath, [
+          {
+            asset: {
+              body: 'STATIC_REFRESH_MUST_NOT_ESCAPE',
+              headers: { rEfReSh: '5; URL=/account' },
+            },
+            url: 'https://worker.test/',
+          },
+        ]),
+      ).toMatch(/KV415.*refresh.*browser navigation/isu);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -4855,6 +4866,14 @@ export default async function handler(request) {
       urlHost: url.host,
     });
   }
+  if (url.pathname === '/refresh') {
+    return new Response('blocked', {
+      headers: { Refresh: '0; url=https://attacker.example/phish' },
+    });
+  }
+  if (url.pathname === '/location') {
+    return new Response(null, { headers: { Location: '/hello' }, status: 303 });
+  }
   return new Response('cloudflare:' + url.pathname, {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   });
@@ -4901,6 +4920,8 @@ export default async function handler(request) {
 
       const workerPath = join(cloudflareOutDir, 'worker.mjs');
       const workerSource = await readFile(workerPath, 'utf8');
+      expect(workerSource).toContain('const classifyTransportResponseHeaders = (');
+      expect(workerSource).toContain('finalizeCloudflareResponse(await handler(dispatchRequest))');
       expect(workerSource).toContain('const requestIngressClassifier = (');
       expect(workerSource).toContain('requestIngressClassifier.classify({');
       expect(workerSource.indexOf('requestIngressClassifier.classify({')).toBeLessThan(
@@ -4923,6 +4944,7 @@ export default async function handler(request) {
         immutableAssetProbe,
         assetErrorProbe,
         routeProbe,
+        locationProbe,
         overLimitProbe,
         invalidSchemeProbe,
         extensionMethodProbe,
@@ -4946,7 +4968,10 @@ export default async function handler(request) {
         {
           asset: {
             body: 'body { color: navy; }',
-            headers: { 'content-type': 'text/css; charset=utf-8' },
+            headers: {
+              'content-length': '999',
+              'content-type': 'text/css; charset=utf-8',
+            },
           },
           url: 'https://worker.test/assets/cart.css',
         },
@@ -4968,6 +4993,10 @@ export default async function handler(request) {
         {
           asset: { body: 'Not Found', status: 404 },
           url: 'https://worker.test/hello',
+        },
+        {
+          asset: { body: 'Not Found', status: 404 },
+          url: 'https://worker.test/location',
         },
         {
           asset: { body: 'OVER_LIMIT_ASSET_MUST_NOT_RUN' },
@@ -5033,6 +5062,7 @@ export default async function handler(request) {
       expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
       expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
       expect(assetResponse.headers.get('access-control-allow-origin')).toBeNull();
+      expect(assetResponse.headers.get('content-length')).toBeNull();
       expect(assetResponse.headers.get('vary')).toBeNull();
       expect(assetResponse.headers.get('set-cookie')).toBeNull();
 
@@ -5060,6 +5090,30 @@ export default async function handler(request) {
       const routeResponse = routeProbe!.response;
       await expect(routeResponse.text()).resolves.toBe('cloudflare:/hello');
       expect(routeResponse.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+
+      const locationResponse = locationProbe!.response;
+      expect(locationResponse.status).toBe(303);
+      expect(locationResponse.headers.get('location')).toBe('/hello');
+
+      expect(
+        runGeneratedCloudflareWorkerFailure(workerPath, [
+          {
+            asset: { body: 'Not Found', status: 404 },
+            url: 'https://worker.test/refresh',
+          },
+        ]),
+      ).toMatch(/KV415.*refresh.*browser navigation/iu);
+      expect(
+        runGeneratedCloudflareWorkerFailure(workerPath, [
+          {
+            asset: {
+              body: 'blocked static asset',
+              headers: { Refresh: '0; url=https://attacker.example/phish' },
+            },
+            url: 'https://worker.test/assets/refresh.txt',
+          },
+        ]),
+      ).toMatch(/KV415.*refresh.*browser navigation/iu);
 
       const overLimit = overLimitProbe!;
       expect(overLimit.assetCalls).toBe(0);
@@ -6181,6 +6235,7 @@ async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<v
         await expectAdapterTransportHeaderRejection(writeResponse, name, httpVersion);
       }
     }
+    await expectAdapterBrowserNavigationHeaderRejection(writeResponse);
   }
 
   const emittedConnectionClose = await capturedFrameworkConnectionClose(
@@ -6344,6 +6399,33 @@ async function expectAdapterTransportHeaderRejection(
       { httpVersion },
     ),
   ).rejects.toThrow(/KV415.*owned by the HTTP adapter/u);
+  expect(writeHeadCalls).toBe(0);
+}
+
+async function expectAdapterBrowserNavigationHeaderRejection(
+  writeWebResponseToNode: NodeAdapterModule['writeWebResponseToNode'],
+): Promise<void> {
+  let writeHeadCalls = 0;
+  const nodeResponse = {
+    end() {
+      return this;
+    },
+    writeHead() {
+      writeHeadCalls += 1;
+      return this;
+    },
+  } as unknown as ServerResponse;
+
+  await expect(
+    writeWebResponseToNode(
+      new Response('blocked', {
+        headers: { Refresh: '0; url=https://attacker.example/phish' },
+        status: 200,
+      }),
+      nodeResponse,
+      'GET',
+    ),
+  ).rejects.toThrow(/KV415.*refresh.*browser navigation/iu);
   expect(writeHeadCalls).toBe(0);
 }
 
@@ -6682,6 +6764,19 @@ process.stdout.write(JSON.stringify(results));
       status: result.status,
     }),
   }));
+}
+
+function runGeneratedCloudflareWorkerFailure(
+  workerPath: string,
+  requests: readonly GeneratedWorkerRequest[],
+): string {
+  try {
+    runGeneratedCloudflareWorker(workerPath, requests);
+  } catch (error) {
+    const stderr = (error as { readonly stderr?: Buffer | string }).stderr;
+    return stderr === undefined ? String(error) : String(stderr);
+  }
+  throw new Error('Generated Cloudflare Worker unexpectedly emitted a forbidden response header.');
 }
 
 function runGeneratedVercelIngressMiddleware(

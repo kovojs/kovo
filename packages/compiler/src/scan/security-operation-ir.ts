@@ -41,6 +41,7 @@ import {
   compilerStringEndsWith,
   compilerStringSlice,
   compilerStringStartsWith,
+  compilerStringToLowerCase,
   compilerStringTrim,
   compilerWeakMapGet,
   compilerWeakMapSet,
@@ -2659,6 +2660,12 @@ function scanServerSecurityOperationsDirect(
             aliases,
             appendViolation,
           );
+          appendForbiddenResponseInitHeaderViolation(
+            sourceFile,
+            node.arguments?.[1],
+            'new Response',
+            appendViolation,
+          );
           appendOperation(
             'server.response.raw',
             node,
@@ -3672,6 +3679,7 @@ function classifyServerCall(
   if (ts.isIdentifier(callee)) {
     const authorityTransfer = serverArgumentsContainAuthority(call.arguments, aliases);
     const classified = classifyServerProvenanceCall(
+      sourceFile,
       serverExpressionProvenance(callee, aliases),
       call,
       callee.text,
@@ -3750,6 +3758,7 @@ function classifyServerCall(
   const provenance = serverExpressionProvenance(callee, aliases);
   if (
     classifyServerProvenanceCall(
+      sourceFile,
       provenance,
       call,
       target,
@@ -4919,6 +4928,7 @@ function serverUnreviewedCallbackArgument(
 }
 
 function classifyServerProvenanceCall(
+  sourceFile: ts.SourceFile,
   provenance: ServerValueProvenance,
   call: ts.CallExpression,
   target: string,
@@ -5002,6 +5012,12 @@ function classifyServerProvenanceCall(
     if (surface === 'endpoint' || surface === 'webhook') {
       if (compilerStringEndsWith(target, '.json')) {
         appendUnsafeWireBodyViolation(call.arguments[0], target, aliases, appendViolation);
+        appendForbiddenResponseInitHeaderViolation(
+          sourceFile,
+          call.arguments[1],
+          target,
+          appendViolation,
+        );
       }
       appendOperation(kind, call, target, `${surface} access/CSRF posture`);
     } else {
@@ -5035,6 +5051,289 @@ function appendUnsafeWireBodyViolation(
     'computed-security-operation',
     `${target} body carries catch-bound error or request-derived data outside an audited render door`,
   );
+}
+
+function appendForbiddenResponseInitHeaderViolation(
+  sourceFile: ts.SourceFile,
+  init: ts.Expression | undefined,
+  target: string,
+  appendViolation: (
+    node: ts.Node,
+    kind: SecurityOperationViolationModel['kind'],
+    detail: string,
+  ) => void,
+): void {
+  if (init === undefined) return;
+  const refreshHeader = responseInitRefreshHeader(sourceFile, init, compilerCreateSet<number>(), 0);
+  if (refreshHeader === undefined) return;
+  appendViolation(
+    refreshHeader,
+    'raw-capability-operation',
+    `${target} Response init header Refresh triggers browser navigation outside Kovo's typed Location redirect posture`,
+  );
+}
+
+function responseInitRefreshHeader(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  active: Set<number>,
+  depth: number,
+): ts.Node | undefined {
+  const resolution = responseInitHeadersResolution(sourceFile, expression, active, depth);
+  return resolution.kind === 'present' ? resolution.refreshHeader : undefined;
+}
+
+type ResponseInitHeadersResolution =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'present'; readonly refreshHeader: ts.Node | undefined }
+  | { readonly kind: 'unknown' };
+
+function responseInitHeadersResolution(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  active: Set<number>,
+  depth: number,
+): ResponseInitHeadersResolution {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return { kind: 'unknown' };
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (initializer === undefined) return { kind: 'unknown' };
+    const key = initializer.getStart(sourceFile);
+    if (compilerSetHas(active, key)) return { kind: 'unknown' };
+    compilerSetAdd(active, key);
+    try {
+      return responseInitHeadersResolution(sourceFile, initializer, active, depth + 1);
+    } finally {
+      compilerSetDelete(active, key);
+    }
+  }
+  if (ts.isConditionalExpression(current)) {
+    const whenTrue = responseInitHeadersResolution(sourceFile, current.whenTrue, active, depth + 1);
+    const whenFalse = responseInitHeadersResolution(
+      sourceFile,
+      current.whenFalse,
+      active,
+      depth + 1,
+    );
+    if (whenTrue.kind === 'present' && whenTrue.refreshHeader !== undefined) return whenTrue;
+    if (whenFalse.kind === 'present' && whenFalse.refreshHeader !== undefined) return whenFalse;
+    if (whenTrue.kind === 'present' && whenFalse.kind === 'present') {
+      return { kind: 'present', refreshHeader: undefined };
+    }
+    if (whenTrue.kind === 'absent' && whenFalse.kind === 'absent') return { kind: 'absent' };
+    return { kind: 'unknown' };
+  }
+  if (responseInitObjectWrapper(sourceFile, current)) {
+    return responseInitHeadersResolution(sourceFile, current.arguments[0]!, active, depth + 1);
+  }
+  if (!ts.isObjectLiteralExpression(current)) return { kind: 'unknown' };
+  const properties = compilerSnapshotDenseArray(current.properties, 'Raw Response init properties');
+  // Resolve ordinary object-literal overwrite order from right to left. A later spread known to own
+  // `headers` must win before an earlier explicit field is considered; an unresolved spread stays
+  // conservative, so an earlier statically visible Refresh remains closed until runtime proves the
+  // actual response header bag.
+  for (let index = properties.length - 1; index >= 0; index -= 1) {
+    const property = properties[index]!;
+    if (ts.isSpreadAssignment(property)) {
+      const spreadResolution = responseInitHeadersResolution(
+        sourceFile,
+        property.expression,
+        active,
+        depth + 1,
+      );
+      if (spreadResolution.kind === 'present') return spreadResolution;
+      continue;
+    }
+    if (responseInitPropertyName(property.name) !== 'headers') continue;
+    if (ts.isPropertyAssignment(property)) {
+      return {
+        kind: 'present',
+        refreshHeader: responseHeaderCollectionRefreshHeader(
+          sourceFile,
+          property.initializer,
+          active,
+          depth + 1,
+        ),
+      };
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      return {
+        kind: 'present',
+        refreshHeader: responseHeaderCollectionRefreshHeader(
+          sourceFile,
+          property.name,
+          active,
+          depth + 1,
+        ),
+      };
+    }
+    return { kind: 'present', refreshHeader: undefined };
+  }
+  return { kind: 'absent' };
+}
+
+function responseHeaderCollectionRefreshHeader(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  active: Set<number>,
+  depth: number,
+): ts.Node | undefined {
+  if (depth > SECURITY_SEMANTIC_CALL_DEPTH_BUDGET) return undefined;
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (initializer === undefined) return undefined;
+    return withResponseInitExpression(
+      sourceFile,
+      initializer,
+      active,
+      depth,
+      responseHeaderCollectionRefreshHeader,
+    );
+  }
+  if (ts.isConditionalExpression(current)) {
+    return (
+      responseHeaderCollectionRefreshHeader(sourceFile, current.whenTrue, active, depth + 1) ??
+      responseHeaderCollectionRefreshHeader(sourceFile, current.whenFalse, active, depth + 1)
+    );
+  }
+  if (responseInitObjectWrapper(sourceFile, current)) {
+    return responseHeaderCollectionRefreshHeader(
+      sourceFile,
+      current.arguments[0]!,
+      active,
+      depth + 1,
+    );
+  }
+  if (
+    ts.isNewExpression(current) &&
+    responseInitUsesAmbientHeaders(sourceFile, current.expression)
+  ) {
+    const headers = current.arguments?.[0];
+    return headers === undefined
+      ? undefined
+      : responseHeaderCollectionRefreshHeader(sourceFile, headers, active, depth + 1);
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    const properties = compilerSnapshotDenseArray(
+      current.properties,
+      'Raw Response init header properties',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (ts.isSpreadAssignment(property)) {
+        const spreadMatch = responseHeaderCollectionRefreshHeader(
+          sourceFile,
+          property.expression,
+          active,
+          depth + 1,
+        );
+        if (spreadMatch !== undefined) return spreadMatch;
+        continue;
+      }
+      const name = responseInitPropertyName(property.name);
+      if (name !== undefined && compilerStringToLowerCase(name) === 'refresh') {
+        return property.name ?? property;
+      }
+    }
+    return undefined;
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    const elements = compilerSnapshotDenseArray(
+      current.elements,
+      'Raw Response init header entries',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isSpreadElement(element)) {
+        const spreadMatch = responseHeaderCollectionRefreshHeader(
+          sourceFile,
+          element.expression,
+          active,
+          depth + 1,
+        );
+        if (spreadMatch !== undefined) return spreadMatch;
+        continue;
+      }
+      const entry = unwrapExpression(element);
+      if (!ts.isArrayLiteralExpression(entry) || entry.elements.length === 0) continue;
+      const name = responseInitHeaderNameExpression(entry.elements[0]!);
+      if (name !== undefined && compilerStringToLowerCase(name) === 'refresh') {
+        return entry.elements[0]!;
+      }
+    }
+  }
+  return undefined;
+}
+
+function withResponseInitExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  active: Set<number>,
+  depth: number,
+  inspect: (
+    sourceFile: ts.SourceFile,
+    expression: ts.Expression,
+    active: Set<number>,
+    depth: number,
+  ) => ts.Node | undefined,
+): ts.Node | undefined {
+  const key = expression.getStart(sourceFile);
+  if (compilerSetHas(active, key)) return undefined;
+  compilerSetAdd(active, key);
+  try {
+    return inspect(sourceFile, expression, active, depth + 1);
+  } finally {
+    compilerSetDelete(active, key);
+  }
+}
+
+function responseInitObjectWrapper(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): expression is ts.CallExpression {
+  if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) return false;
+  const member = staticMember(unwrapExpression(expression.expression));
+  const root = member === undefined ? undefined : unwrapExpression(member.receiver);
+  return !!(
+    member !== undefined &&
+    (member.name === 'freeze' || member.name === 'seal' || member.name === 'preventExtensions') &&
+    root !== undefined &&
+    ts.isIdentifier(root) &&
+    root.text === 'Object' &&
+    !identifierIsShadowedWithinBoundary(root, sourceFile)
+  );
+}
+
+function responseInitUsesAmbientHeaders(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return current.text === 'Headers' && !identifierIsShadowedWithinBoundary(current, sourceFile);
+  }
+  const member = staticMember(current);
+  const root = member === undefined ? undefined : unwrapExpression(member.receiver);
+  return !!(
+    member?.name === 'Headers' &&
+    root !== undefined &&
+    ts.isIdentifier(root) &&
+    root.text === 'globalThis' &&
+    !identifierIsShadowedWithinBoundary(root, sourceFile)
+  );
+}
+
+function responseInitPropertyName(name: ts.PropertyName | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  if (ts.isComputedPropertyName(name)) return responseInitHeaderNameExpression(name.expression);
+  return staticPropertyName(name);
+}
+
+function responseInitHeaderNameExpression(expression: ts.Expression): string | undefined {
+  const current = unwrapExpression(expression);
+  return ts.isStringLiteralLike(current) ? current.text : undefined;
 }
 
 function serverAliasProvenance(
