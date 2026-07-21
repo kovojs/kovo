@@ -230,7 +230,7 @@ Measurements are versioned and reproducible:
       analysis after 2A/2B. Consume every root-linked `server.helper.call` with a bottom-up semantic
       summary; document transfer semantics, alias/mutation rules, recursion/state budgets, and the
       exact closed verdict for every unsupported condition.
-  - Evidence: SPEC §6.6 defines `kovo-security-semantic-graph/v1`, its finite lattice/transfers,
+  - Evidence: SPEC §6.6 defines `kovo-security-semantic-graph/v3`, its finite lattice/transfers,
     four fixed budgets, and closed reasons; the integrated semantic/CLI/diagnostic suite passes
     118/118.
 - [x] Implement provenance over normalized operations rather than raw syntax shapes. Diagnostic

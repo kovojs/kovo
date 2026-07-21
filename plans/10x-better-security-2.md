@@ -173,7 +173,7 @@ runtime floors are all blind to when the missing shape was not anticipated. **Le
 **Effort:** XL. This oracle searches for counterexamples to SPEC §11.2's `observed ⊆ static`
 invariant over an explicitly finite generated language. It does **not** prove soundness for general
 JavaScript or for behavior outside that language. Sequence after plan-1 Layer-3 lands the
-semantic-graph rule table as data (schema is `kovo-security-semantic-graph/v2`,
+semantic-graph rule table as data (schema is `kovo-security-semantic-graph/v3`,
 `packages/core/src/internal/security-operation-ir.ts:23`).
 
 **Depends on:** plan-1 Layer 3 and Phase 0's exact transfer inventory. **Produces:** a versioned
@@ -866,7 +866,7 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
 ## Notes on sequencing and honesty
 
 - **Layer-3 baseline.** Plan-1's normalized graph is present as
-  `kovo-security-semantic-graph/v2`, so the §1.1, §2.4, §2.5, §3.4, and §4.4 entry gate is satisfied.
+  `kovo-security-semantic-graph/v3`, so the §1.1, §2.4, §2.5, §3.4, and §4.4 entry gate is satisfied.
   Future extensions must keep consuming that data rather than re-create a raw-AST treadmill.
 - **Release-train discipline.** The dependency table, not section numbering, controls execution.
   Train A live defects preempt meta work; decision-record entry gates prevent uncertain cache,
