@@ -162,6 +162,10 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Publish readiness
         run: vp exec pnpm run check:publish
+      - name: Enforce packed security evidence budgets
+        run: |
+          vp exec pnpm run check:pack-security
+          vp exec pnpm run check:certificate-module-identity
       - name: Archive package dist outputs
         run: |
           tar -czf "$RUNNER_TEMP/kovo-package-dist.tgz" \

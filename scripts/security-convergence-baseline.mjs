@@ -10,6 +10,7 @@ import { dec10GreenCorpusRows } from '../packages/conformance-fixtures/src/adver
 import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
 import { loadSecurityDenominatorInventories } from './derivation-rewitness-inventory.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import {
   assertCleanCurrentCodeSubject,
@@ -437,12 +438,7 @@ export function measureGreenCorpusCommand(options = {}) {
 }
 
 export function parsePeakRss(output, platform) {
-  if (platform === 'darwin') {
-    const match = /^\s*(\d+)\s+maximum resident set size\s*$/imu.exec(output);
-    return match?.[1] ? Number(match[1]) : undefined;
-  }
-  const match = /Maximum resident set size \(kbytes\):\s*(\d+)/iu.exec(output);
-  return match?.[1] ? Number(match[1]) * 1024 : undefined;
+  return parseTimePeakRssBytes(output, platform);
 }
 
 export function compareSnapshot(expected, actual) {

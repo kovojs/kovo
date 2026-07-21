@@ -1,0 +1,866 @@
+{
+  "schema": "kovo.plan3-security-gate-budgets/v1",
+  "budgetVersion": "2026-07-21.1",
+  "intendedRunner": {
+    "architecture": "x64",
+    "ciImage": "github-actions/ubuntu-latest",
+    "node": "24.18.0",
+    "operatingSystem": "linux",
+    "scheduling": "one gate at a time within its job"
+  },
+  "measurement": {
+    "peakRss": "maximum of process-tree RSS samples and /usr/bin/time child high-water mark",
+    "sampleIntervalMs": 50,
+    "wallTime": "monotonic elapsed time around every command step"
+  },
+  "gates": [
+    {
+      "id": "cost-budget-manifest",
+      "budgetVersion": 1,
+      "planSections": ["completion-contract"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:plan3-cost-budgets",
+      "execution": "self-check",
+      "groups": [],
+      "wallTimeCeilingMs": 15000,
+      "peakRssCeilingMiB": 256,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Manifest validation is repository analysis and does not invoke a production build."
+      }
+    },
+    {
+      "id": "artifact-provenance-build",
+      "budgetVersion": 1,
+      "planSections": ["0.4"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:artifact-provenance-build",
+      "groups": [],
+      "wallTimeCeilingMs": 300000,
+      "peakRssCeilingMiB": 6144,
+      "buildTime": {
+        "status": "enforced",
+        "ceilingMs": 240000,
+        "scope": "The exact real kovo build and no-op rebuild artifact-provenance behavior, excluding the adjacent unrelated build corpus."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/artifact-provenance.test.ts",
+            "--reporter=dot"
+          ]
+        },
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/index.kovo-build.test.ts",
+            "--reporter=dot",
+            "-t",
+            "emits byte-stable artifact provenance across two no-op production rebuilds"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-guarantee",
+      "budgetVersion": 1,
+      "planSections": ["0.5"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:security-guarantee",
+      "groups": [],
+      "wallTimeCeilingMs": 30000,
+      "peakRssCeilingMiB": 512,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Guarantee-register validation is static repository analysis and does not invoke a production build."
+      },
+      "steps": [{ "command": ["node", "scripts/check-security-guarantee.mjs"] }]
+    },
+    {
+      "id": "hermetic-proof-stage",
+      "budgetVersion": 1,
+      "planSections": ["0.6"],
+      "ciJob": "hermetic-proof",
+      "entrypoint": "pnpm run check:hermetic-proof-stage",
+      "groups": [],
+      "wallTimeCeilingMs": 900000,
+      "peakRssCeilingMiB": 4096,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The proof stage consumes restored inert dist artifacts; the package build is owned and budgeted by the certificate build gate."
+      },
+      "steps": [{ "command": ["node", "scripts/hermetic-proof-stage.mjs"] }]
+    },
+    {
+      "id": "provenance-closure",
+      "budgetVersion": 1,
+      "planSections": ["1.0", "1.1"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:provenance-closure",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Finite provenance analysis and its focused tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/provenance-closure.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/compiler/src/security-provenance-relation.test.ts",
+            "scripts/provenance-closure.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "authorization-matrix",
+      "budgetVersion": 1,
+      "planSections": ["1.2"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:authorization-matrix",
+      "groups": [],
+      "wallTimeCeilingMs": 60000,
+      "peakRssCeilingMiB": 1024,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Authorization-matrix validation is static repository analysis and does not invoke a production build."
+      },
+      "steps": [{ "command": ["node", "scripts/check-authorization-matrix.mjs"] }]
+    },
+    {
+      "id": "rls-emission-door",
+      "budgetVersion": 1,
+      "planSections": ["1.2"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:rls-emission-door",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "RLS source-door analysis and its focused tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/check-postgres-rls-emission-door.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-postgres-rls-emission-door.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "grammar-containment",
+      "budgetVersion": 1,
+      "planSections": ["1.3"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:grammar-containment",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The declared grammar decision procedure and tests do not invoke a production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/server/src/internal/linear-regex/automata.test.ts",
+            "packages/server/src/internal/header-serializer-grammars.gate.test.ts",
+            "packages/server/src/internal/ipv4-grammars.gate.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "label-clause-map",
+      "budgetVersion": 1,
+      "planSections": ["1.4"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:label-clause-map",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Label-clause correspondence analysis and focused tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/label-clause-map-gate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/label-clause-map-gate.test.mjs",
+            "packages/drizzle/src/label-lattice.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pack-security",
+      "budgetVersion": 1,
+      "planSections": ["2.0"],
+      "ciJob": "publish-readiness",
+      "entrypoint": "pnpm run check:pack-security",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 1536,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "This gate validates already-built package subjects; certificate owns the end-to-end package build ceiling."
+      },
+      "steps": [
+        {
+          "command": [
+            "node",
+            "scripts/egress-floor.mjs",
+            "--policy",
+            "publish",
+            "--",
+            "node",
+            "scripts/check-pack-security.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "certificate-module-identity",
+      "budgetVersion": 1,
+      "planSections": ["2.0"],
+      "ciJob": "publish-readiness",
+      "entrypoint": "pnpm run check:certificate-module-identity",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 1536,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Module-identity recovery consumes already-built package subjects and does not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/certificate-module-identity-probe.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/certificate-module-identity-probe.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "certificate",
+      "budgetVersion": 1,
+      "planSections": ["2.1", "2.2"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:certificate",
+      "groups": [],
+      "wallTimeCeilingMs": 600000,
+      "peakRssCeilingMiB": 6144,
+      "buildTime": {
+        "status": "enforced",
+        "ceilingMs": 360000,
+        "scope": "End-to-end dist builds for every package included in kovo.certificate/v1."
+      },
+      "steps": [
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "--filter",
+            "@kovojs/better-auth",
+            "--filter",
+            "@kovojs/browser",
+            "--filter",
+            "@kovojs/compiler",
+            "--filter",
+            "@kovojs/core",
+            "--filter",
+            "@kovojs/drizzle",
+            "--filter",
+            "@kovojs/server",
+            "--filter",
+            "@kovojs/style",
+            "--filter",
+            "@kovojs/verify",
+            "run",
+            "build:dist"
+          ]
+        },
+        { "command": ["node", "--experimental-strip-types", "scripts/kovo-certificate.mjs"] },
+        { "command": ["node", "scripts/check-kovo-certificate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/kovo-certificate.test.mjs",
+            "packages/verify/src/index.test.ts",
+            "packages/verify/src/directory.test.ts",
+            "packages/verify/src/bin.test.ts",
+            "packages/verify/src/translation.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emission-constructor-closure",
+      "budgetVersion": 1,
+      "planSections": ["2.3"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:emission-constructor-closure",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Emission-constructor source analysis and parse-tree tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/emission-constructor-closure-gate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/emission-constructor-closure-gate.test.mjs",
+            "packages/core/src/internal/emission.test.ts",
+            "packages/drizzle/src/derive-codegen.test.ts",
+            "packages/compiler/src/emit/registry-emission.security.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-agent-mediation",
+      "budgetVersion": 1,
+      "planSections": ["3.1"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:plan3-phase3-gates",
+      "groups": ["phase3"],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 4096,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The focused tool-door behavioral suite does not invoke a production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/compiler/src/agent-tool-security.test.ts",
+            "packages/server/src/agent.security.test.ts",
+            "packages/cli/src/index.kovo-explain-agent.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-grant-graph",
+      "budgetVersion": 1,
+      "planSections": ["3.2"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:plan3-phase3-gates",
+      "groups": ["phase3"],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 4096,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The focused grant-graph behavioral suite does not invoke a production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/drizzle/src/grant-graph-static.test.ts",
+            "packages/server/src/delegation.test.ts",
+            "packages/cli/src/index.kovo-explain-grants.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-environment-contract",
+      "budgetVersion": 1,
+      "planSections": ["3.3"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:plan3-phase3-gates",
+      "groups": ["phase3"],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 4096,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The focused retained-obligation behavioral suite does not invoke a production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/cli/src/deployment-environment-contract.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-derived-dataset",
+      "budgetVersion": 1,
+      "planSections": ["3.4"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:plan3-phase3-gates",
+      "groups": ["phase3"],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 4096,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The focused derived-dataset compiler/runtime suite does not invoke a production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/compiler/src/derived-dataset-security.test.ts",
+            "packages/server/src/derived-dataset.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-dependency-capabilities",
+      "budgetVersion": 1,
+      "planSections": ["3.5"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:plan3-phase3-gates",
+      "groups": ["phase3"],
+      "wallTimeCeilingMs": 300000,
+      "peakRssCeilingMiB": 4096,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "The focused dependency classifier and generated-policy suites do not invoke an end-to-end production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/dependency-capability-loader.test.ts",
+            "packages/cli/src/dependency-capability-loader.scalability.test.ts",
+            "packages/create-kovo/src/index.lifecycle-policy.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "escape-census",
+      "budgetVersion": 1,
+      "planSections": ["4.1", "4.2"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:escape-census",
+      "groups": [],
+      "wallTimeCeilingMs": 240000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Escape census/review analysis consumes checked source and app-graph fixtures without invoking a production build."
+      },
+      "steps": [
+        { "command": ["pnpm", "run", "check:escape-census:baseline"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/escape-census-baseline.test.mjs",
+            "scripts/escape-census-gate.test.mjs",
+            "packages/core/src/escape-census-graph.test.ts",
+            "packages/drizzle/src/trust-escapes-static.escape-census.test.ts",
+            "packages/server/src/escape-census-review.security.test.ts",
+            "packages/cli/src/commands/build-export.escape-census-reviews.test.ts",
+            "packages/cli/src/commands/attest.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "declassification-census",
+      "budgetVersion": 1,
+      "planSections": ["4.4"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:declassification-census",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 1536,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Declassification source census and drift tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/declassification-census-gate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/declassification-census-gate.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "provenance-precision-register",
+      "budgetVersion": 1,
+      "planSections": ["4.5"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:provenance-precision-register",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Precision-register analysis and compiler witnesses do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/provenance-precision-register-gate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/provenance-precision-register-c13.test.mjs",
+            "scripts/provenance-precision-register-gate.test.mjs",
+            "packages/compiler/src/security-analyzer-soundness-oracle.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analyzable-fragment",
+      "budgetVersion": 1,
+      "planSections": ["4.6"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:analyzable-fragment",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Undecidability-ledger generation checks and real-root compilation analysis do not emit a production build."
+      },
+      "steps": [{ "command": ["node", "scripts/analyzable-fragment.mjs"] }]
+    },
+    {
+      "id": "security-event-answerability",
+      "budgetVersion": 1,
+      "planSections": ["5.1"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:security-event-answerability",
+      "groups": [],
+      "wallTimeCeilingMs": 240000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Answerability source analysis and focused runtime tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/check-security-event-answerability.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-security-event-answerability.test.mjs",
+            "packages/server/src/security-event-answerability.test.ts",
+            "packages/server/src/security-event-emission-coverage.test.ts",
+            "packages/server/src/generated-runtime-posture-registry.test.ts",
+            "packages/server/src/generated-runtime-posture-registry-boot.test.ts",
+            "packages/cli/src/commands/incident-scope.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "advisory-feed",
+      "budgetVersion": 1,
+      "planSections": ["5.2"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:advisory-feed",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Advisory schema, signature-policy, and client-state tests do not invoke a production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/cli/src/commands/advisory-feed-gate.test.ts",
+            "packages/cli/src/commands/advisories.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "auth-provider-pin",
+      "budgetVersion": 1,
+      "planSections": ["5.3"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:auth-provider-pin",
+      "groups": [],
+      "wallTimeCeilingMs": 240000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Provider-pin source analysis and lifecycle characterization tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/check-auth-provider-pin.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-auth-provider-pin.test.mjs",
+            "packages/better-auth/src/lifecycle-inheritance.test.ts",
+            "packages/cli/src/auth-lifecycle.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c9-sink-inventory",
+      "budgetVersion": 1,
+      "planSections": ["5.4"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:c9-sink-inventory",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Sink-inventory source/runtime tests consume fixtures and do not invoke an end-to-end production build."
+      },
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/core/src/internal/source-sink-registry.test.ts",
+            "packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "replay-model",
+      "budgetVersion": 1,
+      "planSections": ["6"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:replay-model",
+      "groups": [],
+      "wallTimeCeilingMs": 600000,
+      "peakRssCeilingMiB": 3072,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "TLC model exploration and faithfulness tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/check-replay-reservation-model.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-replay-reservation-model.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "protocol-alphabet",
+      "budgetVersion": 1,
+      "planSections": ["6"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:protocol-alphabet",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 1536,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Protocol-alphabet source analysis and mutation tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/check-protocol-alphabet.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-protocol-alphabet.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "model-honesty-boundary",
+      "budgetVersion": 1,
+      "planSections": ["6"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:model-honesty-boundary",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 1536,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Model-scope complement analysis and explain tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/check-model-honesty-boundary.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-model-honesty-boundary.test.mjs",
+            "packages/cli/src/model-boundaries.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decided-surface",
+      "budgetVersion": 1,
+      "planSections": ["convergence-delta"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:decided-surface",
+      "groups": [],
+      "wallTimeCeilingMs": 180000,
+      "peakRssCeilingMiB": 2048,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Declared-fragment denominator analysis and artifact tests do not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/decided-surface-gate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/decided-surface-gate.test.mjs",
+            "scripts/lib/security-evidence-subject.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "metric-e-rounds",
+      "budgetVersion": 1,
+      "planSections": ["convergence-e"],
+      "ciJob": "static-core",
+      "entrypoint": "pnpm run check:metric-e-rounds",
+      "groups": [],
+      "wallTimeCeilingMs": 120000,
+      "peakRssCeilingMiB": 1536,
+      "buildTime": {
+        "status": "not-applicable",
+        "reviewedReason": "Metric E comparable-round validation consumes retained evidence and does not invoke a production build."
+      },
+      "steps": [
+        { "command": ["node", "scripts/metric-e-rounds-gate.mjs"] },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/metric-e-rounds-gate.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    }
+  ]
+}
