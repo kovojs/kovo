@@ -361,8 +361,14 @@ const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
 
 interface FrameworkVitePluginAuthority {
   readonly identities: Readonly<Record<string, unknown>>;
+  readonly purpose: ViteTransformPurpose;
   readonly sourceRootCoverage: '*' | string | null;
 }
+
+type ViteTransformPurpose = 'css-collector' | 'server';
+
+const KOVO_CSS_COLLECTOR_MODULE_SOURCE =
+  '// Compiler-owned CSS collection boundary (SPEC §5.2/§6.6).\nexport {};\n';
 
 const frameworkVitePluginAuthorities = compilerCreateWeakMap<
   KovoVitePlugin,
@@ -380,13 +386,39 @@ export function createKovoVitePlugin(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
-  return createBoundKovoVitePlugin(compileComponentModule, snapshotKovoVitePluginOptions(options));
+  return createBoundKovoVitePlugin(
+    compileComponentModule,
+    snapshotKovoVitePluginOptions(options),
+    'server',
+  );
 }
 
 /** @internal Construct the plugin with the statically owned fresh compiler entry point. */
 export function createFrameworkKovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
+  return createFrameworkKovoVitePluginForPurpose(options, 'server');
+}
+
+/**
+ * @internal Build-only CSS collector. It compiles component source and retains compiler metadata,
+ * but the browser-facing transform is deliberately inert: server render descriptors and the
+ * server JSX runtime are not executable client-entry dependencies (SPEC §5.2/§6.6).
+ */
+export function createFrameworkKovoCssCollectorVitePlugin(
+  options: KovoVitePluginOptions = {},
+): KovoVitePlugin {
+  return createFrameworkKovoVitePluginForPurpose(options, 'css-collector');
+}
+
+function createFrameworkKovoVitePluginForPurpose(
+  options: KovoVitePluginOptions,
+  purpose: ViteTransformPurpose,
+): KovoVitePlugin {
   const optionsSnapshot = snapshotKovoVitePluginOptions(options);
-  const plugin = createBoundKovoVitePlugin(compileComponentModuleForFramework, optionsSnapshot);
+  const plugin = createBoundKovoVitePlugin(
+    compileComponentModuleForFramework,
+    optionsSnapshot,
+    purpose,
+  );
   const identities = compilerCreateNullRecord<unknown>();
   const identityPropertyCount = compilerArrayLength(
     FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES,
@@ -406,6 +438,7 @@ export function createFrameworkKovoVitePlugin(options: KovoVitePluginOptions = {
   }
   compilerWeakMapSet(frameworkVitePluginAuthorities, plugin, {
     identities: compilerFreeze(identities),
+    purpose,
     sourceRootCoverage: frameworkVitePluginSourceRootCoverage(optionsSnapshot),
   });
 
@@ -429,6 +462,7 @@ export function isFrameworkKovoVitePluginOwnerForSourceRoot(
   const plugin = value as KovoVitePlugin;
   const authority = compilerWeakMapGet(frameworkVitePluginAuthorities, plugin);
   if (authority === undefined) return false;
+  if (authority.purpose !== 'server') return false;
 
   const identityPropertyCount = compilerArrayLength(
     FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES,
@@ -466,6 +500,7 @@ export function isFrameworkKovoVitePluginOwnerForSourceRoot(
 function createBoundKovoVitePlugin(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions,
+  purpose: ViteTransformPurpose,
 ): KovoVitePlugin {
   let devState = createViteDevStateStore(true);
   let root = process.cwd();
@@ -727,6 +762,7 @@ function createBoundKovoVitePlugin(
                 source,
                 resolvedResult,
                 isCurrent,
+                purpose,
               );
             } finally {
               finish();
@@ -747,6 +783,7 @@ function createBoundKovoVitePlugin(
           source,
           result,
           isCurrent,
+          purpose,
         );
       } finally {
         finish();
@@ -911,6 +948,7 @@ function transformViteCompileResult(
   source: string,
   result: ViteCompileResult,
   shouldRetainResult: () => boolean,
+  purpose: ViteTransformPurpose,
 ): null | { code: string; map: null } {
   // A compile result is executable authority for the root and source revision that issued it.
   // Lifecycle or same-file invalidation must drop the settlement itself, not merely its cache state.
@@ -931,10 +969,10 @@ function transformViteCompileResult(
       break;
     }
   }
-  const code = bindViteEmittedJsxRuntime(
-    fileName,
-    executableViteServerSource(serverSource) ?? source,
-  );
+  const code =
+    purpose === 'css-collector'
+      ? KOVO_CSS_COLLECTOR_MODULE_SOURCE
+      : bindViteEmittedJsxRuntime(fileName, executableViteServerSource(serverSource) ?? source);
   if (!shouldRetainResult()) return null;
   return { code, map: null };
 }
@@ -956,6 +994,7 @@ function assertKovoViteJsxPragmaModels(model: ReturnType<typeof parseComponentMo
     ) as (typeof model.jsxPragmas)[number] | undefined;
     if (!pragma) throw new TypeError(`Vite authored JSX pragma facts[${index}] must be own data.`);
     if (pragma.kind === 'jsxImportSource' && pragma.value === '@kovojs/server') continue;
+    if (pragma.kind === 'jsxRuntime' && pragma.value === 'automatic') continue;
     const rendered = `@${pragma.kind}${pragma.value === undefined ? '' : ` ${pragma.value}`}`;
     const importSourceHelp =
       pragma.kind === 'jsxImportSource' ? ' JSX import source must be @kovojs/server.' : '';

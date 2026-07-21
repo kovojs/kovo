@@ -16,7 +16,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
-import { createKovoVitePlugin, viteFrameworkIdentityFiles } from './vite.js';
+import {
+  createFrameworkKovoCssCollectorVitePlugin,
+  createKovoVitePlugin,
+  isFrameworkKovoVitePluginOwnerForSourceRoot,
+  viteFrameworkIdentityFiles,
+} from './vite.js';
 import type { HmrImpactMetadata } from './types.js';
 
 const cartBadgeSource = `
@@ -201,6 +206,28 @@ export const Safe = component({ render: () => <div>{examples.length + pattern.so
     },
   );
 
+  it.each(['tsx', 'jsx'])(
+    'accepts the exact compiler-owned automatic JSX runtime in authored .%s comments',
+    async (extension) => {
+      const compileComponentModule = vi.fn(() => ({
+        diagnostics: [],
+        files: [{ kind: 'server', source: 'export const compiled = true;' }],
+      }));
+      const plugin = createKovoVitePlugin(compileComponentModule);
+      const source = `
+/** @jsxImportSource @kovojs/server */
+/** @jsxRuntime automatic */
+export const Safe = component({ render: () => <div /> });
+`;
+
+      await expect(plugin.transform(source, `src/safe.${extension}`)).resolves.toEqual({
+        code: 'export const compiled = true;',
+        map: null,
+      });
+      expect(compileComponentModule).toHaveBeenCalledOnce();
+    },
+  );
+
   it('compiles SPEC-supported JSX modules instead of delegating them past Kovo diagnostics', async () => {
     const plugin = kovoVitePlugin();
     const source = `
@@ -322,7 +349,7 @@ export const C = component({
         }
         return nativeApply(nativeIterator, this, []);
       };
-      expect(() =>
+      await expect(() =>
         plugin.transform(
           `
 import { th } from './browser-barrel';
@@ -1294,6 +1321,51 @@ export const RealKv437 = component({
         sourceFileName: 'components/cart/cart-badge.css',
       }),
     ]);
+  });
+
+  it('collects component CSS through an inert browser module boundary', async () => {
+    const root = process.cwd();
+    const plugin = createFrameworkKovoCssCollectorVitePlugin();
+    plugin.configResolved?.({ command: 'build', root });
+
+    const transformed = await plugin.transform(
+      `
+import { component } from '@kovojs/core';
+
+export const CssOnlyBoundary = component({
+  state: () => ({ count: 0 }),
+  css: \`css-only-boundary { color: teal; }\`,
+  render: (_queries, state) => (
+    <css-only-boundary>
+      <button type="button" onClick={() => { state.count += 1; }}>{state.count}</button>
+    </css-only-boundary>
+  ),
+});
+`,
+      join(root, 'src/css-only-boundary.tsx'),
+    );
+
+    expect(transformed).toEqual({
+      code: '// Compiler-owned CSS collection boundary (SPEC §5.2/§6.6).\nexport {};\n',
+      map: null,
+    });
+    expect(transformed?.code).not.toContain('@kovojs/core');
+    expect(transformed?.code).not.toContain('@kovojs/server');
+    expect(transformed?.code).not.toContain('component(');
+    expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([
+      expect.objectContaining({
+        componentName: 'css-only-boundary',
+        criticalCss: expect.stringContaining('css-only-boundary'),
+      }),
+    ]);
+    expect(plugin.getClientModules?.()).toEqual([
+      expect.objectContaining({
+        path: expect.stringMatching(/\/src\/css-only-boundary\.client\.js$/u),
+        source: expect.stringContaining('CssOnlyBoundary$button_click'),
+      }),
+    ]);
+    // The collector is genuine compiler code, but cannot satisfy the server-render plugin proof.
+    expect(isFrameworkKovoVitePluginOwnerForSourceRoot(plugin, root)).toBe(false);
   });
 
   it('uses the resolved Vite root for build CSS asset names', async () => {
