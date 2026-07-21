@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(431);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(430);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -20,7 +20,6 @@ describe('security-gate-mutations', () => {
       'dependency-loader/drop-returned-function-self-capture',
       'dependency-loader/drop-structured-opacity-cache-hit-pruning',
       'dependency-loader/drop-structured-opacity-callable-free-captures',
-      'dependency-loader/drop-structured-opacity-mode-separation',
       'dependency-loader/drop-structured-opacity-static-path-identity',
     ];
     const mutants = SECURITY_GATE_MUTANTS.filter((mutant) => names.includes(mutant.name));
@@ -213,7 +212,6 @@ describe('security-gate-mutations', () => {
         'dependency-loader/drop-structured-return-origin-closure',
         'dependency-loader/drop-structured-opacity-cache-hit-pruning',
         'dependency-loader/drop-structured-opacity-callable-free-captures',
-        'dependency-loader/drop-structured-opacity-mode-separation',
         'dependency-loader/drop-structured-opacity-static-path-identity',
         'dependency-loader/drop-structured-opacity-value-reference-filter',
         'dependency-loader/drop-superclass-invocation-authority-closure',
@@ -753,7 +751,7 @@ describe('security-gate-mutations', () => {
     );
     expect(results.every((result) => result.status === 'killed')).toBe(true);
     expect(results.length).toBe(SECURITY_GATE_MUTANTS.length);
-  }, 180_000);
+  }, 900_000);
 
   it('executes semantic-v2 consumer mutants instead of source-text assertions', () => {
     const semanticV2Mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>

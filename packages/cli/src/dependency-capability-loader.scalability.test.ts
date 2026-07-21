@@ -10,6 +10,12 @@ import { dependencyCapabilityLoaderVitePlugin } from './dependency-capability-lo
 
 const wideMemberCount = 1_600;
 const repeatedTransferCount = 64;
+const memoizedClassMethodCount = 2_000;
+const repeatedClassTransferCount = 32;
+// The production walk skips syntax-only class keys before consuming its finite evaluation budget.
+// At this count the mutated 6N walk exceeds the budget while the production 5N walk remains below
+// it, so the regression is deterministic rather than wall-clock based (SPEC §6.6; C13).
+const syntaxOnlyClassMethodCount = 18_000;
 // Stable path identities keep this below KV448's finite-work budget; treating every use as a fresh
 // identity exhausts that budget and is enrolled as a release-gate mutant (SPEC §6.6).
 const repeatedAliasTransferCount = 7_500;
@@ -43,6 +49,17 @@ function provenanceChurnedStructuredTransfers(name: string): string {
 
 function repeatedAliasTransfers(name: string): string {
   return Array.from({ length: repeatedAliasTransferCount }, () => `unknownSink(${name});`).join(
+    '\n',
+  );
+}
+
+function wideSafeClass(name: string, methodCount: number): string {
+  const methods = Array.from({ length: methodCount }, (_, index) => `m${index}(){}`).join('');
+  return `class ${name} { ${methods} }`;
+}
+
+function repeatedClassTransfers(name: string): string {
+  return Array.from({ length: repeatedClassTransferCount }, () => `unknownSink(${name});`).join(
     '\n',
   );
 }
@@ -135,6 +152,16 @@ export const inspect = () => ['classifier-scale-ok', target.get()];`;
     expect(artifact).toContain('Object.assign');
   });
 
+  // @kovo-security-certifies C13 dependency-browser-opacity-cache-hit-pruning
+  it('prunes repeated whole-class opacity summaries before exhausting the finite budget', async () => {
+    const source = `${wideSafeClass('MemoizedSafe', memoizedClassMethodCount)}
+${repeatedClassTransfers('MemoizedSafe')}
+export const inspect = () => 'class-memo-ok';`;
+
+    const artifact = await buildReviewedClientArtifact(source);
+    expect(artifact).toContain('class-memo-ok');
+  });
+
   // @kovo-security-certifies C13 dependency-browser-opacity-stable-provenance-batch
   it('admits a repeated wide safe closure across unrelated assignment provenance', async () => {
     const source = `${wideSafeClosure('wideSafe')}
@@ -145,6 +172,16 @@ export const inspect = () => ['classifier-churn-ok', target.get(), target.p63];`
     const artifact = await buildReviewedClientArtifact(source);
     expect(artifact).toContain('classifier-churn-ok');
     expect(artifact).toContain('target.p63');
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-opacity-provenance-before-effects
+  it('resolves a later defineProperty alias before applying opaque call effects', async () => {
+    const source = `export function prepare() { defineForAudit(globalThis, 'safeFlag', { value: 1 }); }
+globalThis.defineForAudit = Object.defineProperty;
+export const inspect = () => new Map().size;`;
+
+    const artifact = await buildReviewedClientArtifact(source);
+    expect(artifact).toContain('new Map');
   });
 
   // @kovo-security-certifies C13 dependency-browser-opacity-stable-binding-memo
@@ -292,13 +329,13 @@ export const inspect = () => new externalGlobal.platform.Worker('/payload.mjs');
   });
 
   // @kovo-security-certifies C13 dependency-browser-opacity-syntax-key-not-global
-  it('does not treat a class method key as an unresolved global capture', async () => {
-    const source = `const Local = class { constructor() {} };
-unknownSink(Local);
-export const inspect = () => new Map().size;`;
+  it('does not spend the finite budget on syntax-only class method keys', async () => {
+    const source = `${wideSafeClass('SyntaxOnlySafe', syntaxOnlyClassMethodCount)}
+unknownSink(SyntaxOnlySafe);
+export const inspect = () => 'syntax-key-budget-ok';`;
 
     const artifact = await buildReviewedClientArtifact(source);
-    expect(artifact).toContain('new Map');
+    expect(artifact).toContain('syntax-key-budget-ok');
   });
 
   // @kovo-security-certifies C13 dependency-browser-opacity-owned-chunk-import

@@ -415,7 +415,7 @@ const escapeCensusJsonQuotedReportBranch = 'app=${JSON.stringify(app.app)}';
 const weakenedEscapeCensusJsonQuotedReportBranch = 'app=${app.app}';
 
 const metricERuntimeReviewVerifierBranch = [
-  '    const verified = metricEAttestationVerification.verifySignedPayload(',
+  '    const verified = metricEVerifySignedPayload(',
   '      canonicalMetricEReviewJson({ keyId: envelope.keyId, subject }),',
   '      envelope.publicKeySpki,',
   '      envelope.signature,',
@@ -700,11 +700,15 @@ const dependencyLoaderUnresolvedAmbientGlobalBranch =
   "    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'ambient-global' }];";
 const removedDependencyLoaderUnresolvedAmbientGlobalBranch =
   "    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'plain' }];";
-const dependencyLoaderAmbientGlobalMemberBranch = [
+const dependencyLoaderAmbientGlobalStaticMemberBranch = [
+  "      } else if (receiver.kind === 'module-meta-member') {",
+  "        atoms.push({ kind: 'module-meta-member' });",
   "      } else if (receiver.kind === 'ambient-global') {",
   "        atoms.push({ kind: 'ambient-global' });",
 ].join('\n');
-const removedDependencyLoaderAmbientGlobalMemberBranch = [
+const removedDependencyLoaderAmbientGlobalStaticMemberBranch = [
+  "      } else if (receiver.kind === 'module-meta-member') {",
+  "        atoms.push({ kind: 'module-meta-member' });",
   "      } else if (receiver.kind === 'ambient-global') {",
   "        atoms.push({ kind: 'plain' });",
 ].join('\n');
@@ -821,13 +825,17 @@ const removedDependencyLoaderLocalCallableEffectClosureBranch = [
   '    [],',
 ].join('\n');
 const dependencyLoaderProxyConstructorArgumentClosureBranch = [
-  '  const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);',
   '  const args = Array.isArray(expression.arguments) ? expression.arguments : [];',
+  '  if (args.length === 0) return;',
+  '  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };',
+  '  const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);',
 ].join('\n');
 const restoredDependencyLoaderProxyConstructorArgumentExemptionBranch = [
+  '  const args = Array.isArray(expression.arguments) ? expression.arguments : [];',
+  '  if (args.length === 0) return;',
+  '  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };',
   '  const callee = evaluateBrowserStaticValue(expression.callee, scope, index, state);',
   "  if (callee.length > 0 && callee.every((atom) => atom.kind === 'proxy-constructor')) return;",
-  '  const args = Array.isArray(expression.arguments) ? expression.arguments : [];',
 ].join('\n');
 const dependencyLoaderInvocationReceiverEffectClosureBranch = '  return receiverAffected;';
 const removedDependencyLoaderInvocationReceiverEffectClosureBranch = '  return false;';
@@ -886,13 +894,11 @@ const dependencyLoaderStructuredOpacityDeferredCallEffectBranch = [
 ].join('\n');
 const immediateDependencyLoaderStructuredOpacityCallEffectBranch =
   '      collectBrowserOpaqueCallArguments(record, scope, index, definePropertyProvenanceCalls);';
-const dependencyLoaderStructuredOpacityModeBranch = [
-  '  const requiredModes = inspectClosure',
-  '    ? browserStructuredOpaqueValueMode | browserStructuredOpaqueClosureMode',
-  '    : browserStructuredOpaqueValueMode;',
-].join('\n');
-const removedDependencyLoaderStructuredOpacityModeBranch =
-  '  const requiredModes = browserStructuredOpaqueValueMode;';
+// There is deliberately no mode-bit mutant. After literal-leaf flattening and stable-path
+// normalization, every value-only namespace/callable transfer eagerly enqueues its whole closure;
+// forcing requiredModes to the value bit is therefore behaviorally identical across the complete
+// loader corpus. Retain the conservative production bit for future transfer forms, but do not
+// inflate the release mutation denominator with an unforceable no-op.
 const dependencyLoaderStructuredOpacityStaticPathIdentityBranch =
   '    const memoIdentity = browserStructuredOpaqueMemoIdentity(candidate, candidateScope, index);';
 const removedDependencyLoaderStructuredOpacityStaticPathIdentityBranch =
@@ -3567,8 +3573,8 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
-    description: 'Bypasses the purpose-minimal runtime-attestation verifier for Metric E evidence.',
-    expectedKiller: 'Metric E detached evidence must execute the pinned Ed25519 verifier',
+    description: 'Bypasses the strict local Ed25519 verifier for Metric E evidence.',
+    expectedKiller: 'Metric E detached evidence must execute the strict Ed25519 verifier',
     name: 'metric-e/drop-runtime-review-verifier',
     replacement: removedMetricERuntimeReviewVerifierBranch,
     search: metricERuntimeReviewVerifierBranch,
@@ -3916,8 +3922,8 @@ export const SECURITY_GATE_MUTANTS = [
     expectedKiller:
       'ambient-global member projections must preserve their shared unresolved origin through opaque calls',
     name: 'dependency-loader/drop-ambient-global-member-provenance',
-    replacement: removedDependencyLoaderAmbientGlobalMemberBranch,
-    search: dependencyLoaderAmbientGlobalMemberBranch,
+    replacement: removedDependencyLoaderAmbientGlobalStaticMemberBranch,
+    search: dependencyLoaderAmbientGlobalStaticMemberBranch,
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderAmbientGlobalMemberBehavior,
@@ -4170,17 +4176,6 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: cliDependencyCapabilityLoaderPath,
     sourceOnly: true,
     test: assertDependencyLoaderStructuredOpacityProvenancePhaseBehavior,
-  },
-  {
-    baseModule: {},
-    description: 'Reuses a value-only summary when a whole callable closure must be inspected.',
-    expectedKiller: 'value and whole-closure structured-opacity summaries must remain distinct',
-    name: 'dependency-loader/drop-structured-opacity-mode-separation',
-    replacement: removedDependencyLoaderStructuredOpacityModeBranch,
-    search: dependencyLoaderStructuredOpacityModeBranch,
-    sourceFile: cliDependencyCapabilityLoaderPath,
-    sourceOnly: true,
-    test: assertDependencyLoaderStructuredOpacityModeBehavior,
   },
   {
     baseModule: {},
@@ -9070,7 +9065,7 @@ function assertDependencyLoaderStructuredOpacityCacheHitBehavior(_moduleUnderTes
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
     testNamePattern:
-      'admits a wide safe closure transferred repeatedly through structured arguments',
+      'prunes repeated whole-class opacity summaries before exhausting the finite budget',
   });
 }
 
@@ -9083,17 +9078,7 @@ function assertDependencyLoaderStructuredOpacityProvenancePhaseBehavior(
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
-    testNamePattern: 'admits a repeated wide safe closure across unrelated assignment provenance',
-  });
-}
-
-function assertDependencyLoaderStructuredOpacityModeBehavior(_moduleUnderTest, { sourceText }) {
-  runIsolatedPackageVitestMutation({
-    packageName: 'cli',
-    relativeSourcePath: 'dependency-capability-loader.ts',
-    sourceText,
-    testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
-    testNamePattern: 'distinguishes a value-only callable summary from whole-closure inspection',
+    testNamePattern: 'resolves a later defineProperty alias before applying opaque call effects',
   });
 }
 
@@ -9398,7 +9383,7 @@ function assertDependencyLoaderStructuredOpacityValueIdentifierBehavior(
     relativeSourcePath: 'dependency-capability-loader.ts',
     sourceText,
     testFile: 'packages/cli/src/dependency-capability-loader.scalability.test.ts',
-    testNamePattern: 'does not treat a class method key as an unresolved global capture',
+    testNamePattern: 'does not spend the finite budget on syntax-only class method keys',
   });
 }
 
