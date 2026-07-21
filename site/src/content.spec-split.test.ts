@@ -49,6 +49,9 @@ describe('split normative spec content', () => {
       '<a href="../SPEC.md">root spec</a>',
       '<a href="../SPEC.md#4-8-2">root fragment</a>',
       '<a href="/spec/#4-8-2">nearest existing section</a>',
+      '<a href="../security/analyzable-fragment.json">register</a>',
+      '<a href="../packages/compiler/src/fixtures/analyzable-fragment/returning-authority.tsx.txt">fixture</a>',
+      '<a href="06-analyzable-fragment-hand-argument.md">hand argument</a>',
     ].join('');
 
     expect(rewriteRenderedSpecLinksForTest(html, ids, anchors)).toBe(
@@ -59,6 +62,9 @@ describe('split normative spec content', () => {
         '<a href="/spec/">root spec</a>',
         '<a href="/spec/#4-8">root fragment</a>',
         '<a href="/spec/#4-8">nearest existing section</a>',
+        '<a href="/security/analyzable-fragment.json">register</a>',
+        '<a href="/packages/compiler/src/fixtures/analyzable-fragment/returning-authority.tsx.txt">fixture</a>',
+        '<a href="/06-analyzable-fragment-hand-argument.md">hand argument</a>',
       ].join(''),
     );
   });

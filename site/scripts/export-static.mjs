@@ -25,9 +25,11 @@ registerHooks({
   },
 });
 
-// SPEC §9.5: the docs site's static export uses the command facade for route
-// replay, /c/ client modules, and Vite manifest assets. This script only owns
-// site-specific content generation and extra static files.
+// SPEC §9.5: this repository-owned marketing-site build replays the app through
+// the public static-export API in one security-locked Vite realm. It is a
+// build-owned direct-export consumer, not evidence that the authored site graph
+// passes the strict `kovo export` source preflight; dedicated CLI fixtures own
+// that conformance claim.
 
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const cssDistDir = path.join(siteRoot, 'dist-css');
@@ -323,11 +325,9 @@ export async function exportSiteStaticApp({
   outDir = defaultDistDir,
   skipPipeline = false,
 } = {}) {
-  // The CLI command module imports Vite. Establish the compiler/server realm
-  // lock before even evaluating that trusted runner graph (SPEC §6.6 rule 6).
+  // Establish the compiler/server realm lock before evaluating the trusted app
+  // or server graph (SPEC §6.6 rule 6).
   await securityLockedViteRuntime();
-  const { runExportCommandStructured } =
-    await import('../../packages/cli/src/commands/build-export.js');
   if (!skipPipeline) await runContentPipeline();
   // The export owns the whole static-host directory; clear stale routes/assets
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
@@ -341,7 +341,6 @@ export async function exportSiteStaticApp({
   assertServedStylesheet();
   await stageStaticExportReferencedPublicAssets();
 
-  const manifestFile = path.join(cssDistDir, '.vite/manifest.json');
   const viteServer = await createViteServer({
     appType: 'custom',
     logLevel: 'error',
@@ -352,28 +351,33 @@ export async function exportSiteStaticApp({
   let examplesModule;
   let staticExportResult;
   try {
-    const [loadedAuxModule, loadedExamplesModule] = await Promise.all([
+    const [appModule, serverModule, loadedAuxModule, loadedExamplesModule] = await Promise.all([
+      viteServer.ssrLoadModule('/src/app.tsx'),
+      viteServer.ssrLoadModule('@kovojs/server'),
       viteServer.ssrLoadModule('/src/aux.ts'),
       viteServer.ssrLoadModule('/src/examples.ts'),
     ]);
     auxModule = loadedAuxModule;
     examplesModule = loadedExamplesModule;
     await auxModule.stageMarkdownMirrorPublicAssets(cssDistDir);
-    const exportResult = await runExportCommandStructured({
-      appModulePath: '/src/app.tsx',
-      distDir: cssDistDir,
-      manifestFile,
+    const app = appModule.default ?? appModule.siteStaticExportApp;
+    if (!isKovoApp(app)) {
+      throw new Error('site/src/app.tsx must export the Kovo site app.');
+    }
+    if (typeof serverModule.exportStaticApp !== 'function') {
+      throw new Error('@kovojs/server must export exportStaticApp.');
+    }
+    staticExportResult = await serverModule.exportStaticApp(app, {
+      assets: [
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/site.css',
+          source: builtStylesheetPath(),
+        },
+      ],
       outDir,
-      root: siteRoot,
-      vite: true,
+      publicAssetRoot: cssDistDir,
     });
-    if ('error' in exportResult) {
-      throw new Error(exportResult.error || 'kovo export failed');
-    }
-    if (exportResult.exitCode !== 0) {
-      throw new Error(exportResult.output || 'kovo export failed');
-    }
-    staticExportResult = exportResult.staticExport;
   } finally {
     await viteServer.close();
   }
@@ -397,6 +401,15 @@ export async function exportSiteStaticApp({
   await examplesModule.exportExampleApps(outDir);
 
   return staticExportResult;
+}
+
+function isKovoApp(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray(value.routes) &&
+    typeof value.clientModules?.resolve === 'function'
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

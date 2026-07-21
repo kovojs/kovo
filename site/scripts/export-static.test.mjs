@@ -13,6 +13,7 @@ import {
   assertServedUiStylesheetContent,
   stageStaticExportReferencedPublicAssets,
 } from './export-static.mjs';
+import { stageAnalyzableFragmentPublicAssets } from '../src/security-evidence-assets.js';
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -138,6 +139,33 @@ describe('site export CSS guards', () => {
         'overwritten by site/src/aux.ts',
       );
       expect(existsSync(resolve(tempRoot, 'avatars/missing.png'))).toBe(true);
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps the build-owned direct export distinct from strict CLI conformance evidence', () => {
+    const source = readFileSync(resolve(siteRoot, 'scripts/export-static.mjs'), 'utf8');
+    expect(source).toContain("viteServer.ssrLoadModule('/src/app.tsx')");
+    expect(source).toContain("viteServer.ssrLoadModule('@kovojs/server')");
+    expect(source).toContain('not evidence that the authored site graph');
+    expect(source).not.toContain('runExportCommandStructured');
+  });
+
+  it('stages only the finite public evidence linked from the analyzable-fragment register', async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-site-security-evidence-'));
+    try {
+      await stageAnalyzableFragmentPublicAssets(tempRoot);
+      expect(existsSync(resolve(tempRoot, 'security/analyzable-fragment.json'))).toBe(true);
+      expect(existsSync(resolve(tempRoot, '06-analyzable-fragment-hand-argument.md'))).toBe(true);
+      expect(
+        existsSync(
+          resolve(
+            tempRoot,
+            'packages/compiler/src/fixtures/analyzable-fragment/returning-authority.tsx.txt',
+          ),
+        ),
+      ).toBe(true);
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
     }

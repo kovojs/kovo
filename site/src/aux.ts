@@ -23,6 +23,7 @@ import { buildLlmsFull, buildLlmsIndex, buildLlmsTier } from '../scripts/llms.mj
 
 import { buildGalleryLlmsSection } from './gallery-llms.js';
 import { injectMarkdownAlternateLink } from './document-template.js';
+import { stageAnalyzableFragmentPublicAssets } from './security-evidence-assets.js';
 
 const SITE_ORIGIN = 'https://kovo.sh';
 
@@ -116,6 +117,7 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
 export async function stageMarkdownMirrorPublicAssets(outDir: string): Promise<void> {
   const { content, sections } = await loadAgentSections();
   await writeMarkdownMirrors(outDir, sections, content.spec.source);
+  await stageAnalyzableFragmentPublicAssets(outDir);
 }
 
 async function loadAgentSections() {

@@ -365,13 +365,27 @@ function resolveSpecRootLinks(html: string, specIds: Set<string>): string {
   );
 }
 
+function resolveSpecEvidenceLinks(html: string): string {
+  return html
+    .replace(
+      /href="\.\.\/(security\/analyzable-fragment\.json|packages\/compiler\/src\/fixtures\/analyzable-fragment\/[a-z0-9-]+\.tsx\.txt)"/g,
+      'href="/$1"',
+    )
+    .replace(
+      /href="06-analyzable-fragment-hand-argument\.md"/g,
+      'href="/06-analyzable-fragment-hand-argument.md"',
+    );
+}
+
 function resolveSpecLinks(
   html: string,
   specIds: Set<string>,
   moduleAnchors: ReadonlyMap<string, string>,
 ): string {
   return resolveSpecAnchors(
-    resolveSpecRootLinks(resolveSpecModuleLinks(html, specIds, moduleAnchors), specIds),
+    resolveSpecEvidenceLinks(
+      resolveSpecRootLinks(resolveSpecModuleLinks(html, specIds, moduleAnchors), specIds),
+    ),
     specIds,
   );
 }
