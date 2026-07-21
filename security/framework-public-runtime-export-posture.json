@@ -8,7 +8,7 @@
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "4772b198d3375f04033530c5c13816299391aefb33faa7046b62bea5677592ec",
+      "sourceTreeSha256": "f211d44a0636c606716304d0374b4c2ab53dcc5bdbab72c0fcc798b27040576c",
       "manifestVariants": [
         {
           "exports": {
@@ -66,7 +66,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "cfe079ebb221b53a7c081c6e1c2f3047333e9d7146b03c18a4d689e60ab37579",
+      "sourceTreeSha256": "e5fca5e74f287f90e0a38be8eb8c5fc4eb491d730b549da4db92dd797ca1896c",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -478,7 +478,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "ffcafefde8cac1fa85029ddc31f285c7c5291ce5bdcb74aaef4f36d226bc9ff6"
+      "sourceTreeSha256": "30a71452db16a4a3897c91e71943dbcc638ea18efbf3b85e3d18c74d20e83fc9"
     },
     {
       "manifestVariants": [
@@ -762,7 +762,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "d809e6296572f1e5264bf581724608c7337727d0af4019b3b1c967fbb7b7dee6"
+      "sourceTreeSha256": "3fd4f8558b59d2e73643b8b25d8e401c05992fec376f5f53a762a533c4ec7ac1"
     },
     {
       "manifestVariants": [
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "bc9b415a3c9df38a434689765d036b81b7ca9db60239805b764eea11f78d89c2"
+      "sourceTreeSha256": "83c483ebab725d26606001e9c38729cd7d69debf8c9ef98de347a1df264d5ead"
     },
     {
       "manifestVariants": [
@@ -967,7 +967,7 @@
               "default": "./dist/internal/wire-json.mjs"
             }
           },
-          "fingerprint": "sha256:4b1cca6ff35688b3c9f5bc8a5ec7fdf700fee2251047e2fb722482c10abdf4af"
+          "fingerprint": "sha256:591893d6dd8c69a19f7f5d909b92ba25f66a28a7e9cfc2aad52619c23d349abd"
         },
         {
           "exports": {
@@ -1006,7 +1006,7 @@
             "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
             "./internal/wire-json": "./src/internal/wire-json.ts"
           },
-          "fingerprint": "sha256:51ba62a7369ff21d93c3470bef8c672284cb1bf4a259b36a8f9b3ffdc666d6a3"
+          "fingerprint": "sha256:407a46bf0041448914f80bf157477dee17e04990d16666242343deed2eb825e8"
         }
       ],
       "packageName": "@kovojs/core",
@@ -1660,7 +1660,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "475164f60ce959064b012021505a5f3a775d06d196de13685e1c1bdf251c7498"
+      "sourceTreeSha256": "0a3b2a7a5928fa44b3ef99b71be437cb09482c1375f3c04678d62af84d653534"
     },
     {
       "manifestVariants": [
@@ -1928,7 +1928,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "8edf91bf5a24de0be2452110475f7d3fbba9e31c997d70d592ac3dfda277a031"
+      "sourceTreeSha256": "ac262ad996c81ceeeb167b33689090bfb167fe608cbd3319913a4fb8b89a6869"
     },
     {
       "manifestVariants": [
@@ -9813,7 +9813,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "0351d6f28466670ab915ead232d28843a1cf751df7fd67e2d32acde614fd71a5"
+      "sourceTreeSha256": "641f99abb04df2aebd8bbcc9ef8e8c135865e179c73ef7860baf1d45ccc0daf3"
     },
     {
       "manifestVariants": [
