@@ -95,6 +95,7 @@ describe('security convergence baseline', () => {
       auditedCodeSha: 'e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded',
       measurements: { c13: '17 corpora / 143 anchors', p: 5956 },
     });
+    expect(baseline.historicalRows[0]).not.toHaveProperty('snapshotSha256');
     expect(baseline.currentSnapshot).toMatchObject({
       measuredCodeSha: 'fa326cdfdde18c027b95aee2702b82771d396fbe',
       snapshot: {
@@ -156,6 +157,14 @@ describe('security convergence baseline', () => {
     writeFileSync(path.join(driftRoot, SECURITY_CONVERGENCE_SOURCE_PATHS[0]), '// drift\n');
     expect(await runSecurityConvergenceGate({ args: [], repoRoot: driftRoot })).toBe(false);
     expect(readFileSync(driftBaselinePath, 'utf8')).toContain('test subject binding');
+  });
+
+  it('rejects decorative fields that are not joined to historical evidence', async () => {
+    const { baselinePath, root } = convergenceRepository();
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+    baseline.historicalRows[0].snapshotSha256 = '0'.repeat(64);
+    writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: root })).toBe(false);
   });
 
   it('keeps check, live, and writer CLI modes explicit and mutually exclusive', () => {

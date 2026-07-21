@@ -551,9 +551,16 @@ export async function main(options = {}) {
   for (const [index, row] of (baseline.historicalRows ?? []).entries()) {
     const auditRound = row?.auditRound;
     if (
+      !hasExactObjectKeys(row, ['auditRound', 'auditedCodeSha', 'measurements', 'recordedAt']) ||
+      !hasExactObjectKeys(auditRound, ['canaryRecall', 'file', 'r', 'sha256'])
+    ) {
+      findings.push(`historical convergence row ${index} has schema drift`);
+      continue;
+    }
+    if (
       typeof auditRound?.file !== 'string' ||
       typeof auditRound?.sha256 !== 'string' ||
-      !/^[0-9a-f]{64}$/u.test(row?.snapshotSha256 ?? '')
+      !/^[0-9a-f]{64}$/u.test(auditRound.sha256)
     ) {
       findings.push(`historical convergence row ${index} is incomplete`);
       continue;
@@ -721,6 +728,16 @@ function normalizeSourceText(source) {
 
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function hasExactObjectKeys(value, expectedKeys) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort(compareText)) ===
+      JSON.stringify([...expectedKeys].sort(compareText))
+  );
 }
 
 function lineCount(source) {

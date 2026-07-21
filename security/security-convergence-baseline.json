@@ -15,8 +15,7 @@
         "p": 5956,
         "g": "18/18 fixture rows; 2350ms; 468713472-byte peak RSS",
         "c13": "17 corpora / 143 anchors"
-      },
-      "snapshotSha256": "997b85decb4d23184259ec38d0ed9a85069521737c3a1e089e14411f54f1ad79"
+      }
     }
   ],
   "currentSnapshot": {
