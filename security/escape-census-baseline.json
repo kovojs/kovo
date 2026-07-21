@@ -1,6 +1,6 @@
 {
   "$comment": "Exact Metric E report plus mandatory negative controls from the representative production build.",
-  "schema": "kovo.escape-census-baseline/v1",
+  "schema": "kovo.escape-census-baseline/v2",
   "command": "pnpm run check:escape-census:baseline",
   "gateCommand": "node scripts/escape-census-gate.mjs --config security/escape-census-config.json",
   "config": "security/escape-census-config.json",
@@ -9,6 +9,66 @@
     "reviewedCommit": "53f5a607441ed5fee6d4fa7277c38644a08ce566",
     "sha256": "73e0d4f816d9188c7cce5c3725f56d3e628544c896af0879ca5e919e8f101a99"
   },
+  "reviewSubjects": [
+    {
+      "app": "metric-e-representative",
+      "manifest": {
+        "artifactSubject": "sha256:77617282596f784efe4acde3dad5dc24ba72bf0ec7247e535198451fc1432475",
+        "schema": "kovo.escape-census-review-subjects/v1",
+        "subjects": [
+          {
+            "artifactSubject": "sha256:77617282596f784efe4acde3dad5dc24ba72bf0ec7247e535198451fc1432475",
+            "door": "allowControlChars",
+            "root": "app.tsx:560:590",
+            "schema": "kovo.escape-census-review/v1",
+            "sites": [
+              {
+                "encoding": "utf16le",
+                "file": "app.tsx",
+                "sliceHash": "sha256:99d398175e6f5ce730f34687ba0064aaff232b27e8e998d8bdfd1182640179e8",
+                "sourceHash": "sha256:dfcf3717260dccc2fc89fbce798eb2cb5b9557249d666bf5db07e6c3ca5ecaf6",
+                "sourceLength": 1316,
+                "span": { "end": 590, "start": 560 }
+              }
+            ]
+          },
+          {
+            "artifactSubject": "sha256:77617282596f784efe4acde3dad5dc24ba72bf0ec7247e535198451fc1432475",
+            "door": "csrf:false",
+            "root": "mutation:app/admin-mutation",
+            "schema": "kovo.escape-census-review/v1",
+            "sites": [
+              {
+                "encoding": "utf16le",
+                "file": "app.tsx",
+                "sliceHash": "sha256:d22e6ba996a72f29b3cbe7729fa0d44d58428043a742f1cd8d5e09d5a6f27081",
+                "sourceHash": "sha256:dfcf3717260dccc2fc89fbce798eb2cb5b9557249d666bf5db07e6c3ca5ecaf6",
+                "sourceLength": 1316,
+                "span": { "end": 641, "start": 427 }
+              }
+            ]
+          },
+          {
+            "artifactSubject": "sha256:77617282596f784efe4acde3dad5dc24ba72bf0ec7247e535198451fc1432475",
+            "door": "trustedHtml",
+            "root": "app.tsx:1026:1094",
+            "schema": "kovo.escape-census-review/v1",
+            "sites": [
+              {
+                "encoding": "utf16le",
+                "file": "app.tsx",
+                "sliceHash": "sha256:23f232750b546d44e0d109a5414b1c588721949d3770a14316ad042a6813443f",
+                "sourceHash": "sha256:dfcf3717260dccc2fc89fbce798eb2cb5b9557249d666bf5db07e6c3ca5ecaf6",
+                "sourceLength": 1316,
+                "span": { "end": 1094, "start": 1026 }
+              }
+            ]
+          }
+        ]
+      },
+      "package": "@kovojs/security-metric-e-app"
+    }
+  ],
   "report": {
     "apps": [
       {
@@ -23,11 +83,11 @@
         },
         "package": "@kovojs/security-metric-e-app",
         "roots": {
-          "allowControlChars": ["app.tsx:19"],
+          "allowControlChars": ["app.tsx:560:590"],
           "csrf:false": ["mutation:app/admin-mutation"],
           "ctx.fetch": [],
           "kovoAnalyzerSummary": [],
-          "trustedHtml": ["app.tsx:32"],
+          "trustedHtml": ["app.tsx:1026:1094"],
           "trustedSql": []
         }
       }
@@ -44,16 +104,16 @@
         },
         "package": "@kovojs/security-metric-e-app",
         "roots": {
-          "allowControlChars": ["[\"metric-e-representative\",\"app.tsx:19\"]"],
+          "allowControlChars": ["[\"metric-e-representative\",\"app.tsx:560:590\"]"],
           "csrf:false": ["[\"metric-e-representative\",\"mutation:app/admin-mutation\"]"],
           "ctx.fetch": [],
           "kovoAnalyzerSummary": [],
-          "trustedHtml": ["[\"metric-e-representative\",\"app.tsx:32\"]"],
+          "trustedHtml": ["[\"metric-e-representative\",\"app.tsx:1026:1094\"]"],
           "trustedSql": []
         }
       }
     ],
-    "schema": "kovo.escape-census/v1"
+    "schema": "kovo.escape-census/v2"
   },
   "negativeChecks": [
     {
@@ -61,14 +121,14 @@
       "door": "trustedHtml",
       "package": "@kovojs/security-metric-e-app",
       "expectedFindings": [
-        "@kovojs/security-metric-e-app: trustedHtml escaped roots 1 exceed budget 0 ([\"metric-e-representative\",\"app.tsx:32\"])"
+        "@kovojs/security-metric-e-app: trustedHtml escaped roots 1 exceed budget 0 ([\"metric-e-representative\",\"app.tsx:1026:1094\"])"
       ]
     },
     {
       "id": "missing-producer-provenance",
       "app": "metric-e-representative",
       "expectedFindings": [
-        "metric-e-representative: missing kovo.escape-census-coverage/v1 producer witness"
+        "metric-e-representative: missing kovo.escape-census-coverage/v2 producer witness"
       ]
     },
     {
