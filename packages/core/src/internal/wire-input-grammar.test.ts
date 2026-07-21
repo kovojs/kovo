@@ -39,6 +39,12 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         },
         {
           carrier: 'response-header',
+          grammar: 'content-disposition',
+          id: 'response-header.content-disposition',
+          name: 'content-disposition',
+        },
+        {
+          carrier: 'response-header',
           grammar: 'http-field-value',
           id: 'response-header.vary',
           name: 'vary',

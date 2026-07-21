@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { discoverWireInputReads, evaluateWireInputBoundary } from './wire-input-boundary-gate.mjs';
@@ -134,6 +136,22 @@ describe('closed wire-input classifications', () => {
       .sort((left, right) => String(left).localeCompare(String(right)));
 
     expect(reads).toEqual(['authorization', 'authorization', 'cookie', 'cookie']);
+  });
+
+  it('binds every browser content-disposition read to its dedicated finite grammar', () => {
+    const manifest = JSON.parse(readFileSync('security/wire-input-boundary.json', 'utf8'));
+    const reads = discoverWireInputReads().filter(
+      (site) => site.api === 'browserReadHeader' && site.inputName === 'content-disposition',
+    );
+
+    expect(reads).toHaveLength(3);
+    expect(
+      reads.map((site) => manifest.rows.find((row) => row.id === site.id)?.registryId),
+    ).toEqual([
+      'response-header.content-disposition',
+      'response-header.content-disposition',
+      'response-header.content-disposition',
+    ]);
   });
 
   it('rejects missing, stale, and name-incompatible registry bindings', () => {

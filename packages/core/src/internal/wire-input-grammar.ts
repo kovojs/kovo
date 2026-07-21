@@ -37,6 +37,7 @@ export type FrameworkWireInputCarrier =
 export type FrameworkWireInputGrammarKind =
   | 'boolean-literal'
   | 'capability-token'
+  | 'content-disposition'
   | 'cookie-value'
   | 'fragment-target'
   | 'http-field-value'
@@ -182,6 +183,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
       grammar: 'http-field-value',
       id: 'response-header.cache-control',
       name: 'cache-control',
+    },
+    {
+      carrier: 'response-header',
+      grammar: 'content-disposition',
+      id: 'response-header.content-disposition',
+      name: 'content-disposition',
     },
     {
       carrier: 'response-header',

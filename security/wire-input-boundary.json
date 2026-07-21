@@ -13,6 +13,16 @@
     {
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
+      "file": "packages/browser/src/enhanced-navigation.ts",
+      "id": "packages/browser/src/enhanced-navigation.ts#contentDisposition",
+      "inputName": "content-disposition",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Enhanced navigation applies response bytes only when the registered disposition grammar is absent or an unambiguous inline value.",
+      "registryId": "response-header.content-disposition"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
       "file": "packages/browser/src/mutation-fetch.ts",
       "id": "packages/browser/src/mutation-fetch.ts#reauth",
       "inputName": "kovo-reauth",
@@ -54,6 +64,16 @@
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
       "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#contentDisposition",
+      "inputName": "content-disposition",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation fragment handling applies response bytes only when the registered disposition grammar is absent or an unambiguous inline value.",
+      "registryId": "response-header.content-disposition"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
       "id": "packages/browser/src/mutation-fetch.ts#readSessionTransition.return",
       "inputName": "kovo-session-transition",
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
@@ -69,6 +89,16 @@
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
       "reason": "Mutation redirect handling validates the registered response location.",
       "registryId": "response-header.location"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/query-refetch.ts",
+      "id": "packages/browser/src/query-refetch.ts#refetchQueries.call",
+      "inputName": "content-disposition",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Typed query refetch materializes response bytes only when the registered disposition grammar is absent or an unambiguous inline value.",
+      "registryId": "response-header.content-disposition"
     },
     {
       "allowedCarriers": ["response-header"],
@@ -99,6 +129,16 @@
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
       "reason": "Document cache proof treats any registered Authorization field as a narrowing credential signal.",
       "registryId": "request-header.authorization"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-document.ts",
+      "id": "packages/server/src/app-document.ts#enhancedNavigationDocument",
+      "inputName": "accept",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Document rendering omits bootstrap bytes only when the registered Accept field selects the enhanced-navigation media type.",
+      "registryId": "request-header.accept"
     },
     {
       "allowedCarriers": ["header", "request-header", "response-header"],
@@ -523,8 +563,8 @@
   ],
   "schema": "kovo-wire-input-boundary/v1",
   "summary": {
-    "classified": 52,
+    "classified": 56,
     "dynamicNames": 5,
-    "sites": 52
+    "sites": 56
   }
 }
