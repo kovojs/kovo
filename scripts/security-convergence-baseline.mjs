@@ -13,6 +13,9 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import {
   assertCleanCurrentCodeSubject,
+  assertRetainedCodeSubject,
+  buildSourceSet,
+  buildSourceSetAtCodeSubject,
   canonicalJson,
   parseExactCliArguments,
   SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
@@ -48,6 +51,22 @@ export const SECURITY_PREDICATE_PRODUCTION_FILES = Object.freeze([
   'packages/compiler/src/emit/server-render.ts',
   'packages/compiler/src/lower/handlers.ts',
 ]);
+
+export const SECURITY_CONVERGENCE_SOURCE_PATHS = Object.freeze(
+  [
+    ...new Set([
+      ...SECURITY_PREDICATE_PRODUCTION_FILES,
+      EGRESS_FILE,
+      'packages/conformance-fixtures/src/adversarial-corpus.ts',
+      'scripts/check-security-classifier-corpus.mjs',
+      'scripts/derivation-rewitness-inventory.mjs',
+      'scripts/security-convergence-baseline.mjs',
+      'scripts/security-gate-mutations.mjs',
+      DEFAULT_CHARTER_FILE,
+      'security/security-derivation-rewitness-inventory.json',
+    ]),
+  ].sort(compareText),
+);
 
 const EGRESS_RANGE_TABLES = [
   'IANA_IPV4_SPECIAL_PURPOSE_PREFIXES',
@@ -436,7 +455,13 @@ export function compareSnapshot(expected, actual) {
  * Refresh the current structural row after the measured code is committed. The caller then commits
  * this evidence update separately; embedding that later evidence-commit SHA would be self-referential.
  */
-export function updateSecurityConvergenceRecord({ baseline, codeSubjectSha, reason, snapshot }) {
+export function updateSecurityConvergenceRecord({
+  baseline,
+  codeSubjectSha,
+  reason,
+  repoRoot = findRepoRoot(),
+  snapshot,
+}) {
   const subjectSha = validateCodeSubjectSha(codeSubjectSha);
   if (typeof reason !== 'string' || reason.trim() === '') {
     throw new TypeError('convergence refresh reason must be non-empty');
@@ -450,9 +475,22 @@ export function updateSecurityConvergenceRecord({ baseline, codeSubjectSha, reas
     currentSnapshot: {
       measuredCodeSha: subjectSha,
       reason,
+      sources: buildSourceSet({ paths: SECURITY_CONVERGENCE_SOURCE_PATHS, repoRoot }),
       snapshot,
     },
   };
+}
+
+export function parseSecurityConvergenceMode(args, { live = false } = {}) {
+  if (!Array.isArray(args)) throw new TypeError('convergence CLI arguments must be an array');
+  if (args.length === 0) return Object.freeze({ mode: live ? 'live' : 'check' });
+  if (args.length === 1 && args[0] === '--live') return Object.freeze({ mode: 'live' });
+  if (live) throw new Error('--live cannot be combined with convergence evidence writes');
+  const options = parseExactCliArguments(args, {
+    command: '--write',
+    valueFlags: ['--subject-sha', '--reason'],
+  });
+  return Object.freeze({ mode: 'write', options });
 }
 
 export async function main(options = {}) {
@@ -460,12 +498,15 @@ export async function main(options = {}) {
   const baselinePath = path.join(root, options.baselineFile ?? DEFAULT_BASELINE_FILE);
   let baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   const actual = collectSecurityConvergenceSnapshot({ repoRoot: root });
+  const actualSources = buildSourceSet({
+    paths: SECURITY_CONVERGENCE_SOURCE_PATHS,
+    repoRoot: root,
+  });
   const args = options.args ?? process.argv.slice(2);
-  if (args.length > 0) {
-    const writeOptions = parseExactCliArguments(args, {
-      command: '--write',
-      valueFlags: ['--subject-sha', '--reason'],
-    });
+  const invocation = parseSecurityConvergenceMode(args, { live: options.live === true });
+  const live = invocation.mode === 'live';
+  if (invocation.mode === 'write') {
+    const writeOptions = invocation.options;
     const codeSubjectSha = writeOptions['subject-sha'];
     const reason = writeOptions.reason;
     assertCleanCurrentCodeSubject({ repoRoot: root, subjectSha: codeSubjectSha });
@@ -473,6 +514,7 @@ export async function main(options = {}) {
       baseline,
       codeSubjectSha,
       reason,
+      repoRoot: root,
       snapshot: actual,
     });
     writeFileSync(baselinePath, canonicalJson(baseline), 'utf8');
@@ -488,6 +530,24 @@ export async function main(options = {}) {
   }
   if (!/^[0-9a-f]{40}$/u.test(baseline.currentSnapshot?.measuredCodeSha ?? '')) {
     findings.push('current structural snapshot is missing its exact measured code SHA');
+  } else {
+    try {
+      const retainedSources = buildSourceSetAtCodeSubject({
+        paths: SECURITY_CONVERGENCE_SOURCE_PATHS,
+        repoRoot: root,
+        subjectSha: baseline.currentSnapshot.measuredCodeSha,
+      });
+      if (canonicalJson(baseline.currentSnapshot?.sources) !== canonicalJson(retainedSources)) {
+        findings.push('current structural snapshot subject does not retain its measured inputs');
+      }
+      if (canonicalJson(baseline.currentSnapshot?.sources) !== canonicalJson(actualSources)) {
+        findings.push('current structural snapshot source inputs drifted');
+      }
+    } catch (error) {
+      findings.push(
+        `current structural snapshot subject cannot be verified: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
   if (!Array.isArray(baseline.historicalRows) || baseline.historicalRows.length === 0) {
     findings.push('convergence record must preserve at least one immutable historical row');
@@ -506,6 +566,23 @@ export async function main(options = {}) {
     if (sha256(auditRoundSource) !== auditRound.sha256) {
       findings.push(`executed audit-round record ${index} drifted`);
     }
+    try {
+      const auditedCodeSha = assertRetainedCodeSubject({
+        repoRoot: root,
+        subjectSha: row.auditedCodeSha,
+      });
+      const auditRoundDocument = JSON.parse(auditRoundSource);
+      if (
+        auditRoundDocument?.schema !== 'kovo-security-audit-round/v1' ||
+        auditRoundDocument?.auditedCodeSha !== auditedCodeSha
+      ) {
+        findings.push(`historical convergence row ${index} does not bind its audit subject`);
+      }
+    } catch (error) {
+      findings.push(
+        `historical convergence row ${index} subject cannot be verified: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
   if (findings.length > 0) {
     process.stderr.write(
@@ -513,14 +590,16 @@ export async function main(options = {}) {
     );
     return false;
   }
-  if (options.live === true) {
-    const live = await measureLiveSecurityConvergence({ repoRoot: root });
-    if (live.m.survivors.length > 0) {
-      process.stderr.write(`${BASELINE_SCHEMA} FAIL survivors=${live.m.survivors.length}\n`);
+  if (live) {
+    const liveMeasurement = await measureLiveSecurityConvergence({ repoRoot: root });
+    if (liveMeasurement.m.survivors.length > 0) {
+      process.stderr.write(
+        `${BASELINE_SCHEMA} FAIL survivors=${liveMeasurement.m.survivors.length}\n`,
+      );
       return false;
     }
     process.stdout.write(
-      `${BASELINE_SCHEMA} LIVE mutants=${live.m.killed}/${live.m.total} greenMs=${live.g.durationMs} peakRssBytes=${live.g.peakRssBytes}\n`,
+      `${BASELINE_SCHEMA} LIVE mutants=${liveMeasurement.m.killed}/${liveMeasurement.m.total} greenMs=${liveMeasurement.g.durationMs} peakRssBytes=${liveMeasurement.g.peakRssBytes}\n`,
     );
   } else {
     process.stdout.write(
@@ -657,5 +736,5 @@ function sha256(source) {
 }
 
 if (isMainEntry(import.meta.url)) {
-  await runGate(() => main({ live: process.argv.includes('--live') }));
+  await runGate(() => main({ args: process.argv.slice(2) }));
 }

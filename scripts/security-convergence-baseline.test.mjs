@@ -1,9 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { repoRoot } from './lib/repo-root.mjs';
+import { sha256 } from './lib/security-evidence-subject.mjs';
 import {
   collectSecurityConvergenceSnapshot,
   compareSnapshot,
@@ -12,9 +15,73 @@ import {
   measureLiveSecurityConvergence,
   measureProductionPredicateObligations,
   measureStaticPredicateObligations,
+  main as runSecurityConvergenceGate,
   parsePeakRss,
+  parseSecurityConvergenceMode,
+  SECURITY_CONVERGENCE_SOURCE_PATHS,
   updateSecurityConvergenceRecord,
 } from './security-convergence-baseline.mjs';
+
+const temporaryRoots = [];
+
+afterEach(() => {
+  for (const root of temporaryRoots.splice(0)) rmSync(root, { force: true, recursive: true });
+});
+
+function convergenceRepository() {
+  const sourceRoot = repoRoot();
+  const root = mkdtempSync(path.join(tmpdir(), 'kovo-convergence-subject-'));
+  temporaryRoots.push(root);
+  const paths = new Set([
+    ...SECURITY_CONVERGENCE_SOURCE_PATHS,
+    'security/security-convergence-baseline.json',
+    'security/security-convergence-audit-round-2026-07-18.json',
+  ]);
+  for (const relativePath of paths) {
+    const destination = path.join(root, relativePath);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    cpSync(path.join(sourceRoot, relativePath), destination);
+  }
+  git(root, ['init', '-q']);
+  git(root, ['config', 'user.email', 'convergence@example.test']);
+  git(root, ['config', 'user.name', 'Convergence Test']);
+  git(root, ['add', '.']);
+  git(root, ['commit', '-qm', 'measured convergence inputs']);
+  const subjectSha = git(root, ['rev-parse', 'HEAD']);
+  const baselinePath = path.join(root, 'security/security-convergence-baseline.json');
+  const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  const auditRoundPath = path.join(
+    root,
+    'security/security-convergence-audit-round-2026-07-18.json',
+  );
+  const auditRound = JSON.parse(readFileSync(auditRoundPath, 'utf8'));
+  auditRound.auditedCodeSha = subjectSha;
+  writeFileSync(auditRoundPath, `${JSON.stringify(auditRound, null, 2)}\n`);
+  baseline.historicalRows[0].auditedCodeSha = subjectSha;
+  baseline.historicalRows[0].auditRound.sha256 = sha256(readFileSync(auditRoundPath));
+  const snapshot = collectSecurityConvergenceSnapshot({ repoRoot: root });
+  writeFileSync(
+    baselinePath,
+    `${JSON.stringify(
+      updateSecurityConvergenceRecord({
+        baseline,
+        codeSubjectSha: subjectSha,
+        reason: 'test subject binding',
+        repoRoot: root,
+        snapshot,
+      }),
+      null,
+      2,
+    )}\n`,
+  );
+  return { baselinePath, root, subjectSha };
+}
+
+function git(root, args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(`${result.stderr}${result.stdout}`);
+  return result.stdout.trim();
+}
 
 describe('security convergence baseline', () => {
   it('keeps the committed deterministic snapshot synchronized', () => {
@@ -74,6 +141,45 @@ describe('security convergence baseline', () => {
         snapshot,
       }),
     ).toThrow('full lowercase Git commit SHA');
+  });
+
+  it('binds the current convergence label to a real commit and its exact measured inputs', async () => {
+    const { baselinePath, root } = convergenceRepository();
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: root })).toBe(true);
+
+    const nonexistent = JSON.parse(readFileSync(baselinePath, 'utf8'));
+    nonexistent.currentSnapshot.measuredCodeSha = '0'.repeat(40);
+    writeFileSync(baselinePath, `${JSON.stringify(nonexistent, null, 2)}\n`);
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: root })).toBe(false);
+
+    const { baselinePath: driftBaselinePath, root: driftRoot } = convergenceRepository();
+    writeFileSync(path.join(driftRoot, SECURITY_CONVERGENCE_SOURCE_PATHS[0]), '// drift\n');
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: driftRoot })).toBe(false);
+    expect(readFileSync(driftBaselinePath, 'utf8')).toContain('test subject binding');
+  });
+
+  it('keeps check, live, and writer CLI modes explicit and mutually exclusive', () => {
+    expect(parseSecurityConvergenceMode([])).toEqual({ mode: 'check' });
+    expect(parseSecurityConvergenceMode(['--live'])).toEqual({ mode: 'live' });
+    expect(
+      parseSecurityConvergenceMode([
+        '--write',
+        '--subject-sha',
+        '0123456789abcdef0123456789abcdef01234567',
+        '--reason',
+        'reviewed refresh',
+      ]),
+    ).toMatchObject({ mode: 'write' });
+    expect(() =>
+      parseSecurityConvergenceMode([
+        '--live',
+        '--write',
+        '--subject-sha',
+        '0123456789abcdef0123456789abcdef01234567',
+        '--reason',
+        'bad combination',
+      ]),
+    ).toThrow();
   });
 
   it('reports absolute D and W denominator counts from the validated inventories', () => {

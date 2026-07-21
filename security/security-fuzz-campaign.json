@@ -15,7 +15,7 @@
   "successArtifacts": {
     "directory": ".kovo/security-evidence/security-fuzz-campaign",
     "schema": "kovo.security-fuzz-success/v1",
-    "qualification": "the artifact counts toward a duration exit only when the enclosing GitHub Actions run concludes success",
+    "qualification": "the artifact is nonqualifying by itself; a duration exit requires authenticated GitHub Actions API proof of terminal success, scheduled or reviewed-dispatch profile, exact SHA and digests, and the required consecutive span",
     "retentionDays": 30
   },
   "mutationHarness": {

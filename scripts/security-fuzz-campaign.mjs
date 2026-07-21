@@ -177,6 +177,13 @@ const allowedDecisionRoles = new Set([
 ]);
 
 const securityFuzzReplayEnvironmentPattern = /^KOVO_[A-Z0-9_]*FUZZ_REPLAY_FILE$/u;
+const securityFuzzAggregatorChecks = Object.freeze([
+  'authenticate the GitHub Actions run through the Actions API',
+  'require terminal conclusion success',
+  'require the scheduled or reviewed dispatch profile',
+  'match code subject, campaign digest, case digest, and artifact digest',
+  'prove the required consecutive time span',
+]);
 
 export function createSecurityFuzzChildEnvironment(
   environment,
@@ -228,11 +235,11 @@ export function validateSecurityFuzzCampaignDocument(
     document.successArtifacts.directory !== '.kovo/security-evidence/security-fuzz-campaign' ||
     document.successArtifacts.schema !== securityFuzzSuccessSchema ||
     document.successArtifacts.qualification !==
-      'the artifact counts toward a duration exit only when the enclosing GitHub Actions run concludes success' ||
+      'the artifact is nonqualifying by itself; a duration exit requires authenticated GitHub Actions API proof of terminal success, scheduled or reviewed-dispatch profile, exact SHA and digests, and the required consecutive span' ||
     document.successArtifacts.retentionDays !== 30
   ) {
     findings.push(
-      'successArtifacts must pin the 30-day terminal-workflow qualification and durable evidence schema',
+      'successArtifacts must pin the 30-day authenticated terminal-workflow qualification and durable evidence schema',
     );
   }
   if (
@@ -498,13 +505,91 @@ export function validateSecurityFuzzWorkflowSource(source) {
   ) {
     findings.push('workflow must reserve the release profile for explicit dispatch');
   }
-  const nightlyIndex = source.indexOf('run: vp exec pnpm run test:security-fuzz-nightly');
-  const timingIndex = source.indexOf(
-    'run: vp exec pnpm run test:response-indistinguishability-nightly',
+  const steps = parseCampaignWorkflowSteps(source, findings);
+  const nightly = namedWorkflowStep(steps, 'Run nightly deterministic campaign', findings);
+  const timing = namedWorkflowStep(
+    steps,
+    'Run response indistinguishability timing oracle',
+    findings,
   );
-  const releaseIndex = source.indexOf('run: vp exec pnpm run test:security-fuzz-release');
-  const successArtifactIndex = source.indexOf('name: Archive successful campaign evidence');
-  const failureArtifactIndex = source.indexOf('name: Archive replayable minimized counterexamples');
+  const release = namedWorkflowStep(steps, 'Run release-budget deterministic campaign', findings);
+  const successArtifact = namedWorkflowStep(
+    steps,
+    'Archive successful campaign evidence',
+    findings,
+  );
+  const failureArtifact = namedWorkflowStep(
+    steps,
+    'Archive replayable minimized counterexamples',
+    findings,
+  );
+  requireExactWorkflowStep(
+    nightly,
+    {
+      if: "github.event_name != 'workflow_dispatch' || inputs.profile == 'nightly'",
+      name: 'Run nightly deterministic campaign',
+      run: 'vp exec pnpm run test:security-fuzz-nightly',
+    },
+    'nightly campaign',
+    findings,
+  );
+  requireExactWorkflowStep(
+    timing,
+    {
+      if: "github.event_name != 'workflow_dispatch' || inputs.profile == 'nightly'",
+      name: 'Run response indistinguishability timing oracle',
+      run: 'vp exec pnpm run test:response-indistinguishability-nightly',
+    },
+    'nightly timing oracle',
+    findings,
+  );
+  requireExactWorkflowStep(
+    release,
+    {
+      if: "github.event_name == 'workflow_dispatch' && inputs.profile == 'release'",
+      name: 'Run release-budget deterministic campaign',
+      run: 'vp exec pnpm run test:security-fuzz-release',
+    },
+    'release campaign',
+    findings,
+  );
+  requireExactWorkflowStep(
+    successArtifact,
+    {
+      if: 'success()',
+      name: 'Archive successful campaign evidence',
+      uses: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+      with: {
+        'if-no-files-found': 'error',
+        name: 'kovo-security-fuzz-success-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}',
+        path: '.kovo/security-evidence/security-fuzz-campaign/*.json',
+        'retention-days': '30',
+      },
+    },
+    'successful evidence upload',
+    findings,
+  );
+  requireExactWorkflowStep(
+    failureArtifact,
+    {
+      if: 'failure()',
+      name: 'Archive replayable minimized counterexamples',
+      uses: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+      with: {
+        'if-no-files-found': 'ignore',
+        name: 'kovo-security-fuzz-failures',
+        path: '.kovo/security-failures/**',
+        'retention-days': '30',
+      },
+    },
+    'failure evidence upload',
+    findings,
+  );
+  const nightlyIndex = steps.indexOf(nightly);
+  const timingIndex = steps.indexOf(timing);
+  const releaseIndex = steps.indexOf(release);
+  const successArtifactIndex = steps.indexOf(successArtifact);
+  const failureArtifactIndex = steps.indexOf(failureArtifact);
   if (
     nightlyIndex < 0 ||
     timingIndex <= nightlyIndex ||
@@ -517,6 +602,102 @@ export function validateSecurityFuzzWorkflowSource(source) {
     );
   }
   return result(findings);
+}
+
+function parseCampaignWorkflowSteps(source, findings) {
+  const lines = source.split(/\r?\n/u);
+  const jobStart = lines.findIndex((line) => line === '  campaign:');
+  if (jobStart < 0) {
+    findings.push('workflow must retain the campaign job');
+    return [];
+  }
+  const jobEndOffset = lines
+    .slice(jobStart + 1)
+    .findIndex((line) => /^  [A-Za-z0-9_-]+:\s*$/u.test(line));
+  const jobEnd = jobEndOffset < 0 ? lines.length : jobStart + 1 + jobEndOffset;
+  const stepsStart = lines.findIndex(
+    (line, index) => index > jobStart && index < jobEnd && line === '    steps:',
+  );
+  if (stepsStart < 0) {
+    findings.push('campaign job must retain a steps sequence');
+    return [];
+  }
+  const blocks = [];
+  let current;
+  for (let index = stepsStart + 1; index < jobEnd; index += 1) {
+    const line = lines[index];
+    if (/^      - /u.test(line)) {
+      current = [];
+      blocks.push(current);
+    }
+    if (current !== undefined) current.push(line);
+  }
+  return blocks.map((block, index) => parseWorkflowStepBlock(block, index, findings));
+}
+
+function parseWorkflowStepBlock(lines, index, findings) {
+  const step = {};
+  let nested;
+  for (const [lineIndex, line] of lines.entries()) {
+    if (line.trim() === '' || /^\s*#/u.test(line)) continue;
+    const root = (
+      lineIndex === 0
+        ? /^      - ([A-Za-z0-9_-]+):\s*(.*)$/u
+        : /^        ([A-Za-z0-9_-]+):\s*(.*)$/u
+    ).exec(line);
+    if (root) {
+      const [, key, value] = root;
+      if (Object.hasOwn(step, key)) {
+        findings.push(`campaign workflow step ${index + 1} repeats ${key}`);
+        continue;
+      }
+      if (value === '') {
+        nested = {};
+        step[key] = nested;
+      } else {
+        nested = undefined;
+        step[key] = unquoteWorkflowScalar(value);
+      }
+      continue;
+    }
+    const child = /^          ([A-Za-z0-9_-]+):\s*(.*)$/u.exec(line);
+    if (child && nested !== undefined) {
+      const [, key, value] = child;
+      if (Object.hasOwn(nested, key)) {
+        findings.push(`campaign workflow step ${index + 1} repeats nested ${key}`);
+      } else {
+        nested[key] = unquoteWorkflowScalar(value);
+      }
+      continue;
+    }
+    findings.push(`campaign workflow step ${index + 1} has unsupported structure: ${line.trim()}`);
+  }
+  return step;
+}
+
+function unquoteWorkflowScalar(value) {
+  if (
+    value.length >= 2 &&
+    ((value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"')))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function namedWorkflowStep(steps, name, findings) {
+  const matches = steps.filter((step) => step?.name === name);
+  if (matches.length !== 1) {
+    findings.push(`campaign workflow must contain exactly one ${name} step`);
+  }
+  return matches[0];
+}
+
+function requireExactWorkflowStep(actual, expected, label, findings) {
+  if (!deepEqual(actual, expected)) {
+    findings.push(`${label} step must retain its exact condition, action/command, and mapping`);
+  }
 }
 
 export function validateSecurityFuzzReleaseWorkflowSource(source) {
@@ -874,6 +1055,12 @@ export function buildSecurityFuzzSuccessRecord({
   if (profileName !== 'nightly' && profileName !== 'release') {
     throw new TypeError('security fuzz success evidence profile must be nightly or release');
   }
+  const inGitHubActions = environment.GITHUB_ACTIONS === 'true';
+  if (inGitHubActions && environment.GITHUB_SHA !== codeSubjectSha) {
+    throw new TypeError(
+      'GitHub Actions fuzz evidence must bind GITHUB_SHA to the exact code subject',
+    );
+  }
   const analyzerFamily = campaign.families.find((family) => family.id === 'analyzer-soundness');
   if (!analyzerFamily) throw new TypeError('analyzer-soundness family is missing');
   const executed = exactSuccessfulExecutions(campaign, executions);
@@ -939,11 +1126,24 @@ export function buildSecurityFuzzSuccessRecord({
     }),
     normativePropertyViolations: 0,
     qualification: campaign.successArtifacts.qualification,
+    qualificationEvidence: Object.freeze({
+      authenticatedTerminalConclusion: null,
+      claim: inGitHubActions
+        ? 'candidate metadata only; this JSON cannot authenticate its enclosing workflow conclusion'
+        : 'local command evidence only; not qualified for any duration exit',
+      requiredAggregatorChecks: securityFuzzAggregatorChecks,
+      state: inGitHubActions
+        ? 'pending-authenticated-terminal-green-actions-verification'
+        : 'local-nonqualifying',
+    }),
     workflow: Object.freeze({
       eventName: environment.GITHUB_EVENT_NAME ?? null,
+      inGitHubActions,
       ref: environment.GITHUB_REF ?? null,
       runAttempt: environment.GITHUB_RUN_ATTEMPT ?? null,
       runId: environment.GITHUB_RUN_ID ?? null,
+      selectedProfile: profileName,
+      sha: environment.GITHUB_SHA ?? null,
       workflow: environment.GITHUB_WORKFLOW ?? null,
     }),
   });
@@ -985,6 +1185,40 @@ export function validateSecurityFuzzSuccessRecord(
   }
   if (document.qualification !== campaign?.successArtifacts?.qualification) {
     findings.push('success evidence workflow-conclusion qualification drifted');
+  }
+  const inGitHubActions = document.workflow?.inGitHubActions === true;
+  const expectedQualificationState = inGitHubActions
+    ? 'pending-authenticated-terminal-green-actions-verification'
+    : 'local-nonqualifying';
+  if (
+    document.qualificationEvidence?.state !== expectedQualificationState ||
+    document.qualificationEvidence?.authenticatedTerminalConclusion !== null ||
+    !deepEqual(
+      document.qualificationEvidence?.requiredAggregatorChecks,
+      securityFuzzAggregatorChecks,
+    ) ||
+    (inGitHubActions
+      ? !document.qualificationEvidence?.claim?.includes('cannot authenticate')
+      : !document.qualificationEvidence?.claim?.includes('not qualified'))
+  ) {
+    findings.push(
+      'success evidence must preserve its local/CI nonclaim and aggregator requirements',
+    );
+  }
+  if (
+    document.workflow?.selectedProfile !== document.profile ||
+    (inGitHubActions &&
+      (document.workflow?.sha !== document.codeSubjectSha ||
+        !/^[0-9]+$/u.test(document.workflow?.runId ?? '') ||
+        !/^[0-9]+$/u.test(document.workflow?.runAttempt ?? '') ||
+        document.workflow?.workflow !== 'Security Fuzz Campaign' ||
+        typeof document.workflow?.ref !== 'string' ||
+        !['schedule', 'workflow_dispatch'].includes(document.workflow?.eventName) ||
+        (document.workflow.eventName === 'schedule' && document.profile !== 'nightly')))
+  ) {
+    findings.push(
+      'success evidence CI metadata does not bind the exact workflow, SHA, and profile',
+    );
   }
   if (
     document.campaign?.sha256 !== sha256(canonicalJson(campaign)) ||

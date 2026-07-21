@@ -73,14 +73,28 @@ export function assertCleanCurrentCodeSubject({ repoRoot, subjectSha }) {
   }
 }
 
-/**
- * A historical first round may predate the series ledger. It is admissible only when every named
- * measurement input is byte-identical to the retained commit. Future rounds should use the clean
- * current-HEAD writer path instead.
- */
-export function assertHistoricalCodeSubjectMatches({ paths, repoRoot, subjectSha }) {
+/** Prove that a claimed evidence subject names a retained commit in this repository. */
+export function assertRetainedCodeSubject({ repoRoot, subjectSha }) {
   const expected = validateCodeSubjectSha(subjectSha);
   runGit(repoRoot, ['cat-file', '-e', `${expected}^{commit}`]);
+  runGit(repoRoot, ['merge-base', '--is-ancestor', expected, 'HEAD']);
+  return expected;
+}
+
+/** Read one exact path from a retained code-subject commit, never from the current worktree. */
+export function readFileAtCodeSubject({ relativePath, repoRoot, subjectSha }) {
+  const expected = assertRetainedCodeSubject({ repoRoot, subjectSha });
+  const [safePath] = normalizedPaths([relativePath]);
+  return runGitBuffer(repoRoot, ['show', `${expected}:${safePath}`]);
+}
+
+/**
+ * A historical first round may predate the series ledger. This writer-side compatibility check
+ * requires every named measurement input to remain byte-identical; artifact gates must still bind
+ * each round to retained commit bytes again at check time.
+ */
+export function assertHistoricalCodeSubjectMatches({ paths, repoRoot, subjectSha }) {
+  const expected = assertRetainedCodeSubject({ repoRoot, subjectSha });
   for (const relativePath of normalizedPaths(paths)) {
     const current = readFileSync(path.join(repoRoot, relativePath));
     const retained = runGitBuffer(repoRoot, ['show', `${expected}:${relativePath}`]);
@@ -103,6 +117,19 @@ export function buildSourceSet({ paths, repoRoot }) {
   });
 }
 
+/** Build the exact source-set digest retained by a named commit. */
+export function buildSourceSetAtCodeSubject({ paths, repoRoot, subjectSha }) {
+  const expected = assertRetainedCodeSubject({ repoRoot, subjectSha });
+  const files = normalizedPaths(paths).map((relativePath) => ({
+    path: relativePath,
+    sha256: sha256(runGitBuffer(repoRoot, ['show', `${expected}:${relativePath}`])),
+  }));
+  return Object.freeze({
+    files: Object.freeze(files),
+    sha256: sha256(canonicalJson(files)),
+  });
+}
+
 function normalizedPaths(paths) {
   if (!Array.isArray(paths) || paths.length === 0) {
     throw new TypeError('security evidence source set must name at least one path');
@@ -115,6 +142,7 @@ function normalizedPaths(paths) {
         typeof entry !== 'string' ||
         entry.length === 0 ||
         path.isAbsolute(entry) ||
+        entry.includes(':') ||
         entry.split('/').includes('..'),
     )
   ) {
@@ -128,7 +156,11 @@ function runGit(repoRoot, args) {
 }
 
 function runGitBuffer(repoRoot, args) {
-  const result = spawnSync('git', args, { cwd: repoRoot, encoding: null });
+  const result = spawnSync('git', args, {
+    cwd: repoRoot,
+    encoding: null,
+    maxBuffer: 64 * 1024 * 1024,
+  });
   if (result.error || result.status !== 0) {
     const detail = Buffer.concat([
       result.stdout ?? Buffer.alloc(0),

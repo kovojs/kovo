@@ -8,6 +8,7 @@ import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import {
   assertCleanCurrentCodeSubject,
   buildSourceSet,
+  buildSourceSetAtCodeSubject,
   canonicalJson,
   parseExactCliArguments,
   SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
@@ -217,6 +218,14 @@ export function validateDecidedSurfaceArtifact(document, { repoRoot = findRepoRo
   }
   let expected;
   try {
+    const subjectSources = buildSourceSetAtCodeSubject({
+      paths: decidedSurfaceSourcePaths,
+      repoRoot,
+      subjectSha: document?.subject?.codeSubjectSha,
+    });
+    if (canonicalJson(document?.subject?.sources) !== canonicalJson(subjectSources)) {
+      findings.push('decided-surface subject does not retain the measured source inputs');
+    }
     expected = buildDecidedSurfaceArtifact({
       codeSubjectSha: document?.subject?.codeSubjectSha,
       repoRoot,

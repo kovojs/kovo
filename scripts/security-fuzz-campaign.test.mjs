@@ -61,7 +61,7 @@ describe('deterministic security fuzz campaign contract', () => {
     expect(
       validateSecurityFuzzCampaignDocument(successArtifactDrift, { rootDir }).findings,
     ).toContain(
-      'successArtifacts must pin the 30-day terminal-workflow qualification and durable evidence schema',
+      'successArtifacts must pin the 30-day authenticated terminal-workflow qualification and durable evidence schema',
     );
   });
 
@@ -193,6 +193,19 @@ describe('deterministic security fuzz campaign contract', () => {
     expect(validateSecurityFuzzWorkflowSource(commentedSchedule).findings).toContain(
       "workflow must include line - cron: '37 8 * * *'",
     );
+
+    const decoySuccess = source
+      .replace(
+        '      - name: Validate versioned campaign contract\n        run:',
+        '      - name: Validate versioned campaign contract\n        if: success()\n        run:',
+      )
+      .replace(
+        '      - name: Archive successful campaign evidence\n        if: success()',
+        '      - name: Archive successful campaign evidence\n        if: always()',
+      );
+    expect(validateSecurityFuzzWorkflowSource(decoySuccess).findings).toContain(
+      'successful evidence upload step must retain its exact condition, action/command, and mapping',
+    );
   });
 
   it('builds digest-bound success evidence that still requires a terminal-green workflow', () => {
@@ -211,10 +224,12 @@ describe('deterministic security fuzz campaign contract', () => {
       codeSubjectSha: '0123456789abcdef0123456789abcdef01234567',
       endedAt: '2026-07-20T12:05:00Z',
       environment: {
+        GITHUB_ACTIONS: 'true',
         GITHUB_EVENT_NAME: 'schedule',
         GITHUB_REF: 'refs/heads/main',
         GITHUB_RUN_ATTEMPT: '1',
         GITHUB_RUN_ID: '1234',
+        GITHUB_SHA: '0123456789abcdef0123456789abcdef01234567',
         GITHUB_WORKFLOW: 'Security Fuzz Campaign',
       },
       executions,
@@ -241,8 +256,12 @@ describe('deterministic security fuzz campaign contract', () => {
       },
       execution: { casesExecuted: 21 },
       normativePropertyViolations: 0,
-      qualification: expect.stringContaining('GitHub Actions run concludes success'),
-      workflow: { eventName: 'schedule', runId: '1234' },
+      qualification: expect.stringContaining('authenticated GitHub Actions API proof'),
+      qualificationEvidence: {
+        authenticatedTerminalConclusion: null,
+        state: 'pending-authenticated-terminal-green-actions-verification',
+      },
+      workflow: { eventName: 'schedule', inGitHubActions: true, runId: '1234' },
     });
 
     for (const mutate of [
@@ -250,6 +269,7 @@ describe('deterministic security fuzz campaign contract', () => {
       (document) => (document.analyzerSoundness.canaryRecall.detected = 1),
       (document) => (document.mutation.survivors = 1),
       (document) => (document.qualification = 'command-only'),
+      (document) => (document.qualificationEvidence.authenticatedTerminalConclusion = 'success'),
       (document) => document.execution.cases.pop(),
       (document) => document.execution.cases.push(document.execution.cases[0]),
     ]) {
