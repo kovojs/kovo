@@ -22,7 +22,7 @@ adapter shares:
 > from the write ASTs and committed as a reviewable graph instead of declared by hand. See the
 > [data-layer guide](/guides/data-layer/).
 
-{{snippet:05-optimistic/src/app.ts#touches}}
+{{snippet:05-optimistic/src/app.tsx#touches}}
 
 The mutation registers its touches and the queries it may affect. The loaders now read the
 per-request database, so post-commit reruns render what the transaction just committed — the
@@ -45,7 +45,7 @@ A one-round-trip wait is fine for the product list, but the cart badge should ti
 You declare optimism per **(mutation × invalidated query)** — never per island — so every island
 consuming the query updates from one transform, including islands written months from now:
 
-{{snippet:05-optimistic/src/app.ts#optimistic}}
+{{snippet:05-optimistic/src/app.tsx#optimistic}}
 
 Two deliberate choices are visible here:
 

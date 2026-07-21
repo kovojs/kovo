@@ -2,26 +2,26 @@
 // request shell gains a typed session user, so the cart/add write set —
 // cart, product, order — matches the reference commerce app's.
 
-export interface ShopProduct {
+export type ShopProduct = {
   id: string;
   name: string;
   stock: number;
   unitPrice: number;
-}
+};
 
-export interface CartItem {
+export type CartItem = {
   productId: string;
   qty: number;
   unitPrice: number;
-}
+};
 
-export interface ShopOrder {
+export type ShopOrder = {
   id: string;
   productId: string;
   qty: number;
   total: number;
   userId: string;
-}
+};
 
 export interface ShopDb {
   cartItems: CartItem[];

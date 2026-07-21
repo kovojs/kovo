@@ -7,13 +7,13 @@ import { cart, product } from './domains.js';
 // through the query load context, so post-commit reruns (SPEC.md section
 // 10.3) render the data the mutation just wrote — never pre-commit state.
 
-export interface CartResult {
+export type CartResult = {
   count: number;
-}
+};
 
-export interface ProductsResult {
+export type ProductsResult = {
   items: ShopProduct[];
-}
+};
 
 export function loadCart(db: ShopDb): CartResult {
   return { count: db.cartItems.reduce((total, item) => total + item.qty, 0) };

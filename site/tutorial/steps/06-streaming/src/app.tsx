@@ -1,20 +1,14 @@
+/** @jsxImportSource @kovojs/server */
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/browser';
-import { mutation, route, s, type MutationFail } from '@kovojs/server';
+import { Defer, mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
-import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
+import type { ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import * as productListComponent from './components/product-list.js';
 import { cart, product } from './domains.js';
-import {
-  cartQuery,
-  loadCart,
-  loadProducts,
-  productsQuery,
-  type CartResult,
-  type ProductsResult,
-} from './queries.js';
+import { cartQuery, productsQuery, type CartResult, type ProductsResult } from './queries.js';
 
 // Tutorial step 06 (chapter 6), carried from step 05: the mutation declares what it touches, the
 // framework derives which queries to re-run (SPEC.md sections 10.3, 11.1),
@@ -54,14 +48,14 @@ export const addToCartTouches = [
   {
     domain: cart.key,
     keys: null,
-    site: 'site/tutorial/steps/06-streaming/src/app.ts:addToCart',
+    site: 'site/tutorial/steps/06-streaming/src/app.tsx:addToCart',
     via: 'cart_items',
   },
   {
     domain: product.key,
     keys: 'arg:productId',
     predicate: 'eq',
-    site: 'site/tutorial/steps/06-streaming/src/app.ts:addToCart',
+    site: 'site/tutorial/steps/06-streaming/src/app.tsx:addToCart',
     via: 'products',
   },
 ] as const;
@@ -129,21 +123,30 @@ export const addToCartOptimistic = {
 } satisfies OptimisticFor<typeof addToCartForm, { cart: CartResult; products: ProductsResult }>;
 // /snippet
 
-export function renderShopPage(
-  db: ShopDb = createShopDb(),
-  addToCartFailure?: AddToCartFailureState,
-  request?: ShopRequest,
-): string {
-  const cart = loadCart(db);
-  const products = loadProducts(db);
-  const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
-  const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
-
-  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${badge}${list}</main></body></html>`;
+export function renderShopPage() {
+  return (
+    <html>
+      <head>
+        <title>Kovo Shop</title>
+      </head>
+      <body>
+        <main>
+          <h1>Kovo Shop</h1>
+          <CartBadge />
+          <Defer
+            target="product-list"
+            priority="after-paint"
+            fallback={<section aria-busy="true">Loading products...</section>}
+            render={() => <ProductList />}
+          />
+        </main>
+      </body>
+    </html>
+  );
 }
 
 export const homeRoute = route('/', {
-  page() {
+  page(_input, _request: ShopRequest) {
     return renderShopPage();
   },
 });

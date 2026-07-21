@@ -1,18 +1,18 @@
 // Tutorial step 04 (chapter 4): the in-memory database gains transactions and
 // named-table writes so commit and rollback behavior is real, not simulated.
 
-export interface ShopProduct {
+export type ShopProduct = {
   id: string;
   name: string;
   stock: number;
   unitPrice: number;
-}
+};
 
-export interface CartItem {
+export type CartItem = {
   productId: string;
   qty: number;
   unitPrice: number;
-}
+};
 
 // snippet:db
 export interface ShopDb {

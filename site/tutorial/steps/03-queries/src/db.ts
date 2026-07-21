@@ -4,22 +4,26 @@
 // so every behavior stays visible.
 
 // snippet:db
-export interface ShopProduct {
+export type ShopProduct = {
   id: string;
   name: string;
   stock: number;
   unitPrice: number;
-}
+};
 
-export interface CartItem {
+export type CartItem = {
   productId: string;
   qty: number;
   unitPrice: number;
-}
+};
 
 export interface ShopDb {
   cartItems: CartItem[];
   products: Map<string, ShopProduct>;
+}
+
+export interface ShopRequest {
+  db: ShopDb;
 }
 
 export function createShopDb(): ShopDb {

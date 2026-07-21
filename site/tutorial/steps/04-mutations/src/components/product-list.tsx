@@ -1,20 +1,15 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, FormError } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import { addToCart, type AddToCartFailure, type AddToCartFailureState } from '../mutations.js';
+import { addToCart, type AddToCartFailure } from '../mutations.js';
 
 // Tutorial step 04 (chapter 4): every product card carries a real form
 // posting to the mutation endpoint. The no-JS fallback IS the output;
-// `enhance` upgrades it to the fragment wire. Failure state is request
-// context, not query data, so it arrives as an explicit second render argument.
-
-export interface ProductListRenderContext {
-  failure?: AddToCartFailureState | undefined;
-  request?: ShopRequest | undefined;
-}
+// `enhance` upgrades it to the fragment wire. FormError reads the framework's
+// per-form failure context, without a reconstructibility-unsafe render prop.
 
 const productListStyles = style.create({
   list: {
@@ -26,16 +21,12 @@ const productListStyles = style.create({
 
 export const ProductList = component({
   queries: { products: productsQuery },
-  render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
+  render: ({ products }: { products: ProductsResult }) => (
     <ul style={productListStyles.list}>
       {products.items.map((item) => (
         <li key={item.id}>
           {item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)
-          {renderAddToCartForm(
-            item,
-            context.failure?.productId === item.id ? context.failure.failure : undefined,
-            context.request,
-          )}
+          {renderAddToCartForm(item)}
         </li>
       ))}
     </ul>
@@ -60,7 +51,17 @@ export function renderAddToCartForm(
         <input name="quantity" type="number" min="1" max={item.stock} value="1" />
       </label>
       <button type="submit">Add</button>
-      {failure ? renderAddToCartError(failure) : ''}
+      {failure ? (
+        renderAddToCartError(failure)
+      ) : (
+        <FormError
+          code="OUT_OF_STOCK"
+          role="alert"
+          message={(formFailure: { payload: { availableQuantity?: number } }) =>
+            `Only ${formFailure.payload.availableQuantity ?? 0} available.`
+          }
+        />
+      )}
     </form>
   );
 }

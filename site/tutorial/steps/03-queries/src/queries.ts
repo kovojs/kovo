@@ -1,6 +1,6 @@
-import { query } from '@kovojs/server';
+import { query, type QueryLoadContext } from '@kovojs/server';
 
-import { createShopDb, type ShopDb, type ShopProduct } from './db.js';
+import { createShopDb, type ShopDb, type ShopProduct, type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';
 
 // Tutorial step 03 (chapter 3): typed reads declared once (SPEC.md section
@@ -8,13 +8,13 @@ import { cart, product } from './domains.js';
 // read set is the whole invalidation declaration; nothing else registers
 // anywhere.
 
-export interface CartResult {
+export type CartResult = {
   count: number;
-}
+};
 
-export interface ProductsResult {
+export type ProductsResult = {
   items: ShopProduct[];
-}
+};
 
 // snippet:loaders
 export function loadCart(db: ShopDb): CartResult {
@@ -28,14 +28,18 @@ export function loadProducts(db: ShopDb): ProductsResult {
 }
 // /snippet
 
+function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
+  return context?.request?.db ?? createShopDb();
+}
+
 // snippet:queries
 export const cartQuery = query({
-  load: (_input: unknown) => loadCart(createShopDb()),
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
   reads: [cart],
 });
 
 export const productsQuery = query({
-  load: (_input: unknown) => loadProducts(createShopDb()),
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 // /snippet

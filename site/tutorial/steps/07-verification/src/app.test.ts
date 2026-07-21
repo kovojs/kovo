@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { renderRouteHtml } from '@kovojs/server';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import {
   componentLiveTargetRenderer,
   renderMutationEndpointResponse,
-  type MutationWireHeaderSource,
 } from '../../../../../packages/server/src/internal/wire.js';
-import { createLiveTargetAttestation } from '../../../../../packages/server/src/mutation-wire.js';
+import {
+  createLiveTargetAttestation,
+  type MutationEndpointRequest,
+} from '../../../../../packages/server/src/mutation-wire.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
@@ -15,10 +19,10 @@ import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs
 import {
   addToCart,
   addToCartOptimistic,
+  homeRoute,
   ProductList,
   renderAddToCartError,
   renderAddToCartForm,
-  renderShopPage,
   shopCsrf,
   shopGraph,
   shopTouchGraph,
@@ -31,7 +35,9 @@ import { createShopDb, type ShopDb } from './db.js';
 import { cart, order, product } from './domains.js';
 import { cartQuery, orderHistoryQuery, productsQuery } from './queries.js';
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority(
+type TutorialMutationHeaders = Record<string, readonly string[] | string | undefined>;
+
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<ShopRequest>(
   'tutorial-step-07-test-build',
   addToCart.csrf === false ? undefined : addToCart.csrf,
 );
@@ -56,12 +62,15 @@ function formInput(request: ShopRequest, fields: Record<string, string>) {
 function submitAddToCart(
   rawInput: unknown,
   request: ShopRequest,
-  headers: MutationWireHeaderSource,
+  headers: TutorialMutationHeaders,
 ) {
   const productId = productIdFromRawInput(rawInput);
-  return renderMutationEndpointResponse(addToCart, {
+  const endpointRequest: MutationEndpointRequest<
+    ShopRequest,
+    { productId: string; quantity: number }
+  > = {
     buildToken: 'tutorial-step-07-test-build',
-    csrf: tutorialWireCsrf,
+    ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
     liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
@@ -69,22 +78,24 @@ function submitAddToCart(
     rawInput,
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
-    renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
+    renderFailurePage: (failure) =>
+      renderShopPageForTest(request, { failure, productId }, rawInput),
     request,
-  });
+  };
+  return renderMutationEndpointResponse(addToCart, endpointRequest);
 }
 
 function successLiveTargetRenderers() {
   return [
-    componentLiveTargetRenderer({
+    componentLiveTargetRenderer<typeof CartBadge.definition, ShopRequest>({
       component: CartBadge,
       componentId: 'components/cart-badge/cart-badge',
     }),
-    componentLiveTargetRenderer({
+    componentLiveTargetRenderer<typeof ProductList.definition, ShopRequest>({
       component: ProductList,
       componentId: 'components/product-list/product-list',
     }),
-    componentLiveTargetRenderer({
+    componentLiveTargetRenderer<typeof OrderHistory.definition, ShopRequest>({
       component: OrderHistory,
       componentId: 'components/order-history/order-history',
     }),
@@ -92,9 +103,9 @@ function successLiveTargetRenderers() {
 }
 
 function withAttestedLiveTargets(
-  headers: MutationWireHeaderSource,
+  headers: TutorialMutationHeaders,
   request: ShopRequest,
-): MutationWireHeaderSource {
+): TutorialMutationHeaders {
   const value = headers['Kovo-Live-Targets'];
   if (typeof value !== 'string') return headers;
 
@@ -115,7 +126,11 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const props = JSON.parse(propsJson) as Record<string, unknown>;
       const token = createLiveTargetAttestation(
         { component, props, target },
-        { buildToken: tutorialLiveTargetAuthority.audience, csrf: tutorialWireCsrf, request },
+        {
+          buildToken: tutorialLiveTargetAuthority.audience,
+          ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
+          request,
+        },
       );
       return `${target}#${component}@${token}:${propsJson}`;
     })
@@ -141,6 +156,28 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   }
   const productId = rawInput.productId;
   return typeof productId === 'string' ? productId : undefined;
+}
+
+async function renderShopPageForTest(
+  request: ShopRequest,
+  failure?: { failure: AddToCartFailure; productId?: string | undefined },
+  rawInput?: unknown,
+): Promise<string> {
+  const response = await renderRoutePageResponse(homeRoute, {}, request, renderRouteHtml, {
+    attestationAuthority: tutorialLiveTargetAuthority.authority,
+    ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
+    ...(failure === undefined
+      ? {}
+      : {
+          mutationFailure: {
+            failure: failure.failure,
+            input: rawInput,
+            mutationKey: addToCart.key,
+          },
+        }),
+  });
+  if (typeof response.body !== 'string') throw new Error('expected a string page body');
+  return response.body;
 }
 
 function explainLine(output: string, prefix: string): string {
@@ -286,7 +323,11 @@ describe('tutorial step 07 — testing & verification', () => {
     const harness = createKovoTestHarness({
       db: shopDb,
       pages: {
-        '/': () => renderShopPage(shopDb),
+        '/': () =>
+          renderShopPageForTest({
+            db: shopDb,
+            session: { id: 's1', user: { id: 'u1' } },
+          }),
       },
       request: {
         session: { id: 's1', user: { id: 'u1' } },
@@ -347,8 +388,9 @@ describe('tutorial step 07 — testing & verification', () => {
 
     // The tutorial now lets the compiler derive the mutation key from the
     // exported binding and module path; the no-JS form action follows that key.
-    expect(renderShopPage()).toContain(`action="/_m/${addToCart.key}"`);
-    expect(renderShopPage()).toContain('name="kovo-form-key" value="p1"');
+    const shopPage = await renderShopPageForTest(shopRequest());
+    expect(shopPage).toContain(`action="/_m/${addToCart.key}"`);
+    expect(shopPage).toContain('name="kovo-form-key" value="p1"');
 
     // Same input field vocabulary and write set.
     expect(shopCartAdd?.inputFields).toEqual(commerceCartAdd?.inputFields);

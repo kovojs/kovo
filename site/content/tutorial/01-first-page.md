@@ -34,9 +34,9 @@ unchanged layouts. If that proof is missing, the browser performs the normal nav
 starts on the server, with a route. You declare the route as a plain value, and the compiler
 captures its path string as a literal type:
 
-{{snippet:01-first-page/src/app.ts#catalog}}
+{{snippet:01-first-page/src/app.tsx#catalog}}
 
-{{snippet:01-first-page/src/app.ts#home-route}}
+{{snippet:01-first-page/src/app.tsx#home-route}}
 
 `route()` hands you a value you can export, test, and point links at — it doesn't register
 anything into a hidden router. Because the path is a literal type, every `<Link>`, GET form, and
@@ -49,13 +49,13 @@ under `vp check`. That pattern — declare once, derive everywhere, let renames 
 The product detail route declares its params schema once, coercion included — the same way form
 fields will declare theirs in chapter 4:
 
-{{snippet:01-first-page/src/app.ts#product-route}}
+{{snippet:01-first-page/src/app.tsx#product-route}}
 
 `notFound()` is a page outcome, not an exception: return it and the route answers with a real
-404 status, so status codes stay part of the typed surface. The render itself is ordinary string
-assembly for now — components arrive in the next chapter:
+404 status, so status codes stay part of the typed surface. The render itself is ordinary TSX;
+stateful components arrive in the next chapter:
 
-{{snippet:01-first-page/src/app.ts#render-home}}
+{{snippet:01-first-page/src/app.tsx#render-home}}
 
 ## Prove it without a browser
 

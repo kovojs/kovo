@@ -40,7 +40,7 @@ The app renders the authored TSX component into the product page. The compiler m
 generated artifacts for inspection during a build, but those are outputs to verify, not source you
 author, commit, or import by hand:
 
-{{snippet:02-islands/src/app.ts#render-island}}
+{{snippet:02-islands/src/app.tsx#render-island}}
 
 The step's first test reads the served HTML the way you'd read it in the Elements panel: the
 popover wired as plain attributes, the handler as a full URL plus a named export, and the

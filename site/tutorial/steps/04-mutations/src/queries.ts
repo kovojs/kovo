@@ -7,13 +7,13 @@ import { cart, product } from './domains.js';
 // query context so generated post-commit refresh renders the same state the
 // mutation just wrote.
 
-export interface CartResult {
+export type CartResult = {
   count: number;
-}
+};
 
-export interface ProductsResult {
+export type ProductsResult = {
   items: ShopProduct[];
-}
+};
 
 export function loadCart(db: ShopDb): CartResult {
   return { count: db.cartItems.reduce((total, item) => total + item.qty, 0) };

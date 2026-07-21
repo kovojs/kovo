@@ -1,23 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  mutationCsrfTokenForTesting as csrfToken,
-  renderWithRequestForTesting,
-} from '@kovojs/server/testing';
+import { renderRouteHtml } from '@kovojs/server';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import {
   componentLiveTargetRenderer,
   renderMutationEndpointResponse,
-  type MutationWireHeaderSource,
 } from '../../../../../packages/server/src/internal/wire.js';
-import { createLiveTargetAttestation } from '../../../../../packages/server/src/mutation-wire.js';
+import {
+  createLiveTargetAttestation,
+  type MutationEndpointRequest,
+} from '../../../../../packages/server/src/mutation-wire.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 
 import {
   addToCart,
+  homeRoute,
   ProductList,
   renderAddToCartError,
   renderAddToCartForm,
-  renderShopPage,
   shopCsrf,
   type AddToCartFailure,
   type ShopRequest,
@@ -26,7 +27,9 @@ import { CartBadge } from './components/cart-badge.js';
 import { createShopDb } from './db.js';
 import { cartQuery, productsQuery } from './queries.js';
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority(
+type TutorialMutationHeaders = Record<string, readonly string[] | string | undefined>;
+
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<ShopRequest>(
   'tutorial-step-04-test-build',
   addToCart.csrf === false ? undefined : addToCart.csrf,
 );
@@ -53,12 +56,15 @@ function submitAddToCartNoJs(rawInput: unknown, request: ShopRequest) {
 function submitAddToCart(
   rawInput: unknown,
   request: ShopRequest,
-  headers: MutationWireHeaderSource,
+  headers: TutorialMutationHeaders,
 ) {
   const productId = productIdFromRawInput(rawInput);
-  return renderMutationEndpointResponse(addToCart, {
+  const endpointRequest: MutationEndpointRequest<
+    ShopRequest,
+    { productId: string; quantity: number }
+  > = {
     buildToken: 'tutorial-step-04-test-build',
-    csrf: tutorialWireCsrf,
+    ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
     headers: withAttestedLiveTargets(headers, request),
     liveTargetRenderers: successLiveTargetRenderers(),
     liveTargetAttestationAuthority: tutorialLiveTargetAuthority.authority,
@@ -67,20 +73,19 @@ function submitAddToCart(
     redirectTo: '/',
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
     renderFailurePage: (failure) =>
-      renderWithRequestForTesting(request, () =>
-        renderShopPage(request.db, { failure, productId }, request),
-      ),
+      renderShopPageForTest(request, { failure, productId }, rawInput),
     request,
-  });
+  };
+  return renderMutationEndpointResponse(addToCart, endpointRequest);
 }
 
 function successLiveTargetRenderers() {
   return [
-    componentLiveTargetRenderer({
+    componentLiveTargetRenderer<typeof CartBadge.definition, ShopRequest>({
       component: CartBadge,
       componentId: 'components/cart-badge/cart-badge',
     }),
-    componentLiveTargetRenderer({
+    componentLiveTargetRenderer<typeof ProductList.definition, ShopRequest>({
       component: ProductList,
       componentId: 'components/product-list/product-list',
     }),
@@ -88,9 +93,9 @@ function successLiveTargetRenderers() {
 }
 
 function withAttestedLiveTargets(
-  headers: MutationWireHeaderSource,
+  headers: TutorialMutationHeaders,
   request: ShopRequest,
-): MutationWireHeaderSource {
+): TutorialMutationHeaders {
   const value = headers['Kovo-Live-Targets'];
   if (typeof value !== 'string') return headers;
 
@@ -111,7 +116,11 @@ function attestLiveTargetEntries(value: string, request: ShopRequest): string {
       const props = JSON.parse(propsJson) as Record<string, unknown>;
       const token = createLiveTargetAttestation(
         { component, props, target },
-        { buildToken: tutorialLiveTargetAuthority.audience, csrf: tutorialWireCsrf, request },
+        {
+          buildToken: tutorialLiveTargetAuthority.audience,
+          ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
+          request,
+        },
       );
       return `${target}#${component}@${token}:${propsJson}`;
     })
@@ -139,13 +148,33 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   return typeof productId === 'string' ? productId : undefined;
 }
 
+async function renderShopPageForTest(
+  request: ShopRequest,
+  failure?: { failure: AddToCartFailure; productId?: string | undefined },
+  rawInput?: unknown,
+): Promise<string> {
+  const response = await renderRoutePageResponse(homeRoute, {}, request, renderRouteHtml, {
+    attestationAuthority: tutorialLiveTargetAuthority.authority,
+    ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
+    ...(failure === undefined
+      ? {}
+      : {
+          mutationFailure: {
+            failure: failure.failure,
+            input: rawInput,
+            mutationKey: addToCart.key,
+          },
+        }),
+  });
+  if (typeof response.body !== 'string') throw new Error('expected a string page body');
+  return response.body;
+}
+
 describe('tutorial step 04 — mutations & forms', () => {
   // snippet:form-markup-test
-  it('renders the complete add-to-cart form bundle as the page output', () => {
+  it('renders the complete add-to-cart form bundle as the page output', async () => {
     const request = shopRequest();
-    const html = renderWithRequestForTesting(request, () =>
-      renderShopPage(request.db, undefined, request),
-    );
+    const html = await renderShopPageForTest(request);
     const action = `/_m/${addToCart.key}`;
 
     expect(html).toContain(
@@ -178,7 +207,7 @@ describe('tutorial step 04 — mutations & forms', () => {
       status: 303,
     });
     expect(request.db.cartItems).toEqual([{ productId: 'p1', qty: 2, unitPrice: 1499 }]);
-    expect(renderShopPage(request.db)).toContain('(3 in stock)');
+    await expect(renderShopPageForTest(request)).resolves.toContain('(3 in stock)');
   });
   // /snippet
 

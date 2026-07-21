@@ -70,7 +70,7 @@ script, and every island that depends on it reads from that single copy. There's
 per-component fetch and no client cache with a lifecycle. When a value changes, the loader
 replaces it and walks the self-describing bindings under each dependent island:
 
-{{snippet:03-queries/src/app.ts#shop-page}}
+{{snippet:03-queries/src/app.tsx#shop-page}}
 
 {{snippet:03-queries/src/app.test.ts#query-data-test}}
 

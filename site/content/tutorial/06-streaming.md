@@ -41,16 +41,17 @@ export function ShopPage() {
 }
 ```
 
-Deferred content reuses a mechanism you already have. The chunks that arrive after the shell are
-the same `<kovo-query>` and `<kovo-fragment>` elements the mutation wire used in chapters 4 and 5.
-The emitted placeholder is `<kovo-defer>`, but app code authors `<Defer>`.
+Deferred content reuses a mechanism you already have. The chunks that arrive after the shell use
+the same `<kovo-fragment>` element the mutation wire used in chapters 4 and 5. When a chunk also
+carries shared query JSON, the serializer places it before its consumers. The emitted placeholder
+is `<kovo-defer>`, but app code authors `<Defer>`.
 
 {{snippet:06-streaming/src/app.test.ts#deferred-stream}}
 
 The shell carries the cart badge, which is cheap and rendered inline. Kovo emits a `<kovo-defer>`
-wire placeholder with your fallback content. The stream then appends the products query value and
-the product-list fragment; the loader morphs the fragment over the placeholder exactly as it would
-morph a mutation response.
+wire placeholder with your fallback content. The stream then appends the complete product-list
+fragment; its compiler-derived `kovo-deps` stamp still names the products query, and the loader
+morphs the fragment over the placeholder exactly as it would morph a mutation response.
 
 ## Assert the stream as a string
 
@@ -59,9 +60,8 @@ shell precedes the fragment. Paint now, fill in later:
 
 {{snippet:06-streaming/src/app.test.ts#defer-test}}
 
-Second, the ordering guarantee that keeps the client coherent: deferred query JSON arrives
-**before or with** its consumers, so a fragment can never render against data the document does
-not hold yet:
+Second, the identity guarantee that keeps later refreshes coherent: the deferred consumer carries
+the same compiler-derived query dependency it would have carried in the initial shell:
 
 {{snippet:06-streaming/src/app.test.ts#query-order-test}}
 
@@ -104,11 +104,11 @@ set as one rendered inline. So once the fragment lands, it is a full participant
 invalidation loop from chapter 5: if a later mutation touches a domain the deferred query reads,
 that query re-runs and the deferred island updates exactly like any other dependent island. Nothing
 special is needed because the defer arrived late — the loader has already wired its bindings by the
-time the mutation's response comes back. The one ordering rule that protects this is the guarantee
-you assert above: a deferred query's JSON arrives **before or with** the fragment that binds to it,
-so the document never holds a binding whose data hasn't landed. A mutation that fires while a defer
-is still streaming sees a coherent document either way: it refreshes whatever query values are
-present, and the deferred chunk, when it arrives, carries the freshest server value.
+time the mutation's response comes back. The identity rule you assert above protects that loop: the
+arriving fragment retains its compiler-derived query dependency, so later invalidation selects the
+same consumer. A mutation that fires while a defer is still streaming sees a coherent document
+either way: it refreshes whatever query values are present, and the deferred chunk, when it arrives,
+carries the freshest server-rendered value.
 
 The app now paints fast, updates instantly, and degrades gracefully. What remains is the
 framework's biggest claim: proving all of this behavior, mechanically, without a browser.
@@ -117,8 +117,8 @@ framework's biggest claim: proving all of this behavior, mechanically, without a
 <summary>Spec & diagnostics</summary>
 
 `<Defer>` and streaming within first render: SPEC §8. Reused fragment protocol and morph over the
-framework-emitted `<kovo-defer>` placeholder: SPEC §9.1. Deferred query JSON ordered before or with
-its consumers: SPEC §8. Projected children ship in initial HTML; Defer is the only lazy-content
+framework-emitted `<kovo-defer>` placeholder: SPEC §9.1. Deferred consumers retain their
+compiler-derived query identity: SPEC §8. Projected children ship in initial HTML; Defer is the only lazy-content
 mechanism: SPEC §4.5. Priority and HTTP/1.1 considerations: SPEC §13.3. App-authored `defer(...)`
 as a JSX child is **KV244**.
 

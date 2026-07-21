@@ -139,7 +139,7 @@ const tutorialAddToCartInputs = [
   },
 ];
 
-/** Closed input facts for tutorial chapters whose mutation is declared in `app.ts`. */
+/** Closed input facts for tutorial chapters whose mutation is declared in `app.tsx`. */
 export const tutorialAppRegistryFacts = {
   mutationInputs: {
     'app/add-to-cart': tutorialAddToCartInputs,

@@ -9,22 +9,11 @@ import { catalog, homeRoute, productRoute } from './app.js';
 // values, no browser involved.
 
 function renderHomeRoute() {
-  return renderRoutePageResponse(homeRoute, {}, {}, renderTutorialPageValue);
+  return renderRoutePageResponse(homeRoute, {}, {});
 }
 
 function renderProductRoute(id: string) {
-  return renderRoutePageResponse(productRoute, { params: { id } }, {}, renderTutorialPageValue);
-}
-
-function renderTutorialPageValue(value: unknown): string {
-  if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
-  if (typeof value === 'object' && typeof (value as { html?: unknown }).html === 'string') {
-    return (value as { html: string }).html;
-  }
-
-  return JSON.stringify(value) ?? '';
+  return renderRoutePageResponse(productRoute, { params: { id } }, {});
 }
 
 describe('tutorial step 01 — first page', () => {

@@ -19,8 +19,10 @@ import { listSnippetReferences, loadTutorialSnippets } from './extract-snippets.
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
-      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
-      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+      for (const extension of ['.ts', '.tsx']) {
+        const sourceUrl = new URL(specifier.replace(/\.js$/, extension), context.parentURL);
+        if (existsSync(sourceUrl)) return nextResolve(sourceUrl.href, context);
+      }
     }
     return nextResolve(specifier, context);
   },
@@ -114,9 +116,9 @@ function compileStepComponents(step) {
 }
 
 function writeRegistryFactsForStep(step, root) {
-  const appPath = path.join(stepsDir, step, 'src/app.ts');
+  const appPath = path.join(stepsDir, step, 'src/app.tsx');
   const mutationInputs = existsSync(appPath)
-    ? compileMutationInputs(`site/tutorial/steps/${step}/src/app.ts`, appPath, root)
+    ? compileMutationInputs(`site/tutorial/steps/${step}/src/app.tsx`, appPath, root)
     : {};
   const registryFacts = {
     ...(Object.keys(mutationInputs).length > 0 ? { mutationInputs } : {}),
@@ -140,7 +142,7 @@ function compileMutationInputs(fileName, appPath, root) {
 function compileTutorialComponent({ fileName, registryFactsPath, root, sourcePath }) {
   const loweredPath = path.join(root, 'lowered.tsx');
   const clientFileName = fileName.replace(/\.tsx$/, '.client.js');
-  const clientPath = path.join(root, clientFileName);
+  const clientPath = path.join(root, path.basename(clientFileName));
   execFileSync(
     kovoBin,
     [

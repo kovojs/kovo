@@ -1,18 +1,16 @@
+/** @jsxImportSource @kovojs/server */
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/browser';
 import { guards, mutation, route, s, session, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
-import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
+import type { ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import { cart, order, product } from './domains.js';
 import { OrderHistory } from './components/order-history.js';
 import * as productListComponent from './components/product-list.js';
 import {
   cartQuery,
-  loadCart,
-  loadOrderHistory,
-  loadProducts,
   orderHistoryQuery,
   productsQuery,
   type CartResult,
@@ -65,20 +63,20 @@ export const addToCartTouches = [
   {
     domain: cart.key,
     keys: null,
-    site: 'site/tutorial/steps/07-verification/src/app.ts:addToCart',
+    site: 'site/tutorial/steps/07-verification/src/app.tsx:addToCart',
     via: 'cart_items',
   },
   {
     domain: order.key,
     keys: null,
-    site: 'site/tutorial/steps/07-verification/src/app.ts:addToCart',
+    site: 'site/tutorial/steps/07-verification/src/app.tsx:addToCart',
     via: 'orders',
   },
   {
     domain: product.key,
     keys: 'arg:productId',
     predicate: 'eq',
-    site: 'site/tutorial/steps/07-verification/src/app.ts:addToCart',
+    site: 'site/tutorial/steps/07-verification/src/app.tsx:addToCart',
     via: 'products',
   },
 ] as const;
@@ -207,23 +205,26 @@ export const shopGraph = {
 } as const;
 // /snippet
 
-export function renderShopPage(
-  db: ShopDb = createShopDb(),
-  addToCartFailure?: AddToCartFailureState,
-  request?: ShopRequest,
-): string {
-  const cart = loadCart(db);
-  const products = loadProducts(db);
-  const orderHistory = loadOrderHistory(db);
-  const badge = `<kovo-fragment target="cart-badge">${CartBadge.definition.render({ cart })}</kovo-fragment>`;
-  const list = `<kovo-fragment target="product-list">${ProductList.definition.render({ products }, { failure: addToCartFailure, request })}</kovo-fragment>`;
-  const orders = `<kovo-fragment target="order-history">${OrderHistory.definition.render({ orderHistory })}</kovo-fragment>`;
-
-  return `<!doctype html><html><head><title>Kovo Shop</title></head><body><main><h1>Kovo Shop</h1>${badge}${list}${orders}</main></body></html>`;
+export function renderShopPage() {
+  return (
+    <html>
+      <head>
+        <title>Kovo Shop</title>
+      </head>
+      <body>
+        <main>
+          <h1>Kovo Shop</h1>
+          <CartBadge />
+          <ProductList />
+          <OrderHistory />
+        </main>
+      </body>
+    </html>
+  );
 }
 
 export const homeRoute = route('/', {
-  page() {
+  page(_input, _request: ShopRequest) {
     return renderShopPage();
   },
 });

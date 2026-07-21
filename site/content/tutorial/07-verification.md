@@ -25,7 +25,7 @@ honest against the reference app — run-steps gating and parity — live in the
 `req.session` is a declared schema, not an `any` bag. Guard refinements and the order's `userId`
 rest on typed fields; an untyped session would be a hole directly under the proof surface:
 
-{{snippet:07-verification/src/app.ts#session}}
+{{snippet:07-verification/src/app.tsx#session}}
 
 {{snippet:07-verification/src/db.ts#request-shell}}
 
@@ -37,7 +37,7 @@ rest on typed fields; an untyped session would be a hole directly under the proo
 The mutation now runs behind `authed` plus a rate limit, writes a third domain (`order`), and
 keeps everything else from chapter 5 — schema, errors, CSRF, declared touches:
 
-{{snippet:07-verification/src/app.ts#add-to-cart}}
+{{snippet:07-verification/src/app.tsx#add-to-cart}}
 
 An order history island consumes the new domain. What had to change for it to participate:
 nothing. It declares `queries: { orderHistory }`, and every cart mutation ever written updates
@@ -54,7 +54,7 @@ optimistic statuses, the page's query set, the touch graph (write sites mapped t
 domains) — composes into one value. `examples/commerce` commits this as a generated artifact so
 graph changes appear as diffs in code review; the tutorial declares it inline:
 
-{{snippet:07-verification/src/app.ts#graph}}
+{{snippet:07-verification/src/app.tsx#graph}}
 
 `kovo check` is the CI gate over that graph — touch-graph consistency and optimistic exhaustiveness
 in one stable, diffable output:

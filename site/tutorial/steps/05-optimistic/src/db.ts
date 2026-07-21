@@ -1,19 +1,19 @@
 // Tutorial step 05 (chapter 5): unchanged storage from step 04; the request
 // shell type moves here so queries can read the per-request database without
-// an import cycle through app.ts.
+// an import cycle through app.tsx.
 
-export interface ShopProduct {
+export type ShopProduct = {
   id: string;
   name: string;
   stock: number;
   unitPrice: number;
-}
+};
 
-export interface CartItem {
+export type CartItem = {
   productId: string;
   qty: number;
   unitPrice: number;
-}
+};
 
 // snippet:db
 export interface ShopDb {
