@@ -157,6 +157,7 @@ throw new Error('undeclared Vite config executed');
     } finally {
       await stopChild(child);
     }
+    await expect(waitForPortClosed(port, 5_000)).resolves.toBeUndefined();
   }, 40_000);
 
   it('honors boot-pinned HOST and PORT without evaluating undeclared config', async () => {
@@ -765,7 +766,19 @@ function spawnKovoDev(
   args[args.length] = '--port';
   args[args.length] = String(port);
   args[args.length] = '--strict-port';
-  return spawn(join(repoRoot, 'packages/cli/src/bin.ts'), args, { cwd: root, env: process.env });
+  return spawn(
+    process.execPath,
+    [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-transform-types',
+      join(repoRoot, 'packages/cli/src/bin.ts'),
+      ...args,
+    ],
+    {
+      cwd: root,
+      env: { ...process.env, KOVO_CLI_TRANSFORM_TYPES: '1' },
+    },
+  );
 }
 
 function collectChildOutput(child: ChildProcessWithoutNullStreams): {
@@ -936,4 +949,24 @@ async function stopChild(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.exitCode !== null) return;
   child.kill('SIGTERM');
   await waitForChildExit(child, 10_000);
+}
+
+async function waitForPortClosed(port: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const open = await new Promise<boolean>((resolve) => {
+      const socket = createConnection({ host: '127.0.0.1', port });
+      socket.once('connect', () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.once('error', () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+    if (!open) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for kovo dev port ${port} to close.`);
 }

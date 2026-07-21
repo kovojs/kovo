@@ -23,6 +23,9 @@ export const defaultLockfilePath = 'pnpm-lock.yaml';
 export const analysisClosureSchema = 'kovo.security.analysis-time-closure/v1';
 export const securityRatchetSchema = 'kovo.security.tcb-ratchet/v1';
 
+const analysisCommandRegistryFiles = ['security/plan3-security-gate-commands.json'];
+const plan3GateCommandSchema = 'kovo.plan3-security-gate-commands/v1';
+
 const sourceExtensionPattern = /\.(?:[cm]?[jt]sx?|json)$/u;
 const commandPackageByExecutable = new Map([
   ['esbuild', 'esbuild'],
@@ -89,6 +92,7 @@ export function checkAnalysisTimeClosure(options = {}) {
   const discovered = discoverGateEntrypoints({
     compileEntrypoints: closure.compileEntrypoints,
     exists,
+    readText,
     rootManifest: workspace.byPath.get('package.json'),
     workspaceManifests: workspace.manifests,
   });
@@ -194,6 +198,7 @@ export function checkAnalysisTimeClosure(options = {}) {
 export function discoverGateEntrypoints({
   compileEntrypoints,
   exists,
+  readText,
   rootManifest,
   workspaceManifests,
 }) {
@@ -231,6 +236,54 @@ export function discoverGateEntrypoints({
         command,
         label: `${workspace.path}#${name}`,
       });
+    }
+  }
+
+  for (const registryPath of analysisCommandRegistryFiles) {
+    if (!exists(registryPath)) continue;
+    if (typeof readText !== 'function') {
+      findings.push(`${registryPath}: analysis command registry is unreadable`);
+      continue;
+    }
+    let registry;
+    try {
+      registry = JSON.parse(readText(registryPath));
+    } catch {
+      findings.push(`${registryPath}: analysis command registry is not valid JSON`);
+      continue;
+    }
+    if (
+      registry?.schema !== plan3GateCommandSchema ||
+      !Array.isArray(registry.gates)
+    ) {
+      findings.push(
+        `${registryPath}: analysis command registry must use ${plan3GateCommandSchema} with a gates array`,
+      );
+      continue;
+    }
+    for (const [gateIndex, gate] of registry.gates.entries()) {
+      if (gate?.execution === 'self-check') continue;
+      if (!Array.isArray(gate?.steps)) {
+        findings.push(`${registryPath}#gates[${gateIndex}]: analysis gate steps are missing`);
+        continue;
+      }
+      for (const [stepIndex, step] of gate.steps.entries()) {
+        if (
+          !Array.isArray(step?.command) ||
+          step.command.length === 0 ||
+          step.command.some((token) => typeof token !== 'string' || token.trim() === '')
+        ) {
+          findings.push(
+            `${registryPath}#gates[${gateIndex}].steps[${stepIndex}]: analysis gate command must be a non-empty string argv`,
+          );
+          continue;
+        }
+        scripts.push({
+          baseDir: '.',
+          command: step.command.join(' '),
+          label: `${registryPath}#gates[${gateIndex}].steps[${stepIndex}]`,
+        });
+      }
     }
   }
 

@@ -254,8 +254,16 @@ that closure.
         "reason": "Capability closure resolves a normalized request derived from the statically extracted app package import; the target is application dependency input."
       },
       {
+        "id": "packages/cli/src/commands/build-export-framework-sources.test.ts#require.resolve#createRequire(context.entry).resolve(dependencyName)",
+        "reason": "The source-root regression test resolves only manifest-declared first-party @kovojs dependency names from an already resolved framework package entry."
+      },
+      {
         "id": "packages/cli/src/commands/build-export.ts#require.resolve#context.resolver.resolve(packageName)",
         "reason": "The source-root proof resolves only names from Kovo's finite first-party framework package inventory through a resolver captured before app evaluation."
+      },
+      {
+        "id": "packages/cli/src/commands/build-export.ts#require.resolve#requireFromCli.resolve(packageName)",
+        "reason": "The build/export runner resolves only names from Kovo's finite first-party framework package inventory to pin workspace entry paths before app evaluation."
       },
       {
         "id": "packages/cli/src/commands/db.ts#import#import(pathToFileURL(resolvedPath).href)",
@@ -284,6 +292,10 @@ that closure.
       {
         "id": "packages/server/src/egress-undici-runtime.ts#require#requireUndici(undiciPackageName)",
         "reason": "The egress runtime loads only the fixed enrolled undici package name through its captured module loader."
+      },
+      {
+        "id": "packages/server/src/vite-source.ts#import#import(sourceEntryUrl)",
+        "reason": "The workspace source-mode adapter imports its fixed sibling Vite implementation URL after installing the source resolver; published consumers use the static dist entry."
       },
       {
         "id": "scripts/check-spec-conformance-closure.mjs#import#import( pathToFileURL(path.join(root, 'packages/core/src/diagnostics.ts')).href )",

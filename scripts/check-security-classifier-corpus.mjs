@@ -4849,10 +4849,35 @@ export function evaluateCustomRunnerBootstrapOrdering(readText) {
   }
   if (siteStaticExportSource !== undefined) {
     const lockIndex = siteStaticExportSource.indexOf('await securityLockedViteRuntime();');
-    const cliImportIndex = siteStaticExportSource.indexOf(
+    const orderedGraphReferences = [
+      'if (!skipPipeline) await runContentPipeline();',
+      'await buildWithSecurityLockedVite({ root: siteRoot });',
+      'const viteServer = await createViteServer({',
+    ];
+    let priorIndex = lockIndex;
+    let invalidOrdering = lockIndex < 0;
+    for (const reference of orderedGraphReferences) {
+      const index = siteStaticExportSource.indexOf(reference);
+      if (index < 0 || index <= priorIndex) invalidOrdering = true;
+      priorIndex = index;
+    }
+    const appGraphIndex = siteStaticExportSource.indexOf(
+      "viteServer.ssrLoadModule('/src/app.tsx')",
+    );
+    const serverGraphIndex = siteStaticExportSource.indexOf(
+      "viteServer.ssrLoadModule('@kovojs/server')",
+    );
+    const legacyCliImportIndex = siteStaticExportSource.indexOf(
       "await import('../../packages/cli/src/commands/build-export.js')",
     );
-    if (lockIndex < 0 || cliImportIndex < 0 || lockIndex >= cliImportIndex) {
+    if (
+      appGraphIndex <= priorIndex ||
+      serverGraphIndex <= priorIndex ||
+      (legacyCliImportIndex >= 0 && legacyCliImportIndex <= lockIndex)
+    ) {
+      invalidOrdering = true;
+    }
+    if (invalidOrdering) {
       findings.push(
         `request-safe-runtime: ${SITE_STATIC_EXPORT_RUNNER_FILE} must lock the runtime before importing the CLI/Vite graph`,
       );

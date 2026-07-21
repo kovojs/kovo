@@ -3651,6 +3651,14 @@ function browserScopeIsWithin(scope: BrowserStaticScope, ancestor: BrowserStatic
   return false;
 }
 
+type BrowserStructuredOpacityWorkItem = {
+  readonly candidate: unknown;
+  readonly inspectClosure: boolean;
+  readonly key: string | undefined;
+  readonly parent: Readonly<Record<string, unknown>> | undefined;
+  readonly scope: BrowserStaticScope;
+};
+
 function markBrowserStructuredArgumentOpaque(
   value: unknown,
   scope: BrowserStaticScope,
@@ -3658,13 +3666,9 @@ function markBrowserStructuredArgumentOpaque(
   state: BrowserStaticEvaluationState,
 ): void {
   if (browserExpressionIsDefinitelyPrimitive(value)) return;
-  const worklist: Array<{
-    readonly candidate: unknown;
-    readonly inspectClosure: boolean;
-    readonly key?: string;
-    readonly parent?: Readonly<Record<string, unknown>>;
-    readonly scope: BrowserStaticScope;
-  }> = [{ candidate: value, inspectClosure: false, scope }];
+  const worklist: BrowserStructuredOpacityWorkItem[] = [
+    { candidate: value, inspectClosure: false, key: undefined, parent: undefined, scope },
+  ];
   while (worklist.length > 0) {
     const { candidate, inspectClosure, key, parent, scope: candidateScope } = worklist.pop()!;
     if (typeof candidate !== 'object' || candidate === null) continue;
@@ -3754,6 +3758,8 @@ function markBrowserStructuredArgumentOpaque(
           worklist.push({
             candidate: atom.node,
             inspectClosure: atom.kind === 'namespace',
+            key: undefined,
+            parent: undefined,
             scope: atom.scope,
           });
         }
@@ -3768,6 +3774,8 @@ function markBrowserStructuredArgumentOpaque(
         worklist.push({
           candidate: capture.value,
           inspectClosure: true,
+          key: undefined,
+          parent: undefined,
           scope: capture.scope,
         });
       }
@@ -3800,13 +3808,7 @@ function collectBrowserStructuredOpacityLeaves(
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
-  worklist: Array<{
-    readonly candidate: unknown;
-    readonly inspectClosure: boolean;
-    readonly key?: string;
-    readonly parent?: Readonly<Record<string, unknown>>;
-    readonly scope: BrowserStaticScope;
-  }>,
+  worklist: BrowserStructuredOpacityWorkItem[],
 ): void {
   const pending = values.map((value) => ({ scope, value }));
   const seenContainers = new Set<object>();
@@ -3830,6 +3832,8 @@ function collectBrowserStructuredOpacityLeaves(
             worklist.push({
               candidate: capture.value,
               inspectClosure: true,
+              key: undefined,
+              parent: undefined,
               scope: capture.scope,
             });
           }
@@ -3861,7 +3865,13 @@ function collectBrowserStructuredOpacityLeaves(
       }
       continue;
     }
-    worklist.push({ candidate: current.value, inspectClosure: false, scope: candidateScope });
+    worklist.push({
+      candidate: current.value,
+      inspectClosure: false,
+      key: undefined,
+      parent: undefined,
+      scope: candidateScope,
+    });
   }
 }
 
@@ -3919,8 +3929,8 @@ function browserStaticCallableStructuredCaptures(
   const capturedGlobals = new Set<string>();
   const seen = new Set<object>();
   const pending: Array<{
-    readonly key?: string;
-    readonly parent?: Readonly<Record<string, unknown>>;
+    readonly key: string | undefined;
+    readonly parent: Readonly<Record<string, unknown>> | undefined;
     readonly value: unknown;
   }> = [
     { key: 'body', parent: callable, value: callable.body },
@@ -4066,7 +4076,19 @@ function browserSyntacticStaticPropertyName(
   return literalAstString(member.property);
 }
 
-function browserAstIsImportMeta(value: unknown): value is Record<string, unknown> {
+function browserAstIsImportMeta(
+  value: unknown,
+): value is Readonly<Record<string, unknown>> & {
+  readonly meta: Readonly<Record<string, unknown>> & {
+    readonly name: 'import';
+    readonly type: 'Identifier';
+  };
+  readonly property: Readonly<Record<string, unknown>> & {
+    readonly name: 'meta';
+    readonly type: 'Identifier';
+  };
+  readonly type: 'MetaProperty';
+} {
   return (
     isAstRecord(value) &&
     value.type === 'MetaProperty' &&

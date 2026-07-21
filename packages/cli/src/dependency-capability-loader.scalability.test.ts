@@ -329,6 +329,15 @@ export const inspect = () => new externalGlobal.platform.Worker('/payload.mjs');
   });
 
   // @kovo-security-certifies C13 dependency-browser-opacity-syntax-key-not-global
+  it('does not treat a class method key as an unresolved global capture', async () => {
+    const source = `const Local = class { constructor() {} };
+unknownSink(Local);
+export const inspect = () => new Map().size;`;
+
+    const artifact = await buildReviewedClientArtifact(source);
+    expect(artifact).toContain('new Map');
+  });
+
   it('does not spend the finite budget on syntax-only class method keys', async () => {
     const source = `${wideSafeClass('SyntaxOnlySafe', syntaxOnlyClassMethodCount)}
 unknownSink(SyntaxOnlySafe);

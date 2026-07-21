@@ -46,6 +46,56 @@ describe('analysis-time closure', () => {
     expect(discovered.commandPackages).toEqual(['vitest']);
   });
 
+  it('discovers gate entrypoints hidden behind the reviewed cost-runner registry', () => {
+    const registryPath = 'security/plan3-security-gate-commands.json';
+    const files = new Map([
+      ['packages/better-auth/src/lifecycle-inheritance.test.ts', ''],
+      ['scripts/check-auth-provider-pin.mjs', ''],
+      [
+        registryPath,
+        JSON.stringify({
+          gates: [
+            { execution: 'self-check', id: 'cost-budget-manifest' },
+            {
+              id: 'auth-provider-pin',
+              steps: [
+                { command: ['node', 'scripts/check-auth-provider-pin.mjs'] },
+                {
+                  command: [
+                    'pnpm',
+                    'exec',
+                    'vitest',
+                    '--run',
+                    'packages/better-auth/src/lifecycle-inheritance.test.ts',
+                  ],
+                },
+              ],
+            },
+          ],
+          schema: 'kovo.plan3-security-gate-commands/v1',
+        }),
+      ],
+    ]);
+    const discovered = discoverGateEntrypoints({
+      compileEntrypoints: [],
+      exists: (file) => files.has(file),
+      readText: (file) => files.get(file),
+      rootManifest: {
+        scripts: {
+          check: 'node scripts/security-cost-budget-runner.mjs --check',
+        },
+      },
+      workspaceManifests: [],
+    });
+
+    expect(discovered.findings).toEqual([]);
+    expect(discovered.entrypoints).toEqual([
+      'packages/better-auth/src/lifecycle-inheritance.test.ts',
+      'scripts/check-auth-provider-pin.mjs',
+    ]);
+    expect(discovered.commandPackages).toEqual(['vitest']);
+  });
+
   it('follows first-party command bins and rejects an unclassified gate executable', () => {
     const files = new Set(['packages/cli/src/bin.ts']);
     const discovered = discoverGateEntrypoints({

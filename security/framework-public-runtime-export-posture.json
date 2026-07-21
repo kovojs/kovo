@@ -1,14 +1,14 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-20.2",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-21.1",
   "runtimeSurfaceSha256": "50027f2b64f4e9e90e70d6899438cdb7e1c09dceb8c3c3ee1e2e17f6a33666b8",
   "postureMemberSha256": "6f786a38e33894fe8bcf1884c667606794d04cacef1ecc2e6acaf6d317dbcacf",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "f211d44a0636c606716304d0374b4c2ab53dcc5bdbab72c0fcc798b27040576c",
+      "sourceTreeSha256": "46011ec44ebea6b81006f2948ae3bc4dce0b9095d1a55b463f94fa084b83a9a4",
       "manifestVariants": [
         {
           "exports": {
@@ -824,7 +824,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "83c483ebab725d26606001e9c38729cd7d69debf8c9ef98de347a1df264d5ead"
+      "sourceTreeSha256": "7a6ae682d2835ed6191c40130999e36694f53cc2aa94a2c9004c914ae5f04ddb"
     },
     {
       "manifestVariants": [
@@ -1928,7 +1928,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "ac262ad996c81ceeeb167b33689090bfb167fe608cbd3319913a4fb8b89a6869"
+      "sourceTreeSha256": "71d041e8325cde21b3df5c8bbd2f4c1d1bd40760295b22bd50e41a7e6ea176de"
     },
     {
       "manifestVariants": [

@@ -32,7 +32,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-20.2' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-21.1' as const;
 
 // Compact generated closed membership; expanded formatting triples parse input.
 // prettier-ignore
@@ -66,10 +66,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/compiler", "0.2.0", [
     ["sha256:57e6b16c23a43e00842639913c49daf248aea547dffc0e3ae7f49d134dea74a9", [
 
-    ], ["kovo-compiler-self-source-tree-sha256:f211d44a0636c606716304d0374b4c2ab53dcc5bdbab72c0fcc798b27040576c"]],
+    ], ["kovo-compiler-self-source-tree-sha256:46011ec44ebea6b81006f2948ae3bc4dce0b9095d1a55b463f94fa084b83a9a4"]],
     ["sha256:be9f4067f9133083e695debfb999665dc96ec5b7bb9251e4b112fb59bcf0c5a2", [
 
-    ], ["kovo-compiler-self-packed-tree-sha256:f6ed48a5c55b6ec52c06788994c4656722f86b6b50ac8af32f9faebcafdabcae"]],
+    ], ["kovo-compiler-self-packed-tree-sha256:2be19f48d05fbe6a46969f78948072b483522944b0f599d9ef3655c996491289"]],
   ], "exact-implementation"],
   ["@kovojs/core", "0.2.0", [
     ["sha256:407a46bf0041448914f80bf157477dee17e04990d16666242343deed2eb825e8", [
@@ -82,10 +82,10 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/drizzle", "0.2.0", [
     ["sha256:50b4ecab6c1cf42f9413a9fd115b04cffe9aa94046978130ca273b28c4083d6f", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:73d0be4d7063de6f3745c74f4801cf69b304daec661a4fc3e04be9061d9b86de"]],
+    ], ["kovo-packed-tree-sha256:c77323414541f08b8fbb586ad541b112a9367f61ff92d19ec07a33e529088afe"]],
     ["sha256:ddeb653edb811d7d214ba36f4569cbdc0641fa9033015c792e3fb6551a86c936", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:ac262ad996c81ceeeb167b33689090bfb167fe608cbd3319913a4fb8b89a6869"]],
+    ], ["kovo-source-tree-sha256:71d041e8325cde21b3df5c8bbd2f4c1d1bd40760295b22bd50e41a7e6ea176de"]],
   ], "exact-implementation"],
   ["@kovojs/headless-ui", "0.2.0", [
     ["sha256:28c97b200b5d592458a4d9c0a71ec9478e5e13e4b951addd9f9c1e70999a6ddc", [

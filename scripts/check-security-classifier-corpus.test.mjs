@@ -45,9 +45,12 @@ describe('check-security-classifier-corpus gate', () => {
       'site/scripts/capture.mjs': `createSecurityLockedViteServer`,
       'site/scripts/export-static.mjs': `
         createSecurityLockedViteServer;
-        buildWithSecurityLockedVite;
-        await import('../../packages/cli/src/commands/build-export.js');
+        const viteServer = await createViteServer({});
+        viteServer.ssrLoadModule('/src/app.tsx');
+        viteServer.ssrLoadModule('@kovojs/server');
         await securityLockedViteRuntime();
+        if (!skipPipeline) await runContentPipeline();
+        await buildWithSecurityLockedVite({ root: siteRoot });
       `,
       'site/scripts/measure-route-style-size.mjs': `createSecurityLockedViteServer; buildWithSecurityLockedVite`,
       'site/scripts/serve.mjs': `createSecurityLockedViteServer`,
@@ -200,9 +203,12 @@ describe('check-security-classifier-corpus gate', () => {
       `,
       'site/scripts/export-static.mjs': `
         createSecurityLockedViteServer;
-        buildWithSecurityLockedVite;
         await securityLockedViteRuntime();
-        await import('../../packages/cli/src/commands/build-export.js');
+        if (!skipPipeline) await runContentPipeline();
+        await buildWithSecurityLockedVite({ root: siteRoot });
+        const viteServer = await createViteServer({ root: siteRoot });
+        await viteServer.ssrLoadModule('/src/app.tsx');
+        await viteServer.ssrLoadModule('@kovojs/server');
       `,
       'packages/create-kovo/templates/src/app.tsx': `export default app;`,
       'examples/commerce/src/app.tsx': `export default app;`,
