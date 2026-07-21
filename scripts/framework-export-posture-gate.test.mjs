@@ -67,6 +67,23 @@ const securityRoleContracts = [
   ['@kovojs/server', '.', 'webhookReplayIdentity', 'security-control'],
 ];
 
+const rootContracts = [
+  ['@kovojs/better-auth', '.', 'mount', 'endpoint'],
+  ['@kovojs/browser', '.', 'handler', 'serialized-browser-handler'],
+  ['@kovojs/server', '.', 'createApp', 'application'],
+  ['@kovojs/server', '.', 'createRequestHandler', 'endpoint'],
+  ['@kovojs/server', '.', 'createStorageDownloadEndpoint', 'endpoint'],
+  ['@kovojs/server', '.', 'endpoint', 'endpoint'],
+  ['@kovojs/server', '.', 'layout', 'layout'],
+  ['@kovojs/server', '.', 'mutation', 'mutation'],
+  ['@kovojs/server', '.', 'query', 'query'],
+  ['@kovojs/server', '.', 'route', 'route'],
+  ['@kovojs/server', '.', 'task', 'durable-task'],
+  ['@kovojs/server', '.', 'toNodeHandler', 'endpoint'],
+  ['@kovojs/server', '.', 'tool', 'agent-tool-callback'],
+  ['@kovojs/server', '.', 'webhook', 'webhook'],
+];
+
 function clone(value) {
   return structuredClone(value);
 }
@@ -123,7 +140,7 @@ describe('framework public runtime export posture gate', () => {
     );
   });
 
-  it('kills stale implementation, manifest-target, review-evidence, and root-census mutants', () => {
+  it('kills stale implementation, manifest-target, review-evidence, and invalid-root mutants', () => {
     const unversioned = clone(ledger);
     unversioned.summaryVersion = 'framework-posture/latest\nexport const injected = true';
     expect(validateFrameworkExportPosture({ actual, ledger: unversioned }).join('\n')).toContain(
@@ -151,18 +168,10 @@ describe('framework public runtime export posture gate', () => {
       'stale or escaping evidence path security/deleted-posture-proof.ts',
     );
 
-    const rootOmission = clone(ledger);
-    groupWithMember(rootOmission, '@kovojs/server', '.', 'route').rootKind = 'none';
-    expect(validateFrameworkExportPosture({ actual, ledger: rootOmission }).join('\n')).toContain(
-      'classificationSha256 is stale for reviewed authority/root/security/matrix posture',
-    );
-
-    const applicationRootDeletion = clone(ledger);
-    groupWithMember(applicationRootDeletion, '@kovojs/server', '.', 'createApp').rootKind = 'none';
-    expect(
-      validateFrameworkExportPosture({ actual, ledger: applicationRootDeletion }).join('\n'),
-    ).toContain(
-      'classificationSha256 is stale for reviewed authority/root/security/matrix posture',
+    const invalidRoot = clone(ledger);
+    groupWithMember(invalidRoot, '@kovojs/server', '.', 'route').rootKind = 'unregistered-root';
+    expect(validateFrameworkExportPosture({ actual, ledger: invalidRoot }).join('\n')).toContain(
+      'rootKind must explicitly name a supported root kind or none',
     );
   });
 
@@ -382,16 +391,27 @@ describe('framework public runtime export posture gate', () => {
     }
   });
 
-  it('kills security-role omission across auth, secret, SQL, authorization, CSRF, and replay exports', () => {
+  it('keeps security-bearing roles and root factories explicit', () => {
     for (const [packageName, subpath, name, role] of securityRoleContracts) {
       expect(groupWithMember(ledger, packageName, subpath, name).securityRole).toBe(role);
     }
+    expect(
+      expandFrameworkExportPostureLedger(ledger)
+        .filter((row) => row.rootKind !== 'none')
+        .map((row) => [row.packageName, row.subpath, row.name, row.rootKind]),
+    ).toEqual(rootContracts);
+  });
 
-    for (const [packageName, subpath, name] of securityRoleContracts.slice(0, 5)) {
-      const omitted = clone(ledger);
-      groupWithMember(omitted, packageName, subpath, name).securityRole = 'ordinary-runtime';
-      expect(validateFrameworkExportPosture({ actual, ledger: omitted }).join('\n')).toContain(
-        'classificationSha256 is stale for reviewed authority/root/security/matrix posture',
+  it('rejects removed aggregate check-digits instead of accepting decorative SHA fields', () => {
+    for (const field of [
+      'classificationSha256',
+      'postureMemberSha256',
+      'runtimeSurfaceSha256',
+    ]) {
+      const surplus = clone(ledger);
+      surplus[field] = '0'.repeat(64);
+      expect(validateFrameworkExportPosture({ actual, ledger: surplus }).join('\n')).toContain(
+        'ledger keys must be exactly',
       );
     }
   });

@@ -189,6 +189,19 @@ export function validateFrameworkExportPosture({
 } = {}) {
   const findings = [];
   if (!isRecord(ledger)) return ['framework export posture ledger must be an object'];
+  const ledgerKeys = Object.keys(ledger).sort(compareStrings);
+  const expectedLedgerKeys = [
+    '$comment',
+    'emptyPublicPackages',
+    'packages',
+    'schema',
+    'summaryVersion',
+  ].sort(compareStrings);
+  if (canonicalJson(ledgerKeys) !== canonicalJson(expectedLedgerKeys)) {
+    findings.push(
+      `ledger keys must be exactly ${expectedLedgerKeys.map((key) => JSON.stringify(key)).join(', ')}`,
+    );
+  }
   if (ledger.schema !== FRAMEWORK_EXPORT_POSTURE_SCHEMA) {
     findings.push(`ledger schema must equal ${FRAMEWORK_EXPORT_POSTURE_SCHEMA}`);
   }
@@ -259,22 +272,6 @@ export function validateFrameworkExportPosture({
     'reviewed runtime posture members',
     findings,
   );
-
-  const runtimeIds = expectedIds.filter((id) => !id.endsWith('\0<module>')).sort(compareStrings);
-  const memberIds = [...expectedIds].sort(compareStrings);
-  if (ledger.runtimeSurfaceSha256 !== stringDigest(runtimeIds)) {
-    findings.push('runtimeSurfaceSha256 is stale for the manifest-declared runtime exports');
-  }
-  if (ledger.postureMemberSha256 !== stringDigest(memberIds)) {
-    findings.push('postureMemberSha256 is stale for runtime exports plus <module> entries');
-  }
-  if (
-    ledger.classificationSha256 !== classificationDigest(expandFrameworkExportPostureLedger(ledger))
-  ) {
-    findings.push(
-      'classificationSha256 is stale for reviewed authority/root/security/matrix posture',
-    );
-  }
 
   return [...new Set(findings)].sort(compareStrings);
 }
@@ -916,28 +913,6 @@ function stringArray(value, label, findings) {
     result.push(entry);
   }
   return result;
-}
-
-function stringDigest(values) {
-  return createHash('sha256').update(values.join('\n')).digest('hex');
-}
-
-function classificationDigest(rows) {
-  return createHash('sha256')
-    .update(
-      canonicalJson(
-        rows.map((row) => ({
-          capabilities: row.capabilities,
-          disposition: row.disposition,
-          id: row.id,
-          matrix: row.matrix,
-          reason: row.reason ?? null,
-          rootKind: row.rootKind,
-          securityRole: row.securityRole,
-        })),
-      ),
-    )
-    .digest('hex');
 }
 
 function memberId(packageName, subpath, name) {
