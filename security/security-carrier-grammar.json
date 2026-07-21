@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 327,
+    "historicalWitnesses": 328,
     "productions": 12
   },
   "productions": [
