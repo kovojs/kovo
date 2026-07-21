@@ -1,28 +1,137 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parsePnpmAuditResult,
   parseAuditFindings,
   verifyBuildScriptPolicy,
   verifyNpmPublishAuthority,
 } from './supply-chain-gates.mjs';
 
-describe('supply-chain gates', () => {
-  it('allows low production advisories while failing the configured severity floor', () => {
-    const audit = {
-      vulnerabilities: {
-        a: { name: 'low-only', severity: 'low' },
-        b: { name: 'moderate-finding', severity: 'moderate' },
-        c: { name: 'critical-finding', severity: 'critical' },
-      },
-    };
+function advisory(id, severity, moduleName = `module-${id}`) {
+  return {
+    id,
+    github_advisory_id: `GHSA-${id}`,
+    module_name: moduleName,
+    severity,
+    findings: [{ version: '1.0.0', paths: [`root>${moduleName}`] }],
+  };
+}
 
-    expect(parseAuditFindings(audit, 'moderate').map((finding) => finding.name)).toEqual([
+function auditReport(rows = []) {
+  const vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
+  for (const row of rows) vulnerabilities[row.severity] += 1;
+  return {
+    actions: [],
+    advisories: Object.fromEntries(rows.map((row) => [String(row.id), row])),
+    muted: [],
+    metadata: {
+      vulnerabilities,
+      dependencies: 3,
+      devDependencies: 0,
+      optionalDependencies: 1,
+      totalDependencies: 4,
+    },
+  };
+}
+
+function commandResult(status, report) {
+  return { status, signal: null, error: undefined, stdout: JSON.stringify(report), stderr: '' };
+}
+
+describe('supply-chain gates', () => {
+  it('accepts exact pnpm 10 zero and nonzero advisory reports', () => {
+    const zero = parsePnpmAuditResult(commandResult(0, auditReport()));
+    expect(parseAuditFindings(zero, 'moderate')).toEqual([]);
+
+    const audit = parsePnpmAuditResult(
+      commandResult(
+        1,
+        auditReport([
+          advisory(101, 'low', 'low-only'),
+          advisory(102, 'moderate', 'moderate-finding'),
+          advisory(103, 'critical', 'critical-finding'),
+        ]),
+      ),
+    );
+    expect(parseAuditFindings(audit, 'moderate').map((finding) => finding.module_name)).toEqual([
       'moderate-finding',
       'critical-finding',
     ]);
-    expect(parseAuditFindings(audit, 'critical').map((finding) => finding.name)).toEqual([
+    expect(parseAuditFindings(audit, 'critical').map((finding) => finding.module_name)).toEqual([
       'critical-finding',
     ]);
+  });
+
+  it('rejects execution errors and exit/report mismatches', () => {
+    expect(() =>
+      parsePnpmAuditResult(commandResult(1, { error: { code: 'ERR_INVALID_URL' } })),
+    ).toThrow('pnpm audit output');
+    expect(() =>
+      parsePnpmAuditResult({
+        status: null,
+        signal: 'SIGTERM',
+        error: new Error('timed out'),
+        stdout: '',
+        stderr: '',
+      }),
+    ).toThrow('pnpm audit execution failed');
+    expect(() => parsePnpmAuditResult(commandResult(2, auditReport()))).toThrow(
+      'unexpected status 2',
+    );
+    expect(() => parsePnpmAuditResult(commandResult(1, auditReport()))).toThrow(
+      'status 1 disagrees',
+    );
+    expect(() =>
+      parsePnpmAuditResult(commandResult(0, auditReport([advisory(101, 'low')]))),
+    ).toThrow('status 0 disagrees');
+  });
+
+  it('rejects malformed, surplus, muted, and count-inconsistent report shapes', () => {
+    const missing = auditReport();
+    delete missing.metadata;
+    expect(() => parsePnpmAuditResult(commandResult(0, missing))).toThrow('top-level keys');
+
+    expect(() =>
+      parsePnpmAuditResult(commandResult(0, { ...auditReport(), unexpected: true })),
+    ).toThrow('top-level keys');
+    expect(() =>
+      parsePnpmAuditResult(commandResult(0, { ...auditReport(), advisories: [] })),
+    ).toThrow('advisories must be an object');
+    expect(() => parsePnpmAuditResult(commandResult(0, { ...auditReport(), muted: [{}] }))).toThrow(
+      'muted advisories',
+    );
+
+    const unknownMetadataSeverity = auditReport();
+    unknownMetadataSeverity.metadata.vulnerabilities.urgent = 0;
+    expect(() => parsePnpmAuditResult(commandResult(0, unknownMetadataSeverity))).toThrow(
+      'metadata.vulnerabilities keys',
+    );
+
+    const inconsistentCount = auditReport([advisory(101, 'high')]);
+    inconsistentCount.metadata.vulnerabilities.high = 2;
+    expect(() => parsePnpmAuditResult(commandResult(1, inconsistentCount))).toThrow(
+      'metadata vulnerability counts disagree',
+    );
+  });
+
+  it('rejects malformed advisory identities, rows, paths, and severities', () => {
+    const mismatchedId = auditReport([advisory(101, 'high')]);
+    mismatchedId.advisories['101'].id = 102;
+    expect(() => parsePnpmAuditResult(commandResult(1, mismatchedId))).toThrow('advisory 101 id');
+
+    const missingModule = auditReport([advisory(101, 'high')]);
+    missingModule.advisories['101'].module_name = '';
+    expect(() => parsePnpmAuditResult(commandResult(1, missingModule))).toThrow('module_name');
+
+    const malformedPaths = auditReport([advisory(101, 'high')]);
+    malformedPaths.advisories['101'].findings[0].paths = [];
+    expect(() => parsePnpmAuditResult(commandResult(1, malformedPaths))).toThrow('paths');
+
+    const unknownSeverity = auditReport([advisory(101, 'high')]);
+    unknownSeverity.advisories['101'].severity = 'urgent';
+    expect(() => parsePnpmAuditResult(commandResult(1, unknownSeverity))).toThrow(
+      'unknown severity',
+    );
   });
 
   it('enforces the approved build-script and lifecycle policy', () => {
