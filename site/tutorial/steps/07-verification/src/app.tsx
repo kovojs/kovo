@@ -1,7 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/browser';
-import { guards, mutation, route, s, session, type MutationFail } from '@kovojs/server';
+import {
+  guards,
+  mutation,
+  publicAccess,
+  route,
+  s,
+  session,
+  type MutationFail,
+} from '@kovojs/server';
 
 import './registries.js';
 import type { ShopRequest } from './db.js';
@@ -38,7 +46,7 @@ const EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET = 'EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_
 
 // snippet:session
 // SPEC.md section 6.5: the session is a declared schema, not an any-bag —
-// guard refinements and the order's userId rest on typed fields.
+// guard refinements and the cart/order userId fields rest on typed fields.
 export const shopSession = session(
   s.object({
     id: s.string(),
@@ -99,10 +107,12 @@ export const addToCart = mutation({
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
   },
-  guard: guards.all(
-    guards.authed<ShopRequest>(),
-    guards.rateLimit<ShopRequest>({ max: 10, per: 'session' }),
-  ),
+  access: [
+    guards.all(
+      guards.authed<ShopRequest>(),
+      guards.rateLimit<ShopRequest>({ max: 10, per: 'session' }),
+    ),
+  ],
   registry: {
     inferredTouches: addToCartTouches,
     queries: [cartQuery, productsQuery, orderHistoryQuery],
@@ -121,6 +131,7 @@ export const addToCart = mutation({
       productId: input.productId,
       qty: input.quantity,
       unitPrice: found.unitPrice,
+      userId: currentSession.user.id,
     });
     request.db.write('orders', {
       id: `order-${request.db.orders.length + 1}`,
@@ -205,27 +216,24 @@ export const shopGraph = {
 } as const;
 // /snippet
 
-export function renderShopPage() {
-  return (
-    <html>
-      <head>
-        <title>Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>Kovo Shop</h1>
-          <CartBadge />
-          <ProductList />
-          <OrderHistory />
-        </main>
-      </body>
-    </html>
-  );
-}
-
 export const homeRoute = route('/', {
-  page(_input, _request: ShopRequest) {
-    return renderShopPage();
+  access: publicAccess('tutorial storefront browsing'),
+  page(_input, request: ShopRequest) {
+    return (
+      <html>
+        <head>
+          <title>Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>Kovo Shop</h1>
+            {request.session?.user?.id ? <CartBadge /> : null}
+            <ProductList />
+            {request.session?.user?.id ? <OrderHistory /> : null}
+          </main>
+        </body>
+      </html>
+    );
   },
 });
 

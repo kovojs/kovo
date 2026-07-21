@@ -30,8 +30,9 @@ No browser test exists anywhere in the tutorial.
 Every code block you read came from a checked-in step state under `site/tutorial/steps/`, and
 `node site/tutorial/run-steps.mjs` gates all of them in CI: each step typechecks against the
 workspace packages, every component compiles through `@kovojs/compiler` with zero errors plus the
-fixpoint and render-equivalence asserts, committed lowered IR is checked for staleness, and every
-step's tests run. An API change that breaks a chapter turns this tutorial red in the same PR.
+fixpoint and render-equivalence asserts, and every direct route page must emit the exact expected
+compiler-owned route facts before the step's tests run. An API change that breaks a chapter turns
+this tutorial red in the same PR.
 
 ### Parity with the reference app
 

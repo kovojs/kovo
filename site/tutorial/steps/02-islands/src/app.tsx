@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { notFound, route, s } from '@kovojs/server';
+import { notFound, publicAccess, route, s } from '@kovojs/server';
 
 import { ProductActions } from './components/product-actions.js';
 
@@ -25,59 +25,53 @@ export function formatPrice(cents: number): string {
 }
 
 export const homeRoute = route('/', {
+  access: publicAccess('tutorial storefront browsing'),
   page() {
-    return renderHomePage();
+    return (
+      <html>
+        <head>
+          <title>Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>Kovo Shop</h1>
+            <ul>
+              {catalog.map((product) => (
+                <li key={product.id}>
+                  <a href={`/products/${product.id}`}>{product.name}</a> —{' '}
+                  {formatPrice(product.unitPrice)}
+                </li>
+              ))}
+            </ul>
+          </main>
+        </body>
+      </html>
+    );
   },
 });
 
+// snippet:render-island
 export const productRoute = route('/products/:id', {
+  access: publicAccess('tutorial storefront browsing'),
   params: s.object({ id: s.string() }),
   page({ params }) {
     const product = catalog.find((item) => item.id === params.id);
     if (!product) return notFound();
-    return renderProductPage(product);
+    return (
+      <html>
+        <head>
+          <title>{product.name} · Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>{product.name}</h1>
+            <p>{formatPrice(product.unitPrice)}</p>
+            <ProductActions />
+            <a href="/">Back to the shop</a>
+          </main>
+        </body>
+      </html>
+    );
   },
 });
-
-export function renderHomePage() {
-  return (
-    <html>
-      <head>
-        <title>Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>Kovo Shop</h1>
-          <ul>
-            {catalog.map((product) => (
-              <li key={product.id}>
-                <a href={`/products/${product.id}`}>{product.name}</a> —{' '}
-                {formatPrice(product.unitPrice)}
-              </li>
-            ))}
-          </ul>
-        </main>
-      </body>
-    </html>
-  );
-}
-
-// snippet:render-island
-export function renderProductPage(product: Product) {
-  return (
-    <html>
-      <head>
-        <title>{product.name} · Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>{product.name}</h1>
-          <p>{formatPrice(product.unitPrice)}</p>
-          <ProductActions />
-          <a href="/">Back to the shop</a>
-        </main>
-      </body>
-    </html>
-  );
-}
 // /snippet

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { route } from '@kovojs/server';
+import { publicAccess, route } from '@kovojs/server';
 
 import type { ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
@@ -10,26 +10,23 @@ import { ProductList } from './components/product-list.js';
 // fetches, no client cache.
 
 // snippet:shop-page
-export function renderShopPage() {
-  return (
-    <html>
-      <head>
-        <title>Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>Kovo Shop</h1>
-          <CartBadge />
-          <ProductList />
-        </main>
-      </body>
-    </html>
-  );
-}
-// /snippet
-
 export const homeRoute = route('/', {
+  access: publicAccess('tutorial storefront browsing'),
   page(_input, _request: ShopRequest) {
-    return renderShopPage();
+    return (
+      <html>
+        <head>
+          <title>Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>Kovo Shop</h1>
+            <CartBadge />
+            <ProductList />
+          </main>
+        </body>
+      </html>
+    );
   },
 });
+// /snippet

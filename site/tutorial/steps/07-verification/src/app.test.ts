@@ -1,7 +1,14 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
-import { renderRouteHtml } from '@kovojs/server';
+import { compileRouteModule } from '@kovojs/compiler';
+import { createApp, renderRouteHtml } from '@kovojs/server';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import {
+  accessFactsFromApp,
+  runQuery,
+} from '../../../../../packages/server/src/internal/execution.js';
 import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import {
   componentLiveTargetRenderer,
@@ -42,6 +49,17 @@ const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<ShopRequest>(
   addToCart.csrf === false ? undefined : addToCart.csrf,
 );
 const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
+
+const tutorialAccessApp = createApp({
+  egress: {
+    enabled: false,
+    justification: 'tutorial verification fixture performs no outbound I/O',
+  },
+  mutations: [addToCart],
+  queries: [cartQuery, productsQuery, orderHistoryQuery],
+  routes: [homeRoute],
+});
+const tutorialAccessFacts = accessFactsFromApp(tutorialAccessApp);
 
 // Tutorial step 07: the whole behavior surface is checkable without a
 // browser — kovo check over the app graph, kovo explain as the queryable
@@ -204,6 +222,7 @@ function optimisticStatuses(output: string): Map<string, string> {
 
 const verifiedShopGraph = {
   ...shopGraph,
+  access: tutorialAccessFacts,
   components: shopGraph.components.map((component) => ({
     ...component,
     queries: component.queries.map((query) => tutorialQueryKey(query)),
@@ -310,12 +329,131 @@ describe('tutorial step 07 — testing & verification', () => {
   });
   // /snippet
 
-  it('reports zero unguarded mutations, routes, and queries', () => {
+  it('reports a complete producer-owned access posture with no missing decisions', () => {
+    expect(
+      tutorialAccessFacts.map(({ decision, kind, name }) => ({ decision, kind, name })),
+    ).toEqual([
+      { decision: 'guard', kind: 'mutation', name: addToCart.key },
+      { decision: 'public', kind: 'page', name: '/' },
+      { decision: 'guard', kind: 'query', name: cartQuery.key },
+      { decision: 'guard', kind: 'query', name: orderHistoryQuery.key },
+      { decision: 'public', kind: 'query', name: productsQuery.key },
+    ]);
     expect(kovoExplain(verifiedShopGraph, { unguarded: true })).toEqual({
       exitCode: 0,
       output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
     });
   });
+
+  it('enrolls the direct authored route TSX in compiler-owned page facts', () => {
+    const fileName = 'site/tutorial/steps/07-verification/src/app.tsx';
+    const result = compileRouteModule({
+      fileName,
+      source: readFileSync(new URL('./app.tsx', import.meta.url), 'utf8'),
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toHaveLength(1);
+    expect(result.routePageFacts).toMatchObject([
+      {
+        access: { kind: 'public', reason: 'tutorial storefront browsing' },
+        route: '/',
+      },
+    ]);
+    expect(result.routePageFacts[0]?.components.map((component) => component.localName)).toEqual([
+      'CartBadge',
+      'ProductList',
+      'OrderHistory',
+    ]);
+  });
+
+  // snippet:principal-isolation-test
+  it('guards and scopes cart and order history to the authenticated principal', async () => {
+    const db = createShopDb();
+    db.cartItems.push(
+      {
+        productId: 'p1',
+        qty: 4,
+        unitPrice: 1499,
+        userId: 'victim',
+      },
+      {
+        productId: 'p2',
+        qty: 1,
+        unitPrice: 2599,
+        userId: 'attacker',
+      },
+    );
+    db.orders.push(
+      {
+        id: 'order-victim',
+        productId: 'p1',
+        qty: 1,
+        total: 1499,
+        userId: 'victim',
+      },
+      {
+        id: 'order-attacker',
+        productId: 'p2',
+        qty: 1,
+        total: 2599,
+        userId: 'attacker',
+      },
+    );
+
+    const attackerRequest = {
+      db,
+      session: { id: 's-attacker', user: { id: 'attacker' } },
+    };
+    const attackerPage = await renderShopPageForTest(attackerRequest);
+    expect(attackerPage).toContain('<cart-badge');
+    expect(attackerPage).toContain('kovo-key="order-attacker"');
+    expect(attackerPage).not.toContain('order-victim');
+
+    const anonymousPage = await renderShopPageForTest({
+      db,
+      session: { id: 's-anonymous', user: null },
+    });
+    expect(anonymousPage).toContain('Pour-over kettle');
+    expect(anonymousPage).not.toContain('<cart-badge');
+    expect(anonymousPage).not.toContain('order-attacker');
+
+    await expect(runQuery(cartQuery, undefined, attackerRequest)).resolves.toEqual({
+      input: undefined,
+      ok: true,
+      value: { count: 1 },
+    });
+    await expect(
+      runQuery(orderHistoryQuery, undefined, attackerRequest),
+    ).resolves.toEqual({
+      input: undefined,
+      ok: true,
+      value: {
+        items: [
+          {
+            id: 'order-attacker',
+            productId: 'p2',
+            qty: 1,
+            total: 2599,
+            userId: 'attacker',
+          },
+        ],
+      },
+    });
+    await expect(runQuery(cartQuery, undefined, { db, session: null })).resolves.toEqual({
+      auth: 'unauthenticated',
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    await expect(runQuery(orderHistoryQuery, undefined, { db, session: null })).resolves.toEqual({
+      auth: 'unauthenticated',
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+  });
+  // /snippet
 
   // snippet:harness-test
   it('executes addToCart through the harness with write verification on', async () => {

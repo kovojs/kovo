@@ -14,9 +14,9 @@ updates, streaming, and a behavior graph a machine can check.
 Every code block in this tutorial is extracted at build time from a checked-in, compiling,
 tested step state under `site/tutorial/steps/` in the
 [kovo repository](https://github.com/kovojs/kovo). One command — `node
-site/tutorial/run-steps.mjs` — typechecks every step, compiles every component through the real
-compiler, and runs every step's tests, so a chapter and its code stay in sync. This chapter's
-state is `site/tutorial/steps/01-first-page/`.
+site/tutorial/run-steps.mjs` — typechecks every step, compiles every route page and component
+through the real compiler, and runs every step's tests, so a chapter and its code stay in sync.
+This chapter's state is `site/tutorial/steps/01-first-page/`.
 
 ## Prerequisites
 
@@ -44,6 +44,9 @@ anything into a hidden router. Because the path is a literal type, every `<Link>
 under `vp check`. That pattern — declare once, derive everywhere, let renames be compiler errors
 — recurs through the whole tutorial.
 
+The `publicAccess(...)` line is equally deliberate: every request surface records an access
+decision. This storefront is public by design; there is no implicit allow.
+
 ## Add typed params and a real 404
 
 The product detail route declares its params schema once, coercion included — the same way form
@@ -52,10 +55,9 @@ fields will declare theirs in chapter 4:
 {{snippet:01-first-page/src/app.tsx#product-route}}
 
 `notFound()` is a page outcome, not an exception: return it and the route answers with a real
-404 status, so status codes stay part of the typed surface. The render itself is ordinary TSX;
-stateful components arrive in the next chapter:
-
-{{snippet:01-first-page/src/app.tsx#render-home}}
+404 status, so status codes stay part of the typed surface. Both route pages return ordinary TSX
+directly at the route boundary, which lets the compiler enroll and lower the complete page;
+stateful components arrive in the next chapter.
 
 ## Prove it without a browser
 
@@ -81,6 +83,7 @@ browser. Next: the page's first interactivity — without shipping a framework t
 Tutorial goal and shape: `rules/v1-acceptance.md` and SPEC §1.2. Strict-TypeScript requirement: SPEC §6.6. MPA model
 and real navigation: SPEC §8. Typed route paths checked at every consumer: SPEC §6.4. Params
 schema with coercion: SPEC §6.3. Self-describing HTML proven from strings: SPEC §11.4. No
-browser in the tutorial: `rules/v1-acceptance.md`.
+browser in the tutorial: `rules/v1-acceptance.md`. Explicit default-deny access decisions: SPEC
+§10.2, **KV436**.
 
 </details>

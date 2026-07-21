@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { notFound, route, s } from '@kovojs/server';
+import { notFound, publicAccess, route, s } from '@kovojs/server';
 
 // Tutorial step 01 (chapter 1): routes and the first page. Pages are complete
 // documents rendered on the server — there is no client router and no
@@ -25,61 +25,53 @@ export function formatPrice(cents: number): string {
 
 // snippet:home-route
 export const homeRoute = route('/', {
+  access: publicAccess('tutorial storefront browsing'),
   page() {
-    return renderHomePage();
+    return (
+      <html>
+        <head>
+          <title>Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>Kovo Shop</h1>
+            <ul>
+              {catalog.map((product) => (
+                <li key={product.id}>
+                  <a href={`/products/${product.id}`}>{product.name}</a> —{' '}
+                  {formatPrice(product.unitPrice)}
+                </li>
+              ))}
+            </ul>
+          </main>
+        </body>
+      </html>
+    );
   },
 });
 // /snippet
 
 // snippet:product-route
 export const productRoute = route('/products/:id', {
+  access: publicAccess('tutorial storefront browsing'),
   params: s.object({ id: s.string() }),
   page({ params }) {
     const product = catalog.find((item) => item.id === params.id);
     if (!product) return notFound();
-    return renderProductPage(product);
+    return (
+      <html>
+        <head>
+          <title>{product.name} · Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>{product.name}</h1>
+            <p>{formatPrice(product.unitPrice)}</p>
+            <a href="/">Back to the shop</a>
+          </main>
+        </body>
+      </html>
+    );
   },
 });
 // /snippet
-
-// snippet:render-home
-export function renderHomePage() {
-  return (
-    <html>
-      <head>
-        <title>Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>Kovo Shop</h1>
-          <ul>
-            {catalog.map((product) => (
-              <li key={product.id}>
-                <a href={`/products/${product.id}`}>{product.name}</a> —{' '}
-                {formatPrice(product.unitPrice)}
-              </li>
-            ))}
-          </ul>
-        </main>
-      </body>
-    </html>
-  );
-}
-// /snippet
-
-export function renderProductPage(product: Product) {
-  return (
-    <html>
-      <head>
-        <title>{product.name} · Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>{product.name}</h1>
-          <p>{formatPrice(product.unitPrice)}</p>
-          <a href="/">Back to the shop</a>
-        </main>
-      </body>
-    </html>
-  );
-}

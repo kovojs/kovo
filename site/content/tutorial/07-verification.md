@@ -6,10 +6,10 @@ order: 7
 
 # Testing & verification
 
-In this chapter the app gains its production posture — a typed session, a guard chain, an order
-history — and then proves its entire behavior surface without running a browser: `kovo check` over
-the app graph, `kovo explain` as a queryable dependency graph, and harness tests that verify
-observed writes against declared touches. Step state:
+In this chapter the app gains its production posture — a typed session, a guard chain, and a
+principal-scoped cart and order history — then proves its entire behavior surface without running a
+browser: `kovo check` over the app graph, `kovo explain` as a queryable dependency graph, and
+harness tests that verify observed writes against declared touches. Step state:
 `site/tutorial/steps/07-verification/`.
 
 This chapter has two halves. **Guards** (sessions, the guard chain, the new domain) lock down who
@@ -34,8 +34,9 @@ rest on typed fields; an untyped session would be a hole directly under the proo
 > extracted from the write ASTs, and write verification runs against actual table writes. The
 > [data-layer guide](/guides/data-layer/) is the home for the production story.
 
-The mutation now runs behind `authed` plus a rate limit, writes a third domain (`order`), and
-keeps everything else from chapter 5 — schema, errors, CSRF, declared touches:
+The mutation now declares the canonical `access` guard chain — `authed` plus a rate limit — writes
+a third domain (`order`), and keeps everything else from chapter 5: schema, errors, CSRF, and
+declared touches:
 
 {{snippet:07-verification/src/app.tsx#add-to-cart}}
 
@@ -45,14 +46,34 @@ it, because optimism and invalidation are keyed to queries, not call sites:
 
 {{snippet:07-verification/src/components/order-history.tsx#order-history}}
 
+The cart becomes private in this final production-posture step. Each row carries its owner, and its
+canonical `access: [guards.authed()]` chain and loader use the same typed session principal. Earlier
+tutorial steps deliberately model one anonymous cart and label that simplification as public; step
+7 does not:
+
+{{snippet:07-verification/src/queries.ts#private-cart}}
+
+Order history follows the same rule. Its loader filters `userId` instead of trusting the guard to
+imply row ownership:
+
+{{snippet:07-verification/src/queries.ts#private-order-history}}
+
+The victim/attacker regression exercises both boundaries and proves an authenticated attacker sees
+only their own cart count and order rows, while anonymous requests are rejected before either
+loader succeeds:
+
+{{snippet:07-verification/src/app.test.ts#principal-isolation-test}}
+
 ## Verification: prove the behavior surface
 
 ### Check the app graph
 
 Everything the app has declared — components and their queries, the mutation's guards and writes,
-optimistic statuses, the page's query set, the touch graph (write sites mapped to touched
-domains) — composes into one value. `examples/commerce` commits this as a generated artifact so
-graph changes appear as diffs in code review; the tutorial declares it inline:
+optimistic statuses, the page's query set, the touch graph (write sites mapped to touched domains),
+and the framework-produced access ledger — composes into one value. `examples/commerce` commits
+this as a generated artifact so graph changes appear as diffs in code review; the tutorial keeps
+the behavior fixture inline and derives its access facts from the actual route/query/mutation
+declarations:
 
 {{snippet:07-verification/src/app.tsx#graph}}
 
@@ -74,8 +95,10 @@ Here is the acceptance question — "what updates when cart/add commits?" — an
 
 {{snippet:07-verification/src/app.test.ts#intent-test}}
 
-The unguarded audit rides the same surface: `kovo explain --unguarded` lists every mutation, route,
-and query reachable without `authed`. This app's answer is zero.
+The access audit rides the same surface. The product catalog remains visibly `public`; the cart
+query, order-history query, and cart mutation remain visibly guarded. `kovo explain --unguarded`
+reports zero only because no route, query, or mutation is missing a decision — it does not relabel
+public surfaces as authenticated.
 
 ### Verify writes in harness tests
 
@@ -111,8 +134,9 @@ Guarded, session-typed, and provable without a browser. One short chapter remain
 Behavior surface proven without a browser: SPEC §11.4. Typed session schema: SPEC §6.5. Optimism
 and invalidation keyed to queries, not call sites: SPEC §10.4. App graph as one composed value:
 SPEC §11.4. `kovo check` exhaustiveness and consistency gate: SPEC §10.6. `kovo explain` stable text
-for humans and agents: SPEC §5.3. Acceptance intent question: `rules/v1-acceptance.md`. Unguarded audit and
-zero unauthed reach: SPEC §10.3. `observed ⊆ static` write-verification invariant: SPEC §11.2.
+for humans and agents: SPEC §5.3. Acceptance intent question: `rules/v1-acceptance.md`. Complete
+explicit access posture: SPEC §10.2, **KV436**. Principal-scoped cart and order-history reads: SPEC
+§10.2–§10.3. `observed ⊆ static` write-verification invariant: SPEC §11.2.
 Reference-app parity: `rules/v1-acceptance.md`.
 
 </details>

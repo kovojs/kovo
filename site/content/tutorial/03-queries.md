@@ -29,7 +29,9 @@ The tutorial keeps a plain store:
 
 ## Declare the reads once
 
-A query couples a key, a loader, and the domains it reads. That read set is the entire
+A query couples an explicit access decision, a loader, and the domains it reads. This tutorial's
+catalog and single-cart fixture are intentionally public; `publicAccess(...)` records that review
+decision instead of relying on an implicit allow. The read set is the entire invalidation
 registration: no query subscribes to mutations, and no mutation enumerates queries.
 
 > **Where the primitives live.** `query`, `route`, `mutation`, `s`, `domain`, `guards`, and
@@ -89,6 +91,7 @@ Domains as invalidation currency: SPEC §10.1. Derived downstream surfaces and r
 extraction: SPEC §10.2. Read set as the entire registration: Constitution #2 (no API requires
 global knowledge at a local site). Derived `kovo-deps`/`data-bind` stamps and binding type-check:
 SPEC §4.8; binding through a nullable segment without `?.` is **KV227**. Authored `key` lowering to
-runtime `kovo-key`: SPEC §4.8, §13.2. Data shipped once as shared truth: SPEC §4.2.
+runtime `kovo-key`: SPEC §4.8, §13.2. Explicit default-deny access decisions: SPEC §10.2,
+**KV436**. Data shipped once as shared truth: SPEC §4.2.
 
 </details>

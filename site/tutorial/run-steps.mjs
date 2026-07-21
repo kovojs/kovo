@@ -31,8 +31,9 @@ registerHooks({
 /**
  * Tutorial step gate (plan W5): every checked-in step state must
  *  1. typecheck against the workspace @kovojs/* packages (tsgo per step),
- *  2. compile its TSX components with zero error diagnostics through the
- *     SPEC.md §5.2.3 fixpoint gate,
+ *  2. compile every route page plus its TSX components with zero error
+ *     diagnostics through the SPEC.md §5.2 public compiler path and component
+ *     fixpoint gate,
  *  3. pass its vitest tests.
  * Chapter snippet references are validated here too, so a renamed marker
  * fails this gate even before the site build runs. `--write` refreshes the
@@ -46,6 +47,16 @@ const stepsDir = path.join(tutorialDir, 'steps');
 const contentDir = path.resolve(tutorialDir, '../content/tutorial');
 const kovoBin = path.join(siteRoot, 'node_modules/.bin/kovo');
 const write = process.argv.includes('--write');
+
+const expectedRoutesByStep = new Map([
+  ['01-first-page', ['/', '/products/:id']],
+  ['02-islands', ['/', '/products/:id']],
+  ['03-queries', ['/']],
+  ['04-mutations', ['/']],
+  ['05-optimistic', ['/']],
+  ['06-streaming', ['/']],
+  ['07-verification', ['/']],
+]);
 
 const steps = readdirSync(stepsDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -115,6 +126,51 @@ function compileStepComponents(step) {
   return compiled;
 }
 
+function compileStepRoutes(step) {
+  const appPath = path.join(stepsDir, step, 'src/app.tsx');
+  if (!existsSync(appPath)) return 0;
+
+  const expectedRoutes = expectedRoutesByStep.get(step);
+  assert.ok(expectedRoutes, `missing expected route inventory for tutorial step ${step}`);
+  const root = mkdtempSync(path.join(tmpdir(), 'kovo-tutorial-route-'));
+  const factsPath = path.join(root, 'route-facts.json');
+
+  try {
+    execFileSync(
+      kovoBin,
+      [
+        'compile',
+        'route',
+        appPath,
+        '--out',
+        path.join(root, 'app.kovo-route.tsx'),
+        '--facts-out',
+        factsPath,
+        '--file-name',
+        `site/tutorial/steps/${step}/src/app.tsx`,
+      ],
+      { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+    );
+    const facts = JSON.parse(readFileSync(factsPath, 'utf8'));
+    assert.ok(Array.isArray(facts.routePageFacts), `${step} emitted no route-page fact list`);
+    assert.deepEqual(
+      facts.routePageFacts.map((fact) => fact.route).sort(),
+      [...expectedRoutes].sort(),
+      `${step} did not enroll every authored route page in compiler-owned facts`,
+    );
+    for (const fact of facts.routePageFacts) {
+      assert.equal(
+        fact.access?.kind,
+        'public',
+        `${step} route ${fact.route} did not emit its explicit public access decision`,
+      );
+    }
+    return facts.routePageFacts.length;
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
 function writeRegistryFactsForStep(step, root) {
   const appPath = path.join(stepsDir, step, 'src/app.tsx');
   const mutationInputs = existsSync(appPath)
@@ -170,8 +226,13 @@ function compileTutorialComponent({ fileName, registryFactsPath, root, sourcePat
 }
 
 let components = 0;
+let routes = 0;
 for (const step of steps) {
-  // 1. Compile TSX components; with --write, also refresh legacy generated artifacts.
+  // 1. Compile direct authored route TSX and every component. A helper-call-only
+  // route page emits no route facts, so this exact inventory prevents the
+  // tutorial from accidentally bypassing page lowering or access enrollment.
+  routes += compileStepRoutes(step);
+  // With --write, also refresh legacy generated component artifacts.
   components += compileStepComponents(step);
   // 2. Typecheck the step against the real workspace packages.
   run(path.join(repoRoot, 'node_modules/.bin/tsgo'), [
@@ -203,5 +264,5 @@ if (existsSync(contentDir)) {
 runSite(path.join(repoRoot, 'node_modules/.bin/vitest'), ['--run', 'tutorial/steps']);
 
 process.stdout.write(
-  `tutorial-steps/v1\nsteps=${steps.length} components=${components} snippets=${snippets.size} references=${references}\ntutorial-steps/v1 steps=${steps.length} OK\n`,
+  `tutorial-steps/v1\nsteps=${steps.length} routes=${routes} components=${components} snippets=${snippets.size} references=${references}\ntutorial-steps/v1 steps=${steps.length} OK\n`,
 );

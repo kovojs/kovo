@@ -13,6 +13,7 @@ export type CartItem = {
   productId: string;
   qty: number;
   unitPrice: number;
+  userId: string;
 };
 
 export type ShopOrder = {

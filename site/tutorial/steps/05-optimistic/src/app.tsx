@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/browser';
-import { mutation, route, s, type MutationFail } from '@kovojs/server';
+import { mutation, publicAccess, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
 import type { ShopRequest } from './db.js';
@@ -63,6 +63,7 @@ export const addToCartTouches = [
 // /snippet
 
 export const addToCart = mutation({
+  access: publicAccess('tutorial anonymous single-cart write protected by CSRF'),
   csrf: shopCsrf,
   input: s.object({
     productId: s.string(),
@@ -130,26 +131,23 @@ export const addToCartOptimistic = {
   },
 } satisfies OptimisticFor<typeof addToCartForm, { cart: CartResult; products: ProductsResult }>;
 
-export function renderShopPage() {
-  return (
-    <html>
-      <head>
-        <title>Kovo Shop</title>
-      </head>
-      <body>
-        <main>
-          <h1>Kovo Shop</h1>
-          <CartBadge />
-          <ProductList />
-        </main>
-      </body>
-    </html>
-  );
-}
-
 export const homeRoute = route('/', {
+  access: publicAccess('tutorial storefront browsing'),
   page(_input, _request: ShopRequest) {
-    return renderShopPage();
+    return (
+      <html>
+        <head>
+          <title>Kovo Shop</title>
+        </head>
+        <body>
+          <main>
+            <h1>Kovo Shop</h1>
+            <CartBadge />
+            <ProductList />
+          </main>
+        </body>
+      </html>
+    );
   },
 });
 

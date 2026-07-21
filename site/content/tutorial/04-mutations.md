@@ -36,7 +36,9 @@ instead of making you maintain it by hand.
 {{snippet:04-mutations/src/mutations.ts#add-to-cart}}
 
 `errors` gives the form a typed `OUT_OF_STOCK` state. `transaction` gives `fail()` a rollback
-boundary.
+boundary. The step's single anonymous cart is public by design, so `publicAccess(...)` records the
+access decision. It does not disable CSRF: the browser POST still has to carry the framework-minted,
+request-bound token before parsing or handler work.
 
 The step's tiny database makes the commit/rollback boundary concrete:
 
@@ -97,5 +99,6 @@ typed discriminated union: SPEC §9.2. Transaction lifecycle and rollback: SPEC 
 default-on, fail-closed: SPEC §6.6. No-JS degradation as a structural contract: SPEC §8. Legible
 named POST: Constitution #4. Stateless fragment responses keyed off live `kovo-deps`: SPEC §9.1.
 Submitted-form target inference and typed failure state: SPEC §6.3, §9.2.
+Explicit default-deny access decisions: SPEC §10.2, **KV436**.
 
 </details>

@@ -1,4 +1,4 @@
-import { mutation, s, type MutationFail } from '@kovojs/server';
+import { mutation, publicAccess, s, type MutationFail } from '@kovojs/server';
 
 import { type ShopRequest } from './db.js';
 import { cart, product } from './domains.js';
@@ -34,6 +34,7 @@ export const addToCartInput = s.object({
 
 // snippet:add-to-cart
 export const addToCart = mutation({
+  access: publicAccess('tutorial anonymous single-cart write protected by CSRF'),
   csrf: shopCsrf,
   input: addToCartInput,
   errors: {

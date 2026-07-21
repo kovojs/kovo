@@ -1,4 +1,4 @@
-import { query, type QueryLoadContext } from '@kovojs/server';
+import { guards, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 
 import {
   createShopDb,
@@ -25,38 +25,54 @@ export type OrderHistoryResult = {
   items: ShopOrder[];
 };
 
-export function loadCart(db: ShopDb): CartResult {
-  return { count: db.cartItems.reduce((total, item) => total + item.qty, 0) };
-}
-
 export function loadProducts(db: ShopDb): ProductsResult {
   return {
     items: [...db.products.values()].sort((left, right) => left.id.localeCompare(right.id)),
   };
 }
 
-export function loadOrderHistory(db: ShopDb): OrderHistoryResult {
-  return { items: db.orders };
-}
-
 function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
   return context?.request?.db ?? createShopDb();
 }
 
-// snippet:queries
+function requireShopUserId(context?: QueryLoadContext<ShopRequest>): string {
+  const userId = context?.request?.session?.user?.id;
+  if (!userId) throw new Error('private shop data requires an authenticated tutorial session');
+  return userId;
+}
+
+// snippet:private-cart
+export function loadCart(db: ShopDb, userId: string): CartResult {
+  return {
+    count: db.cartItems
+      .filter((item) => item.userId === userId)
+      .reduce((total, item) => total + item.qty, 0),
+  };
+}
+
 export const cartQuery = query({
-  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
+  access: [guards.authed<ShopRequest>()],
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) =>
+    loadCart(dbFrom(context), requireShopUserId(context)),
   reads: [cart],
 });
+// /snippet
 
 export const productsQuery = query({
+  access: publicAccess('tutorial public product catalog'),
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 
+// snippet:private-order-history
+export function loadOrderHistory(db: ShopDb, userId: string): OrderHistoryResult {
+  return { items: db.orders.filter((item) => item.userId === userId) };
+}
+
 export const orderHistoryQuery = query({
+  access: [guards.authed<ShopRequest>()],
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) =>
-    loadOrderHistory(dbFrom(context)),
+    loadOrderHistory(dbFrom(context), requireShopUserId(context)),
   reads: [order],
 });
 // /snippet

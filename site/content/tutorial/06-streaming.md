@@ -13,33 +13,24 @@ response. Step state: `site/tutorial/steps/06-streaming/`.
 
 ## Defer an expensive fragment
 
-Import `Defer` from `@kovojs/server`, give it a stable target, render an honest fallback, and put
-the slow region behind `render`:
+Import `Defer` from `@kovojs/server`. Inside the TSX returned by `route().page`, give it a stable
+target, render an honest fallback, and put the slow region behind `render`:
 
 ```tsx
 import { Defer } from '@kovojs/server';
 
-const products = (
-  <Defer
-    target="product-list"
-    fallback={<section aria-busy="true">Loading products...</section>}
-    render={() => <ProductList />}
-  />
-);
+<Defer
+  target="product-list"
+  priority="after-paint"
+  fallback={<section aria-busy="true">Loading products...</section>}
+  render={() => <ProductList />}
+/>
 ```
 
-Then place that boundary in the page shell:
-
-```tsx
-export function ShopPage() {
-  return (
-    <main>
-      <CartBadge />
-      {products}
-    </main>
-  );
-}
-```
+Keep the boundary inside the request-rendered page. JSX function components execute where they are
+created; constructing `<Defer>` at module scope would run outside the request's deferred-region
+collector. `priority="after-paint"` is the explicit streaming posture; the default `critical`
+priority renders inline.
 
 Deferred content reuses a mechanism you already have. The chunks that arrive after the shell use
 the same `<kovo-fragment>` element the mutation wire used in chapters 4 and 5. When a chunk also
