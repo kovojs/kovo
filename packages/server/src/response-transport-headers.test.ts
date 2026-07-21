@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  type BrowserNavigationResponseHeaderName,
   createTransportResponseHeaderClassifier,
   type TransportOwnedResponseHeaderName,
 } from './response-transport-headers.js';
@@ -26,6 +27,18 @@ type MissingTransportOwnedResponseHeaderName = Exclude<
 >;
 const exactTypeSet: MissingTransportOwnedResponseHeaderName extends never ? true : never = true;
 
+const browserNavigationResponseHeaderNames = [
+  'refresh',
+] as const satisfies readonly BrowserNavigationResponseHeaderName[];
+
+type MissingBrowserNavigationResponseHeaderName = Exclude<
+  BrowserNavigationResponseHeaderName,
+  (typeof browserNavigationResponseHeaderNames)[number]
+>;
+const exactBrowserNavigationTypeSet: MissingBrowserNavigationResponseHeaderName extends never
+  ? true
+  : never = true;
+
 const classify = createTransportResponseHeaderClassifier({
   lowerCase: (value) => value.toLowerCase(),
 });
@@ -39,6 +52,20 @@ describe('response transport-header classifier', () => {
       });
       expect(classify([{ name: name.toUpperCase(), value: 'attacker-controlled' }])).toBeDefined();
     }
+  });
+
+  it.each([
+    ['Refresh', '0;url=https://attacker.example/phish'],
+    ['rEfReSh', ' 0 ; url = https://attacker.example/phish '],
+    ['REFRESH', '5'],
+    ['refresh', '5; URL=/account'],
+    ['Refresh', '0; url=//attacker.example/phish'],
+  ])('rejects browser-navigation header %s independently of value %s', (name, value) => {
+    expect(exactBrowserNavigationTypeSet).toBe(true);
+    expect(classify([{ name, value }])).toMatchObject({
+      headerName: name,
+      kind: 'browser-navigation',
+    });
   });
 
   it('leaves legitimate end-to-end names open while rejecting Connection wholesale', () => {

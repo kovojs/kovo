@@ -73,6 +73,38 @@ describe('central response posture finalization', () => {
     ).toThrow(/KV415.*field and every header it nominates are rejected/u);
   });
 
+  it.each([
+    ['Refresh', '0;url=https://attacker.example/phish'],
+    ['rEfReSh', ' 0 ; url = https://attacker.example/phish '],
+    ['REFRESH', '5'],
+    ['refresh', '5; URL=/account'],
+    ['Refresh', '0; url=//attacker.example/phish'],
+  ])(
+    'rejects HTTP Refresh browser navigation for structured and raw responses: %s: %s',
+    (name, value) => {
+      expect(() =>
+        finalizeServerResponse(
+          {
+            body: 'blocked',
+            headers: { [name]: value },
+            status: 200,
+          },
+          { method: 'GET' },
+        ),
+      ).toThrow(/KV415.*Refresh.*browser navigation/iu);
+
+      expect(() =>
+        finalizeRawWebResponse(
+          new Response('blocked', {
+            headers: { [name]: value },
+            status: 200,
+          }),
+          { method: 'GET' },
+        ),
+      ).toThrow(/KV415.*refresh.*browser navigation/iu);
+    },
+  );
+
   it('preserves legitimate end-to-end metadata on structured and raw responses', () => {
     const safeHeaders = {
       'Cache-Control': 'public, max-age=60',

@@ -1855,6 +1855,30 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
     }
   });
 
+  it('rejects HTTP Refresh before the Node adapter writes response headers', async () => {
+    for (const httpVersion of ['1.0', '1.1', '2.0']) {
+      const writeHead = vi.fn();
+      const nodeResponse = {
+        end: vi.fn(),
+        shouldKeepAlive: false,
+        writeHead,
+      } as unknown as ServerResponse;
+
+      await expect(
+        writeWebResponseToNode(
+          new Response('blocked', {
+            headers: { Refresh: '0; url=https://attacker.example/phish' },
+            status: 200,
+          }),
+          nodeResponse,
+          'GET',
+          { httpVersion },
+        ),
+      ).rejects.toThrow(/KV415.*refresh.*browser navigation/iu);
+      expect(writeHead).not.toHaveBeenCalled();
+    }
+  });
+
   it('adds framework-owned Connection close only after authored headers pass validation', async () => {
     let capturedHeaders: Record<string, string | string[]> | undefined;
     const nodeResponse = {

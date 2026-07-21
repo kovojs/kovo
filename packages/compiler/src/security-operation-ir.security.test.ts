@@ -1028,6 +1028,32 @@ export const report = endpoint('/report', {
     );
   });
 
+  // @kovo-security-certifies C13 raw-response-refresh-header-closed
+  it.each([
+    ["Refresh: '0;url=https://attacker.example/phish'", 'direct identifier'],
+    ["'rEfReSh': ' 0 ; url = https://attacker.example/phish '", 'quoted mixed case'],
+    ["['REFRESH']: '5'", 'computed literal'],
+    ["refresh: '5; URL=/account'", 'numeric delay and relative URL'],
+    ["Refresh: '0; url=//attacker.example/phish'", 'scheme-relative URL'],
+  ])('closes raw Response init HTTP Refresh through %s', (header, _label) => {
+    const diagnostics = kv449(`
+import { endpoint } from '@kovojs/server';
+export const report = endpoint('/report', {
+  handler() {
+    return new Response('blocked', {
+      headers: { ${header} },
+    });
+  },
+});
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        message: expect.stringMatching(/Response init.*Refresh.*browser navigation/iu),
+      }),
+    ]);
+  });
+
   it('classifies exact module and global Response aliases as reviewed endpoint outcomes', () => {
     const result = compile(`
 import { endpoint } from '@kovojs/server';
