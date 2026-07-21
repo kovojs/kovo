@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '89d7810b2c70f5c6b1ec1cf2c1e8941ad89db840d71925c4e35056292f2fac28';
+  'b8a4f635244cc53e98400935e8c5adf1bab1ae538598d321a3b390bf3fa66b95';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   'f13c6210b08259959c03ae1942ee0cdf6846fd079c4ad37c2650dbcd3ba3993d';
 const expectedDiagnosticActualLayerReviewDigest =
-  'fa34ea34fb35520661923ddce412ad9cc53588ba070d188c01b4615ba4f26e22';
+  'd7d5720f9b8e9f4544b2e0d795f6a098083c4509f91c940e1725940d68247dfb';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -95,7 +95,7 @@ const expectedCompileComponentModuleDigest =
 const expectedValidateComponentPhaseDigest =
   '54f995664b8b91f754f04481585a009e256dce30ac8f3a66cabb80fc53d109db';
 const expectedCoreBuildDistCommand =
-  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts';
+  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts';
 // Capability-closure summaries for the few framework-owned loaders whose target is intentionally
 // runtime-selected. Each row pins both the complete source file and the acquisition expression, so
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
@@ -126,11 +126,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', '1d98e30c50e8fd8ce2bbe489d56fcbd0df3042d49c1a38d03dcfdd635a77a088'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '510345aa4ca4f21575157dd4a10ab2d2e62e8254710d68d5df7cf28d05c7ae7b',
+    '647da0a90472389bf67b6927de644492c5267dfdabd8766b7c4fc6f6dd504e3c',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    'b23edbc7195e62e9ebe8c601997ba66b0719510d5d659a88d432e685b03c40b4',
+    '63d6216a65fcc491eeb22482ef3cbb00a8cab5f9450a3f4d40a9e5c7e4b38165',
   ],
   [
     'packages/cli/src/commands/dev.ts',
@@ -138,7 +138,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    '32535adaff7947e78f603950c1747e6e4ae8a533be8ac8727082a1fcb9f2ae1a',
+    '8e6b5721af897e1a62a677e7f7be4a5611ff17b6303e5ee185ccc5ba8ace9dd8',
   ],
   [
     'packages/compiler/src/ts-api.ts',
@@ -158,7 +158,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    'b4b621f70fc7610e0e3e003798cfda7236263f6dfcbbcc6079014d3d42b48082',
+    '6ea6af9ca508d95c4d8ee1aab3f91b4bbb06bc855fd68a10144206430e11e7f2',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -205,7 +205,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
-    'packages/cli/src/commands/compile.ts#literal#d6f772521c5d7f3a2068579f07b0229f2633d14d0b05ac3024033fb17c10a633#6e57e31ea6f82f5d8ac7771a5b0878254216a287f5cc437155a0b74eb273db40',
+    'packages/cli/src/commands/compile.ts#literal#d6f772521c5d7f3a2068579f07b0229f2633d14d0b05ac3024033fb17c10a633#285e010de3a30b636431bae8b63296487e078f1aa8d94a0584bd5d2af957af63',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
