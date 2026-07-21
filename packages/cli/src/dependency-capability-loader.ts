@@ -8,6 +8,7 @@ import type {
   AppDependencyCapabilityManifest,
   ResolvedCapabilityPackage,
 } from '@kovojs/compiler/internal';
+import { parseComponentModule } from '@kovojs/compiler/internal';
 import { elementContextSecurityStaticValueIssue } from '@kovojs/core/internal/sink-policy';
 import { parse, type DefaultTreeAdapterTypes } from 'parse5';
 import type { Plugin } from 'vite-plus';
@@ -111,6 +112,8 @@ export type DependencyCapabilityLoaderLane =
 interface DependencyCapabilityLoaderOptions {
   readonly allowNodeBuiltins?: boolean;
   readonly allowRuntimeExternal?: (specifier: string) => boolean;
+  /** Base directory for project-root-relative approved source identities. */
+  readonly sourceRoot?: string;
 }
 
 interface ReviewedThirdPartyModule {
@@ -134,13 +137,24 @@ export function dependencyCapabilityLoaderVitePlugin(
   options: DependencyCapabilityLoaderOptions = {},
 ): Plugin {
   assertDependencyCapabilityManifestShape(manifest);
-  const sourceRoot = dirname(appModulePath);
+  const sourceRoot = options.sourceRoot ?? dirname(appModulePath);
   const approvedPaths = new Map<string, string>();
+  const approvedSpecifiersByPath = new Map<string, readonly string[]>();
   for (const file of approvedSourceFiles) {
-    approvedPaths.set(
-      canonicalSourcePath(resolve(sourceRoot, file.fileName)),
-      normalizeModuleName(file.fileName),
-    );
+    const sourcePath = canonicalSourcePath(resolve(sourceRoot, file.fileName));
+    approvedPaths.set(sourcePath, normalizeModuleName(file.fileName));
+    try {
+      approvedSpecifiersByPath.set(
+        sourcePath,
+        parseComponentModule(file.fileName, file.source).moduleSpecifiers.map(
+          (entry) => entry.specifier,
+        ),
+      );
+    } catch {
+      throw dependencyCapabilityError(
+        `approved app source ${normalizeModuleName(file.fileName)} cannot be parsed while binding configured package aliases`,
+      );
+    }
   }
   const admittedSpecifiers = new Set(
     manifest.dependencies
@@ -261,23 +275,6 @@ export function dependencyCapabilityLoaderVitePlugin(
             `reviewed package ${reviewedPackage.packageName} aliases CommonJS loader authority before app evaluation`,
           );
         }
-        const browserCarrier = reviewedExecutableBrowserCarrier(ast);
-        if (browserCarrier?.kind === 'worker') {
-          throw dependencyCapabilityError(
-            `reviewed package ${reviewedPackage.packageName} creates a ${browserCarrier.name} subgraph outside the dependency closure plugin`,
-          );
-        }
-        const executableAssetCarrier =
-          browserCarrier?.kind === 'asset'
-            ? browserCarrier.name
-            : containsImportMetaUrlConstructor(ast)
-              ? 'opaque new-URL'
-              : undefined;
-        if (executableAssetCarrier !== undefined) {
-          throw dependencyCapabilityError(
-            `reviewed package ${reviewedPackage.packageName} creates ${executableAssetCarrier === 'opaque new-URL' ? 'an' : 'a'} ${executableAssetCarrier} executable asset outside the dependency closure plugin`,
-          );
-        }
         for (const edge of parsedModuleEdges(ast)) {
           if (edge.specifier === undefined) {
             throw dependencyCapabilityError(
@@ -334,6 +331,17 @@ export function dependencyCapabilityLoaderVitePlugin(
       const importerName = importerPath === undefined ? undefined : approvedPaths.get(importerPath);
       const reviewedPackage =
         importerPath === undefined ? undefined : reviewedThirdPartyModules.get(importerPath);
+      const aliasedPackageSpecifier =
+        importerName === undefined || importerPath === undefined
+          ? undefined
+          : approvedAliasedPackageSpecifier(
+              specifier,
+              importerName,
+              importerPath,
+              admittedSpecifiers,
+              configuredAliases,
+              manifest,
+            );
       if (importerName !== undefined && specifierHasUnsupportedSubgraphSuffix(specifier)) {
         throw dependencyCapabilityError(
           `approved app source ${importerName} edge ${specifier} carries a query or fragment without a Kovo-owned subgraph proof`,
@@ -346,6 +354,67 @@ export function dependencyCapabilityLoaderVitePlugin(
       }
       if (importerName !== undefined && isReviewedViteBuildVirtualSpecifier(specifier)) {
         return null;
+      }
+      if (
+        importerName !== undefined &&
+        importerPath !== undefined &&
+        aliasedPackageSpecifier !== undefined
+      ) {
+        if (
+          approvedSourceContainsUnadmittedAliasTarget(
+            approvedSpecifiersByPath.get(importerPath),
+            importerPath,
+            viteSourcePath(specifier),
+            admittedSpecifiers,
+            configuredAliases,
+          )
+        ) {
+          throw dependencyCapabilityError(
+            `approved app source ${importerName} authored an unadmitted edge to a configured package-alias target`,
+          );
+        }
+        const installed = resolveCapabilityPackageImport(aliasedPackageSpecifier, importerPath);
+        const dependency = assertDependencyCapabilityImport(
+          manifest,
+          aliasedPackageSpecifier,
+          installed,
+          importerName,
+        );
+        // The alias plugin has already selected the absolute replacement before this pre hook sees
+        // the edge. Re-enter resolution with this plugin skipped so Vite's file resolver can attach
+        // the same canonical module metadata it would have attached to the reviewed bare import.
+        // Returning the raw replacement here bypasses that metadata and can retain the whole server
+        // barrel, making the post-bundle carrier census grow exponentially instead of tree-shaking.
+        const resolved = await this.resolve(specifier, importer, { skipSelf: true });
+        const resolvedPath =
+          resolved === null || resolved.external === true ? undefined : viteSourcePath(resolved.id);
+        const packageRoot = capabilityPackageResolvedTargetRoot(
+          aliasedPackageSpecifier,
+          importerPath,
+          resolved?.id ?? specifier,
+        );
+        if (
+          resolved === null ||
+          resolved.external === true ||
+          resolvedPath === undefined ||
+          packageRoot === undefined ||
+          !isReviewedPackageCodeModule(resolvedPath) ||
+          !sourceBelongsToPackageRoot(packageRoot, resolvedPath)
+        ) {
+          throw dependencyCapabilityError(
+            `${aliasedPackageSpecifier} alias no longer names its exact reviewed package export target in ${lane}`,
+          );
+        }
+        approvedPackageEntryModules.add(resolvedPath);
+        if (dependency.implementationDigest === undefined) {
+          reviewedThirdPartyModules.set(resolvedPath, {
+            packageName: dependency.packageName,
+            root: packageRoot,
+          });
+        }
+        // Return Vite's canonical resolution to terminate the outer alias resolution while keeping
+        // its side-effect and package metadata intact.
+        return resolved;
       }
       if (importerName !== undefined && !isBareDependencySpecifier(specifier)) {
         const resolved = await this.resolve(specifier, importer, { skipSelf: true });
@@ -515,14 +584,22 @@ export function dependencyCapabilityLoaderVitePlugin(
             `supported ${lane} artifact ${output.fileName} cannot be parsed for retained module edges`,
           );
         }
-        const browserCarrier = reviewedExecutableBrowserCarrier(outputAst);
+        // Browser Worker/worklet/service-worker carriers are executable only in the client lane.
+        // Server artifacts still receive the complete literal module-edge closure below, while
+        // app and reviewed-package module edges were classified before bundling. The retained
+        // browser-carrier evaluator is therefore authoritative only for client artifacts.
+        const browserCarrier =
+          lane === 'build-client' ? reviewedExecutableBrowserCarrier(outputAst) : undefined;
         if (browserCarrier?.kind === 'worker') {
           throw dependencyCapabilityError(
             `supported ${lane} artifact ${output.fileName} retains a ${browserCarrier.name} constructor outside the dependency closure plugin`,
           );
         }
+        const opaqueBrowserCarrier =
+          browserCarrier?.kind === 'asset' &&
+          browserCarrier.name === 'opaque browser executable carrier';
         const executableAssetCarrier =
-          browserCarrier?.kind === 'asset'
+          browserCarrier?.kind === 'asset' && !opaqueBrowserCarrier
             ? browserCarrier.name
             : containsImportMetaUrlConstructor(outputAst)
               ? 'opaque new-URL'
@@ -550,6 +627,13 @@ export function dependencyCapabilityLoaderVitePlugin(
               `ambiguous runtime URL module target ${specifier} remains in supported ${lane} artifact ${output.fileName}`,
             );
           }
+        }
+        if (opaqueBrowserCarrier) {
+          throw dependencyCapabilityError(
+            `supported ${lane} artifact ${output.fileName} retains a opaque browser executable carrier executable asset outside the dependency closure plugin`,
+          );
+        }
+        for (const specifier of retainedSpecifiers) {
           if (
             artifactSpecifierIsBundleOwned(output.fileName, specifier, bundleOwnedChunkFileNames)
           ) {
@@ -622,6 +706,67 @@ export function dependencyCapabilityLoaderVitePlugin(
       }
     },
   };
+}
+
+function approvedAliasedPackageSpecifier(
+  resolvedSpecifier: string,
+  importerName: string,
+  importerPath: string,
+  admittedSpecifiers: ReadonlySet<string>,
+  configuredAliases: readonly { find: string | RegExp; replacement: string }[],
+  manifest: AppDependencyCapabilityManifest,
+): string | undefined {
+  const matches = new Set<string>();
+  for (const candidate of admittedSpecifiers) {
+    for (const alias of configuredAliases) {
+      const replacement = aliasReplacementFor(candidate, alias.find, alias.replacement);
+      if (replacement !== resolvedSpecifier) continue;
+      const installed = resolveCapabilityPackageImport(candidate, importerPath);
+      assertDependencyCapabilityImport(manifest, candidate, installed, importerName);
+      if (
+        capabilityPackageResolvedTargetRoot(candidate, importerPath, resolvedSpecifier) ===
+        undefined
+      ) {
+        throw dependencyCapabilityError(
+          `${candidate} alias differs from its exact package export target`,
+        );
+      }
+      matches.add(candidate);
+    }
+  }
+  // Multiple reviewed exports may intentionally name the same exact module (for example
+  // jsx-runtime and jsx-dev-runtime). Every candidate above independently passed the manifest,
+  // package-name, export-target, importer, and implementation checks, so the consumed bytes are
+  // unambiguous even when the original spelling was normalized away by Vite's alias pre-hook.
+  return matches.values().next().value;
+}
+
+function approvedSourceContainsUnadmittedAliasTarget(
+  authoredSpecifiers: readonly string[] | undefined,
+  importerPath: string,
+  resolvedTarget: string | undefined,
+  admittedSpecifiers: ReadonlySet<string>,
+  configuredAliases: readonly { find: string | RegExp; replacement: string }[],
+): boolean {
+  if (authoredSpecifiers === undefined || resolvedTarget === undefined) return false;
+  for (const specifier of authoredSpecifiers) {
+    const cleanSpecifier = specifier.split(/[?#]/u, 1)[0] ?? specifier;
+    const directTarget =
+      viteSourcePath(cleanSpecifier) ??
+      (cleanSpecifier.startsWith('./') || cleanSpecifier.startsWith('../')
+        ? canonicalSourcePath(resolve(dirname(importerPath), cleanSpecifier))
+        : undefined);
+    const aliasesTarget = configuredAliases.some((alias) => {
+      const replacement = aliasReplacementFor(specifier, alias.find, alias.replacement);
+      return (
+        replacement !== undefined && (viteSourcePath(replacement) ?? replacement) === resolvedTarget
+      );
+    });
+    if (directTarget !== resolvedTarget && !aliasesTarget) continue;
+    if (admittedSpecifiers.has(specifier) && aliasesTarget) continue;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -1171,6 +1316,7 @@ interface ParsedModuleEdge {
 type ReviewedExecutableAssetCarrier =
   | 'audio worklet'
   | 'opaque browser executable carrier'
+  | 'opaque new-URL'
   | 'paint worklet'
   | 'service worker'
   | 'worklet';
@@ -1192,6 +1338,8 @@ type BrowserStaticAtom =
   | { readonly kind: 'dynamic-code'; readonly name: 'Function' | 'eval' }
   | { readonly kind: 'frames' }
   | { readonly kind: 'global' }
+  | { readonly kind: 'module-meta' }
+  | { readonly kind: 'module-meta-url' }
   | {
       readonly constructor: {
         readonly kind: 'namespace';
@@ -1215,6 +1363,8 @@ type BrowserStaticAtom =
       readonly scope: BrowserStaticScope;
     }
   | { readonly kind: 'reflect' }
+  | { readonly kind: 'reflect-construct' }
+  | { readonly kind: 'reflect-define-property' }
   | { readonly kind: 'reflect-get' }
   | {
       readonly callArgumentIndex?: number;
@@ -1232,6 +1382,7 @@ type BrowserStaticAtom =
     }
   | { readonly kind: 'string'; readonly value: string }
   | { readonly kind: 'timer'; readonly name: 'setInterval' | 'setTimeout' }
+  | { readonly kind: 'url-constructor' }
   | { readonly carrier: ReviewedExecutableAssetCarrier; readonly kind: 'asset' }
   | { readonly kind: 'worker'; readonly name: 'SharedWorker' | 'Worker' };
 
@@ -1260,21 +1411,34 @@ interface BrowserStaticScope {
 }
 
 interface BrowserStaticIndex {
+  readonly analysisBudget: BrowserStaticEvaluationBudget;
   readonly bindings: BrowserStaticBinding[];
   readonly bindingIdentifiers: WeakSet<object>;
   readonly callableEffects: WeakMap<object, BrowserStaticCallableEffects>;
+  readonly globalBindings: Map<string, BrowserStaticBinding>;
   readonly memberSources: WeakMap<object, Map<string, BrowserBindingSource[]>>;
+  readonly opaqueConstructors: WeakSet<object>;
   readonly opaqueMemberSources: WeakSet<object>;
   readonly opaquePrototypeProperties: WeakMap<object, Set<string>>;
   readonly opaquePrototypes: WeakSet<object>;
   readonly root: BrowserStaticScope;
   readonly scopeByNode: WeakMap<object, BrowserStaticScope>;
+  readonly superclassSources: WeakMap<
+    object,
+    {
+      readonly enclosingClass: object;
+      readonly expression: unknown;
+      readonly scope: BrowserStaticScope;
+    }
+  >;
   effectAnalysisClosed: boolean;
+  opaqueGlobalBindings: boolean;
 }
 
 interface BrowserStaticEvaluationState {
   readonly bindingStack: Set<BrowserStaticBinding>;
   readonly budget?: BrowserStaticEvaluationBudget;
+  readonly callableStack?: ReadonlySet<object>;
   readonly callReceiver?: true;
   readonly depth: number;
   readonly overrides?: ReadonlyMap<BrowserStaticBinding, readonly BrowserStaticAtom[]>;
@@ -1288,6 +1452,7 @@ interface BrowserStaticCallableEffects {
 
 interface BrowserStaticEvaluationBudget {
   exhausted: boolean;
+  remaining: number;
   recursive: boolean;
 }
 
@@ -1298,6 +1463,7 @@ function nextBrowserStaticEvaluationState(
   return {
     bindingStack,
     ...(state.budget === undefined ? {} : { budget: state.budget }),
+    ...(state.callableStack === undefined ? {} : { callableStack: state.callableStack }),
     ...(state.callReceiver === true ? { callReceiver: true as const } : {}),
     depth: state.depth + 1,
     ...(state.overrides === undefined ? {} : { overrides: state.overrides }),
@@ -1306,6 +1472,20 @@ function nextBrowserStaticEvaluationState(
 
 const browserAstMetadataKeys = new Set(['type', 'start', 'end', 'loc', 'range', 'raw']);
 const maxBrowserFiniteStaticStrings = 32;
+const maxBrowserStaticEvaluationSteps = 100_000;
+
+function consumeBrowserStaticEvaluationStep(
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): boolean {
+  const budget = state.budget ?? index.analysisBudget;
+  if (budget.remaining <= 0) {
+    budget.exhausted = true;
+    return false;
+  }
+  budget.remaining -= 1;
+  return true;
+}
 
 /**
  * Close Vite's executable browser carriers over a small, explicit expression language.
@@ -1323,15 +1503,25 @@ function reviewedExecutableBrowserCarrier(
 ): ReviewedExecutableBrowserCarrier | undefined {
   if (!isAstRecord(ast)) return undefined;
   const index = buildBrowserStaticIndex(ast);
-  if (index.effectAnalysisClosed) {
-    return { kind: 'asset', name: 'opaque browser executable carrier' };
-  }
+  let opaqueFallback = false;
+  const prioritizeSpecificFinding = (
+    finding: ReviewedExecutableBrowserCarrier | undefined,
+  ): ReviewedExecutableBrowserCarrier | undefined => {
+    if (finding?.kind === 'asset' && finding.name === 'opaque browser executable carrier') {
+      opaqueFallback = true;
+      return undefined;
+    }
+    return finding;
+  };
 
   const visit = (
     value: unknown,
     parent?: Readonly<Record<string, unknown>>,
     key?: string,
   ): ReviewedExecutableBrowserCarrier | undefined => {
+    if (index.analysisBudget.exhausted) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
     if (typeof value !== 'object' || value === null) return undefined;
     if (Array.isArray(value)) {
       for (const child of value) {
@@ -1348,18 +1538,40 @@ function reviewedExecutableBrowserCarrier(
       (record.type === 'Identifier' &&
         browserIdentifierIsValueReference(record, parent, key, index.bindingIdentifiers))
     ) {
-      const finding = browserCarrierFromAtoms(
-        evaluateBrowserStaticValue(record, scope, index, { bindingStack: new Set(), depth: 0 }),
-      );
-      if (finding !== undefined) return finding;
+      const atoms = evaluateBrowserStaticValue(record, scope, index, {
+        bindingStack: new Set(),
+        depth: 0,
+      });
+      const directSafeTimerCallee =
+        parent?.type === 'CallExpression' &&
+        key === 'callee' &&
+        parent.callee === record &&
+        atoms.length > 0 &&
+        atoms.every((atom) => atom.kind === 'timer') &&
+        browserExecutableMethodCall(parent, index.scopeByNode.get(parent) ?? scope, index) ===
+          undefined;
+      const finding = browserCarrierFromAtoms(atoms, directSafeTimerCallee);
+      const specificFinding = prioritizeSpecificFinding(finding);
+      if (specificFinding !== undefined) return specificFinding;
     }
     if (record.type === 'NewExpression') {
       const finding = browserExecutableConstructor(record, scope, index);
-      if (finding !== undefined) return finding;
+      const specificFinding = prioritizeSpecificFinding(finding);
+      if (specificFinding !== undefined) return specificFinding;
     }
     if (record.type === 'CallExpression') {
       const finding = browserExecutableMethodCall(record, scope, index);
-      if (finding !== undefined) return finding;
+      const specificFinding = prioritizeSpecificFinding(finding);
+      if (specificFinding !== undefined) return specificFinding;
+    }
+    if (record.type === 'TaggedTemplateExpression') {
+      const tag = evaluateBrowserStaticValue(record.tag, scope, index, {
+        bindingStack: new Set(),
+        depth: 0,
+      });
+      if (tag.some((atom) => atom.kind === 'constructor-value' || atom.kind === 'timer')) {
+        opaqueFallback = true;
+      }
     }
     for (const [childKey, child] of Object.entries(record)) {
       if (browserAstMetadataKeys.has(childKey)) continue;
@@ -1378,22 +1590,101 @@ function reviewedExecutableBrowserCarrier(
     const finding = browserCarrierFromAtoms(
       evaluateBrowserBinding(binding, index, { bindingStack: new Set(), depth: 0 }),
     );
-    if (finding !== undefined) return finding;
+    const specificFinding = prioritizeSpecificFinding(finding);
+    if (specificFinding !== undefined) return specificFinding;
+    if (index.analysisBudget.exhausted) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
   }
-  return undefined;
+  return opaqueFallback || index.effectAnalysisClosed
+    ? { kind: 'asset', name: 'opaque browser executable carrier' }
+    : undefined;
 }
 
 function browserExecutableConstructor(
   expression: Readonly<Record<string, unknown>>,
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
+  evaluationState?: BrowserStaticEvaluationState,
 ): ReviewedExecutableBrowserCarrier | undefined {
-  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+  const state: BrowserStaticEvaluationState = evaluationState ?? {
+    bindingStack: new Set(),
+    depth: 0,
+  };
   const callee = expression.callee;
   const calleeAtoms = evaluateBrowserStaticValue(callee, scope, index, state);
   const direct = browserCarrierFromAtoms(calleeAtoms);
   if (direct?.kind === 'worker') return direct;
-  if (calleeAtoms.some((atom) => atom.kind === 'closed' || atom.kind === 'dynamic-code')) {
+  const args = Array.isArray(expression.arguments) ? expression.arguments : [];
+  if (calleeAtoms.some((atom) => atom.kind === 'url-constructor')) {
+    const argumentAtoms = browserUrlConstructorArgumentAtoms(args, scope, index, {
+      bindingStack: new Set(),
+      depth: 0,
+    });
+    if (argumentAtoms.some((atom) => atom.kind !== 'plain' && atom.kind !== 'string')) {
+      return { kind: 'asset', name: 'opaque new-URL' };
+    }
+  }
+  const localConstructors = calleeAtoms.filter(
+    (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
+      atom.kind === 'namespace' &&
+      (browserAstFunctionType(String(atom.node.type)) ||
+        atom.node.type === 'ClassDeclaration' ||
+        atom.node.type === 'ClassExpression'),
+  );
+  if (localConstructors.length > 0) {
+    const constructorCallables: Extract<BrowserStaticAtom, { kind: 'namespace' }>[] = [];
+    let constructorAnalysisClosed = false;
+    for (const constructor of localConstructors) {
+      const callables = browserStaticConstructorCallables(constructor, index, state, new Set(), 0);
+      if (callables === undefined) constructorAnalysisClosed = true;
+      else constructorCallables.push(...callables);
+    }
+    const affectedArguments = new Set<number>();
+    collectBrowserAffectedInvocationArguments(
+      constructorCallables,
+      args,
+      scope,
+      index,
+      state,
+      affectedArguments,
+    );
+    const authorityBearingSpread = args.some(
+      (argument) =>
+        isAstRecord(argument) &&
+        argument.type === 'SpreadElement' &&
+        browserExpressionCarriesInvocationAuthority(argument.argument, scope, index, state),
+    );
+    if (
+      ((constructorAnalysisClosed || affectedArguments.size > 0) && authorityBearingSpread) ||
+      [...affectedArguments].some((argumentIndex) =>
+        browserExpressionCarriesInvocationAuthority(args[argumentIndex], scope, index, state),
+      ) ||
+      (constructorAnalysisClosed &&
+        args.some((argument) =>
+          browserExpressionCarriesInvocationAuthority(argument, scope, index, state),
+        ))
+    ) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+  }
+  if (
+    calleeAtoms.some(
+      (atom) =>
+        atom.kind === 'closed' ||
+        atom.kind === 'constructor-value' ||
+        atom.kind === 'dynamic-code' ||
+        atom.kind === 'timer',
+    )
+  ) {
+    return { kind: 'asset', name: 'opaque browser executable carrier' };
+  }
+  if (
+    !browserCalleeHasFiniteConstructorSemantics(calleeAtoms) &&
+    args.some((argument) =>
+      browserExpressionCarriesInvocationAuthority(argument, scope, index, state),
+    )
+  ) {
     return { kind: 'asset', name: 'opaque browser executable carrier' };
   }
   if (!isAstRecord(callee) || callee.type !== 'MemberExpression') return undefined;
@@ -1407,12 +1698,73 @@ function browserExecutableConstructor(
   return browserReceiverIsProvenPlain(receiver) ? undefined : { kind: 'worker', name: workerName };
 }
 
+function browserUrlConstructorArgumentAtoms(
+  args: readonly unknown[],
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  state: BrowserStaticEvaluationState,
+): BrowserStaticAtom[] {
+  let offsets = new Set([0]);
+  const argumentAtoms: BrowserStaticAtom[] = [];
+  for (const argument of args) {
+    if (!isAstRecord(argument) || argument.type !== 'SpreadElement') {
+      if (offsets.has(0) || offsets.has(1)) {
+        argumentAtoms.push(...evaluateBrowserStaticValue(argument, scope, index, state));
+      }
+      offsets = new Set([...offsets].map((offset) => offset + 1));
+      continue;
+    }
+
+    const arrays = evaluateBrowserStaticValue(argument.argument, scope, index, state);
+    if (
+      arrays.length === 0 ||
+      !arrays.every(
+        (atom): atom is Extract<BrowserStaticAtom, { kind: 'array' }> => atom.kind === 'array',
+      )
+    ) {
+      return [{ kind: 'closed' }];
+    }
+    const nextOffsets = new Set<number>();
+    for (const offset of offsets) {
+      for (const array of arrays) {
+        const elements = Array.isArray(array.node.elements) ? array.node.elements : [];
+        if (
+          index.opaqueMemberSources.has(array.node) ||
+          (index.memberSources.get(array.node)?.size ?? 0) > 0 ||
+          elements.some((element) => isAstRecord(element) && element.type === 'SpreadElement')
+        ) {
+          return [{ kind: 'closed' }];
+        }
+        for (const argumentIndex of [0 - offset, 1 - offset]) {
+          if (argumentIndex < 0 || argumentIndex >= elements.length) continue;
+          const selected = elements[argumentIndex];
+          argumentAtoms.push(
+            ...(selected === null || selected === undefined
+              ? [{ kind: 'closed' } satisfies BrowserStaticAtom]
+              : evaluateBrowserStaticValue(selected, array.scope, index, state)),
+          );
+        }
+        nextOffsets.add(offset + elements.length);
+      }
+    }
+    offsets = nextOffsets;
+  }
+  return argumentAtoms;
+}
+
 function browserCarrierFromAtoms(
   atoms: readonly BrowserStaticAtom[],
+  allowDirectTimer = false,
 ): ReviewedExecutableBrowserCarrier | undefined {
   for (const atom of atoms) {
     if (atom.kind === 'worker') return { kind: 'worker', name: atom.name };
     if (atom.kind === 'asset') return { kind: 'asset', name: atom.carrier };
+    if (atom.kind === 'dynamic-code') {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+    if (atom.kind === 'timer' && !allowDirectTimer) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
   }
   return undefined;
 }
@@ -1421,22 +1773,142 @@ function browserExecutableMethodCall(
   call: Readonly<Record<string, unknown>>,
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
+  evaluationState?: BrowserStaticEvaluationState,
 ): ReviewedExecutableBrowserCarrier | undefined {
   const callee = call.callee;
-  const calleeAtoms = evaluateBrowserStaticValue(callee, scope, index, {
+  const state: BrowserStaticEvaluationState = evaluationState ?? {
     bindingStack: new Set(),
     depth: 0,
-  });
-  if (calleeAtoms.some((atom) => atom.kind === 'dynamic-code')) {
+  };
+  const calleeAtoms = evaluateBrowserStaticValue(callee, scope, index, state);
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  const localCallables = calleeAtoms.filter(
+    (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
+      atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type)),
+  );
+  if (localCallables.length > 0) {
+    const affectedArguments = new Set<number>();
+    const receiverAffected = collectBrowserAffectedInvocationArguments(
+      localCallables,
+      args,
+      scope,
+      index,
+      state,
+      affectedArguments,
+    );
+    const authorityBearingSpread = args.some(
+      (argument) =>
+        isAstRecord(argument) &&
+        argument.type === 'SpreadElement' &&
+        browserExpressionCarriesInvocationAuthority(argument.argument, scope, index, state),
+    );
+    if (
+      (affectedArguments.size > 0 && authorityBearingSpread) ||
+      [...affectedArguments].some((argumentIndex) =>
+        browserExpressionCarriesInvocationAuthority(args[argumentIndex], scope, index, state),
+      ) ||
+      (receiverAffected &&
+        isAstRecord(callee) &&
+        callee.type === 'MemberExpression' &&
+        browserExpressionCarriesInvocationAuthority(callee.object, scope, index, state))
+    ) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+  }
+  if (isAstRecord(callee) && callee.type === 'Super') {
+    const direct = browserCarrierFromAtoms(calleeAtoms);
+    if (direct !== undefined) return direct;
+    if (calleeAtoms.some((atom) => atom.kind === 'url-constructor')) {
+      const argumentAtoms = browserUrlConstructorArgumentAtoms(args, scope, index, state);
+      if (argumentAtoms.some((atom) => atom.kind !== 'plain' && atom.kind !== 'string')) {
+        return { kind: 'asset', name: 'opaque new-URL' };
+      }
+    }
+    if (
+      calleeAtoms.some(
+        (atom) =>
+          atom.kind === 'closed' || atom.kind === 'constructor-value' || atom.kind === 'timer',
+      )
+    ) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+  }
+  if (
+    calleeAtoms.some((atom) => atom.kind === 'constructor-value' || atom.kind === 'dynamic-code')
+  ) {
     return { kind: 'asset', name: 'opaque browser executable carrier' };
   }
   if (calleeAtoms.some((atom) => atom.kind === 'timer')) {
-    const args = Array.isArray(call.arguments) ? call.arguments : [];
-    const callback = evaluateBrowserStaticValue(args[0], scope, index, {
-      bindingStack: new Set(),
-      depth: 0,
-    });
-    if (callback.some((atom) => atom.kind === 'closed' || atom.kind === 'string')) {
+    if (!calleeAtoms.every((atom) => atom.kind === 'timer')) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+    const callback = evaluateBrowserStaticValue(args[0], scope, index, state);
+    const provedCallableCallback =
+      callback.length > 0 &&
+      callback.every(
+        (atom) => atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type)),
+      );
+    if (!provedCallableCallback) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+    if (
+      args
+        .slice(1)
+        .some((argument) =>
+          browserExpressionCarriesInvocationAuthority(argument, scope, index, state),
+        )
+    ) {
+      return { kind: 'asset', name: 'opaque browser executable carrier' };
+    }
+  } else if (
+    !browserCalleeHasFiniteCallSemantics(calleeAtoms) &&
+    args.some((argument) =>
+      browserExpressionCarriesInvocationAuthority(argument, scope, index, state),
+    )
+  ) {
+    return { kind: 'asset', name: 'opaque browser executable carrier' };
+  }
+  if (
+    isAstRecord(callee) &&
+    callee.type === 'MemberExpression' &&
+    calleeAtoms.every((atom) => atom.kind === 'closed' || atom.kind === 'plain') &&
+    (calleeAtoms.some((atom) => atom.kind === 'closed') ||
+      browserStaticPropertyNames(callee, scope, index, state)?.some((property) =>
+        [
+          'every',
+          'filter',
+          'find',
+          'findIndex',
+          'findLast',
+          'findLastIndex',
+          'flatMap',
+          'forEach',
+          'map',
+          'reduce',
+          'reduceRight',
+          'some',
+          'sort',
+          'then',
+        ].includes(property),
+      ) === true) &&
+    browserExpressionCarriesInvocationAuthority(callee.object, scope, index, state)
+  ) {
+    return { kind: 'asset', name: 'opaque browser executable carrier' };
+  }
+  if (calleeAtoms.some((atom) => atom.kind === 'reflect-construct')) {
+    const target = evaluateBrowserStaticValue(args[0], scope, index, state);
+    const carrier = browserCarrierFromAtoms(target);
+    if (carrier !== undefined) return carrier;
+    const provedLocalConstructor =
+      target.length > 0 &&
+      target.every(
+        (atom) =>
+          atom.kind === 'namespace' &&
+          (browserAstFunctionType(String(atom.node.type)) ||
+            atom.node.type === 'ClassDeclaration' ||
+            atom.node.type === 'ClassExpression'),
+      );
+    if (!provedLocalConstructor) {
       return { kind: 'asset', name: 'opaque browser executable carrier' };
     }
   }
@@ -1481,6 +1953,104 @@ function browserExecutableMethodCall(
   return undefined;
 }
 
+function browserCalleeHasFiniteConstructorSemantics(atoms: readonly BrowserStaticAtom[]): boolean {
+  return (
+    atoms.length > 0 &&
+    atoms.every(
+      (atom) =>
+        atom.kind === 'namespace' &&
+        (browserAstFunctionType(String(atom.node.type)) ||
+          atom.node.type === 'ClassDeclaration' ||
+          atom.node.type === 'ClassExpression'),
+    )
+  );
+}
+
+function browserCalleeHasFiniteCallSemantics(atoms: readonly BrowserStaticAtom[]): boolean {
+  return (
+    atoms.length > 0 &&
+    atoms.every(
+      (atom) =>
+        (atom.kind === 'namespace' && browserAstFunctionType(String(atom.node.type))) ||
+        atom.kind === 'object-define-property' ||
+        atom.kind === 'object-freeze' ||
+        atom.kind === 'reflect-construct' ||
+        atom.kind === 'reflect-define-property' ||
+        atom.kind === 'reflect-get',
+    )
+  );
+}
+
+function browserExpressionCarriesInvocationAuthority(
+  value: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+  evaluationState?: BrowserStaticEvaluationState,
+): boolean {
+  const state: BrowserStaticEvaluationState = evaluationState ?? {
+    bindingStack: new Set(),
+    depth: 0,
+  };
+  const seen = new Set<object>();
+  const worklist: Array<{ readonly scope: BrowserStaticScope; readonly value: unknown }> = [
+    { scope, value },
+  ];
+  while (worklist.length > 0) {
+    const current = worklist.pop()!;
+    if (typeof current.value !== 'object' || current.value === null) continue;
+    if (Array.isArray(current.value)) {
+      for (const child of current.value) worklist.push({ scope: current.scope, value: child });
+      continue;
+    }
+    const record = current.value as Record<string, unknown>;
+    if (seen.has(record)) continue;
+    seen.add(record);
+    const atoms = evaluateBrowserStaticValue(record, current.scope, index, state);
+    if (browserAtomsCarryInvocationAuthority(atoms)) {
+      return true;
+    }
+    for (const atom of atoms) {
+      if (atom.kind === 'array' || atom.kind === 'object') {
+        worklist.push({ scope: atom.scope, value: atom.node });
+      }
+    }
+    if (
+      browserAstFunctionType(String(record.type)) ||
+      record.type === 'ClassDeclaration' ||
+      record.type === 'ClassExpression'
+    ) {
+      continue;
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (browserAstMetadataKeys.has(key)) continue;
+      worklist.push({
+        scope: isAstRecord(child) ? (index.scopeByNode.get(child) ?? current.scope) : current.scope,
+        value: child,
+      });
+    }
+  }
+  return false;
+}
+
+function browserAtomsCarryInvocationAuthority(atoms: readonly BrowserStaticAtom[]): boolean {
+  return atoms.some(
+    (atom) =>
+      atom.kind === 'asset' ||
+      atom.kind === 'constructor-value' ||
+      atom.kind === 'css' ||
+      atom.kind === 'document' ||
+      atom.kind === 'dynamic-code' ||
+      atom.kind === 'frames' ||
+      atom.kind === 'global' ||
+      atom.kind === 'navigator' ||
+      atom.kind === 'reflect' ||
+      atom.kind === 'reflect-construct' ||
+      atom.kind === 'timer' ||
+      atom.kind === 'url-constructor' ||
+      atom.kind === 'worker',
+  );
+}
+
 function browserExpressionAcquiresProperty(
   value: unknown,
   expectedProperty: string,
@@ -1519,16 +2089,25 @@ function browserReceiverIsProvenPlain(receivers: readonly BrowserStaticAtom[]): 
 function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticIndex {
   const root: BrowserStaticScope = { bindings: new Map(), kind: 'program' };
   const index: BrowserStaticIndex = {
+    analysisBudget: {
+      exhausted: false,
+      recursive: false,
+      remaining: maxBrowserStaticEvaluationSteps,
+    },
     bindings: [],
     bindingIdentifiers: new WeakSet(),
     callableEffects: new WeakMap(),
     effectAnalysisClosed: false,
+    globalBindings: new Map(),
     memberSources: new WeakMap(),
+    opaqueConstructors: new WeakSet(),
     opaqueMemberSources: new WeakSet(),
     opaquePrototypeProperties: new WeakMap(),
     opaquePrototypes: new WeakSet(),
     root,
     scopeByNode: new WeakMap(),
+    superclassSources: new WeakMap(),
+    opaqueGlobalBindings: false,
   };
 
   const collect = (value: unknown, scope: BrowserStaticScope): void => {
@@ -1547,6 +2126,7 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
         // Static blocks are eagerly executed with the class constructor as `this`; keep that
         // general-JS mutation surface closed rather than losing its implicit receiver effects.
         index.opaqueMemberSources.add(record);
+        index.opaqueConstructors.add(record);
       }
     }
     if (type === 'Program') {
@@ -1660,8 +2240,44 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
   };
 
   collect(ast, root);
+  collectBrowserSuperclassSources(ast, index);
   collectBrowserAssignmentSources(ast, index);
   return index;
+}
+
+function collectBrowserSuperclassSources(ast: unknown, index: BrowserStaticIndex): void {
+  const visit = (value: unknown, enclosingClass?: Record<string, unknown>): void => {
+    if (typeof value !== 'object' || value === null) return;
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child, enclosingClass);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if (record.type === 'Super') {
+      if (enclosingClass !== undefined) {
+        const superclass = enclosingClass.superClass;
+        if (superclass === null || superclass === undefined) return;
+        index.superclassSources.set(record, {
+          enclosingClass,
+          expression: superclass,
+          scope: index.scopeByNode.get(enclosingClass) ?? index.root,
+        });
+      }
+      return;
+    }
+    if (record.type === 'ClassDeclaration' || record.type === 'ClassExpression') {
+      visit(record.superClass, enclosingClass);
+      for (const [key, child] of Object.entries(record)) {
+        if (browserAstMetadataKeys.has(key) || key === 'superClass') continue;
+        visit(child, record);
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (!browserAstMetadataKeys.has(key)) visit(child, enclosingClass);
+    }
+  };
+  visit(ast);
 }
 
 function collectBrowserAstChildren(
@@ -1701,6 +2317,14 @@ function ensureBrowserBinding(
   const binding: BrowserStaticBinding = { opaque: false, scope, sources: [] };
   scope.bindings.set(name, binding);
   index.bindings.push(binding);
+  return binding;
+}
+
+function ensureBrowserGlobalBinding(name: string, index: BrowserStaticIndex): BrowserStaticBinding {
+  const existing = index.globalBindings.get(name);
+  if (existing !== undefined) return existing;
+  const binding: BrowserStaticBinding = { opaque: false, scope: index.root, sources: [] };
+  index.globalBindings.set(name, binding);
   return binding;
 }
 
@@ -1835,6 +2459,9 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
       if (record.operator === '=') {
         addBrowserAssignmentPattern(record.left, record.right, scope, index);
       } else {
+        if (browserExpressionCarriesInvocationAuthority(record.right, scope, index)) {
+          index.effectAnalysisClosed = true;
+        }
         markBrowserAssignmentPatternOpaque(record.left, scope, index);
       }
     } else if (record.type === 'UpdateExpression') {
@@ -1844,16 +2471,25 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
       markBrowserAssignmentPatternOpaque(record.argument, scope, index);
     } else if (
       (record.type === 'ForInStatement' || record.type === 'ForOfStatement') &&
-      isAstRecord(record.left) &&
-      record.left.type !== 'VariableDeclaration'
+      isAstRecord(record.left)
     ) {
       // Iteration assigns an element/key rather than the right-hand collection itself. Keep that
       // unsupported transform closed instead of attaching a falsely precise collection source.
-      markBrowserAssignmentPatternOpaque(record.left, scope, index);
+      if (browserExpressionCarriesInvocationAuthority(record.right, scope, index)) {
+        index.effectAnalysisClosed = true;
+      }
+      if (record.left.type !== 'VariableDeclaration') {
+        markBrowserAssignmentPatternOpaque(record.left, scope, index);
+      }
       markBrowserStructuredArgumentOpaque(record.right, scope, index, {
         bindingStack: new Set(),
         depth: 0,
       });
+    } else if (
+      record.type === 'ThrowStatement' &&
+      browserExpressionCarriesInvocationAuthority(record.argument, scope, index)
+    ) {
+      index.effectAnalysisClosed = true;
     }
     if (record.type === 'CallExpression') {
       collectBrowserOpaqueCallArguments(record, scope, index);
@@ -1907,7 +2543,12 @@ function collectBrowserOpaqueCallArguments(
     return;
   }
   const callee = evaluateBrowserStaticValue(call.callee, scope, index, state);
-  if (callee.length > 0 && callee.every((atom) => atom.kind === 'object-define-property')) {
+  if (
+    callee.length > 0 &&
+    callee.every(
+      (atom) => atom.kind === 'object-define-property' || atom.kind === 'reflect-define-property',
+    )
+  ) {
     collectBrowserDefinePropertyEffects(call, scope, index, state);
     return;
   }
@@ -2013,9 +2654,20 @@ function collectBrowserDefinePropertyEffects(
   const args = Array.isArray(call.arguments) ? call.arguments : [];
   const targets = evaluateBrowserStaticValue(args[0], scope, index, state);
   const properties = browserFiniteStaticStrings(args[1], scope, index, state);
+  const descriptorValue = browserExactDefinePropertyValue(args[2]);
   let closed = targets.length === 0;
   for (const target of targets) {
-    if (target.kind === 'prototype') {
+    if (target.kind === 'global') {
+      if (properties === undefined) {
+        index.opaqueGlobalBindings = true;
+      } else {
+        for (const property of properties) {
+          const binding = ensureBrowserGlobalBinding(property, index);
+          if (descriptorValue === undefined) binding.opaque = true;
+          else binding.sources.push({ expression: descriptorValue, projections: [], scope });
+        }
+      }
+    } else if (target.kind === 'prototype') {
       if (properties === undefined) {
         index.opaquePrototypes.add(target.constructor.node);
       } else {
@@ -2039,6 +2691,39 @@ function collectBrowserDefinePropertyEffects(
   for (const argument of args) {
     markBrowserStructuredArgumentOpaque(argument, scope, index, state);
   }
+}
+
+function browserExactDefinePropertyValue(descriptor: unknown): unknown | undefined {
+  if (!isAstRecord(descriptor) || descriptor.type !== 'ObjectExpression') return undefined;
+  const properties = Array.isArray(descriptor.properties) ? descriptor.properties : [];
+  let value: unknown;
+  let valueCount = 0;
+  for (const property of properties) {
+    if (
+      !isAstRecord(property) ||
+      property.type !== 'Property' ||
+      property.kind !== 'init' ||
+      property.method === true ||
+      property.computed === true
+    ) {
+      return undefined;
+    }
+    const name = staticObjectPropertyName(property);
+    if (name === 'value') {
+      value = property.value;
+      valueCount += 1;
+      continue;
+    }
+    if (
+      (name !== 'configurable' && name !== 'enumerable' && name !== 'writable') ||
+      !isAstRecord(property.value) ||
+      property.value.type !== 'Literal' ||
+      typeof property.value.value !== 'boolean'
+    ) {
+      return undefined;
+    }
+  }
+  return valueCount === 1 ? value : undefined;
 }
 
 function collectBrowserOpaqueConstructorArguments(
@@ -2217,7 +2902,11 @@ function browserStaticCallableEffects(
       overrides,
     );
   }
-  const budget: BrowserStaticEvaluationBudget = { exhausted: false, recursive: false };
+  const budget: BrowserStaticEvaluationBudget = {
+    exhausted: false,
+    recursive: false,
+    remaining: maxBrowserStaticEvaluationSteps,
+  };
   const state: BrowserStaticEvaluationState = {
     bindingStack: new Set(),
     budget,
@@ -2547,39 +3236,80 @@ function markBrowserStructuredArgumentOpaque(
   state: BrowserStaticEvaluationState,
 ): void {
   const seen = new Set<object>();
-  const visit = (candidate: unknown, candidateScope: BrowserStaticScope, depth: number): void => {
-    if (depth > 48) {
+  const worklist: Array<{
+    readonly candidate: unknown;
+    readonly inspectClosure: boolean;
+    readonly scope: BrowserStaticScope;
+  }> = [{ candidate: value, inspectClosure: false, scope }];
+  while (worklist.length > 0) {
+    const { candidate, inspectClosure, scope: candidateScope } = worklist.pop()!;
+    if (typeof candidate !== 'object' || candidate === null) continue;
+    if (!consumeBrowserStaticEvaluationStep(index, state)) {
       index.effectAnalysisClosed = true;
       return;
     }
-    if (typeof candidate !== 'object' || candidate === null) return;
     if (Array.isArray(candidate)) {
-      for (const child of candidate) visit(child, candidateScope, depth + 1);
-      return;
+      for (const child of candidate) {
+        worklist.push({
+          candidate: child,
+          inspectClosure,
+          scope: isAstRecord(child)
+            ? (index.scopeByNode.get(child) ?? candidateScope)
+            : candidateScope,
+        });
+      }
+      continue;
     }
     const record = candidate as Record<string, unknown>;
-    if (seen.has(record)) return;
+    if (seen.has(record)) continue;
     seen.add(record);
     const expression = record.type === 'SpreadElement' ? record.argument : record;
     for (const atom of evaluateBrowserStaticValue(expression, candidateScope, index, state)) {
-      if (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') {
+      if (atom.kind === 'global') {
+        index.opaqueGlobalBindings = true;
+      } else if (atom.kind === 'array' || atom.kind === 'namespace' || atom.kind === 'object') {
         index.opaqueMemberSources.add(atom.node);
-        if (atom.node !== record) visit(atom.node, atom.scope, depth + 1);
+        if (atom.node !== record) {
+          worklist.push({
+            candidate: atom.node,
+            inspectClosure: atom.kind === 'namespace',
+            scope: atom.scope,
+          });
+        }
       } else if (atom.kind === 'prototype') {
         index.opaquePrototypes.add(atom.constructor.node);
       } else if (atom.kind === 'instance') {
         index.opaqueMemberSources.add(atom.constructor.node);
       }
     }
-    for (const [key, child] of Object.entries(record)) {
-      if (browserAstMetadataKeys.has(key)) continue;
-      const childScope = isAstRecord(child)
-        ? (index.scopeByNode.get(child) ?? candidateScope)
-        : candidateScope;
-      visit(child, childScope, depth + 1);
+    if (inspectClosure) {
+      for (const [key, child] of Object.entries(record)) {
+        if (browserAstMetadataKeys.has(key)) continue;
+        const childScope = isAstRecord(child)
+          ? (index.scopeByNode.get(child) ?? candidateScope)
+          : candidateScope;
+        worklist.push({ candidate: child, inspectClosure: true, scope: childScope });
+      }
+    } else if (record.type === 'ArrayExpression') {
+      const elements = Array.isArray(record.elements) ? record.elements : [];
+      for (const child of elements) {
+        const childScope = isAstRecord(child)
+          ? (index.scopeByNode.get(child) ?? candidateScope)
+          : candidateScope;
+        worklist.push({ candidate: child, inspectClosure: false, scope: childScope });
+      }
+    } else if (record.type === 'ObjectExpression') {
+      const properties = Array.isArray(record.properties) ? record.properties : [];
+      for (const property of properties) {
+        if (!isAstRecord(property)) continue;
+        const child = property.type === 'Property' ? property.value : property.argument;
+        const childScope = isAstRecord(child)
+          ? (index.scopeByNode.get(child) ?? candidateScope)
+          : candidateScope;
+        worklist.push({ candidate: child, inspectClosure: false, scope: childScope });
+      }
     }
-  };
-  visit(value, scope, 0);
+  }
 }
 
 interface BrowserStaticSetterResolution {
@@ -2621,9 +3351,18 @@ function collectBrowserSetterAssignment(
     affectedArguments,
   );
   if (affectedArguments.has(0)) {
+    if (
+      resolution.callables.length > 0 &&
+      browserExpressionCarriesInvocationAuthority(expression, scope, index, state)
+    ) {
+      index.effectAnalysisClosed = true;
+    }
     markBrowserStructuredArgumentOpaque(expression, scope, index, state);
   }
   if (receiverAffected) {
+    if (browserExpressionCarriesInvocationAuthority(member.object, scope, index, state)) {
+      index.effectAnalysisClosed = true;
+    }
     markBrowserStructuredArgumentOpaque(member.object, scope, index, state);
   }
 }
@@ -2867,6 +3606,40 @@ function collectBrowserMemberAssignment(
     bindingStack: new Set(),
     depth: 0,
   });
+  const properties = browserStaticPropertyNames(member, scope, index, {
+    bindingStack: new Set(),
+    depth: 0,
+  });
+  if (properties?.includes('__proto__') === true) {
+    const expressionAtoms =
+      expression === undefined
+        ? [{ kind: 'closed' } satisfies BrowserStaticAtom]
+        : evaluateBrowserStaticValue(expression, scope, index, {
+            bindingStack: new Set(),
+            depth: 0,
+          });
+    if (
+      expressionAtoms.some((atom) => atom.kind === 'closed') ||
+      (expression !== undefined &&
+        browserExpressionCarriesInvocationAuthority(expression, scope, index))
+    ) {
+      index.effectAnalysisClosed = true;
+    }
+    for (const receiver of receivers) {
+      if (receiver.kind === 'namespace') index.opaqueConstructors.add(receiver.node);
+    }
+  }
+  if (receivers.some((receiver) => receiver.kind === 'global')) {
+    if (!exact || properties === undefined) {
+      index.opaqueGlobalBindings = true;
+    } else {
+      for (const property of properties) {
+        const binding = ensureBrowserGlobalBinding(property, index);
+        if (expression === undefined) binding.opaque = true;
+        else binding.sources.push({ expression, projections: [], scope });
+      }
+    }
+  }
   const targets = receivers.filter(
     (
       receiver,
@@ -2874,10 +3647,6 @@ function collectBrowserMemberAssignment(
       receiver.kind === 'array' || receiver.kind === 'namespace' || receiver.kind === 'object',
   );
   if (targets.length === 0) return;
-  const properties = browserStaticPropertyNames(member, scope, index, {
-    bindingStack: new Set(),
-    depth: 0,
-  });
   for (const target of targets) {
     if (!exact || properties === undefined) {
       index.opaqueMemberSources.add(target.node);
@@ -2936,6 +3705,7 @@ function addBrowserAssignmentPatternSource(
     // top-level AssignmentExpression member target. That general-JS effect is outside the finite
     // projection grammar, so close both sides instead of silently discarding it (SPEC §6.6; C13).
     const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+    collectBrowserSetterAssignment(pattern, source.expression, scope, index);
     markBrowserStructuredArgumentOpaque(pattern.object, scope, index, state);
     markBrowserStructuredArgumentOpaque(source.expression, source.scope, index, state);
     return;
@@ -3056,11 +3826,25 @@ function lookupBrowserBinding(
   return undefined;
 }
 
+function lookupBrowserArgumentsBinding(
+  scope: BrowserStaticScope,
+): BrowserStaticBinding | undefined {
+  let candidate: BrowserStaticScope | undefined = scope;
+  while (candidate !== undefined) {
+    const binding = candidate.bindings.get('arguments');
+    if (binding !== undefined) return binding;
+    if (candidate.kind === 'function') return undefined;
+    candidate = candidate.parent;
+  }
+  return undefined;
+}
+
 function evaluateBrowserBinding(
   binding: BrowserStaticBinding,
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): BrowserStaticAtom[] {
+  if (!consumeBrowserStaticEvaluationStep(index, state)) return [{ kind: 'closed' }];
   const override = state.overrides?.get(binding);
   if (override !== undefined) return [...override];
   if (state.depth > 48) {
@@ -3097,46 +3881,58 @@ function evaluateBrowserStaticValue(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): BrowserStaticAtom[] {
+  if (!consumeBrowserStaticEvaluationStep(index, state)) return [{ kind: 'closed' }];
   if (state.depth > 48) {
     if (state.budget !== undefined) state.budget.exhausted = true;
     return [{ kind: 'closed' }];
   }
   if (!isAstRecord(value)) return [{ kind: 'closed' }];
   const nextState = nextBrowserStaticEvaluationState(state);
+  if (value.type === 'Super') {
+    const superclass = index.superclassSources.get(value);
+    if (superclass === undefined) return [{ kind: 'closed' }];
+    const atoms = evaluateBrowserStaticValue(
+      superclass.expression,
+      superclass.scope,
+      index,
+      nextState,
+    );
+    return index.opaqueConstructors.has(superclass.enclosingClass)
+      ? [...atoms, { kind: 'closed' }]
+      : atoms;
+  }
+  if (
+    value.type === 'MetaProperty' &&
+    isAstRecord(value.meta) &&
+    value.meta.type === 'Identifier' &&
+    value.meta.name === 'import' &&
+    isAstRecord(value.property) &&
+    value.property.type === 'Identifier' &&
+    value.property.name === 'meta'
+  ) {
+    return [{ kind: 'module-meta' }];
+  }
   if (value.type === 'ThisExpression') {
     return state.callReceiver === true
       ? [{ callReceiver: true, kind: 'plain' }]
       : [{ kind: 'closed' }];
   }
   if (value.type === 'Identifier' && typeof value.name === 'string') {
-    const binding = lookupBrowserBinding(value.name, scope);
+    const binding =
+      value.name === 'arguments'
+        ? lookupBrowserArgumentsBinding(scope)
+        : lookupBrowserBinding(value.name, scope);
     if (binding !== undefined) return evaluateBrowserBinding(binding, index, nextState);
-    if (value.name === 'Worker' || value.name === 'SharedWorker') {
-      return [{ kind: 'worker', name: value.name }];
+    if (value.name === 'arguments') return [{ kind: 'closed' }];
+    const globalBinding = index.globalBindings.get(value.name);
+    if (globalBinding !== undefined) {
+      const written = evaluateBrowserBinding(globalBinding, index, nextState);
+      const ambient = browserAmbientIdentifierAtoms(value.name);
+      return ambient === undefined ? written : [...written, ...ambient];
     }
-    if (value.name === 'Function' || value.name === 'eval') {
-      return [{ kind: 'dynamic-code', name: value.name }];
-    }
-    if (value.name === 'Object') return [{ kind: 'object-builtin' }];
-    if (value.name === 'Proxy') return [{ kind: 'proxy-constructor' }];
-    if (value.name === 'setInterval' || value.name === 'setTimeout') {
-      return [{ kind: 'timer', name: value.name }];
-    }
-    if (
-      value.name === 'globalThis' ||
-      value.name === 'self' ||
-      value.name === 'window' ||
-      value.name === 'top' ||
-      value.name === 'parent'
-    ) {
-      return [{ kind: 'global' }];
-    }
-    if (value.name === 'frames') return [{ kind: 'frames' }];
-    if (value.name === 'navigator') return [{ kind: 'navigator' }];
-    if (value.name === 'CSS') return [{ kind: 'css' }];
-    if (value.name === 'document') return [{ kind: 'document' }];
-    if (value.name === 'Reflect') return [{ kind: 'reflect' }];
-    return [{ kind: 'plain' }];
+    const ambient = browserAmbientIdentifierAtoms(value.name);
+    if (ambient !== undefined) return ambient;
+    return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'plain' }];
   }
   const literal = literalAstString(value);
   if (literal !== undefined) return [{ kind: 'string', value: literal }];
@@ -3145,14 +3941,30 @@ function evaluateBrowserStaticValue(
   }
   if (value.type === 'ObjectExpression') return [{ kind: 'object', node: value, scope }];
   if (value.type === 'ArrayExpression') return [{ kind: 'array', node: value, scope }];
+  if (value.type === 'TemplateLiteral') {
+    const strings = browserFiniteStaticStrings(value, scope, index, nextState);
+    if (strings === undefined) return [{ kind: 'closed' }];
+    return strings.map((stringValue) => ({ kind: 'string', value: stringValue }));
+  }
   if (
     value.type === 'ArrowFunctionExpression' ||
     value.type === 'FunctionDeclaration' ||
-    value.type === 'FunctionExpression' ||
-    value.type === 'ClassDeclaration' ||
-    value.type === 'ClassExpression'
+    value.type === 'FunctionExpression'
   ) {
-    return [{ kind: 'namespace', node: value, scope }];
+    return [
+      { kind: 'namespace', node: value, scope },
+      ...(index.opaqueConstructors.has(value)
+        ? ([{ kind: 'closed' }] satisfies BrowserStaticAtom[])
+        : []),
+    ];
+  }
+  if (value.type === 'ClassDeclaration' || value.type === 'ClassExpression') {
+    const atoms: BrowserStaticAtom[] = [{ kind: 'namespace', node: value, scope }];
+    if (index.opaqueConstructors.has(value)) atoms.push({ kind: 'closed' });
+    if (value.superClass === null || value.superClass === undefined) return atoms;
+    const superclass = evaluateBrowserStaticValue(value.superClass, scope, index, nextState);
+    atoms.push(...superclass.filter(browserClassRetainsSuperclassAuthority));
+    return atoms;
   }
   if (value.type === 'MemberExpression') {
     const object = evaluateBrowserStaticValue(value.object, scope, index, nextState);
@@ -3162,6 +3974,24 @@ function evaluateBrowserStaticValue(
   if (value.type === 'CallExpression') {
     const callee = evaluateBrowserStaticValue(value.callee, scope, index, nextState);
     const args = Array.isArray(value.arguments) ? value.arguments : [];
+    if (
+      isAstRecord(value.callee) &&
+      value.callee.type === 'Super' &&
+      callee.some((atom) => atom.kind === 'url-constructor') &&
+      callee.every(
+        (atom) =>
+          atom.kind === 'url-constructor' ||
+          (atom.kind === 'namespace' &&
+            (browserAstFunctionType(String(atom.node.type)) ||
+              atom.node.type === 'ClassDeclaration' ||
+              atom.node.type === 'ClassExpression')),
+      )
+    ) {
+      const argumentAtoms = browserUrlConstructorArgumentAtoms(args, scope, index, nextState);
+      return argumentAtoms.some((atom) => atom.kind !== 'plain' && atom.kind !== 'string')
+        ? [{ carrier: 'opaque new-URL', kind: 'asset' }]
+        : [{ kind: 'plain' }];
+    }
     if (callee.some((atom) => atom.kind === 'reflect-get')) {
       if (args.length < 2) return [{ carrier: 'opaque browser executable carrier', kind: 'asset' }];
       const receiver = evaluateBrowserStaticValue(args[0], scope, index, nextState);
@@ -3172,6 +4002,35 @@ function evaluateBrowserStaticValue(
       return args.length === 0
         ? [{ kind: 'closed' }]
         : evaluateBrowserStaticValue(args[0], scope, index, nextState);
+    }
+    if (callee.length > 0 && callee.every((atom) => atom.kind === 'reflect-construct')) {
+      const target = evaluateBrowserStaticValue(args[0], scope, index, nextState);
+      const localConstructors = target.filter(
+        (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
+          atom.kind === 'namespace' &&
+          (browserAstFunctionType(String(atom.node.type)) ||
+            atom.node.type === 'ClassDeclaration' ||
+            atom.node.type === 'ClassExpression'),
+      );
+      const newTarget = args[2];
+      const newTargetIsLocal =
+        newTarget === undefined ||
+        evaluateBrowserStaticValue(newTarget, scope, index, nextState).every(
+          (atom) =>
+            atom.kind === 'namespace' &&
+            (browserAstFunctionType(String(atom.node.type)) ||
+              atom.node.type === 'ClassDeclaration' ||
+              atom.node.type === 'ClassExpression'),
+        );
+      if (
+        localConstructors.length > 0 &&
+        localConstructors.length === target.length &&
+        newTargetIsLocal &&
+        !browserExpressionCarriesInvocationAuthority(args[1], scope, index, nextState)
+      ) {
+        return localConstructors.map((constructor) => ({ constructor, kind: 'instance' }));
+      }
+      return [{ carrier: 'opaque browser executable carrier', kind: 'asset' }];
     }
     const callable = callee.filter(
       (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
@@ -3187,6 +4046,29 @@ function evaluateBrowserStaticValue(
   if (value.type === 'NewExpression') {
     const callee = evaluateBrowserStaticValue(value.callee, scope, index, nextState);
     const args = Array.isArray(value.arguments) ? value.arguments : [];
+    if (
+      callee.some((atom) => atom.kind === 'url-constructor') &&
+      callee.every(
+        (atom) =>
+          atom.kind === 'url-constructor' ||
+          (atom.kind === 'namespace' &&
+            (browserAstFunctionType(String(atom.node.type)) ||
+              atom.node.type === 'ClassDeclaration' ||
+              atom.node.type === 'ClassExpression')),
+      )
+    ) {
+      const argumentAtoms = browserUrlConstructorArgumentAtoms(args, scope, index, nextState);
+      if (argumentAtoms.some((atom) => atom.kind !== 'plain' && atom.kind !== 'string')) {
+        return [{ carrier: 'opaque new-URL', kind: 'asset' }];
+      }
+      const localConstructors = callee.filter(
+        (atom): atom is Extract<BrowserStaticAtom, { kind: 'namespace' }> =>
+          atom.kind === 'namespace',
+      );
+      return localConstructors.length === 0
+        ? [{ kind: 'plain' }]
+        : localConstructors.map((constructor) => ({ constructor, kind: 'instance' }));
+    }
     if (callee.some((atom) => atom.kind === 'proxy-constructor')) {
       return args.length === 0
         ? [{ kind: 'closed' }]
@@ -3239,14 +4121,46 @@ function evaluateBrowserStaticValue(
       ? [{ kind: 'closed' }]
       : strings.map((stringValue) => ({ kind: 'string', value: stringValue }));
   }
-  if (
-    value.type === 'Literal' ||
-    value.type === 'TemplateLiteral' ||
-    value.type === 'UnaryExpression'
-  ) {
+  if (value.type === 'Literal' || value.type === 'UnaryExpression') {
     return [{ kind: 'plain' }];
   }
   return [{ kind: 'closed' }];
+}
+
+function browserAmbientIdentifierAtoms(name: string): BrowserStaticAtom[] | undefined {
+  if (name === 'Worker' || name === 'SharedWorker') return [{ kind: 'worker', name }];
+  if (name === 'URL') return [{ kind: 'url-constructor' }];
+  if (name === 'Function' || name === 'eval') return [{ kind: 'dynamic-code', name }];
+  if (name === 'Object') return [{ kind: 'object-builtin' }];
+  if (name === 'Proxy') return [{ kind: 'proxy-constructor' }];
+  if (name === 'setInterval' || name === 'setTimeout') return [{ kind: 'timer', name }];
+  if (
+    name === 'globalThis' ||
+    name === 'self' ||
+    name === 'window' ||
+    name === 'top' ||
+    name === 'parent'
+  ) {
+    return [{ kind: 'global' }];
+  }
+  if (name === 'frames') return [{ kind: 'frames' }];
+  if (name === 'navigator') return [{ kind: 'navigator' }];
+  if (name === 'CSS') return [{ kind: 'css' }];
+  if (name === 'document') return [{ kind: 'document' }];
+  if (name === 'Reflect') return [{ kind: 'reflect' }];
+  return undefined;
+}
+
+function browserClassRetainsSuperclassAuthority(atom: BrowserStaticAtom): boolean {
+  return (
+    atom.kind === 'asset' ||
+    atom.kind === 'closed' ||
+    atom.kind === 'constructor-value' ||
+    atom.kind === 'dynamic-code' ||
+    atom.kind === 'timer' ||
+    atom.kind === 'url-constructor' ||
+    atom.kind === 'worker'
+  );
 }
 
 function evaluateBrowserStaticCallable(
@@ -3256,6 +4170,10 @@ function evaluateBrowserStaticCallable(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): BrowserStaticAtom[] {
+  if (state.callableStack?.has(callable.node) === true) {
+    (state.budget ?? index.analysisBudget).recursive = true;
+    return [{ kind: 'closed' }];
+  }
   const parameters = Array.isArray(callable.node.params) ? callable.node.params : [];
   if (
     parameters.some(
@@ -3300,6 +4218,7 @@ function evaluateBrowserStaticCallable(
   }
   const returnState = {
     ...nextBrowserStaticEvaluationState(state),
+    callableStack: new Set([...(state.callableStack ?? []), callable.node]),
     overrides,
   } satisfies BrowserStaticEvaluationState;
   return returns.flatMap((expression) => {
@@ -3352,7 +4271,7 @@ function browserMemberAtoms(
         receiver.kind === 'frames'
       ) {
         atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
-      } else if (receiver.kind === 'closed') {
+      } else if (receiver.kind === 'closed' || receiver.kind === 'module-meta') {
         atoms.push({ kind: 'closed' });
       } else {
         atoms.push({ kind: 'plain' });
@@ -3360,7 +4279,23 @@ function browserMemberAtoms(
       continue;
     }
     for (const property of properties) {
-      if (receiver.kind === 'global') {
+      if (
+        property === 'constructor' &&
+        (receiver.kind === 'object-builtin' ||
+          receiver.kind === 'object-define-property' ||
+          receiver.kind === 'object-freeze' ||
+          receiver.kind === 'proxy-constructor' ||
+          receiver.kind === 'reflect-construct' ||
+          receiver.kind === 'reflect-define-property' ||
+          receiver.kind === 'reflect-get' ||
+          receiver.kind === 'timer')
+      ) {
+        atoms.push({ kind: 'dynamic-code', name: 'Function' });
+        continue;
+      }
+      if (receiver.kind === 'module-meta') {
+        atoms.push(property === 'url' ? { kind: 'module-meta-url' } : { kind: 'plain' });
+      } else if (receiver.kind === 'global') {
         if (property === 'Worker' || property === 'SharedWorker') {
           atoms.push({ kind: 'worker', name: property });
         } else if (
@@ -3417,20 +4352,34 @@ function browserMemberAtoms(
       } else if (receiver.kind === 'document') {
         atoms.push(property === 'defaultView' ? { kind: 'global' } : { kind: 'closed' });
       } else if (receiver.kind === 'reflect') {
-        atoms.push(property === 'get' ? { kind: 'reflect-get' } : { kind: 'closed' });
+        atoms.push(
+          property === 'get'
+            ? { kind: 'reflect-get' }
+            : property === 'construct'
+              ? { kind: 'reflect-construct' }
+              : property === 'defineProperty'
+                ? { kind: 'reflect-define-property' }
+                : property === 'set' || property === 'setPrototypeOf'
+                  ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+                  : { kind: 'closed' },
+        );
       } else if (receiver.kind === 'object-builtin') {
         atoms.push(
           property === 'freeze'
             ? { kind: 'object-freeze' }
             : property === 'defineProperty'
               ? { kind: 'object-define-property' }
-              : { kind: 'closed' },
+              : property === 'setPrototypeOf'
+                ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+                : { kind: 'closed' },
         );
       } else if (receiver.kind === 'constructor-value') {
         atoms.push(
           property === 'constructor'
             ? { kind: 'dynamic-code', name: 'Function' }
-            : { kind: 'closed' },
+            : property === 'call' || property === 'apply' || property === 'bind'
+              ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+              : { kind: 'closed' },
         );
       } else if (receiver.kind === 'object') {
         atoms.push(...browserPlainObjectMember(receiver, property, index, state));
@@ -3443,7 +4392,13 @@ function browserMemberAtoms(
       } else if (receiver.kind === 'prototype') {
         atoms.push({ kind: 'closed' });
       } else if (receiver.kind === 'closed') {
-        if (property === 'Worker' || property === 'SharedWorker') {
+        if (property === 'constructor') {
+          // Any ordinary object can reach Function through value.constructor.constructor. Preserve
+          // that bridge even when the receiver itself is outside the finite expression language;
+          // constructor-value remains inert until a second constructor projection reaches the
+          // dynamic-code sink (SPEC §6.6; C13).
+          atoms.push({ kind: 'constructor-value' });
+        } else if (property === 'Worker' || property === 'SharedWorker') {
           atoms.push({ kind: 'worker', name: property });
         } else if (property === 'serviceWorker') {
           atoms.push({ carrier: 'service worker', kind: 'asset' });
@@ -3453,6 +4408,16 @@ function browserMemberAtoms(
           atoms.push({ carrier: 'paint worklet', kind: 'asset' });
         } else if (property.toLowerCase().endsWith('worklet')) {
           atoms.push({ carrier: 'worklet', kind: 'asset' });
+        } else if (property === 'setInterval' || property === 'setTimeout') {
+          atoms.push({ kind: 'timer', name: property });
+        } else if (property === 'Function' || property === 'eval') {
+          atoms.push({ kind: 'dynamic-code', name: property });
+        } else if (property === 'URL') {
+          atoms.push({ kind: 'url-constructor' });
+        } else if (property === 'Reflect') {
+          atoms.push({ kind: 'reflect' });
+        } else if (property === 'setPrototypeOf') {
+          atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
         } else {
           atoms.push({ kind: 'closed' });
         }
@@ -3469,11 +4434,24 @@ function browserMemberAtoms(
       } else if (
         receiver.kind === 'proxy-constructor' ||
         receiver.kind === 'object-define-property' ||
-        receiver.kind === 'object-freeze'
+        receiver.kind === 'object-freeze' ||
+        receiver.kind === 'reflect-define-property'
       ) {
         atoms.push({ kind: 'closed' });
       } else if (receiver.kind === 'dynamic-code') {
         atoms.push({ kind: 'closed' });
+      } else if (receiver.kind === 'timer') {
+        atoms.push(
+          property === 'call' || property === 'apply' || property === 'bind'
+            ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+            : { kind: 'closed' },
+        );
+      } else if (receiver.kind === 'reflect-construct') {
+        atoms.push(
+          property === 'call' || property === 'apply' || property === 'bind'
+            ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+            : { kind: 'closed' },
+        );
       } else if (receiver.kind === 'worker' || receiver.kind === 'asset') {
         atoms.push(receiver);
       } else {
@@ -3573,7 +4551,7 @@ function browserPlainNamespaceMember(
   if (atoms.length === 0) {
     atoms.push(
       propertyName === 'constructor'
-        ? { kind: 'constructor-value' }
+        ? { kind: 'dynamic-code', name: 'Function' }
         : propertyName === 'prototype'
           ? { constructor: namespace, kind: 'prototype' }
           : { kind: 'plain' },

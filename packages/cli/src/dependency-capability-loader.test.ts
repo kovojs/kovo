@@ -58,6 +58,105 @@ function recursiveBudgetCarrierExpression(assetPath: string): string {
   return `(() => { function install(box) { var cycle = cycle; console.log(cycle); const holder = { get target() { return box; } }; holder.target.platform = globalThis; } const box = {}; install(box); return new box.platform.Worker('${assetPath}'); })()`;
 }
 
+// @kovo-security-certifies C13 dependency-browser-carrier-recursion-budget
+function recursiveCallableCarrierExpression(assetPath: string): string {
+  return `(() => { function select() { return flag ? select() : select(); } return new (select().Worker)('${assetPath}'); })()`;
+}
+
+function finiteBrowserBudgetExhaustionExpression(): string {
+  const declarations = ['function branch0(value) { return value; }'];
+  for (let depth = 1; depth <= 14; depth += 1) {
+    declarations.push(
+      `function branch${depth}(value) { return flag ? branch${depth - 1}(value + 1) : branch${depth - 1}(value + 2); }`,
+    );
+  }
+  return `(() => { ${declarations.join(' ')} return branch14(0); })()`;
+}
+
+// @kovo-security-certifies C13 dependency-closed-constructor-chain
+function closedBrowserValueDynamicWorkerExpression(assetPath: string): string {
+  return `globalThis.location.constructor.constructor(${JSON.stringify(
+    `return new Worker(${JSON.stringify(assetPath)})`,
+  )})()`;
+}
+
+// @kovo-security-certifies C13 dependency-invocation-adapter-closure
+function dynamicCodeAdapterCarrierExpressions(
+  assetPath: string,
+): readonly (readonly [label: string, expression: string])[] {
+  const workerCode = `new Worker(${JSON.stringify(assetPath)})`;
+  const script = JSON.stringify(workerCode);
+  const functionBody = JSON.stringify(`return ${workerCode}`);
+  return [
+    ['eval.call dynamic Worker', `globalThis.eval.call(null, ${script})`],
+    ['eval.apply dynamic Worker', `globalThis.eval.apply(null, [${script}])`],
+    ['eval.bind dynamic Worker', `globalThis.eval.bind(null)(${script})`],
+    ['Reflect.apply eval dynamic Worker', `Reflect.apply(globalThis.eval, null, [${script}])`],
+    [
+      'Reflect.construct Function dynamic Worker',
+      `Reflect.construct(Function, [${functionBody}])()`,
+    ],
+    ['Function tagged-template dynamic Worker', `Function\`${`return ${workerCode}`}\`() `],
+    [
+      'borrowed apply.call eval dynamic Worker',
+      `(() => {}).apply.call(globalThis.eval, null, [${script}])`,
+    ],
+    ['local-function constructor dynamic Worker', `(() => {}).constructor(${functionBody})()`],
+    ['array-method constructor dynamic Worker', `[].filter.constructor(${functionBody})()`],
+    ['Object constructor dynamic Worker', `Object.constructor(${functionBody})()`],
+    ['Proxy constructor dynamic Worker', `Proxy.constructor(${functionBody})()`],
+    ['setTimeout constructor dynamic Worker', `setTimeout.constructor(${functionBody})()`],
+    ['Object.freeze constructor dynamic Worker', `Object.freeze.constructor(${functionBody})()`],
+    ['Reflect.get constructor dynamic Worker', `Reflect.get.constructor(${functionBody})()`],
+    [
+      'Reflect.construct constructor dynamic Worker',
+      `Reflect.construct.constructor(${functionBody})()`,
+    ],
+    [
+      'constructor-chain call dynamic Worker',
+      `globalThis.location.constructor.constructor.call(null, ${functionBody})()`,
+    ],
+    [
+      'constructor-chain Reflect.apply dynamic Worker',
+      `Reflect.apply(globalThis.location.constructor.constructor, null, [${functionBody}])()`,
+    ],
+    [
+      'descriptor Reflect.construct Worker',
+      `Reflect.construct(Object.getOwnPropertyDescriptor(globalThis, 'Worker').value, [${JSON.stringify(assetPath)}])`,
+    ],
+  ];
+}
+
+function timerAdapterCarrierExpressions(
+  assetPath: string,
+): readonly (readonly [label: string, expression: string])[] {
+  const script = JSON.stringify(`new Worker(${JSON.stringify(assetPath)})`);
+  return [
+    [
+      'setTimeout tagged-template callback',
+      `setTimeout\`${`new Worker(${JSON.stringify(assetPath)})`}\``,
+    ],
+    ['setTimeout array callback', `setTimeout([${script}], 0)`],
+    ['setTimeout coercing-object callback', `setTimeout({ toString() { return ${script}; } }, 0)`],
+    [
+      'setTimeout aliased-array callback',
+      `(() => { const callback = [${script}]; return setTimeout(callback, 0); })()`,
+    ],
+    [
+      'setTimeout extra timer-authority callback argument',
+      `setTimeout(timer => timer(${script}, 0), 0, setTimeout)`,
+    ],
+    ['setTimeout.call string callback', `setTimeout.call(null, ${script}, 0)`],
+    ['setTimeout.apply string callback', `setTimeout.apply(null, [${script}, 0])`],
+    ['setTimeout.bind string callback', `setTimeout.bind(null)(${script}, 0)`],
+    ['Reflect.apply setTimeout string callback', `Reflect.apply(setTimeout, null, [${script}, 0])`],
+    [
+      'borrowed call.call setTimeout string callback',
+      `(() => {}).call.call(setTimeout, null, ${script}, 0)`,
+    ],
+  ];
+}
+
 function deepStructuredArgumentCarrierExpression(assetPath: string): string {
   const depth = 56;
   const nested = Array.from({ length: depth }).reduce<string>(
@@ -227,6 +326,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     }
   });
 
+  // @kovo-security-certifies C13 dependency-configured-alias-identity-join
   it('enforces the manifest in a real Vite import path before admitting app dependencies', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-dependency-loader-'));
     const appModulePath = join(root, 'app.mjs');
@@ -308,6 +408,75 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
               exactManifest,
             ),
           ],
+          resolve: { alias: { 'safe-parser': join(packageRoot, 'index.js') } },
+          root,
+        }),
+      ).resolves.toBeDefined();
+
+      const aliasTarget = join(packageRoot, 'index.js');
+      const aliasBorrowingSource =
+        `import { parse as reviewed } from 'safe-parser';\n` +
+        `import { parse as borrowed } from ${JSON.stringify(aliasTarget)};\n` +
+        `export const value = [reviewed('ok'), borrowed('borrowed')];\n`;
+      writeFileSync(appModulePath, aliasBorrowingSource, 'utf8');
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir, rollupOptions: { input: appModulePath } },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: basename(appModulePath), source: aliasBorrowingSource }],
+              exactManifest,
+            ),
+          ],
+          resolve: { alias: { 'safe-parser': aliasTarget } },
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*authored an unadmitted edge.*package-alias target/u);
+
+      const aliasBorrowingBareSource =
+        `import { parse as reviewed } from 'safe-parser';\n` +
+        `import { parse as borrowed } from 'borrowed-parser';\n` +
+        `export const value = [reviewed('ok'), borrowed('borrowed')];\n`;
+      writeFileSync(appModulePath, aliasBorrowingBareSource, 'utf8');
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir, rollupOptions: { input: appModulePath } },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: basename(appModulePath), source: aliasBorrowingBareSource }],
+              exactManifest,
+            ),
+          ],
+          resolve: {
+            alias: {
+              'borrowed-parser': aliasTarget,
+              'safe-parser': aliasTarget,
+            },
+          },
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*authored an unadmitted edge.*package-alias target/u);
+
+      writeFileSync(appModulePath, source, 'utf8');
+
+      await expect(
+        viteBuild({
+          build: { emptyOutDir: true, outDir, rollupOptions: { input: appModulePath } },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: basename(appModulePath), source }],
+              exactManifest,
+            ),
+          ],
           resolve: { alias: { 'safe-parser': join(packageRoot, 'hidden.js') } },
           root,
         }),
@@ -337,6 +506,181 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       await expect(build(source)).rejects.toThrow(
         /KV448.*identity drifted after capability census/u,
       );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-carrier-client-lane
+  it('limits browser carrier evaluation to client artifacts', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-browser-lane-')));
+    const appModulePath = join(root, 'app.mjs');
+    const source = `${recursiveCallableCarrierExpression('/payload.mjs')};\n`;
+    try {
+      writeFileSync(appModulePath, source);
+      const build = (lane: 'build-client' | 'build-server') =>
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir: join(root, `dist-${lane}`),
+            rollupOptions: { input: appModulePath },
+            ...(lane === 'build-server' ? { ssr: true } : {}),
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              lane,
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        });
+
+      await expect(build('build-server')).resolves.toBeDefined();
+      await expect(build('build-client')).rejects.toThrow(
+        /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-carrier-finite-budget
+  it('fails closed when finite browser carrier evaluation exhausts its shared step budget', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-browser-budget-')));
+    const appModulePath = join(root, 'app.mjs');
+    const source = `${finiteBrowserBudgetExhaustionExpression()};\n`;
+    try {
+      writeFileSync(appModulePath, source);
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir: join(root, 'dist'),
+            rollupOptions: { input: appModulePath },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).rejects.toThrow(/KV448.*opaque browser executable carrier/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  // @kovo-security-certifies C13 dependency-real-drizzle-noncarrier
+  it('admits the retained real Drizzle eq graph as a proved browser non-carrier in both build lanes', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-real-drizzle-')));
+    const appModulePath = join(root, 'app.mjs');
+    const source = "import { eq } from 'drizzle-orm'; export const retainedEq = eq;\n";
+    try {
+      mkdirSync(join(root, 'node_modules'), { recursive: true });
+      symlinkSync(
+        join(import.meta.dirname, '../../drizzle/node_modules/drizzle-orm'),
+        join(root, 'node_modules', 'drizzle-orm'),
+        'dir',
+      );
+      writeFileSync(appModulePath, source);
+      const installed = resolveCapabilityPackageImport('drizzle-orm', appModulePath)!;
+      const exactManifest: AppDependencyCapabilityManifest = {
+        dependencies: [
+          {
+            entries: [
+              {
+                conditions: installed.conditions,
+                importers: ['app.mjs'],
+                imports: [{ capabilities: [], disposition: 'pure', name: 'eq' }],
+                rootKinds: ['route'],
+                sites: ['app.mjs:1:1'],
+                specifier: 'drizzle-orm',
+              },
+            ],
+            manifestFingerprint: installed.manifestFingerprint,
+            packageName: installed.packageName,
+            packageVersion: installed.packageVersion,
+            summaryVersion: 'drizzle-eq-review/1',
+            verdict: 'open',
+          },
+        ],
+        schema: 'kovo-app-dependency-capabilities/v1',
+      };
+      const build = (lane: 'build-client' | 'build-server') =>
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            minify: false,
+            outDir: join(root, `dist-${lane}`),
+            rollupOptions: { input: appModulePath },
+            ...(lane === 'build-server' ? { ssr: true } : {}),
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source }],
+              exactManifest,
+              lane,
+            ),
+          ],
+          root,
+          ssr: { noExternal: true },
+        });
+
+      await expect(build('build-client')).resolves.toBeDefined();
+      await expect(build('build-server')).resolves.toBeDefined();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('admits direct timers with proved callbacks and local carrier-shaped properties', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-safe-builtins-')));
+    const appModulePath = join(root, 'app.mjs');
+    const source = [
+      'const local = {',
+      '  eval: value => value,',
+      '  Function: value => () => value,',
+      '  setTimeout: callback => callback(),',
+      '};',
+      'setTimeout(() => {}, 1);',
+      "globalThis.__kovoSafeCarrierNames = [local.eval('safe'), local.Function('safe')(), local.setTimeout(() => 'safe'), globalThis.location.constructor];",
+    ].join('\n');
+    try {
+      writeFileSync(appModulePath, `${source}\n`);
+      await expect(
+        viteBuild({
+          build: {
+            emptyOutDir: true,
+            outDir: join(root, 'dist'),
+            rollupOptions: { input: appModulePath },
+          },
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [
+            dependencyCapabilityLoaderVitePlugin(
+              appModulePath,
+              [{ fileName: 'app.mjs', source: `${source}\n` }],
+              { dependencies: [], schema: 'kovo-app-dependency-capabilities/v1' },
+              'build-client',
+            ),
+          ],
+          root,
+        }),
+      ).resolves.toBeDefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -1684,7 +2028,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           }),
         ).rejects.toThrow(
           new RegExp(
-            `KV448.*reviewed package safe-parser creates a ${label.includes('Shared') ? 'SharedWorker' : 'Worker'} subgraph`,
+            `KV448.*supported build-client artifact.*retains a ${label.includes('Shared') ? 'SharedWorker' : 'Worker'} constructor`,
             'u',
           ),
         );
@@ -1764,6 +2108,17 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "globalThis.constructor.constructor('return Worker')()",
       'opaque',
     ],
+    [
+      'closed-browser-value constructor-chain dynamic Worker',
+      closedBrowserValueDynamicWorkerExpression('/worker.mjs'),
+      'opaque',
+    ],
+    ...dynamicCodeAdapterCarrierExpressions('/worker.mjs').map(
+      ([label, expression]) => [label, expression, 'opaque'] as const,
+    ),
+    ...timerAdapterCarrierExpressions('/worker.mjs').map(
+      ([label, expression]) => [label, expression, 'opaque'] as const,
+    ),
     ['indirect eval Worker', "(0, eval)('Worker')", 'opaque'],
     [
       'callback-parameter Worker',
@@ -1865,7 +2220,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'dynamic-constructor-written Worker',
       "(() => { const Installer = getInstaller(); const box = {}; new Installer(box); return new box.platform.Worker('/worker.mjs'); })()",
-      'opaque',
+      'Worker',
     ],
     [
       'Reflect.construct-written Worker',
@@ -1990,7 +2345,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-deep-structured-argument-written Worker',
       deepStructuredArgumentCarrierExpression('/worker.mjs'),
-      'opaque',
+      'Worker',
     ],
     [
       'audit-object-rest-target-written Worker',
@@ -2104,6 +2459,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Worker',
     ],
     [
+      'recursive-callable-budget Worker',
+      recursiveCallableCarrierExpression('/worker.mjs'),
+      'Worker',
+    ],
+    [
       'array-written Worker',
       "(() => { const box = []; box[0] = globalThis; const W = box[0].Worker; return new W('/worker.mjs'); })()",
       'Worker',
@@ -2123,8 +2483,13 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "(() => { class Box { static G = globalThis } return new Box.G.Worker('/worker.mjs'); })()",
       'Worker',
     ],
+    [
+      'Worker subclass',
+      "(() => { class ReviewedWorker extends Worker {} return new ReviewedWorker('/worker.mjs'); })()",
+      'Worker',
+    ],
   ] as const)(
-    'rejects a reviewed package %s before Vite copies an unapproved public module',
+    'rejects a reviewed package %s before a supported artifact can ship an unapproved public module',
     async (_label, expression, expectedConstructor) => {
       const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-public-worker-')));
       const appModulePath = join(root, 'client.mjs');
@@ -2198,13 +2563,17 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           }),
         ).rejects.toThrow(
           expectedConstructor === 'opaque'
-            ? /KV448.*reviewed package safe-parser creates an? opaque browser executable carrier executable asset/u
+            ? /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u
             : new RegExp(
-                `KV448.*reviewed package safe-parser creates a ${expectedConstructor} subgraph`,
+                `KV448.*supported build-client artifact.*retains a ${expectedConstructor} constructor`,
                 'u',
               ),
         );
-        expect(() => readFileSync(join(outDir, 'worker.mjs'), 'utf8')).toThrow();
+        // Vite copies publicDir before generateBundle; the build still fails before an artifact can
+        // be published, and this staged file proves the retained-artifact backstop saw a real graph.
+        expect(readFileSync(join(outDir, 'worker.mjs'), 'utf8')).toContain(
+          '__KOVO_PUBLIC_WORKER__',
+        );
       } finally {
         rmSync(root, { force: true, recursive: true });
       }
@@ -2257,7 +2626,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "(() => { const key = globalThis.__KOVO_BROWSER_KEY__; const { [key]: Carrier } = globalThis; return new Carrier('/payload.mjs'); })()",
     ],
     [
-      'service worker',
+      'opaque browser executable carrier',
       "Reflect.apply(Reflect.get, Reflect, [navigator, 'serviceWorker']).register('/payload.mjs')",
     ],
     [
@@ -2265,14 +2634,62 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       "(() => { const read = (object, key) => object[key]; const worker = read(navigator, 'serviceWorker'); return worker?.register('/payload.mjs'); })()",
     ],
     [
-      'worklet',
+      'opaque browser executable carrier',
       "(() => { const worklet = Reflect.apply(Reflect.get, Reflect, [CSS, 'paintWorklet']); return worklet.addModule('/payload.mjs'); })()",
     ],
     [
-      'worklet',
+      'opaque browser executable carrier',
       "(() => { const worklet = Reflect.apply(Reflect.get, Reflect, [context, 'audioWorklet']); return worklet.addModule('/payload.mjs'); })()",
     ],
     ['opaque browser executable carrier', 'setTimeout("new Worker(\'/payload.mjs\')", 0)'],
+    [
+      'opaque new-URL',
+      "(() => { const U = URL; globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { class ReviewedURL extends URL {} return new ReviewedURL('./payload.mjs', import.meta.url); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { const BaseURL = URL; class ReviewedURL extends BaseURL {} const args = ['./payload.mjs', import.meta.url]; return new ReviewedURL(...args); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { class ReviewedURL extends URL { constructor() { super('./payload.mjs', import.meta.url); } } return new ReviewedURL(); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { class ReviewedURL extends URL {} return new ReviewedURL('./payload.mjs', `${import.meta.url}`); })()",
+    ],
+    [
+      'opaque browser executable carrier',
+      "(() => { class ReviewedURL extends URL {} return Reflect.apply(Reflect.construct, Reflect, [ReviewedURL, ['./payload.mjs', import.meta.url]]); })()",
+    ],
+    [
+      'opaque browser executable carrier',
+      "(() => { class ReviewedURL extends URL {} return Reflect.construct.call(Reflect, ReviewedURL, ['./payload.mjs', import.meta.url]); })()",
+    ],
+    [
+      'opaque new-URL',
+      '(() => { class ReviewedURL extends URL {} return new ReviewedURL(import.meta.url); })()',
+    ],
+    [
+      'opaque new-URL',
+      "(() => { class ReviewedURL extends URL { constructor() { super('./payload.mjs', arguments[0]); } } return new ReviewedURL(import.meta.url); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { globalThis.__KovoURL = URL; return new __KovoURL('./payload.mjs', import.meta.url); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { Object.defineProperty(globalThis, '__KovoURL', { value: URL }); return new __KovoURL('./payload.mjs', import.meta.url); })()",
+    ],
+    [
+      'opaque new-URL',
+      "(() => { class ReviewedURL extends URL {} return new ReviewedURL('./payload.mjs', [import.meta.url]); })()",
+    ],
   ] as const)('rejects a reviewed package %s executable asset', async (carrier, expression) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-dependency-executable-asset-')));
     const appModulePath = join(root, 'client.mjs');
@@ -2344,7 +2761,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
         }),
       ).rejects.toThrow(
         new RegExp(
-          `KV448.*reviewed package safe-parser creates a ${carrier} executable asset`,
+          `KV448.*supported build-client artifact.*retains an? ${carrier} executable asset`,
           'u',
         ),
       );
@@ -2391,7 +2808,19 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
           "const safeSetterBox = { Worker: class LocalWorker { constructor() { this.kind = 'safe-setter'; } } }; const safeHolder = { set target(unused) { const local = {}; local.platform = 'local-only'; } }; const safeHolderAlias = { holder: safeHolder }.holder; safeHolderAlias['tar' + 'get'] = safeSetterBox; class SafeClassHolder { set target(unused) { const local = {}; local.platform = 'local-only'; } } const safeClassHolder = new SafeClassHolder(); safeClassHolder.target = safeSetterBox; function SafePrototypeHolder() {} Object.defineProperty(SafePrototypeHolder.prototype, 'safe', { value: 'local-only' }); const safePrototypeHolder = new SafePrototypeHolder(); safePrototypeHolder.other = safeSetterBox; const safeSetterWorker = new safeSetterBox.Worker().kind;",
           "const describedLocal = (() => { const Object = { getOwnPropertyDescriptor: () => ({ value: class LocalWorker { constructor() { this.kind = 'local-object'; } } }) }; const Local = Object.getOwnPropertyDescriptor({}, 'Worker').value; return new Local().kind; })();",
           "const reflectedLocal = (() => { const Reflect = { get: (object, key) => object[key] }; const Local = Reflect.get({ Worker: class LocalWorker { constructor() { this.kind = 'local-reflect'; } } }, 'Worker'); return new Local().kind; })();",
-          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, safeConstructorWorker, safeSetterWorker, reflectedLocal, describedLocal, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
+          "class LocalAssetReference { constructor(_path, _base) { this.kind = 'local-asset'; } }",
+          "const localAssetReference = new LocalAssetReference('./payload.mjs', import.meta.url).kind;",
+          "const reflectedLocalAssetReference = Reflect.construct(LocalAssetReference, ['./payload.mjs', import.meta.url]).kind;",
+          "class LocalBase { constructor() { this.kind = 'local-base'; } } class LocalSubclass extends LocalBase {}",
+          'const localSubclass = new LocalSubclass().kind;',
+          'const SafeURLAlias = URL;',
+          "const safeURLAlias = new SafeURLAlias('/local', 'https://example.test').pathname;",
+          "const spreadSafeURLAlias = new SafeURLAlias(...['/local', 'https://example.test']).pathname;",
+          'class SafeURLSubclass extends URL {}',
+          "const safeURLSubclass = new SafeURLSubclass('/local', 'https://example.test').pathname;",
+          "class SafeConstructingURL extends URL { constructor() { super('/local', 'https://example.test'); } }",
+          'const safeConstructingURL = new SafeConstructingURL().pathname;',
+          "export const inspect = () => [new Worker().kind, new Namespace.Worker().kind, new FunctionNamespace.Worker().kind, new frozen.Worker().kind, frozen.serviceWorker.register(), frozen.paintWorklet.addModule(), localClassRegister, new localBox.Worker().kind, new localArray[0]().kind, helperRead, localWrite, nonCapturingWorker, safeConstructorWorker, safeSetterWorker, reflectedLocal, describedLocal, localAssetReference, reflectedLocalAssetReference, localSubclass, safeURLAlias, spreadSafeURLAlias, safeURLSubclass, safeConstructingURL, settings.serviceWorker.state, serviceWorker.state, paintWorklet.addModule(), new Map().size, new URL('/local', 'https://example.test').pathname, new Error('local').message, typeof ignoredUnknownResult].join(':');",
           '',
         ].join('\n'),
       );
@@ -2656,7 +3085,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'dynamic-constructor-written Worker',
       "(() => { const Installer = getInstaller(); const box = {}; new Installer(box); return new box.platform.Worker('/payload.mjs'); })()",
-      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
       'Reflect.construct-written Worker',
@@ -2781,7 +3210,7 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     [
       'audit-deep-structured-argument-written Worker',
       deepStructuredArgumentCarrierExpression('/payload.mjs'),
-      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
       'audit-object-rest-target-written Worker',
@@ -2899,6 +3328,11 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
     ],
     [
+      'recursive-callable-budget Worker',
+      recursiveCallableCarrierExpression('/payload.mjs'),
+      /KV448.*supported build-client artifact.*retains a Worker constructor/u,
+    ],
+    [
       'accessor-triggered Worker',
       "(() => { const box = { get trigger() { this.platform = globalThis; return 1; } }; function inspect(value) { Reflect.get(value, 'trigger'); } inspect(box); return new box.platform.Worker('/payload.mjs'); })()",
       /KV448.*supported build-client artifact.*retains a Worker constructor/u,
@@ -2913,6 +3347,307 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
       'Function("return new Worker(\'/payload.mjs\')")()',
       /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
     ],
+    [
+      'closed-browser-value constructor-chain dynamic Worker',
+      closedBrowserValueDynamicWorkerExpression('/payload.mjs'),
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified URL-constructor alias',
+      "(() => { const U = URL; globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified import.meta.url base alias',
+      "(() => { const getURL = () => URL; const meta = import.meta; const base = meta.url; const U = getURL(); globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', base)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified destructured import.meta.url base alias',
+      "(() => { const { url: base } = import.meta; const U = (0, URL); globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', base)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified mutable conditional URL aliases',
+      "(() => { let U = class Local {}; U = globalThis.__KOVO_URL_CHOICE__ ? class Local {} : (0, URL); let base = 'https://example.test'; base = import.meta.url; globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', base)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL spread argument alias',
+      "(() => { const U = URL; const args = ['./payload.mjs', import.meta.url]; globalThis.__KOVO_URL_CONSTRUCTOR__ = U; globalThis.__KOVO_URL_ARGUMENTS__ = args; return (globalThis.__KOVO_URL_ASSET__ = new U(...args)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass',
+      "(() => { class U extends URL {} globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass spread argument alias',
+      "(() => { const B = URL; class U extends B {} const args = ['./payload.mjs', import.meta.url]; globalThis.__KOVO_URL_CONSTRUCTOR__ = U; globalThis.__KOVO_URL_ARGUMENTS__ = args; return (globalThis.__KOVO_URL_ASSET__ = new U(...args)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass super call',
+      "(() => { class U extends URL { constructor() { super('./payload.mjs', import.meta.url); } } globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U()); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass shifted super base',
+      "(() => { class U extends URL { constructor(base) { super('./payload.mjs', base); } } globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U(import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass lexical super spread',
+      "(() => { const args = ['./payload.mjs', import.meta.url]; class U extends URL { constructor() { super(...args); } } globalThis.__KOVO_URL_CONSTRUCTOR__ = U; globalThis.__KOVO_URL_ARGUMENTS__ = args; return (globalThis.__KOVO_URL_ASSET__ = new U()); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass chained super call',
+      "(() => { class U extends URL { constructor() { super('./payload.mjs', import.meta.url); } } class V extends U {} globalThis.__KOVO_URL_CONSTRUCTOR__ = V; return (globalThis.__KOVO_URL_ASSET__ = new V()); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass template-literal base',
+      "(() => { class U extends URL {} globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', `${import.meta.url}`)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass spread template-literal base',
+      "(() => { class U extends URL {} const args = ['./payload.mjs', `${import.meta.url}`]; globalThis.__KOVO_URL_CONSTRUCTOR__ = U; globalThis.__KOVO_URL_ARGUMENTS__ = args; return (globalThis.__KOVO_URL_ASSET__ = new U(...args)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified Reflect.apply Reflect.construct URL subclass',
+      "(() => { class U extends URL {} const args = ['./payload.mjs', import.meta.url]; return (globalThis.__KOVO_URL_ASSET__ = Reflect.apply(Reflect.construct, Reflect, [U, args])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified Reflect.construct.call URL subclass',
+      "(() => { class U extends URL {} const args = ['./payload.mjs', import.meta.url]; return (globalThis.__KOVO_URL_ASSET__ = Reflect.construct.call(Reflect, U, args)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified Reflect.construct.bind URL subclass',
+      "(() => { class U extends URL {} const args = ['./payload.mjs', import.meta.url]; const construct = Reflect.construct.bind(Reflect, U, args); return (globalThis.__KOVO_URL_ASSET__ = construct()); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified Reflect.construct.apply URL subclass',
+      "(() => { class U extends URL {} const args = ['./payload.mjs', import.meta.url]; return (globalThis.__KOVO_URL_ASSET__ = Reflect.construct.apply(Reflect, [U, args])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified destructured Reflect.apply URL subclass',
+      "(() => { const { apply } = Reflect; class U extends URL {} const args = ['./payload.mjs', import.meta.url]; return (globalThis.__KOVO_URL_ASSET__ = apply(Reflect.construct, Reflect, [U, args])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified borrowed call Reflect.construct URL subclass',
+      "(() => { class U extends URL {} const args = ['./payload.mjs', import.meta.url]; return (globalThis.__KOVO_URL_ASSET__ = (() => {}).call.call(Reflect.construct, Reflect, U, args)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified forwarded Reflect.construct URL subclass',
+      "(() => { const invoke = (fn, receiver, args) => Reflect.apply(fn, receiver, args); class U extends URL {} const args = ['./payload.mjs', import.meta.url]; return (globalThis.__KOVO_URL_ASSET__ = invoke(Reflect.construct, Reflect, [U, args])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified URL subclass one-argument module URL',
+      '(() => { class U extends URL {} globalThis.__KOVO_URL_CONSTRUCTOR__ = U; return (globalThis.__KOVO_URL_ASSET__ = new U(import.meta.url)); })()',
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass implicit arguments base',
+      "(() => { class U extends URL { constructor() { super('./payload.mjs', arguments[0]); } } return (globalThis.__KOVO_URL_ASSET__ = new U(import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass implicit arguments spread',
+      "(() => { class U extends URL { constructor() { super(...arguments); } } return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL helper implicit arguments base',
+      "(() => { function first() { return arguments[0]; } class U extends URL { constructor() { super('./payload.mjs', first(import.meta.url)); } } return (globalThis.__KOVO_URL_ASSET__ = new U()); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified global URL constructor alias',
+      "(() => { globalThis.__KovoURL = URL; return (globalThis.__KOVO_URL_ASSET__ = new __KovoURL('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified global module URL base alias',
+      "(() => { globalThis.__kovoBase = import.meta.url; return (globalThis.__KOVO_URL_ASSET__ = new URL('./payload.mjs', __kovoBase)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified nested global URL constructor alias',
+      "(() => { globalThis.__kovoConstructors = { URL }; const { URL: U } = __kovoConstructors; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified Object.defineProperty global URL alias',
+      "(() => { Object.defineProperty(globalThis, '__KovoURL', { value: URL }); return (globalThis.__KOVO_URL_ASSET__ = new __KovoURL('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified Reflect.defineProperty global module URL base',
+      "(() => { Reflect.defineProperty(window, '__kovoBase', { value: import.meta.url }); return (globalThis.__KOVO_URL_ASSET__ = new URL('./payload.mjs', __kovoBase)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified escaped global unknown constructor',
+      "(() => { inspectGlobal(globalThis); return (globalThis.__KOVO_URL_ASSET__ = new __KovoUnknown('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified timer before ambient overwrite',
+      '(() => { setTimeout(\'import("/payload.mjs")\', 0); globalThis.setTimeout = () => {}; })()',
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified captured timer before ambient overwrite',
+      '(() => { const timer = setTimeout; globalThis.setTimeout = () => {}; timer(\'import("/payload.mjs")\', 0); })()',
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified captured URL before ambient overwrite',
+      "(() => { const U = URL; globalThis.URL = class LocalURL {}; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified captured Reflect.construct before ambient overwrite',
+      "(() => { const construct = Reflect.construct; globalThis.Reflect = {}; return (globalThis.__KOVO_URL_ASSET__ = construct(URL, ['./payload.mjs', import.meta.url])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified descriptor-acquired timer',
+      "Object.getOwnPropertyDescriptor(globalThis, 'setTimeout').value('import(\"/payload.mjs\")', 0)",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified descriptor-acquired Function',
+      "Object.getOwnPropertyDescriptor(globalThis, 'Function').value('return import(\"/payload.mjs\")')()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified descriptor-acquired Reflect.construct',
+      "Object.getOwnPropertyDescriptor(Reflect, 'construct').value(URL, ['./payload.mjs', import.meta.url])",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified mutated URL superclass',
+      "(() => { class LocalBase {} class U extends LocalBase {} Object.setPrototypeOf(U, URL); return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified dunder-mutated URL superclass',
+      "(() => { class LocalBase {} class U extends LocalBase {} U.__proto__ = URL; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified helper dunder-mutated URL superclass',
+      "(() => { function install(Constructor, Base) { Constructor.__proto__ = Base; } class LocalBase {} class U extends LocalBase {} install(U, URL); return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified helper setPrototypeOf-mutated URL superclass',
+      "(() => { function install(Constructor, Base) { Object.setPrototypeOf(Constructor, Base); } class LocalBase {} class U extends LocalBase {} install(U, URL); return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified new-target-mutated URL superclass',
+      "(() => { class Base { constructor() { Object.setPrototypeOf(new.target, URL); } } class U extends Base {} new U(); return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified helper new-target-mutated URL superclass',
+      "(() => { function install(Constructor, Base) { Object.setPrototypeOf(Constructor, Base); } class LocalBase { constructor() { install(new.target, URL); } } class U extends LocalBase {} new U(); return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified instance-constructor-mutated URL superclass',
+      "(() => { class Base { constructor() { this.constructor.__proto__ = URL; } } class U extends Base {} new U(); return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', import.meta.url)); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified URL subclass array-coercible base',
+      "(() => { class U extends URL {} return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', [import.meta.url])); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL subclass object-coercible base',
+      "(() => { class U extends URL {} const base = { toString() { return import.meta.url; } }; return (globalThis.__KOVO_URL_ASSET__ = new U('./payload.mjs', base)); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified URL super array-coercible base',
+      "(() => { class U extends URL { constructor() { super('./payload.mjs', [import.meta.url]); } } return (globalThis.__KOVO_URL_ASSET__ = new U()); })()",
+      /KV448.*supported build-client artifact.*retains an opaque new-URL executable asset/u,
+    ],
+    [
+      'minified descriptor-helper Reflect.construct authority laundering',
+      "(() => { function get(object, key) { return Object.getOwnPropertyDescriptor(object, key).value; } const R = get(globalThis, 'Reflect'); const U = get(globalThis, 'URL'); return (globalThis.__KOVO_URL_ASSET__ = R.construct(U, ['./payload.mjs', import.meta.url])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified Object.create-helper Reflect.construct authority laundering',
+      "(() => { function inherit(object) { return Object.create(object); } const R = inherit(Reflect); const U = inherit(URL); return (globalThis.__KOVO_URL_ASSET__ = R.construct(U, ['./payload.mjs', import.meta.url])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified local-helper Reflect.construct invocation',
+      "(() => { function invoke(R, U, args) { return R.construct(U, args); } return (globalThis.__KOVO_URL_ASSET__ = invoke(Reflect, URL, ['./payload.mjs', import.meta.url])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified local-helper aliased Reflect.construct invocation',
+      "(() => { function invoke(construct, U, args) { return construct(U, args); } return (globalThis.__KOVO_URL_ASSET__ = invoke(Reflect.construct, URL, ['./payload.mjs', import.meta.url])); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified descriptor-helper eval authority laundering',
+      "(() => { function get(object, key) { return Object.getOwnPropertyDescriptor(object, key).value; } return get(globalThis, 'eval')('import(\"/payload.mjs\")'); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified descriptor-helper Function authority laundering',
+      "(() => { function get(object, key) { return Object.getOwnPropertyDescriptor(object, key).value; } return get(globalThis, 'Function')('return import(\"/payload.mjs\")')(); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified descriptor-helper timer authority laundering',
+      "(() => { function get(object, key) { return Object.getOwnPropertyDescriptor(object, key).value; } return get(globalThis, 'setTimeout')('import(\"/payload.mjs\")', 0); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified local-helper timer invocation',
+      '(() => { function invoke(timer, source, delay) { return timer(source, delay); } return invoke(setTimeout, \'import("/payload.mjs")\', 0); })()',
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    [
+      'minified discarded local-helper timer invocation',
+      "(() => { function invoke(timer, source) { timer(source, 0); return 'plain'; } return invoke(setTimeout, 'import(\"/payload.mjs\")'); })()",
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    ],
+    ...dynamicCodeAdapterCarrierExpressions('/payload.mjs').map(
+      ([label, expression]) =>
+        [
+          label,
+          expression,
+          /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+        ] as const,
+    ),
+    ...timerAdapterCarrierExpressions('/payload.mjs').map(
+      ([label, expression]) =>
+        [
+          label,
+          expression,
+          /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+        ] as const,
+    ),
   ] as const)(
     'rejects a retained approved-app %s before a public executable module can ship',
     async (_label, expression, expectedError) => {
