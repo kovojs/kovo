@@ -1452,6 +1452,12 @@ interface BrowserStaticEvaluationState {
   readonly callReceiver?: true;
   readonly depth: number;
   readonly overrides?: ReadonlyMap<BrowserStaticBinding, readonly BrowserStaticAtom[]>;
+  readonly provenanceDependencies?: BrowserStaticProvenanceDependencies;
+}
+
+interface BrowserStaticProvenanceDependencies {
+  readonly bindings: Set<BrowserStaticBinding>;
+  readonly globals: Set<string>;
 }
 
 interface BrowserStaticCallableEffects {
@@ -1477,6 +1483,9 @@ function nextBrowserStaticEvaluationState(
     ...(state.callReceiver === true ? { callReceiver: true as const } : {}),
     depth: state.depth + 1,
     ...(state.overrides === undefined ? {} : { overrides: state.overrides }),
+    ...(state.provenanceDependencies === undefined
+      ? {}
+      : { provenanceDependencies: state.provenanceDependencies }),
   };
 }
 
@@ -2656,6 +2665,7 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
   const callProvenance: Array<{
     readonly call: Readonly<Record<string, unknown>>;
     readonly scope: BrowserStaticScope;
+    settled: boolean;
   }> = [];
   const definePropertyProvenanceCalls = new WeakSet<object>();
   const deferredEffects: (() => void)[] = [];
@@ -2759,10 +2769,7 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
       });
     }
     if (record.type === 'CallExpression') {
-      callProvenance.push({ call: record, scope });
-      if (collectBrowserCallProvenance(record, scope, index)) {
-        definePropertyProvenanceCalls.add(record);
-      }
+      callProvenance.push({ call: record, scope, settled: false });
       deferredEffects.push(() =>
         collectBrowserOpaqueCallArguments(record, scope, index, definePropertyProvenanceCalls),
       );
@@ -2812,9 +2819,13 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
       );
     }
     for (const candidate of callProvenance) {
-      if (definePropertyProvenanceCalls.has(candidate.call)) continue;
-      if (collectBrowserCallProvenance(candidate.call, candidate.scope, index)) {
+      if (candidate.settled) continue;
+      const verdict = collectBrowserCallProvenance(candidate.call, candidate.scope, index);
+      if (verdict === 'define-property') {
         definePropertyProvenanceCalls.add(candidate.call);
+        candidate.settled = true;
+      } else if (verdict === 'stable-other') {
+        candidate.settled = true;
       }
     }
   } while (index.sourceGeneration !== previousSourceGeneration);
@@ -2838,8 +2849,16 @@ function collectBrowserCallProvenance(
   call: Readonly<Record<string, unknown>>,
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
-): boolean {
-  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+): 'define-property' | 'pending' | 'stable-other' {
+  const provenanceDependencies: BrowserStaticProvenanceDependencies = {
+    bindings: new Set(),
+    globals: new Set(),
+  };
+  const state: BrowserStaticEvaluationState = {
+    bindingStack: new Set(),
+    depth: 0,
+    provenanceDependencies,
+  };
   const callee = evaluateBrowserStaticValue(call.callee, scope, index, state);
   if (
     callee.length > 0 &&
@@ -2848,9 +2867,22 @@ function collectBrowserCallProvenance(
     )
   ) {
     collectBrowserDefinePropertyEffects(call, scope, index, state, 'provenance');
-    return true;
+    return 'define-property';
   }
-  return false;
+  // Provenance only grows. A non-define atom therefore permanently prevents this call from being
+  // an exact defineProperty transfer. PLAIN/CLOSED are transient only when evaluation actually
+  // crossed an unsourced lexical/global dependency; unsupported calls such as Object.assign are
+  // terminal and must not be replayed across unrelated source generations.
+  return (provenanceDependencies.bindings.size > 0 || provenanceDependencies.globals.size > 0) &&
+    callee.every(
+      (atom) =>
+        atom.kind === 'closed' ||
+        atom.kind === 'plain' ||
+        atom.kind === 'object-define-property' ||
+        atom.kind === 'reflect-define-property',
+    )
+    ? 'pending'
+    : 'stable-other';
 }
 
 function collectBrowserOpaqueCallArguments(
@@ -4320,6 +4352,9 @@ function evaluateBrowserBinding(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): BrowserStaticAtom[] {
+  if (!binding.opaque && binding.sources.length === 0) {
+    state.provenanceDependencies?.bindings.add(binding);
+  }
   if (!consumeBrowserStaticEvaluationStep(index, state)) return [{ kind: 'closed' }];
   const override = state.overrides?.get(binding);
   if (override !== undefined) return [...override];
@@ -4408,6 +4443,7 @@ function evaluateBrowserStaticValue(
     }
     const ambient = browserAmbientIdentifierAtoms(value.name);
     if (ambient !== undefined) return ambient;
+    state.provenanceDependencies?.globals.add(value.name);
     return [{ kind: index.opaqueGlobalBindings ? 'closed' : 'plain' }];
   }
   const literal = literalAstString(value);
