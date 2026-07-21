@@ -1423,6 +1423,10 @@ interface BrowserStaticIndex {
   readonly opaquePrototypes: WeakSet<object>;
   readonly root: BrowserStaticScope;
   readonly scopeByNode: WeakMap<object, BrowserStaticScope>;
+  readonly structuredOpaqueMemo: WeakMap<
+    object,
+    WeakMap<BrowserStaticScope, BrowserStructuredOpaqueMemo>
+  >;
   readonly superclassSources: WeakMap<
     object,
     {
@@ -1433,6 +1437,12 @@ interface BrowserStaticIndex {
   >;
   effectAnalysisClosed: boolean;
   opaqueGlobalBindings: boolean;
+  sourceGeneration: number;
+}
+
+interface BrowserStructuredOpaqueMemo {
+  readonly generation: number;
+  readonly modes: number;
 }
 
 interface BrowserStaticEvaluationState {
@@ -1473,6 +1483,8 @@ function nextBrowserStaticEvaluationState(
 const browserAstMetadataKeys = new Set(['type', 'start', 'end', 'loc', 'range', 'raw']);
 const maxBrowserFiniteStaticStrings = 32;
 const maxBrowserStaticEvaluationSteps = 100_000;
+const browserStructuredOpaqueValueMode = 1;
+const browserStructuredOpaqueClosureMode = 2;
 
 function consumeBrowserStaticEvaluationStep(
   index: BrowserStaticIndex,
@@ -2129,8 +2141,10 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
     opaquePrototypes: new WeakSet(),
     root,
     scopeByNode: new WeakMap(),
+    structuredOpaqueMemo: new WeakMap(),
     superclassSources: new WeakMap(),
     opaqueGlobalBindings: false,
+    sourceGeneration: 0,
   };
 
   const collect = (value: unknown, scope: BrowserStaticScope): void => {
@@ -2441,6 +2455,28 @@ function ensureBrowserGlobalBinding(name: string, index: BrowserStaticIndex): Br
   return binding;
 }
 
+function addBrowserBindingSource(
+  binding: BrowserStaticBinding,
+  source: BrowserBindingSource,
+  index: BrowserStaticIndex,
+): void {
+  binding.sources.push(source);
+  noteBrowserStaticProvenanceChange(index);
+}
+
+function noteBrowserStaticProvenanceChange(index: BrowserStaticIndex): void {
+  // A structured-opacity summary may have followed this provenance before the new fact existed.
+  // Advance the finite provenance snapshot so the next transfer replays that exact AST/scope state
+  // instead of treating an older safe summary as authoritative (SPEC §6.6; C13).
+  index.sourceGeneration += 1;
+}
+
+function markBrowserBindingOpaque(binding: BrowserStaticBinding, index: BrowserStaticIndex): void {
+  if (binding.opaque) return;
+  binding.opaque = true;
+  noteBrowserStaticProvenanceChange(index);
+}
+
 function addOpaqueBrowserPattern(
   pattern: unknown,
   scope: BrowserStaticScope,
@@ -2472,8 +2508,8 @@ function addBrowserPatternBindings(
   if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
     index.bindingIdentifiers.add(pattern);
     const binding = ensureBrowserBinding(pattern.name, scope, index);
-    if (source === undefined) binding.opaque = true;
-    else binding.sources.push(source);
+    if (source === undefined) markBrowserBindingOpaque(binding, index);
+    else addBrowserBindingSource(binding, source, index);
     return;
   }
   if (pattern.type === 'AssignmentPattern') {
@@ -2776,8 +2812,14 @@ function collectBrowserDefinePropertyEffects(
       } else {
         for (const property of properties) {
           const binding = ensureBrowserGlobalBinding(property, index);
-          if (descriptorValue === undefined) binding.opaque = true;
-          else binding.sources.push({ expression: descriptorValue, projections: [], scope });
+          if (descriptorValue === undefined) markBrowserBindingOpaque(binding, index);
+          else {
+            addBrowserBindingSource(
+              binding,
+              { expression: descriptorValue, projections: [], scope },
+              index,
+            );
+          }
         }
       }
     } else if (target.kind === 'prototype') {
@@ -3357,7 +3399,6 @@ function markBrowserStructuredArgumentOpaque(
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
 ): void {
-  const seen = new Set<object>();
   const worklist: Array<{
     readonly candidate: unknown;
     readonly inspectClosure: boolean;
@@ -3366,6 +3407,9 @@ function markBrowserStructuredArgumentOpaque(
   while (worklist.length > 0) {
     const { candidate, inspectClosure, scope: candidateScope } = worklist.pop()!;
     if (typeof candidate !== 'object' || candidate === null) continue;
+    if (!claimBrowserStructuredOpaqueState(candidate, candidateScope, inspectClosure, index)) {
+      continue;
+    }
     if (!consumeBrowserStaticEvaluationStep(index, state)) {
       index.effectAnalysisClosed = true;
       return;
@@ -3383,8 +3427,6 @@ function markBrowserStructuredArgumentOpaque(
       continue;
     }
     const record = candidate as Record<string, unknown>;
-    if (seen.has(record)) continue;
-    seen.add(record);
     const expression = record.type === 'SpreadElement' ? record.argument : record;
     for (const atom of evaluateBrowserStaticValue(expression, candidateScope, index, state)) {
       if (atom.kind === 'global') {
@@ -3432,6 +3474,37 @@ function markBrowserStructuredArgumentOpaque(
       }
     }
   }
+}
+
+function claimBrowserStructuredOpaqueState(
+  candidate: object,
+  scope: BrowserStaticScope,
+  inspectClosure: boolean,
+  index: BrowserStaticIndex,
+): boolean {
+  let byScope = index.structuredOpaqueMemo.get(candidate);
+  if (byScope === undefined) {
+    byScope = new WeakMap();
+    index.structuredOpaqueMemo.set(candidate, byScope);
+  }
+  const generation = index.sourceGeneration;
+  const requiredModes = inspectClosure
+    ? browserStructuredOpaqueValueMode | browserStructuredOpaqueClosureMode
+    : browserStructuredOpaqueValueMode;
+  const memo = byScope.get(scope);
+  // Claim before expanding children: recursive object/function graphs terminate on the in-flight
+  // entry. Value and whole-closure walks are distinct, and lexical scope is part of the identity;
+  // a same-spelled shadow must never reuse an ambient-authority verdict. Source mutations advance
+  // the generation and conservatively replay the state, while monotone opacity marks need no
+  // invalidation (SPEC §6.6; C13).
+  if (memo?.generation === generation && (memo.modes & requiredModes) === requiredModes) {
+    return false;
+  }
+  byScope.set(scope, {
+    generation,
+    modes: memo?.generation === generation ? memo.modes | requiredModes : requiredModes,
+  });
+  return true;
 }
 
 interface BrowserStaticSetterResolution {
@@ -3757,8 +3830,10 @@ function collectBrowserMemberAssignment(
     } else {
       for (const property of properties) {
         const binding = ensureBrowserGlobalBinding(property, index);
-        if (expression === undefined) binding.opaque = true;
-        else binding.sources.push({ expression, projections: [], scope });
+        if (expression === undefined) markBrowserBindingOpaque(binding, index);
+        else {
+          addBrowserBindingSource(binding, { expression, projections: [], scope }, index);
+        }
       }
     }
   }
@@ -3785,6 +3860,7 @@ function collectBrowserMemberAssignment(
     for (const property of properties) {
       const propertySources = sources.get(property) ?? [];
       propertySources.push({ expression, projections: [], scope });
+      noteBrowserStaticProvenanceChange(index);
       sources.set(property, propertySources);
     }
   }
@@ -3800,7 +3876,7 @@ function addBrowserAssignmentPattern(
   if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
     const binding = lookupBrowserBinding(pattern.name, scope);
     if (binding !== undefined) {
-      binding.sources.push({ expression, projections: [], scope });
+      addBrowserBindingSource(binding, { expression, projections: [], scope }, index);
     }
     return;
   }
@@ -3834,7 +3910,7 @@ function addBrowserAssignmentPatternSource(
   }
   if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
     const binding = lookupBrowserBinding(pattern.name, scope);
-    if (binding !== undefined) binding.sources.push(source);
+    if (binding !== undefined) addBrowserBindingSource(binding, source, index);
     return;
   }
   if (pattern.type === 'AssignmentPattern') {
@@ -3903,7 +3979,7 @@ function markBrowserAssignmentPatternOpaque(
   if (!isAstRecord(pattern)) return;
   if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
     const binding = lookupBrowserBinding(pattern.name, scope);
-    if (binding !== undefined) binding.opaque = true;
+    if (binding !== undefined) markBrowserBindingOpaque(binding, index);
     return;
   }
   if (pattern.type === 'MemberExpression') {
