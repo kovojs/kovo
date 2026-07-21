@@ -256,20 +256,22 @@ describe('security convergence baseline', () => {
       total: 4,
     });
     expect(measured.files.every((row) => /^[0-9a-f]{64}$/u.test(row.sourceSha256))).toBe(true);
-    expect(measured.rowsSha256).toMatch(/^[0-9a-f]{64}$/u);
-    expect(measured.scopeSha256).toMatch(/^[0-9a-f]{64}$/u);
+    expect(Object.keys(measured).sort()).toEqual(['fileCount', 'files', 'scopeFiles', 'total']);
     const sourceChanged = measureProductionPredicateObligations([
       { file: 'a-classifier.ts', source: `const NAMES = ['a', 'changed'];` },
       { file: 'z-classifier.ts', source: `if (name === 'z') accept();` },
     ]);
-    expect(sourceChanged.scopeSha256).toBe(measured.scopeSha256);
-    expect(sourceChanged.rowsSha256).not.toBe(measured.rowsSha256);
+    expect(sourceChanged.scopeFiles).toEqual(measured.scopeFiles);
+    expect(sourceChanged.files[0].sourceSha256).not.toBe(measured.files[0].sourceSha256);
     expect(
       measureProductionPredicateObligations([
         { file: 'moved/a-classifier.ts', source: `const NAMES = ['a', 'b'];` },
         { file: 'z-classifier.ts', source: `if (name === 'z') accept();` },
-      ]).scopeSha256,
-    ).not.toBe(measured.scopeSha256);
+      ]).scopeFiles,
+    ).not.toEqual(measured.scopeFiles);
+    expect(compareSnapshot(measured, { ...measured, rowsSha256: '0'.repeat(64) })).toEqual([
+      'deterministic convergence snapshot drifted',
+    ]);
   });
 
   it('derives the residual dangerous-call lexicon without the deleted raw-handler classifier', () => {

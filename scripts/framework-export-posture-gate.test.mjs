@@ -403,11 +403,7 @@ describe('framework public runtime export posture gate', () => {
   });
 
   it('rejects removed aggregate check-digits instead of accepting decorative SHA fields', () => {
-    for (const field of [
-      'classificationSha256',
-      'postureMemberSha256',
-      'runtimeSurfaceSha256',
-    ]) {
+    for (const field of ['classificationSha256', 'postureMemberSha256', 'runtimeSurfaceSha256']) {
       const surplus = clone(ledger);
       surplus[field] = '0'.repeat(64);
       expect(validateFrameworkExportPosture({ actual, ledger: surplus }).join('\n')).toContain(

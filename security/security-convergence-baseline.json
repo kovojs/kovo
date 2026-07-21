@@ -396,7 +396,6 @@
               "total": 6056
             }
           ],
-          "rowsSha256": "63ee64f5846ceccf4fad309de58efa9acb2b2b813f3c655a0f047fbe259dfa6a",
           "scopeFiles": [
             "packages/cli/src/commands/build-export.ts",
             "packages/cli/src/commands/compile.ts",
@@ -412,7 +411,6 @@
             "packages/compiler/src/validate/security-operation-ir.ts",
             "packages/drizzle/src/trust-escapes-static.ts"
           ],
-          "scopeSha256": "e998b3167f60575b26c50e6b91832cb0bb75d4c90505141c1d4a41aabf3b297c",
           "total": 7964
         }
       },

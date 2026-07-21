@@ -175,9 +175,7 @@ export function measureProductionPredicateObligations(sources) {
   return {
     fileCount: files.length,
     files,
-    rowsSha256: sha256(JSON.stringify(files)),
     scopeFiles,
-    scopeSha256: sha256(JSON.stringify(scopeFiles)),
     total: files.reduce((count, row) => count + row.total, 0),
   };
 }
