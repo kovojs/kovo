@@ -336,7 +336,7 @@ code units; `sourceHash` hashes the full UTF-16LE source; and `sliceHash` hashes
 `source.slice(start, end)` as UTF-16LE. Absolute paths, backslashes, empty/`.`/`..` components,
 control characters, and bidirectional controls are invalid. Every source-root door other than
 `csrf:false` and `ctx.fetch` has exactly one site and its root is `file:start:end`; the two
-relation-root doors retain every canonically sorted unique producer site. Metric E series v2
+relation-root doors retain every canonically sorted unique producer site. Metric E series v3
 re-reads each site as a regular blob from the retained `codeSubjectSha` and rejects any source,
 length, span, or slice mismatch before accepting review evidence. When this set is non-empty,
 `--escape-census-reviews <reviews.json>` is mandatory. Its
@@ -349,6 +349,31 @@ Success reports both verified review counts and explicitly states the non-claim:
 only that the pinned key holder approved those exact bytes; it does not prove an obligation true,
 identify an independent human, or prove executed-code/host integrity. The two build-emitted subject
 files are unsigned reviewer inputs, not approval evidence.
+
+The canonical v3 series MAY contain zero rounds. In that state both `series.comparability` and
+`series.reviewAnchor` MUST be `null`: `PENDING 0/3` carries neither a source-comparability claim nor
+review evidence, so initialization does not stamp the repository's source hashes. The first
+authenticated append MUST create one validated document that adds the round and locks both the full
+computed comparability record and the externally pinned review anchor. A partial or pre-seeded empty
+state, or a nonempty state with either lock null or mismatched, fails closed. Later rounds MUST retain
+both locks unchanged. Every nonempty series MUST be verified against an exact external policy
+artifact that pins the already-existing `kovo-runtime-posture-attestation/v1` fingerprint.
+`node scripts/metric-e-rounds-gate.mjs --init` is the sole initializer and MUST refuse to overwrite
+a nonempty or non-v3 ledger.
+The verifier MUST derive authority from that supplied policy, never from `series.reviewAnchor`, a
+round, or a caller-provided fingerprint; coherently replacing repository evidence and its embedded
+anchor therefore still fails against the external pin. In addition to the exact root set, each
+round retains one detached aggregate `kovo.metric-e-independent-review/v3` envelope under the same
+Ed25519 key. Its canonical payload binds the exact code subject, round number and calendar date,
+report and ceiling digests, signed root-set path/digest/anchor, reviewer identity and UTC review
+time, explicit `accept` verdict, and closed assertions that build, review, and signing-key custody
+were outside the build/coding-agent environment. Missing, duplicate/reused, malformed, surplus,
+stale-subject, replacement-key, wrong-anchor, and invalid-signature aggregate evidence fails closed.
+Reusing an identical aggregate or signed root-set digest under another path or round is not a new
+independent review and MUST fail closed.
+Only then are verified root signatures counted as reviewed and subtracted from unsigned escapes.
+The signature authenticates the pinned key holder and those exact bytes; it does not prove the
+asserted custody or human independence true, identify the reviewer, or establish review correctness.
 
 `kovo explain --endpoints` is the stable machine-ingress audit. Its diffable table lists every declared endpoint and webhook, every `mutation()`, plus every route that returns `respond.file()`/`respond.stream()`: source-derived registry identity where applicable, method, path, mount mode, auth scheme (`session+guard`, `verifier:<resolved scheme>`, `custom:<name>`, or `none:<justification>`), CSRF/effect posture, and for webhooks the write→domain chain. Endpoint posture is `safe:read-only` for the closed `GET`/`HEAD`/`OPTIONS` set from §9.1, `checked` when an unsafe method receives the default synchronizer-token check, or `exempt:<justification>` when an unsafe endpoint explicitly opts out. Mutation posture remains `checked` or `exempt:<justification>`; a `csrf: false` mutation appears here with the latter posture, and KV418 (§6.6) guarantees it references no ambient session. The pre-dispatch coarse limiter posture (§9.5) is enrolled and printed here too. The command is snapshot-locked with the rest of P8 output so security review can answer "what can reach this app, and what can it touch?" without executing a browser.
 

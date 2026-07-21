@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { ESCAPE_CENSUS_DOORS } from './escape-census-gate.mjs';
@@ -22,12 +22,30 @@ import {
   validateCodeSubjectSha,
 } from './lib/security-evidence-subject.mjs';
 
-export const metricERoundsSchema = 'kovo.metric-e-round-series/v2';
-export const metricEIndependentReviewSchema = 'kovo.metric-e-independent-review/v2';
+export const metricERoundsSchema = 'kovo.metric-e-round-series/v3';
+export const metricEIndependentReviewSchema = 'kovo.metric-e-independent-review/v3';
+export const metricEIndependentReviewPayloadSchema = 'kovo.metric-e-independent-review-payload/v1';
+export const metricEReviewAnchorPolicySchema = 'kovo.metric-e-runtime-attestation-anchor-policy/v1';
+export const metricEReviewAnchorAuthority = 'kovo-runtime-posture-attestation/v1';
 export const metricEEscapeReviewsSchema = 'kovo.escape-census-reviews/v1';
 export const defaultMetricERoundsPath = 'security/metric-e-rounds.json';
 export const defaultEscapeCensusBaselinePath = 'security/escape-census-baseline.json';
 export const metricERequiredComparableRounds = 3;
+export const metricEReviewAnchorPolicyEnvironment =
+  'KOVO_METRIC_E_RUNTIME_ATTESTATION_ANCHOR_POLICY';
+export const metricEReviewHonestyBoundary =
+  'signatures authenticate the externally pinned runtime-attestation key holder and exact bytes; they do not prove reviewer identity, human independence, custody truth, or review correctness';
+const metricEReviewProcess = Object.freeze({
+  buildCustody: 'outside-kovo-build-and-coding-agent',
+  independence: 'outside-party-reviewer-asserted',
+  signingKeyCustody: 'outside-kovo-build-and-coding-agent',
+});
+const metricEReviewAuthentication = 'externally-pinned-runtime-attestation-ed25519';
+const metricEReviewIndependence = 'outside-party-process-asserted-not-proven';
+const metricEMaxReviewEvidenceBytes = 8 * 1024 * 1024;
+const metricEMaxAnchorPolicyBytes = 16 * 1024;
+const metricEHistoricalComparabilityCacheLimit = 128;
+const metricEHistoricalComparabilityCache = new Map();
 export const metricEComparabilityInputPaths = Object.freeze([
   'package.json',
   'packages/better-auth/package.json',
@@ -59,6 +77,7 @@ export const metricEComparabilityInputPaths = Object.freeze([
   'pnpm-workspace.yaml',
   'scripts/escape-census-baseline.mjs',
   'scripts/escape-census-gate.mjs',
+  'scripts/kovo-certificate-signature.mjs',
   'scripts/lib/cli-entry.mjs',
   'scripts/lib/repo-root.mjs',
   'scripts/lib/security-evidence-subject.mjs',
@@ -133,10 +152,20 @@ export function buildMetricEComparabilityAtCodeSubject({
   repoRoot = findRepoRoot(),
 } = {}) {
   const subjectSha = validateCodeSubjectSha(codeSubjectSha);
+  const cacheKey = `${realpathSync(repoRoot)}\0${subjectSha}`;
+  const cached = metricEHistoricalComparabilityCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const buildSources = (paths) => buildSourceSetAtCodeSubject({ paths, repoRoot, subjectSha });
   const buildSourceTrees = (roots) =>
     buildSourceTreeSetAtCodeSubject({ repoRoot, roots, subjectSha });
-  return buildMetricEComparabilityWithSources(buildSources, buildSourceTrees);
+  const comparability = buildMetricEComparabilityWithSources(buildSources, buildSourceTrees);
+  if (metricEHistoricalComparabilityCache.size >= metricEHistoricalComparabilityCacheLimit) {
+    metricEHistoricalComparabilityCache.delete(
+      metricEHistoricalComparabilityCache.keys().next().value,
+    );
+  }
+  metricEHistoricalComparabilityCache.set(cacheKey, comparability);
+  return comparability;
 }
 
 function buildMetricEComparabilityWithSources(buildSources, buildSourceTrees) {
@@ -160,15 +189,68 @@ function buildMetricEComparabilityWithSources(buildSources, buildSourceTrees) {
   return Object.freeze({ ...value, sha256: sha256(canonicalJson(value)) });
 }
 
+/**
+ * Read the out-of-band policy that pins the already-existing runtime-attestation authority.
+ *
+ * This file is deliberately not generated or committed by this gate. A repository-controlled
+ * fingerprint would let the same actor replace the key and the evidence together.
+ */
+export function readMetricEReviewAnchorPolicy(policyPath, { repoRoot = findRepoRoot() } = {}) {
+  if (typeof policyPath !== 'string' || policyPath.trim() === '') {
+    throw new TypeError(
+      `Metric E authenticated rounds require an external anchor policy path via ${metricEReviewAnchorPolicyEnvironment}`,
+    );
+  }
+  const stats = lstatSync(policyPath);
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > metricEMaxAnchorPolicyBytes) {
+    throw new TypeError('Metric E anchor policy must be one bounded external regular file');
+  }
+  const policyRealPath = realpathSync(policyPath);
+  const repositoryRealPath = realpathSync(repoRoot);
+  const repositoryRelativePath = path.relative(repositoryRealPath, policyRealPath);
+  if (
+    repositoryRelativePath === '' ||
+    (!repositoryRelativePath.startsWith(`..${path.sep}`) &&
+      repositoryRelativePath !== '..' &&
+      !path.isAbsolute(repositoryRelativePath))
+  ) {
+    throw new TypeError('Metric E anchor policy must resolve outside the repository');
+  }
+  const source = readFileSync(policyRealPath);
+  let document;
+  try {
+    document = JSON.parse(source.toString('utf8'));
+  } catch (error) {
+    throw new TypeError(
+      `Metric E anchor policy must be valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (
+    !exactObjectKeys(document, ['authority', 'schema', 'trustAnchorFingerprint']) ||
+    document.schema !== metricEReviewAnchorPolicySchema ||
+    document.authority !== metricEReviewAnchorAuthority ||
+    !metricEDigestPattern.test(document.trustAnchorFingerprint ?? '')
+  ) {
+    throw new TypeError(
+      'Metric E anchor policy must exactly pin the existing runtime-attestation fingerprint',
+    );
+  }
+  return Object.freeze({
+    authority: metricEReviewAnchorAuthority,
+    schema: metricEReviewAnchorPolicySchema,
+    trustAnchorFingerprint: document.trustAnchorFingerprint,
+  });
+}
+
 export function buildMetricERound({
   codeSubjectSha,
   date,
   escapeReviewEvidencePath,
-  escapeReviewTrustAnchor,
   number,
   predecessor,
   previousRound,
   repoRoot = findRepoRoot(),
+  reviewAnchorPolicyPath,
   reviewEvidencePath,
   reviewedAt,
   reviewer,
@@ -198,29 +280,42 @@ export function buildMetricERound({
   }
   const report = structuredClone(baseline.report);
   const ceilings = loadCeilingsAtCodeSubject({ baseline, repoRoot, subjectSha });
+  const reviewAnchor = readMetricEReviewAnchorPolicy(reviewAnchorPolicyPath, { repoRoot });
   const escapeReviews = readMetricEEscapeReviewEvidence({
     baseline,
     codeSubjectSha: subjectSha,
     relativePath: escapeReviewEvidencePath,
     repoRoot,
-    trustAnchorFingerprint: escapeReviewTrustAnchor,
+    trustAnchorFingerprint: reviewAnchor.trustAnchorFingerprint,
   });
+  const reviewEvidence = readIndependentReviewArtifact(reviewEvidencePath, repoRoot);
+  const reviewCheck = validateMetricEIndependentReviewArtifact(reviewEvidence.document, {
+    ceilingSha256: sha256(canonicalJson(ceilings)),
+    codeSubjectSha: subjectSha,
+    date,
+    escapeReviews:
+      escapeReviews === undefined
+        ? null
+        : {
+            path: escapeReviews.path,
+            sha256: escapeReviews.sha256,
+            trustAnchorFingerprint: escapeReviews.trustAnchorFingerprint,
+          },
+    number,
+    reportSha256: sha256(canonicalJson(report)),
+    requireAccepted: true,
+    trustAnchorFingerprint: reviewAnchor.trustAnchorFingerprint,
+  });
+  if (!reviewCheck.ok) throw new TypeError(reviewCheck.findings.join('\n'));
   const result = deriveRoundResult({
+    authenticatedIndependentReview: true,
     baseline,
     ceilings,
     cryptographicallyValidEscapeSignatures: escapeReviews?.verified ?? 0,
     previousRound,
     report,
   });
-  const reviewEvidence = readIndependentReviewArtifact(reviewEvidencePath, repoRoot);
-  assertIndependentReviewBindings(reviewEvidence.document, {
-    ceilingSha256: sha256(canonicalJson(ceilings)),
-    codeSubjectSha: subjectSha,
-    escapeReviewSha256: escapeReviews?.sha256 ?? null,
-    escapeReviewTrustAnchor: escapeReviews?.trustAnchorFingerprint ?? null,
-    number,
-    reportSha256: sha256(canonicalJson(report)),
-  });
+  const payload = reviewCheck.summary.payload;
   return Object.freeze({
     number,
     codeSubjectSha: subjectSha,
@@ -239,31 +334,33 @@ export function buildMetricERound({
       escapeReviews === undefined
         ? null
         : Object.freeze({
-            authentication: 'caller-supplied-unverified',
+            authentication: metricEReviewAuthentication,
             path: escapeReviews.path,
             sha256: escapeReviews.sha256,
             trustAnchorFingerprint: escapeReviews.trustAnchorFingerprint,
           }),
     reviewer: Object.freeze({
-      authentication: 'none',
+      authentication: metricEReviewAuthentication,
       evidence: Object.freeze({ path: reviewEvidence.path, sha256: reviewEvidence.sha256 }),
-      id: reviewEvidence.document.reviewer.id,
-      independence: 'declared-independent-unverified',
-      reviewedAt: reviewEvidence.document.reviewer.reviewedAt,
-      verdict: reviewEvidence.document.verdict,
+      id: payload.reviewer.id,
+      independence: metricEReviewIndependence,
+      reviewedAt: payload.reviewer.reviewedAt,
+      trustAnchorFingerprint: reviewAnchor.trustAnchorFingerprint,
+      verdict: payload.verdict,
     }),
     predecessor: predecessor ?? null,
     result,
   });
 }
 
-export function buildMetricEIndependentReviewArtifact({
+export function buildMetricEIndependentReviewPayload({
   ceilingSha256,
   codeSubjectSha,
-  escapeReviewSha256 = null,
-  escapeReviewTrustAnchor = null,
+  date,
+  escapeReviews = null,
   number,
   reportSha256,
+  reviewAnchorFingerprint,
   reviewedAt,
   reviewer,
   verdict,
@@ -280,19 +377,37 @@ export function buildMetricEIndependentReviewArtifact({
       throw new TypeError(`Metric E independent-review ${label} must be one SHA-256 digest`);
     }
   }
-  if (
-    (escapeReviewSha256 === null) !== (escapeReviewTrustAnchor === null) ||
-    (escapeReviewSha256 !== null &&
-      (typeof escapeReviewSha256 !== 'string' || !/^[0-9a-f]{64}$/u.test(escapeReviewSha256))) ||
-    (escapeReviewTrustAnchor !== null &&
-      (typeof escapeReviewTrustAnchor !== 'string' ||
-        !metricEDigestPattern.test(escapeReviewTrustAnchor)))
-  ) {
-    throw new TypeError(
-      'Metric E independent-review escape evidence digest and trust anchor must be paired',
-    );
+  if (!validMetricERoundDate(date)) {
+    throw new TypeError('Metric E independent-review date must be a real YYYY-MM-DD calendar date');
   }
-  if (typeof reviewer !== 'string' || reviewer.trim() === '') {
+  let normalizedEscapeReviews = null;
+  if (escapeReviews !== null) {
+    if (
+      !exactObjectKeys(escapeReviews, ['path', 'sha256', 'trustAnchorFingerprint']) ||
+      !safeRelativePath(escapeReviews.path) ||
+      !escapeReviews.path.startsWith('security/reviews/metric-e/') ||
+      !escapeReviews.path.endsWith('.escape-reviews.json') ||
+      !/^[0-9a-f]{64}$/u.test(escapeReviews.sha256 ?? '') ||
+      !metricEDigestPattern.test(escapeReviews.trustAnchorFingerprint ?? '')
+    ) {
+      throw new TypeError('Metric E independent-review escape-review descriptor is malformed');
+    }
+    normalizedEscapeReviews = Object.freeze({
+      path: escapeReviews.path,
+      sha256: escapeReviews.sha256,
+      trustAnchorFingerprint: escapeReviews.trustAnchorFingerprint,
+    });
+  }
+  if (!metricEDigestPattern.test(reviewAnchorFingerprint ?? '')) {
+    throw new TypeError('Metric E independent-review runtime anchor must be one SHA-256 digest');
+  }
+  if (
+    normalizedEscapeReviews !== null &&
+    normalizedEscapeReviews.trustAnchorFingerprint !== reviewAnchorFingerprint
+  ) {
+    throw new TypeError('Metric E independent-review root set and aggregate use different anchors');
+  }
+  if (!metricEReviewAuditText(reviewer)) {
     throw new TypeError('Metric E independent-review reviewer must be non-empty');
   }
   if (
@@ -301,22 +416,98 @@ export function buildMetricEIndependentReviewArtifact({
   ) {
     throw new TypeError('Metric E independent-review reviewedAt must be one UTC ISO timestamp');
   }
+  if (!reviewedAt.startsWith(`${date}T`)) {
+    throw new TypeError('Metric E independent-review timestamp must match its round date');
+  }
   if (verdict !== 'accept' && verdict !== 'reject') {
     throw new TypeError('Metric E independent-review verdict must be accept or reject');
   }
   return Object.freeze({
-    authentication: 'none',
-    schema: metricEIndependentReviewSchema,
+    process: metricEReviewProcess,
+    reviewer: Object.freeze({ id: reviewer, reviewedAt }),
+    schema: metricEIndependentReviewPayloadSchema,
     subject: Object.freeze({ codeSubjectSha: subjectSha }),
     round: Object.freeze({
       ceilingSha256,
-      escapeReviewSha256,
-      escapeReviewTrustAnchor,
+      date,
+      escapeReviews: normalizedEscapeReviews,
       number,
       reportSha256,
+      reviewAnchorFingerprint,
     }),
-    reviewer: Object.freeze({ id: reviewer, reviewedAt }),
     verdict,
+  });
+}
+
+export function metricEIndependentReviewPayloadSource(keyId, payload) {
+  if (!metricEKeyIdPattern.test(keyId ?? '')) {
+    throw new TypeError('Metric E independent-review key id is malformed');
+  }
+  return canonicalMetricEReviewJson({ keyId, payload });
+}
+
+export function buildMetricEIndependentReviewArtifact(document) {
+  if (
+    !exactObjectKeys(document, [
+      'keyId',
+      'payload',
+      'publicKeySpki',
+      'schema',
+      'signature',
+      'trustAnchorFingerprint',
+    ]) ||
+    document.schema !== metricEIndependentReviewSchema
+  ) {
+    throw new TypeError('Metric E independent-review envelope has unknown or missing fields');
+  }
+  const payload = buildMetricEIndependentReviewPayload({
+    ceilingSha256: document?.payload?.round?.ceilingSha256,
+    codeSubjectSha: document?.payload?.subject?.codeSubjectSha,
+    date: document?.payload?.round?.date,
+    escapeReviews: document?.payload?.round?.escapeReviews,
+    number: document?.payload?.round?.number,
+    reportSha256: document?.payload?.round?.reportSha256,
+    reviewAnchorFingerprint: document?.payload?.round?.reviewAnchorFingerprint,
+    reviewedAt: document?.payload?.reviewer?.reviewedAt,
+    reviewer: document?.payload?.reviewer?.id,
+    verdict: document?.payload?.verdict,
+  });
+  if (canonicalJson(document.payload) !== canonicalJson(payload)) {
+    throw new TypeError('Metric E independent-review payload has unknown or noncanonical fields');
+  }
+  if (
+    !metricEKeyIdPattern.test(document.keyId ?? '') ||
+    typeof document.publicKeySpki !== 'string' ||
+    typeof document.signature !== 'string' ||
+    !metricEDigestPattern.test(document.trustAnchorFingerprint ?? '')
+  ) {
+    throw new TypeError('Metric E independent-review envelope is malformed');
+  }
+  const publicKey = strictBase64url(document.publicKeySpki, 1_024, 'aggregate public key');
+  const signature = strictBase64url(document.signature, 128, 'aggregate signature');
+  if (
+    signature.length !== 64 ||
+    `sha256:${sha256(publicKey)}` !== document.trustAnchorFingerprint ||
+    document.trustAnchorFingerprint !== payload.round.reviewAnchorFingerprint
+  ) {
+    throw new TypeError('Metric E independent-review envelope uses the wrong trust anchor');
+  }
+  if (
+    !metricEVerifySignedPayload(
+      metricEIndependentReviewPayloadSource(document.keyId, payload),
+      document.publicKeySpki,
+      document.signature,
+    )
+  ) {
+    throw new TypeError('Metric E independent-review envelope has an invalid Ed25519 signature');
+  }
+  return Object.freeze({
+    keyId: document.keyId,
+    payload,
+    publicKeySpki: document.publicKeySpki,
+    schema: metricEIndependentReviewSchema,
+    signature: document.signature,
+    trustAnchorFingerprint: document.trustAnchorFingerprint,
   });
 }
 
@@ -324,55 +515,39 @@ export function validateMetricEIndependentReviewArtifact(document, expected = {}
   const findings = [];
   let normalized;
   try {
-    normalized = buildMetricEIndependentReviewArtifact({
-      ceilingSha256: document?.round?.ceilingSha256,
-      codeSubjectSha: document?.subject?.codeSubjectSha,
-      escapeReviewSha256: document?.round?.escapeReviewSha256,
-      escapeReviewTrustAnchor: document?.round?.escapeReviewTrustAnchor,
-      number: document?.round?.number,
-      reportSha256: document?.round?.reportSha256,
-      reviewedAt: document?.reviewer?.reviewedAt,
-      reviewer: document?.reviewer?.id,
-      verdict: document?.verdict,
-    });
+    normalized = buildMetricEIndependentReviewArtifact(document);
   } catch (error) {
     findings.push(error instanceof Error ? error.message : String(error));
     return result(findings);
   }
-  if (document?.schema !== metricEIndependentReviewSchema) {
-    findings.push(`independent review schema must be ${metricEIndependentReviewSchema}`);
-  }
-  if (canonicalJson(document) !== canonicalJson(normalized)) {
-    findings.push('independent review artifact has unknown or noncanonical fields');
-  }
+  const payload = normalized.payload;
   for (const [label, actual, wanted] of [
-    ['code subject', normalized.subject.codeSubjectSha, expected.codeSubjectSha],
-    ['round number', normalized.round.number, expected.number],
-    ['report digest', normalized.round.reportSha256, expected.reportSha256],
-    ['ceiling digest', normalized.round.ceilingSha256, expected.ceilingSha256],
-    ['escape-review digest', normalized.round.escapeReviewSha256, expected.escapeReviewSha256],
+    ['code subject', payload.subject.codeSubjectSha, expected.codeSubjectSha],
+    ['round number', payload.round.number, expected.number],
+    ['round date', payload.round.date, expected.date],
+    ['report digest', payload.round.reportSha256, expected.reportSha256],
+    ['ceiling digest', payload.round.ceilingSha256, expected.ceilingSha256],
+    ['escape-review artifact', payload.round.escapeReviews, expected.escapeReviews],
     [
-      'escape-review trust anchor',
-      normalized.round.escapeReviewTrustAnchor,
-      expected.escapeReviewTrustAnchor,
+      'runtime trust anchor',
+      payload.round.reviewAnchorFingerprint,
+      expected.trustAnchorFingerprint,
     ],
   ]) {
-    if (wanted !== undefined && actual !== wanted) {
+    if (wanted !== undefined && canonicalJson(actual) !== canonicalJson(wanted)) {
       findings.push(`independent review ${label} does not bind the reviewed round`);
     }
   }
-  if (expected.requireAccepted === true && normalized.verdict !== 'accept') {
+  if (
+    expected.trustAnchorFingerprint !== undefined &&
+    normalized.trustAnchorFingerprint !== expected.trustAnchorFingerprint
+  ) {
+    findings.push('independent review envelope does not use the externally pinned trust anchor');
+  }
+  if (expected.requireAccepted === true && payload.verdict !== 'accept') {
     findings.push('independent review verdict must explicitly accept the round');
   }
-  return result(findings);
-}
-
-function assertIndependentReviewBindings(document, expected) {
-  const check = validateMetricEIndependentReviewArtifact(document, {
-    ...expected,
-    requireAccepted: true,
-  });
-  if (!check.ok) throw new TypeError(check.findings.join('\n'));
+  return result(findings, { payload });
 }
 
 function readJsonAtCodeSubject({ relativePath, repoRoot, subjectSha }) {
@@ -413,8 +588,8 @@ function readIndependentReviewArtifact(relativePath, repoRoot) {
   }
   const absolutePath = path.join(repoRoot, relativePath);
   const stats = lstatSync(absolutePath);
-  if (!stats.isFile() || stats.isSymbolicLink()) {
-    throw new TypeError('Metric E review evidence must be one retained regular file');
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > metricEMaxReviewEvidenceBytes) {
+    throw new TypeError('Metric E review evidence must be one bounded retained regular file');
   }
   const source = readFileSync(absolutePath);
   let document;
@@ -443,7 +618,15 @@ function readMetricEEscapeReviewEvidence({
     codeSubjectSha,
     repoRoot,
   });
-  if (relativePath === undefined && trustAnchorFingerprint === undefined) return undefined;
+  if (relativePath === undefined) {
+    if (
+      trustAnchorFingerprint !== undefined &&
+      !metricEDigestPattern.test(trustAnchorFingerprint)
+    ) {
+      throw new TypeError('Metric E escape-review trust anchor is malformed');
+    }
+    return undefined;
+  }
   if (
     typeof relativePath !== 'string' ||
     typeof trustAnchorFingerprint !== 'string' ||
@@ -462,7 +645,7 @@ function readMetricEEscapeReviewEvidence({
   }
   const absolutePath = path.join(repoRoot, relativePath);
   const stats = lstatSync(absolutePath);
-  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 8 * 1024 * 1024) {
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.size > metricEMaxReviewEvidenceBytes) {
     throw new TypeError('Metric E escape-review evidence must be one bounded regular file');
   }
   const source = readFileSync(absolutePath);
@@ -849,6 +1032,7 @@ function sortMetricEReviewJson(value) {
 }
 
 function deriveRoundResult({
+  authenticatedIndependentReview = false,
   baseline,
   ceilings,
   cryptographicallyValidEscapeSignatures = 0,
@@ -870,6 +1054,9 @@ function deriveRoundResult({
   ) {
     throw new Error('Metric E valid signature count exceeds the measured escape-root set');
   }
+  const reviewedEscapeSignatures = authenticatedIndependentReview
+    ? cryptographicallyValidEscapeSignatures
+    : 0;
   return Object.freeze({
     ceilingIncreases:
       previousRound === undefined
@@ -884,14 +1071,14 @@ function deriveRoundResult({
           ),
     observedEscapes,
     cryptographicallyValidEscapeSignatures,
-    reviewedEscapeSignatures: 0,
+    reviewedEscapeSignatures,
     signatureCoverage:
-      observedEscapes === 0
-        ? 'unresolved: no escape roots were observed, and independent review remains unauthenticated'
-        : cryptographicallyValidEscapeSignatures === observedEscapes
-          ? 'unresolved: detached signatures verify, but their caller-supplied anchor and reviewer claim do not authenticate independent review'
-          : 'unresolved: producer provenance is not a detached escape-review signature',
-    unsignedEscapes: observedEscapes,
+      observedEscapes === 0 && authenticatedIndependentReview
+        ? 'complete: the externally pinned key holder accepted the zero-root round and its outside-custody assertion'
+        : reviewedEscapeSignatures === observedEscapes && authenticatedIndependentReview
+          ? 'complete: every measured root and the aggregate review authenticate under the externally pinned runtime-attestation anchor'
+          : 'unresolved: root and aggregate review evidence has not authenticated under the externally pinned runtime-attestation anchor',
+    unsignedEscapes: observedEscapes - reviewedEscapeSignatures,
   });
 }
 
@@ -907,16 +1094,31 @@ function totalObservedEscapes(report) {
   );
 }
 
-export function buildMetricESeries({ rounds, repoRoot = findRepoRoot() } = {}) {
+export function buildMetricESeries({
+  comparability,
+  reviewAnchor = null,
+  rounds,
+  repoRoot = findRepoRoot(),
+} = {}) {
   const comparableRounds = Array.isArray(rounds) ? rounds : [];
-  const comparability = buildMetricEComparability({ repoRoot });
-  const qualifyingComparableRounds = trailingQualifyingMetricERounds(comparableRounds);
+  const pending = comparableRounds.length === 0;
+  const normalizedComparability = pending
+    ? null
+    : comparability === undefined
+      ? buildMetricEComparability({ repoRoot })
+      : comparability;
+  const normalizedReviewAnchor = pending ? null : reviewAnchor === undefined ? null : reviewAnchor;
+  const qualifyingComparableRounds = trailingQualifyingMetricERounds(
+    comparableRounds,
+    normalizedReviewAnchor,
+  );
   return Object.freeze({
     schema: metricERoundsSchema,
     subjectProtocol: SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
     series: Object.freeze({
       id: 'metric-e-representative/v2',
-      comparability,
+      comparability: normalizedComparability,
+      reviewAnchor: normalizedReviewAnchor,
     }),
     rounds: Object.freeze(comparableRounds),
     status: Object.freeze({
@@ -931,20 +1133,26 @@ export function buildMetricESeries({ rounds, repoRoot = findRepoRoot() } = {}) {
       verdict:
         qualifyingComparableRounds >= metricERequiredComparableRounds
           ? 'round-count-complete'
-          : comparableRounds.some((round) => round?.result?.unsignedEscapes !== 0)
-            ? 'waiting-for-signed-comparable-rounds'
-            : 'waiting-for-independent-comparable-rounds',
+          : comparableRounds.length === 0
+            ? 'pending-external-independent-rounds'
+            : comparableRounds.some((round) => round?.result?.unsignedEscapes !== 0)
+              ? 'waiting-for-signed-comparable-rounds'
+              : 'waiting-for-independent-comparable-rounds',
     }),
   });
 }
 
-function trailingQualifyingMetricERounds(rounds) {
+function lockedMetricESeriesValueMatches(actual, expected) {
+  return plainObject(actual) && canonicalJson(actual) === canonicalJson(expected);
+}
+
+function trailingQualifyingMetricERounds(rounds, reviewAnchor) {
   let count = 0;
   for (let index = rounds.length - 1; index >= 0; index -= 1) {
     const round = rounds[index];
     const result = round?.result;
     if (
-      !metricERoundHasAuthenticatedIndependentReview(round) ||
+      !metricERoundHasAuthenticatedIndependentReview(round, reviewAnchor) ||
       result?.unsignedEscapes !== 0 ||
       result?.ceilingIncreases !== 0 ||
       result?.observedIncreases !== 0
@@ -956,15 +1164,24 @@ function trailingQualifyingMetricERounds(rounds) {
   return count;
 }
 
-function metricERoundHasAuthenticatedIndependentReview(_round) {
-  // The v2 retained-review schema deliberately labels every review as unauthenticated and
-  // independence as self-declared. Such evidence remains useful audit input, but cannot satisfy
-  // the plan's outside-party review requirement. Keep qualification closed until a later schema
-  // defines and verifies an authenticated independent-review mechanism end to end.
-  return false;
+function metricERoundHasAuthenticatedIndependentReview(round, reviewAnchor) {
+  return (
+    plainObject(reviewAnchor) &&
+    reviewAnchor.schema === metricEReviewAnchorPolicySchema &&
+    reviewAnchor.authority === metricEReviewAnchorAuthority &&
+    metricEDigestPattern.test(reviewAnchor.trustAnchorFingerprint ?? '') &&
+    round?.reviewer?.authentication === metricEReviewAuthentication &&
+    round?.reviewer?.independence === metricEReviewIndependence &&
+    round?.reviewer?.trustAnchorFingerprint === reviewAnchor.trustAnchorFingerprint &&
+    round?.reviewer?.verdict === 'accept' &&
+    round?.result?.reviewedEscapeSignatures === round?.result?.observedEscapes
+  );
 }
 
-export function validateMetricESeries(document, { baseline, repoRoot = findRepoRoot() } = {}) {
+export function validateMetricESeries(
+  document,
+  { baseline, repoRoot = findRepoRoot(), reviewAnchorPolicyPath } = {},
+) {
   const findings = [];
   const currentBaseline =
     baseline ??
@@ -979,22 +1196,59 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
     findings.push('Metric E series document has unknown or missing fields');
   }
   const rounds = Array.isArray(document.rounds) ? document.rounds : [];
-  if (!Array.isArray(document.rounds) || rounds.length === 0) {
-    findings.push('Metric E series must retain at least one reviewed baseline round');
+  if (!Array.isArray(document.rounds)) {
+    findings.push('Metric E series rounds must be an array');
   }
-  const expectedShell = buildMetricESeries({ rounds, repoRoot });
+  let reviewAnchor = null;
+  if (rounds.length > 0) {
+    try {
+      reviewAnchor = readMetricEReviewAnchorPolicy(reviewAnchorPolicyPath, { repoRoot });
+    } catch (error) {
+      findings.push(
+        `Metric E authenticated rounds lack their external runtime-attestation anchor policy: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  const expectedShell = buildMetricESeries({ reviewAnchor, rounds, repoRoot });
   if (canonicalJson(document.subjectProtocol) !== canonicalJson(expectedShell.subjectProtocol)) {
     findings.push('Metric E code-subject/evidence-commit protocol drifted');
   }
-  if (canonicalJson(document.series) !== canonicalJson(expectedShell.series)) {
-    findings.push('Metric E comparability signature drifted; start a reviewed new series');
+  if (!exactObjectKeys(document?.series, ['comparability', 'id', 'reviewAnchor'])) {
+    findings.push('Metric E series descriptor has unknown or missing fields');
+  }
+  if (document?.series?.id !== expectedShell.series.id) {
+    findings.push('Metric E series identity drifted; start a reviewed new series');
+  }
+  if (rounds.length === 0) {
+    if (document?.series?.comparability !== null || document?.series?.reviewAnchor !== null) {
+      findings.push(
+        'pending Metric E series must leave comparability and review anchor unlocked as null',
+      );
+    }
+  } else {
+    if (
+      !lockedMetricESeriesValueMatches(
+        document?.series?.comparability,
+        expectedShell.series.comparability,
+      )
+    ) {
+      findings.push(
+        'nonempty Metric E series lacks its exact locked comparability signature; start a reviewed new series',
+      );
+    }
+    if (!lockedMetricESeriesValueMatches(document?.series?.reviewAnchor, reviewAnchor)) {
+      findings.push(
+        'Metric E series review anchor differs from the verifier-supplied external policy',
+      );
+    }
   }
   if (canonicalJson(document.status) !== canonicalJson(expectedShell.status)) {
     findings.push('Metric E round status does not match the retained round count');
   }
 
   const subjectShas = new Set();
-  const reviewEvidenceKeys = new Set();
+  const escapeReviewEvidenceDigests = new Set();
+  const reviewEvidenceDigests = new Set();
   let previous;
   for (const [index, round] of rounds.entries()) {
     const label = `Metric E round ${index + 1}`;
@@ -1012,6 +1266,7 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
     let subjectBaseline;
     let subjectCeilings;
     let subjectEscapeReviewSignatures = 0;
+    let authenticatedIndependentReview = false;
     if (!exactObjectKeys(round, roundFields)) {
       findings.push(`${label} has unknown or missing fields`);
     }
@@ -1031,6 +1286,7 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
         'id',
         'independence',
         'reviewedAt',
+        'trustAnchorFingerprint',
         'verdict',
       ]) ||
       !exactObjectKeys(round?.reviewer?.evidence, ['path', 'sha256'])
@@ -1044,7 +1300,7 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
         codeSubjectSha: subjectSha,
         repoRoot,
       });
-      if (canonicalJson(document.series?.comparability) !== canonicalJson(subjectComparability)) {
+      if (!lockedMetricESeriesValueMatches(document.series?.comparability, subjectComparability)) {
         findings.push(`${label} code subject does not retain the fixed Metric E inputs`);
       }
       subjectBaseline = readJsonAtCodeSubject({
@@ -1080,16 +1336,21 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
           'sha256',
           'trustAnchorFingerprint',
         ]) ||
-        round.escapeReviews.authentication !== 'caller-supplied-unverified'
+        round.escapeReviews.authentication !== metricEReviewAuthentication ||
+        round.escapeReviews.trustAnchorFingerprint !== reviewAnchor?.trustAnchorFingerprint
       ) {
         findings.push(`${label} escape-review evidence descriptor is malformed`);
       } else {
+        if (escapeReviewEvidenceDigests.has(round.escapeReviews.sha256)) {
+          findings.push(`${label} reuses prior signed escape-review evidence`);
+        }
+        escapeReviewEvidenceDigests.add(round.escapeReviews.sha256);
         const escapeReviewEvidence = readMetricEEscapeReviewEvidence({
           baseline: subjectBaseline,
           codeSubjectSha: subjectSha,
           relativePath: round.escapeReviews.path,
           repoRoot,
-          trustAnchorFingerprint: round.escapeReviews.trustAnchorFingerprint,
+          trustAnchorFingerprint: reviewAnchor?.trustAnchorFingerprint,
         });
         if (escapeReviewEvidence?.sha256 !== round.escapeReviews.sha256) {
           findings.push(`${label} escape-review evidence digest drifted`);
@@ -1109,26 +1370,27 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
       findings.push(`${label} date must be a real YYYY-MM-DD calendar date`);
     }
     if (
-      round?.reviewer?.authentication !== 'none' ||
-      round?.reviewer?.independence !== 'declared-independent-unverified' ||
+      round?.reviewer?.authentication !== metricEReviewAuthentication ||
+      round?.reviewer?.independence !== metricEReviewIndependence ||
       round?.reviewer?.verdict !== 'accept' ||
       typeof round?.reviewer?.id !== 'string' ||
-      round.reviewer.id.trim() === '' ||
+      !metricEReviewAuditText(round.reviewer.id) ||
       !safeRelativePath(round?.reviewer?.evidence?.path) ||
       !/^[0-9a-f]{64}$/u.test(round?.reviewer?.evidence?.sha256 ?? '') ||
+      round?.reviewer?.trustAnchorFingerprint !== reviewAnchor?.trustAnchorFingerprint ||
       !metricEReviewedAtPattern.test(round?.reviewer?.reviewedAt ?? '') ||
       !Number.isFinite(Date.parse(round?.reviewer?.reviewedAt ?? ''))
     ) {
-      findings.push(`${label} lacks complete declared-review metadata`);
+      findings.push(`${label} lacks complete authenticated-review metadata`);
     } else {
       if (!round.reviewer.reviewedAt.startsWith(`${round.date}T`)) {
         findings.push(`${label} review timestamp does not match its round date`);
       }
-      const evidenceKey = `${round.reviewer.evidence.path}#${round.reviewer.evidence.sha256}`;
-      if (reviewEvidenceKeys.has(evidenceKey)) {
+      const evidenceDigest = round.reviewer.evidence.sha256;
+      if (reviewEvidenceDigests.has(evidenceDigest)) {
         findings.push(`${label} reuses prior review evidence and is not an independent round`);
       }
-      reviewEvidenceKeys.add(evidenceKey);
+      reviewEvidenceDigests.add(evidenceDigest);
       let evidenceRecord;
       try {
         evidenceRecord = readIndependentReviewArtifact(round.reviewer.evidence.path, repoRoot);
@@ -1147,26 +1409,37 @@ export function validateMetricESeries(document, { baseline, repoRoot = findRepoR
         const reviewCheck = validateMetricEIndependentReviewArtifact(evidenceRecord.document, {
           ceilingSha256: round?.ceilings?.sha256,
           codeSubjectSha: round?.codeSubjectSha,
-          escapeReviewSha256: round?.escapeReviews?.sha256 ?? null,
-          escapeReviewTrustAnchor: round?.escapeReviews?.trustAnchorFingerprint ?? null,
+          date: round?.date,
+          escapeReviews:
+            round?.escapeReviews === null
+              ? null
+              : {
+                  path: round?.escapeReviews?.path,
+                  sha256: round?.escapeReviews?.sha256,
+                  trustAnchorFingerprint: round?.escapeReviews?.trustAnchorFingerprint,
+                },
           number: round?.number,
           reportSha256: round?.report?.sha256,
           requireAccepted: true,
+          trustAnchorFingerprint: reviewAnchor?.trustAnchorFingerprint,
         });
         findings.push(...reviewCheck.findings.map((finding) => `${label} ${finding}`));
         if (
-          evidenceRecord.document?.reviewer?.id !== round.reviewer.id ||
-          evidenceRecord.document?.reviewer?.reviewedAt !== round.reviewer.reviewedAt ||
-          evidenceRecord.document?.verdict !== round.reviewer.verdict
+          reviewCheck.summary?.payload?.reviewer?.id !== round.reviewer.id ||
+          reviewCheck.summary?.payload?.reviewer?.reviewedAt !== round.reviewer.reviewedAt ||
+          reviewCheck.summary?.payload?.verdict !== round.reviewer.verdict
         ) {
           findings.push(`${label} reviewer metadata differs from its structured review artifact`);
         }
+        authenticatedIndependentReview =
+          reviewCheck.ok && evidenceRecord.sha256 === round.reviewer.evidence.sha256;
       }
     }
     validateRoundDigest(round, label, findings);
     let expectedResult;
     try {
       expectedResult = deriveRoundResult({
+        authenticatedIndependentReview,
         baseline: subjectBaseline,
         ceilings: round?.ceilings?.snapshot,
         cryptographicallyValidEscapeSignatures: subjectEscapeReviewSignatures,
@@ -1478,14 +1751,17 @@ export function appendMetricERound({
   codeSubjectSha,
   date,
   escapeReviewEvidence,
-  escapeReviewTrustAnchor,
   historicalSubject = false,
   ledger,
   repoRoot = findRepoRoot(),
+  reviewAnchorPolicyPath,
   reviewEvidence,
 } = {}) {
   if (ledger !== undefined && ledger?.schema !== metricERoundsSchema) {
     throw new Error('Metric E series schema changed; start a reviewed new series');
+  }
+  if (ledger !== undefined && !Array.isArray(ledger?.rounds)) {
+    throw new Error('Metric E pending ledger is malformed; start a reviewed new series');
   }
   if (historicalSubject) {
     assertHistoricalCodeSubjectMatches({
@@ -1500,12 +1776,25 @@ export function appendMetricERound({
     });
   }
   const existingRounds = ledger?.rounds ?? [];
+  if (ledger !== undefined && existingRounds.length === 0) {
+    const pendingCheck = validateMetricESeries(ledger, { repoRoot });
+    if (!pendingCheck.ok) {
+      throw new Error(`Metric E pending ledger is malformed: ${pendingCheck.findings.join('\n')}`);
+    }
+  }
   const currentComparability = buildMetricEComparability({ repoRoot });
+  const reviewAnchor = readMetricEReviewAnchorPolicy(reviewAnchorPolicyPath, { repoRoot });
   if (
-    ledger !== undefined &&
-    canonicalJson(ledger?.series?.comparability) !== canonicalJson(currentComparability)
+    existingRounds.length > 0 &&
+    !lockedMetricESeriesValueMatches(ledger?.series?.comparability, currentComparability)
   ) {
     throw new Error('Metric E comparability changed; start a reviewed new series');
+  }
+  if (
+    existingRounds.length > 0 &&
+    canonicalJson(ledger?.series?.reviewAnchor) !== canonicalJson(reviewAnchor)
+  ) {
+    throw new Error('Metric E runtime-attestation anchor changed; start a reviewed new series');
   }
   const baseline = JSON.parse(
     readFileSync(path.join(repoRoot, defaultEscapeCensusBaselinePath), 'utf8'),
@@ -1515,29 +1804,75 @@ export function appendMetricERound({
     codeSubjectSha,
     date,
     escapeReviewEvidencePath: escapeReviewEvidence,
-    escapeReviewTrustAnchor,
     number: existingRounds.length + 1,
     predecessor: previous === undefined ? null : predecessorFor(previous),
     previousRound: previous,
     repoRoot,
+    reviewAnchorPolicyPath,
     reviewEvidencePath: reviewEvidence,
   });
-  const document = buildMetricESeries({ rounds: [...existingRounds, round], repoRoot });
-  const check = validateMetricESeries(document, { baseline, repoRoot });
+  const document = buildMetricESeries({
+    comparability: currentComparability,
+    reviewAnchor,
+    rounds: [...existingRounds, round],
+    repoRoot,
+  });
+  const check = validateMetricESeries(document, { baseline, repoRoot, reviewAnchorPolicyPath });
   if (!check.ok) throw new Error(check.findings.join('\n'));
   return document;
+}
+
+export function initializeMetricESeries({ existing, repoRoot = findRepoRoot() } = {}) {
+  if (
+    existing !== undefined &&
+    (existing?.schema !== metricERoundsSchema ||
+      !Array.isArray(existing?.rounds) ||
+      existing.rounds.length !== 0)
+  ) {
+    throw new Error('Metric E --init refuses to overwrite a nonempty or non-v3 ledger');
+  }
+  const pending = buildMetricESeries({ rounds: [], repoRoot });
+  if (existing !== undefined) {
+    const check = validateMetricESeries(existing, { repoRoot });
+    if (!check.ok) {
+      throw new Error(
+        `Metric E --init refuses to normalize a malformed or pre-seeded empty ledger: ${check.findings.join('\n')}`,
+      );
+    }
+  }
+  return pending;
 }
 
 async function main() {
   const root = findRepoRoot();
   const ledgerPath = path.join(root, defaultMetricERoundsPath);
   const args = process.argv.slice(2);
-  if (args.length > 0) {
+  let cliReviewAnchorPolicyPath;
+  if (args[0] === '--init') {
+    if (args.length !== 1) {
+      throw new TypeError('Metric E --init accepts no additional arguments');
+    }
+    if (existsLedger(ledgerPath)) {
+      const existing = JSON.parse(readFileSync(ledgerPath, 'utf8'));
+      writeFileSync(
+        ledgerPath,
+        canonicalJson(initializeMetricESeries({ existing, repoRoot: root })),
+        'utf8',
+      );
+    } else {
+      writeFileSync(ledgerPath, canonicalJson(initializeMetricESeries({ repoRoot: root })), 'utf8');
+    }
+  } else if (args.length > 0) {
     const appendOptions = parseExactCliArguments(args, {
       command: '--append',
       optionalFlags: ['--historical-subject'],
-      optionalValueFlags: ['--escape-review-evidence-path', '--escape-review-trust-anchor'],
-      valueFlags: ['--subject-sha', '--date', '--review-evidence-path'],
+      optionalValueFlags: ['--escape-review-evidence-path'],
+      valueFlags: [
+        '--subject-sha',
+        '--date',
+        '--review-evidence-path',
+        '--runtime-attestation-anchor-policy',
+      ],
     });
     const ledger = existsLedger(ledgerPath)
       ? JSON.parse(readFileSync(ledgerPath, 'utf8'))
@@ -1546,19 +1881,25 @@ async function main() {
       codeSubjectSha: appendOptions['subject-sha'],
       date: appendOptions.date,
       escapeReviewEvidence: appendOptions['escape-review-evidence-path'],
-      escapeReviewTrustAnchor: appendOptions['escape-review-trust-anchor'],
       historicalSubject: appendOptions['historical-subject'] === true,
       ledger,
       repoRoot: root,
+      reviewAnchorPolicyPath: appendOptions['runtime-attestation-anchor-policy'],
       reviewEvidence: appendOptions['review-evidence-path'],
     });
+    cliReviewAnchorPolicyPath = appendOptions['runtime-attestation-anchor-policy'];
     writeFileSync(ledgerPath, canonicalJson(document), 'utf8');
   }
   const document = JSON.parse(readFileSync(ledgerPath, 'utf8'));
-  const check = validateMetricESeries(document, { repoRoot: root });
+  const reviewAnchorPolicyPath =
+    document?.rounds?.length > 0
+      ? (cliReviewAnchorPolicyPath ?? process.env[metricEReviewAnchorPolicyEnvironment])
+      : undefined;
+  const check = validateMetricESeries(document, { repoRoot: root, reviewAnchorPolicyPath });
   if (!check.ok) throw new Error(check.findings.join('\n'));
+  const state = check.summary.completed >= check.summary.required ? 'COMPLETE' : 'PENDING';
   process.stdout.write(
-    `${metricERoundsSchema} observed=${check.summary.observed} qualifying=${check.summary.completed}/${check.summary.required} remaining=${check.summary.remaining} unsigned=${document.rounds.at(-1)?.result?.unsignedEscapes ?? 'unresolved'} ceiling-increases=0 OK\n`,
+    `${metricERoundsSchema} ${state} qualifying=${check.summary.completed}/${check.summary.required} observed=${check.summary.observed} remaining=${check.summary.remaining} unsigned=${document.rounds.at(-1)?.result?.unsignedEscapes ?? 'pending'}; ${metricEReviewHonestyBoundary}; STRUCTURAL-OK\n`,
   );
 }
 

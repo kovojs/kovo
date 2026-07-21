@@ -1,0 +1,22 @@
+{
+  "schema": "kovo.metric-e-round-series/v3",
+  "subjectProtocol": {
+    "schema": "kovo.security-evidence-subject/v1",
+    "codeSubject": "codeSubjectSha names the clean committed code tree measured before this evidence artifact is written",
+    "evidenceCommit": "the later commit containing the evidence artifact is intentionally not embedded because its own SHA is self-referential"
+  },
+  "series": {
+    "id": "metric-e-representative/v2",
+    "comparability": null,
+    "reviewAnchor": null
+  },
+  "rounds": [],
+  "status": {
+    "completedComparableRounds": 0,
+    "observedRounds": 0,
+    "qualifyingComparableRounds": 0,
+    "remainingComparableRounds": 3,
+    "requiredComparableRounds": 3,
+    "verdict": "pending-external-independent-rounds"
+  }
+}

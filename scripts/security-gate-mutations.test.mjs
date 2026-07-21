@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(430);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(439);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -118,7 +118,16 @@ describe('security-gate-mutations', () => {
       'cli-task-b-compile/drop-kv450-finite-diagnostic',
       'cli-task-b-compile/drop-kv452-finite-diagnostic',
       'cli-task-b-compile/drop-route-finite-diagnostic-carrier',
-      'metric-e/count-caller-anchor-as-reviewed',
+      'metric-e/trust-embedded-anchor-over-external-policy',
+      'metric-e/drop-aggregate-review-verifier',
+      'metric-e/drop-aggregate-root-anchor-join',
+      'metric-e/drop-external-policy-exact-shape',
+      'metric-e/drop-aggregate-evidence-reuse-closure',
+      'metric-e/drop-root-evidence-reuse-closure',
+      'metric-e/eagerly-stamp-pending-comparability',
+      'metric-e/drop-pending-series-null-join',
+      'metric-e/allow-nonempty-null-series-lock',
+      'metric-e/reuse-pending-null-locks-on-first-append',
       'metric-e/drop-app-package-root-join',
       'metric-e/drop-build-export-comparability-input',
       'metric-e/drop-ceiling-package-denominator',

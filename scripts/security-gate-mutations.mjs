@@ -422,22 +422,60 @@ const metricERuntimeReviewVerifierBranch = [
   '    );',
 ].join('\n');
 const removedMetricERuntimeReviewVerifierBranch = '    const verified = true;';
-const metricECallerAnchorNonqualifyingBranch = '    reviewedEscapeSignatures: 0,';
+const metricECallerAnchorNonqualifyingBranch =
+  '      reviewAnchor = readMetricEReviewAnchorPolicy(reviewAnchorPolicyPath, { repoRoot });';
 const weakenedMetricECallerAnchorNonqualifyingBranch =
-  '    reviewedEscapeSignatures: cryptographicallyValidEscapeSignatures,';
+  '      reviewAnchor = document?.series?.reviewAnchor;';
 const metricEAuthenticatedReviewQualificationBranch = [
-  'function metricERoundHasAuthenticatedIndependentReview(_round) {',
-  '  // The v2 retained-review schema deliberately labels every review as unauthenticated and',
-  '  // independence as self-declared. Such evidence remains useful audit input, but cannot satisfy',
-  "  // the plan's outside-party review requirement. Keep qualification closed until a later schema",
-  '  // defines and verifies an authenticated independent-review mechanism end to end.',
-  '  return false;',
-  '}',
+  '    round?.reviewer?.authentication === metricEReviewAuthentication &&',
+  '    round?.reviewer?.independence === metricEReviewIndependence &&',
 ].join('\n');
-const weakenedMetricEAuthenticatedReviewQualificationBranch = [
-  'function metricERoundHasAuthenticatedIndependentReview(_round) {',
-  '  return true;',
-  '}',
+const weakenedMetricEAuthenticatedReviewQualificationBranch = ['    true &&', '    true &&'].join(
+  '\n',
+);
+const metricEAggregateReviewVerifierBranch = [
+  '  if (',
+  '    !metricEVerifySignedPayload(',
+  '      metricEIndependentReviewPayloadSource(document.keyId, payload),',
+  '      document.publicKeySpki,',
+  '      document.signature,',
+  '    )',
+  '  ) {',
+].join('\n');
+const removedMetricEAggregateReviewVerifierBranch = ['  if (false) {'].join('\n');
+const metricEAggregateRootAnchorJoinBranch = [
+  '  if (',
+  '    normalizedEscapeReviews !== null &&',
+  '    normalizedEscapeReviews.trustAnchorFingerprint !== reviewAnchorFingerprint',
+  '  ) {',
+].join('\n');
+const removedMetricEAggregateRootAnchorJoinBranch = ['  if (false) {'].join('\n');
+const metricEExternalPolicyExactShapeBranch =
+  "    !exactObjectKeys(document, ['authority', 'schema', 'trustAnchorFingerprint']) ||";
+const removedMetricEExternalPolicyExactShapeBranch = '    false ||';
+const metricEAggregateEvidenceReuseBranch =
+  '      if (reviewEvidenceDigests.has(evidenceDigest)) {';
+const removedMetricEAggregateEvidenceReuseBranch = '      if (false) {';
+const metricERootEvidenceReuseBranch =
+  '        if (escapeReviewEvidenceDigests.has(round.escapeReviews.sha256)) {';
+const removedMetricERootEvidenceReuseBranch = '        if (false) {';
+const metricEPendingComparabilityLazyBranch = '  const normalizedComparability = pending';
+const weakenedMetricEPendingComparabilityLazyBranch =
+  '  const normalizedComparability = false && pending';
+const metricEPendingSeriesNullJoinBranch =
+  '    if (document?.series?.comparability !== null || document?.series?.reviewAnchor !== null) {';
+const removedMetricEPendingSeriesNullJoinBranch = '    if (false) {';
+const metricENonemptySeriesLockBranch =
+  '  return plainObject(actual) && canonicalJson(actual) === canonicalJson(expected);';
+const weakenedMetricENonemptySeriesLockBranch =
+  '  return actual === null || (plainObject(actual) && canonicalJson(actual) === canonicalJson(expected));';
+const metricEFirstAppendLockBranch = [
+  '    comparability: currentComparability,',
+  '    reviewAnchor,',
+].join('\n');
+const weakenedMetricEFirstAppendLockBranch = [
+  '    comparability: ledger?.series?.comparability,',
+  '    reviewAnchor: ledger?.series?.reviewAnchor,',
 ].join('\n');
 const metricETimestampEpochOrderingBranch = [
   '      if (',
@@ -3584,9 +3622,9 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
-    description: 'Counts caller-anchored cryptographic signatures as independently reviewed roots.',
-    expectedKiller: 'caller-supplied anchors must remain explicitly nonqualifying',
-    name: 'metric-e/count-caller-anchor-as-reviewed',
+    description: 'Trusts the repository-embedded Metric E anchor instead of the external policy.',
+    expectedKiller: 'review authority must derive only from the verifier-supplied external policy',
+    name: 'metric-e/trust-embedded-anchor-over-external-policy',
     replacement: weakenedMetricECallerAnchorNonqualifyingBranch,
     search: metricECallerAnchorNonqualifyingBranch,
     sourceFile: metricERoundsGatePath,
@@ -3596,13 +3634,113 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: {},
     description: 'Qualifies unauthenticated self-declared review artifacts as independent rounds.',
-    expectedKiller: 'the v1 unauthenticated reviewer schema must never increment qualifying rounds',
+    expectedKiller: 'self-declared unauthenticated reviewer metadata must never qualify a round',
     name: 'metric-e/qualify-unauthenticated-independent-review',
     replacement: weakenedMetricEAuthenticatedReviewQualificationBranch,
     search: metricEAuthenticatedReviewQualificationBranch,
     sourceFile: metricERoundsGatePath,
     sourceOnly: true,
     test: assertMetricEAuthenticatedReviewQualificationBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Bypasses strict Ed25519 verification of the aggregate independent review.',
+    expectedKiller: 'Metric E aggregate evidence must execute the strict Ed25519 verifier',
+    name: 'metric-e/drop-aggregate-review-verifier',
+    replacement: removedMetricEAggregateReviewVerifierBranch,
+    search: metricEAggregateReviewVerifierBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEAggregateReviewVerifierBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets the aggregate review use a different key than the signed root set.',
+    expectedKiller: 'Metric E aggregate and root-set signatures must share the external anchor',
+    name: 'metric-e/drop-aggregate-root-anchor-join',
+    replacement: removedMetricEAggregateRootAnchorJoinBranch,
+    search: metricEAggregateRootAnchorJoinBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEAggregateRootAnchorJoinBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows signer material or surplus fields in the external anchor policy.',
+    expectedKiller:
+      'the external runtime-attestation anchor policy must have an exact key-free schema',
+    name: 'metric-e/drop-external-policy-exact-shape',
+    replacement: removedMetricEExternalPolicyExactShapeBranch,
+    search: metricEExternalPolicyExactShapeBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEExternalPolicyExactShapeBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Counts copied aggregate bytes under another path as a distinct review round.',
+    expectedKiller: 'aggregate review reuse must be rejected by exact evidence digest',
+    name: 'metric-e/drop-aggregate-evidence-reuse-closure',
+    replacement: removedMetricEAggregateEvidenceReuseBranch,
+    search: metricEAggregateEvidenceReuseBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEEvidenceReuseBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Counts a reused signed root set as a fresh independent review round.',
+    expectedKiller: 'signed root-set reuse must be rejected by exact evidence digest',
+    name: 'metric-e/drop-root-evidence-reuse-closure',
+    replacement: removedMetricERootEvidenceReuseBranch,
+    search: metricERootEvidenceReuseBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEEvidenceReuseBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Eagerly stamps source-comparability hashes into an empty pending ledger.',
+    expectedKiller: 'pending Metric E initialization must not read or claim comparability inputs',
+    name: 'metric-e/eagerly-stamp-pending-comparability',
+    replacement: weakenedMetricEPendingComparabilityLazyBranch,
+    search: metricEPendingComparabilityLazyBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEPendingSeriesStateBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows a pending Metric E ledger to pre-seed one or both series locks.',
+    expectedKiller: 'empty Metric E series must retain two exact null locks',
+    name: 'metric-e/drop-pending-series-null-join',
+    replacement: removedMetricEPendingSeriesNullJoinBranch,
+    search: metricEPendingSeriesNullJoinBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEPendingSeriesStateBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Allows a nonempty Metric E series to retain a null comparability or anchor lock.',
+    expectedKiller: 'nonempty Metric E series must retain two exact non-null locks',
+    name: 'metric-e/allow-nonempty-null-series-lock',
+    replacement: weakenedMetricENonemptySeriesLockBranch,
+    search: metricENonemptySeriesLockBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEPendingSeriesStateBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Carries pending null locks forward instead of locking the first reviewed round.',
+    expectedKiller: 'first authenticated append must lock comparability and anchor together',
+    name: 'metric-e/reuse-pending-null-locks-on-first-append',
+    replacement: weakenedMetricEFirstAppendLockBranch,
+    search: metricEFirstAppendLockBranch,
+    sourceFile: metricERoundsGatePath,
+    sourceOnly: true,
+    test: assertMetricEPendingSeriesStateBehavior,
   },
   {
     baseModule: {},
@@ -8732,7 +8870,7 @@ function assertMetricERuntimeReviewVerifierBehavior(_moduleUnderTest, { sourceTe
 function assertMetricECallerAnchorNonqualifyingBehavior(_moduleUnderTest, { sourceText }) {
   runMetricERoundsMutation(
     sourceText,
-    'records an exact detached Ed25519 set without treating its caller-supplied anchor',
+    'rejects coherently rewritten and re-signed repository evidence under a replacement key',
   );
 }
 
@@ -8740,6 +8878,41 @@ function assertMetricEAuthenticatedReviewQualificationBehavior(_moduleUnderTest,
   runMetricERoundsMutation(
     sourceText,
     'does not qualify zero-escape rounds backed only by self-declared unauthenticated reviews',
+  );
+}
+
+function assertMetricEAggregateReviewVerifierBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects forged, malformed, and stale aggregate independent-review evidence',
+  );
+}
+
+function assertMetricEAggregateRootAnchorJoinBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects an aggregate whose key differs from the externally pinned root-set key',
+  );
+}
+
+function assertMetricEExternalPolicyExactShapeBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects signer material or surplus fields in the external anchor policy',
+  );
+}
+
+function assertMetricEEvidenceReuseBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'rejects reused aggregate or root-set evidence as another independent round',
+  );
+}
+
+function assertMetricEPendingSeriesStateBehavior(_moduleUnderTest, { sourceText }) {
+  runMetricERoundsMutation(
+    sourceText,
+    'locks comparability and the external anchor on first append and rejects partial states',
   );
 }
 

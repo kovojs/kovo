@@ -1843,7 +1843,7 @@
       "anchor": "metric-e-round-signature-join",
       "corpus": "capability-closure",
       "production": "structural-closure",
-      "reason": "The round gate joins every retained measured root to one exact signed subject but leaves caller-supplied trust anchors explicitly unverified and nonqualifying."
+      "reason": "The round gate qualifies exact root and aggregate signatures only when both match the verifier-supplied external runtime-attestation anchor; embedded or caller-authored replacement anchors remain nonqualifying."
     },
     {
       "anchor": "dependency-configured-alias-identity-join",

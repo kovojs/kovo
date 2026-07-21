@@ -856,12 +856,12 @@
     },
     {
       "id": "metric-e-rounds",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["convergence-e"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:metric-e-rounds",
       "groups": [],
-      "wallTimeCeilingMs": 120000,
+      "wallTimeCeilingMs": 300000,
       "peakRssCeilingMiB": 1536,
       "buildTime": {
         "status": "not-applicable",
