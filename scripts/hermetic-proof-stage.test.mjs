@@ -1,21 +1,106 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   assertHermeticDockerArgs,
+  forceRemoveDockerContainerEventually,
+  hermeticDockerStageContainerName,
   readHermeticProofManifest,
   validateHermeticProofContract,
 } from './hermetic-proof-stage.mjs';
 
 describe('hermetic proof stage', () => {
+  it('closes a delayed Docker cidfile race before interrupted-stage cleanup returns', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-hermetic-cid-race-'));
+    const cidFile = path.join(root, 'analysis.cid');
+    const containerId = 'a'.repeat(64);
+    const containerName = hermeticDockerStageContainerName(root, 'analysis');
+    const removals = [];
+    try {
+      writeFileSync(cidFile, '');
+      setTimeout(() => writeFileSync(cidFile, containerId.slice(0, 16)), 10);
+      setTimeout(() => writeFileSync(cidFile, `${containerId}\n`), 30);
+      await forceRemoveDockerContainerEventually('/usr/bin/docker', cidFile, {
+        containerName,
+        execFileSync(file, args, options) {
+          if (args[2] === containerName) {
+            const error = new Error('No such container');
+            error.stderr = 'No such container';
+            throw error;
+          }
+          removals.push({ args, file, timeout: options.timeout });
+        },
+        pollIntervalMs: 5,
+        timeoutMs: 250,
+      });
+      expect(readFileSync(cidFile, 'utf8').trim()).toBe(containerId);
+      expect(removals).toEqual([
+        {
+          args: ['rm', '--force', containerId],
+          file: '/usr/bin/docker',
+          timeout: expect.any(Number),
+        },
+      ]);
+      expect(removals[0].timeout).toBeLessThanOrEqual(250);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('removes an abnormal container by its preassigned name without a cidfile', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-hermetic-known-name-'));
+    const cidFile = path.join(root, 'analysis.cid');
+    const containerName = hermeticDockerStageContainerName(root, 'analysis');
+    const removals = [];
+    try {
+      await forceRemoveDockerContainerEventually('/usr/bin/docker', cidFile, {
+        containerName,
+        execFileSync(file, args) {
+          removals.push({ args, file });
+        },
+        timeoutMs: 250,
+      });
+      expect(removals).toEqual([
+        { args: ['rm', '--force', containerName], file: '/usr/bin/docker' },
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('pins the three-stage isolation contract', () => {
     const manifest = readHermeticProofManifest();
     expect(manifest.toolingBinding).toBe('kovo-certificate-v1-signed');
     const packageJson = {
-      scripts: { 'check:hermetic-proof-stage': 'node scripts/hermetic-proof-stage.mjs' },
+      scripts: {
+        'check:hermetic-proof-stage':
+          'node scripts/security-cost-budget-runner.mjs --gate hermetic-proof-stage',
+      },
     };
-    const workflow = `hermetic-proof:\n    needs: publish-readiness\nname: Hermetic certificate proof stage\nvp install --frozen-lockfile --ignore-scripts\nname: kovo-package-dist\nkovo-package-dist.tgz\n${manifest.linuxRunner.image}\nvp exec node scripts/hermetic-proof-stage.mjs\n      - hermetic-proof`;
+    const costManifest = {
+      schema: 'kovo.plan3-security-gate-budgets/v1',
+      gates: [
+        {
+          ciJob: 'hermetic-proof',
+          entrypoint: 'pnpm run check:hermetic-proof-stage',
+          id: 'hermetic-proof-stage',
+          isolatedMemory: {
+            ceilingMiB: manifest.linuxRunner.memoryMiB,
+            combinedCeilingMiB: 4096,
+            kind: 'docker-cgroup',
+          },
+          peakRssCeilingMiB: 4096 - manifest.linuxRunner.memoryMiB,
+          steps: [{ command: ['node', 'scripts/hermetic-proof-stage.mjs'] }],
+        },
+      ],
+    };
+    const workflow = `hermetic-proof:\n    needs: publish-readiness\nname: Hermetic certificate proof stage\nvp install --frozen-lockfile --ignore-scripts\nname: kovo-package-dist\nkovo-package-dist.tgz\n${manifest.linuxRunner.image}\nvp exec pnpm run check:hermetic-proof-stage\n      - hermetic-proof`;
     expect(
       validateHermeticProofContract({
+        costManifest,
         manifest,
         packageJson,
         workflow,
@@ -24,18 +109,21 @@ describe('hermetic proof stage', () => {
 
     const widened = structuredClone(manifest);
     widened.stages[0].reads.push('app dependency closure');
-    expect(validateHermeticProofContract({ manifest: widened, packageJson, workflow })).toContain(
-      'analysis does not match the exact reviewed stage contract',
-    );
+    expect(
+      validateHermeticProofContract({ costManifest, manifest: widened, packageJson, workflow }),
+    ).toContain('analysis does not match the exact reviewed stage contract');
 
     const unbound = structuredClone(manifest);
     unbound.toolingBinding = 'sandbox-self-test-unbound';
-    expect(validateHermeticProofContract({ manifest: unbound, packageJson, workflow })).toContain(
+    expect(
+      validateHermeticProofContract({ costManifest, manifest: unbound, packageJson, workflow }),
+    ).toContain(
       'hermetic proof tooling must be bound to kovo.certificate/v1 analysis, generation, and signing',
     );
 
     expect(
       validateHermeticProofContract({
+        costManifest,
         manifest,
         packageJson,
         workflow: workflow.replace(' --ignore-scripts', ''),
@@ -45,18 +133,45 @@ describe('hermetic proof stage', () => {
     const substitutedTool = structuredClone(manifest);
     substitutedTool.tooling.signing.sourceTreeSha256 = '0'.repeat(64);
     expect(
-      validateHermeticProofContract({ manifest: substitutedTool, packageJson, workflow }),
+      validateHermeticProofContract({
+        costManifest,
+        manifest: substitutedTool,
+        packageJson,
+        workflow,
+      }),
     ).toContain('hermetic proof tooling identities differ from the exact sealed source closures');
+
+    const divertedCostManifest = structuredClone(costManifest);
+    divertedCostManifest.gates[0].steps[0].command = ['node', 'scripts/no-op.mjs'];
+    expect(
+      validateHermeticProofContract({
+        costManifest: divertedCostManifest,
+        manifest,
+        packageJson,
+        workflow,
+      }),
+    ).toContain('Plan 3 cost manifest must wrap the exact hermetic proof worker command');
   });
 
   it('kills network, lifecycle, mount-source, mount-destination, and mount-mode weakenings', () => {
     const root = '/proof-stage';
-    const context = { gid: 1000, port: 31_337, root, uid: 1000 };
+    const context = {
+      gid: 1000,
+      memoryMiB: 3072,
+      memorySwapMiB: 3072,
+      port: 31_337,
+      root,
+      uid: 1000,
+    };
     const image = readHermeticProofManifest().linuxRunner.image;
+    const analysisName = hermeticDockerStageContainerName(root, 'analysis');
+    const signingName = hermeticDockerStageContainerName(root, 'signing');
     const common = [
       `KOVO_HERMETIC_STAGE_ROOT=${root}`,
       'run',
       '--rm',
+      '--memory=3072m',
+      '--memory-swap=3072m',
       '--pull=never',
       '--network=none',
       '--add-host=kovo-network-canary:host-gateway',
@@ -70,6 +185,8 @@ describe('hermetic proof stage', () => {
     ];
     const analysis = [
       ...common,
+      `--cidfile=${root}/analysis.cid`,
+      `--name=${analysisName}`,
       `--mount=type=bind,src=${root}/sealed-analysis,dst=/sealed,readonly`,
       `--mount=type=bind,src=${root}/subject,dst=/subject,readonly`,
       `--mount=type=bind,src=${root}/analysis,dst=/analysis`,
@@ -89,6 +206,8 @@ describe('hermetic proof stage', () => {
     ];
     const signing = [
       ...common,
+      `--cidfile=${root}/signing.cid`,
+      `--name=${signingName}`,
       `--mount=type=bind,src=${root}/sealed-signing,dst=/sealed,readonly`,
       `--mount=type=bind,src=${root}/unsigned,dst=/unsigned,readonly`,
       `--mount=type=bind,src=${root}/signing,dst=/key,readonly`,

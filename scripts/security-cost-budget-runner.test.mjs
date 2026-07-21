@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -7,12 +7,18 @@ import { describe, expect, it } from 'vitest';
 import {
   PLAN3_SECURITY_GATE_DENOMINATOR,
   evaluateGateBudget,
+  evaluateRunnerCalibration,
   loadPlan3CostBudgetManifest,
+  loadPlan3GateCommandRegistry,
   parsePlan3CostBudgetArguments,
   parseTimePeakRssKiB,
   runBudgetedGate,
+  runnerMatches,
   sumDescendantRssKiB,
   validatePlan3CostBudgetManifest,
+  validatePlan3CostRepositoryBindings,
+  validatePlan3GateCommandRegistry,
+  validatePlan3WorkflowRunnerBindings,
 } from './security-cost-budget-runner.mjs';
 import { repoRoot } from './lib/repo-root.mjs';
 
@@ -32,7 +38,7 @@ describe('Plan 3 security-gate cost budgets', () => {
     ]);
     expect(
       manifest.gates.filter((gate) => gate.buildTime.status === 'enforced').map((gate) => gate.id),
-    ).toEqual(['artifact-provenance-build', 'certificate']);
+    ).toEqual(['artifact-provenance-build', 'certificate', 'phase3-dependency-capabilities']);
     expect(
       manifest.gates.every(
         (gate) =>
@@ -76,10 +82,55 @@ describe('Plan 3 security-gate cost budgets', () => {
     expect(publishJob.indexOf('vp exec pnpm run check:publish')).toBeLessThan(
       publishJob.indexOf('vp exec pnpm run check:pack-security'),
     );
+    expect(workflow).toContain('run: vp exec pnpm run check:hermetic-proof-stage');
+    expect(workflow).not.toContain('run: vp exec node scripts/hermetic-proof-stage.mjs');
+    for (const job of ['static-core', 'hermetic-proof', 'publish-readiness']) {
+      const jobText = workflow.slice(workflow.indexOf(`  ${job}:`));
+      expect(jobText.slice(0, 120), job).toContain('runs-on: ubuntu-24.04');
+    }
+  });
+
+  it('labels only the exact CI image, architecture, and Node calibration as intended', () => {
+    const intended = loadPlan3CostBudgetManifest().intendedRunner;
+    const exact = {
+      architecture: 'x64',
+      env: {
+        GITHUB_ACTIONS: 'true',
+        ImageOS: 'ubuntu24',
+        RUNNER_OS: 'Linux',
+      },
+      node: '24.18.0',
+      osRelease: 'ID=ubuntu\nVERSION_ID="24.04"\n',
+      platform: 'linux',
+    };
+    expect(runnerMatches(intended, exact)).toBe(true);
+    expect(runnerMatches(intended, { ...exact, node: '24.19.0' })).toBe(false);
+    expect(runnerMatches(intended, { ...exact, env: {} })).toBe(false);
+    expect(
+      runnerMatches(intended, {
+        ...exact,
+        osRelease: 'ID=ubuntu\nVERSION_ID="22.04"\n',
+      }),
+    ).toBe(false);
+    expect(evaluateRunnerCalibration(intended, exact)).toEqual([]);
+    expect(
+      evaluateRunnerCalibration(intended, {
+        ...exact,
+        node: '24.19.0',
+      }).join('\n'),
+    ).toContain('exact reviewed GitHub Actions calibration');
+    expect(
+      evaluateRunnerCalibration(intended, {
+        ...exact,
+        env: { ...exact.env, GITHUB_ACTIONS: 'false' },
+        node: '24.19.0',
+      }),
+    ).toEqual([]);
   });
 
   it('kills denominator, threshold, build-scope, and reviewed-N/A drift', () => {
     const manifest = loadPlan3CostBudgetManifest();
+    const commands = loadPlan3GateCommandRegistry();
 
     const missing = structuredClone(manifest);
     missing.gates.splice(4, 1);
@@ -104,6 +155,66 @@ describe('Plan 3 security-gate cost budgets', () => {
     expect(validatePlan3CostBudgetManifest(dishonestNa).join('\n')).toContain(
       'must explain the reviewed N/A decision',
     );
+
+    const divertedHermeticWorker = structuredClone(manifest);
+    divertedHermeticWorker.gates.find(
+      (gate) => gate.id === 'hermetic-proof-stage',
+    ).steps[0].command = ['node', 'scripts/no-op.mjs'];
+    expect(validatePlan3CostBudgetManifest(divertedHermeticWorker).join('\n')).toContain(
+      'exact measured hermetic-proof-stage worker command',
+    );
+
+    const widenedHermeticHost = structuredClone(manifest);
+    widenedHermeticHost.gates.find(
+      (gate) => gate.id === 'hermetic-proof-stage',
+    ).peakRssCeilingMiB += 1;
+    expect(validatePlan3CostBudgetManifest(widenedHermeticHost).join('\n')).toContain(
+      'exact combined ceiling',
+    );
+
+    expect(validatePlan3CostRepositoryBindings(manifest)).toEqual([]);
+
+    const workflow = readFileSync(path.join(repoRoot(), '.github/workflows/ci.yml'), 'utf8');
+    expect(validatePlan3WorkflowRunnerBindings(manifest, workflow)).toEqual([]);
+    const poisonedWorkflow = workflow.replace(
+      '  static-core:\n    runs-on: ubuntu-24.04',
+      '  static-core:\n    # runs-on: ubuntu-24.04\n    runs-on: ubuntu-22.04',
+    );
+    expect(validatePlan3WorkflowRunnerBindings(manifest, poisonedWorkflow).join('\n')).toContain(
+      'static-core must run on exact image ubuntu-24.04',
+    );
+
+    const divertedBudgetStep = structuredClone(manifest);
+    divertedBudgetStep.gates.find((gate) => gate.id === 'security-guarantee').steps[0].command = [
+      'node',
+      'scripts/no-op.mjs',
+    ];
+    expect(validatePlan3GateCommandRegistry(commands, divertedBudgetStep).join('\n')).toContain(
+      'differs from its independently reviewed steps',
+    );
+
+    const divertedCommandStep = structuredClone(commands);
+    divertedCommandStep.gates.find((gate) => gate.id === 'security-guarantee').steps[0].command = [
+      'node',
+      'scripts/no-op.mjs',
+    ];
+    expect(validatePlan3GateCommandRegistry(divertedCommandStep, manifest).join('\n')).toContain(
+      'differs from its independently reviewed steps',
+    );
+
+    const coherentEvalNoOpManifest = structuredClone(manifest);
+    const coherentEvalNoOpCommands = structuredClone(commands);
+    coherentEvalNoOpManifest.gates.find(
+      (gate) => gate.id === 'security-guarantee',
+    ).steps[0].command = ['node', '-e', 'process.exit(0)'];
+    coherentEvalNoOpCommands.gates.find(
+      (gate) => gate.id === 'security-guarantee',
+    ).steps[0].command = ['node', '-e', 'process.exit(0)'];
+    expect(
+      validatePlan3GateCommandRegistry(coherentEvalNoOpCommands, coherentEvalNoOpManifest).join(
+        '\n',
+      ),
+    ).toContain('opaque shell/eval vector');
   });
 
   it('enforces wall, peak-RSS, and end-to-end build ceilings as verdicts', () => {
@@ -181,6 +292,44 @@ describe('Plan 3 security-gate cost budgets', () => {
       rmSync(directory, { force: true, recursive: true });
     }
   });
+
+  it.runIf(process.platform !== 'win32')(
+    'kills a SIGTERM-ignoring descendant before a timed-out gate returns',
+    async () => {
+      const directory = mkdtempSync(path.join(os.tmpdir(), 'kovo-plan3-cost-tree-timeout-'));
+      const pidFile = path.join(directory, 'descendant.pid');
+      try {
+        const manifest = loadPlan3CostBudgetManifest();
+        const descendantSource = "process.on('SIGTERM', () => {}); setInterval(() => {}, 10_000);";
+        const parentSource = [
+          "const { spawn } = require('node:child_process');",
+          "const { writeFileSync } = require('node:fs');",
+          `const child = spawn(process.execPath, ['-e', ${JSON.stringify(descendantSource)}], { stdio: 'ignore' });`,
+          `writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,
+          'setInterval(() => {}, 10_000);',
+        ].join('\n');
+        const gate = {
+          ...manifest.gates.find((candidate) => candidate.id === 'security-guarantee'),
+          id: 'synthetic-tree-timeout',
+          peakRssCeilingMiB: 1024,
+          steps: [{ command: [process.execPath, '-e', parentSource] }],
+          wallTimeCeilingMs: 250,
+        };
+
+        await expect(
+          runBudgetedGate(gate, manifest, {
+            repoRoot: repoRoot(),
+            reportDirectory: directory,
+          }),
+        ).rejects.toThrow('time ceiling exceeded');
+        expect(existsSync(pidFile)).toBe(true);
+        const descendantPid = Number(readFileSync(pidFile, 'utf8'));
+        expect(() => process.kill(descendantPid, 0)).toThrow();
+      } finally {
+        rmSync(directory, { force: true, recursive: true });
+      }
+    },
+  );
 
   it('normalizes GNU/Linux and macOS high-water RSS units and sums descendants', () => {
     expect(parseTimePeakRssKiB('Maximum resident set size (kbytes): 12345\n', 'linux')).toBe(12345);

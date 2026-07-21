@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import {
   chmodSync,
@@ -11,6 +11,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -23,6 +24,7 @@ import { verifyKovoCertificateSignature } from './kovo-certificate-signature.mjs
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(repoRoot, 'security/hermetic-proof-stage.json');
+const costManifestPath = path.join(repoRoot, 'security/plan3-security-gate-budgets.json');
 const certificatePath = path.join(repoRoot, 'security/kovo-certificate-v1.json');
 const workflowPath = path.join(repoRoot, '.github/workflows/ci.yml');
 const packagePath = path.join(repoRoot, 'package.json');
@@ -95,8 +97,12 @@ export function hermeticProofToolingDigests() {
   };
 }
 
-export function validateHermeticProofContract({ manifest, packageJson, workflow }) {
+export function validateHermeticProofContract({ costManifest, manifest, packageJson, workflow }) {
   const findings = [];
+  const costRows = Array.isArray(costManifest?.gates)
+    ? costManifest.gates.filter((gate) => gate?.id === 'hermetic-proof-stage')
+    : [];
+  const costRow = costRows[0];
   if (manifest?.schema !== 'kovo.hermetic-proof-stage/v1') {
     findings.push('hermetic proof manifest schema must be kovo.hermetic-proof-stage/v1');
   }
@@ -131,9 +137,22 @@ export function validateHermeticProofContract({ manifest, packageJson, workflow 
   if (
     manifest?.linuxRunner?.network !== 'none' ||
     manifest?.linuxRunner?.pull !== 'never' ||
-    manifest?.linuxRunner?.readOnlyRoot !== true
+    manifest?.linuxRunner?.readOnlyRoot !== true ||
+    !Number.isSafeInteger(manifest?.linuxRunner?.memoryMiB) ||
+    manifest.linuxRunner.memoryMiB < 64 ||
+    manifest?.linuxRunner?.memorySwapMiB !== manifest?.linuxRunner?.memoryMiB
   ) {
-    findings.push('Linux proof runner must be network=none, pull=never, and read-only');
+    findings.push(
+      'Linux proof runner must be network=none, pull=never, read-only, and carry one exact no-swap cgroup memory ceiling',
+    );
+  }
+  if (
+    costRow?.isolatedMemory?.kind !== 'docker-cgroup' ||
+    costRow?.isolatedMemory?.ceilingMiB !== manifest?.linuxRunner?.memoryMiB ||
+    costRow?.isolatedMemory?.combinedCeilingMiB !==
+      costRow?.peakRssCeilingMiB + manifest?.linuxRunner?.memoryMiB
+  ) {
+    findings.push('Hermetic Docker memory must close the exact combined Plan 3 gate budget');
   }
   const expectedStages = ['analysis', 'certificate-generation', 'signing'];
   if (
@@ -150,9 +169,26 @@ export function validateHermeticProofContract({ manifest, packageJson, workflow 
     }
   }
   if (
-    packageJson?.scripts?.['check:hermetic-proof-stage'] !== 'node scripts/hermetic-proof-stage.mjs'
+    packageJson?.scripts?.['check:hermetic-proof-stage'] !==
+    'node scripts/security-cost-budget-runner.mjs --gate hermetic-proof-stage'
   ) {
-    findings.push('package.json must expose the exact check:hermetic-proof-stage command');
+    findings.push('package.json must expose the measured check:hermetic-proof-stage command');
+  }
+  if (
+    costManifest?.schema !== 'kovo.plan3-security-gate-budgets/v1' ||
+    costRows.length !== 1 ||
+    canonicalJson({
+      ciJob: costRows[0]?.ciJob,
+      entrypoint: costRows[0]?.entrypoint,
+      steps: costRows[0]?.steps,
+    }) !==
+      canonicalJson({
+        ciJob: 'hermetic-proof',
+        entrypoint: 'pnpm run check:hermetic-proof-stage',
+        steps: [{ command: ['node', 'scripts/hermetic-proof-stage.mjs'] }],
+      })
+  ) {
+    findings.push('Plan 3 cost manifest must wrap the exact hermetic proof worker command');
   }
   if (
     !workflow.includes('name: Hermetic certificate proof stage') ||
@@ -178,8 +214,8 @@ export function validateHermeticProofContract({ manifest, packageJson, workflow 
   ) {
     findings.push('CI hermetic proof job must depend on the separately built publish artifact');
   }
-  if (!workflow.includes('vp exec node scripts/hermetic-proof-stage.mjs')) {
-    findings.push('CI hermetic proof job must invoke the fixed Node entrypoint directly');
+  if (!workflow.includes('vp exec pnpm run check:hermetic-proof-stage')) {
+    findings.push('CI hermetic proof job must invoke the measured fixed entrypoint');
   }
   if (!workflow.includes('- hermetic-proof')) {
     findings.push('CI aggregate check must require the hermetic proof job');
@@ -201,6 +237,7 @@ export function assertHermeticDockerArgs(args, stage, context) {
 async function main() {
   const manifest = readHermeticProofManifest();
   const findings = validateHermeticProofContract({
+    costManifest: JSON.parse(readFileSync(costManifestPath, 'utf8')),
     manifest,
     packageJson: JSON.parse(readFileSync(packagePath, 'utf8')),
     workflow: readFileSync(workflowPath, 'utf8'),
@@ -216,7 +253,7 @@ async function main() {
     const paths = prepareStagePaths(root);
     const port = await listen(canary);
     if (process.platform === 'linux') {
-      runDockerStages(paths, manifest.linuxRunner.image, port, launcher);
+      await runDockerStages(paths, manifest.linuxRunner, port, launcher);
     } else if (process.platform === 'darwin') {
       runMacStages(paths, port, launcher);
     } else {
@@ -391,9 +428,11 @@ function copyToolFile(relativePath, targetRoot) {
   chmodSync(target, 0o400);
 }
 
-function runDockerStages(paths, image, port, dockerPath) {
+async function runDockerStages(paths, linuxRunner, port, dockerPath) {
   const context = {
     gid: process.getgid(),
+    memoryMiB: linuxRunner.memoryMiB,
+    memorySwapMiB: linuxRunner.memorySwapMiB,
     port,
     root: paths.root,
     uid: process.getuid(),
@@ -402,6 +441,8 @@ function runDockerStages(paths, image, port, dockerPath) {
     `KOVO_HERMETIC_STAGE_ROOT=${paths.root}`,
     'run',
     '--rm',
+    `--memory=${linuxRunner.memoryMiB}m`,
+    `--memory-swap=${linuxRunner.memorySwapMiB}m`,
     '--pull=never',
     '--network=none',
     '--add-host=kovo-network-canary:host-gateway',
@@ -413,10 +454,10 @@ function runDockerStages(paths, image, port, dockerPath) {
     '--entrypoint=/usr/local/bin/node',
     `--env=KOVO_HERMETIC_NETWORK_CANARY=kovo-network-canary:${port}`,
   ];
-  runDockerStage(
+  await runDockerStage(
     dockerPath,
     'analysis',
-    image,
+    linuxRunner.image,
     common,
     [
       mount(paths.sealedAnalysis, '/sealed', true),
@@ -435,10 +476,10 @@ function runDockerStages(paths, image, port, dockerPath) {
     ['/analysis'],
     context,
   );
-  runDockerStage(
+  await runDockerStage(
     dockerPath,
     'certificate-generation',
-    image,
+    linuxRunner.image,
     common,
     [
       mount(paths.sealedGeneration, '/sealed', true),
@@ -457,10 +498,10 @@ function runDockerStages(paths, image, port, dockerPath) {
     ['/unsigned'],
     context,
   );
-  runDockerStage(
+  await runDockerStage(
     dockerPath,
     'signing',
-    image,
+    linuxRunner.image,
     common,
     [
       mount(paths.sealedSigning, '/sealed', true),
@@ -483,7 +524,7 @@ function runDockerStages(paths, image, port, dockerPath) {
   );
 }
 
-function runDockerStage(
+async function runDockerStage(
   dockerPath,
   stage,
   image,
@@ -494,8 +535,12 @@ function runDockerStage(
   writes,
   context,
 ) {
+  const cidFile = path.join(context.root, `${stage}.cid`);
+  const containerName = hermeticDockerStageContainerName(context.root, stage);
   const args = [
     ...common,
+    `--cidfile=${cidFile}`,
+    `--name=${containerName}`,
     ...mounts,
     image,
     '--preserve-symlinks',
@@ -505,7 +550,172 @@ function runDockerStage(
     ...workerArgs,
   ];
   assertHermeticDockerArgs(args, stage, context);
-  execFileSync(dockerPath, args.slice(1), { stdio: 'inherit' });
+  let child;
+  let childSpawned = false;
+  let childError;
+  let interruptedSignal = '';
+  let cleanupError;
+  let cleanupStarted = false;
+  let cleanupPromise = Promise.resolve();
+  const startCleanup = (timeoutMs = 900) => {
+    if (cleanupStarted) return;
+    cleanupStarted = true;
+    cleanupPromise = forceRemoveDockerContainerEventually(dockerPath, cidFile, {
+      containerName,
+      timeoutMs,
+    })
+      .catch((error) => {
+        cleanupError = error;
+      })
+      .finally(() => {
+        try {
+          child?.kill('SIGKILL');
+        } catch (killError) {
+          if (killError?.code !== 'ESRCH') {
+            cleanupError =
+              cleanupError === undefined
+                ? killError
+                : new AggregateError([cleanupError, killError]);
+          }
+        }
+      });
+  };
+  const interrupt = (signal) => {
+    if (interruptedSignal !== '') return;
+    interruptedSignal = signal;
+    startCleanup();
+  };
+  const interruptSignal = () => interrupt('SIGINT');
+  const terminateSignal = () => interrupt('SIGTERM');
+  process.once('SIGINT', interruptSignal);
+  process.once('SIGTERM', terminateSignal);
+  let result;
+  try {
+    child = spawn(dockerPath, args.slice(1), { stdio: 'inherit' });
+    child.once('spawn', () => {
+      childSpawned = true;
+    });
+    result = await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('exit', (code, signal) => resolve({ code, signal }));
+    });
+  } catch (error) {
+    childError = error;
+  } finally {
+    process.removeListener('SIGINT', interruptSignal);
+    process.removeListener('SIGTERM', terminateSignal);
+    const abnormalExit =
+      childError !== undefined ||
+      result?.code !== 0 ||
+      (result?.signal !== null && result?.signal !== undefined);
+    if (interruptedSignal === '' && abnormalExit && childSpawned) {
+      startCleanup(300);
+    }
+    await cleanupPromise;
+    if (interruptedSignal !== '' || abnormalExit) {
+      try {
+        await forceRemoveDockerContainerEventually(dockerPath, cidFile, {
+          containerName,
+          timeoutMs: 300,
+        });
+      } catch (error) {
+        cleanupError =
+          cleanupError === undefined ? error : new AggregateError([cleanupError, error]);
+      }
+    }
+    removeFileIfPresent(cidFile);
+  }
+  if (cleanupError !== undefined) {
+    throw new Error(
+      `${stage} Docker cleanup failed: ${
+        cleanupError instanceof Error ? cleanupError.message : 'unknown cleanup failure'
+      }`,
+    );
+  }
+  if (interruptedSignal !== '') {
+    throw new Error(`${stage} Docker stage interrupted by ${interruptedSignal}`);
+  }
+  if (childError !== undefined) throw childError;
+  if (result.code !== 0) {
+    throw new Error(
+      `${stage} Docker stage failed${result.code === null ? '' : ` with exit ${result.code}`}${result.signal === null ? '' : ` by ${result.signal}`}`,
+    );
+  }
+}
+
+export async function forceRemoveDockerContainerEventually(dockerPath, cidFile, options = {}) {
+  const containerName = options.containerName;
+  if (
+    typeof containerName !== 'string' ||
+    !/^kovo-hermetic-[a-z0-9-]+-[a-f0-9]{16}$/u.test(containerName)
+  ) {
+    throw new TypeError('Hermetic Docker cleanup requires one canonical known container name');
+  }
+  // The enclosing cost runner escalates from SIGTERM to SIGKILL after two
+  // seconds. Discovery, force-removal, client termination, and the final
+  // post-exit removal all retain a real margin inside that outer deadline.
+  const deadline = Date.now() + (options.timeoutMs ?? 900);
+  const pollIntervalMs = options.pollIntervalMs ?? 25;
+  const removeTimeoutMs = options.removeTimeoutMs ?? 500;
+  const read = options.readFileSync ?? readFileSync;
+  const execute = options.execFileSync ?? execFileSync;
+  let lastError;
+
+  while (Date.now() <= deadline) {
+    let containerId;
+    try {
+      containerId = read(cidFile, 'utf8').trim();
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    const targets = [
+      ...(containerId !== undefined && /^[a-f0-9]{64}$/u.test(containerId) ? [containerId] : []),
+      containerName,
+    ];
+    for (const target of targets) {
+      try {
+        execute(dockerPath, ['rm', '--force', target], {
+          encoding: 'utf8',
+          stdio: 'pipe',
+          timeout: Math.max(1, Math.min(removeTimeoutMs, deadline - Date.now())),
+        });
+        return;
+      } catch (error) {
+        const errorText =
+          error instanceof Error
+            ? `${error.message}\n${typeof error.stderr === 'string' ? error.stderr : ''}`
+            : '';
+        if (errorText.includes('No such container')) continue;
+        lastError = error;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  if (lastError === undefined) return;
+  throw new Error(
+    `Hermetic Docker container cleanup did not close the known-name removal${
+      lastError === undefined
+        ? ''
+        : `: ${lastError instanceof Error ? lastError.message : 'unknown Docker cleanup error'}`
+    }`,
+  );
+}
+
+export function hermeticDockerStageContainerName(root, stage) {
+  if (typeof root !== 'string' || !path.isAbsolute(root)) {
+    throw new TypeError('Hermetic Docker stage name requires an absolute root and known stage');
+  }
+  dockerStageNodeArgs(stage);
+  const suffix = createHash('sha256').update(root).digest('hex').slice(0, 16);
+  return `kovo-hermetic-${stage}-${suffix}`;
+}
+
+function removeFileIfPresent(file) {
+  try {
+    unlinkSync(file);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
 }
 
 function runMacStages(paths, port, sandboxExecPath) {
@@ -637,7 +847,10 @@ function expectedDockerArgs(stage, context) {
     context.gid < 0 ||
     !Number.isSafeInteger(context.port) ||
     context.port < 1 ||
-    context.port > 65_535
+    context.port > 65_535 ||
+    !Number.isSafeInteger(context.memoryMiB) ||
+    context.memoryMiB < 64 ||
+    context.memorySwapMiB !== context.memoryMiB
   ) {
     throw new Error(`${stage} Docker stage has an invalid sealed invocation context`);
   }
@@ -646,6 +859,8 @@ function expectedDockerArgs(stage, context) {
     `KOVO_HERMETIC_STAGE_ROOT=${context.root}`,
     'run',
     '--rm',
+    `--memory=${context.memoryMiB}m`,
+    `--memory-swap=${context.memorySwapMiB}m`,
     '--pull=never',
     '--network=none',
     '--add-host=kovo-network-canary:host-gateway',
@@ -656,6 +871,8 @@ function expectedDockerArgs(stage, context) {
     `--user=${context.uid}:${context.gid}`,
     '--entrypoint=/usr/local/bin/node',
     `--env=KOVO_HERMETIC_NETWORK_CANARY=kovo-network-canary:${context.port}`,
+    `--cidfile=${path.join(context.root, `${stage}.cid`)}`,
+    `--name=${hermeticDockerStageContainerName(context.root, stage)}`,
     ...dockerStageMounts(context.root, stage),
     linuxNodeImage,
     '--preserve-symlinks',

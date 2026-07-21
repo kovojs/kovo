@@ -359,10 +359,7 @@ export function validateReplayModelContract(inputs) {
   }
 
   const modelScript = packageJson?.scripts?.['check:replay-model'];
-  if (
-    typeof modelScript !== 'string' ||
-    !modelScript.includes('scripts/check-replay-reservation-model.mjs')
-  ) {
+  if (modelScript !== 'node scripts/security-cost-budget-runner.mjs --gate replay-model') {
     findings.push('package.json must expose check:replay-model through the TLC gate');
   }
   if (!packageJson?.scripts?.check?.includes('pnpm run check:replay-model')) {

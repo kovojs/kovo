@@ -18,7 +18,7 @@ export const rootPackageJsonPath = 'package.json';
 export const tcbManifestPath = 'security/TCB.md';
 export const lockfilePath = 'pnpm-lock.yaml';
 export const providerGateCommand =
-  'node scripts/check-auth-provider-pin.mjs && vitest --run scripts/check-auth-provider-pin.test.mjs packages/better-auth/src/lifecycle-inheritance.test.ts packages/cli/src/auth-lifecycle.test.ts --reporter=dot';
+  'node scripts/security-cost-budget-runner.mjs --gate auth-provider-pin';
 
 /**
  * Bind the public Better Auth peer to the exact implementation whose lifecycle behavior Kovo

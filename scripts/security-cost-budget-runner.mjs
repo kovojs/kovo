@@ -11,6 +11,8 @@ import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 
 export const PLAN3_COST_BUDGET_SCHEMA = 'kovo.plan3-security-gate-budgets/v1';
 export const DEFAULT_PLAN3_COST_BUDGET_FILE = 'security/plan3-security-gate-budgets.json';
+export const PLAN3_GATE_COMMAND_SCHEMA = 'kovo.plan3-security-gate-commands/v1';
+export const DEFAULT_PLAN3_GATE_COMMAND_FILE = 'security/plan3-security-gate-commands.json';
 export const DEFAULT_PLAN3_COST_REPORT_DIRECTORY = '.kovo/security-evidence/plan3-cost';
 
 // This is deliberately independent of the manifest. A deleted or newly invented row therefore
@@ -56,16 +58,180 @@ const PHASE3_GATE_IDS = Object.freeze([
   'phase3-derived-dataset',
   'phase3-dependency-capabilities',
 ]);
+const HERMETIC_PROOF_STAGE_COMMAND = Object.freeze(['node', 'scripts/hermetic-proof-stage.mjs']);
 
 export function loadPlan3CostBudgetManifest(options = {}) {
   const root = options.repoRoot ?? findRepoRoot();
   const manifestFile = options.manifestFile ?? DEFAULT_PLAN3_COST_BUDGET_FILE;
   const manifest = JSON.parse(readFileSync(path.resolve(root, manifestFile), 'utf8'));
-  const findings = validatePlan3CostBudgetManifest(manifest);
+  const commands = loadPlan3GateCommandRegistry({ repoRoot: root });
+  const findings = [
+    ...validatePlan3CostBudgetManifest(manifest),
+    ...validatePlan3GateCommandRegistry(commands, manifest),
+    ...validatePlan3CostRepositoryBindings(manifest, root),
+  ];
   if (findings.length > 0) {
     throw new TypeError(`Plan 3 cost-budget manifest is invalid:\n${findings.join('\n')}`);
   }
   return manifest;
+}
+
+export function loadPlan3GateCommandRegistry(options = {}) {
+  const root = options.repoRoot ?? findRepoRoot();
+  const commandFile = options.commandFile ?? DEFAULT_PLAN3_GATE_COMMAND_FILE;
+  return JSON.parse(readFileSync(path.resolve(root, commandFile), 'utf8'));
+}
+
+export function validatePlan3GateCommandRegistry(registry, manifest) {
+  const findings = [];
+  if (!isRecord(registry)) return ['command registry must be an object'];
+  if (registry.schema !== PLAN3_GATE_COMMAND_SCHEMA) {
+    findings.push(`command registry schema must be ${PLAN3_GATE_COMMAND_SCHEMA}`);
+  }
+  if (!Array.isArray(registry.gates)) {
+    findings.push('command registry gates must be an array');
+    return findings;
+  }
+  const ids = registry.gates.map((gate) => gate?.id);
+  if (!sameArray(ids, PLAN3_SECURITY_GATE_DENOMINATOR)) {
+    findings.push(
+      `command registry denominator/order drifted: expected ${PLAN3_SECURITY_GATE_DENOMINATOR.join(', ')}, received ${ids.join(', ')}`,
+    );
+  }
+  const manifestById = new Map(
+    Array.isArray(manifest?.gates) ? manifest.gates.map((gate) => [gate?.id, gate]) : [],
+  );
+  for (const [index, commandGate] of registry.gates.entries()) {
+    const label = `command registry gates[${index}]`;
+    if (!isRecord(commandGate) || typeof commandGate.id !== 'string') {
+      findings.push(`${label} must carry an id`);
+      continue;
+    }
+    const budgetGate = manifestById.get(commandGate.id);
+    if (budgetGate === undefined) {
+      findings.push(`${label} ${commandGate.id} has no matching budget row`);
+      continue;
+    }
+    if (budgetGate.execution === 'self-check') {
+      if (
+        commandGate.execution !== 'self-check' ||
+        commandGate.steps !== undefined ||
+        !sameArray(Object.keys(commandGate).sort(), ['execution', 'id'])
+      ) {
+        findings.push(`${label} must retain the exact non-recursive self-check vector`);
+      }
+      continue;
+    }
+    if (
+      commandGate.execution !== undefined ||
+      !Array.isArray(commandGate.steps) ||
+      JSON.stringify(commandGate.steps) !== JSON.stringify(budgetGate.steps)
+    ) {
+      findings.push(`${label} ${commandGate.id} differs from its independently reviewed steps`);
+      continue;
+    }
+    for (const [stepIndex, step] of commandGate.steps.entries()) {
+      const command = step?.command;
+      if (
+        Array.isArray(command) &&
+        ((command[0] === 'node' && ['-e', '--eval'].includes(command[1])) ||
+          ['bash', 'sh', 'zsh'].includes(command[0]))
+      ) {
+        findings.push(
+          `${label}.steps[${stepIndex}] uses an opaque shell/eval vector instead of a reviewed gate entrypoint`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
+export function validatePlan3CostRepositoryBindings(manifest, root = findRepoRoot()) {
+  const findings = [];
+  const gate = Array.isArray(manifest?.gates)
+    ? manifest.gates.find((row) => row?.id === 'hermetic-proof-stage')
+    : undefined;
+  let hermetic;
+  try {
+    hermetic = JSON.parse(
+      readFileSync(path.join(root, 'security/hermetic-proof-stage.json'), 'utf8'),
+    );
+  } catch (error) {
+    findings.push(`hermetic proof memory binding could not be read: ${String(error)}`);
+    return findings;
+  }
+  if (
+    gate?.isolatedMemory?.kind !== 'docker-cgroup' ||
+    hermetic?.linuxRunner?.memoryMiB !== gate.isolatedMemory.ceilingMiB ||
+    hermetic?.linuxRunner?.memorySwapMiB !== gate.isolatedMemory.ceilingMiB
+  ) {
+    findings.push(
+      'hermetic proof Docker memory/swap limits must equal the independently budgeted isolated-memory ceiling',
+    );
+  }
+  try {
+    findings.push(
+      ...validatePlan3WorkflowRunnerBindings(
+        manifest,
+        readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8'),
+      ),
+    );
+  } catch (error) {
+    findings.push(
+      `Plan 3 workflow runner bindings could not be read: ${
+        error instanceof Error ? error.message : 'unknown workflow read failure'
+      }`,
+    );
+  }
+  return findings;
+}
+
+export function validatePlan3WorkflowRunnerBindings(manifest, workflow) {
+  const { findings, runners } = parseWorkflowJobRunners(workflow);
+  const expectedRunner = manifest?.intendedRunner?.ciImage?.replace('github-actions/', '');
+  const jobIds = new Set(
+    Array.isArray(manifest?.gates) ? manifest.gates.map((gate) => gate?.ciJob) : [],
+  );
+  for (const jobId of jobIds) {
+    if (typeof jobId !== 'string') continue;
+    const actualRunner = runners.get(jobId);
+    if (actualRunner !== expectedRunner) {
+      findings.push(
+        `Plan 3 CI job ${jobId} must run on exact image ${expectedRunner}; received ${
+          actualRunner ?? 'no literal runs-on value'
+        }`,
+      );
+    }
+  }
+  return findings;
+}
+
+export function parseWorkflowJobRunners(workflow) {
+  const findings = [];
+  const runners = new Map();
+  let inJobs = false;
+  let currentJob;
+  for (const line of workflow.split(/\r?\n/u)) {
+    if (!inJobs) {
+      if (/^jobs:\s*(?:#.*)?$/u.test(line)) inJobs = true;
+      continue;
+    }
+    if (/^[^\s#]/u.test(line)) break;
+    const job = /^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$/u.exec(line);
+    if (job) {
+      currentJob = job[1];
+      continue;
+    }
+    const runner = /^    runs-on:\s*([^\s#]+)\s*(?:#.*)?$/u.exec(line);
+    if (!runner || currentJob === undefined) continue;
+    if (runners.has(currentJob)) {
+      findings.push(`Plan 3 workflow job ${currentJob} has more than one runs-on declaration`);
+      continue;
+    }
+    runners.set(currentJob, runner[1]);
+  }
+  if (!inJobs) findings.push('Plan 3 workflow has no literal jobs mapping');
+  return { findings, runners };
 }
 
 export function validatePlan3CostBudgetManifest(manifest) {
@@ -126,7 +292,7 @@ function validateIntendedRunner(value, findings) {
   }
   const expected = {
     architecture: 'x64',
-    ciImage: 'github-actions/ubuntu-latest',
+    ciImage: 'github-actions/ubuntu-24.04',
     node: '24.18.0',
     operatingSystem: 'linux',
     scheduling: 'one gate at a time within its job',
@@ -195,6 +361,23 @@ function validateGate(gate, label, findings) {
   if (!Number.isSafeInteger(gate.peakRssCeilingMiB) || gate.peakRssCeilingMiB < 64) {
     findings.push(`${label}.peakRssCeilingMiB must be an enforced integer ceiling`);
   }
+  if (gate.id === 'hermetic-proof-stage') {
+    if (
+      !isRecord(gate.isolatedMemory) ||
+      gate.isolatedMemory.kind !== 'docker-cgroup' ||
+      !Number.isSafeInteger(gate.isolatedMemory.ceilingMiB) ||
+      gate.isolatedMemory.ceilingMiB < 64 ||
+      !Number.isSafeInteger(gate.isolatedMemory.combinedCeilingMiB) ||
+      gate.isolatedMemory.combinedCeilingMiB !==
+        gate.peakRssCeilingMiB + gate.isolatedMemory.ceilingMiB
+    ) {
+      findings.push(
+        `${label}.isolatedMemory must split an exact combined ceiling between host RSS and Docker cgroup memory`,
+      );
+    }
+  } else if (gate.isolatedMemory !== undefined) {
+    findings.push(`${label}.isolatedMemory is reserved for the Docker-backed hermetic proof gate`);
+  }
 
   const selfCheck = gate.execution === 'self-check';
   if (selfCheck && gate.id !== 'cost-budget-manifest') {
@@ -222,6 +405,13 @@ function validateGate(gate, label, findings) {
         findings.push(`${stepLabel}.buildIntegrated may only be present with value true`);
       }
     }
+  }
+  if (
+    gate.id === 'hermetic-proof-stage' &&
+    (gate.steps.length !== 1 ||
+      !sameArray(gate.steps[0]?.command ?? [], HERMETIC_PROOF_STAGE_COMMAND))
+  ) {
+    findings.push(`${label} must retain the exact measured hermetic-proof-stage worker command`);
   }
 
   const buildSteps = gate.steps?.filter((step) => step.buildIntegrated === true).length ?? 0;
@@ -310,6 +500,16 @@ export function evaluateGateBudget(gate, measurement, options = {}) {
   return { findings, ok: findings.length === 0 };
 }
 
+export function evaluateRunnerCalibration(intendedRunner, options = {}) {
+  const env = options.env ?? process.env;
+  if (env.GITHUB_ACTIONS !== 'true' || runnerMatches(intendedRunner, options)) return [];
+  return [
+    'Plan 3 cost budgets require the exact reviewed GitHub Actions calibration ' +
+      `${intendedRunner.ciImage}, ${intendedRunner.operatingSystem}/${intendedRunner.architecture}, ` +
+      `Node ${intendedRunner.node}`,
+  ];
+}
+
 export async function runBudgetedGate(gate, manifest, options = {}) {
   if (gate.execution === 'self-check') {
     throw new TypeError('The self-check row must execute through runManifestSelfCheck().');
@@ -360,8 +560,16 @@ export async function runBudgetedGate(gate, manifest, options = {}) {
     peakRssMiB: rssAvailable ? peakRssMiB : null,
     wallTimeMs: performance.now() - startedAt,
   };
-  const intendedRunner = runnerMatches(manifest.intendedRunner);
+  const runnerOptions = {
+    architecture: options.architecture,
+    env: options.env ?? process.env,
+    node: options.node,
+    platform: options.platform,
+  };
+  const intendedRunner = runnerMatches(manifest.intendedRunner, runnerOptions);
   const verdict = evaluateGateBudget(gate, measurement, { requireRss: intendedRunner });
+  verdict.findings.unshift(...evaluateRunnerCalibration(manifest.intendedRunner, runnerOptions));
+  verdict.ok = verdict.findings.length === 0;
   if (failedStep !== null) {
     verdict.findings.unshift(
       `${gate.id}: step ${failedStep.index + 1} failed${
@@ -372,7 +580,16 @@ export async function runBudgetedGate(gate, manifest, options = {}) {
     );
     verdict.ok = false;
   }
-  writeGateReport(root, gate, manifest, measurement, verdict, failedStep, options.reportDirectory);
+  writeGateReport(
+    root,
+    gate,
+    manifest,
+    measurement,
+    verdict,
+    failedStep,
+    options.reportDirectory,
+    runnerOptions,
+  );
   printGateResult(gate, manifest, measurement, verdict, intendedRunner);
   if (!verdict.ok) throw new Error(verdict.findings.join('\n'));
   return { measurement, verdict };
@@ -388,9 +605,16 @@ export function runManifestSelfCheck(manifest, options = {}) {
     peakRssMiB: Number.isFinite(maxRssKiB) ? maxRssKiB / 1024 : null,
     wallTimeMs: performance.now() - startedAt,
   };
-  const verdict = evaluateGateBudget(gate, measurement, {
-    requireRss: runnerMatches(manifest.intendedRunner),
-  });
+  const runnerOptions = {
+    architecture: options.architecture,
+    env: options.env ?? process.env,
+    node: options.node,
+    platform: options.platform,
+  };
+  const intendedRunner = runnerMatches(manifest.intendedRunner, runnerOptions);
+  const verdict = evaluateGateBudget(gate, measurement, { requireRss: intendedRunner });
+  verdict.findings.unshift(...evaluateRunnerCalibration(manifest.intendedRunner, runnerOptions));
+  verdict.ok = verdict.findings.length === 0;
   writeGateReport(
     options.repoRoot ?? findRepoRoot(),
     gate,
@@ -399,8 +623,9 @@ export function runManifestSelfCheck(manifest, options = {}) {
     verdict,
     null,
     options.reportDirectory,
+    runnerOptions,
   );
-  printGateResult(gate, manifest, measurement, verdict, runnerMatches(manifest.intendedRunner));
+  printGateResult(gate, manifest, measurement, verdict, intendedRunner);
   if (!verdict.ok) throw new Error(verdict.findings.join('\n'));
   return { measurement, verdict };
 }
@@ -417,7 +642,8 @@ export async function runMeasuredCommand(command, options) {
   let rssAvailable = false;
   let terminationReason = null;
   let settled = false;
-  let forceKillTimer = null;
+  let terminationCleanup = Promise.resolve(true);
+  let terminationRequested = false;
 
   const child = spawn(invocation.file, invocation.args, {
     cwd: root,
@@ -429,7 +655,8 @@ export async function runMeasuredCommand(command, options) {
   const relaySignal = (signal) => {
     if (settled || terminationReason !== null) return;
     terminationReason = `runner received ${signal}`;
-    forceKillTimer = terminateChildTree(child);
+    terminationRequested = true;
+    terminationCleanup = terminateChildTree(child);
   };
   const relayInterrupt = () => relaySignal('SIGINT');
   const relayTermination = () => relaySignal('SIGTERM');
@@ -443,7 +670,8 @@ export async function runMeasuredCommand(command, options) {
     sampledPeakKiB = Math.max(sampledPeakKiB, rssKiB);
     if (rssKiB / 1024 > options.memoryCeilingMiB && terminationReason === null) {
       terminationReason = `peak RSS exceeded ${options.memoryCeilingMiB} MiB`;
-      forceKillTimer = terminateChildTree(child);
+      terminationRequested = true;
+      terminationCleanup = terminateChildTree(child);
     }
   };
   sample();
@@ -452,7 +680,8 @@ export async function runMeasuredCommand(command, options) {
   const timeout = setTimeout(() => {
     if (settled || terminationReason !== null) return;
     terminationReason = `time ceiling exceeded after ${formatMs(options.timeoutMs)}`;
-    forceKillTimer = terminateChildTree(child);
+    terminationRequested = true;
+    terminationCleanup = terminateChildTree(child);
   }, options.timeoutMs);
   timeout.unref();
 
@@ -466,10 +695,16 @@ export async function runMeasuredCommand(command, options) {
     settled = true;
     clearInterval(sampler);
     clearTimeout(timeout);
-    if (forceKillTimer !== null) clearTimeout(forceKillTimer);
     process.removeListener('SIGINT', relayInterrupt);
     process.removeListener('SIGTERM', relayTermination);
   });
+
+  if (terminationRequested) {
+    const terminated = await terminationCleanup;
+    if (!terminated) {
+      terminationReason = `${terminationReason ?? 'termination requested'}; process group survived SIGKILL`;
+    }
+  }
 
   const wallTimeMs = performance.now() - startedAt;
   let timePeakKiB = null;
@@ -584,23 +819,44 @@ export function sumDescendantRssKiB(rootPid, rows) {
   return total;
 }
 
-function terminateChildTree(child) {
+async function terminateChildTree(child) {
+  signalChildTree(child, 'SIGTERM');
+  if (await waitForChildTreeExit(child, 2000)) return true;
+  signalChildTree(child, 'SIGKILL');
+  return waitForChildTreeExit(child, 2000);
+}
+
+function signalChildTree(child, signal) {
   try {
-    if (process.platform === 'win32') child.kill('SIGTERM');
-    else process.kill(-child.pid, 'SIGTERM');
+    if (process.platform === 'win32') child.kill(signal);
+    else process.kill(-child.pid, signal);
   } catch (error) {
     if (error?.code !== 'ESRCH') throw error;
   }
-  const killTimer = setTimeout(() => {
-    try {
-      if (process.platform === 'win32') child.kill('SIGKILL');
-      else process.kill(-child.pid, 'SIGKILL');
-    } catch {
-      // The process group normally exits on SIGTERM; a late SIGKILL is only a best-effort fallback.
-    }
-  }, 2000);
-  killTimer.unref();
-  return killTimer;
+}
+
+function childTreeExists(child) {
+  if (process.platform === 'win32') return child.exitCode === null && child.signalCode === null;
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false;
+    if (error?.code === 'EPERM') return true;
+    throw error;
+  }
+}
+
+async function waitForChildTreeExit(child, timeoutMs) {
+  const deadline = performance.now() + timeoutMs;
+  while (childTreeExists(child)) {
+    const remainingMs = deadline - performance.now();
+    if (remainingMs <= 0) return false;
+    await new Promise((resolve) => {
+      setTimeout(resolve, Math.min(25, remainingMs));
+    });
+  }
+  return true;
 }
 
 function writeGateReport(
@@ -611,6 +867,7 @@ function writeGateReport(
   verdict,
   failedStep,
   reportDirectory = DEFAULT_PLAN3_COST_REPORT_DIRECTORY,
+  runnerOptions = {},
 ) {
   const directory = path.resolve(root, reportDirectory);
   mkdirSync(directory, { recursive: true });
@@ -622,6 +879,7 @@ function writeGateReport(
       buildTime: gate.buildTime,
       budgetVersion: gate.budgetVersion,
       id: gate.id,
+      ...(gate.isolatedMemory === undefined ? {} : { isolatedMemory: gate.isolatedMemory }),
       peakRssCeilingMiB: gate.peakRssCeilingMiB,
       planSections: gate.planSections,
       wallTimeCeilingMs: gate.wallTimeCeilingMs,
@@ -630,7 +888,7 @@ function writeGateReport(
       buildTimeMs: round(measurement.buildTimeMs),
       peakRssMiB: measurement.peakRssMiB === null ? null : round(measurement.peakRssMiB),
       runner: `${process.platform}-${process.arch}`,
-      runnerMatchesIntended: runnerMatches(manifest.intendedRunner),
+      runnerMatchesIntended: runnerMatches(manifest.intendedRunner, runnerOptions),
       wallTimeMs: round(measurement.wallTimeMs),
     },
     result: {
@@ -651,16 +909,43 @@ function printGateResult(gate, manifest, measurement, verdict, intendedRunner) {
     measurement.peakRssMiB === null
       ? `unavailable/${gate.peakRssCeilingMiB} MiB`
       : `${formatMiB(measurement.peakRssMiB)}/${formatMiB(gate.peakRssCeilingMiB)}`;
+  const isolated =
+    gate.isolatedMemory === undefined
+      ? ''
+      : ` isolated=${formatMiB(gate.isolatedMemory.ceilingMiB)}/${formatMiB(gate.isolatedMemory.combinedCeilingMiB)} combined`;
   process.stdout.write(
-    `plan3-cost gate=${gate.id} budget=${manifest.budgetVersion}.${gate.budgetVersion} wall=${formatMs(measurement.wallTimeMs)}/${formatMs(gate.wallTimeCeilingMs)} rss=${rss} build=${build} runner=${process.platform}-${process.arch}${intendedRunner ? '' : ':non-calibration'} ${verdict.ok ? 'OK' : 'FAILED'}\n`,
+    `plan3-cost gate=${gate.id} budget=${manifest.budgetVersion}.${gate.budgetVersion} wall=${formatMs(measurement.wallTimeMs)}/${formatMs(gate.wallTimeCeilingMs)} rss=${rss}${isolated} build=${build} runner=${process.platform}-${process.arch}${intendedRunner ? '' : ':non-calibration'} ${verdict.ok ? 'OK' : 'FAILED'}\n`,
   );
 }
 
-function runnerMatches(intendedRunner) {
+export function runnerMatches(intendedRunner, options = {}) {
+  const env = options.env ?? process.env;
+  const node = options.node ?? process.versions.node;
+  const platform = options.platform ?? process.platform;
+  const architecture = options.architecture ?? process.arch;
+  let osRelease = options.osRelease;
+  if (osRelease === undefined && platform === 'linux') {
+    try {
+      osRelease = readFileSync('/etc/os-release', 'utf8');
+    } catch {
+      osRelease = '';
+    }
+  }
   return (
-    process.platform === intendedRunner.operatingSystem &&
-    process.arch === intendedRunner.architecture
+    platform === intendedRunner.operatingSystem &&
+    architecture === intendedRunner.architecture &&
+    node === intendedRunner.node &&
+    env.GITHUB_ACTIONS === 'true' &&
+    env.RUNNER_OS === 'Linux' &&
+    env.ImageOS === 'ubuntu24' &&
+    osReleaseField(osRelease ?? '', 'ID') === 'ubuntu' &&
+    osReleaseField(osRelease ?? '', 'VERSION_ID') === '24.04'
   );
+}
+
+function osReleaseField(source, name) {
+  const match = new RegExp(`^${name}=(?:"([^"]*)"|'([^']*)'|([^\\s#]+))$`, 'mu').exec(source);
+  return match?.[1] ?? match?.[2] ?? match?.[3];
 }
 
 async function main(argv = process.argv.slice(2)) {

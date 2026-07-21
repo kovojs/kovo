@@ -1,9 +1,9 @@
 {
   "schema": "kovo.plan3-security-gate-budgets/v1",
-  "budgetVersion": "2026-07-21.1",
+  "budgetVersion": "2026-07-21.2",
   "intendedRunner": {
     "architecture": "x64",
-    "ciImage": "github-actions/ubuntu-latest",
+    "ciImage": "github-actions/ubuntu-24.04",
     "node": "24.18.0",
     "operatingSystem": "linux",
     "scheduling": "one gate at a time within its job"
@@ -16,7 +16,7 @@
   "gates": [
     {
       "id": "cost-budget-manifest",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["completion-contract"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:plan3-cost-budgets",
@@ -88,13 +88,18 @@
     },
     {
       "id": "hermetic-proof-stage",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["0.6"],
       "ciJob": "hermetic-proof",
       "entrypoint": "pnpm run check:hermetic-proof-stage",
       "groups": [],
       "wallTimeCeilingMs": 900000,
-      "peakRssCeilingMiB": 4096,
+      "peakRssCeilingMiB": 1024,
+      "isolatedMemory": {
+        "kind": "docker-cgroup",
+        "ceilingMiB": 3072,
+        "combinedCeilingMiB": 4096
+      },
       "buildTime": {
         "status": "not-applicable",
         "reviewedReason": "The proof stage consumes restored inert dist artifacts; the package build is owned and budgeted by the certificate build gate."
@@ -479,7 +484,7 @@
     },
     {
       "id": "phase3-dependency-capabilities",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["3.5"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:plan3-phase3-gates",
@@ -487,11 +492,13 @@
       "wallTimeCeilingMs": 300000,
       "peakRssCeilingMiB": 4096,
       "buildTime": {
-        "status": "not-applicable",
-        "reviewedReason": "The focused dependency classifier and generated-policy suites do not invoke an end-to-end production build."
+        "status": "enforced",
+        "ceilingMs": 240000,
+        "scope": "Real Vite dependency-loader and packed-framework source builds exercised by the complete Phase 3 dependency-capability suites."
       },
       "steps": [
         {
+          "buildIntegrated": true,
           "command": [
             "pnpm",
             "exec",
@@ -501,6 +508,18 @@
             "packages/cli/src/dependency-capability-loader.test.ts",
             "packages/cli/src/dependency-capability-loader.scalability.test.ts",
             "packages/create-kovo/src/index.lifecycle-policy.test.ts",
+            "--reporter=dot"
+          ]
+        },
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/commands/build-export-framework-sources.test.ts",
             "--reporter=dot"
           ]
         }

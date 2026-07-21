@@ -1,0 +1,574 @@
+{
+  "$comment": "Independent semantic execution vectors for Plan 3 cost gates. Budget edits cannot change what a gate runs.",
+  "schema": "kovo.plan3-security-gate-commands/v1",
+  "gates": [
+    {
+      "id": "cost-budget-manifest",
+      "execution": "self-check"
+    },
+    {
+      "id": "artifact-provenance-build",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/artifact-provenance.test.ts",
+            "--reporter=dot"
+          ]
+        },
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/index.kovo-build.test.ts",
+            "--reporter=dot",
+            "-t",
+            "emits byte-stable artifact provenance across two no-op production rebuilds"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-guarantee",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-security-guarantee.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "hermetic-proof-stage",
+      "steps": [
+        {
+          "command": ["node", "scripts/hermetic-proof-stage.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "provenance-closure",
+      "steps": [
+        {
+          "command": ["node", "scripts/provenance-closure.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/compiler/src/security-provenance-relation.test.ts",
+            "scripts/provenance-closure.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "authorization-matrix",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-authorization-matrix.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "rls-emission-door",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-postgres-rls-emission-door.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-postgres-rls-emission-door.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "grammar-containment",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/server/src/internal/linear-regex/automata.test.ts",
+            "packages/server/src/internal/header-serializer-grammars.gate.test.ts",
+            "packages/server/src/internal/ipv4-grammars.gate.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "label-clause-map",
+      "steps": [
+        {
+          "command": ["node", "scripts/label-clause-map-gate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/label-clause-map-gate.test.mjs",
+            "packages/drizzle/src/label-lattice.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pack-security",
+      "steps": [
+        {
+          "command": [
+            "node",
+            "scripts/egress-floor.mjs",
+            "--policy",
+            "publish",
+            "--",
+            "node",
+            "scripts/check-pack-security.mjs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "certificate-module-identity",
+      "steps": [
+        {
+          "command": ["node", "scripts/certificate-module-identity-probe.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/certificate-module-identity-probe.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "certificate",
+      "steps": [
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "--filter",
+            "@kovojs/better-auth",
+            "--filter",
+            "@kovojs/browser",
+            "--filter",
+            "@kovojs/compiler",
+            "--filter",
+            "@kovojs/core",
+            "--filter",
+            "@kovojs/drizzle",
+            "--filter",
+            "@kovojs/server",
+            "--filter",
+            "@kovojs/style",
+            "--filter",
+            "@kovojs/verify",
+            "run",
+            "build:dist"
+          ]
+        },
+        {
+          "command": ["node", "--experimental-strip-types", "scripts/kovo-certificate.mjs"]
+        },
+        {
+          "command": ["node", "scripts/check-kovo-certificate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/kovo-certificate.test.mjs",
+            "packages/verify/src/index.test.ts",
+            "packages/verify/src/directory.test.ts",
+            "packages/verify/src/bin.test.ts",
+            "packages/verify/src/translation.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emission-constructor-closure",
+      "steps": [
+        {
+          "command": ["node", "scripts/emission-constructor-closure-gate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/emission-constructor-closure-gate.test.mjs",
+            "packages/core/src/internal/emission.test.ts",
+            "packages/drizzle/src/derive-codegen.test.ts",
+            "packages/compiler/src/emit/registry-emission.security.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-agent-mediation",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/compiler/src/agent-tool-security.test.ts",
+            "packages/server/src/agent.security.test.ts",
+            "packages/cli/src/index.kovo-explain-agent.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-grant-graph",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/drizzle/src/grant-graph-static.test.ts",
+            "packages/server/src/delegation.test.ts",
+            "packages/cli/src/index.kovo-explain-grants.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-environment-contract",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/cli/src/deployment-environment-contract.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-derived-dataset",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/compiler/src/derived-dataset-security.test.ts",
+            "packages/server/src/derived-dataset.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "phase3-dependency-capabilities",
+      "steps": [
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/dependency-capability-loader.test.ts",
+            "packages/cli/src/dependency-capability-loader.scalability.test.ts",
+            "packages/create-kovo/src/index.lifecycle-policy.test.ts",
+            "--reporter=dot"
+          ]
+        },
+        {
+          "buildIntegrated": true,
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "--no-file-parallelism",
+            "packages/cli/src/commands/build-export-framework-sources.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "escape-census",
+      "steps": [
+        {
+          "command": ["pnpm", "run", "check:escape-census:baseline"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/escape-census-baseline.test.mjs",
+            "scripts/escape-census-gate.test.mjs",
+            "packages/core/src/escape-census-graph.test.ts",
+            "packages/drizzle/src/trust-escapes-static.escape-census.test.ts",
+            "packages/server/src/escape-census-review.security.test.ts",
+            "packages/cli/src/commands/build-export.escape-census-reviews.test.ts",
+            "packages/cli/src/commands/attest.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "declassification-census",
+      "steps": [
+        {
+          "command": ["node", "scripts/declassification-census-gate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/declassification-census-gate.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "provenance-precision-register",
+      "steps": [
+        {
+          "command": ["node", "scripts/provenance-precision-register-gate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/provenance-precision-register-c13.test.mjs",
+            "scripts/provenance-precision-register-gate.test.mjs",
+            "packages/compiler/src/security-analyzer-soundness-oracle.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analyzable-fragment",
+      "steps": [
+        {
+          "command": ["node", "scripts/analyzable-fragment.mjs"]
+        }
+      ]
+    },
+    {
+      "id": "security-event-answerability",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-security-event-answerability.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-security-event-answerability.test.mjs",
+            "packages/server/src/security-event-answerability.test.ts",
+            "packages/server/src/security-event-emission-coverage.test.ts",
+            "packages/server/src/generated-runtime-posture-registry.test.ts",
+            "packages/server/src/generated-runtime-posture-registry-boot.test.ts",
+            "packages/cli/src/commands/incident-scope.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "advisory-feed",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/cli/src/commands/advisory-feed-gate.test.ts",
+            "packages/cli/src/commands/advisories.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "auth-provider-pin",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-auth-provider-pin.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-auth-provider-pin.test.mjs",
+            "packages/better-auth/src/lifecycle-inheritance.test.ts",
+            "packages/cli/src/auth-lifecycle.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c9-sink-inventory",
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "packages/core/src/internal/source-sink-registry.test.ts",
+            "packages/create-kovo/src/index.build.prod-artifact.sink-census.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "replay-model",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-replay-reservation-model.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-replay-reservation-model.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "protocol-alphabet",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-protocol-alphabet.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-protocol-alphabet.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "model-honesty-boundary",
+      "steps": [
+        {
+          "command": ["node", "scripts/check-model-honesty-boundary.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/check-model-honesty-boundary.test.mjs",
+            "packages/cli/src/model-boundaries.test.ts",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decided-surface",
+      "steps": [
+        {
+          "command": ["node", "scripts/decided-surface-gate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/decided-surface-gate.test.mjs",
+            "scripts/lib/security-evidence-subject.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "metric-e-rounds",
+      "steps": [
+        {
+          "command": ["node", "scripts/metric-e-rounds-gate.mjs"]
+        },
+        {
+          "command": [
+            "pnpm",
+            "exec",
+            "vitest",
+            "--run",
+            "scripts/metric-e-rounds-gate.test.mjs",
+            "--reporter=dot"
+          ]
+        }
+      ]
+    }
+  ]
+}

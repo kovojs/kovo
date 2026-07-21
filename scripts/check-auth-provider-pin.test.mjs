@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkAuthProviderPin } from './check-auth-provider-pin.mjs';
+import { checkAuthProviderPin, providerGateCommand } from './check-auth-provider-pin.mjs';
 
 const integrity =
   'sha512-M0XMJ9/KE9hlmuN2Zha1VayShZW5CQifAMPaoz41gtao2la6YpT5KrnL5MAeIAM/3d4DkdYA2BVMY1Gt4iEzHw==';
@@ -13,8 +13,7 @@ function rootPackage({ check = true, command = true } = {}) {
         : 'pnpm run check:imports && pnpm run check:tcb-boundary',
       ...(command
         ? {
-            'check:auth-provider-pin':
-              'node scripts/check-auth-provider-pin.mjs && vitest --run scripts/check-auth-provider-pin.test.mjs packages/better-auth/src/lifecycle-inheritance.test.ts packages/cli/src/auth-lifecycle.test.ts --reporter=dot',
+            'check:auth-provider-pin': providerGateCommand,
           }
         : {}),
     },

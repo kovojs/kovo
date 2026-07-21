@@ -20,7 +20,7 @@ env:
 
 jobs:
   static-core:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -43,7 +43,7 @@ jobs:
       - run: git diff --check
 
   hermetic-proof:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - publish-readiness
     steps:
@@ -64,7 +64,7 @@ jobs:
       - name: Pull pinned hermetic Node image before proof isolation
         run: docker pull docker.io/library/node@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6
       - name: Hermetic certificate proof stage
-        run: vp exec node scripts/hermetic-proof-stage.mjs
+        run: vp exec pnpm run check:hermetic-proof-stage
 
   paranoid:
     runs-on: ubuntu-latest
@@ -156,7 +156,7 @@ jobs:
         run: vp run compiler-perf
 
   publish-readiness:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup

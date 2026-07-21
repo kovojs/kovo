@@ -5,23 +5,25 @@
   "tooling": {
     "analysis": {
       "implementation": "scripts/kovo-certificate.mjs#analyzeKovoCertificate",
-      "sourceTreeSha256": "b867b88e7a678fd78ce8dc270ab56642a986c351b65b8346970943e6db9e3ce2"
+      "sourceTreeSha256": "f03ba0981edded343f4649e257f9b05545f3920a206d7b02389d6f26d19ef2ae"
     },
     "certificateGeneration": {
       "implementation": "scripts/kovo-certificate-format.mjs#generateKovoCertificateFromAnalysis",
       "sourceTreeSha256": "9c5dadb88ba2665b194dd504a963e83b4c3d9bec5a75b7e1b12b0faec29513f2"
     },
-    "orchestratorSha256": "94fb9693dfbe079dd979b886f49f7ba14d910d84d1537ea9bcbebfad697ffb13",
+    "orchestratorSha256": "82da8516edb1d2f7921ef9ebcd96ff539277c347dad81049e61e10b25a13b1ad",
     "signing": {
       "implementation": "scripts/kovo-certificate-signature.mjs#signKovoCertificate",
-      "sourceTreeSha256": "a8fdeb1e07dfbb798eac619ae55831dbc5b128883efeb8633a370f9f1a1c754a"
+      "sourceTreeSha256": "5eac523dc3b85eefbfba22572852cd316e70343043abbee2177ae2ae4f496a39"
     }
   },
   "linuxRunner": {
     "image": "docker.io/library/node@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6",
     "network": "none",
     "pull": "never",
-    "readOnlyRoot": true
+    "readOnlyRoot": true,
+    "memoryMiB": 3072,
+    "memorySwapMiB": 3072
   },
   "stages": [
     {

@@ -382,7 +382,7 @@ export function rogue(input) { return emit({ ...input, site: 'owner' }); }
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
     );
     expect(packageJson.scripts['check:rls-emission-door']).toBe(
-      'node scripts/check-postgres-rls-emission-door.mjs && vitest --run scripts/check-postgres-rls-emission-door.test.mjs --reporter=dot',
+      'node scripts/security-cost-budget-runner.mjs --gate rls-emission-door',
     );
     expect(packageJson.scripts.check).toContain('pnpm run check:rls-emission-door');
   });
