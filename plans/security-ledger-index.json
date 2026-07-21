@@ -2,7 +2,7 @@
   "schema": "kovo.security-ledger-index/v1",
   "ledgerKinds": {
     "bugz": {
-      "nextSequence": 35,
+      "nextSequence": 36,
       "pathTemplate": "plans/bugz-{sequence}.md"
     },
     "papercuts": {
@@ -67,6 +67,16 @@
       "archiveBy": "2026-07-25",
       "archivePath": "plans/history/bugz-34.md",
       "summary": "Remediation is complete; publish the exact verified tip, observe required CI, then archive."
+    },
+    {
+      "path": "plans/bugz-35.md",
+      "kind": "bugz",
+      "state": "closed-pending-publication",
+      "openedOn": "2026-07-21",
+      "closedOn": "2026-07-21",
+      "archiveBy": "2026-08-18",
+      "archivePath": "plans/history/bugz-35.md",
+      "summary": "All four security/evidence defects are remediated; publish the exact verified tip, observe required CI, then archive."
     }
   ],
   "history": {

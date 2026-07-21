@@ -22,6 +22,7 @@ ledger active; registration does. `pnpm run check:security-ledger-index` enforce
 | ------------------ | --------------------------- | ---------------- | -------------------------- |
 | `plans/bugz-33.md` | Closed; publication pending | 2026-07-25       | `plans/history/bugz-33.md` |
 | `plans/bugz-34.md` | Closed; publication pending | 2026-07-25       | `plans/history/bugz-34.md` |
+| `plans/bugz-35.md` | Closed; publication pending | 2026-08-18       | `plans/history/bugz-35.md` |
 
 There may be zero, one, or many transient ledgers. Do not infer a required count or discover them
 from `bugz-*` / `papercuts-*` filenames.
