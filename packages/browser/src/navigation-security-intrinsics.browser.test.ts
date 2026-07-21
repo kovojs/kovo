@@ -45,7 +45,9 @@ describe('browser navigation security controls', () => {
     }
     const headers = {
       get(name: string) {
-        return name === 'Kovo-Build' ? 'build-server' : null;
+        if (name === 'Kovo-Build') return 'build-server';
+        if (name === 'Content-Disposition') return 'inline; filename="safe.html"';
+        return null;
       },
     };
     const response = {
@@ -76,6 +78,9 @@ describe('browser navigation security controls', () => {
         new URL('/safe', location.href).href,
       );
       expect(controls.readHeader(accepted, 'Kovo-Build')).toBe('build-server');
+      expect(controls.readHeader(accepted, 'Content-Disposition')).toBe(
+        'inline; filename="safe.html"',
+      );
       expect(await controls.readResponseText(accepted)).toBe('SERVER-SAFE');
     } finally {
       Object.defineProperty(globalThis, 'fetch', descriptor);

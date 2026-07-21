@@ -32,6 +32,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     readElementAttribute: () => ({ present: false }),
     readPageTransitionPersisted: () => false,
     responseContentType: () => 'text/html; charset=utf-8',
+    responseAllowsInlineBody: () => true,
     readResponseStatus: () => 200,
     readResponseText: async () => '<html><body>next</body></html>',
     reload,
@@ -50,6 +51,43 @@ async function refresh(options: DocumentLifecycleRecoveryOptions): Promise<void>
 }
 
 describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
+  it('reloads before reading an attachment live-target response', async () => {
+    const fetchValue = vi.fn(async () => ({ status: 200 }));
+    const readResponseText = vi.fn(
+      async () => '<kovo-fragment target="account">BAD</kovo-fragment>',
+    );
+    const { applied, options, reload } = recoveryOptions({
+      fetchValue,
+      readResponseText,
+      responseAllowsInlineBody: () => false,
+    });
+
+    await refresh(options);
+
+    expect(reload).toHaveBeenCalledOnce();
+    expect(readResponseText).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
+  it('reloads before reading an attachment query-refresh response', async () => {
+    const fetchValue = vi.fn(async () => ({ status: 200 }));
+    const readResponseText = vi.fn(async () => '<kovo-query name="cart">{}</kovo-query>');
+    const { applied, options, reload } = recoveryOptions({
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseText,
+      responseAllowsInlineBody: () => false,
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(reload).toHaveBeenCalledOnce();
+    expect(readResponseText).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
   it('reloads instead of stamping the active build onto wire bytes with no response proof', async () => {
     const fetchValue = vi.fn(async () => ({ status: 200 }));
     const { applied, options, reload } = recoveryOptions({

@@ -374,7 +374,9 @@ describe('inline loader enhanced navigation fallback', () => {
               }),
             ],
             fetch: vi.fn(async () => ({
-              headers: { get: () => 'text/html' },
+              headers: {
+                get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+              },
               text: async () => '<!doctype html><html></html>',
               url: 'http://app.test/account',
             })),
@@ -448,7 +450,9 @@ describe('inline loader enhanced navigation fallback', () => {
           }),
           documents: [createTestShell({ session: 'session-a', segments: [nextSegment] })],
           fetch: vi.fn(async () => ({
-            headers: { get: () => 'text/html' },
+            headers: {
+              get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            },
             text: async () => '<!doctype html><html></html>',
             url: 'http://app.test/account',
           })),
@@ -562,7 +566,9 @@ describe('inline loader enhanced navigation fallback', () => {
         }),
         documents: [createTestShell({ build: nextBuild, segments: [nextSegment] })],
         fetch: vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: 'http://app.test/account',
         })),
@@ -637,7 +643,9 @@ describe('inline loader enhanced navigation fallback', () => {
               }),
             ],
             fetch: vi.fn(async () => ({
-              headers: { get: () => 'text/html' },
+              headers: {
+                get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+              },
               text: async () => '<!doctype html><html></html>',
               url: 'http://app.test/account',
             })),
@@ -690,7 +698,10 @@ describe('inline loader enhanced navigation fallback', () => {
           currentDocument: createTestShell({ replaceWith, segments: [currentSegment] }),
           documents: [createTestShell({ segments: [attackerSegment] })],
           fetch: vi.fn(async () => ({
-            headers: { get: () => 'text/html; charset=utf-8' },
+            headers: {
+              get: (name: string) =>
+                name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null,
+            },
             text: async () => '<!doctype html><html><body>attacker</body></html>',
             url: 'https://evil.example/phish',
           })),
@@ -759,7 +770,10 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument: createTestShell({ replaceWith, segments: [currentSegment] }),
         documents: [createTestShell({ segments: [attackerSegment] })],
         fetch: vi.fn(async () => ({
-          headers: { get: () => 'text/html; charset=utf-8' },
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null,
+          },
           text: async () => '<!doctype html><html><body>attacker</body></html>',
           url: 'blob:http://app.test/attacker-document',
         })),
@@ -943,7 +957,9 @@ describe('inline loader enhanced navigation fallback', () => {
           }
         };
         globalRecord.fetch = vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: 'http://app.test/cart',
         }));
@@ -1030,7 +1046,10 @@ describe('inline loader enhanced navigation fallback', () => {
           querySelectorAll: () => [],
         };
         globalRecord.fetch = vi.fn(async () => ({
-          headers: { get: () => 'application/pdf' },
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'content-type' ? 'application/pdf' : null,
+          },
           text: async () => '%PDF-1.7\n',
           url: 'http://app.test/download.pdf',
         }));
@@ -1095,7 +1114,9 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument,
         documents: [targetDocument],
         fetch: vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: 'http://app.test/cart',
         })),
@@ -1148,7 +1169,9 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument,
         documents: [targetDocument],
         fetch: vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: 'http://app.test/login?next=%2Fadmin',
         })),
@@ -1205,7 +1228,9 @@ describe('inline loader enhanced navigation fallback', () => {
       currentDocument,
       documents: [targetDocument],
       fetch: vi.fn(async () => ({
-        headers: { get: () => 'text/html' },
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+        },
         status,
         text: async () => '<!doctype html><html></html>',
         url: 'http://app.test/admin',
@@ -1269,7 +1294,9 @@ describe('inline loader enhanced navigation fallback', () => {
       let resolveFast: ((value: unknown) => void) | undefined;
       let fetchCount = 0;
       const response = (url: string) => ({
-        headers: { get: () => 'text/html' },
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+        },
         text: async () => '<!doctype html><html></html>',
         url,
       });
@@ -1388,7 +1415,9 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument,
         documents: [targetDocument],
         fetch: vi.fn(async (href: string) => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: href,
         })),
@@ -1453,7 +1482,9 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument,
         documents: [cartDocument, secondProductsDocument],
         fetch: vi.fn(async (href: string) => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: href,
         })),
@@ -1542,7 +1573,9 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument,
         documents: [cartDocument, secondProductsDocument],
         fetch: vi.fn(async (href: string) => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: href,
         })),
@@ -1679,7 +1712,9 @@ describe('inline loader enhanced navigation fallback', () => {
           }
         };
         globalRecord.fetch = vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: 'http://app.test/cart',
         }));
@@ -1792,7 +1827,9 @@ describe('inline loader enhanced navigation fallback', () => {
         currentDocument,
         documents: [targetDocument],
         fetch: vi.fn(async () => ({
-          headers: { get: () => 'text/html' },
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
           text: async () => '<!doctype html><html></html>',
           url: 'http://app.test/cart',
         })),

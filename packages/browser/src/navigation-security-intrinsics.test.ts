@@ -3,7 +3,42 @@ import { describe, expect, it } from 'vitest';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { sanitizeReauthDirective } from './reauth-directive.js';
 
+// @kovo-security-classifier-corpus browser-posture
+
 describe('browser navigation security intrinsics', () => {
+  it('accepts only absent or structurally unambiguous inline response dispositions', () => {
+    const controls = createBrowserNavigationSecurityControls();
+
+    for (const value of [
+      undefined,
+      'inline',
+      ' INLINE ',
+      'inline; filename=safe.html',
+      'inline; filename="safe,still-inline.html"',
+      'inline; filename="safe\\\"name.html"; filename*=UTF-8\'\'safe.html',
+    ]) {
+      expect(controls.isInlineContentDisposition(value), String(value)).toBe(true);
+    }
+
+    for (const value of [
+      null,
+      '',
+      'attachment',
+      'form-data',
+      'inline, attachment',
+      'inline; filename=safe.html, attachment',
+      'inline;',
+      'inline; filename',
+      'inline; filename=',
+      'inline; filename="unterminated',
+      'inline; filename="bad\\q"',
+      'inline\r\nX-Kovo-Attacker: yes',
+      `inline; filename=${'a'.repeat(8192)}`,
+    ]) {
+      expect(controls.isInlineContentDisposition(value), String(value)).toBe(false);
+    }
+  });
+
   it('keeps keyed reconciliation maps pinned after late Map prototype replacement', () => {
     const controls = createBrowserNavigationSecurityControls();
     const originalGet = Map.prototype.get;

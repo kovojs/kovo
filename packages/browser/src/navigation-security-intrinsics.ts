@@ -509,6 +509,7 @@ export function createBrowserNavigationSecurityControls(
   const islandAbortControllers = new NativeWeakMap<object, AbortController>();
   const fetchHeaderNames = [
     ['content-type', 'content-type'],
+    ['content-disposition', 'Content-Disposition'],
     ['kovo-build', 'Kovo-Build'],
     ['kovo-changes', 'Kovo-Changes'],
     ['kovo-session-transition', 'Kovo-Session-Transition'],
@@ -2369,6 +2370,107 @@ export function createBrowserNavigationSecurityControls(
     return mediaType === 'text/html';
   }
 
+  function isHeaderTokenCode(code: number): boolean {
+    return (
+      (code >= 0x30 && code <= 0x39) ||
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      code === 0x21 ||
+      code === 0x23 ||
+      code === 0x24 ||
+      code === 0x25 ||
+      code === 0x26 ||
+      code === 0x27 ||
+      code === 0x2a ||
+      code === 0x2b ||
+      code === 0x2d ||
+      code === 0x2e ||
+      code === 0x5e ||
+      code === 0x5f ||
+      code === 0x60 ||
+      code === 0x7c ||
+      code === 0x7e
+    );
+  }
+
+  /**
+   * Decide whether a fetched response body may be interpreted inside the current document.
+   *
+   * SPEC §§6.6/9.1: `Content-Disposition: attachment` is a browser-enforced active-content
+   * boundary. Enhanced navigation, fragment application, and query materialization must preserve
+   * that boundary instead of turning attachment bytes into live DOM. Absence means the ordinary
+   * document/fragment protocol applies; a present header is accepted only as one unambiguous,
+   * structurally valid `inline` disposition. Combined fields and malformed parameters fail closed.
+   */
+  function isInlineContentDisposition(value: unknown): boolean {
+    if (!controlsSound) return false;
+    if (value === undefined) return true;
+    if (typeof value !== 'string' || value.length === 0 || value.length > 8192) return false;
+
+    let cursor = 0;
+    const skipOptionalWhitespace = () => {
+      while (cursor < value.length) {
+        const code = charCode(value, cursor);
+        if (code !== 0x20 && code !== 0x09) break;
+        cursor += 1;
+      }
+    };
+
+    skipOptionalWhitespace();
+    const dispositionStart = cursor;
+    while (cursor < value.length && isHeaderTokenCode(charCode(value, cursor))) cursor += 1;
+    if (cursor === dispositionStart || lower(slice(value, dispositionStart, cursor)) !== 'inline') {
+      return false;
+    }
+    skipOptionalWhitespace();
+
+    while (cursor < value.length) {
+      if (charCode(value, cursor) !== 0x3b) return false;
+      cursor += 1;
+      skipOptionalWhitespace();
+
+      const parameterStart = cursor;
+      while (cursor < value.length && isHeaderTokenCode(charCode(value, cursor))) cursor += 1;
+      if (cursor === parameterStart) return false;
+      skipOptionalWhitespace();
+      if (cursor >= value.length || charCode(value, cursor) !== 0x3d) return false;
+      cursor += 1;
+      skipOptionalWhitespace();
+      if (cursor >= value.length) return false;
+
+      if (charCode(value, cursor) === 0x22) {
+        cursor += 1;
+        let closed = false;
+        while (cursor < value.length) {
+          const code = charCode(value, cursor);
+          if (code === 0x22) {
+            cursor += 1;
+            closed = true;
+            break;
+          }
+          if (code === 0x5c) {
+            cursor += 1;
+            if (cursor >= value.length) return false;
+            const escaped = charCode(value, cursor);
+            if (escaped !== 0x22 && escaped !== 0x5c) return false;
+            cursor += 1;
+            continue;
+          }
+          if (code < 0x20 || code > 0x7e || code === 0x7f) return false;
+          cursor += 1;
+        }
+        if (!closed) return false;
+      } else {
+        const valueStart = cursor;
+        while (cursor < value.length && isHeaderTokenCode(charCode(value, cursor))) cursor += 1;
+        if (cursor === valueStart) return false;
+      }
+      skipOptionalWhitespace();
+    }
+
+    return true;
+  }
+
   function isTrimmedAsciiEqual(value: unknown, expectedLowercase: string): boolean {
     return controlsSound && typeof value === 'string' && lower(trim(value)) === expectedLowercase;
   }
@@ -3652,6 +3754,7 @@ export function createBrowserNavigationSecurityControls(
     insertDomNode,
     elementContains,
     isHtmlContentType,
+    isInlineContentDisposition,
     isTrimmedAsciiEqual,
     indexOf,
     lower,

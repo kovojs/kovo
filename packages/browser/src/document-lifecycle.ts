@@ -34,6 +34,7 @@ export interface DocumentLifecycleRecoveryOptions {
   readDomAttribute: (element: Element, name: string) => string | null;
   /** Boot-pinned, ASCII-lowercased response Content-Type used to distinguish wire from document. */
   responseContentType: (response: unknown) => string;
+  responseAllowsInlineBody: (response: unknown) => boolean;
   readResponseStatus: (response: unknown) => number | undefined;
   readResponseText: (response: unknown) => Promise<string>;
   reload: () => boolean;
@@ -129,6 +130,9 @@ export function createDocumentLifecycleRecovery(
   const responseContentType = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['responseContentType']
   >(options, 'responseContentType');
+  const responseAllowsInlineBody = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['responseAllowsInlineBody']
+  >(options, 'responseAllowsInlineBody');
   const readResponseStatus = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['readResponseStatus']
   >(options, 'readResponseStatus');
@@ -171,6 +175,10 @@ export function createDocumentLifecycleRecovery(
         });
         const status = readResponseStatus(res);
         if (status === undefined || status >= 400) return;
+        if (!responseAllowsInlineBody(res)) {
+          reload();
+          return;
+        }
         const activeBuild = pageBuild;
         const responseBuild = buildHeader(res);
         if (!activeBuild || !responseBuild || responseBuild !== activeBuild) {
@@ -206,6 +214,10 @@ export function createDocumentLifecycleRecovery(
         });
         const status = readResponseStatus(res);
         if (status === undefined || status >= 400) return;
+        if (!responseAllowsInlineBody(res)) {
+          reload();
+          return;
+        }
         const activeBuild = pageBuild;
         const responseBuild = buildHeader(res);
         if (!activeBuild || !responseBuild || responseBuild !== activeBuild) {

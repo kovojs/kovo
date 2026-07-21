@@ -231,12 +231,14 @@ export function installEnhancedNavigationRuntime(
         finalUrl = security.parseUrl(finalUrl.href + requestedUrl.hash);
       }
       const contentType = security.readHeader(response, 'content-type');
+      const contentDisposition = security.readHeader(response, 'content-disposition');
       if (
         !finalUrl ||
         finalUrl.origin === 'null' ||
         (finalUrl.protocol !== 'http:' && finalUrl.protocol !== 'https:') ||
         finalUrl.origin !== currentUrl.origin ||
-        !security.isHtmlContentType(contentType)
+        !security.isHtmlContentType(contentType) ||
+        !security.isInlineContentDisposition(contentDisposition)
       ) {
         throw Error();
       }

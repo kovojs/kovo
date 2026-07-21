@@ -1267,6 +1267,8 @@ function installInlineKovoLoader(im) {
     readDomAttribute: (element, name) => bns.ra(element, name),
     readPageTransitionPersisted: (event) => bns.readPageTransitionPersisted(event),
     responseContentType: (response) => bns.lower(bns.readHeader(response, 'Content-Type') ?? ''),
+    responseAllowsInlineBody: (response) =>
+      bns.isInlineContentDisposition(bns.readHeader(response, 'Content-Disposition')),
     readResponseStatus: (response) => {
       const status = bns.readResponseField(response, 'status');
       return typeof status === 'number' ? status : undefined;
@@ -1765,7 +1767,10 @@ function installInlineKovoLoader(im) {
         // SPEC §9.1: Kovo response directives carry authority only inside the exact mutation
         // media envelope. A standard same-origin HTTP redirect needs no fragment body, but
         // text/html cannot promote Kovo-* lookalike headers into session or DOM authority.
-        if (mt(response) !== 'text/vnd.kovo.fragment+html') {
+        if (
+          mt(response) !== 'text/vnd.kovo.fragment+html' ||
+          !bns.isInlineContentDisposition(bns.readHeader(response, 'Content-Disposition'))
+        ) {
           if (redirect) {
             ng(redirect);
             return;

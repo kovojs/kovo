@@ -532,6 +532,7 @@ describe('browser-runtime security regressions', () => {
       readDomAttribute: (element, name) => security.readAttribute(element, name),
       readPageTransitionPersisted: (event) => security.readPageTransitionPersisted(event),
       responseContentType: () => 'text/html; charset=utf-8',
+      responseAllowsInlineBody: () => true,
       readResponseStatus: (response) => {
         const status = security.readResponseField(response, 'status');
         return typeof status === 'number' ? status : undefined;
@@ -609,6 +610,7 @@ describe('browser-runtime security regressions', () => {
       readDomAttribute: (element: Element, name: string) => security.readAttribute(element, name),
       readPageTransitionPersisted: () => false,
       responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
+      responseAllowsInlineBody: () => true,
       readResponseStatus: () => 200,
       readResponseText: async () => '<kovo-fragment target="cart">SAFE</kovo-fragment>',
       reload: () => false,
@@ -690,6 +692,7 @@ describe('browser-runtime security regressions', () => {
       readDomAttribute: () => null,
       readPageTransitionPersisted: () => false,
       responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
+      responseAllowsInlineBody: () => true,
       readResponseStatus: () => 200,
       readResponseText: async () => '',
       reload: () => false,
@@ -751,6 +754,7 @@ describe('browser-runtime security regressions', () => {
       readDomAttribute: () => null,
       readPageTransitionPersisted: () => false,
       responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
+      responseAllowsInlineBody: () => true,
       readResponseStatus: () => 200,
       readResponseText: async () => '',
       reload: () => false,

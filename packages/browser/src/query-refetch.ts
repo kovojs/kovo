@@ -210,6 +210,14 @@ export async function refetchQueries(
         continue;
       }
 
+      if (
+        !queryRefetchSecurity.isInlineContentDisposition(
+          queryRefetchSecurity.readHeader(response, 'Content-Disposition'),
+        )
+      ) {
+        throw new TypeError('Kovo refused an attachment or malformed typed-read response.');
+      }
+
       // SPEC §5.2.1 rule 2d / §14: a /_q/ refetch whose build token still differs from the
       // document token means the document is fundamentally skewed — do NOT merge fresh-build data
       // into the stale-build store; escalate to a full navigation reload (once) instead.

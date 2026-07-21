@@ -91,6 +91,10 @@ const browserResponseFragmentApplyPath = path.join(
   'packages/browser/src/response-fragment-apply.ts',
 );
 const browserMutationSubmitPath = path.join(repoRoot, 'packages/browser/src/mutation-submit.ts');
+const browserNavigationSecurityIntrinsicsPath = path.join(
+  repoRoot,
+  'packages/browser/src/navigation-security-intrinsics.ts',
+);
 const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
@@ -813,6 +817,9 @@ const removedModularTypedMutationMismatchClosureBranch = [
   '    return false;',
   '  }',
 ].join('\n');
+const inlineContentDispositionAbsenceBranch = '    if (value === undefined) return true;';
+const weakenedInlineContentDispositionAbsenceBranch =
+  "    if (value === undefined || typeof value === 'string') return true;";
 const inlineTypedMutationMismatchClosureBranch = [
   '        if (!transport) {',
   '          // A compiler-owned data-mutation form has one immutable POST transport. A mismatch is',
@@ -3416,6 +3423,18 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertModularTypedMutationMismatchClosureBehavior,
   },
   {
+    description:
+      'Treats every present Content-Disposition value as safe for browser response-body application.',
+    expectedKiller:
+      'attachment mutation responses must be rejected before their body can reach a live-state sink',
+    name: 'browser-response/weaken-inline-content-disposition-closure',
+    replacement: weakenedInlineContentDispositionAbsenceBranch,
+    search: inlineContentDispositionAbsenceBranch,
+    sourceFile: browserNavigationSecurityIntrinsicsPath,
+    sourceOnly: true,
+    test: assertBrowserInlineContentDispositionClosureBehavior,
+  },
+  {
     description: 'Lets the always-loaded inline runtime natively submit a tampered typed form.',
     expectedKiller:
       'inline typed mutation mismatch must prevent default before any native token serialization',
@@ -5358,8 +5377,7 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     baseModule: {},
-    description:
-      'Restores the live Node adapter accepting callable per-request origin authority.',
+    description: 'Restores the live Node adapter accepting callable per-request origin authority.',
     expectedKiller:
       'the public Node adapter must reject dynamic origin callbacks before request handling',
     name: 'server-node/restore-dynamic-origin-callback',
@@ -5373,8 +5391,7 @@ export const SECURITY_GATE_MUTANTS = [
     baseModule: {},
     description:
       'Restores the emitted Node and Vercel adapter accepting callable per-request origin authority.',
-    expectedKiller:
-      'generated Node and Vercel adapters must reject dynamic origin callbacks',
+    expectedKiller: 'generated Node and Vercel adapters must reject dynamic origin callbacks',
     name: 'server-build/restore-emitted-dynamic-origin-callback',
     replacement: weakenedNodeOriginAdmissionBranch,
     search: fixedNodeOriginAdmissionBranch,
@@ -6638,6 +6655,19 @@ async function assertModularTypedMutationMismatchClosureBehavior(_moduleUnderTes
   });
 }
 
+async function assertBrowserInlineContentDispositionClosureBehavior(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  runIsolatedPackageVitestMutation({
+    packageName: 'browser',
+    relativeSourcePath: 'navigation-security-intrinsics.ts',
+    sourceText,
+    testFile: 'packages/browser/src/mutation-media-authority.test.ts',
+    testNamePattern: 'rejects attachment fragment responses before reading or applying their body',
+  });
+}
+
 async function assertInlineTypedMutationMismatchClosureBehavior(_moduleUnderTest, { sourceText }) {
   runIsolatedPackageVitestMutation({
     packageName: 'browser',
@@ -6749,10 +6779,7 @@ function assertNodeDynamicOriginCallbackRejectionBehavior(_moduleUnderTest, { so
   });
 }
 
-function assertEmittedNodeDynamicOriginCallbackRejectionBehavior(
-  _moduleUnderTest,
-  { sourceText },
-) {
+function assertEmittedNodeDynamicOriginCallbackRejectionBehavior(_moduleUnderTest, { sourceText }) {
   runIsolatedPackageVitestMutation({
     packageName: 'server',
     relativeSourcePath: 'build.ts',

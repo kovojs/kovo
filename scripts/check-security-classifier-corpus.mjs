@@ -2386,11 +2386,58 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
     id: 'browser-posture',
     marker: '@kovo-security-classifier-corpus browser-posture',
     testFiles: [
+      'packages/browser/src/document-lifecycle-build-proof.test.ts',
+      'packages/browser/src/inline-loader-navigation.test.ts',
+      'packages/browser/src/mutation-media-authority.test.ts',
+      'packages/browser/src/navigation-security-intrinsics.test.ts',
+      'packages/browser/src/query-refetch.test.ts',
       'packages/compiler/src/browser-posture-manifest.security.test.ts',
       'packages/server/src/browser-response-posture.security.test.ts',
       'scripts/browser-posture-derivation-gate.test.mjs',
     ],
     verdictAnchors: [
+      {
+        id: 'browser-response-disposition-grammar',
+        file: 'packages/browser/src/navigation-security-intrinsics.test.ts',
+        snippets: [
+          'accepts only absent or structurally unambiguous inline response dispositions',
+          "'inline, attachment'",
+          "'inline; filename=\"unterminated'",
+        ],
+      },
+      {
+        id: 'enhanced-navigation-download-boundary',
+        file: 'packages/browser/src/inline-loader-navigation.test.ts',
+        snippets: [
+          'preserves the browser download boundary for HTML attachment responses through %s',
+          'attachment; filename="attacker.html"',
+          'expect(replaceWith).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'enhanced-mutation-attachment-boundary',
+        file: 'packages/browser/src/mutation-media-authority.test.ts',
+        snippets: [
+          'rejects attachment fragment responses before reading or applying their body',
+          'expect(text).not.toHaveBeenCalled()',
+        ],
+      },
+      {
+        id: 'lifecycle-attachment-boundary',
+        file: 'packages/browser/src/document-lifecycle-build-proof.test.ts',
+        snippets: [
+          'reloads before reading an attachment live-target response',
+          'reloads before reading an attachment query-refresh response',
+        ],
+      },
+      {
+        id: 'typed-read-attachment-boundary',
+        file: 'packages/browser/src/query-refetch.test.ts',
+        snippets: [
+          'does not materialize query truth from an attachment response',
+          "expect(store.get('cart')).toBeUndefined()",
+        ],
+      },
       {
         id: 'browser-posture-source-and-runtime-closure',
         file: 'packages/compiler/src/browser-posture-manifest.security.test.ts',

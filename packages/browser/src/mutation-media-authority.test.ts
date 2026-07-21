@@ -5,6 +5,42 @@ import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 import { serverStampedMutationIdem } from './runtime-test-fakes.js';
 
 describe('enhanced mutation media authority', () => {
+  it('rejects attachment fragment responses before reading or applying their body', async () => {
+    const text = vi.fn(async () => '<kovo-fragment target="account">ATTACKER</kovo-fragment>');
+    const pending = fetchEnhancedMutation({
+      fetch: async () => ({
+        headers: {
+          get(name: string) {
+            const normalized = name.toLowerCase();
+            if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+            if (normalized === 'content-disposition') {
+              return 'attachment; filename="attacker.html"';
+            }
+            return null;
+          },
+        },
+        ok: true,
+        status: 200,
+        text,
+        url: 'http://localhost/_m/account/update',
+      }),
+      form: {
+        action: '/_m/account/update',
+        getAttribute(name: string) {
+          if (name === 'data-mutation') return 'account/update';
+          if (name === 'enhance') return '';
+          return null;
+        },
+        method: 'post',
+      },
+      formData: new FormData(),
+      root: { querySelectorAll: () => [] },
+    });
+
+    await expect(pending).rejects.toThrow(/non-fragment enhanced mutation response/u);
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('rejects a session directive outside the exact mutation media envelope', async () => {
     const retire = vi.fn();
     const reload = vi.fn();
@@ -43,9 +79,24 @@ describe('enhanced mutation media authority', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it.each(inlineSourceInstallCases)(
-    'does not consume an inline session directive outside mutation media through %s',
-    async (_name, installSource) => {
+  it.each(
+    inlineSourceInstallCases.flatMap(
+      ([name, installSource]) =>
+        [
+          ['wrong media', name, installSource, 'text/html; charset=utf-8', undefined, 'reload'],
+          [
+            'attachment fragment',
+            name,
+            installSource,
+            'text/vnd.kovo.fragment+html',
+            'attachment; filename="attacker.html"',
+            undefined,
+          ],
+        ] as const,
+    ),
+  )(
+    'does not consume an inline %s response through %s',
+    async (_scenario, _name, installSource, contentType, contentDisposition, sessionTransition) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
       const originals = {
         BroadcastChannel: globalRecord.BroadcastChannel,
@@ -103,18 +154,20 @@ describe('enhanced mutation media authority', () => {
           },
           querySelectorAll: () => [],
         };
+        const text = vi.fn(async () => '<kovo-fragment target="account">ATTACKER</kovo-fragment>');
         const fetch = vi.fn(async () => ({
           headers: {
             get(name: string) {
               const normalized = name.toLowerCase();
-              if (normalized === 'content-type') return 'text/html; charset=utf-8';
-              if (normalized === 'kovo-session-transition') return 'reload';
+              if (normalized === 'content-type') return contentType;
+              if (normalized === 'content-disposition') return contentDisposition ?? null;
+              if (normalized === 'kovo-session-transition') return sessionTransition ?? null;
               return null;
             },
           },
           ok: true,
           status: 200,
-          text: async () => '<html>ordinary document</html>',
+          text,
           url: 'https://kovo.test/_m/account/update',
         }));
         globalRecord.fetch = fetch;
@@ -149,6 +202,7 @@ describe('enhanced mutation media authority', () => {
         // recovery after an ambiguous dispatched mutation.
         expect(closeBroadcast).not.toHaveBeenCalled();
         expect(reload).toHaveBeenCalledOnce();
+        expect(text).not.toHaveBeenCalled();
       } finally {
         Object.assign(globalRecord, {
           BroadcastChannel: originals.BroadcastChannel,

@@ -37,6 +37,37 @@ describe('refetch-on-focus opt-out derivation', () => {
 });
 
 describe('query refetch', () => {
+  it('does not materialize query truth from an attachment response', async () => {
+    const store = createQueryStore();
+    const text = vi.fn(() => '<kovo-query name="cart">{"html":"ATTACKER"}</kovo-query>');
+    const onError = vi.fn();
+
+    await expect(
+      refetchQueries({
+        fetch: () => ({
+          headers: {
+            get(name: string) {
+              return name.toLowerCase() === 'content-disposition'
+                ? 'attachment; filename="attacker.html"'
+                : null;
+            },
+          },
+          status: 200,
+          text,
+        }),
+        onError,
+        queries: ['cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(text).not.toHaveBeenCalled();
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringMatching(/attachment or malformed/u) }),
+    );
+  });
+
   it('preserves direct injected response carriers and synchronous text', async () => {
     const store = createQueryStore();
     const response = {

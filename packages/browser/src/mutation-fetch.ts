@@ -396,6 +396,7 @@ function isMutationFragmentContentType(
   security: BrowserNavigationSecurityControls,
 ): boolean {
   const contentType = security.readHeader(response, 'Content-Type');
+  const contentDisposition = security.readHeader(response, 'Content-Disposition');
   const separator = typeof contentType === 'string' ? security.indexOf(contentType, ';') : -1;
   const mediaType =
     typeof contentType === 'string'
@@ -403,7 +404,10 @@ function isMutationFragmentContentType(
           security.trim(separator < 0 ? contentType : security.slice(contentType, 0, separator)),
         )
       : '';
-  return mediaType === 'text/vnd.kovo.fragment+html';
+  return (
+    mediaType === 'text/vnd.kovo.fragment+html' &&
+    security.isInlineContentDisposition(contentDisposition)
+  );
 }
 
 function readSessionTransition(
