@@ -118,6 +118,12 @@
       "reason": "This witness exercises an equivalent encoding at one authoritative parser boundary."
     },
     {
+      "anchor": "implicit-localhost-connect-carrier-grammar",
+      "corpus": "egress-ip",
+      "production": "carrier-container",
+      "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
       "anchor": "undeclared-origin-before-dns-dial",
       "corpus": "egress-ip",
       "production": "module-boundary",

@@ -224,6 +224,21 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'implicit-localhost-connect-carrier-grammar',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'classifies every valid implicit-localhost TCP carrier before dialing',
+          'Socket.connect({ port })',
+          "Socket.connect({ port, host: '' })",
+          'net.createConnection({ port }) normalized-array carrier',
+          'classifies Node-valid falsy host carrier %s as implicit localhost',
+          'pins %s onto the exact options carrier before Node dials',
+          'fails closed on unstable, frozen, and non-configurable valid TCP carriers',
+          'preserves Node ERR_MISSING_ARGS for carriers without a port or path',
+          'preserves Node ERR_INVALID_ARG_TYPE for truthy non-string hosts',
+        ],
+      },
+      {
         id: 'undeclared-origin-before-dns-dial',
         file: 'packages/server/src/egress-property-oracle.test.ts',
         snippets: [

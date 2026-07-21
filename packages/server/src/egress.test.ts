@@ -166,6 +166,21 @@ function mockDnsLookup(addresses: { address: string; family: number }[]): void {
   }) as typeof dns.lookup);
 }
 
+function loopbackDnsLookup(): typeof dns.lookup {
+  return ((_hostname: string, opts: unknown, cb?: unknown) => {
+    const callback = (typeof opts === 'function' ? opts : cb) as (
+      err: Error | null,
+      address: string | { address: string; family: number }[],
+      family?: number,
+    ) => void;
+    const lookupOptions = (typeof opts === 'function' ? {} : opts) as { all?: boolean };
+    queueMicrotask(() => {
+      if (lookupOptions.all) callback(null, [{ address: '127.0.0.1', family: 4 }]);
+      else callback(null, '127.0.0.1', 4);
+    });
+  }) as typeof dns.lookup;
+}
+
 // @kovo-security-classifier-corpus egress-ip
 describe('IPv6 classifier corpus (SPEC §6.6 decision rule)', () => {
   it('denies the complete 2025-10-09 IANA special-purpose registry snapshot', () => {
@@ -955,6 +970,150 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     expect(isNetConnectFloorInstalled()).toBe(false);
     uninstall = installNetConnectFloor(emptyPolicy());
     expect(isNetConnectFloorInstalled()).toBe(true);
+  });
+
+  it.each([
+    {
+      carrier: 'Socket.connect({ port })',
+      dial: (targetPort: number) => {
+        const socket = new net.Socket();
+        socket.connect({ port: targetPort });
+        return socket;
+      },
+    },
+    {
+      carrier: "Socket.connect({ port, host: '' })",
+      dial: (targetPort: number) => {
+        const socket = new net.Socket();
+        socket.connect({ host: '', port: targetPort });
+        return socket;
+      },
+    },
+    {
+      carrier: 'net.createConnection({ port }) normalized-array carrier',
+      dial: (targetPort: number) => net.createConnection({ port: targetPort }),
+    },
+  ])(
+    'classifies every valid implicit-localhost TCP carrier before dialing: $carrier',
+    async ({ dial }) => {
+      uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+      const socket = dial(port);
+      const connected = new Promise<void>((resolve, reject) => {
+        socket.once('connect', resolve);
+        socket.once('error', reject);
+      });
+
+      await expect(connected).rejects.toMatchObject({
+        classification: 'loopback',
+        name: EGRESS_BLOCKED_ERROR_NAME,
+      });
+      socket.destroy();
+    },
+  );
+
+  it('preserves Node ERR_MISSING_ARGS for carriers without a port or path', () => {
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+    for (const options of [{}, { host: '' }, { port: undefined }]) {
+      const socket = new net.Socket();
+      expect(() => socket.connect(options as never)).toThrow(
+        expect.objectContaining({ code: 'ERR_MISSING_ARGS' }),
+      );
+      socket.destroy();
+    }
+  });
+
+  it.each([
+    ['null', null],
+    ['false', false],
+    ['zero', 0],
+  ])('classifies Node-valid falsy host carrier %s as implicit localhost', async (_name, host) => {
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+    const socket = new net.Socket();
+    const connected = new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+      socket.connect({ host, port } as never);
+    });
+
+    await expect(connected).rejects.toMatchObject({
+      classification: 'loopback',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
+    socket.destroy();
+  });
+
+  it.each([
+    [
+      'stable accessors',
+      () => {
+        const options = {};
+        const lookup = loopbackDnsLookup();
+        Object.defineProperties(options, {
+          host: { configurable: true, get: () => 'private.test' },
+          lookup: { configurable: true, get: () => lookup },
+          port: { configurable: true, get: () => port },
+        });
+        return options;
+      },
+    ],
+    [
+      'inherited values',
+      () =>
+        Object.create({
+          host: 'private.test',
+          lookup: loopbackDnsLookup(),
+          port,
+        }),
+    ],
+  ])('pins %s onto the exact options carrier before Node dials', async (_name, options) => {
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+    const socket = new net.Socket();
+    const connected = new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+      socket.connect(options() as never);
+    });
+
+    await expect(connected).rejects.toMatchObject({
+      classification: 'loopback',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
+    socket.destroy();
+  });
+
+  it('fails closed on unstable, frozen, and non-configurable valid TCP carriers', () => {
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+
+    let hostRead = 0;
+    const unstable = { port };
+    Object.defineProperty(unstable, 'host', {
+      configurable: true,
+      get: () => (hostRead++ === 0 ? 'private.test' : 'public.test'),
+    });
+    const unstableSocket = new net.Socket();
+    expect(() => unstableSocket.connect(unstable as never)).toThrow(EgressBlockedError);
+    unstableSocket.destroy();
+
+    const frozenSocket = new net.Socket();
+    expect(() => frozenSocket.connect(Object.freeze({ port }) as never)).toThrow(TypeError);
+    frozenSocket.destroy();
+
+    const nonConfigurable = { port };
+    Object.defineProperty(nonConfigurable, 'host', { configurable: false, value: '' });
+    const nonConfigurableSocket = new net.Socket();
+    expect(() => nonConfigurableSocket.connect(nonConfigurable as never)).toThrow(TypeError);
+    nonConfigurableSocket.destroy();
+  });
+
+  it('preserves Node ERR_INVALID_ARG_TYPE for truthy non-string hosts', () => {
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+    for (const host of [true, 1, Symbol('invalid-host')]) {
+      const socket = new net.Socket();
+      expect(() => socket.connect({ host, port } as never)).toThrow(
+        expect.objectContaining({ code: 'ERR_INVALID_ARG_TYPE' }),
+      );
+      socket.destroy();
+    }
   });
 
   it('frameworkEgressFetch fails closed when the floor is missing or the origin is not allowlisted', async () => {

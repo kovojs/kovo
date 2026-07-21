@@ -1989,10 +1989,10 @@ function ipInCidr(ip: string, cidr: string): boolean {
 // ---------------------------------------------------------------------------
 
 interface ConnectOptions {
-  host?: string;
-  port?: number | string;
-  path?: string | null;
-  lookup?: typeof dns.lookup;
+  host?: unknown;
+  port?: unknown;
+  path?: unknown;
+  lookup?: unknown;
   [key: string]: unknown;
 }
 
@@ -2086,13 +2086,35 @@ export function installNetConnectFloor(
         return egressApply(original, this, args);
       }
     }
-    if (!options || options.host === undefined || options.host === '') {
+    if (!options) {
       // Unparseable forms retain Node's own argument validation. Recognized path-only forms were
       // denied above before the original connect function could open a local service socket.
       return egressApply(original, this, args);
     }
-    const host = options.host;
-    const port = egressNumber(options.port ?? 0);
+    const portValue = stableConnectTargetValue(options, 'port');
+    if (!isNodeTcpPortValue(portValue)) {
+      // This is not a valid TCP carrier. Preserve Node's own argument/type error instead of
+      // manufacturing a destination that the native sink would never dial.
+      return egressApply(original, this, args);
+    }
+    const hostValue = stableConnectTargetValue(options, 'host');
+    let host: string;
+    if (!hostValue) {
+      // Node's TCP carrier grammar treats every falsy host as localhost. Pin that implicit
+      // authority so valid `socket.connect({ port })` / `net.createConnection({ port })` dials
+      // still cross the SPEC §6.6 classifier.
+      host = 'localhost';
+    } else if (typeof hostValue !== 'string') {
+      // Truthy non-string hosts are invalid in Node. Preserve the native validation error.
+      return egressApply(original, this, args);
+    } else {
+      host = hostValue;
+    }
+    // Replace accessor/inherited carriers with the exact stable values used by the decision. The
+    // same options object reaches Node, so the authority we classify is the authority it dials.
+    pinConnectTargetValue(options, 'host', host);
+    pinConnectTargetValue(options, 'port', portValue);
+    const port = egressNumber(portValue);
 
     // If host is already an IP literal, classify + decide synchronously before connecting.
     const literalIp = normalizeFastPathIpLiteral(host);
@@ -2117,8 +2139,8 @@ export function installNetConnectFloor(
 
     // Hostname: inject a pinning lookup that validates the RESOLVED IP and rejects before the
     // socket dials, defeating DNS rebinding (the answer we validate is the answer we connect to).
-    const userLookup = options.lookup;
-    options.lookup = ((
+    const userLookup = stableConnectTargetValue(options, 'lookup');
+    const pinnedLookup = ((
       hostname: string,
       lookupOptions: unknown,
       callback: (err: Error | null, address: string, family: number) => void,
@@ -2169,6 +2191,7 @@ export function installNetConnectFloor(
         },
       ]);
     }) as typeof dns.lookup;
+    pinConnectTargetValue(options, 'lookup', pinnedLookup);
 
     return egressApply(original, this, args);
   } as ConnectFn;
@@ -2399,11 +2422,37 @@ function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
   return typeof first === 'string' ? { path: first } : null;
 }
 
-function stableConnectTargetValue(options: object, property: 'path' | 'socketPath'): unknown {
+function isNodeTcpPortValue(value: unknown): value is number | string {
+  // Mirrors Node's public connect-port grammar: a non-empty number/string whose numeric value is
+  // an unsigned 16-bit integer. Keeping this finite check here lets malformed carriers retain the
+  // native ERR_MISSING_ARGS / ERR_SOCKET_BAD_PORT path without opening a valid implicit-host dial.
+  if (typeof value !== 'number' && typeof value !== 'string') return false;
+  if (typeof value === 'string' && egressStringTrim(value) === '') return false;
+  const port = egressNumber(value);
+  return port === port >>> 0 && port <= 0xffff;
+}
+
+function stableConnectTargetValue(
+  options: object,
+  property: 'host' | 'lookup' | 'path' | 'port' | 'socketPath',
+): unknown {
   const before = egressReflectGet(options, property, options);
   const after = egressReflectGet(options, property, options);
   if (!egressObjectIs(before, after)) throw unixDomainSocketBlocked();
   return before;
+}
+
+function pinConnectTargetValue(
+  options: ConnectOptions,
+  property: 'host' | 'lookup' | 'port',
+  value: unknown,
+): void {
+  egressObjectDefineProperty(options, property, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
 }
 
 function unixDomainSocketBlocked(): EgressBlockedError {

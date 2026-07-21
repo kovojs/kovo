@@ -13,6 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import dns from 'node:dns';
 import http from 'node:http';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -2138,6 +2139,15 @@ const weakenedViteJsToTsSiblingCandidatesBranch = [
 const frameworkEgressOriginCheck =
   '  const originBlocked = evaluateFrameworkDestinationOrigin({ host, port, protocol, policy });';
 const removedFrameworkEgressOriginCheck = '  const originBlocked = null;';
+const implicitLocalhostConnectCarrierClassifier = [
+  "    const hostValue = stableConnectTargetValue(options, 'host');",
+  '    let host: string;',
+].join('\n');
+const removedImplicitLocalhostConnectCarrierClassifier = [
+  "    const hostValue = stableConnectTargetValue(options, 'host');",
+  '    if (!hostValue) return egressApply(original, this, args);',
+  '    let host: string;',
+].join('\n');
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
@@ -7214,6 +7224,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: taskMutationSessionProviderExclusion,
     sourceFile: serverTaskRuntimePath,
     test: assertTaskMutationExcludesSessionProviderBehavior,
+  },
+  {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Restores delegation for valid TCP carriers whose host defaults to localhost.',
+    expectedKiller: 'implicit-localhost socket dials must cross the egress classifier before dial',
+    name: 'server-egress/drop-implicit-localhost-carrier-classification',
+    replacement: removedImplicitLocalhostConnectCarrierClassifier,
+    search: implicitLocalhostConnectCarrierClassifier,
+    sourceFile: serverEgressPath,
+    test: assertImplicitLocalhostConnectCarrierBehavior,
   },
   {
     behavioralInstrumentation: serverEgressBehavioralInstrumentation,
@@ -14624,6 +14645,42 @@ async function assertFrameworkEgressRejectsUndeclaredOriginBeforeDns(moduleUnder
   } finally {
     dns.lookup = originalLookup;
     uninstall();
+  }
+}
+
+async function assertImplicitLocalhostConnectCarrierBehavior(moduleUnderTest) {
+  const server = http.createServer((_request, response) => response.end('unexpected dial'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    server.close();
+    throw new Error('behavioral implicit-localhost server did not bind a TCP port');
+  }
+  const policy = moduleUnderTest.resolveEgressPolicy({ allowInternal: [] }, () => {});
+  const uninstall = moduleUnderTest.installNetConnectFloor(policy);
+  let socket;
+  try {
+    const outcome = await new Promise((resolve) => {
+      socket = new net.Socket();
+      socket.once('connect', () => resolve({ connected: true }));
+      socket.once('error', (error) => resolve({ error }));
+      try {
+        socket.connect({ port: address.port });
+      } catch (error) {
+        resolve({ error });
+      }
+    });
+    if (
+      outcome.connected ||
+      !(outcome.error instanceof moduleUnderTest.EgressBlockedError) ||
+      outcome.error.classification !== 'loopback'
+    ) {
+      throw new Error('implicit-localhost socket dial bypassed the egress classifier');
+    }
+  } finally {
+    socket?.destroy();
+    uninstall();
+    await new Promise((resolve) => server.close(resolve));
   }
 }
 

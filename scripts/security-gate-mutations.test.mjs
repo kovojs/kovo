@@ -827,6 +827,7 @@ describe('security-gate-mutations', () => {
       'request-ingress/recompute-vercel-prepared-verdict',
       'server-response-posture/drop-endpoint-verification-choke',
       'server-egress/drop-dispatcher-pin',
+      'server-egress/drop-implicit-localhost-carrier-classification',
       'server-egress/drop-origin-before-dns',
       'server-egress/drop-task-context-fetch-seal',
       'server-egress/drop-webhook-context-fetch-seal',
