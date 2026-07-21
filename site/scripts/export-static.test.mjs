@@ -157,7 +157,9 @@ describe('site export CSS guards', () => {
     try {
       await stageAnalyzableFragmentPublicAssets(tempRoot);
       expect(existsSync(resolve(tempRoot, 'security/analyzable-fragment.json'))).toBe(true);
-      expect(existsSync(resolve(tempRoot, '06-analyzable-fragment-hand-argument.md'))).toBe(true);
+      expect(existsSync(resolve(tempRoot, 'spec/06-analyzable-fragment-hand-argument.md'))).toBe(
+        true,
+      );
       expect(
         existsSync(
           resolve(

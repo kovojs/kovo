@@ -21,7 +21,7 @@ export async function stageAnalyzableFragmentPublicAssets(outDir: string): Promi
   const sources = [
     { publicPath: manifestPath, sourcePath: manifestPath },
     {
-      publicPath: path.posix.basename(manifest.handArgument.file),
+      publicPath: manifest.handArgument.file,
       sourcePath: manifest.handArgument.file,
     },
   ];

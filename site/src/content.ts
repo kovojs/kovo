@@ -373,7 +373,7 @@ function resolveSpecEvidenceLinks(html: string): string {
     )
     .replace(
       /href="06-analyzable-fragment-hand-argument\.md"/g,
-      'href="/06-analyzable-fragment-hand-argument.md"',
+      'href="/spec/06-analyzable-fragment-hand-argument.md"',
     );
 }
 

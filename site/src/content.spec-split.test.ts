@@ -64,7 +64,7 @@ describe('split normative spec content', () => {
         '<a href="/spec/#4-8">nearest existing section</a>',
         '<a href="/security/analyzable-fragment.json">register</a>',
         '<a href="/packages/compiler/src/fixtures/analyzable-fragment/returning-authority.tsx.txt">fixture</a>',
-        '<a href="/06-analyzable-fragment-hand-argument.md">hand argument</a>',
+        '<a href="/spec/06-analyzable-fragment-hand-argument.md">hand argument</a>',
       ].join(''),
     );
   });

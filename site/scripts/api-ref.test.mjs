@@ -273,14 +273,15 @@ describe('api-ref generator', () => {
 
   it('documents every public @kovojs/drizzle export including runtime metadata helpers', () => {
     const drizzle = result.packages.find((pkg) => pkg.name === '@kovojs/drizzle');
-    expect(drizzle.exports).toBe(38);
-    expect(drizzle.documented).toBe(38);
+    expect(drizzle.exports).toBe(39);
+    expect(drizzle.documented).toBe(39);
     expect(drizzlePage).toContain('runtime database metadata extraction');
     for (const name of [
       'extractKovoRuntimeDbMetadata',
       'KovoRuntimeDbMetadata',
       'KovoRuntimeDbTable',
       'KovoRuntimeAuthorizationClassification',
+      'KovoRuntimeKeySource',
     ]) {
       expect(drizzlePage, `missing Drizzle runtime metadata export "${name}"`).toContain(
         `#### \`${name}\``,
@@ -367,7 +368,7 @@ describe('api-ref generator', () => {
     // Remove), so those packages' documented floors drop by one.
     const expected = {
       '@kovojs/core': 68,
-      '@kovojs/drizzle': 38,
+      '@kovojs/drizzle': 39,
       '@kovojs/headless-ui': 103,
       '@kovojs/icons': 1,
       '@kovojs/browser': 39,
