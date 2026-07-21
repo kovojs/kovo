@@ -2051,6 +2051,29 @@ function browserAtomsCarryInvocationAuthority(atoms: readonly BrowserStaticAtom[
   );
 }
 
+function browserAtomsCarryEscapableInvocationAuthority(
+  atoms: readonly BrowserStaticAtom[],
+): boolean {
+  // A one-hop `constructor-value` remains inert until another constructor projection reaches
+  // Function; the ordinary evaluator keeps tracking that exact chain. Reviewed Reflect/Object
+  // operations likewise stay aliasable because their finite call semantics are checked at use.
+  return atoms.some(
+    (atom) =>
+      atom.kind === 'asset' ||
+      atom.kind === 'css' ||
+      atom.kind === 'document' ||
+      atom.kind === 'dynamic-code' ||
+      atom.kind === 'frames' ||
+      atom.kind === 'global' ||
+      atom.kind === 'navigator' ||
+      atom.kind === 'reflect' ||
+      atom.kind === 'reflect-construct' ||
+      atom.kind === 'timer' ||
+      atom.kind === 'url-constructor' ||
+      atom.kind === 'worker',
+  );
+}
+
 function browserExpressionAcquiresProperty(
   value: unknown,
   expectedProperty: string,
@@ -2242,7 +2265,97 @@ function buildBrowserStaticIndex(ast: Record<string, unknown>): BrowserStaticInd
   collect(ast, root);
   collectBrowserSuperclassSources(ast, index);
   collectBrowserAssignmentSources(ast, index);
+  collectBrowserAuthorityEscapes(ast, index);
   return index;
+}
+
+/**
+ * Keep composable browser invocation authority lexical until one exact reviewed operation consumes
+ * it. Local aliases remain finite, but putting authority in a heap-like value makes later getter,
+ * iterator, thenable, coercion, Proxy, or other implicit protocol dispatch indistinguishable from
+ * arbitrary JavaScript. Close at that transfer instead of trying to enumerate every protocol hook
+ * (SPEC §6.6; C13).
+ */
+function collectBrowserAuthorityEscapes(ast: unknown, index: BrowserStaticIndex): void {
+  const seen = new Set<object>();
+  const budget: BrowserStaticEvaluationBudget = {
+    exhausted: false,
+    recursive: false,
+    remaining: maxBrowserStaticEvaluationSteps,
+  };
+  const carriesAuthority = (value: unknown, scope: BrowserStaticScope): boolean => {
+    if (value === null || value === undefined) return false;
+    return browserAtomsCarryEscapableInvocationAuthority(
+      evaluateBrowserStaticValue(value, scope, index, {
+        bindingStack: new Set(),
+        budget,
+        depth: 0,
+      }),
+    );
+  };
+  const closeIfAuthority = (value: unknown, scope: BrowserStaticScope): void => {
+    if (carriesAuthority(value, scope)) index.effectAnalysisClosed = true;
+  };
+  const visit = (value: unknown): void => {
+    if (typeof value !== 'object' || value === null || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const scope = index.scopeByNode.get(record) ?? index.root;
+    if (
+      record.type === 'AssignmentExpression' &&
+      isAstRecord(record.left) &&
+      record.left.type === 'MemberExpression'
+    ) {
+      closeIfAuthority(record.right, scope);
+    } else if (record.type === 'ArrayExpression') {
+      const elements = Array.isArray(record.elements) ? record.elements : [];
+      for (const element of elements) {
+        closeIfAuthority(
+          isAstRecord(element) && element.type === 'SpreadElement' ? element.argument : element,
+          scope,
+        );
+      }
+    } else if (record.type === 'ObjectExpression') {
+      const properties = Array.isArray(record.properties) ? record.properties : [];
+      for (const property of properties) {
+        if (!isAstRecord(property)) continue;
+        if (property.type === 'SpreadElement') {
+          closeIfAuthority(property.argument, scope);
+          continue;
+        }
+        if (property.type !== 'Property') continue;
+        if (property.computed === true) closeIfAuthority(property.key, scope);
+        if (property.kind === 'init' && property.method !== true) {
+          closeIfAuthority(property.value, scope);
+        }
+      }
+    } else if (record.type === 'PropertyDefinition' || record.type === 'FieldDefinition') {
+      if (record.computed === true) closeIfAuthority(record.key, scope);
+      closeIfAuthority(record.value, scope);
+    } else if (record.type === 'ReturnStatement' || record.type === 'YieldExpression') {
+      closeIfAuthority(record.argument, scope);
+    } else if (record.type === 'AwaitExpression' || record.type === 'SpreadElement') {
+      closeIfAuthority(record.argument, scope);
+    } else if (record.type === 'TemplateLiteral') {
+      const expressions = Array.isArray(record.expressions) ? record.expressions : [];
+      for (const expression of expressions) closeIfAuthority(expression, scope);
+    } else if (record.type === 'TaggedTemplateExpression') {
+      closeIfAuthority(record.tag, scope);
+      const quasi = isAstRecord(record.quasi) ? record.quasi : undefined;
+      const expressions =
+        quasi !== undefined && Array.isArray(quasi.expressions) ? quasi.expressions : [];
+      for (const expression of expressions) closeIfAuthority(expression, scope);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (!browserAstMetadataKeys.has(key)) visit(child);
+    }
+  };
+  visit(ast);
+  if (budget.exhausted || budget.recursive) index.effectAnalysisClosed = true;
 }
 
 function collectBrowserSuperclassSources(ast: unknown, index: BrowserStaticIndex): void {
@@ -3054,6 +3167,7 @@ function browserStaticCallableEffects(
       record.argument !== undefined
     ) {
       const returned = evaluateBrowserStaticValue(record.argument, recordScope, index, state);
+      let retainsStructuredOrigins = false;
       for (const atom of returned) {
         if (
           atom.kind === 'namespace' &&
@@ -3062,8 +3176,16 @@ function browserStaticCallableEffects(
             atom.node.type === 'ClassExpression')
         ) {
           addDeepOrigins(atom.node, atom.scope);
+        } else if (
+          atom.kind === 'array' ||
+          atom.kind === 'instance' ||
+          atom.kind === 'object' ||
+          atom.kind === 'prototype'
+        ) {
+          retainsStructuredOrigins = true;
         }
       }
+      if (retainsStructuredOrigins) addDeepOrigins(record.argument, recordScope);
     } else if (type === 'NewExpression') {
       addDeepOrigins(record.callee, recordScope);
       const args = Array.isArray(record.arguments) ? record.arguments : [];
@@ -4131,6 +4253,9 @@ function browserAmbientIdentifierAtoms(name: string): BrowserStaticAtom[] | unde
   if (name === 'Worker' || name === 'SharedWorker') return [{ kind: 'worker', name }];
   if (name === 'URL') return [{ kind: 'url-constructor' }];
   if (name === 'Function' || name === 'eval') return [{ kind: 'dynamic-code', name }];
+  if (name === 'addEventListener') {
+    return [{ carrier: 'opaque browser executable carrier', kind: 'asset' }];
+  }
   if (name === 'Object') return [{ kind: 'object-builtin' }];
   if (name === 'Proxy') return [{ kind: 'proxy-constructor' }];
   if (name === 'setInterval' || name === 'setTimeout') return [{ kind: 'timer', name }];
@@ -4318,6 +4443,8 @@ function browserMemberAtoms(
           atoms.push({ kind: 'reflect' });
         } else if (property === 'Function' || property === 'eval') {
           atoms.push({ kind: 'dynamic-code', name: property });
+        } else if (property === 'addEventListener') {
+          atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
         } else if (property === 'Object') {
           atoms.push({ kind: 'object-builtin' });
         } else if (property === 'Proxy') {
@@ -4339,7 +4466,9 @@ function browserMemberAtoms(
         atoms.push(
           property === 'serviceWorker'
             ? { carrier: 'service worker', kind: 'asset' }
-            : { kind: 'closed' },
+            : property === 'addEventListener'
+              ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+              : { kind: 'closed' },
         );
       } else if (receiver.kind === 'css') {
         if (property === 'paintWorklet') {
@@ -4350,7 +4479,13 @@ function browserMemberAtoms(
           atoms.push({ kind: 'closed' });
         }
       } else if (receiver.kind === 'document') {
-        atoms.push(property === 'defaultView' ? { kind: 'global' } : { kind: 'closed' });
+        atoms.push(
+          property === 'defaultView'
+            ? { kind: 'global' }
+            : property === 'addEventListener'
+              ? { carrier: 'opaque browser executable carrier', kind: 'asset' }
+              : { kind: 'closed' },
+        );
       } else if (receiver.kind === 'reflect') {
         atoms.push(
           property === 'get'
@@ -4416,6 +4551,8 @@ function browserMemberAtoms(
           atoms.push({ kind: 'url-constructor' });
         } else if (property === 'Reflect') {
           atoms.push({ kind: 'reflect' });
+        } else if (property === 'addEventListener') {
+          atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
         } else if (property === 'setPrototypeOf') {
           atoms.push({ carrier: 'opaque browser executable carrier', kind: 'asset' });
         } else {

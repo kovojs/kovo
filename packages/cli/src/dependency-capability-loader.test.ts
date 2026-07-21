@@ -166,6 +166,73 @@ function deepStructuredArgumentCarrierExpression(assetPath: string): string {
   return `(() => { const box = {}; const root = ${nested}; function install(value) { value${'.next'.repeat(depth)}.box.platform = globalThis; } install(root); return new box.platform.Worker('${assetPath}'); })()`;
 }
 
+async function buildReviewedBrowserPackageArtifact(dependencySource: string): Promise<string> {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-browser-authority-escape-')));
+  const appModulePath = join(root, 'client.mjs');
+  const packageRoot = join(root, 'node_modules', 'safe-parser');
+  const outDir = join(root, 'dist');
+  const appSource = "import { inspect } from 'safe-parser'; export const value = inspect();\n";
+  try {
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({
+        exports: { '.': './index.mjs' },
+        name: 'safe-parser',
+        type: 'module',
+        version: '1.2.3',
+      }),
+    );
+    writeFileSync(join(packageRoot, 'index.mjs'), `${dependencySource}\n`);
+    writeFileSync(appModulePath, appSource);
+    const installed = resolveCapabilityPackageImport('safe-parser', appModulePath)!;
+    const exactManifest: AppDependencyCapabilityManifest = {
+      dependencies: [
+        {
+          entries: [
+            {
+              conditions: installed.conditions,
+              importers: ['client.mjs'],
+              imports: [{ capabilities: [], disposition: 'pure', name: 'inspect' }],
+              rootKinds: ['route'],
+              sites: ['client.mjs:1:1'],
+              specifier: 'safe-parser',
+            },
+          ],
+          manifestFingerprint: installed.manifestFingerprint,
+          packageName: installed.packageName,
+          packageVersion: installed.packageVersion,
+          summaryVersion: 'safe-parser-review/1',
+          verdict: 'open',
+        },
+      ],
+      schema: 'kovo-app-dependency-capabilities/v1',
+    };
+    await viteBuild({
+      build: {
+        emptyOutDir: true,
+        minify: true,
+        outDir,
+        rollupOptions: { input: appModulePath, output: { entryFileNames: 'entry.js' } },
+      },
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        dependencyCapabilityLoaderVitePlugin(
+          appModulePath,
+          [{ fileName: 'client.mjs', source: appSource }],
+          exactManifest,
+          'build-client',
+        ),
+      ],
+      root,
+    });
+    return readFileSync(join(outDir, 'entry.js'), 'utf8');
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
 describe('SPEC §6.6 app dependency loader attenuation', () => {
   // @kovo-security-certifies C13 dependency-complete-ssr-wiring
   it('forces complete dependency traversal in both supported SSR app-evaluation lanes', () => {
@@ -2873,6 +2940,85 @@ describe('SPEC §6.6 app dependency loader attenuation', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-authority-escape-closure
+  it.each([
+    [
+      'object storage',
+      "const holder = { run: Reflect.construct, U: URL, args: ['./payload.mjs', import.meta.url] }; export const inspect = () => holder.run(holder.U, holder.args);",
+    ],
+    [
+      'structured helper return',
+      "function box(run, U) { return { run, U }; } const holder = box(Reflect.construct, URL); export const inspect = () => holder.run(holder.U, ['./payload.mjs', import.meta.url]);",
+    ],
+    [
+      'structured closure return',
+      "function box(run, U, args) { return { invoke() { return run(U, args); } }; } const holder = box(Reflect.construct, URL, ['./payload.mjs', import.meta.url]); export const inspect = () => holder.invoke();",
+    ],
+    [
+      'class field and getter',
+      "class Holder { static run = Reflect.construct; static U = URL; static args = ['./payload.mjs', import.meta.url]; static get value() { return this.run(this.U, this.args); } } export const inspect = () => Holder.value;",
+    ],
+    [
+      'Proxy trap receiver',
+      "const target = {}; const proxy = new Proxy(target, { ownKeys(value) { value.run(value.U, value.args); return []; } }); target.run = Reflect.construct; target.U = URL; target.args = ['./payload.mjs', import.meta.url]; export const inspect = () => ({ ...proxy });",
+    ],
+    [
+      'iterator receiver',
+      "const iterable = { *[Symbol.iterator]() { this.run(this.U, this.args); yield 1; } }; iterable.run = Reflect.construct; iterable.U = URL; iterable.args = ['./payload.mjs', import.meta.url]; export const inspect = () => Array.from(iterable);",
+    ],
+    [
+      'tag substitution',
+      "function tag(_strings, run, U, args) { run(U, args); return 1; } export const inspect = () => tag`${Reflect.construct}${URL}${['./payload.mjs', import.meta.url]}`;",
+    ],
+    [
+      'getter-fabricated pair',
+      "const holder = { get run() { return Reflect.construct; }, get U() { return URL; } }; export const inspect = () => holder.run(holder.U, ['./payload.mjs', import.meta.url]);",
+    ],
+    [
+      'imperative event registration',
+      "addEventListener('message', () => {}); export const inspect = () => 1;",
+    ],
+    [
+      'timer destructuring default',
+      'const { timer = setTimeout } = {}; export const inspect = () => timer(\'import("/payload.mjs")\', 0);',
+    ],
+    [
+      'timer generator yield',
+      'function* timers() { yield setTimeout; } const timer = timers().next().value; export const inspect = () => timer(\'import("/payload.mjs")\', 0);',
+    ],
+    [
+      'Proxy-returned timer',
+      'const proxy = new Proxy({}, { get() { return setTimeout; } }); export const inspect = () => proxy.timer(\'import("/payload.mjs")\', 0);',
+    ],
+    [
+      'Proxy-set timer',
+      'const target = {}; const proxy = new Proxy(target, { set(object, key, value) { object[key] = value; return true; } }); proxy.timer = setTimeout; export const inspect = () => target.timer(\'import("/payload.mjs")\', 0);',
+    ],
+  ] as const)('rejects retained invocation authority through %s', async (_kind, source) => {
+    await expect(buildReviewedBrowserPackageArtifact(source)).rejects.toThrow(
+      /KV448.*supported build-client artifact.*retains an? opaque browser executable carrier executable asset/u,
+    );
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-authority-escape-precision
+  it('keeps lexical URL aliases and authority-free helper results inside the finite language', async () => {
+    const artifact = await buildReviewedBrowserPackageArtifact(
+      [
+        'const Alias = URL;',
+        "const direct = new Alias('/local', 'https://example.test').pathname;",
+        "function ignore(_authority, value) { return value; } const ignored = ignore(Reflect, 'safe');",
+        "function box(_authority, value) { return { value }; } const structured = box(Reflect, 'local').value;",
+        'class SafeURL extends URL {}',
+        "const subclass = new SafeURL('/local', 'https://example.test').pathname;",
+        "const addEventListener = callback => callback(); const localListener = addEventListener(() => 'safe');",
+        "const timeout = setTimeout(() => 'safe', 0);",
+        "export const inspect = () => [direct, ignored, structured, subclass, localListener, typeof timeout].join(':');",
+      ].join('\n'),
+    );
+
+    expect(artifact).toContain('safe');
   });
 
   // @kovo-security-certifies C13 dependency-approved-worker-subgraph-closure
