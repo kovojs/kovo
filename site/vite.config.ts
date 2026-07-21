@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'vite-plus';
 
@@ -7,6 +10,18 @@ import {
   tutorialAppRegistryFacts,
   tutorialMutationRegistryFacts,
 } from '../examples/vite-kovo-compiler.js';
+
+const siteRoot = fileURLToPath(new URL('.', import.meta.url));
+
+// A compiler-emitted `*.client.js` module has no file on disk. Keep it out of the authored-source
+// transform pass while still sending any physical file with that reserved suffix through the
+// SPEC §5.2 authoring gate.
+function isCompilerEmittedTutorialClientModule(fileName: string): boolean {
+  const cleanFileName = fileName.replace(/[?#].*$/u, '');
+  if (!cleanFileName.endsWith('.client.js')) return false;
+  const diskPath = isAbsolute(cleanFileName) ? cleanFileName : resolve(siteRoot, cleanFileName);
+  return !existsSync(diskPath);
+}
 
 // The docs site is a real Kovo app authored in src/app.tsx. Vite builds the document CSS (with a
 // manifest) into dist-css/; the app-shell export bridge replays the declared route documents into
@@ -27,10 +42,16 @@ export default defineConfig({
   },
   plugins: [
     exampleKovoCompilerPlugin({
+      exclude: [isCompilerEmittedTutorialClientModule],
+      include: ['tutorial/steps/02-islands', 'tutorial/steps/03-queries'],
+    }),
+    exampleKovoCompilerPlugin({
+      exclude: [isCompilerEmittedTutorialClientModule],
       include: ['tutorial/steps/04-mutations'],
       registryFacts: tutorialMutationRegistryFacts,
     }),
     exampleKovoCompilerPlugin({
+      exclude: [isCompilerEmittedTutorialClientModule],
       include: [
         'tutorial/steps/05-optimistic',
         'tutorial/steps/06-streaming',

@@ -79,7 +79,7 @@ function compileStepComponents(step) {
       // SPEC.md §4.8: stamps are derived, never hand-written in authored sugar.
       assert.doesNotMatch(
         source,
-        /(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/,
+        /(?:data-bind|kovo-deps|kovo-c|kovo-key|kovo-state|data-p-[\w-]+)=/,
         `${fileName} hand-writes stamps`,
       );
 

@@ -15,7 +15,7 @@ export const OrderHistory = component({
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
     <ol>
       {orderHistory.items.map((item) => (
-        <li kovo-key={item.id}>
+        <li key={item.id}>
           {item.productId} x {item.qty} - {item.total}
         </li>
       ))}

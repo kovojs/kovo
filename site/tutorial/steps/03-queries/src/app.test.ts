@@ -61,7 +61,9 @@ describe('tutorial step 03 — queries & data binding', () => {
     for (const name of ['cart-badge', 'product-list']) {
       const source = readFileSync(new URL(`./components/${name}.tsx`, import.meta.url), 'utf8');
       // SPEC.md section 4.8 / KV223: stamps are derived, never required in sugar.
-      expect(source).not.toMatch(/(?:data-bind|kovo-deps|kovo-c|kovo-state|data-p-[\w-]+)=/);
+      expect(source).not.toMatch(
+        /(?:data-bind|kovo-deps|kovo-c|kovo-key|kovo-state|data-p-[\w-]+)=/,
+      );
     }
   });
 });

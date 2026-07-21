@@ -30,7 +30,7 @@ export const ProductList = component({
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul style={productListStyles.list}>
       {products.items.map((item) => (
-        <li kovo-key={item.id}>
+        <li key={item.id}>
           {item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)
           {renderAddToCartForm(
             item,
