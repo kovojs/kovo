@@ -30,6 +30,14 @@ function repeatedStructuredTransfers(name: string): string {
   ).join('\n');
 }
 
+function provenanceChurnedStructuredTransfers(name: string): string {
+  return Array.from(
+    { length: repeatedTransferCount },
+    (_, index) =>
+      `Object.assign(target, { get: ${name} }); target.p${index} = { value: ${index} };`,
+  ).join('\n');
+}
+
 async function buildReviewedClientArtifact(source: string): Promise<string> {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'kovo-browser-opacity-scale-')));
   const appModulePath = join(root, 'app.mjs');
@@ -76,6 +84,34 @@ export const inspect = () => ['classifier-scale-ok', target.get()];`;
     const artifact = await buildReviewedClientArtifact(source);
     expect(artifact).toContain('classifier-scale-ok');
     expect(artifact).toContain('Object.assign');
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-opacity-stable-provenance-batch
+  it('admits a repeated wide safe closure across unrelated assignment provenance', async () => {
+    const source = `${wideSafeClosure('wideSafe')}
+const target = {};
+${provenanceChurnedStructuredTransfers('wideSafe')}
+export const inspect = () => ['classifier-churn-ok', target.get(), target.p63];`;
+
+    const artifact = await buildReviewedClientArtifact(source);
+    expect(artifact).toContain('classifier-churn-ok');
+    expect(artifact).toContain('target.p63');
+  });
+
+  // @kovo-security-certifies C13 dependency-browser-opacity-late-member-alias
+  it('closes a member write whose receiver is resolved by a later alias source', async () => {
+    const source = `const box = {};
+const poison = {};
+unknownEffect(poison);
+let alias;
+function install() { alias.platform = poison; }
+alias = box;
+install();
+export const inspect = () => new box.platform.Worker('/payload.mjs');`;
+
+    await expect(buildReviewedClientArtifact(source)).rejects.toThrow(
+      /KV448.*(?:opaque browser executable carrier|Worker constructor)/u,
+    );
   });
 
   // @kovo-security-certifies C13 dependency-browser-opacity-poison-first

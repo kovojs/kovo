@@ -2459,8 +2459,73 @@ function addBrowserBindingSource(
   binding: BrowserStaticBinding,
   source: BrowserBindingSource,
   index: BrowserStaticIndex,
+): boolean {
+  return addBrowserProvenanceSource(binding.sources, source, index);
+}
+
+function addBrowserProvenanceSource(
+  sources: BrowserBindingSource[],
+  source: BrowserBindingSource,
+  index: BrowserStaticIndex,
+): boolean {
+  if (sources.some((candidate) => browserBindingSourcesEqual(candidate, source))) return false;
+  sources.push(source);
+  noteBrowserStaticProvenanceChange(index);
+  return true;
+}
+
+function browserBindingSourcesEqual(
+  left: BrowserBindingSource,
+  right: BrowserBindingSource,
+): boolean {
+  if (
+    left.scope !== right.scope ||
+    !Object.is(left.expression, right.expression) ||
+    left.projections.length !== right.projections.length
+  ) {
+    return false;
+  }
+  return left.projections.every((projection, projectionIndex) => {
+    const other = right.projections[projectionIndex];
+    return (
+      other !== undefined &&
+      projection.scope === other.scope &&
+      projection.property === other.property &&
+      Object.is(projection.expression, other.expression)
+    );
+  });
+}
+
+function markBrowserGlobalBindingsOpaque(index: BrowserStaticIndex): void {
+  if (index.opaqueGlobalBindings) return;
+  index.opaqueGlobalBindings = true;
+  noteBrowserStaticProvenanceChange(index);
+}
+
+function markBrowserMemberSourceOpaque(node: object, index: BrowserStaticIndex): void {
+  if (index.opaqueMemberSources.has(node)) return;
+  index.opaqueMemberSources.add(node);
+  noteBrowserStaticProvenanceChange(index);
+}
+
+function markBrowserPrototypeOpaque(node: object, index: BrowserStaticIndex): void {
+  if (index.opaquePrototypes.has(node)) return;
+  index.opaquePrototypes.add(node);
+  noteBrowserStaticProvenanceChange(index);
+}
+
+function markBrowserPrototypePropertyOpaque(
+  node: object,
+  property: string,
+  index: BrowserStaticIndex,
 ): void {
-  binding.sources.push(source);
+  let opaque = index.opaquePrototypeProperties.get(node);
+  if (opaque === undefined) {
+    opaque = new Set();
+    index.opaquePrototypeProperties.set(node, opaque);
+  }
+  if (opaque.has(property)) return;
+  opaque.add(property);
   noteBrowserStaticProvenanceChange(index);
 }
 
@@ -2582,6 +2647,18 @@ function addBrowserPatternBindings(
 }
 
 function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex): void {
+  const memberProvenance: Array<{
+    readonly exact: boolean;
+    readonly expression: unknown;
+    readonly member: Readonly<Record<string, unknown>>;
+    readonly scope: BrowserStaticScope;
+  }> = [];
+  const callProvenance: Array<{
+    readonly call: Readonly<Record<string, unknown>>;
+    readonly scope: BrowserStaticScope;
+  }> = [];
+  const definePropertyProvenanceCalls = new WeakSet<object>();
+  const deferredEffects: (() => void)[] = [];
   const seen = new Set<object>();
   const visit = (value: unknown): void => {
     if (typeof value !== 'object' || value === null || seen.has(value)) return;
@@ -2594,9 +2671,12 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
     const scope = index.scopeByNode.get(record) ?? index.root;
     if (record.type === 'AssignmentExpression') {
       if (isAstRecord(record.left) && record.left.type === 'MemberExpression') {
-        if (record.operator === '=') {
-          collectBrowserSetterAssignment(record.left, record.right, scope, index);
-        }
+        memberProvenance.push({
+          exact: record.operator === '=',
+          expression: record.right,
+          member: record.left,
+          scope,
+        });
         collectBrowserMemberAssignment(
           record.left,
           record.right,
@@ -2607,67 +2687,177 @@ function collectBrowserAssignmentSources(ast: unknown, index: BrowserStaticIndex
       }
       if (record.operator === '=') {
         addBrowserAssignmentPattern(record.left, record.right, scope, index);
+        deferredEffects.push(() => {
+          if (isAstRecord(record.left) && record.left.type === 'MemberExpression') {
+            collectBrowserPrototypeAssignmentEffects(record.left, record.right, scope, index);
+            collectBrowserSetterAssignment(record.left, record.right, scope, index);
+            return;
+          }
+          collectBrowserAssignmentPatternEffects(
+            record.left,
+            { expression: record.right, projections: [], scope },
+            scope,
+            index,
+          );
+        });
       } else {
-        if (browserExpressionCarriesInvocationAuthority(record.right, scope, index)) {
-          index.effectAnalysisClosed = true;
-        }
-        markBrowserAssignmentPatternOpaque(record.left, scope, index);
+        markBrowserAssignmentPatternBindingsOpaque(record.left, scope, index);
+        deferredEffects.push(() => {
+          if (isAstRecord(record.left) && record.left.type === 'MemberExpression') {
+            collectBrowserPrototypeAssignmentEffects(record.left, record.right, scope, index);
+          }
+          if (browserExpressionCarriesInvocationAuthority(record.right, scope, index)) {
+            index.effectAnalysisClosed = true;
+          }
+          markBrowserAssignmentPatternOpaque(record.left, scope, index);
+        });
       }
     } else if (record.type === 'UpdateExpression') {
       if (isAstRecord(record.argument) && record.argument.type === 'MemberExpression') {
+        memberProvenance.push({
+          exact: false,
+          expression: undefined,
+          member: record.argument,
+          scope,
+        });
         collectBrowserMemberAssignment(record.argument, undefined, false, scope, index);
       }
-      markBrowserAssignmentPatternOpaque(record.argument, scope, index);
+      markBrowserAssignmentPatternBindingsOpaque(record.argument, scope, index);
+      deferredEffects.push(() => {
+        if (isAstRecord(record.argument) && record.argument.type === 'MemberExpression') {
+          collectBrowserPrototypeAssignmentEffects(record.argument, undefined, scope, index);
+        }
+        markBrowserAssignmentPatternOpaque(record.argument, scope, index);
+      });
     } else if (
       (record.type === 'ForInStatement' || record.type === 'ForOfStatement') &&
       isAstRecord(record.left)
     ) {
       // Iteration assigns an element/key rather than the right-hand collection itself. Keep that
       // unsupported transform closed instead of attaching a falsely precise collection source.
-      if (browserExpressionCarriesInvocationAuthority(record.right, scope, index)) {
-        index.effectAnalysisClosed = true;
+      const left = record.left;
+      if (left.type !== 'VariableDeclaration') {
+        markBrowserAssignmentPatternBindingsOpaque(left, scope, index);
       }
-      if (record.left.type !== 'VariableDeclaration') {
-        markBrowserAssignmentPatternOpaque(record.left, scope, index);
-      }
-      markBrowserStructuredArgumentOpaque(record.right, scope, index, {
-        bindingStack: new Set(),
-        depth: 0,
+      deferredEffects.push(() => {
+        if (browserExpressionCarriesInvocationAuthority(record.right, scope, index)) {
+          index.effectAnalysisClosed = true;
+        }
+        if (left.type !== 'VariableDeclaration') {
+          markBrowserAssignmentPatternOpaque(left, scope, index);
+        }
+        markBrowserStructuredArgumentOpaque(record.right, scope, index, {
+          bindingStack: new Set(),
+          depth: 0,
+        });
       });
-    } else if (
-      record.type === 'ThrowStatement' &&
-      browserExpressionCarriesInvocationAuthority(record.argument, scope, index)
-    ) {
-      index.effectAnalysisClosed = true;
+    } else if (record.type === 'ThrowStatement') {
+      deferredEffects.push(() => {
+        if (browserExpressionCarriesInvocationAuthority(record.argument, scope, index)) {
+          index.effectAnalysisClosed = true;
+        }
+      });
     }
     if (record.type === 'CallExpression') {
-      collectBrowserOpaqueCallArguments(record, scope, index);
+      callProvenance.push({ call: record, scope });
+      if (collectBrowserCallProvenance(record, scope, index)) {
+        definePropertyProvenanceCalls.add(record);
+      }
+      deferredEffects.push(() =>
+        collectBrowserOpaqueCallArguments(record, scope, index, definePropertyProvenanceCalls),
+      );
     } else if (record.type === 'NewExpression') {
-      collectBrowserOpaqueConstructorArguments(record, scope, index);
+      deferredEffects.push(() => collectBrowserOpaqueConstructorArguments(record, scope, index));
     } else if (record.type === 'TaggedTemplateExpression') {
-      const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
-      markBrowserStructuredArgumentOpaque(record.tag, scope, index, state);
-      if (isAstRecord(record.tag) && record.tag.type === 'MemberExpression') {
-        markBrowserStructuredArgumentOpaque(record.tag.object, scope, index, state);
-      }
-      const quasi = isAstRecord(record.quasi) ? record.quasi : undefined;
-      const expressions =
-        quasi !== undefined && Array.isArray(quasi.expressions) ? quasi.expressions : [];
-      for (const expression of expressions) {
-        markBrowserStructuredArgumentOpaque(expression, scope, index, state);
-      }
+      deferredEffects.push(() => {
+        const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+        markBrowserStructuredArgumentOpaque(record.tag, scope, index, state);
+        if (isAstRecord(record.tag) && record.tag.type === 'MemberExpression') {
+          markBrowserStructuredArgumentOpaque(record.tag.object, scope, index, state);
+        }
+        const quasi = isAstRecord(record.quasi) ? record.quasi : undefined;
+        const expressions =
+          quasi !== undefined && Array.isArray(quasi.expressions) ? quasi.expressions : [];
+        for (const expression of expressions) {
+          markBrowserStructuredArgumentOpaque(expression, scope, index, state);
+        }
+      });
     }
     for (const [key, child] of Object.entries(record)) {
       if (!browserAstMetadataKeys.has(key)) visit(child);
     }
   };
   visit(ast);
+  // A later lexical/member source can reveal an earlier aliased receiver or defineProperty call.
+  // Replay the finite, de-duplicated provenance graph to a fixed point before freezing it. If the
+  // effects phase ever discovers an unrecorded defineProperty call anyway, it closes rather than
+  // mutating the supposedly stable graph below.
+  let previousSourceGeneration: number;
+  let provenancePasses = 0;
+  const maxProvenancePasses = memberProvenance.length + callProvenance.length + 1;
+  do {
+    if (provenancePasses >= maxProvenancePasses) {
+      index.effectAnalysisClosed = true;
+      return;
+    }
+    provenancePasses += 1;
+    previousSourceGeneration = index.sourceGeneration;
+    for (const candidate of memberProvenance) {
+      collectBrowserMemberAssignment(
+        candidate.member,
+        candidate.expression,
+        candidate.exact,
+        candidate.scope,
+        index,
+      );
+    }
+    for (const candidate of callProvenance) {
+      if (definePropertyProvenanceCalls.has(candidate.call)) continue;
+      if (collectBrowserCallProvenance(candidate.call, candidate.scope, index)) {
+        definePropertyProvenanceCalls.add(candidate.call);
+      }
+    }
+  } while (index.sourceGeneration !== previousSourceGeneration);
+  // Binding/member provenance is flow-insensitive and monotone. Freeze that finite graph before
+  // any general-JavaScript effect walk can summarize a structured value; otherwise thousands of
+  // unrelated later assignments repeatedly invalidate the same safe closure. Every deferred walk
+  // therefore observes all earlier and later sources, which is more conservative than source-order
+  // evaluation, while the unchanged shared budget and closed verdict still bound the phase
+  // (SPEC §6.6; C13).
+  const stableSourceGeneration = index.sourceGeneration;
+  for (const effect of deferredEffects) {
+    effect();
+    if (index.sourceGeneration !== stableSourceGeneration) {
+      index.effectAnalysisClosed = true;
+      return;
+    }
+  }
+}
+
+function collectBrowserCallProvenance(
+  call: Readonly<Record<string, unknown>>,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): boolean {
+  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+  const callee = evaluateBrowserStaticValue(call.callee, scope, index, state);
+  if (
+    callee.length > 0 &&
+    callee.every(
+      (atom) => atom.kind === 'object-define-property' || atom.kind === 'reflect-define-property',
+    )
+  ) {
+    collectBrowserDefinePropertyEffects(call, scope, index, state, 'provenance');
+    return true;
+  }
+  return false;
 }
 
 function collectBrowserOpaqueCallArguments(
   call: Readonly<Record<string, unknown>>,
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
+  definePropertyProvenanceCalls: WeakSet<object>,
 ): void {
   const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
   const calleeMember =
@@ -2698,7 +2888,11 @@ function collectBrowserOpaqueCallArguments(
       (atom) => atom.kind === 'object-define-property' || atom.kind === 'reflect-define-property',
     )
   ) {
-    collectBrowserDefinePropertyEffects(call, scope, index, state);
+    if (!definePropertyProvenanceCalls.has(call)) {
+      index.effectAnalysisClosed = true;
+      return;
+    }
+    collectBrowserDefinePropertyEffects(call, scope, index, state, 'effects');
     return;
   }
   if (callee.length > 0 && callee.every((atom) => atom.kind === 'object-freeze')) return;
@@ -2799,6 +2993,7 @@ function collectBrowserDefinePropertyEffects(
   scope: BrowserStaticScope,
   index: BrowserStaticIndex,
   state: BrowserStaticEvaluationState,
+  phase: 'effects' | 'provenance',
 ): void {
   const args = Array.isArray(call.arguments) ? call.arguments : [];
   const targets = evaluateBrowserStaticValue(args[0], scope, index, state);
@@ -2807,8 +3002,10 @@ function collectBrowserDefinePropertyEffects(
   let closed = targets.length === 0;
   for (const target of targets) {
     if (target.kind === 'global') {
-      if (properties === undefined) {
-        index.opaqueGlobalBindings = true;
+      if (phase === 'effects') {
+        // Provenance was recorded before the deferred effect phase.
+      } else if (properties === undefined) {
+        markBrowserGlobalBindingsOpaque(index);
       } else {
         for (const property of properties) {
           const binding = ensureBrowserGlobalBinding(property, index);
@@ -2823,24 +3020,26 @@ function collectBrowserDefinePropertyEffects(
         }
       }
     } else if (target.kind === 'prototype') {
-      if (properties === undefined) {
-        index.opaquePrototypes.add(target.constructor.node);
+      if (phase === 'effects') {
+        // Provenance was recorded before the deferred effect phase.
+      } else if (properties === undefined) {
+        markBrowserPrototypeOpaque(target.constructor.node, index);
       } else {
-        let opaque = index.opaquePrototypeProperties.get(target.constructor.node);
-        if (opaque === undefined) {
-          opaque = new Set();
-          index.opaquePrototypeProperties.set(target.constructor.node, opaque);
+        for (const property of properties) {
+          markBrowserPrototypePropertyOpaque(target.constructor.node, property, index);
         }
-        for (const property of properties) opaque.add(property);
       }
     } else if (target.kind === 'array' || target.kind === 'namespace' || target.kind === 'object') {
-      index.opaqueMemberSources.add(target.node);
+      if (phase === 'provenance') markBrowserMemberSourceOpaque(target.node, index);
     } else if (target.kind === 'instance') {
-      index.opaqueMemberSources.add(target.constructor.node);
+      if (phase === 'provenance') {
+        markBrowserMemberSourceOpaque(target.constructor.node, index);
+      }
     } else {
       closed = true;
     }
   }
+  if (phase === 'provenance') return;
   markBrowserStructuredArgumentOpaque(args[2], scope, index, state);
   if (!closed) return;
   for (const argument of args) {
@@ -3805,28 +4004,9 @@ function collectBrowserMemberAssignment(
     bindingStack: new Set(),
     depth: 0,
   });
-  if (properties?.includes('__proto__') === true) {
-    const expressionAtoms =
-      expression === undefined
-        ? [{ kind: 'closed' } satisfies BrowserStaticAtom]
-        : evaluateBrowserStaticValue(expression, scope, index, {
-            bindingStack: new Set(),
-            depth: 0,
-          });
-    if (
-      expressionAtoms.some((atom) => atom.kind === 'closed') ||
-      (expression !== undefined &&
-        browserExpressionCarriesInvocationAuthority(expression, scope, index))
-    ) {
-      index.effectAnalysisClosed = true;
-    }
-    for (const receiver of receivers) {
-      if (receiver.kind === 'namespace') index.opaqueConstructors.add(receiver.node);
-    }
-  }
   if (receivers.some((receiver) => receiver.kind === 'global')) {
     if (!exact || properties === undefined) {
-      index.opaqueGlobalBindings = true;
+      markBrowserGlobalBindingsOpaque(index);
     } else {
       for (const property of properties) {
         const binding = ensureBrowserGlobalBinding(property, index);
@@ -3846,11 +4026,11 @@ function collectBrowserMemberAssignment(
   if (targets.length === 0) return;
   for (const target of targets) {
     if (!exact || properties === undefined) {
-      index.opaqueMemberSources.add(target.node);
+      markBrowserMemberSourceOpaque(target.node, index);
       continue;
     }
     if (properties.includes('__proto__')) {
-      index.opaqueMemberSources.add(target.node);
+      markBrowserMemberSourceOpaque(target.node, index);
     }
     let sources = index.memberSources.get(target.node);
     if (sources === undefined) {
@@ -3859,10 +4039,35 @@ function collectBrowserMemberAssignment(
     }
     for (const property of properties) {
       const propertySources = sources.get(property) ?? [];
-      propertySources.push({ expression, projections: [], scope });
-      noteBrowserStaticProvenanceChange(index);
+      addBrowserProvenanceSource(propertySources, { expression, projections: [], scope }, index);
       sources.set(property, propertySources);
     }
+  }
+}
+
+function collectBrowserPrototypeAssignmentEffects(
+  member: Readonly<Record<string, unknown>>,
+  expression: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+  const properties = browserStaticPropertyNames(member, scope, index, state);
+  if (properties?.includes('__proto__') !== true) return;
+  const expressionAtoms =
+    expression === undefined
+      ? [{ kind: 'closed' } satisfies BrowserStaticAtom]
+      : evaluateBrowserStaticValue(expression, scope, index, state);
+  if (
+    expressionAtoms.some((atom) => atom.kind === 'closed') ||
+    (expression !== undefined &&
+      browserExpressionCarriesInvocationAuthority(expression, scope, index))
+  ) {
+    index.effectAnalysisClosed = true;
+  }
+  const receivers = evaluateBrowserStaticValue(member.object, scope, index, state);
+  for (const receiver of receivers) {
+    if (receiver.kind === 'namespace') index.opaqueConstructors.add(receiver.node);
   }
 }
 
@@ -3898,16 +4103,7 @@ function addBrowserAssignmentPatternSource(
   index: BrowserStaticIndex,
 ): void {
   if (!isAstRecord(pattern)) return;
-  if (pattern.type === 'MemberExpression') {
-    // Destructuring writes can invoke setters or mutate a projected object without ever exposing a
-    // top-level AssignmentExpression member target. That general-JS effect is outside the finite
-    // projection grammar, so close both sides instead of silently discarding it (SPEC §6.6; C13).
-    const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
-    collectBrowserSetterAssignment(pattern, source.expression, scope, index);
-    markBrowserStructuredArgumentOpaque(pattern.object, scope, index, state);
-    markBrowserStructuredArgumentOpaque(source.expression, source.scope, index, state);
-    return;
-  }
+  if (pattern.type === 'MemberExpression') return;
   if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
     const binding = lookupBrowserBinding(pattern.name, scope);
     if (binding !== undefined) addBrowserBindingSource(binding, source, index);
@@ -3928,7 +4124,7 @@ function addBrowserAssignmentPatternSource(
         if (isAstRecord(property) && property.type === 'RestElement') {
           addBrowserAssignmentPatternSource(property.argument, source, scope, index);
         } else if (isAstRecord(property)) {
-          markBrowserAssignmentPatternOpaque(property.argument, scope, index);
+          markBrowserAssignmentPatternBindingsOpaque(property.argument, scope, index);
         }
         continue;
       }
@@ -3967,6 +4163,88 @@ function addBrowserAssignmentPatternSource(
         scope,
         index,
       );
+    }
+  }
+}
+
+function collectBrowserAssignmentPatternEffects(
+  pattern: unknown,
+  source: BrowserBindingSource,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'MemberExpression') {
+    // Destructuring writes can invoke setters or mutate a projected object without ever exposing a
+    // top-level AssignmentExpression member target. Keep the general-JS effect closed, but only
+    // after every assignment source has entered the stable provenance graph (SPEC §6.6; C13).
+    const state: BrowserStaticEvaluationState = { bindingStack: new Set(), depth: 0 };
+    collectBrowserSetterAssignment(pattern, source.expression, scope, index);
+    markBrowserStructuredArgumentOpaque(pattern.object, scope, index, state);
+    markBrowserStructuredArgumentOpaque(source.expression, source.scope, index, state);
+    return;
+  }
+  if (pattern.type === 'AssignmentPattern') {
+    collectBrowserAssignmentPatternEffects(pattern.left, source, scope, index);
+    return;
+  }
+  if (pattern.type === 'RestElement') {
+    collectBrowserAssignmentPatternEffects(pattern.argument, source, scope, index);
+    return;
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    for (const property of properties) {
+      if (!isAstRecord(property)) continue;
+      collectBrowserAssignmentPatternEffects(
+        property.type === 'Property' ? property.value : property.argument,
+        source,
+        scope,
+        index,
+      );
+    }
+    return;
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    for (const element of elements) {
+      collectBrowserAssignmentPatternEffects(element, source, scope, index);
+    }
+  }
+}
+
+function markBrowserAssignmentPatternBindingsOpaque(
+  pattern: unknown,
+  scope: BrowserStaticScope,
+  index: BrowserStaticIndex,
+): void {
+  if (!isAstRecord(pattern)) return;
+  if (pattern.type === 'Identifier' && typeof pattern.name === 'string') {
+    const binding = lookupBrowserBinding(pattern.name, scope);
+    if (binding !== undefined) markBrowserBindingOpaque(binding, index);
+    return;
+  }
+  if (pattern.type === 'MemberExpression') return;
+  if (pattern.type === 'AssignmentPattern' || pattern.type === 'RestElement') {
+    markBrowserAssignmentPatternBindingsOpaque(pattern.left ?? pattern.argument, scope, index);
+    return;
+  }
+  if (pattern.type === 'ObjectPattern') {
+    const properties = Array.isArray(pattern.properties) ? pattern.properties : [];
+    for (const property of properties) {
+      if (!isAstRecord(property)) continue;
+      markBrowserAssignmentPatternBindingsOpaque(
+        property.type === 'Property' ? property.value : property.argument,
+        scope,
+        index,
+      );
+    }
+    return;
+  }
+  if (pattern.type === 'ArrayPattern') {
+    const elements = Array.isArray(pattern.elements) ? pattern.elements : [];
+    for (const element of elements) {
+      markBrowserAssignmentPatternBindingsOpaque(element, scope, index);
     }
   }
 }
