@@ -70,7 +70,9 @@ export interface TrustEscapeSourceFileInput {
 /**
  * Compiler-owned semantic facts bound to the exact source carrier from which they were parsed.
  * The request/process classifier uses them only to recognize a proved helper declaration; a
- * missing, duplicate, or byte-mismatched carrier silently falls back to the legacy closed verdict.
+ * missing, duplicate, or byte-mismatched carrier falls back to the legacy closed verdict. A
+ * disagreement between the redundant source-operation and graph inventories additionally closes
+ * the compiler route, even when the internally exact graph can suppress redundant legacy noise.
  *
  * @internal
  */
@@ -1850,11 +1852,14 @@ function requestProcessSinksForProject(
     scanned: new Set(),
     ...(taskBClosure === undefined ? {} : { taskBClosure }),
   };
-  if (taskBClosure?.invalidReason && sourceFiles[0]) {
+  const compilerRouteInvalidReason =
+    taskBClosure?.invalidReason ??
+    (compilerSecuritySemanticSources === undefined ? undefined : semanticProofs.invalidReason);
+  if (compilerRouteInvalidReason && sourceFiles[0]) {
     appendRequestTaskBRouteFailure(
       context,
       sourceFiles[0],
-      `root=<census>; transfers=<none>; sink=compiler-route; verdict=closed:${taskBClosure.invalidReason}`,
+      `root=<census>; transfers=<none>; sink=compiler-route; verdict=closed:${compilerRouteInvalidReason}`,
     );
   }
   let requestRootCount = 0;
@@ -2210,6 +2215,10 @@ function requestCompilerSemanticProofIndex(
   const egressCallSpansByCallable = new Map<string, Set<string>>();
   const rootsByCallable = new Map<string, SecuritySemanticGraph['roots'][number][]>();
   const invalidProofKeys = new Set<string>();
+  let carrierInvalidReason: string | undefined;
+  const closeCarrier = (reason: string): void => {
+    carrierInvalidReason ??= reason;
+  };
   for (const [index, file] of files.entries()) {
     const sourceFile = sourceFiles[index];
     const semanticSource = sourcesByName.get(file.fileName);
@@ -2252,7 +2261,7 @@ function requestCompilerSemanticProofIndex(
     }
     for (const operation of semanticSource.operations) {
       if (!graphRootNames.has(operation.root)) {
-        return invalid(
+        closeCarrier(
           `compiler semantic source operation has no exact root ${file.fileName}:${operation.root}`,
         );
       }
@@ -2275,6 +2284,7 @@ function requestCompilerSemanticProofIndex(
             callsBySpan,
             callablesBySpan,
             semanticSource.operations,
+            closeCarrier,
           )
         ) {
           return invalid(`compiler semantic root ${root.root} does not match ${file.fileName}`);
@@ -2353,7 +2363,12 @@ function requestCompilerSemanticProofIndex(
     }
   }
   for (const key of invalidProofKeys) proofs.delete(key);
-  return { egressCallSpansByCallable, helperProofs: proofs, rootsByCallable };
+  return {
+    egressCallSpansByCallable,
+    helperProofs: proofs,
+    ...(carrierInvalidReason === undefined ? {} : { invalidReason: carrierInvalidReason }),
+    rootsByCallable,
+  };
 }
 
 function requestCompilerSemanticRootFactsAreExact(
@@ -2363,6 +2378,7 @@ function requestCompilerSemanticRootFactsAreExact(
   callsBySpan: ReadonlyMap<string, import('ts-morph').CallExpression>,
   callablesBySpan: ReadonlyMap<string, Node>,
   sourceOperations: readonly CompilerTaskBSourceOperation[],
+  closeCarrier: (reason: string) => void,
 ): boolean {
   const sourceLength = source.length;
   const binding = root.binding;
@@ -2552,7 +2568,10 @@ function requestCompilerSemanticRootFactsAreExact(
     expectedTerminalKeys.size !== actualTerminalKeys.size ||
     [...expectedTerminalKeys].some((key) => !actualTerminalKeys.has(key))
   ) {
-    return false;
+    // The compiler carrier and semantic graph are redundant on purpose (SPEC §6.6). Keep the
+    // graph's internally reconstructed proof available so authored-AST checks remain independently
+    // forcing, but close the compiler route before that proof can authorize a build.
+    closeCarrier(`compiler semantic terminal inventory does not match ${fileName}:${root.root}`);
   }
 
   for (const summary of root.summaries) {

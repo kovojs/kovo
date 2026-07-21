@@ -15424,15 +15424,138 @@ export const report = query('report', {
       { fileName: 'summary-carrier.ts', source },
       { fileName: 'schema.ts', source: schemaSource },
     ];
+    const exactSemanticSource = compilerSemanticSource('summary-carrier.ts', source, [graph]);
 
     const closed = collectUnregisteredSinksFromProject({
       compilerSecuritySemanticSources: [
-        compilerSemanticSource('summary-carrier.ts', source, [graph]),
+        exactSemanticSource,
         compilerSemanticSource('schema.ts', schemaSource, []),
       ],
       files,
     });
     expect(closed).toEqual([]);
+
+    const semanticSinksWithOperations = (
+      candidate: SecuritySemanticGraph,
+      operations = exactSemanticSource.operations,
+    ) =>
+      collectUnregisteredSinksFromProject({
+        compilerSecuritySemanticSources: [
+          { ...exactSemanticSource, graphs: [candidate], operations },
+          compilerSemanticSource('schema.ts', schemaSource, []),
+        ],
+        files,
+      });
+    const expectCompilerRouteClosure = (
+      facts: ReturnType<typeof semanticSinksWithOperations>,
+      reason: string,
+    ) => {
+      expect(facts, reason).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sink: 'request-handler.opaque-source',
+            source: expect.stringContaining('sink=compiler-route; verdict=closed:'),
+          }),
+        ]),
+      );
+    };
+    const expectAuthoredReconstructionClosure = (
+      candidate: SecuritySemanticGraph,
+      reason: string,
+    ) => {
+      const facts = semanticSinksWithOperations(candidate);
+      expectCompilerRouteClosure(facts, reason);
+      expect(facts, reason).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        ]),
+      );
+    };
+
+    const forgedRoot = 'mutation:forged/update';
+    const rootForgedEverywhere: SecuritySemanticGraph = {
+      ...graph,
+      roots: [
+        {
+          ...graph.roots[0]!,
+          binding: { ...graph.roots[0]!.binding, root: forgedRoot },
+          root: forgedRoot,
+          traces: graph.roots[0]!.traces.map((trace) => ({ ...trace, root: forgedRoot })),
+        },
+      ],
+    };
+    expectAuthoredReconstructionClosure(
+      rootForgedEverywhere,
+      'factory root must be reconstructed independently from authored syntax',
+    );
+
+    const operationForgedEverywhere: SecuritySemanticGraph = {
+      ...graph,
+      roots: [
+        {
+          ...graph.roots[0]!,
+          helperInvocations: graph.roots[0]!.helperInvocations.map((invocation) => ({
+            ...invocation,
+            operationKinds: ['server.database.read'],
+          })),
+          summaries: graph.roots[0]!.summaries.map((summary) => ({
+            ...summary,
+            operationKinds: ['server.database.read'],
+          })),
+          traces: graph.roots[0]!.traces.map((trace) => ({
+            ...trace,
+            sink: { ...trace.sink, kind: 'server.database.read', target: 'db.select' },
+          })),
+        },
+      ],
+    };
+    expectAuthoredReconstructionClosure(
+      operationForgedEverywhere,
+      'helper terminal inventory must be reconstructed independently from its authored body',
+    );
+
+    const writeOperation = exactSemanticSource.operations.find(
+      (operation) => operation.kind === 'server.database.write',
+    );
+    expect(writeOperation).toBeDefined();
+    const carrierOnlyDriftCases = [
+      [
+        'source-operation root drift',
+        exactSemanticSource.operations.map((operation) => ({
+          ...operation,
+          root: forgedRoot,
+        })),
+      ],
+      [
+        'missing source terminal',
+        exactSemanticSource.operations.filter(
+          (operation) => operation.kind !== 'server.database.write',
+        ),
+      ],
+      [
+        'source terminal kind drift',
+        exactSemanticSource.operations.map((operation) =>
+          operation === writeOperation
+            ? { ...operation, kind: 'server.database.read' as const, target: 'db.select' }
+            : operation,
+        ),
+      ],
+      [
+        'source terminal target drift',
+        exactSemanticSource.operations.map((operation) =>
+          operation === writeOperation ? { ...operation, target: 'db.delete' } : operation,
+        ),
+      ],
+    ] as const;
+    for (const [reason, operations] of carrierOnlyDriftCases) {
+      const facts = semanticSinksWithOperations(graph, operations);
+      expectCompilerRouteClosure(facts, reason);
+      expect(facts, reason).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
+        ]),
+      );
+    }
 
     const byteMismatched = collectUnregisteredSinksFromProject({
       compilerSecuritySemanticSources: [
@@ -15471,13 +15594,7 @@ export const report = query('report', {
     );
 
     const semanticSinks = (candidate: SecuritySemanticGraph) =>
-      collectUnregisteredSinksFromProject({
-        compilerSecuritySemanticSources: [
-          compilerSemanticSource('summary-carrier.ts', source, [candidate]),
-          compilerSemanticSource('schema.ts', schemaSource, []),
-        ],
-        files,
-      });
+      semanticSinksWithOperations(candidate);
     const provedSummary = graph.roots[0]!.summaries[0]!;
     for (const [label, candidate] of [
       [
