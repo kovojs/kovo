@@ -276,11 +276,16 @@ trusted the expected identity supplied by the same subject.
     helper argument and container/callee escape unless a finite local summary proves it safe, and
     require an explicit `true` fact before lowering. Reject laundering through mutable handler state
     (`state.saved = item.fn; state.saved()`) and every dynamic state callee/constructor/tag variant.
-    Prove every state write remains recursive JSON data so a callable nested under an allowlisted
-    method name cannot cross a chained-handler boundary and impersonate an intrinsic data method.
-    Cover the executable helper repro, containers, callback-only data methods, property keys,
-    mutation, destructuring, prototype paths, callable state writes, and unrelated same-name
-    bindings.
+    Use a deliberately small closed state-expression/method vocabulary: unknown call results,
+    callback returns, implicit coercion/iterator/then protocols, spread arguments, computed or
+    destructuring writes, and arbitrary event payloads are rejected unless an exact summary proves
+    recursive JSON before the next same-handler use. A post-handler snapshot is only the
+    cross-handler/serialization pin; it cannot justify execution that already happened. Snapshot
+    initial and chained state into fresh null-prototype JSON data, and never blindly await a sync
+    handler return or assimilate an unproved thenable. Cover executable helpers and event detail,
+    containers, state-method impersonation, callback returns, property keys, mutation,
+    destructuring, spread/protocol paths, callable state writes, lexical shadowing, and modular/
+    generated-inline parity.
 
 - [ ] **M13 — The live-target emitter reparsed executable query text after parser analysis.**
   - The emitter reconstructed a TypeScript source file from a raw query-expression string to decide
