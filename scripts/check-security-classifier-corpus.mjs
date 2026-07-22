@@ -204,6 +204,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       'packages/cli/src/index.kovo-db.test.ts',
       'packages/server/src/egress-bootstrap.test.ts',
       'packages/server/src/egress-nat64-nsp.test.ts',
+      'packages/server/src/egress-carrier-snapshot.test.ts',
       'packages/server/src/egress-property-oracle.test.ts',
       'packages/server/src/egress-undici.test.ts',
       'packages/server/src/egress.test.ts',
@@ -246,6 +247,44 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'new Proxy(target',
           'defineProperty: () => true',
           "classification: 'loopback'",
+        ],
+      },
+      {
+        id: 'resolver-result-carrier-snapshot',
+        file: 'packages/server/src/egress-carrier-snapshot.test.ts',
+        snippets: [
+          'never forwards a resolver-owned entry whose address changes between consumers',
+          'addressReads).toBe(0)',
+          'fails closed for %s returned by a custom resolver',
+          'an over-budget array',
+        ],
+      },
+      {
+        id: 'http-agent-request-carrier-snapshot',
+        file: 'packages/server/src/egress-carrier-snapshot.test.ts',
+        snippets: [
+          'does not let a double-read Proxy redirect native Agent reuse after classification',
+          'hostReads).toBe(0)',
+          'fails closed without invoking accessors or accepting unstable descriptors',
+          'bounds the native Agent request carrier before enumerating values',
+        ],
+      },
+      {
+        id: 'http-agent-native-host-grammar',
+        file: 'packages/server/src/egress-carrier-snapshot.test.ts',
+        snippets: [
+          'classifies native Agent host semantics instead of a conflicting hostname alias',
+          "hostname: 'allowed-alias.test'",
+          'rejects.toBeInstanceOf(EgressBlockedError)',
+        ],
+      },
+      {
+        id: 'http-agent-options-overlay-snapshot',
+        file: 'packages/server/src/egress-carrier-snapshot.test.ts',
+        snippets: [
+          'classifies the agent-options overlay that native Agent applies before reuse',
+          'Object.assign(harness.agent.options',
+          'rejects.toBeInstanceOf(EgressBlockedError)',
         ],
       },
       {

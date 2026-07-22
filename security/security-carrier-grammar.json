@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 344,
+    "historicalWitnesses": 348,
     "productions": 12
   },
   "productions": [
@@ -128,6 +128,30 @@
       "corpus": "egress-ip",
       "production": "runtime-floor",
       "reason": "This witness exercises a runtime-owned reconstruction that prevents an app-controlled carrier from retaining dial authority."
+    },
+    {
+      "anchor": "resolver-result-carrier-snapshot",
+      "corpus": "egress-ip",
+      "production": "runtime-floor",
+      "reason": "This witness requires the runtime floor to validate and forward one owned snapshot of a resolver result."
+    },
+    {
+      "anchor": "http-agent-request-carrier-snapshot",
+      "corpus": "egress-ip",
+      "production": "runtime-floor",
+      "reason": "This witness requires the Agent reuse floor to classify and consume one bounded own-data request snapshot."
+    },
+    {
+      "anchor": "http-agent-native-host-grammar",
+      "corpus": "egress-ip",
+      "production": "platform-differential",
+      "reason": "This witness aligns Kovo's classified host carrier with the host field consumed by Node's native Agent implementation."
+    },
+    {
+      "anchor": "http-agent-options-overlay-snapshot",
+      "corpus": "egress-ip",
+      "production": "carrier-container",
+      "reason": "This witness closes the native Agent overlay of request and agent option carriers before socket reuse."
     },
     {
       "anchor": "undeclared-origin-before-dns-dial",
