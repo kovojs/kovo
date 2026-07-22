@@ -2484,44 +2484,153 @@ const verifyTranslationExactParserCensusBranch =
   '    { exact: true, owner: NativeObjectPrototype },';
 const weakenedVerifyTranslationExactParserCensusBranch =
   '    { exact: false, owner: NativeObjectPrototype, selectedKeys: [] },';
-const verifyTranslationWarmParserGraphBranch = '  translationWarmParser,';
-const removedVerifyTranslationWarmParserGraphBranch = '';
+const verifyTranslationPrivateParserCensusRootsBranch = [
+  '  translationPrivateParserCensus.parser,',
+  '  translationPrivateParserCensus.destructuringErrors,',
+  '  translationPrivateParserCensus.scope,',
+  '  translationPrivateParserCensus.regexpState,',
+  '  translationPrivateParserCensus.branch,',
+].join('\n');
+const removedVerifyTranslationPrivateParserCensusRootsBranch = '';
 const translationParserWarmGraphBehavioralInstrumentation = `
-export function __securityMutationPoisonTranslationParserWordCache() {
-  const seed = new AcornParser(translationParserOptions, '') as AcornParser & {
-    keywords: RegExp;
-  };
-  const expression = seed.keywords;
-  const original = NativeObject.getOwnPropertyDescriptor(expression, 'test');
+export function __securityMutationProbeTranslationPrivateParserFamilies() {
   const exactArrayPush = NativeArrayPrototype.push;
-  const exactRegExpTest = NativeRegExpPrototype.test;
-  let callbackCalls = 0;
+  const attacks = [
+    {
+      family: 'DestructuringErrors',
+      key: 'doubleProto',
+      kind: 'setter',
+      owner: translationPrivateParserCensus.destructuringErrors,
+      source: "const __kovoPrivateFamilyTrigger = { reviewed: true }; import { unreviewed } from 'attacker-controlled';",
+    },
+    {
+      family: 'Scope',
+      key: 'flags',
+      kind: 'setter',
+      owner: translationPrivateParserCensus.scope,
+      source: "const __kovoPrivateFamilyTrigger = { reviewed: true }; import { unreviewed } from 'attacker-controlled';",
+    },
+    {
+      family: 'RegExpValidationState',
+      key: 'reset',
+      kind: 'method',
+      owner: translationPrivateParserCensus.regexpState,
+      source: "const __kovoPrivateFamilyTrigger = /(a|b)/; import { unreviewed } from 'attacker-controlled';",
+    },
+    {
+      family: 'BranchID',
+      key: 'base',
+      kind: 'setter',
+      owner: translationPrivateParserCensus.branch,
+      source: "const __kovoPrivateFamilyTrigger = /(a|b)/; import { unreviewed } from 'attacker-controlled';",
+    },
+  ] as const;
+  const results: {
+    callbackCalls: number;
+    callerMutationRestored: boolean;
+    family: string;
+    importRetained: boolean;
+    parseThrew: boolean;
+    pushRestored: boolean;
+  }[] = [];
+
   function poisonParserPush<T>(this: T[], ...values: T[]): number {
     if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
       return this.length;
     }
     return apply<number>(exactArrayPush, this, values);
   }
-  function poisonedWordTest(this: RegExp, value: string): boolean {
-    callbackCalls += 1;
-    NativeArrayPrototype.push = poisonParserPush;
-    return apply<boolean>(exactRegExpTest, this, [value]);
-  }
-  NativeObject.defineProperty(expression, 'test', {
-    configurable: true,
-    value: poisonedWordTest,
-    writable: true,
-  });
-  return {
-    callbackCalls: () => callbackCalls,
-    cleanup() {
+
+  for (let index = 0; index < translationArrayLength(attacks); index += 1) {
+    const attack = attacks[index]!;
+    const prototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [attack.owner]);
+    if (prototype === null) throw new NativeTypeError('Private parser family lost its prototype.');
+    const original = apply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [prototype, attack.key],
+    );
+    let callbackCalls = 0;
+    let poisonedControl: Function;
+    if (attack.kind === 'method') {
+      const originalMethod = original?.value;
+      if (typeof originalMethod !== 'function') {
+        throw new NativeTypeError('Private parser method control is unavailable.');
+      }
+      function poisonedMethod(this: object, ...args: unknown[]): unknown {
+        callbackCalls += 1;
+        NativeArrayPrototype.push = poisonParserPush;
+        return apply(originalMethod, this, args);
+      }
+      poisonedControl = poisonedMethod;
+      apply(nativeObjectDefineProperty, NativeObject, [prototype, attack.key, {
+        ...original,
+        value: poisonedMethod,
+      }]);
+    } else {
+      function poisonedSetter(this: object, value: unknown): void {
+        callbackCalls += 1;
+        NativeArrayPrototype.push = poisonParserPush;
+        apply(nativeObjectDefineProperty, NativeObject, [this, attack.key, {
+          configurable: true,
+          enumerable: true,
+          value,
+          writable: true,
+        }]);
+      }
+      poisonedControl = poisonedSetter;
+      apply(nativeObjectDefineProperty, NativeObject, [prototype, attack.key, {
+        configurable: true,
+        enumerable: false,
+        set: poisonedSetter,
+      }]);
+    }
+
+    let callerMutationRestored = false;
+    let importRetained = false;
+    let parseThrew = false;
+    let pushRestored = false;
+    try {
+      let program: unknown;
+      try {
+        program = translationParseJavaScriptSource(attack.source);
+      } catch {
+        parseThrew = true;
+      }
+      pushRestored = NativeArrayPrototype.push === exactArrayPush;
+      const installed = apply<PropertyDescriptor | undefined>(
+        nativeObjectGetOwnPropertyDescriptor,
+        NativeObject,
+        [prototype, attack.key],
+      );
+      callerMutationRestored =
+        (attack.kind === 'method' ? installed?.value : installed?.set) === poisonedControl;
+      const body = (program as { body?: unknown } | undefined)?.body;
+      if (apply<boolean>(nativeArrayIsArray, NativeArray, [body])) {
+        for (let bodyIndex = 0; bodyIndex < translationArrayLength(body); bodyIndex += 1) {
+          if ((body[bodyIndex] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+            importRetained = true;
+          }
+        }
+      }
+    } finally {
       NativeArrayPrototype.push = exactArrayPush;
-      if (original === undefined) NativeReflect.deleteProperty(expression, 'test');
-      else NativeObject.defineProperty(expression, 'test', original);
-    },
-    expression,
-    poisonedWordTest,
-  };
+      if (original === undefined) {
+        apply(nativeReflectDeleteProperty, NativeReflect, [prototype, attack.key]);
+      } else {
+        apply(nativeObjectDefineProperty, NativeObject, [prototype, attack.key, original]);
+      }
+    }
+    translationArrayAppend(results, {
+      callbackCalls,
+      callerMutationRestored,
+      family: attack.family,
+      importRetained,
+      parseThrew,
+      pushRestored,
+    });
+  }
+  return results;
 }
 `;
 const installedUpdateDocsSnapshotBranch = '  const resolved = bundledDocs(version);';
@@ -8536,12 +8645,12 @@ export const SECURITY_GATE_MUTANTS = [
     behavioralInstrumentation: translationParserWarmGraphBehavioralInstrumentation,
     behavioralTypeScript: true,
     description:
-      'Drops the fixed-mode warm parser whose graph closes Acorn private lazy callbacks.',
+      'Drops the explicit fixed-mode roots for all four Acorn private instance families.',
     expectedKiller:
-      'translation parsing must census the shared word cache and private fixed-mode parser controls',
+      'translation parsing must census DestructuringErrors, Scope, RegExpValidationState, and BranchID',
     name: 'translation-verifier/drop-warm-parser-control-graph',
-    replacement: removedVerifyTranslationWarmParserGraphBranch,
-    search: verifyTranslationWarmParserGraphBranch,
+    replacement: removedVerifyTranslationPrivateParserCensusRootsBranch,
+    search: verifyTranslationPrivateParserCensusRootsBranch,
     sourceFile: verifyTranslationIntrinsicsPath,
     test: assertTranslationWarmParserGraphBehavior,
   },
@@ -8623,31 +8732,22 @@ function assertTranslationExactParserCensusBehavior(moduleUnderTest) {
 }
 
 function assertTranslationWarmParserGraphBehavior(moduleUnderTest) {
-  const nativePush = Array.prototype.push;
-  const fixture = moduleUnderTest.__securityMutationPoisonTranslationParserWordCache();
-  let program;
-  let pushRestored = false;
-  let callerMutationRestored = false;
-  try {
-    program = moduleUnderTest.translationParseJavaScriptSource(
-      "import { unreviewed } from 'attacker-controlled';",
-    );
-    pushRestored = Array.prototype.push === nativePush;
-    callerMutationRestored = fixture.expression.test === fixture.poisonedWordTest;
-  } finally {
-    fixture.cleanup();
-    Array.prototype.push = nativePush;
-  }
+  const expectedFamilies = ['DestructuringErrors', 'Scope', 'RegExpValidationState', 'BranchID'];
+  const results = moduleUnderTest.__securityMutationProbeTranslationPrivateParserFamilies();
   if (
-    fixture.callbackCalls() !== 0 ||
-    !pushRestored ||
-    !callerMutationRestored ||
-    !Array.isArray(program?.body) ||
-    program.body.length !== 1 ||
-    program.body[0]?.type !== 'ImportDeclaration'
+    results.length !== expectedFamilies.length ||
+    results.some(
+      (result, index) =>
+        result.family !== expectedFamilies[index] ||
+        result.callbackCalls !== 0 ||
+        !result.callerMutationRestored ||
+        !result.importRetained ||
+        result.parseThrew ||
+        !result.pushRestored,
+    )
   ) {
     throw new Error(
-      'translation parser omitted an import through an uncensused Acorn lazy callback',
+      'translation parser omitted an import through an uncensused Acorn private-family callback',
     );
   }
 }

@@ -119,27 +119,53 @@ const ConstructableAcornParser = AcornParser as unknown as new (
   input: string,
   startPos?: number,
 ) => AcornParser;
+const acornParserCheckExpressionErrors = parserRequiredOwnFunction(
+  AcornParser.prototype,
+  'checkExpressionErrors',
+);
+
+interface TranslationPrivateParserCensus {
+  branch: object;
+  destructuringErrors: object;
+  parser: AcornParser;
+  regexpState: object;
+  scope: object;
+}
 
 /**
  * Acorn's public `Parser` graph does not expose every mutable control used by a later parse.
- * Constructing this fixed-mode parser creates the four shared word-cache RegExps. The deliberate
- * invalid RegExp reaches `RegExpValidationState`, `Scope`, and `BranchID`, then rejects before
- * unwinding the branch pointer so those otherwise-private prototypes remain reachable. Acorn's
- * exact version and the retained shape below are a review gate: an upgrade must re-audit the fixed
- * option mode and all lazy controls before this bootstrap census can change.
+ * Constructing this fixed-mode parser creates the four shared word-cache RegExps. A bootstrap-only
+ * subclass retains the actual `DestructuringErrors` passed to Acorn's original implementation; it
+ * delegates through the boot-captured method without mutating `Parser.prototype`. The deliberate
+ * invalid RegExp retains `RegExpValidationState` and `BranchID`, while `scopeStack[0]` explicitly
+ * retains `Scope`. Acorn's exact version and the retained shapes below are a review gate: an upgrade
+ * must re-audit the fixed option mode and all lazy controls before this bootstrap census can change.
  */
-const translationWarmParser = createTranslationWarmParser();
+const translationPrivateParserCensus = createTranslationPrivateParserCensus();
 
-function createTranslationWarmParser(): AcornParser {
+function createTranslationPrivateParserCensus(): TranslationPrivateParserCensus {
   if (acornVersion !== REVIEWED_TRANSLATION_ACORN_VERSION) {
     throw new NativeTypeError(
       `Translation parser ${acornVersion} has not passed the fixed-mode control census.`,
     );
   }
 
-  const parser = new ConstructableAcornParser(
+  let destructuringErrors: object | undefined;
+  class WarmParser extends ConstructableAcornParser {
+    checkExpressionErrors(reference: unknown, andThrow: unknown): unknown {
+      if (
+        destructuringErrors === undefined &&
+        ((typeof reference === 'object' && reference !== null) || typeof reference === 'function')
+      ) {
+        destructuringErrors = reference;
+      }
+      return apply(acornParserCheckExpressionErrors, this, [reference, andThrow]);
+    }
+  }
+
+  const parser = new WarmParser(
     translationParserOptions,
-    'const __kovoTranslationParserWarmGraph = /(/;',
+    'const __kovoTranslationDestructuringWarmGraph = { reviewed: true }; const __kovoTranslationRegExpWarmGraph = /(/;',
   );
   let rejected = false;
   try {
@@ -188,6 +214,38 @@ function createTranslationWarmParser(): AcornParser {
   ) {
     throw new NativeTypeError('Translation parser fixed options drifted from the reviewed mode.');
   }
+
+  if (destructuringErrors === undefined) {
+    throw new NativeTypeError('Translation parser DestructuringErrors census is unavailable.');
+  }
+  assertExactParserStringKeys(destructuringErrors, [
+    'shorthandAssign',
+    'trailingComma',
+    'parenthesizedAssign',
+    'parenthesizedBind',
+    'doubleProto',
+  ]);
+  const destructuringErrorsPrototype = apply<object | null>(
+    nativeObjectGetPrototypeOf,
+    NativeObject,
+    [destructuringErrors],
+  );
+  if (destructuringErrorsPrototype === null) {
+    throw new NativeTypeError('Translation parser DestructuringErrors prototype is unavailable.');
+  }
+  assertExactParserStringKeys(destructuringErrorsPrototype, ['constructor']);
+
+  const scopeStack = parserRequiredOwnObject(parser, 'scopeStack');
+  if (!apply<boolean>(nativeArrayIsArray, NativeArray, [scopeStack])) {
+    throw new NativeTypeError('Translation parser Scope stack census drifted.');
+  }
+  const scope = parserRequiredOwnObject(scopeStack, 0);
+  assertExactParserStringKeys(scope, ['flags', 'var', 'lexical', 'functions']);
+  const scopePrototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [scope]);
+  if (scopePrototype === null) {
+    throw new NativeTypeError('Translation parser Scope prototype is unavailable.');
+  }
+  assertExactParserStringKeys(scopePrototype, ['constructor']);
 
   const cachedWordExpressions = new NativeSet<object>();
   for (const key of [
@@ -257,13 +315,21 @@ function createTranslationWarmParser(): AcornParser {
   }
   assertExactParserStringKeys(branch, ['parent', 'base']);
   assertExactParserStringKeys(branchPrototype, ['constructor', 'separatedFrom', 'sibling']);
-  return parser;
+  return { branch, destructuringErrors, parser, regexpState, scope };
 }
 
 function parserRequiredOwnObject(owner: object, key: PropertyKey): object {
   const value = parserRequiredOwnValue(owner, key);
   if ((typeof value !== 'object' || value === null) && typeof value !== 'function') {
     throw new NativeTypeError('Translation parser warm graph omitted a required object control.');
+  }
+  return value;
+}
+
+function parserRequiredOwnFunction(owner: object, key: PropertyKey): Function {
+  const value = parserRequiredOwnValue(owner, key);
+  if (typeof value !== 'function') {
+    throw new NativeTypeError('Translation parser warm graph omitted a required function control.');
   }
   return value;
 }
@@ -374,7 +440,11 @@ const parserExactRoots: readonly object[] = [
   NativeURIError,
   AcornParser,
   translationParserOptions,
-  translationWarmParser,
+  translationPrivateParserCensus.parser,
+  translationPrivateParserCensus.destructuringErrors,
+  translationPrivateParserCensus.scope,
+  translationPrivateParserCensus.regexpState,
+  translationPrivateParserCensus.branch,
 ];
 
 const translationParserSurfaceDefinitions = parserSurfaceDefinitions();

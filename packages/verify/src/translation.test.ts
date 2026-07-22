@@ -322,15 +322,134 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     );
   });
 
+  it('removes callbacks from Acorn private DestructuringErrors reached by a warm subclass', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = `const __kovoDestructuringErrorsTrigger = { reviewed: true };\n${client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    )}`;
+    const checkExpressionErrorsDescriptor = Object.getOwnPropertyDescriptor(
+      Parser.prototype,
+      'checkExpressionErrors',
+    );
+    const originalCheckExpressionErrors = checkExpressionErrorsDescriptor?.value;
+    expect(originalCheckExpressionErrors).toBeTypeOf('function');
+    let errors: object | undefined;
+    function captureDestructuringErrors(
+      this: Parser,
+      reference: unknown,
+      andThrow: unknown,
+    ): unknown {
+      if (typeof reference === 'object' && reference !== null) errors ??= reference;
+      return Reflect.apply(originalCheckExpressionErrors as Function, this, [reference, andThrow]);
+    }
+    try {
+      Object.defineProperty(Parser.prototype, 'checkExpressionErrors', {
+        ...checkExpressionErrorsDescriptor,
+        value: captureDestructuringErrors,
+      });
+      new ConstructableParser(
+        { allowHashBang: true, ecmaVersion: 'latest', sourceType: 'module' },
+        'const __kovoDestructuringErrorsSeed = { reviewed: true };',
+      ).parse();
+    } finally {
+      Object.defineProperty(
+        Parser.prototype,
+        'checkExpressionErrors',
+        checkExpressionErrorsDescriptor!,
+      );
+    }
+    expect(errors).toBeDefined();
+
+    const errorsPrototype = Object.getPrototypeOf(errors!) as object;
+    const originalDoubleProto = Object.getOwnPropertyDescriptor(errorsPrototype, 'doubleProto');
+    expect(originalDoubleProto).toBeUndefined();
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    let callbackCalls = 0;
+    function poisonParserPush<T>(this: T[], ...values: T[]): number {
+      if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+        return this.length;
+      }
+      return nativeApply(nativePush, this, values);
+    }
+    function poisonedDoubleProto(this: object, value: unknown): void {
+      callbackCalls += 1;
+      Array.prototype.push = poisonParserPush;
+      Object.defineProperty(this, 'doubleProto', {
+        configurable: true,
+        enumerable: true,
+        value,
+        writable: true,
+      });
+    }
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    let callerMutationRestored = false;
+    let parserPushRestored = false;
+    try {
+      Object.defineProperty(errorsPrototype, 'doubleProto', {
+        configurable: true,
+        enumerable: false,
+        set: poisonedDoubleProto,
+      });
+      findings = verifyEmittedTranslation(input).findings;
+      callerMutationRestored =
+        Object.getOwnPropertyDescriptor(errorsPrototype, 'doubleProto')?.set ===
+        poisonedDoubleProto;
+      parserPushRestored = Array.prototype.push === nativePush;
+    } finally {
+      Array.prototype.push = nativePush;
+      if (originalDoubleProto === undefined) {
+        Reflect.deleteProperty(errorsPrototype, 'doubleProto');
+      } else {
+        Object.defineProperty(errorsPrototype, 'doubleProto', originalDoubleProto);
+      }
+    }
+
+    expect(callbackCalls).toBe(0);
+    expect(callerMutationRestored).toBe(true);
+    expect(parserPushRestored).toBe(true);
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
   it('pins the exact Acorn version and fixed-mode lazy control census', () => {
     expect(acornVersion).toBe('8.17.0');
     const options = { allowHashBang: true, ecmaVersion: 'latest', sourceType: 'module' } as const;
-    const warm = new ConstructableParser(options, 'const __kovoWarmCensus = /(/;') as Parser & {
+    const originalCheckExpressionErrors = Object.getOwnPropertyDescriptor(
+      Parser.prototype,
+      'checkExpressionErrors',
+    )?.value;
+    expect(originalCheckExpressionErrors).toBeTypeOf('function');
+    let destructuringErrors: object | undefined;
+    class WarmCensusParser extends ConstructableParser {
+      checkExpressionErrors(reference: unknown, andThrow: unknown): unknown {
+        if (typeof reference === 'object' && reference !== null) {
+          destructuringErrors ??= reference;
+        }
+        return Reflect.apply(originalCheckExpressionErrors as Function, this, [
+          reference,
+          andThrow,
+        ]);
+      }
+    }
+    const warm = new WarmCensusParser(
+      options,
+      'const __kovoWarmDestructuringCensus = { reviewed: true }; const __kovoWarmRegExpCensus = /(/;',
+    ) as Parser & {
       keywords: RegExp;
       regexpState: { branchID: object; parser: Parser } | null;
       reservedWords: RegExp;
       reservedWordsStrict: RegExp;
       reservedWordsStrictBind: RegExp;
+      scopeStack: object[];
     };
     expect(() => warm.parse()).toThrow(/Unterminated group/u);
     expect(
@@ -341,6 +460,18 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
         warm.reservedWordsStrictBind,
       ]).size,
     ).toBe(4);
+    expect(new Set(Reflect.ownKeys(destructuringErrors!))).toEqual(
+      new Set([
+        'shorthandAssign',
+        'trailingComma',
+        'parenthesizedAssign',
+        'parenthesizedBind',
+        'doubleProto',
+      ]),
+    );
+    expect(Reflect.ownKeys(Object.getPrototypeOf(destructuringErrors!))).toEqual(['constructor']);
+    expect(Reflect.ownKeys(warm.scopeStack[0]!)).toEqual(['flags', 'var', 'lexical', 'functions']);
+    expect(Reflect.ownKeys(Object.getPrototypeOf(warm.scopeStack[0]!))).toEqual(['constructor']);
     expect(warm.regexpState?.parser).toBe(warm);
     expect(Reflect.ownKeys(Object.getPrototypeOf(warm.regexpState!))).toEqual([
       'constructor',

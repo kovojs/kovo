@@ -39,6 +39,14 @@ describe('security-gate-mutations', () => {
       'translation-verifier/drop-exact-parser-census',
       'translation-verifier/drop-warm-parser-control-graph',
     ]);
+    expect(
+      mutants.find(
+        (mutant) => mutant.name === 'translation-verifier/drop-warm-parser-control-graph',
+      ),
+    ).toMatchObject({
+      expectedKiller:
+        'translation parsing must census DestructuringErrors, Scope, RegExpValidationState, and BranchID',
+    });
   });
 
   it('enrolls the self-contained verifier parser pack forcing mutant', () => {
