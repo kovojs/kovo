@@ -8,6 +8,11 @@
   "files": [
     "dist"
   ],
+  "kovoPublish": {
+    "extraEntries": [
+      "./src/internal/runtime-lock.ts"
+    ]
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -31,7 +36,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal.ts src/internal/server-mount-adapter.ts src/internal/runtime-lock.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal.ts src/internal/runtime-lock.ts src/internal/server-mount-adapter.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
