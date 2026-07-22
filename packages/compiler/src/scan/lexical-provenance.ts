@@ -1,46 +1,93 @@
 import ts from 'typescript';
 
-import type { ScannedBindingCandidate, ScannedImportBindingFact } from '../security/capability-closure-model.js';
+import type {
+  ScannedBindingCandidate,
+  ScannedImportBindingFact,
+} from '../security/capability-closure-model.js';
 
-export interface ScannedCallProvenance { readonly callee: ScannedUseProvenance; readonly firstArgument?: ScannedUseProvenance }
-export interface ScannedUseProvenance { readonly candidates: readonly ScannedBindingCandidate[]; readonly uncertain: boolean }
-export interface ScannedLexicalProvenance { readonly calls: ReadonlyMap<number, ScannedCallProvenance> }
+export interface ScannedCallProvenance {
+  readonly callee: ScannedUseProvenance;
+  readonly firstArgument?: ScannedUseProvenance;
+}
+export interface ScannedUseProvenance {
+  readonly candidates: readonly ScannedBindingCandidate[];
+  readonly uncertain: boolean;
+}
+export interface ScannedLexicalProvenance {
+  readonly calls: ReadonlyMap<number, ScannedCallProvenance>;
+}
 
-interface Binding { readonly id: string; mutable: boolean; readonly name: string; readonly owner: string }
-interface Scope { readonly bindings: Map<string, Binding>; readonly id: string; readonly owner: string; readonly parent?: Scope }
+interface Binding {
+  readonly id: string;
+  mutable: boolean;
+  readonly name: string;
+  readonly owner: string;
+}
+interface Scope {
+  readonly bindings: Map<string, Binding>;
+  readonly id: string;
+  readonly owner: string;
+  readonly parent?: Scope;
+}
 
-interface Value extends ScannedUseProvenance { readonly captured: readonly string[] }
+interface Value extends ScannedUseProvenance {
+  readonly captured: readonly string[];
+}
 
 type Environment = Map<string, Value>;
 
-interface AnalysisState { readonly calls: Map<number, { callee: Value; firstArgument?: Value }>; readonly history: Map<string, Value>; readonly sourceFile: ts.SourceFile }
+interface AnalysisState {
+  budgetExhausted: boolean;
+  readonly calls: Map<number, { callee: Value; firstArgument?: Value }>;
+  readonly history: Map<string, Value>;
+  loopReanalysesRemaining: number;
+  readonly sourceFile: ts.SourceFile;
+}
+
+// Bounds repeated AST work to a fixed module-wide contract; overflow widens every call below.
+const loopReanalysisBudget = 16;
 
 /** Syntax-only lexical + flow abstraction for exact per-use capability provenance (SPEC §6.6). */
-export function scanLexicalProvenance(sourceFile: ts.SourceFile, imports: readonly ScannedImportBindingFact[]): ScannedLexicalProvenance {
+export function scanLexicalProvenance(
+  sourceFile: ts.SourceFile,
+  imports: readonly ScannedImportBindingFact[],
+): ScannedLexicalProvenance {
   const root = createScope(sourceFile);
-  const state: AnalysisState = { calls: new Map(), history: new Map(), sourceFile };
+  const state: AnalysisState = {
+    budgetExhausted: false,
+    calls: new Map(),
+    history: new Map(),
+    loopReanalysesRemaining: loopReanalysisBudget,
+    sourceFile,
+  };
   let environment: Environment = new Map();
   for (const imported of imports) {
     const binding = findBinding(root, imported.local);
     if (binding === undefined) continue;
-    environment.set(
-      stateKey(binding),
-      valueOf({
-        exportName: imported.imported,
-        kind: 'import',
-        ...(imported.namespace ? { namespace: true } : {}),
-        specifier: imported.specifier,
-      }),
-    );
+    const value = valueOf({
+      exportName: imported.imported,
+      kind: 'import',
+      ...(imported.namespace ? { namespace: true } : {}),
+      specifier: imported.specifier,
+    });
+    environment.set(stateKey(binding), value);
+    state.history.set(stateKey(binding), value);
   }
   environment = runStatements(sourceFile.statements, environment, root, state);
+  const overflow = state.budgetExhausted ? budgetOverflowValue(environment, state) : undefined;
   const callFacts = new Map<number, ScannedCallProvenance>();
   for (const [start, call] of state.calls) {
+    const callee = overflow === undefined ? call.callee : joinValues(call.callee, overflow);
+    const firstArgument = call.firstArgument === undefined
+      ? undefined
+      : overflow === undefined
+        ? call.firstArgument
+        : joinValues(call.firstArgument, overflow);
     callFacts.set(start, {
-      callee: finalizeValue(call.callee, state.history),
-      ...(call.firstArgument === undefined
+      callee: finalizeValue(callee, state.history),
+      ...(firstArgument === undefined
         ? {}
-        : { firstArgument: finalizeValue(call.firstArgument, state.history) }),
+        : { firstArgument: finalizeValue(firstArgument, state.history) }),
     });
   }
   return { calls: callFacts };
@@ -171,9 +218,30 @@ function runStatement(node: ts.Statement, env: Environment, scope: Scope, state:
     const no = node.elseStatement ? runStatement(node.elseStatement, new Map(base), scope, state) : base;
     return joinEnvironments(yes, no);
   }
-  if (ts.isWhileStatement(node) || ts.isDoStatement(node)) {
+  if (ts.isWhileStatement(node)) {
     const base = runExpression(node.expression, env, scope, state);
-    return loopEnvironment(base, (current) => runStatement(node.statement, current, scope, state));
+    return loopEnvironment(
+      base,
+      (current) => runExpression(
+        node.expression,
+        runStatement(node.statement, current, scope, state),
+        scope,
+        state,
+      ),
+      state,
+    );
+  }
+  if (ts.isDoStatement(node)) {
+    return loopEnvironment(
+      env,
+      (current) => runExpression(
+        node.expression,
+        runStatement(node.statement, current, scope, state),
+        scope,
+        state,
+      ),
+      state,
+    );
   }
   if (ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node)) {
     const loop = createScope(node, scope);
@@ -187,8 +255,9 @@ function runStatement(node: ts.Statement, env: Environment, scope: Scope, state:
     return loopEnvironment(base, (current) => {
       let body = runStatement(node.statement, current, loop, state);
       if (ts.isForStatement(node) && node.incrementor) body = runExpression(node.incrementor, body, loop, state);
+      if (ts.isForStatement(node) && node.condition) body = runExpression(node.condition, body, loop, state);
       return body;
-    });
+    }, state);
   }
   if (ts.isTryStatement(node)) {
     const attempted = runStatement(node.tryBlock, new Map(env), scope, state);
@@ -480,12 +549,36 @@ function joinEnvironments(left: Environment, right: Environment): Environment {
   return result;
 }
 
-function loopEnvironment(base: Environment, transfer: (current: Environment) => Environment): Environment {
+function loopEnvironment(
+  base: Environment,
+  transfer: (current: Environment) => Environment,
+  state: AnalysisState,
+): Environment {
   for (let result = base;;) {
     const next = joinEnvironments(result, transfer(new Map(result)));
     if (JSON.stringify([...next]) === JSON.stringify([...result])) return next;
+    if (state.loopReanalysesRemaining === 0) {
+      state.budgetExhausted = true;
+      return next;
+    }
+    state.loopReanalysesRemaining -= 1;
     result = next;
   }
+}
+
+function budgetOverflowValue(environment: Environment, state: AnalysisState): Value {
+  const candidates = new Map<string, ScannedBindingCandidate>();
+  const collect = (value: Value): void => {
+    for (const candidate of value.candidates) candidates.set(JSON.stringify(candidate), candidate);
+  };
+  collect(unknownValue('lexical provenance loop reanalysis budget exhausted'));
+  for (const value of environment.values()) collect(value);
+  for (const value of state.history.values()) collect(value);
+  for (const call of state.calls.values()) {
+    collect(call.callee);
+    if (call.firstArgument) collect(call.firstArgument);
+  }
+  return { candidates: [...candidates.values()], captured: [], uncertain: true };
 }
 
 function finalizeValue(value: Value, history: ReadonlyMap<string, Value>): ScannedUseProvenance {

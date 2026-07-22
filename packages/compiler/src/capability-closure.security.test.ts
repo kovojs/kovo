@@ -1191,6 +1191,88 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
   });
 
+  it('evaluates do bodies before conditions and repeats while and for condition effects', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let doFactory = route;
+          do {
+            doFactory('/do-before-condition', { render() { return null; } });
+          } while ((doFactory = localFactory, false));
+
+          let whileFactory = localFactory;
+          let whileSource = localFactory;
+          while ((whileFactory = whileSource, globalThis.choice)) {
+            whileSource = route;
+          }
+          whileFactory('/repeated-while-condition', { render() { return null; } });
+
+          let forFactory = localFactory;
+          let forSource = localFactory;
+          for (; (forFactory = forSource, globalThis.choice);) {
+            forSource = route;
+          }
+          forFactory('/repeated-for-condition', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual([
+      '/do-before-condition',
+      '/repeated-for-condition',
+      '/repeated-while-condition',
+    ]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
+  it('widens every call and closes when the loop reanalysis budget is exhausted', () => {
+    const aliases = Array.from({ length: 64 }, (_, index) => `let factory${index} = localFactory;`);
+    const transfers = Array.from(
+      { length: 63 },
+      (_, index) => `factory${index} = factory${index + 1};`,
+    );
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          ${aliases.join('\n')}
+          while (globalThis.choice) {
+            ${transfers.join('\n')}
+            factory63 = route;
+          }
+          factory0('/budget-widening', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/budget-widening', rootKind: 'route' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/budget-widening',
+        reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {
