@@ -211,6 +211,7 @@ export interface ScannedCapabilityModule {
   readonly globals: readonly ScannedGlobalCapabilityFact[];
   readonly importBindings: readonly ScannedImportBindingFact[];
   readonly imports: readonly ScannedImportFact[];
+  readonly lexicalProvenanceBudgetExhausted?: boolean;
 }
 
 /** @internal Exact package edges inserted only by the reviewed compiler transform. */

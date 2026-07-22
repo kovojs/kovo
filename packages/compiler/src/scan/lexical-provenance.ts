@@ -14,6 +14,7 @@ export interface ScannedUseProvenance {
   readonly uncertain: boolean;
 }
 export interface ScannedLexicalProvenance {
+  readonly budgetExhausted: boolean;
   readonly calls: ReadonlyMap<number, ScannedCallProvenance>;
 }
 
@@ -71,26 +72,18 @@ export function scanLexicalProvenance(
       specifier: imported.specifier,
     });
     environment.set(stateKey(binding), value);
-    state.history.set(stateKey(binding), value);
   }
   environment = runStatements(sourceFile.statements, environment, root, state);
-  const overflow = state.budgetExhausted ? budgetOverflowValue(environment, state) : undefined;
   const callFacts = new Map<number, ScannedCallProvenance>();
   for (const [start, call] of state.calls) {
-    const callee = overflow === undefined ? call.callee : joinValues(call.callee, overflow);
-    const firstArgument = call.firstArgument === undefined
-      ? undefined
-      : overflow === undefined
-        ? call.firstArgument
-        : joinValues(call.firstArgument, overflow);
     callFacts.set(start, {
-      callee: finalizeValue(callee, state.history),
-      ...(firstArgument === undefined
+      callee: finalizeValue(call.callee, state.history),
+      ...(call.firstArgument === undefined
         ? {}
-        : { firstArgument: finalizeValue(firstArgument, state.history) }),
+        : { firstArgument: finalizeValue(call.firstArgument, state.history) }),
     });
   }
-  return { calls: callFacts };
+  return { budgetExhausted: state.budgetExhausted, calls: callFacts };
 }
 
 function createScope(node: ts.Node, parent?: Scope): Scope {
@@ -564,21 +557,6 @@ function loopEnvironment(
     state.loopReanalysesRemaining -= 1;
     result = next;
   }
-}
-
-function budgetOverflowValue(environment: Environment, state: AnalysisState): Value {
-  const candidates = new Map<string, ScannedBindingCandidate>();
-  const collect = (value: Value): void => {
-    for (const candidate of value.candidates) candidates.set(JSON.stringify(candidate), candidate);
-  };
-  collect(unknownValue('lexical provenance loop reanalysis budget exhausted'));
-  for (const value of environment.values()) collect(value);
-  for (const value of state.history.values()) collect(value);
-  for (const call of state.calls.values()) {
-    collect(call.callee);
-    if (call.firstArgument) collect(call.firstArgument);
-  }
-  return { candidates: [...candidates.values()], captured: [], uncertain: true };
 }
 
 function finalizeValue(value: Value, history: ReadonlyMap<string, Value>): ScannedUseProvenance {

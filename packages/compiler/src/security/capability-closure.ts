@@ -307,6 +307,7 @@ const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
   'serialized-browser-handler',
   'webhook',
 ]);
+const lexicalOverflowRootCandidateBudget = 32;
 
 const frameworkPostureRegistry = createFrameworkPostureRegistry();
 
@@ -484,6 +485,11 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         invalidReasons.push(`${packageName}${subpath} has no explicit <module> permission`);
       }
     }
+  }
+  if (rootFactories.size > lexicalOverflowRootCandidateBudget) {
+    invalidReasons.push(
+      `root factory count ${rootFactories.size} exceeds lexical overflow candidate budget ${lexicalOverflowRootCandidateBudget}`,
+    );
   }
   return { invalidReasons, packages, permissions, rootFactories };
 }
@@ -959,6 +965,50 @@ function resolveCallUse(
   return { origins, uncertain: (first ? call.firstArgumentUncertain : call.calleeUncertain) === true || candidates.some((candidate) => candidate.kind === 'unknown') || origins.length !== 1 };
 }
 
+function lexicalOverflowRootOrigins(
+  module: ScannedCapabilityModule,
+): readonly BindingOrigin[] {
+  const roots = new Map<string, BindingOrigin>();
+  const collect = (origin: BindingOrigin): void => {
+    if (origin.kind !== 'package') return;
+    const id = frameworkMemberId(
+      packageNameForSpecifier(origin.specifier),
+      packageSubpath(origin.specifier),
+      origin.exportName,
+    );
+    if (frameworkPostureRegistry.rootFactories.has(id)) {
+      roots.set(bindingOriginKey(origin), origin);
+    }
+  };
+  let includeRegistry = module.imports.some(
+    (imported) => imported.kind === 'dynamic-import' || imported.kind === 'require',
+  );
+  for (const imported of module.importBindings) {
+    if (imported.namespace || !frameworkPostureRegistry.packages.has(
+      packageNameForSpecifier(imported.specifier),
+    )) {
+      includeRegistry = true;
+      continue;
+    }
+    collect({
+      exportName: imported.imported,
+      kind: 'package',
+      specifier: imported.specifier,
+    });
+  }
+  if (includeRegistry) {
+    for (const id of frameworkPostureRegistry.rootFactories.keys()) {
+      const [packageName, subpath, exportName] = id.split('\0');
+      collect({
+        exportName: exportName!,
+        kind: 'package',
+        specifier: subpath === '.' ? packageName! : `${packageName}${subpath!.slice(1)}`,
+      });
+    }
+  }
+  return [...roots.values()].slice(0, lexicalOverflowRootCandidateBudget);
+}
+
 function discoverRoots(
   modules: readonly ScannedCapabilityModule[],
   resolver: BindingResolver,
@@ -966,6 +1016,9 @@ function discoverRoots(
   const roots: CapabilityRoot[] = [];
   const keys = new Set<string>();
   for (const module of modules) {
+    const overflowOrigins = module.lexicalProvenanceBudgetExhausted
+      ? lexicalOverflowRootOrigins(module)
+      : [];
     for (const handler of module.browserHandlers) {
       appendRoot(roots, keys, {
         kind: 'serialized-browser-handler',
@@ -976,7 +1029,10 @@ function discoverRoots(
     }
     for (const call of module.calls) {
       const use = resolveCallUse(resolver, module.fileName, call);
-      for (const origin of use.origins) {
+      const origins = [...new Map(
+        [...use.origins, ...overflowOrigins].map((origin) => [bindingOriginKey(origin), origin]),
+      ).values()];
+      for (const origin of origins) {
         if (origin.kind !== 'package') continue;
         const factoryId = frameworkMemberId(
           packageNameForSpecifier(origin.specifier),
@@ -997,7 +1053,9 @@ function discoverRoots(
         appendRoot(roots, keys, {
           ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),
           kind,
-          ...(use.uncertain ? { lexicalProvenanceClosed: true } : {}),
+          ...(use.uncertain || module.lexicalProvenanceBudgetExhausted
+            ? { lexicalProvenanceClosed: true }
+            : {}),
           module: separatedAdapter ? callbackOrigin.module : module.fileName,
           name: call.firstLiteral ?? call.assignedName ?? origin.exportName,
           site: call.site,

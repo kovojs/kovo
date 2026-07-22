@@ -227,6 +227,9 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
     globals: dedupeGlobals(globals),
     importBindings,
     imports,
+    ...(lexicalProvenance.budgetExhausted
+      ? { lexicalProvenanceBudgetExhausted: true }
+      : {}),
   };
 }
 
