@@ -1426,12 +1426,35 @@ function packageManifestBinTargets(value: unknown, packageName: string): readonl
         ? Object.entries(value).sort(([left], [right]) => compareStrings(left, right))
         : undefined;
   if (entries === undefined) throw new TypeError('bin must be a string or a plain object');
-  return entries.map(([name, target]) => {
-    if (!isNonemptyText(name) || typeof target !== 'string') {
-      throw new TypeError('bin names and targets must be non-empty strings');
+  assertPortablePackageBinNames(
+    entries.map(([name]) => name),
+    packageName,
+  );
+  return entries.map(([, target]) => {
+    if (typeof target !== 'string') {
+      throw new TypeError('bin targets must be strings');
     }
     return packageManifestTarget(target, packageName);
   });
+}
+
+function assertPortablePackageBinNames(names: readonly string[], packageName: string): void {
+  const ownerByShimIdentity = new Map<string, string>();
+  for (const name of names) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(name) || !isPortableArtifactSegment(name)) {
+      throw new TypeError(`${packageName} bin name ${JSON.stringify(name)} is not portable`);
+    }
+    for (const shimName of [name, `${name}.cmd`, `${name}.ps1`]) {
+      const identity = portableArtifactSegmentIdentity(shimName);
+      const previousOwner = ownerByShimIdentity.get(identity);
+      if (previousOwner !== undefined && previousOwner !== name) {
+        throw new TypeError(
+          `${packageName} bin names ${JSON.stringify(previousOwner)} and ${JSON.stringify(name)} create the same portable shim`,
+        );
+      }
+      ownerByShimIdentity.set(identity, name);
+    }
+  }
 }
 
 function packageManifestTarget(value: string, packageName: string): string {
@@ -2502,7 +2525,7 @@ function isCanonicalArtifactPath(value: unknown): value is string {
     /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*\/dist\/[A-Za-z0-9_./-]+\.mjs$/u.test(value) &&
     parts.length >= 4 &&
     parts[0] === '@kovojs' &&
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(parts[1] ?? '') &&
+    isCanonicalPackageName(`${parts[0]}/${parts[1]}`) &&
     parts[2] === 'dist' &&
     parts.slice(3).every((segment) => segment !== '' && segment !== '.' && segment !== '..') &&
     parts.slice(3).every(isPortableArtifactSegment) &&
@@ -2526,10 +2549,11 @@ function isPortableArtifactSegment(value: string): boolean {
 }
 
 function portableArtifactPathIdentity(value: string): string {
-  return value
-    .split('/')
-    .map((segment) => portableFilesystemName(segment).replace(/[ .]+$/u, ''))
-    .join('/');
+  return value.split('/').map(portableArtifactSegmentIdentity).join('/');
+}
+
+function portableArtifactSegmentIdentity(value: string): string {
+  return portableFilesystemName(value).replace(/[ .]+$/u, '');
 }
 
 function validatePortableArtifactPaths(
@@ -2561,7 +2585,10 @@ function packageNameFromArtifact(value: string): string {
 }
 
 function isCanonicalPackageName(value: unknown): value is string {
-  return typeof value === 'string' && /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
+  if (typeof value !== 'string' || !/^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value)) {
+    return false;
+  }
+  return isPortableArtifactSegment(value.slice('@kovojs/'.length));
 }
 
 function isCanonicalExportSubpath(value: unknown): value is string {

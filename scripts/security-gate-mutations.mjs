@@ -2363,8 +2363,18 @@ const removedVerifyDirectoryEntryBoundBranch = [
 const verifyCaseFoldedNodeModulesBranch = '      if (isNodeModulesDirectoryName(entry.name)) {';
 const weakenedVerifyCaseFoldedNodeModulesBranch = "      if (entry.name === 'node_modules') {";
 const verifyPortableArtifactIdentityBranch =
-  "    .map((segment) => portableFilesystemName(segment).replace(/[ .]+$/u, ''))";
-const weakenedVerifyPortableArtifactIdentityBranch = '    .map((segment) => segment)';
+  "  return portableFilesystemName(value).replace(/[ .]+$/u, '');";
+const weakenedVerifyPortableArtifactIdentityBranch = '  return value;';
+const verifyPortablePackageBinNamesBranch = [
+  '  assertPortablePackageBinNames(',
+  '    entries.map(([name]) => name),',
+  '    packageName,',
+  '  );',
+].join('\n');
+const removedVerifyPortablePackageBinNamesBranch = '';
+const verifyPortablePackageNameBranch =
+  "  return isPortableArtifactSegment(value.slice('@kovojs/'.length));";
+const removedVerifyPortablePackageNameBranch = '  return true;';
 const verifyPolicyPackageResolutionBranch = [
   "  if (specifier.startsWith('@kovojs/')) {",
   '    return resolvePolicyPackageSpecifier(policy, module, specifier);',
@@ -8189,6 +8199,29 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description:
+      'Stops checking package bin keys against the cross-platform command-shim namespace.',
+    expectedKiller:
+      'one portable npm command shim must never select between two reviewed runtime targets',
+    name: 'certificate-verifier/drop-portable-bin-shim-closure',
+    replacement: removedVerifyPortablePackageBinNamesBranch,
+    search: verifyPortablePackageBinNamesBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsPortableBinCollisionBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Allows a package leaf reserved as a device name on supported Windows hosts.',
+    expectedKiller:
+      'reviewed package and artifact identities must remain materializable on supported filesystems',
+    name: 'certificate-verifier/drop-portable-package-name-closure',
+    replacement: removedVerifyPortablePackageNameBranch,
+    search: verifyPortablePackageNameBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsPortablePackageNameBehavior,
+  },
+  {
+    behavioralTypeScript: true,
     description: 'Restores convention-based first-party package resolution in the generic checker.',
     expectedKiller:
       'generic certificate edges must resolve exclusively through reviewer-owned package manifests',
@@ -8507,6 +8540,38 @@ async function assertVerifierRejectsPortableArtifactCollisionBehavior(moduleUnde
   });
   if (!result.findings.some((entry) => entry.code === 'artifact-path-collision')) {
     throw new Error('certificate verifier admitted cross-platform artifact path aliases');
+  }
+}
+
+async function assertVerifierRejectsPortableBinCollisionBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/root.mjs';
+  const evilModule = '@kovojs/server/dist/evil.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    capabilities: { [evilModule]: ['process'] },
+    manifest: {
+      bin: { KOVO: './dist/root.mjs', kovo: './dist/evil.mjs' },
+      name: '@kovojs/server',
+    },
+    sources: {
+      [evilModule]: "import 'node:child_process';",
+      [rootModule]: 'export const safe = true;',
+    },
+  });
+  if (!result.findings.some((entry) => entry.code === 'policy-manifest-entrypoint')) {
+    throw new Error('certificate verifier admitted colliding portable package bin shims');
+  }
+}
+
+async function assertVerifierRejectsPortablePackageNameBehavior(moduleUnderTest) {
+  const module = '@kovojs/con/dist/root.mjs';
+  const manifest = { name: '@kovojs/con' };
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest,
+    packages: [{ manifest, name: '@kovojs/con' }],
+    sources: { [module]: 'export const root = true;' },
+  });
+  if (!result.findings.some((entry) => entry.code === 'artifact-path')) {
+    throw new Error('certificate verifier admitted a reserved portable package identity');
   }
 }
 

@@ -770,6 +770,69 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     }
   });
 
+  it('rejects package bin names that select different code through one portable shim', async () => {
+    const evilModule = '@kovojs/server/dist/evil.mjs';
+    const artifacts = artifactSource({
+      [evilModule]: "import 'node:child_process';",
+      [rootModule]: 'export const safe = true;',
+    });
+    const certificate = certificateFor(artifacts, {
+      cap: { [evilModule]: ['process'], [rootModule]: [] },
+      roots: [{ module: rootModule, rootKind: 'application' }],
+    });
+
+    await expect(
+      verifyBound(certificate, artifacts, {
+        packages: [
+          {
+            manifest: {
+              bin: { KOVO: './dist/root.mjs', kovo: './dist/evil.mjs' },
+              name: '@kovojs/server',
+            },
+            name: '@kovojs/server',
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'policy-manifest-entrypoint', obligation: 'schema' }),
+      ]),
+      ok: false,
+    });
+
+    await expect(
+      verifyBound(certificate, artifacts, {
+        packages: [
+          {
+            manifest: {
+              bin: { kovo: './dist/root.mjs', 'kovo.cmd': './dist/evil.mjs' },
+              name: '@kovojs/server',
+            },
+            name: '@kovojs/server',
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'policy-manifest-entrypoint', obligation: 'schema' }),
+      ]),
+      ok: false,
+    });
+  });
+
+  it('rejects package leaves reserved by supported filesystems', async () => {
+    const reservedModule = '@kovojs/con/dist/root.mjs';
+    const artifacts = artifactSource({ [reservedModule]: 'export const root = true;' });
+
+    await expect(verifyBound(certificateFor(artifacts), artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'artifact-path', obligation: 'schema' }),
+        expect.objectContaining({ code: 'policy-package', obligation: 'schema' }),
+      ]),
+      ok: false,
+    });
+  });
+
   it('bounds recursive certificate and policy JSON before canonicalization', async () => {
     const artifacts = artifactSource({ [rootModule]: 'export {};' });
     const valid = certificateFor(artifacts);

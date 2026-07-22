@@ -309,6 +309,23 @@ describe('filesystem certificate artifacts', () => {
     },
   );
 
+  it('rejects portable aliases discovered by the real package-tree census', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+    });
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const manifest = certificate(fixture.sources, policy);
+    mkdirSync(path.join(fixture.root, '@kovojs/server/dist/scope'));
+    mkdirSync(path.join(fixture.root, '@kovojs/server/dist/ＳＣＯＰＥ'));
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+        ok: false,
+      },
+    );
+  });
+
   it('rejects insertion-ordered conditional exports that can select another listed module', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',
