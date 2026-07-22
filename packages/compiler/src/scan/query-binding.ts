@@ -2,7 +2,7 @@ import * as ts from 'typescript';
 
 import { propertyAccessPath } from './ast.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
-import type { LiveTargetQueryBindingFact } from '../types.js';
+import type { QueryBindingModel } from './model.js';
 
 ensureTypescriptRuntime(ts);
 
@@ -15,58 +15,11 @@ ensureTypescriptRuntime(ts);
  * rule 9) and removes the duplication. Behavior-neutral: the functions are moved verbatim.
  */
 
-/** @internal Parse a query-binding initializer into the live-target fact shape (sans `name`). */
-export function queryBindingFromExpression(
-  expressionSource: string,
-): Omit<LiveTargetQueryBindingFact, 'name'> | null {
-  const sourceFile = ts.createSourceFile(
-    'query-binding.tsx',
-    `const __binding = ${expressionSource};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const statement = sourceFile.statements[0];
-  if (!statement || !ts.isVariableStatement(statement)) return null;
-  const expression = statement.declarationList.declarations[0]?.initializer;
-  if (!expression) return null;
-
-  return queryBindingFromParsedExpression(sourceFile, expression);
-}
-
-/** @internal Extract the readable query-key expression (or null for object-literal keys). */
-export function queryExpressionFromBinding(expressionSource: string): string | null {
-  const sourceFile = ts.createSourceFile(
-    'query-binding.tsx',
-    `const __binding = ${expressionSource};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const statement = sourceFile.statements[0];
-  if (!statement || !ts.isVariableStatement(statement)) return null;
-  const expression = statement.declarationList.declarations[0]?.initializer;
-  if (!expression) return null;
-
-  const unwrappedExpression = unwrapQueryRefreshExpression(expression);
-  if (
-    ts.isCallExpression(unwrappedExpression) &&
-    ts.isPropertyAccessExpression(unwrappedExpression.expression) &&
-    unwrappedExpression.expression.name.text === 'args'
-  ) {
-    return queryKeyReadableExpression(
-      unwrapQueryRefreshExpression(unwrappedExpression.expression.expression),
-      sourceFile,
-    );
-  }
-
-  return queryKeyReadableExpression(unwrappedExpression, sourceFile);
-}
-
-function queryBindingFromParsedExpression(
+/** @internal Build query-binding facts from the scanner's one authoritative AST. */
+export function queryBindingFromParsedExpression(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
-): Omit<LiveTargetQueryBindingFact, 'name'> | null {
+): QueryBindingModel {
   // Query binding strings are compiler-authored structural grammar. `.refresh()` and `.args()`
   // are chain modifiers on the serialized binding expression, not framework API authority checks.
   const unwrappedExpression = unwrapQueryRefreshExpression(expression);
@@ -79,19 +32,29 @@ function queryBindingFromParsedExpression(
   ) {
     const [mapper] = unwrappedExpression.arguments;
     const arrow = mapper && ts.isArrowFunction(mapper) ? mapper : null;
+    const queryExpression = unwrapQueryRefreshExpression(unwrappedExpression.expression.expression);
+    const queryKeyExpression = queryKeyReadableExpression(queryExpression, sourceFile);
     return {
       ...(arrow ? queryArgsArrowFacts(sourceFile, arrow) : {}),
       ...(hasRefresh ? { hasRefresh } : {}),
-      queryExpression: unwrapQueryRefreshExpression(
-        unwrappedExpression.expression.expression,
-      ).getText(sourceFile),
+      executable: isRuntimeQueryReference(queryExpression),
+      ...(queryKeyExpression === null ? {} : { queryKeyExpression }),
+      queryExpression: queryExpression.getText(sourceFile),
     };
   }
 
+  const queryKeyExpression = queryKeyReadableExpression(unwrappedExpression, sourceFile);
   return {
     ...(hasRefresh ? { hasRefresh } : {}),
+    executable: isRuntimeQueryReference(unwrappedExpression),
+    ...(queryKeyExpression === null ? {} : { queryKeyExpression }),
     queryExpression: unwrappedExpression.getText(sourceFile),
   };
+}
+
+function isRuntimeQueryReference(expression: ts.Expression): boolean {
+  if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) return true;
+  return ts.isCallExpression(expression) && isRuntimeQueryReference(expression.expression);
 }
 
 function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression {
@@ -116,7 +79,7 @@ function expressionHasQueryRefresh(expression: ts.Expression): boolean {
 function queryArgsArrowFacts(
   sourceFile: ts.SourceFile,
   arrow: ts.ArrowFunction,
-): Pick<LiveTargetQueryBindingFact, 'argsExpression' | 'argsParam' | 'argsPropertyAccesses'> {
+): Pick<QueryBindingModel, 'argsExpression' | 'argsParam' | 'argsPropertyAccesses'> {
   const param = arrow.parameters[0];
   const argsParam = param && ts.isIdentifier(param.name) ? param.name.text : undefined;
   const body = arrow.body;

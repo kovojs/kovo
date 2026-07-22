@@ -1318,6 +1318,9 @@ export const CartBadge = component({
     expect(bootstrap.source).toContain(
       "import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/generated';",
     );
+    expect(bootstrap.source).toContain(
+      "import { defaultEnhancedFetch } from '@kovojs/browser/client';",
+    );
     // B2 (SPEC §5.2): each compiled-plan import is aliased to a per-input-unique local so two
     // same-named components never collide into a duplicate lexical binding. The alias is derived
     // from the import path hash, so assert the aliased import shape rather than a fixed local.
@@ -1346,6 +1349,7 @@ export const CartBadge = component({
     expect(bootstrap.source).toContain('clockUpdatePlans,');
     expect(bootstrap.source).toContain('queryStore: store');
     expect(bootstrap.source).toContain('enhancedMutations: {');
+    expect(bootstrap.source).toContain('fetch: defaultEnhancedFetch,');
     expect(bootstrap.source).toContain('queryPlans,');
     expect(bootstrap.source).toContain('export function applyKovoDeferredStreamResponse');
     expect(bootstrap.source).toContain('return applyDeferredStreamResponseToRuntime({');

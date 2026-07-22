@@ -19,7 +19,10 @@ import { emitQueryPlanBootstrapModule } from './bootstrap.js';
  */
 
 interface InstalledLoader {
-  enhancedMutations: { queryPlans: Record<string, KovoApplier> };
+  enhancedMutations: {
+    fetch: (url: string, options: unknown) => unknown;
+    queryPlans: Record<string, KovoApplier>;
+  };
 }
 
 type KovoApplier = (root: unknown, value: unknown, context?: unknown) => unknown;
@@ -40,6 +43,10 @@ function runBootstrap(
     .replace(
       /import\s*\{([^}]*)\}\s*from\s*['"]@kovojs\/browser\/generated['"];?/g,
       (_match, names: string) => `const { ${names.trim()} } = runtime;`,
+    )
+    .replace(
+      /import\s*\{([^}]*)\}\s*from\s*['"]@kovojs\/browser\/client['"];?/g,
+      (_match, names: string) => `const { ${names.trim()} } = runtimeClient;`,
     )
     .replace(
       /import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"];?/g,
@@ -67,6 +74,9 @@ function runBootstrap(
       return { islandSignalScope: {} };
     },
   };
+  const runtimeClient = {
+    defaultEnhancedFetch: () => 'boot-pinned-fetch',
+  };
 
   runInNewContext(rewritten, {
     document: {},
@@ -74,6 +84,7 @@ function runBootstrap(
     fetch: () => {},
     planModules,
     runtime,
+    runtimeClient,
   });
 
   const installed = calls[0];
@@ -161,5 +172,17 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
     const bootstrap = emitQueryPlanBootstrapModule([]);
     const installed = runBootstrap(bootstrap.source, {});
     expect(installed.enhancedMutations.queryPlans).toEqual({});
+  });
+
+  it('wires the boot-pinned framework mutation transport instead of a late global fetch lookup', () => {
+    const bootstrap = emitQueryPlanBootstrapModule([]);
+    expect(bootstrap.source).toContain(
+      "import { defaultEnhancedFetch } from '@kovojs/browser/client';",
+    );
+    expect(bootstrap.source).toContain('fetch: defaultEnhancedFetch,');
+    expect(bootstrap.source).not.toContain('=> fetch(');
+
+    const installed = runBootstrap(bootstrap.source, {});
+    expect(installed.enhancedMutations.fetch('/_m/cart/add', {})).toBe('boot-pinned-fetch');
   });
 });

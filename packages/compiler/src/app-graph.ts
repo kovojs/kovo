@@ -53,7 +53,6 @@ import {
   type NamedImportModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
-import { queryBindingFromExpression, queryExpressionFromBinding } from './scan/query-binding.js';
 import { uniqueSorted } from './shared.js';
 import type {
   CompileAppGraphOptions,
@@ -1505,7 +1504,7 @@ function componentQueryNameFacts(
   for (let index = 0; index < snapshot.length; index += 1) {
     const entry = snapshot[index]!;
     compilerArrayAppend(names, entry.key, 'Compiler packages/compiler/src/app-graph.ts collection');
-    const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+    const queryExpression = entry.queryBinding?.queryKeyExpression;
     if (!queryExpression) continue;
     compilerArrayAppend(
       names,
@@ -1573,12 +1572,12 @@ function componentQueryBindingFacts(component: ComponentModel): LiveTargetQueryB
   const facts: LiveTargetQueryBindingFact[] = [];
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!;
-    const parsed = entry.value ? queryBindingFromExpression(entry.value) : null;
+    const parsed = entry.queryBinding;
     compilerArrayAppend(
       facts,
       {
         name: entry.key,
-        ...(parsed ?? { queryExpression: entry.value ?? entry.key }),
+        ...(parsed ?? { executable: false, queryExpression: entry.value ?? entry.key }),
       },
       'Compiler packages/compiler/src/app-graph.ts collection',
     );

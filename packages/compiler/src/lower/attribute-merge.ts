@@ -6,7 +6,7 @@ import {
   type JsxAttributeModel,
   type ObjectLiteralEntry,
 } from '../scan/parse.js';
-import { dedupeBy, escapeAttribute, splitDepValue } from '../shared.js';
+import { dedupeBy, escapeAttribute, splitDepTokenValue } from '../shared.js';
 import {
   compilerArrayJoin,
   compilerArrayLength,
@@ -604,7 +604,7 @@ function mergeDepLists(
   if (left === undefined || right === undefined) return undefined;
   const unique = compilerCreateSet<string>();
   const values: string[] = [];
-  const dependencies = splitDepValue(`${left} ${right}`);
+  const dependencies = splitDepTokenValue(`${left} ${right}`);
   const length = compilerArrayLength(dependencies, 'Dependency merge tokens');
   for (let index = 0; index < length; index += 1) {
     const dependency = compilerOwnDataValue(

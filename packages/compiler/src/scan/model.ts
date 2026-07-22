@@ -22,11 +22,25 @@ export interface ComponentOptionEntry {
 export interface ObjectLiteralEntry {
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
+  /** Parser-owned structural facts for query-binding consumers; never re-derived from `value`. */
+  queryBinding?: QueryBindingModel;
   staticConstructorType?: 'boolean' | 'number' | 'string';
   /** Parser-decoded string literal value; consumers must not re-parse escape sequences. */
   staticStringValue?: string;
   value?: string;
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
+}
+
+export interface QueryBindingModel {
+  argsExpression?: string;
+  argsParam?: string;
+  argsPropertyAccesses?: readonly string[];
+  /** Parser-owned verdict: the query expression is an executable identifier/member/call chain. */
+  executable: boolean;
+  hasRefresh?: boolean;
+  /** Readable runtime query reference, absent for object-literal query keys. */
+  queryKeyExpression?: string;
+  queryExpression: string;
 }
 
 export type StaticJsxWireAttributeValue =

@@ -137,7 +137,6 @@ export {
   mutationSessionAuthorityFacts,
   parseComponentModule,
 } from './scan/parse.js';
-export { queryExpressionFromBinding } from './scan/query-binding.js';
 export { deriveRegistryIdentity } from './registry-identities.js';
 export {
   createEmptyCompileResult,

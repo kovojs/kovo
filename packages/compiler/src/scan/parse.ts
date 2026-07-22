@@ -69,6 +69,7 @@ import {
   scanBrowserSecurityOperations,
   scanServerSecurityOperations,
 } from './security-operation-ir.js';
+import { queryBindingFromParsedExpression } from './query-binding.js';
 import {
   callExpressionReceiverSegments,
   propertyAccessPath,
@@ -6918,17 +6919,26 @@ function objectLiteralEntries(
           property.initializer.getEnd(),
         ),
       };
+      compilerDefineOwnDataProperty(
+        entry,
+        'queryBinding',
+        queryBindingFromParsedExpression(sourceFile, property.initializer),
+        false,
+      );
       recordFrameworkTrustedUrlFact(entry, sourceFile, property.initializer);
       compilerArrayAppend(result, entry, 'Object literal entries');
       continue;
     }
 
     if (ts.isShorthandPropertyAssignment(property)) {
-      compilerArrayAppend(
-        result,
-        { key: property.name.text, value: property.name.text },
-        'Object literal entries',
+      const entry: ObjectLiteralEntry = { key: property.name.text, value: property.name.text };
+      compilerDefineOwnDataProperty(
+        entry,
+        'queryBinding',
+        queryBindingFromParsedExpression(sourceFile, property.name),
+        false,
       );
+      compilerArrayAppend(result, entry, 'Object literal entries');
       continue;
     }
 

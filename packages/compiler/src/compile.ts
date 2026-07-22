@@ -814,7 +814,9 @@ function emitServerPhase(
         )?.component?.localName ?? parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
       moduleImportInsertionOffset: lowered.model.moduleImportInsertionOffset,
+      namedImports: lowered.model.namedImports,
       source: insertDerivedWireKeyImports(patchedServerSource, lowered.model),
+      sourceIdentifierNames: lowered.model.sourceIdentifierNames,
     }),
   );
 
@@ -1723,19 +1725,7 @@ function insertDerivedWireKeyImports(source: string, model: ComponentModuleModel
   }
   if (imports.length === 0) return source;
 
-  const sourceFile = parseSourceFile('lowered.tsx', source);
-  const statements = compilerSnapshotDenseArray(sourceFile.statements, 'Lowered source statements');
-  let importDeclarationEnd = 0;
-  for (let index = statements.length - 1; index >= 0; index -= 1) {
-    if (ts.isImportDeclaration(statements[index]!)) {
-      importDeclarationEnd = statements[index]!.end;
-      break;
-    }
-  }
   const importLine = `import { ${compilerArrayJoin(imports, ', ')} } from '${derivedWireKeyModule}';\n`;
-  if (importDeclarationEnd > 0) {
-    return `${compilerStringSlice(source, 0, importDeclarationEnd)}\n${importLine}${compilerStringSlice(source, importDeclarationEnd)}`;
-  }
   const start = model.moduleImportInsertionOffset;
   return `${compilerStringSlice(source, 0, start)}${importLine}${compilerStringSlice(source, start)}`;
 }

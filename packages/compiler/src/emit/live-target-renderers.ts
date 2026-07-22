@@ -1,5 +1,3 @@
-import * as ts from 'typescript';
-
 import {
   compilerArrayAppend,
   compilerCreateSet,
@@ -7,22 +5,12 @@ import {
   compilerRegExpReplace,
   compilerSetAdd,
   compilerSetHas,
+  compilerSetSize,
   compilerSnapshotDenseArray,
   compilerStringSlice,
 } from '../compiler-security-intrinsics.js';
+import type { NamedImportModel } from '../scan/model.js';
 import type { LiveTargetFact } from '../types.js';
-import { ensureTypescriptRuntime } from '../ts-api.js';
-
-ensureTypescriptRuntime(ts);
-
-const compilerTsCreateSourceFile = ts.createSourceFile;
-const compilerTsIsCallExpression = ts.isCallExpression;
-const compilerTsIsIdentifier = ts.isIdentifier;
-const compilerTsIsImportDeclaration = ts.isImportDeclaration;
-const compilerTsIsNamedImports = ts.isNamedImports;
-const compilerTsIsPropertyAccessExpression = ts.isPropertyAccessExpression;
-const compilerTsIsStringLiteral = ts.isStringLiteral;
-const compilerTsIsVariableStatement = ts.isVariableStatement;
 
 const liveTargetWireModule = '@kovojs/server/internal/wire';
 const liveTargetWireImports = [
@@ -35,7 +23,16 @@ export interface EmitLiveTargetRendererExportsOptions {
   componentExpressionForFact?: (fact: LiveTargetFact) => string;
   liveTargetFacts: readonly LiveTargetFact[];
   moduleImportInsertionOffset: number;
+  namedImports: readonly NamedImportModel[];
   source: string;
+  sourceIdentifierNames: readonly string[];
+}
+
+interface LiveTargetRendererBindings {
+  readonly componentLiveTargetRenderer: string;
+  readonly imports: readonly string[];
+  readonly occupied: Set<string>;
+  readonly registerGeneratedLiveTargetRenderer: string;
 }
 
 export function appendLiveTargetRendererExports(
@@ -44,9 +41,11 @@ export function appendLiveTargetRendererExports(
   const facts = compilerSnapshotDenseArray(options.liveTargetFacts, 'Live-target renderer facts');
   if (facts.length === 0) return options.source;
 
+  const bindings = liveTargetRendererBindings(options.namedImports, options.sourceIdentifierNames);
   const sourceWithImport = insertLiveTargetRendererImport(
     options.source,
     options.moduleImportInsertionOffset,
+    bindings.imports,
   );
   const exports: string[] = [];
   for (let index = 0; index < facts.length; index += 1) {
@@ -56,6 +55,7 @@ export function appendLiveTargetRendererExports(
       liveTargetRendererExport(
         options.componentExpressionForFact?.(fact) ?? options.componentExpression,
         fact,
+        bindings,
       ),
       'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
     );
@@ -67,87 +67,89 @@ export function appendLiveTargetRendererExports(
 function insertLiveTargetRendererImport(
   source: string,
   moduleImportInsertionOffset: number,
+  imports: readonly string[],
 ): string {
-  const sourceFile = compilerTsCreateSourceFile(
-    'lowered.tsx',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  let wireImport: ts.ImportDeclaration | undefined;
-  const statements = compilerSnapshotDenseArray(
-    sourceFile.statements,
-    'Live-target source statements',
-  );
-  for (let index = 0; index < statements.length; index += 1) {
-    const statement = statements[index]!;
-    if (
-      compilerTsIsImportDeclaration(statement) &&
-      compilerTsIsStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === liveTargetWireModule
-    ) {
-      wireImport = statement;
-      break;
-    }
-  }
-  if (wireImport) {
-    const augmentedSource = augmentLiveTargetRendererImport(source, wireImport);
-    if (augmentedSource) return augmentedSource;
-  }
-
-  let importDeclarationEnd = 0;
-  for (let index = 0; index < statements.length; index += 1) {
-    const statement = statements[index]!;
-    if (compilerTsIsImportDeclaration(statement)) importDeclarationEnd = statement.end;
-  }
-  const importLine = `import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '${liveTargetWireModule}';\n`;
-
-  if (importDeclarationEnd > 0) {
-    const prefix = compilerStringSlice(source, 0, importDeclarationEnd);
-    const suffix = compilerStringSlice(source, importDeclarationEnd);
-    return `${prefix}\n${importLine}${suffix}`;
-  }
+  if (imports.length === 0) return source;
+  const importLine = `import { ${joinRendererStrings(imports, ', ')} } from '${liveTargetWireModule}';\n`;
 
   const prefix = compilerStringSlice(source, 0, moduleImportInsertionOffset);
   const suffix = compilerStringSlice(source, moduleImportInsertionOffset);
   return `${prefix}${importLine}${suffix}`;
 }
 
-function augmentLiveTargetRendererImport(
-  source: string,
-  declaration: ts.ImportDeclaration,
-): string | null {
-  const namedBindings = declaration.importClause?.namedBindings;
-  if (!namedBindings || !compilerTsIsNamedImports(namedBindings)) return null;
-
-  const importedNames = compilerCreateSet<string>();
-  const elements = compilerSnapshotDenseArray(namedBindings.elements, 'Live-target named imports');
-  for (let index = 0; index < elements.length; index += 1) {
-    compilerSetAdd(importedNames, elements[index]!.name.text);
+function liveTargetRendererBindings(
+  namedImports: readonly NamedImportModel[],
+  sourceIdentifierNames: readonly string[],
+): LiveTargetRendererBindings {
+  const imports = compilerSnapshotDenseArray(namedImports, 'Live-target named-import facts');
+  const occupied = compilerCreateSet<string>();
+  const identifiers = compilerSnapshotDenseArray(
+    sourceIdentifierNames,
+    'Live-target source identifier facts',
+  );
+  for (let index = 0; index < identifiers.length; index += 1) {
+    compilerSetAdd(occupied, identifiers[index]!);
   }
+
   const missing: string[] = [];
-  for (let index = 0; index < liveTargetWireImports.length; index += 1) {
-    const name = liveTargetWireImports[index]!;
-    if (!compilerSetHas(importedNames, name))
+  const selected: string[] = [];
+  for (let helperIndex = 0; helperIndex < liveTargetWireImports.length; helperIndex += 1) {
+    const importedName = liveTargetWireImports[helperIndex]!;
+    let localName: string | undefined;
+    for (let importIndex = 0; importIndex < imports.length; importIndex += 1) {
+      const imported = imports[importIndex]!;
+      if (
+        imported.moduleSpecifier === liveTargetWireModule &&
+        imported.importedName === importedName
+      ) {
+        localName = imported.localName;
+        break;
+      }
+    }
+    if (localName === undefined) {
+      localName = collisionFreeLiveTargetBinding(importedName, occupied, identifiers.length + 2);
+      compilerSetAdd(occupied, localName);
       compilerArrayAppend(
         missing,
-        name,
-        'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
+        localName === importedName ? importedName : `${importedName} as ${localName}`,
+        'Live-target missing helper imports',
       );
+    }
+    compilerArrayAppend(selected, localName, 'Live-target selected helper bindings');
   }
-  if (missing.length === 0) return source;
 
-  const insertion = `${elements.length > 0 ? ', ' : ''}${joinRendererStrings(missing, ', ')}`;
-  const insertionPoint =
-    elements.length > 0 ? elements[elements.length - 1]?.end : namedBindings.getStart() + 1;
-  if (insertionPoint === undefined) return null;
-
-  return `${compilerStringSlice(source, 0, insertionPoint)}${insertion}${compilerStringSlice(source, insertionPoint)}`;
+  return {
+    componentLiveTargetRenderer: selected[0]!,
+    imports: missing,
+    occupied,
+    registerGeneratedLiveTargetRenderer: selected[1]!,
+  };
 }
 
-function liveTargetRendererExport(componentExpression: string, fact: LiveTargetFact): string {
-  const exportName = liveTargetRendererExportName(componentExpression);
+function collisionFreeLiveTargetBinding(
+  base: string,
+  occupied: ReadonlySet<string>,
+  maximumSuffix: number,
+): string {
+  if (!compilerSetHas(occupied, base)) return base;
+  for (let suffix = 1; suffix <= maximumSuffix; suffix += 1) {
+    const candidate = `${base}_${suffix}`;
+    if (!compilerSetHas(occupied, candidate)) return candidate;
+  }
+  throw new TypeError('Kovo could not select a collision-free live-target helper binding.');
+}
+
+function liveTargetRendererExport(
+  componentExpression: string,
+  fact: LiveTargetFact,
+  bindings: LiveTargetRendererBindings,
+): string {
+  const exportName = collisionFreeLiveTargetBinding(
+    liveTargetRendererExportName(componentExpression),
+    bindings.occupied,
+    compilerSetSize(bindings.occupied) + 1,
+  );
+  compilerSetAdd(bindings.occupied, exportName);
   const queries = liveTargetRendererQueries(fact);
   const optionLines = [
     `  component: ${componentExpression},`,
@@ -160,7 +162,7 @@ function liveTargetRendererExport(componentExpression: string, fact: LiveTargetF
       'Compiler packages/compiler/src/emit/live-target-renderers.ts collection',
     );
 
-  return `export const ${exportName} = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+  return `export const ${exportName} = ${bindings.registerGeneratedLiveTargetRenderer}(${bindings.componentLiveTargetRenderer}({
 ${joinRendererStrings(optionLines, '\n')}
 }));`;
 }
@@ -191,37 +193,13 @@ ${joinRendererStrings(bindings, ',\n')}
 function liveTargetRendererQueryBinding(
   binding: LiveTargetFact['queryBindings'][number],
 ): string | null {
-  if (!isExecutableQueryExpression(binding.queryExpression)) return null;
+  if (!binding.executable) return null;
 
   const args =
     binding.argsExpression && binding.argsParam
       ? `, args: (${binding.argsParam}) => ${binding.argsExpression}`
       : '';
   return `    { name: ${rendererJsonSource(binding.name, 'Live-target query name')}, query: ${binding.queryExpression}${args} }`;
-}
-
-function isExecutableQueryExpression(expressionSource: string): boolean {
-  const sourceFile = compilerTsCreateSourceFile(
-    'query-binding-expression.ts',
-    `const __query = ${expressionSource};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const statement = sourceFile.statements[0];
-  if (!statement || !compilerTsIsVariableStatement(statement)) return false;
-  const initializer = statement.declarationList.declarations[0]?.initializer;
-  if (!initializer) return false;
-
-  return isRuntimeQueryReference(initializer);
-}
-
-function isRuntimeQueryReference(expression: ts.Expression): boolean {
-  if (compilerTsIsIdentifier(expression) || compilerTsIsPropertyAccessExpression(expression)) {
-    return true;
-  }
-  if (compilerTsIsCallExpression(expression)) return isRuntimeQueryReference(expression.expression);
-  return false;
 }
 
 function joinRendererStrings(values: readonly string[], separator: string): string {

@@ -64,7 +64,10 @@ export const CartBadge = component({
 
     expect(result.diagnostics).toEqual([]);
     expect(result.loweredSource).toContain(
-      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey, componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
+    );
+    expect(result.loweredSource).toContain(
+      "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
     );
     expect(result.loweredSource).toContain(
       'export const cart = __kovoAssignDerivedQueryKey(query({',
@@ -113,7 +116,7 @@ export const CartBadge = component({
     expect(result.loweredSource).toContain('"components/cart-badge/audit"');
   });
 
-  it('merges live-target renderer imports into an existing wire named import', () => {
+  it('emits live-target renderer imports from parser-owned import facts', () => {
     const result = compileComponentModule({
       fileName: 'src/components/status-card.tsx',
       source: `
@@ -134,14 +137,50 @@ export const StatusCard = component({
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
     expect(result.loweredSource).toContain(
-      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey, componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
     );
-    expect(result.loweredSource).not.toContain(
+    expect(result.loweredSource).toContain(
       "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
     );
     expect(result.loweredSource).toContain(
       'export const StatusCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({',
     );
+  });
+
+  it('selects collision-free live-target helper aliases from parser-owned identifiers', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/colliding-card.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { query } from '@kovojs/server';
+
+const componentLiveTargetRenderer = 'authored';
+const registerGeneratedLiveTargetRenderer = 'authored';
+const CollidingCard$liveTargetRenderer = 'authored';
+const CollidingCard$liveTargetRenderer_1 = 'authored';
+const cardQuery = query('card', { load: () => ({ title: 'safe' }), reads: [] });
+
+export const CollidingCard = component({
+  queries: { card: cardQuery },
+  render: ({ card }) => <colliding-card>{card.title}</colliding-card>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(result.loweredSource).toContain(
+      "import { componentLiveTargetRenderer as componentLiveTargetRenderer_1, registerGeneratedLiveTargetRenderer as registerGeneratedLiveTargetRenderer_1 } from '@kovojs/server/internal/wire';",
+    );
+    expect(result.loweredSource).toContain(
+      'registerGeneratedLiveTargetRenderer_1(componentLiveTargetRenderer_1({',
+    );
+    expect(result.loweredSource).toContain(
+      'export const CollidingCard$liveTargetRenderer_2 = registerGeneratedLiveTargetRenderer_1(',
+    );
+    expect(result.loweredSource).not.toContain(
+      'export const CollidingCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer_1(',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
   });
 
   it('fails closed on malformed TSX before emitting artifacts', () => {

@@ -1,4 +1,5 @@
 import * as runtime from '@kovojs/browser/generated';
+import * as clientRuntime from '@kovojs/browser/client';
 import { describe, expect, it } from 'vitest';
 
 import { emitQueryPlanBootstrapModule } from './bootstrap.js';
@@ -35,5 +36,20 @@ describe('emitted bootstrap ↔ @kovojs/browser/generated import contract', () =
       missing,
       `emitted bootstrap imports names absent from @kovojs/browser/generated: ${missing.join(', ')}`,
     ).toEqual([]);
+  });
+
+  it('imports its pinned mutation transport from the published browser client barrel', () => {
+    const bootstrap = emitQueryPlanBootstrapModule([]);
+    const match = /import\s*\{([^}]*)\}\s*from\s*['"]@kovojs\/browser\/client['"]/.exec(
+      bootstrap.source,
+    );
+    if (match === null)
+      throw new Error('emitted bootstrap must import from @kovojs/browser/client');
+    const imported = (match[1] ?? '')
+      .split(',')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+    expect(imported).toContain('defaultEnhancedFetch');
+    expect(imported.filter((name) => !Object.hasOwn(clientRuntime, name))).toEqual([]);
   });
 });

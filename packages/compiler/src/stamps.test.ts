@@ -47,7 +47,7 @@ export const Recommendations = component({
   queries: { cart: cartQuery },
   state: () => ({ open: true }),
   render: ({ cart }) => (
-    <section class="card" kovo-deps='product%3Ap1'>
+    <section class="card" kovo-deps='!product!product%3Ap1'>
       {renderOnce(cart.count)}
     </section>
   ),
@@ -55,13 +55,13 @@ export const Recommendations = component({
 `;
     const model = parseComponentModule('recommendations.tsx', source);
     const lowering = serverRenderLowering([], model, 'recommendations');
-    const kovoDepsStart = source.indexOf("kovo-deps='product%3Ap1'");
+    const kovoDepsStart = source.indexOf("kovo-deps='!product!product%3Ap1'");
     const insertPosition = source.indexOf('>', kovoDepsStart);
 
     expect(lowering.replacements).toEqual([
       {
-        end: kovoDepsStart + "kovo-deps='product%3Ap1'".length,
-        replacement: 'kovo-deps="product%3Ap1 cart"',
+        end: kovoDepsStart + "kovo-deps='!product!product%3Ap1'".length,
+        replacement: 'kovo-deps="!product!product%3Ap1 cart"',
         start: kovoDepsStart,
       },
       {
@@ -82,7 +82,7 @@ export const Recommendations = component({
         },
         {
           "context": "attribute",
-          "expression": "product%3Ap1 cart",
+          "expression": "!product!product%3Ap1 cart",
           "sink": "kovo-deps",
           "source": "server-render",
           "writer": "host dependency stamp",
@@ -121,7 +121,7 @@ export const Recommendations = component({
         {
           "attr": "kovo-deps",
           "mode": "replace",
-          "value": "product%3Ap1 cart",
+          "value": "!product!product%3Ap1 cart",
           "writer": "host dependency stamp",
         },
         {
@@ -1666,7 +1666,7 @@ export const CartBadge = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section kovo-c="recommendations" kovo-deps="product%3Ap1 cart">
+    <section kovo-c="recommendations" kovo-deps="!product!product%3Ap1 cart">
       {renderOnce(cart.count)}
     </section>
   ),
@@ -1675,7 +1675,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="recommendations" kovo-deps="product%3Ap1 cart" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
+      '<section kovo-c="recommendations" kovo-deps="!product!product%3Ap1 cart" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -1688,7 +1688,7 @@ export const Recommendations = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section class="card" kovo-deps='product%3Ap1'>
+    <section class="card" kovo-deps='!product!product%3Ap1'>
       {renderOnce(cart.count)}
     </section>
   ),
@@ -1697,7 +1697,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section class="card" kovo-deps="product%3Ap1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
+      '<section class="card" kovo-deps="!product!product%3Ap1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -1714,7 +1714,7 @@ export const Recommendations = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section kovo-c="recommendations" kovo-deps="product%3Ap1 cart">
+    <section kovo-c="recommendations" kovo-deps="!product!product%3Ap1 cart">
       <span data-bind="cart.count">{cart.count}</span>
     </section>
   ),
@@ -1742,7 +1742,7 @@ export const Recommendations = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section kovo-c="unknown-component" kovo-deps="cart missingQuery%3Ap1">
+    <section kovo-c="unknown-component" kovo-deps="cart !missingQuery!missingQuery%3Ap1">
       <span data-bind="cart.count">{cart.count}</span>
     </section>
   ),
@@ -1785,7 +1785,7 @@ export const Recommendations = component({
           'kovo-deps or kovo-c names an unknown query instance or component. kovo-deps="missingQuery:p1"',
         severity: 'error',
         start: { column: 41, line: 5 },
-        length: 34,
+        length: 48,
       },
     ]);
   });

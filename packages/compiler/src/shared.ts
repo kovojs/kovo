@@ -1,5 +1,8 @@
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
-import { decodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
+import {
+  decodeFrameworkQueryDependencyToken,
+  type FrameworkQueryDependencyIdentity,
+} from '@kovojs/core/internal/wire-input-grammar';
 import {
   compilerArrayAppend,
   compilerCreateSet,
@@ -615,36 +618,65 @@ function sourceReplacementDiagnosticsMessage(
 
 export interface ParsedDepValue {
   dependencies: string[];
+  identities: FrameworkQueryDependencyIdentity[];
   invalidTokens: string[];
+  tokens: string[];
 }
 
 export function parseDepValue(value: string): ParsedDepValue {
   const dependencies: string[] = [];
+  const identities: FrameworkQueryDependencyIdentity[] = [];
   const invalidTokens: string[] = [];
+  const tokens: string[] = [];
   let start = 0;
   for (let index = 0; index <= value.length; index += 1) {
     const character = index === value.length ? ' ' : value[index];
     if (character !== ' ') continue;
     if (index > start) {
       const token = compilerStringSlice(value, start, index);
-      const dependency = decodeFrameworkIdentityToken(token);
-      if (dependency === undefined) {
+      const identity = decodeFrameworkQueryDependencyToken(token);
+      if (identity === undefined) {
         compilerArrayAppend(invalidTokens, token, 'Compiler invalid kovo-deps identity tokens');
       } else {
         compilerArrayAppend(
           dependencies,
-          dependency,
+          identity.key ?? identity.name,
           'Compiler packages/compiler/src/shared.ts collection',
         );
+        compilerArrayAppend(identities, identity, 'Compiler kovo-deps query identity collection');
+        compilerArrayAppend(tokens, token, 'Compiler kovo-deps canonical token collection');
       }
     }
     start = index + 1;
   }
-  return { dependencies, invalidTokens };
+  return { dependencies, identities, invalidTokens, tokens };
 }
 
 export function splitDepValue(value: string): string[] {
   return parseDepValue(value).dependencies;
+}
+
+/** Split a compiler-authored primitive handler chain without interpreting it as query metadata. */
+export function splitHandlerRefValue(value: string): string[] {
+  const references: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const character = index === value.length ? ' ' : value[index];
+    if (character !== ' ') continue;
+    if (index > start) {
+      compilerArrayAppend(
+        references,
+        compilerStringSlice(value, start, index),
+        'Compiler primitive handler reference collection',
+      );
+    }
+    start = index + 1;
+  }
+  return references;
+}
+
+export function splitDepTokenValue(value: string): string[] {
+  return parseDepValue(value).tokens;
 }
 
 function stableSortedCopy<Value>(

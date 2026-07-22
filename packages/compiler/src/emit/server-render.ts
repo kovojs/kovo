@@ -1,6 +1,6 @@
 import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
 import { securityOperationIrSchema } from '@kovojs/core/internal/security-operation-ir';
-import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
+import { encodeFrameworkQueryDependencyToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { compilerIrHeader } from '../ir.js';
 import {
@@ -35,7 +35,12 @@ import {
   componentSecuritySemanticGraphFacts,
   serverSecurityOperationFacts,
 } from '../security-operation-facts.js';
-import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
+import {
+  escapeAttribute,
+  parseDepValue,
+  splitHandlerRefValue,
+  type SourceReplacement,
+} from '../shared.js';
 import {
   emitElementParamTypes,
   type ElementParam,
@@ -49,7 +54,6 @@ import {
   streamTextTargetRenderLowering,
 } from './mutation-form.js';
 import { writerConflictDiagnostic } from './server-emit-shared.js';
-import { queryExpressionFromBinding } from '../scan/query-binding.js';
 import { clientModuleUrl } from '../lower/handlers.js';
 
 export interface EmittedServerModule {
@@ -618,7 +622,7 @@ function chainedPrimitiveHandlerAttribute(
       );
     }
   }
-  const primitiveTokens = splitDepValue(primitiveRefs);
+  const primitiveTokens = splitHandlerRefValue(primitiveRefs);
   for (let index = 0; index < primitiveTokens.length; index += 1) {
     compilerArrayAppend(
       refValues,
@@ -970,12 +974,12 @@ function declaredQueryDepsStamp(
   if (deps.length === 0) return null;
 
   const existing = serverElementAttribute(hostElement, 'kovo-deps');
-  const existingDeps = splitDepValue(existing?.value ?? '');
+  const existingDeps = parseDepValue(existing?.value ?? '').tokens;
   const existingTokens: QueryDependencyToken[] = [];
   for (let index = 0; index < existingDeps.length; index += 1) {
     compilerArrayAppend(
       existingTokens,
-      { value: existingDeps[index]! },
+      { kind: 'encoded', value: existingDeps[index]! },
       'Compiler packages/compiler/src/emit/server-render.ts collection',
     );
   }
@@ -1006,6 +1010,7 @@ function declaredQueryDepsStamp(
 }
 
 type QueryDependencyToken =
+  | { kind: 'encoded'; value: string }
   | { kind?: 'literal'; value: string }
   | { fallback: string; kind: 'expression'; value: string };
 
@@ -1030,7 +1035,7 @@ function componentQueryDependencyTokens(component: ComponentModel): QueryDepende
 }
 
 function queryKeyExpressionForBinding(entry: ObjectLiteralEntry): string | null {
-  const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+  const queryExpression = entry.queryBinding?.queryKeyExpression;
   if (!queryExpression) return null;
   if (queryExpression === entry.key || queryExpression === `${entry.key}Query`) return null;
   return `${queryExpression}.key ?? ${serverJsonSource(entry.key, 'Query dependency key')}`;
@@ -1047,7 +1052,12 @@ function mergeDepValues(
     const group = compilerSnapshotDenseArray(groups[groupIndex]!, 'Query dependency tokens');
     for (let index = 0; index < group.length; index += 1) {
       const dep = group[index]!;
-      const key = dep.kind === 'expression' ? `expr:${dep.value}` : `lit:${dep.value}`;
+      const key =
+        dep.kind === 'expression'
+          ? `expr:${dep.value}`
+          : `token:${
+              dep.kind === 'encoded' ? dep.value : encodeFrameworkQueryDependencyToken(dep.value)
+            }`;
       if (compilerSetHas(seen, key)) continue;
       compilerSetAdd(seen, key);
       compilerArrayAppend(
@@ -1075,9 +1085,14 @@ function renderQueryDependencyTokens(
   const values: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const dep = snapshot[index]!;
-    const encoded = dep.kind === 'expression' ? undefined : encodeFrameworkIdentityToken(dep.value);
+    const encoded =
+      dep.kind === 'expression'
+        ? undefined
+        : dep.kind === 'encoded'
+          ? dep.value
+          : encodeFrameworkQueryDependencyToken(dep.value);
     if (dep.kind !== 'expression' && encoded === undefined) {
-      throw new TypeError('Generated kovo-deps identity must be a non-empty scalar string.');
+      throw new TypeError('Generated kovo-deps identity must contain valid query facts.');
     }
     compilerArrayAppend(
       values,
@@ -1096,7 +1111,10 @@ function renderQueryDependencyExpressionElement(
 ): string {
   return dep.kind === 'expression'
     ? `${dependencyEncoder}(${dep.value})`
-    : serverJsonSource(encodeFrameworkIdentityToken(dep.value), 'Query dependency literal');
+    : serverJsonSource(
+        dep.kind === 'encoded' ? dep.value : encodeFrameworkQueryDependencyToken(dep.value),
+        'Query dependency literal',
+      );
 }
 
 function staticStateJson(component: ComponentModel): string | null {

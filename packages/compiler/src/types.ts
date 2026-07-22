@@ -37,6 +37,7 @@ import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { attributeKebabCase, normalizeComponentFileName, replaceExtension } from './shared.js';
 import type { CompilerEmittedSourceProvenance } from './source-provenance.js';
 import type { CompilerSourceRootWitness } from './source-filesystem.js';
+import type { QueryBindingModel } from './scan/model.js';
 
 /**
  * Input to {@link compileComponentModule}: the source file name and contents plus optional
@@ -143,13 +144,9 @@ export interface LiveTargetCoverageFact {
 }
 
 /** @internal One declared component query binding, including optional prop-derived args. */
-export interface LiveTargetQueryBindingFact {
-  argsExpression?: string;
-  argsParam?: string;
-  argsPropertyAccesses?: readonly string[];
-  hasRefresh?: boolean;
+export interface LiveTargetQueryBindingFact extends QueryBindingModel {
+  /** Component-local binding name used by generated live-target metadata. */
   name: string;
-  queryExpression: string;
 }
 
 /**

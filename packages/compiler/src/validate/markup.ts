@@ -17,7 +17,6 @@ import {
   compilerOwnDataValue,
   compilerRegExpReplace,
   compilerSetAdd,
-  compilerSetForEach,
   compilerSetHas,
   compilerStringIndexOf,
   compilerStringSplit,
@@ -323,16 +322,16 @@ export function validateResidualStamps(
       );
     }
 
-    const dependencies = parsedDependencies.dependencies;
+    const dependencies = parsedDependencies.identities;
     const dependencyLength = compilerArrayLength(dependencies, 'Residual-stamp dependencies');
     for (let dependencyIndex = 0; dependencyIndex < dependencyLength; dependencyIndex += 1) {
-      const dep = ownArrayEntry(dependencies, dependencyIndex, 'Residual-stamp dependencies');
-      if (!dependencyMatchesKnownQuery(dep, knownQueries)) {
+      const identity = ownArrayEntry(dependencies, dependencyIndex, 'Residual-stamp dependencies');
+      if (!compilerSetHas(knownQueries, identity.name)) {
         appendMarkupFact(
           found,
           kv226Diagnostic(
             diagnostics,
-            `kovo-deps="${dep}"`,
+            `kovo-deps="${identity.key ?? identity.name}"`,
             attribute.start,
             attribute.end - attribute.start,
           ),
@@ -343,15 +342,6 @@ export function validateResidualStamps(
   }
 
   return dedupeBy(found, diagnosticKey);
-}
-
-function dependencyMatchesKnownQuery(dependency: string, knownQueries: Set<string>): boolean {
-  if (compilerSetHas(knownQueries, dependency)) return true;
-  let matched = false;
-  compilerSetForEach(knownQueries, (query) => {
-    if (!matched && compilerStringStartsWith(dependency, `${query}:`)) matched = true;
-  });
-  return matched;
 }
 
 const ambiguousRelationshipAttributes = compilerCreateSet<string>();

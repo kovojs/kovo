@@ -69,7 +69,6 @@ import {
   parseComponentModule,
   parseDiagnosticsForSourceFile,
 } from './scan/parse.js';
-import { queryExpressionFromBinding } from './scan/query-binding.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
@@ -1664,13 +1663,35 @@ function componentLocalQueryShapeFacts(
       throw new TypeError(`Vite component query entries[${index}] must be an own object.`);
     }
     const key = compilerOwnDataValue(rawEntry, 'key', `Vite component query entries[${index}]`);
-    const value = compilerOwnDataValue(rawEntry, 'value', `Vite component query entries[${index}]`);
     if (typeof key !== 'string') {
       throw new TypeError(`Vite component query entries[${index}].key must be a string.`);
     }
-    const queryExpression = value
-      ? queryExpressionFromBinding(value as Parameters<typeof queryExpressionFromBinding>[0])
-      : null;
+    const rawBinding = compilerOwnDataValue(
+      rawEntry,
+      'queryBinding',
+      `Vite component query entries[${index}]`,
+    );
+    if (
+      rawBinding !== undefined &&
+      (typeof rawBinding !== 'object' || rawBinding === null || compilerArrayIsArray(rawBinding))
+    ) {
+      throw new TypeError(
+        `Vite component query entries[${index}].queryBinding must be an own object.`,
+      );
+    }
+    const queryExpression =
+      rawBinding === undefined
+        ? undefined
+        : compilerOwnDataValue(
+            rawBinding,
+            'queryKeyExpression',
+            `Vite component query entries[${index}].queryBinding`,
+          );
+    if (queryExpression !== undefined && typeof queryExpression !== 'string') {
+      throw new TypeError(
+        `Vite component query entries[${index}].queryBinding.queryKeyExpression must be a string.`,
+      );
+    }
     if (!queryExpression || queryExpression === key || compilerMapGet(factsByQuery, key)) continue;
     const importedKey = importedQueryDerivedKey(model, fileName, queryExpression);
     const sourceFact =
