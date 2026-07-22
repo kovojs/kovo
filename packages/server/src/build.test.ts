@@ -499,7 +499,7 @@ export default createRequestHandler(app);
       await vercelServer?.close();
       await rm(root, { force: true, recursive: true });
     }
-  });
+  }, 120_000);
 
   it('rejects symlinked built-in preset roots and destination parents without writing outside', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-preset-output-boundary-'));

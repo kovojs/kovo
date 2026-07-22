@@ -189,6 +189,7 @@ describe('route and query guard responses', () => {
       page: () => trustedHtml('admin'),
     });
     const accountQuery = query('account', {
+      args: s.object({ id: s.string() }),
       guard: guards.authed<AppRequest>(),
       reads: [domain('user')],
     });
@@ -265,6 +266,7 @@ describe('route and query guard responses', () => {
   it('preserves query guard redirect Location blessing through cache/build header wrapping', async () => {
     type AppRequest = { session?: { user?: { id: string } | null } | null };
     const accountQuery = query('account', {
+      args: s.object({ view: s.string() }),
       guard: guards.authed<AppRequest>(),
       reads: [domain('user')],
     });

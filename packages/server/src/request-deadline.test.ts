@@ -415,6 +415,7 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     const slowMutation = mutation('deadline/transaction', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
+      machineReplayPrincipal: () => 'deadline-transaction-machine',
       handler: async (_input, request) => {
         events.push('handler');
         await new Promise<void>((resolve) =>
@@ -483,6 +484,7 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
     const committedMutation = mutation('deadline/post-commit', {
       csrf: false,
       csrfJustification: 'test fixture uses a non-browser caller',
+      machineReplayPrincipal: () => 'deadline-post-commit-machine',
       handler: async () => {
         events.push('handler');
         return { committed: true };

@@ -377,7 +377,10 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
               { key: 'publicValue', name: 'public_value' },
               { key: 'secretValue', name: 'secret_value' },
             ],
+            dialect: 'sqlite',
+            domain: prefix,
             governedColumnKeys: ['id'],
+            key: { columnKey: 'id', columnName: 'id', uniqueness: 'primary' },
             name: prefix,
             secretColumnKeys: ['secretValue'],
             secretDeclared: true,
@@ -993,18 +996,21 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       const addParent = mutation('sqlite/async-parent', {
         csrf: false,
         csrfJustification: 'framework SQLite async transaction regression',
-        input: s.object({ id: s.string(), name: s.string() }),
+        input: s.object({ name: s.string() }),
         registry: { tables: [`${prefix}_parent`], touches: [domain(`${prefix}_parent`)] },
         async handler(input, request: { db: BetterSQLite3Database }) {
-          await request.db.insert(schema.parent).values(input);
+          await request.db.insert(schema.parent).values({
+            id: 'server-async-1',
+            name: input.name,
+          });
           await Promise.resolve();
-          return input.id;
+          return 'server-async-1';
         },
       });
 
       await expect(
-        runMutation(addParent, { id: 'async-1', name: 'Async SQLite' }, {}, { db: runtime.db }),
-      ).resolves.toMatchObject({ ok: true, value: 'async-1' });
+        runMutation(addParent, { name: 'Async SQLite' }, {}, { db: runtime.db }),
+      ).resolves.toMatchObject({ ok: true, value: 'server-async-1' });
 
       const capability = runtime.systemDb({
         operation: 'write',
@@ -1015,7 +1021,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         useSqliteSystemDb(capability, (db) =>
           db.select({ id: schema.parent.id, name: schema.parent.name }).from(schema.parent).all(),
         ),
-      ).toEqual([{ id: 'async-1', name: 'Async SQLite' }]);
+      ).toEqual([{ id: 'server-async-1', name: 'Async SQLite' }]);
     } finally {
       release();
     }
@@ -1107,17 +1113,20 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       const write = mutation('sqlite/late-table-retarget', {
         csrf: false,
         csrfJustification: 'framework SQLite canonical table regression',
-        input: s.object({ id: s.string(), name: s.string() }),
+        input: s.object({ name: s.string() }),
         registry: { tables: [allowedName], touches: [domain(allowedName)] },
         async handler(input, request: { db: BetterSQLite3Database }) {
-          await request.db.insert(allowed).values(input);
-          return input.id;
+          await request.db.insert(allowed).values({
+            id: 'server-pinned',
+            name: input.name,
+          });
+          return 'server-pinned';
         },
       });
 
       await expect(
-        runMutation(write, { id: 'pinned', name: 'Pinned target' }, {}, { db: runtime.db }),
-      ).resolves.toMatchObject({ ok: true, value: 'pinned' });
+        runMutation(write, { name: 'Pinned target' }, {}, { db: runtime.db }),
+      ).resolves.toMatchObject({ ok: true, value: 'server-pinned' });
       Object.defineProperty(allowed, drizzleTableName, originalName);
 
       const capability = runtime.systemDb({
@@ -1131,7 +1140,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           victim: db.select().from(victim).all(),
         })),
       ).toEqual({
-        allowed: [{ id: 'pinned', name: 'Pinned target' }],
+        allowed: [{ id: 'server-pinned', name: 'Pinned target' }],
         victim: [],
       });
     } finally {
@@ -1274,7 +1283,14 @@ function manifestFor(
     tables: tables.map((table) => ({
       authorizationClassifications: [],
       columns: table.columns,
+      dialect: 'sqlite' as const,
+      domain: table.name,
       governedColumnKeys: [table.columns[0]!.key],
+      key: {
+        columnKey: table.columns[0]!.key,
+        columnName: table.columns[0]!.name,
+        uniqueness: 'primary' as const,
+      },
       name: table.name,
       secretColumnKeys: [],
       secretDeclared: false,

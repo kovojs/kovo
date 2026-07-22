@@ -161,7 +161,9 @@ describe('JSX output authority security', () => {
 
     expect(script).toBe('<script></script>');
     expect(script).not.toContain(scriptPayload);
-    expect(meta).toBe('<meta http-equiv="refresh">');
+    // SPEC §6.6/§9.1: an untrusted Refresh control is removed as a whole; retaining the
+    // http-equiv marker would advertise a navigation posture whose content was rejected.
+    expect(meta).toBe('<meta>');
     expect(meta).not.toContain('javascript:metaXss()');
   });
 

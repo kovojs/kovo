@@ -1,6 +1,7 @@
 import { request as httpRequest, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createApp } from './app.js';
 import { mutation } from './mutation.js';
@@ -54,11 +55,11 @@ describe('server app shell Vite diagnostics', () => {
 
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
-          {
-            code: 'KV225',
-            fileName: 'src/components/cart.tsx',
-            message: 'JSX nesting violates the HTML content model.',
-          },
+          createRegisteredDiagnostic(
+            'KV225',
+            { fileName: 'src/components/cart.tsx' },
+            { message: 'JSX nesting violates the HTML content model.' },
+          ),
         ],
         fileName: 'src/components/cart.tsx',
       });
@@ -77,11 +78,11 @@ describe('server app shell Vite diagnostics', () => {
 
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
-          {
-            code: 'KV210',
-            fileName: 'src/components/cart.tsx',
-            message: 'Anonymous handler; name it for stable identity.',
-          },
+          createRegisteredDiagnostic(
+            'KV210',
+            { fileName: 'src/components/cart.tsx' },
+            { message: 'Anonymous handler; name it for stable identity.' },
+          ),
         ],
         fileName: 'src/components/cart.tsx',
       });
@@ -146,11 +147,11 @@ describe('server app shell Vite diagnostics', () => {
       const port = (server.address() as AddressInfo).port;
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
-          {
-            code: 'KV225',
-            fileName: 'src/mutations/cart.ts',
-            message: 'JSX nesting violates the HTML content model.',
-          },
+          createRegisteredDiagnostic(
+            'KV225',
+            { fileName: 'src/mutations/cart.ts' },
+            { message: 'JSX nesting violates the HTML content model.' },
+          ),
         ],
         fileName: 'src/mutations/cart.ts',
         moduleHrefs: ['/_m/cart/add'],

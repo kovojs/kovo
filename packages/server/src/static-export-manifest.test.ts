@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { trustedHtml } from '@kovojs/browser';
 import {
   createInlineKovoLoaderSource,
@@ -380,12 +381,11 @@ describe('server static export', () => {
   });
 
   it('formats static export diagnostics for starter and example export tasks', () => {
-    const diagnostic = {
-      code: 'KV229' as const,
-      message: "KV229 static export cannot export guarded route '/admin'.\nServe dynamically.",
-      routePath: '/admin',
-      severity: 'error' as const,
-    };
+    const diagnostic = createRegisteredDiagnostic(
+      'KV229',
+      { routePath: '/admin' },
+      { message: "KV229 static export cannot export guarded route '/admin'.\nServe dynamically." },
+    );
     const error = new StaticExportError([diagnostic]);
 
     expect(isStaticExportDiagnostic(diagnostic)).toBe(true);

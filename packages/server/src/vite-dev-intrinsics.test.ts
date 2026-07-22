@@ -1,8 +1,9 @@
 import type { IncomingMessage } from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 
 import { describe, expect, it } from 'vitest';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createApp } from './app.js';
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
@@ -22,11 +23,11 @@ describe('Vite-dev intrinsic closure', () => {
   it('keeps compiler errors blocking after late Array.some replacement', () => {
     const diagnostics = createKovoAppShellDevDiagnosticLedger();
     const errors: DiagnosticDocumentDiagnostic[] = [
-      {
-        code: 'KV225',
-        fileName: 'src/components/cart.tsx',
-        message: 'unsafe component must block dev output',
-      },
+      createRegisteredDiagnostic(
+        'KV225',
+        { fileName: 'src/components/cart.tsx' },
+        { message: 'unsafe component must block dev output' },
+      ),
     ];
     const originalSome = Array.prototype.some;
     let poisonHits = 0;
@@ -338,7 +339,16 @@ describe('Vite-dev intrinsic closure', () => {
 });
 
 function nodeRequest(url: string): IncomingMessage {
-  return { headers: {}, method: 'GET', url } as IncomingMessage;
+  return {
+    __kovoRequestIngressSource: 'node-http1',
+    complete: true,
+    headers: { host: 'app.test' },
+    httpVersion: '1.1',
+    method: 'GET',
+    rawHeaders: ['Host', 'app.test'],
+    socket: { remoteAddress: '203.0.113.7' } as Socket,
+    url,
+  } as IncomingMessage;
 }
 
 async function startDevServer(

@@ -311,7 +311,7 @@ describe('untrusted request body parser', () => {
     expect(parsed.params.id).toBe('p1');
   });
 
-  it('tags query search input and lets declared args schemas reveal it', async () => {
+  it('reveals declared query search input and rejects search without an args schema', async () => {
     const seen: unknown[] = [];
     const withArgs = query('products/search', {
       args: s.object({ q: s.string(), page: s.number().int().default(1) }),
@@ -340,9 +340,12 @@ describe('untrusted request body parser', () => {
         request: {},
         search: new URLSearchParams('q=raw'),
       }),
-    ).resolves.toMatchObject({ status: 200 });
+    ).resolves.toMatchObject({
+      body: expect.stringContaining('Search input requires a declared query args schema.'),
+      status: 422,
+    });
 
     expect(seen[0]).toEqual({ page: 2, q: 'hat' });
-    expect(isUntrusted(seen[1])).toBe(true);
+    expect(seen).toHaveLength(1);
   });
 });
