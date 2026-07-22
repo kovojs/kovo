@@ -669,8 +669,8 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
 - [x] At the `audit-justification.ts` chokepoint, replace prose with fields the analyzer can partially
       check — _which invariant, why it holds, what evidence_ — killing the prose-laundering path.
   - Evidence: the six-file obligation/review integration suite passes 31/31; runtime and static
-      validation require the exact invariant, guard-or-policy reason, and digest-identified evidence
-      record. That digest identifies the reviewed text/artifact; it does not prove the justification.
+    validation require the exact invariant, guard-or-policy reason, and digest-identified evidence
+    record. That digest identifies the reviewed text/artifact; it does not prove the justification.
 - [x] Escape signatures over `(site identity, obligation text, artifact/emission hash)` from a key
       **not** present in the build environment or reachable by a coding agent, composing with plan-2
       §4.3's attestation anchor (**do not establish a second trust anchor** — if §4.3 has not landed,
@@ -793,10 +793,11 @@ near-zero present value — while §0.5's process half is nearly free and is a l
     negative controls, exact DSSE/artifact binding, first-parent feed monotonicity, multiprocess
     rollback/equivocation serialization, ambiguous-graph UNKNOWN, exit 1/2 routing, and the exact
     two-action release signer job; crypto, VP, TCB, dependency-closure, and supply-chain gates pass.
-- [ ] Fire drill: publish a test advisory, confirm a real example app reports AFFECTED, ship the fix,
-      confirm NOT-AFFECTED, delete the feed and confirm UNKNOWN **fails closed**. Record all three exit
-      codes. Do not start before the key-custody answer exists — OIDC/Sigstore keyless bound to the
-      release workflow, never a long-lived team-held private key.
+- [ ] Fire drill: publish a test advisory in a drill-only feed/namespace, confirm a real example app
+      reports AFFECTED, ship the fix, confirm NOT-AFFECTED, delete that drill feed and confirm UNKNOWN
+      **fails closed**. Do not delete, rewrite, or roll back the canonical monotone production feed.
+      Record all three exit codes. Do not start before the key-custody answer exists — OIDC/Sigstore
+      keyless bound to the release workflow, never a long-lived team-held private key.
 
 ### 5.3 Inherited-auth honesty (~0.55 pm)
 
@@ -926,7 +927,10 @@ does not duplicate either external action or its evidence.
     table current, and its focused suite passes 4/4.
 - [ ] Metric E is non-increasing across three consecutive comparable rounds as defined above, with
       zero unsigned escapes and no unreviewed ceiling increase.
-- [ ] Δ is 100% of every declared finite fragment at that frozen code subject.
+- [ ] Δ is 100% of every declared finite fragment at that frozen code subject. Ordinary CI proves the
+      live decision with no retained artifact; the one Plan-1 evidence child alone retains
+      `security/decided-surface.json` for `codeSubjectSha` and runs
+      `check:decided-surface-artifact`.
 - [ ] An outside party validates a `kovo.certificate/v1` with disjoint code, and the three negative
       controls fail on three distinct obligations.
 - [x] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;

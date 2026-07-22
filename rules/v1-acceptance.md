@@ -48,14 +48,24 @@ The top-level acceptance script expands to:
 
 ```sh
 pnpm run check
+pnpm run check:api-surface
 pnpm run test
 pnpm run test:browser
+pnpm run test:gallery-browser
+pnpm run test:integration
 pnpm run check:build
+pnpm run check:publish
 pnpm run test:p10-perf
+pnpm run test:compiler-perf
 pnpm run test:conformance
 pnpm run check:kovo
 pnpm run test:authz-paranoid   # 16.9 — Postgres paranoid generative cross-owner dogfood
 ```
+
+Ordinary `pnpm run check:decided-surface` computes the declared finite-domain verdict directly from
+the live checkout and writes nothing. Only the final evidence workflow may run
+`pnpm run generate:decided-surface -- --subject-sha <codeSubjectSha>`; the evidence checkout then
+verifies that retained artifact with `pnpm run check:decided-surface-artifact`.
 
 The `acceptance` script must keep `test:authz-paranoid` wired in. Without it, the release gate only
 sees the static checks and misses the paranoid, served-artifact, every-shape cross-owner proof that
@@ -70,7 +80,7 @@ command log path and commit SHA in `docs/v1-acceptance-ledger.md`.
 | ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1    | Start from a clean worktree at the intended v1 commit.                   | `git status --short --branch` output showing no local changes.                                                                                                                        |
 | 2    | `pnpm install --frozen-lockfile` if dependencies changed.                | Install log or note that lockfile/dependency graph was unchanged.                                                                                                                     |
-| 3    | `pnpm run acceptance`                                                    | Passing log covering check, test, browser, build, perf, conformance, and kovo-check gates.                                                                                            |
+| 3    | `pnpm run acceptance`                                                    | Passing log covering check/API, Node and browser/gallery/integration tests, build/publish, both perf gates, conformance, kovo-check, and paranoid authorization.                      |
 | 4    | `grep -r "invalidate(" examples/commerce packages/create-kovo/templates` | Only documented escape-hatch sites, or an explicit zero-result note.                                                                                                                  |
 | 5    | `grep -r "on:load" examples/commerce packages/create-kovo/templates`     | Only KV211-justified sites, or an explicit zero-result note.                                                                                                                          |
 | 6    | `pnpm run test:authz-paranoid` (16.9)                                    | Zero cross-owner reads/writes and zero secret-column egress across every shape on the Postgres paranoid artifact; the capability-closure audit refused every unsafe reachable object. |

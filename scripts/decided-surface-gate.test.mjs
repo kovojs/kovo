@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   buildDecidedSurfaceArtifact,
+  buildDecidedSurfaceDecision,
   decidedSurfaceSourcePaths,
   validateDecidedSurfaceArtifact,
 } from './decided-surface-gate.mjs';
@@ -47,6 +48,17 @@ function git(root, args) {
 }
 
 describe('aggregate decided-surface gate', () => {
+  it('decides the live finite domains without requiring retained release evidence', () => {
+    expect(buildDecidedSurfaceDecision()).toMatchObject({
+      aggregate: { decided: 2877, percent: 100, total: 2877 },
+      fragments: [
+        { decided: 2508, id: 'provenance-transition-pairs', total: 2508 },
+        { decided: 363, id: 'postgres-owner-policy-models', total: 363 },
+        { decided: 6, id: 'grammar-decision-obligations', total: 6 },
+      ],
+    });
+  });
+
   it('binds all three declared finite fragments to a real commit and exact source inputs', () => {
     const { artifact, root } = fixture();
     expect(validateDecidedSurfaceArtifact(artifact, { repoRoot: root })).toMatchObject({

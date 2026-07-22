@@ -443,6 +443,13 @@ Measurements are versioned and reproducible:
       this ledger: refresh the framework-export posture, convergence row, C9/C13/mutation denominators,
       survivor register, and an independent architecture/security re-review that explicitly accepts
       or rejects the Phase 3C deletions after the historical REJECT above.
+  - Do not create this descendant while any recordable prerequisite is still pending. In particular,
+    finish the three qualifying R=0 rounds, fourteen terminal-green nightly runs, three comparable
+    Metric E rounds, third-party implementation audit/retest, outside certificate validation,
+    advisory drill, and release-analysis dry run first. Ordinary `main` uses the live no-write
+    `check:decided-surface`; only this final workflow retains `security/decided-surface.json` and
+    verifies it with `check:decided-surface-artifact`. Framework source/posture digests remain
+    ordinary reviewed code-subject inputs and must be refreshed before the freeze, not in this child.
   - The evidence-only descendant has one predeclared path allowlist:
     `security/security-convergence-baseline.json`, `security/decided-surface.json`,
     `plans/10x-better-security.md`, `plans/10x-better-security-2.md`,
@@ -450,8 +457,9 @@ Measurements are versioned and reproducible:
     `plans/security-architecture-final-review-v1-candidate.md`. Authored production, SPEC/rules,
     scripts, workflows, manifests, lockfiles, and every other `security/*.json` path are forbidden.
     The descendant must be the direct child of `codeSubjectSha`; a clean-tree ancestry check and an
-    exact `git diff --name-status` comparison to this list are the complete identity proof. Do not add
-    another hash manifest or ledger-only stamping commit.
+    exact `git diff --name-status` subset check against this list are the complete identity proof;
+    not every allowed path must change. Do not add another hash manifest or ledger-only stamping
+    commit.
   - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the
     evidence-only diff, review artifact, and proving commands are intentionally absent until
     implementation stops moving; no earlier checkpoint is final-tip evidence. This protocol uses no
@@ -477,6 +485,8 @@ Phase 5 checkboxes above; this exit section does not duplicate that external wor
 
 - [ ] Local `main` equals the reviewed evidence/release commit pushed to `origin/main`; required CI, race,
       package, browser, integration, Pages, and acceptance checks are terminal green.
+  - This is an external predicate keyed by the evidence/release SHA. Do not create a follow-up commit
+    merely to copy workflow run IDs or the evidence child's own SHA into a ledger.
 - [ ] `rules/v1-acceptance.md` and `docs/v1-acceptance-ledger.md` cite the threat matrix,
       architecture reviews, exact commands, and this plan's convergence table without claiming
       immunity outside the scoped threat model. They must label the Phase 5 audit/retest evidence

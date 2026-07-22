@@ -64,8 +64,8 @@ export const decidedSurfaceSourcePaths = Object.freeze([
   defaultProvenanceRelationPath,
 ]);
 
-export function buildDecidedSurfaceArtifact({ codeSubjectSha, repoRoot = findRepoRoot() } = {}) {
-  const subjectSha = validateCodeSubjectSha(codeSubjectSha);
+/** Compute the declared finite-domain verdict from the live sources without retaining release evidence. */
+export function buildDecidedSurfaceDecision() {
   const provenance = buildProvenanceDecision();
   const policy = buildPolicyDecision();
   const grammars = buildGrammarDecision();
@@ -76,12 +76,6 @@ export function buildDecidedSurfaceArtifact({ codeSubjectSha, repoRoot = findRep
     throw new Error(`aggregate decided surface is incomplete: ${decided}/${total}`);
   }
   return Object.freeze({
-    schema: decidedSurfaceSchema,
-    subject: Object.freeze({
-      ...SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
-      codeSubjectSha: subjectSha,
-      sources: buildSourceSet({ paths: decidedSurfaceSourcePaths, repoRoot }),
-    }),
     fragments,
     aggregate: Object.freeze({
       decided,
@@ -89,6 +83,20 @@ export function buildDecidedSurfaceArtifact({ codeSubjectSha, repoRoot = findRep
       total,
       unit: 'sum of each fragment exact denominator; per-fragment rows remain authoritative because units differ',
     }),
+  });
+}
+
+export function buildDecidedSurfaceArtifact({ codeSubjectSha, repoRoot = findRepoRoot() } = {}) {
+  const subjectSha = validateCodeSubjectSha(codeSubjectSha);
+  const decision = buildDecidedSurfaceDecision();
+  return Object.freeze({
+    schema: decidedSurfaceSchema,
+    subject: Object.freeze({
+      ...SECURITY_EVIDENCE_SUBJECT_PROTOCOL,
+      codeSubjectSha: subjectSha,
+      sources: buildSourceSet({ paths: decidedSurfaceSourcePaths, repoRoot }),
+    }),
+    ...decision,
   });
 }
 
@@ -246,7 +254,19 @@ async function main() {
   const root = findRepoRoot();
   const artifactPath = path.join(root, defaultDecidedSurfacePath);
   const args = process.argv.slice(2);
-  if (args.length > 0) {
+  if (args.length === 0) {
+    const decision = buildDecidedSurfaceDecision();
+    printDecisionSummary(decision);
+    return;
+  }
+  if (args.length === 1 && args[0] === '--check-artifact') {
+    const document = JSON.parse(readFileSync(artifactPath, 'utf8'));
+    const check = validateDecidedSurfaceArtifact(document, { repoRoot: root });
+    if (!check.ok) throw new Error(check.findings.join('\n'));
+    printDecisionSummary(document);
+    return;
+  }
+  {
     const options = parseExactCliArguments(args, {
       command: '--write',
       valueFlags: ['--subject-sha'],
@@ -260,8 +280,12 @@ async function main() {
   const document = JSON.parse(readFileSync(artifactPath, 'utf8'));
   const check = validateDecidedSurfaceArtifact(document, { repoRoot: root });
   if (!check.ok) throw new Error(check.findings.join('\n'));
+  printDecisionSummary(document);
+}
+
+function printDecisionSummary(document) {
   process.stdout.write(
-    `${decidedSurfaceSchema} provenance=${document.fragments[0].decided}/${document.fragments[0].total} policy=${document.fragments[1].decided}/${document.fragments[1].total} grammars=${document.fragments[2].decided}/${document.fragments[2].total} aggregate=${check.summary.decided}/${check.summary.total} OK\n`,
+    `${decidedSurfaceSchema} provenance=${document.fragments[0].decided}/${document.fragments[0].total} policy=${document.fragments[1].decided}/${document.fragments[1].total} grammars=${document.fragments[2].decided}/${document.fragments[2].total} aggregate=${document.aggregate.decided}/${document.aggregate.total} OK\n`,
   );
 }
 

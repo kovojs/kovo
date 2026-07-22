@@ -37,6 +37,7 @@
     "check:crypto-boundary": "node scripts/check-crypto-boundary.mjs && vitest --run scripts/check-crypto-boundary.test.mjs --reporter=dot",
     "check:declassification-census": "node scripts/security-cost-budget-runner.mjs --gate declassification-census",
     "check:decided-surface": "node scripts/security-cost-budget-runner.mjs --gate decided-surface",
+    "check:decided-surface-artifact": "node scripts/decided-surface-gate.mjs --check-artifact",
     "check:security-event-answerability": "node scripts/security-cost-budget-runner.mjs --gate security-event-answerability",
     "check:protocol-alphabet": "node scripts/security-cost-budget-runner.mjs --gate protocol-alphabet",
     "check:model-honesty-boundary": "node scripts/security-cost-budget-runner.mjs --gate model-honesty-boundary",
