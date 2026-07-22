@@ -100,7 +100,7 @@ behavior change never hides inside a "neutral" move.
     and server so public/internal export names are unchanged. Natural neighbor: `core/query-delta.ts` (owns the
     §9.1.1 deep-merge the grammar gates).
   - Neutrality proof: identical value + identical body moved; every emitted token bit-identical. Proven by
-    server `client-modules.test.ts`, `assertRenderPlanTokenMonotonicity` (KV416, `compile.ts:919-942`), api-surface gate.
+    server `client-modules.test.ts`, `assertRenderPlanFingerprintMonotonicity` (KV416, `compile.ts:919-942`), api-surface gate.
   - Unlocks: CAP6.
 
 - [x] **FN8 · P0 · M/med — Unify the output-context sink taxonomy into one module shared by emit and validation.** ✅ done (compiler-side scope)

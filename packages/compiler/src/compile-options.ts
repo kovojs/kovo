@@ -174,16 +174,18 @@ function snapshotProductionRenderPlanGate(value: unknown): ProductionRenderPlanG
     'previous',
     compilerSnapshotJsonValue(previous, 'Compiler options.productionRenderPlanGate.previous'),
   );
-  const tokenFn = compilerOwnDataValue(
+  const fingerprintFn = compilerOwnDataValue(
     value,
-    'tokenFn',
+    'fingerprintFn',
     'Compiler options.productionRenderPlanGate',
   );
-  if (tokenFn !== undefined) {
-    if (typeof tokenFn !== 'function') {
-      throw new TypeError('Compiler options.productionRenderPlanGate.tokenFn must be a function.');
+  if (fingerprintFn !== undefined) {
+    if (typeof fingerprintFn !== 'function') {
+      throw new TypeError(
+        'Compiler options.productionRenderPlanGate.fingerprintFn must be a function.',
+      );
     }
-    compilerDefineOwnDataProperty(snapshot, 'tokenFn', tokenFn);
+    compilerDefineOwnDataProperty(snapshot, 'fingerprintFn', fingerprintFn);
   }
   return compilerFreeze(snapshot) as unknown as ProductionRenderPlanGateOptions;
 }

@@ -56,11 +56,11 @@ export {
   assertFixpoint,
   assertProductionRenderPlanGate,
   assertRenderEquivalence,
-  assertRenderPlanTokenMonotonicity,
+  assertRenderPlanFingerprintMonotonicity,
   compileComponentModule,
   computeCompilerRenderPlanFingerprint,
   CompilerDiagnosticError,
-  type AssertRenderPlanTokenMonotonicityOptions,
+  type AssertRenderPlanFingerprintMonotonicityOptions,
   type CompilerRenderPlanFingerprintInput,
 } from './compile.js';
 

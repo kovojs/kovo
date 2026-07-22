@@ -351,7 +351,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     runtimeGuard:
       'typed-read-endpoint+BroadcastChannel-principal-discard+SSE-guard-recheck+durable-task-principal-index-delete-and-absence-probe',
     schema:
-      '/_q/search-args+query-shape+fragment-target-registry+Kovo-Targets+Kovo-Live-Targets+render-plan-token',
+      '/_q/search-args+query-shape+fragment-target-registry+Kovo-Targets+Kovo-Live-Targets+render-plan-fingerprint',
     sink: 'transport.query.live.broadcast',
     source:
       '/_q/search-args|Kovo-Targets|Kovo-Live-Targets|fragment-targets|data-stream-text|BroadcastChannel|SSE|req.session',

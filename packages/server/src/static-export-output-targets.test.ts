@@ -1,12 +1,21 @@
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import {
+  clientModuleRepresentationDigest,
+  versionedClientModuleHref,
+} from '@kovojs/core/internal/client-module-url';
 
 import { staticExportOutputTargets } from './static-export-output-targets.js';
 
 describe('server static export output target boundary', () => {
   it('plans route document, client module, and static asset targets in write order', () => {
     const root = path.resolve('/tmp/kovo-static-export-targets');
+    const clientSource = 'export const app = true;';
+    const clientHref = versionedClientModuleHref(
+      '/c/app.client.js',
+      clientModuleRepresentationDigest(clientSource),
+    );
 
     expect(
       staticExportOutputTargets(
@@ -29,10 +38,10 @@ describe('server static export output target boundary', () => {
           ],
           clientModules: [
             {
-              body: 'export const app = true;',
-              headers: {},
-              href: '/c/__v/app/app.client.js',
-              path: '/c/__v/app/app.client.js',
+              body: clientSource,
+              headers: { 'content-type': 'text/javascript; charset=utf-8' },
+              href: clientHref,
+              path: clientHref,
               status: 200,
             },
           ],
@@ -54,11 +63,11 @@ describe('server static export output target boundary', () => {
         targetPath: path.join(root, 'index.html'),
       },
       {
-        diagnosticPath: '/c/__v/app/app.client.js',
+        diagnosticPath: clientHref,
         itemIndex: 0,
         itemKind: 'client-module',
         kind: 'client module',
-        targetPath: path.join(root, 'c', '__v', 'app', 'app.client.js'),
+        targetPath: path.join(root, clientHref.slice(1)),
       },
       {
         diagnosticPath: '/assets/app.css',
@@ -143,7 +152,7 @@ describe('server static export output target boundary', () => {
         },
         root,
       ),
-    ).toThrow(/same-origin immutable versioned \/c\/ module URLs/);
+    ).toThrow(/same-origin \/c\/__v\//);
 
     expect(() =>
       staticExportOutputTargets(

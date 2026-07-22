@@ -5,8 +5,12 @@ import {
   collectStaticExportClientModuleHrefs,
   collectStaticExportServerEndpointRefs,
 } from './static-export-document-refs.js';
+
 import { markFrameworkDocumentResponse } from './response.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
+
+const TEST_REPRESENTATION_DIGEST = 'a'.repeat(64);
+const testClientHref = (file: string): string => `/c/__v/${TEST_REPRESENTATION_DIGEST}/${file}`;
 
 describe('server static export document boundary', () => {
   it('replays route documents as synthetic GET requests at normalized pathnames', async () => {
@@ -78,18 +82,18 @@ describe('server static export document boundary', () => {
           '<main>',
           '<form action="/_m/cart/add"><button>Add</button></form>',
           '<a href="/_q/cart?args=%7B%7D">Refresh</a>',
-          '<button on:click="/c/cart.client.js?v=1#Cart$add https://cdn.example.test/c/remote.js?v=1#Remote$open">',
+          `<button on:click="${testClientHref('cart.client.js')}#Cart$add https://cdn.example.test/c/remote.js?v=1#Remote$open">`,
           'Add locally',
           '</button>',
           '<a data-docs="https://shop.example.test/c/example-only.client.js?v=docs">Docs</a>',
           '<link rel="stylesheet" href="/c/not-a-module.css?v=style">',
           '<link rel="preload" as="script" href="/c/not-modulepreload.client.js?v=preload">',
-          '<script type="module" src="https://shop.example.test/c/menu.client.js?v=2"></script>',
+          `<script type="module" src="https://shop.example.test${testClientHref('menu.client.js')}"></script>`,
           '</main>',
         ].join(''),
         headers: {
           link: [
-            '</c/header.client.js?v=3>; rel=modulepreload',
+            `<${testClientHref('header.client.js')}>; rel=modulepreload`,
             '</c/not-a-client-style.css?v=5>; rel=preload; as=style',
             '</c/not-a-client-script.js?v=6>; rel=preload; as=script',
             '<https://cdn.example.test/c/external.client.js?v=4>; rel=modulepreload',
@@ -107,9 +111,9 @@ describe('server static export document boundary', () => {
       { name: 'href', path: '/_q/cart', phase: 'query', value: '/_q/cart?args=%7B%7D' },
     ]);
     expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
-      '/c/cart.client.js?v=1#Cart$add',
-      '/c/header.client.js?v=3',
-      '/c/menu.client.js?v=2',
+      `${testClientHref('cart.client.js')}#Cart$add`,
+      testClientHref('header.client.js'),
+      testClientHref('menu.client.js'),
     ]);
   });
 
@@ -121,7 +125,7 @@ describe('server static export document boundary', () => {
           '<main>',
           '<form ACTION=/_m/cart/add><button>add</button></form>',
           '<a HREF=&#x2f;_q&#x2f;cart?args=1>Refresh</a>',
-          '<button on:click=&#47;c&#47;cart.client.js?v=1#Cart$add>Client add</button>',
+          `<button on:click=&#47;c&#47;__v&#47;${TEST_REPRESENTATION_DIGEST}&#47;cart.client.js#Cart$add>Client add</button>`,
           '<span data-invalid=&#9999999999;>Ignored</span>',
           '</main>',
         ].join(''),
@@ -138,7 +142,7 @@ describe('server static export document boundary', () => {
       { name: 'href', path: '/_q/cart', phase: 'query', value: '/_q/cart?args=1' },
     ]);
     expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
-      '/c/cart.client.js?v=1#Cart$add',
+      `${testClientHref('cart.client.js')}#Cart$add`,
     ]);
   });
 
@@ -157,7 +161,7 @@ describe('server static export document boundary', () => {
           '<title><a href="/_q/title">example</a></title>',
           '<template><form action="/_m/template/add"><button on:click="/c/template.client.js?v=1#open">Template</button></form></template>',
           '<pre><form action="/_m/pre/add"><button on:click="/c/pre.client.js?v=1#open">Pre</button></form></pre>',
-          '<button on:click="/c/real.client.js?v=2#Real$open">Open</button>',
+          `<button on:click="${testClientHref('real.client.js')}#Real$open">Open</button>`,
           '</main>',
         ].join(''),
         headers: {},
@@ -170,7 +174,7 @@ describe('server static export document boundary', () => {
       collectStaticExportServerEndpointRefs(routeArtifacts[0]?.body ?? '', exportOrigin),
     ).toEqual([]);
     expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
-      '/c/real.client.js?v=2#Real$open',
+      `${testClientHref('real.client.js')}#Real$open`,
     ]);
   });
 
@@ -180,18 +184,18 @@ describe('server static export document boundary', () => {
       {
         body: [
           '<main>',
-          '<button on:idle="/c/idle.client.js?v=1#Idle$run /c/load.client.js?v=1#Load$run">Run</button>',
+          `<button on:idle="${testClientHref('idle.client.js')}#Idle$run ${testClientHref('load.client.js')}#Load$run">Run</button>`,
           '<script src="/c/plain-script.client.js?v=ignored"></script>',
           '<script type="application/json" src="/c/config.client.js?v=ignored"></script>',
-          '<script type="module" src="/c/bootstrap.client.js?v=1"></script>',
-          '<link rel="modulepreload alternate" href="/c/head.client.js?v=1">',
+          `<script type="module" src="${testClientHref('bootstrap.client.js')}"></script>`,
+          `<link rel="modulepreload alternate" href="${testClientHref('head.client.js')}">`,
           '<link rel="stylesheet" href="/c/theme.css?v=ignored">',
           '<span data-example="/c/example-only.client.js?v=ignored"></span>',
           '</main>',
         ].join(''),
         headers: {
           link: [
-            '</c/header.client.js?v=1>; rel="modulepreload"; title="a, b"',
+            `<${testClientHref('header.client.js')}>; rel="modulepreload"; title="a, b"`,
             '</c/style.css?v=ignored>; rel=preload; as=style',
             '</c/script.client.js?v=ignored>; rel=preload; as=script',
           ].join(', '),
@@ -202,11 +206,11 @@ describe('server static export document boundary', () => {
     ];
 
     expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
-      '/c/bootstrap.client.js?v=1',
-      '/c/head.client.js?v=1',
-      '/c/header.client.js?v=1',
-      '/c/idle.client.js?v=1#Idle$run',
-      '/c/load.client.js?v=1#Load$run',
+      testClientHref('bootstrap.client.js'),
+      testClientHref('head.client.js'),
+      testClientHref('header.client.js'),
+      `${testClientHref('idle.client.js')}#Idle$run`,
+      `${testClientHref('load.client.js')}#Load$run`,
     ]);
   });
 });

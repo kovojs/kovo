@@ -4,6 +4,7 @@ import { markFrameworkDocumentResponse } from './response.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 
 const responseTestBuildToken = 'static-export-response-test-build';
+const responseTestClientHref = `/c/__v/${'a'.repeat(64)}/docs.client.js`;
 
 function frameworkDocumentResponse(body: BodyInit | null, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
@@ -491,9 +492,9 @@ describe('server static export replay response boundary', () => {
   it('snapshots JavaScript client module responses', async () => {
     await expect(
       readStaticExportReplayedResponse({
-        href: '/c/docs.client.js?v=build',
+        href: responseTestClientHref,
         kind: 'client-module',
-        path: '/c/docs.client.js',
+        path: responseTestClientHref,
         response: new Response('export const docs = true;', {
           headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
         }),
@@ -508,9 +509,9 @@ describe('server static export replay response boundary', () => {
   it('raises KV229 for client module responses that are not JavaScript', async () => {
     await expect(
       readStaticExportReplayedResponse({
-        href: '/c/docs.client.js?v=build',
+        href: responseTestClientHref,
         kind: 'client-module',
-        path: '/c/docs.client.js',
+        path: responseTestClientHref,
         response: new Response('<main>Docs</main>', {
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
         }),
@@ -520,8 +521,8 @@ describe('server static export replay response boundary', () => {
       diagnostics: [
         {
           code: 'KV229',
-          message: expect.stringContaining("cannot copy client module '/c/docs.client.js?v=build'"),
-          routePath: '/c/docs.client.js',
+          message: expect.stringContaining(`cannot copy client module '${responseTestClientHref}'`),
+          routePath: responseTestClientHref,
         },
       ],
     });

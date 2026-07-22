@@ -76,7 +76,7 @@ export interface InternalCompileComponentOptions extends Omit<
  */
 export interface ProductionRenderPlanGateOptions {
   previous: Record<string, string>;
-  tokenFn?: (input: Record<string, string>) => string;
+  fingerprintFn?: (input: Record<string, string>) => string;
 }
 
 /**

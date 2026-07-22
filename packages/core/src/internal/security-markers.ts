@@ -380,10 +380,11 @@ export const SECURITY_CODE_REGISTRY = {
   },
   KV416: {
     buildOnlyRationale:
-      'Render-equivalence and token monotonicity are build-corpus properties checked before emitting deploy artifacts.',
+      'Render-equivalence plus render-plan/app-build identity monotonicity are build-corpus properties checked before emitting deploy artifacts.',
     code: 'KV416',
     enforcement: 'build-only',
-    property: 'Production render-equivalence and render-plan-token monotonicity hold.',
+    property:
+      'Production render-equivalence plus render-plan fingerprint and derived app-build-token monotonicity hold.',
     propertyDependsOn: 'build-artifact',
   },
   KV417: {

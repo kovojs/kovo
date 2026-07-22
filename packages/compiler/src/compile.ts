@@ -1963,14 +1963,14 @@ export function computeCompilerRenderPlanFingerprint(
  * Input for a KV416 fingerprint-monotonicity check: a "before" and "after" snapshot of
  * the projected query-shape signatures, plus an optional fingerprint function that takes
  * a {@link CompilerRenderPlanFingerprintInput} and returns an opaque string.
- * Supply `tokenFn` to test a custom fingerprint provider; omit it to use the built-in
+ * Supply `fingerprintFn` to test a custom fingerprint provider; omit it to use the built-in
  * {@link computeCompilerRenderPlanFingerprint}.
  * @internal
  */
-export interface AssertRenderPlanTokenMonotonicityOptions {
+export interface AssertRenderPlanFingerprintMonotonicityOptions {
   after: CompilerRenderPlanFingerprintInput;
   before: CompilerRenderPlanFingerprintInput;
-  tokenFn?: (input: CompilerRenderPlanFingerprintInput) => string;
+  fingerprintFn?: (input: CompilerRenderPlanFingerprintInput) => string;
 }
 
 /**
@@ -1980,25 +1980,25 @@ export interface AssertRenderPlanTokenMonotonicityOptions {
  * failure.
  *
  * Callers pass the "before" and "after" shape-signature records; the function uses
- * `computeCompilerRenderPlanFingerprint` (or a custom `tokenFn`) to compute both
+ * `computeCompilerRenderPlanFingerprint` (or a custom `fingerprintFn`) to compute both
  * fingerprints and compares them. Call this from the build gate after a differential corpus
  * run (SPEC §5.2.2).
  */
-export function assertRenderPlanTokenMonotonicity(
-  options: AssertRenderPlanTokenMonotonicityOptions,
+export function assertRenderPlanFingerprintMonotonicity(
+  options: AssertRenderPlanFingerprintMonotonicityOptions,
 ): void {
-  const { before, after, tokenFn = computeCompilerRenderPlanFingerprint } = options;
+  const { before, after, fingerprintFn = computeCompilerRenderPlanFingerprint } = options;
 
-  const beforeToken = tokenFn(before);
-  const afterToken = tokenFn(after);
+  const beforeFingerprint = fingerprintFn(before);
+  const afterFingerprint = fingerprintFn(after);
 
   const shapesChanged = canonicalJson(sortedRecord(before)) !== canonicalJson(sortedRecord(after));
 
-  if (shapesChanged && beforeToken === afterToken) {
+  if (shapesChanged && beforeFingerprint === afterFingerprint) {
     throw new CompilerDiagnosticError(
       kv416Diagnostic(
         'render-plan fingerprint failed to move on a projected-query-shape change',
-        `Fingerprint before and after: "${beforeToken}".`,
+        `Fingerprint before and after: "${beforeFingerprint}".`,
       ),
     );
   }
@@ -2014,14 +2014,14 @@ export function assertProductionRenderPlanGate(options: {
   after: CompilerRenderPlanFingerprintInput;
   before: CompilerRenderPlanFingerprintInput;
   result: CompileResult;
-  tokenFn?: (input: CompilerRenderPlanFingerprintInput) => string;
+  fingerprintFn?: (input: CompilerRenderPlanFingerprintInput) => string;
 }): void {
   try {
     assertRenderEquivalence(options.result);
-    assertRenderPlanTokenMonotonicity({
+    assertRenderPlanFingerprintMonotonicity({
       before: options.before,
       after: options.after,
-      ...(options.tokenFn ? { tokenFn: options.tokenFn } : {}),
+      ...(options.fingerprintFn ? { fingerprintFn: options.fingerprintFn } : {}),
     });
   } catch (error) {
     if (error instanceof CompilerDiagnosticError) throw error;
@@ -2057,9 +2057,9 @@ function sortedRecord(record: Record<string, string>): [string, string][] {
   const result: [string, string][] = [];
   for (let index = 0; index < keys.length; index += 1) {
     const key = keys[index]!;
-    const value = compilerOwnDataValue(record, key, 'Render-plan token input');
+    const value = compilerOwnDataValue(record, key, 'Render-plan fingerprint input');
     if (typeof value !== 'string') {
-      compilerFailClosed(`Render-plan token input ${key} must be a string.`);
+      compilerFailClosed(`Render-plan fingerprint input ${key} must be a string.`);
     }
     appendCompileValue(result, [key, value], 'Sorted render-plan input');
   }
@@ -2074,10 +2074,10 @@ function productionRenderPlanGateDiagnostics(
   if (!gate) return [];
 
   try {
-    assertRenderPlanTokenMonotonicity({
+    assertRenderPlanFingerprintMonotonicity({
       before: gate.previous,
       after,
-      ...(gate.tokenFn ? { tokenFn: gate.tokenFn } : {}),
+      ...(gate.fingerprintFn ? { fingerprintFn: gate.fingerprintFn } : {}),
     });
     return [];
   } catch (error) {

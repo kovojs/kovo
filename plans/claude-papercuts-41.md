@@ -11,7 +11,7 @@ Isolated worktree at `58df770b1`; `/Users/mini/kovo` untouched. Line numbers cit
       framework/hygiene; `wire-display-echo` A4-wire-01; REFUTED — negative security result + a cosmetic note)
   - Recorded as a POSITIVE: the A4 attacker confirmed no prototype pollution, no mass-assignment above the governed-
     column floor (the wire decode is a positive schema allowlist, not a permissive merge), and no forgeable/omittable
-    render-plan token path. The residual is a display-only quirk (a value echoed back in a diagnostic/response surface),
+    app-build-token path. The residual is a display-only quirk (a value echoed back in a diagnostic/response surface),
     not a validation or integrity bypass — both verifiers REFUTED it as a security issue.
   - Acceptance (optional): if the echoed value reaches a human-facing diagnostic, ensure it is escaped/bounded at that
     surface; otherwise no action. This is the Wire × I matrix control's evidence, not an open gap.

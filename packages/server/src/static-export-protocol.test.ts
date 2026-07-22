@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { scanStaticExportDocumentProtocol } from './static-export-protocol.js';
 
+const TEST_REPRESENTATION_DIGEST = 'b'.repeat(64);
+const testClientHref = (file: string): string => `/c/__v/${TEST_REPRESENTATION_DIGEST}/${file}`;
+
 describe('server static export protocol scanner', () => {
   it('extracts typed protocol facts from parsed HTML elements and attributes', () => {
     const protocol = scanStaticExportDocumentProtocol(
@@ -12,9 +15,9 @@ describe('server static export protocol scanner', () => {
         '</FORM>',
         "<A HREF='/_q/cart?args=1'>Refresh</A>",
         '<button formaction="/_m/cart/remove">Remove</button>',
-        '<button on:CLICK="/c/cart.client.js?v=1#Cart$add /c/%2Fescape.client.js?v=bad#Bad$run">Client</button>',
-        '<SCRIPT TYPE=module SRC="https://shop.example.test/c/bootstrap.client.js?v=2"></SCRIPT>',
-        '<LINK REL="modulepreload alternate" HREF="/c/head.client.js?v=3">',
+        `<button on:CLICK="${testClientHref('cart.client.js')}#Cart$add /c/%2Fescape.client.js?v=bad#Bad$run">Client</button>`,
+        `<SCRIPT TYPE=module SRC="https://shop.example.test${testClientHref('bootstrap.client.js')}"></SCRIPT>`,
+        `<LINK REL="modulepreload alternate" HREF="${testClientHref('head.client.js')}">`,
         '<kovo-query name="cart" key="cart:1">{"count":1}</kovo-query>',
         '<script type="application/json" kovo-query="reviews" key="reviews:p1">{"items":[]}</script>',
         '<kovo-defer target="reviews:p1">Loading</kovo-defer>',
@@ -52,10 +55,10 @@ describe('server static export protocol scanner', () => {
       })),
     ).toEqual([
       {
-        href: '/c/cart.client.js?v=1#Cart$add',
+        href: `${testClientHref('cart.client.js')}#Cart$add`,
         name: 'on:click',
         source: 'event-handler',
-        value: '/c/cart.client.js?v=1#Cart$add',
+        value: `${testClientHref('cart.client.js')}#Cart$add`,
       },
       {
         href: '/c/%2Fescape.client.js?v=bad#Bad$run',
@@ -64,16 +67,16 @@ describe('server static export protocol scanner', () => {
         value: '/c/%2Fescape.client.js?v=bad#Bad$run',
       },
       {
-        href: '/c/bootstrap.client.js?v=2',
+        href: testClientHref('bootstrap.client.js'),
         name: 'src',
         source: 'module-script',
-        value: 'https://shop.example.test/c/bootstrap.client.js?v=2',
+        value: `https://shop.example.test${testClientHref('bootstrap.client.js')}`,
       },
       {
-        href: '/c/head.client.js?v=3',
+        href: testClientHref('head.client.js'),
         name: 'href',
         source: 'modulepreload-link',
-        value: '/c/head.client.js?v=3',
+        value: testClientHref('head.client.js'),
       },
     ]);
     expect(protocol.deferredMarkers).toEqual([

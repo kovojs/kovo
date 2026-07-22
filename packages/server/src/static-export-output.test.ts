@@ -4,6 +4,10 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import {
+  clientModuleRepresentationDigest,
+  versionedClientModuleHref,
+} from '@kovojs/core/internal/client-module-url';
 
 import {
   createStaticExportOutputPlan,
@@ -11,6 +15,17 @@ import {
   staticExportOutputPlan,
   writeStaticExportOutput,
 } from './static-export-output.js';
+
+function staticClientModuleArtifact(pathname: string, body: string) {
+  const href = versionedClientModuleHref(pathname, clientModuleRepresentationDigest(body));
+  return {
+    body,
+    headers: { 'content-type': 'text/javascript; charset=utf-8' },
+    href,
+    path: href,
+    status: 200 as const,
+  };
+}
 
 describe('server static export output boundary', () => {
   it('normalizes static assets and plans directory targets without writing', async () => {
@@ -26,6 +41,10 @@ describe('server static export output boundary', () => {
           source: pathToFileURL(cssSource),
         },
       ]);
+      const cartClientModule = staticClientModuleArtifact(
+        '/c/cart.client.js',
+        'export const cart = "plan";',
+      );
 
       const plan = staticExportOutputPlan(
         {
@@ -38,15 +57,7 @@ describe('server static export output boundary', () => {
             },
           ],
           assets,
-          clientModules: [
-            {
-              body: 'export const cart = "plan";',
-              headers: { 'content-type': 'text/javascript; charset=utf-8' },
-              href: '/c/__v/plan/cart.client.js',
-              path: '/c/__v/plan/cart.client.js',
-              status: 200,
-            },
-          ],
+          clientModules: [cartClientModule],
         },
         { outDir: pathToFileURL(outDir) },
       );
@@ -70,8 +81,8 @@ describe('server static export output boundary', () => {
         },
         {
           kind: 'client-module',
-          path: '/c/__v/plan/cart.client.js',
-          targetPath: path.join(outDir, 'c', '__v', 'plan', 'cart.client.js'),
+          path: cartClientModule.path,
+          targetPath: path.join(outDir, cartClientModule.path.slice(1)),
         },
         {
           kind: 'static-asset',
@@ -198,7 +209,7 @@ describe('server static export output boundary', () => {
           },
         ],
       }),
-    ).toThrow(/immutable versioned \/c\/ module URLs/);
+    ).toThrow(/same-origin \/c\/__v\//);
 
     expect(() =>
       createStaticExportOutputPlan({
@@ -211,7 +222,7 @@ describe('server static export output boundary', () => {
           },
         ],
       }),
-    ).toThrow(/artifact path and href pathname must match/);
+    ).toThrow(/artifact path must match that canonical pathname/);
 
     expect(() =>
       createStaticExportOutputPlan({
@@ -224,7 +235,15 @@ describe('server static export output boundary', () => {
           },
         ],
       }),
-    ).toThrow(/with a path or query version/);
+    ).toThrow(/64-lowercase-hex-representation-digest/);
+
+    const canonical = staticClientModuleArtifact('/c/cart.client.js', 'export const cart = true;');
+    expect(() =>
+      createStaticExportOutputPlan({
+        ...base,
+        clientModules: [{ ...canonical, body: 'export const cart = false;' }],
+      }),
+    ).toThrow(/bytes or fixed Content-Type do not match the full representation digest/);
   });
 
   it('validates static asset sources before writing any output files', async () => {
@@ -300,6 +319,10 @@ describe('server static export output boundary', () => {
     // immutable versioned /c/__v/ modules MUST be retained for the deploy-skew window.
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-prune-'));
     try {
+      const v1ClientModule = staticClientModuleArtifact(
+        '/c/app.client.js',
+        'export const v1 = true;',
+      );
       const v1Plan = createStaticExportOutputPlan({
         artifacts: [
           {
@@ -316,15 +339,7 @@ describe('server static export output boundary', () => {
           },
         ],
         assets: [],
-        clientModules: [
-          {
-            body: 'export const v1 = true;',
-            headers: {},
-            href: '/c/__v/v1/app.client.js',
-            path: '/c/__v/v1/app.client.js',
-            status: 200,
-          },
-        ],
+        clientModules: [v1ClientModule],
         outDir,
       });
       await writeStaticExportOutput(v1Plan);
@@ -334,7 +349,7 @@ describe('server static export output boundary', () => {
         'Old',
       );
       await expect(
-        readFile(path.join(outDir, 'c', '__v', 'v1', 'app.client.js'), 'utf8'),
+        readFile(path.join(outDir, v1ClientModule.path.slice(1)), 'utf8'),
       ).resolves.toContain('export const v1 = true;');
 
       // Re-export only `/` (the `/old` route was removed; the v1 client module is no longer referenced).
@@ -358,7 +373,7 @@ describe('server static export output boundary', () => {
       await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain('Home v2');
       // SPEC §14: the prior immutable versioned module is RETAINED across the rebuild.
       await expect(
-        readFile(path.join(outDir, 'c', '__v', 'v1', 'app.client.js'), 'utf8'),
+        readFile(path.join(outDir, v1ClientModule.path.slice(1)), 'utf8'),
       ).resolves.toContain('export const v1 = true;');
     } finally {
       await rm(outDir, { force: true, recursive: true });
@@ -438,15 +453,7 @@ describe('server static export output boundary', () => {
             status: 200,
           },
         ],
-        clientModules: [
-          {
-            body: 'export const app = true;',
-            headers: {},
-            href: '/c/app.client.js?v=app',
-            path: '/c/app.client.js',
-            status: 200,
-          },
-        ],
+        clientModules: [staticClientModuleArtifact('/c/app.client.js', 'export const app = true;')],
         outDir,
       });
 
@@ -758,15 +765,7 @@ describe('server static export output boundary', () => {
             source: pathToFileURL(cssSource),
           },
         ]),
-        clientModules: [
-          {
-            body: 'export const app = true;',
-            headers: { 'content-type': 'text/javascript; charset=utf-8' },
-            href: '/c/__v/app/app.client.js',
-            path: '/c/__v/app/app.client.js',
-            status: 200,
-          },
-        ],
+        clientModules: [staticClientModuleArtifact('/c/app.client.js', 'export const app = true;')],
         outDir,
       });
 

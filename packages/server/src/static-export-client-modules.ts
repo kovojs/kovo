@@ -3,7 +3,11 @@ import {
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
-import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
+import {
+  canonicalClientModuleRepresentation,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+} from '@kovojs/core/internal/client-module-url';
 import { versionedClientModuleHref } from './client-modules.js';
 import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import {
@@ -13,6 +17,7 @@ import {
   securityMapSet,
   securityObjectKeys,
   securitySetAdd,
+  securityStringStartsWith,
 } from './response-security-intrinsics.js';
 import { witnessArrayAppend, witnessSetForEach } from './security-witness-intrinsics.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
@@ -73,7 +78,7 @@ export async function replayStaticExportClientModuleArtifacts({
       throw new StaticExportError([
         staticExportDiagnostic(
           artifact.path,
-          `KV229 static export found multiple client module versions for '${artifact.path}' with different response snapshots. Static hosts serve query-string variants from the same file path, so export documents must reference one immutable version per /c/ path.`,
+          `KV229 static export observed conflicting response snapshots for the same immutable client-module href '${artifact.path}'. SPEC §5.2.1 requires one exact representation per full-digest URL.`,
         ),
       ]);
     }
@@ -100,6 +105,7 @@ async function replayStaticExportClientModuleArtifact({
   context,
   href,
 }: StaticExportClientModuleArtifactReplayOptions): Promise<StaticExportClientModuleArtifact> {
+  const target = staticExportClientModuleTarget(href);
   const { response, url } = await replayStaticExportRequest({ context, href });
   const replayed = await readStaticExportReplayedResponse({
     href,
@@ -107,12 +113,56 @@ async function replayStaticExportClientModuleArtifact({
     path: url.pathname,
     response,
   });
+  assertStaticExportClientModuleRepresentation(href, target.digest, replayed);
 
   return {
     ...replayed,
     href,
     path: url.pathname,
   };
+}
+
+function staticExportClientModuleTarget(href: string): { digest: string; path: string } {
+  const target = parseVersionedClientModuleTarget(href);
+  if (target !== undefined) {
+    const path = versionedClientModuleHref(target.path, target.digest);
+    if (href === path || securityStringStartsWith(href, `${path}#`)) {
+      return { digest: target.digest, path };
+    }
+  }
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      href,
+      `KV229 static export refused non-canonical client module href '${href}'. SPEC §5.2.1 requires /c/__v/<64-lowercase-hex-representation-digest>/<module> with no query string or author version.`,
+    ),
+  ]);
+}
+
+function assertStaticExportClientModuleRepresentation(
+  href: string,
+  expectedDigest: string,
+  replayed: Pick<StaticExportClientModuleArtifact, 'body' | 'headers'>,
+): void {
+  const contentType = buildOwnDataProperty(
+    replayed.headers,
+    'content-type',
+    `client module '${href}' content type`,
+  );
+  const canonicalBody = canonicalClientModuleRepresentation(replayed.body);
+  if (
+    !contentType.present ||
+    contentType.value !== 'text/javascript; charset=utf-8' ||
+    canonicalBody !== replayed.body ||
+    clientModuleRepresentationDigest(canonicalBody) !== expectedDigest
+  ) {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        href,
+        `KV229 static export refused client module '${href}' because its response bytes or fixed Content-Type do not match the full representation digest in its immutable URL (SPEC §5.2.1).`,
+      ),
+    ]);
+  }
 }
 
 function staticExportClientModuleArtifactsMatch(

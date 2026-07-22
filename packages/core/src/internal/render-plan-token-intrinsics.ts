@@ -111,7 +111,7 @@ export function renderPlanSha256Hex(parts: readonly string[]): string {
 
 function sortStrings(values: string[]): string[] {
   // Query names are app-shaped build input. Keep canonicalization O(n log n)
-  // so reverse-ordered names cannot turn the render-plan authority token into
+  // so reverse-ordered names cannot turn the render-plan compatibility fingerprint into
   // an insertion-sort build denial of service. Merge through framework-owned
   // null-prototype buffers: they cannot dispatch inherited setters, and unlike
   // securityArrayAppend they do not repeat descriptor witnesses for every item

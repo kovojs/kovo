@@ -29,27 +29,30 @@ describe('server static export synthetic request boundary', () => {
     expect(seen).toEqual(['GET https://docs.example.test/guide/intro']);
   });
 
-  it('preserves versioned /c/ href search and hash for client-module replay', async () => {
+  it('preserves an exact href search and hash for synthetic replay', async () => {
     const seen: string[] = [];
     const handler: RequestHandler = async (request) => {
       const url = new URL(request.url);
       seen.push(`${request.method} ${url.pathname}${url.search}${url.hash}`);
-      return new Response(`export const version = ${JSON.stringify(url.searchParams.get('v'))};`, {
-        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
-      });
+      return new Response(
+        `export const revision = ${JSON.stringify(url.searchParams.get('rev'))};`,
+        {
+          headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+        },
+      );
     };
     const context = { handler, origin: 'https://shop.example.test' };
 
     const { response, url } = await replayStaticExportRequest({
       context,
-      href: '/c/cart.client.js?v=cart-1#Cart$add',
+      href: '/assets/cart.js?rev=cart-1#Cart$add',
     });
 
-    await expect(response.text()).resolves.toBe('export const version = "cart-1";');
-    expect(url.pathname).toBe('/c/cart.client.js');
-    expect(url.search).toBe('?v=cart-1');
+    await expect(response.text()).resolves.toBe('export const revision = "cart-1";');
+    expect(url.pathname).toBe('/assets/cart.js');
+    expect(url.search).toBe('?rev=cart-1');
     expect(url.hash).toBe('#Cart$add');
-    expect(seen).toEqual(['GET /c/cart.client.js?v=cart-1#Cart$add']);
+    expect(seen).toEqual(['GET /assets/cart.js?rev=cart-1#Cart$add']);
   });
 
   it('creates the replay context from the closed app-shell aggregate', async () => {

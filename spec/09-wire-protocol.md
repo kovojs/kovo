@@ -61,7 +61,7 @@ decoding is linear and has no HTTP-size ceiling; the 4,096-character ceiling bel
 HTTP form/list encoder.
 
 Every target-bearing browser request carries a required fragment-free `Kovo-Current-Url` of at most
-1,536 ASCII characters and the exact immutable document render-plan token in `Kovo-Build`. The
+1,536 ASCII characters and the exact immutable document app build token in `Kovo-Build`. The
 framework headers together have an exact 9,216-byte HTTP/1 line budget,
 counting each name, `: `, value, and trailing CRLF. A present form target is required to fit; target
 and live-target lists truncate only at complete entries and empty list headers are omitted. Delegated

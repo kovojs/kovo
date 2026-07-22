@@ -4,7 +4,7 @@ import {
   assertFixpoint,
   assertProductionRenderPlanGate,
   assertRenderEquivalence,
-  assertRenderPlanTokenMonotonicity,
+  assertRenderPlanFingerprintMonotonicity,
   compileComponentModule,
   computeCompilerRenderPlanFingerprint,
   CompilerDiagnosticError,
@@ -1823,34 +1823,42 @@ export const CartBadge = component({
 
 // ─── D4: KV416 render-plan fingerprint monotonicity (SPEC §5.2.2) ────────────
 
-describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () => {
-  it('passes when shapes are unchanged (same token)', () => {
+describe('assertRenderPlanFingerprintMonotonicity — KV416 (D4, SPEC §5.2.2)', () => {
+  it('passes when shapes are unchanged (same fingerprint)', () => {
     const shapes = { cart: 'field:id,count', product: 'field:id,name' };
     // Should not throw — shapes identical before and after
     expect(() =>
-      assertRenderPlanTokenMonotonicity({ before: shapes, after: shapes }),
+      assertRenderPlanFingerprintMonotonicity({ before: shapes, after: shapes }),
     ).not.toThrow();
   });
 
-  it('passes when shapes change AND the token changes', () => {
+  it('passes when shapes change AND the fingerprint changes', () => {
     const before = { cart: 'field:id,count' };
     const after = { cart: 'field:id,total' }; // field renamed → shape changed
-    // With the real fingerprint function, different shapes → different tokens → no throw
-    expect(() => assertRenderPlanTokenMonotonicity({ before, after })).not.toThrow();
+    // With the real fingerprint function, different shapes → different fingerprints → no throw
+    expect(() => assertRenderPlanFingerprintMonotonicity({ before, after })).not.toThrow();
   });
 
-  it('throws KV416 when a projected-query field rename does NOT move a stubbed non-monotonic token (D4)', () => {
-    // Simulate a broken token function that always returns the same value.
-    const frozenToken = (_: Record<string, string>) => 'frozen-token';
+  it('throws KV416 when a projected-query field rename does NOT move a stubbed fingerprint (D4)', () => {
+    // Simulate a broken fingerprint function that always returns the same value.
+    const frozenFingerprint = (_: Record<string, string>) => 'frozen-fingerprint';
 
     const before = { cart: 'field:id,count' };
     const after = { cart: 'field:id,total' }; // shape changed — field renamed
 
     expect(() =>
-      assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken }),
+      assertRenderPlanFingerprintMonotonicity({
+        before,
+        after,
+        fingerprintFn: frozenFingerprint,
+      }),
     ).toThrow(CompilerDiagnosticError);
     try {
-      assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken });
+      assertRenderPlanFingerprintMonotonicity({
+        before,
+        after,
+        fingerprintFn: frozenFingerprint,
+      });
     } catch (error) {
       expect(error).toBeInstanceOf(CompilerDiagnosticError);
       expect((error as CompilerDiagnosticError).diagnostic).toMatchObject({
@@ -1860,37 +1868,41 @@ describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () =>
     }
   });
 
-  it('throws KV416 when a new query is added but the token does not move (coverage: added field)', () => {
-    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+  it('throws KV416 when a new query is added but the fingerprint does not move', () => {
+    const frozenFingerprint = (_: Record<string, string>) => 'frozen-v1';
 
     const before = { cart: 'field:id,count' };
     const after = { cart: 'field:id,count', product: 'field:id,name' }; // new query
 
     expect(() =>
-      assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken }),
+      assertRenderPlanFingerprintMonotonicity({
+        before,
+        after,
+        fingerprintFn: frozenFingerprint,
+      }),
     ).toThrow(CompilerDiagnosticError);
   });
 
-  it('does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)', () => {
+  it('does NOT throw KV416 when shapes differ and the real fingerprint moves', () => {
     const before = { cart: 'field:id,count' };
     const after = { cart: 'field:id,total' }; // field renamed
 
-    const tokenBefore = computeCompilerRenderPlanFingerprint(before);
-    const tokenAfter = computeCompilerRenderPlanFingerprint(after);
+    const fingerprintBefore = computeCompilerRenderPlanFingerprint(before);
+    const fingerprintAfter = computeCompilerRenderPlanFingerprint(after);
 
     // Sanity: the real fingerprint must actually move for this test to be meaningful.
-    expect(tokenBefore).not.toBe(tokenAfter);
+    expect(fingerprintBefore).not.toBe(fingerprintAfter);
 
     expect(() =>
-      assertRenderPlanTokenMonotonicity({
+      assertRenderPlanFingerprintMonotonicity({
         before,
         after,
-        tokenFn: computeCompilerRenderPlanFingerprint,
+        fingerprintFn: computeCompilerRenderPlanFingerprint,
       }),
     ).not.toThrow();
   });
 
-  it('moves the production token for nested delimiter, control, and Unicode field-name changes', () => {
+  it('moves the render-plan fingerprint for nested delimiter, control, and Unicode changes', () => {
     const source = `
 import { component } from '@kovojs/core';
 
@@ -1930,12 +1942,12 @@ export const CollisionProof = component({
   });
 
   it('wires KV416 into the production compile gate diagnostics', () => {
-    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+    const frozenFingerprint = (_: Record<string, string>) => 'frozen-v1';
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       productionRenderPlanGate: {
         previous: { cart: '{count:number}' },
-        tokenFn: frozenToken,
+        fingerprintFn: frozenFingerprint,
       },
       queryShapes: { cart: { total: 'number' } },
       source: cartBadgeSource,
@@ -1953,12 +1965,12 @@ export const CollisionProof = component({
   });
 
   it('includes secret query shape metadata in the production render-plan fingerprint gate', () => {
-    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+    const frozenFingerprint = (_: Record<string, string>) => 'frozen-v1';
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       productionRenderPlanGate: {
         previous: { cart: '{count:number,token:string}' },
-        tokenFn: frozenToken,
+        fingerprintFn: frozenFingerprint,
       },
       queryShapes: {
         cart: {
@@ -1986,14 +1998,14 @@ export const CollisionProof = component({
       queryShapes: { cart: { count: 'number' } },
       source: cartBadgeSource,
     });
-    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+    const frozenFingerprint = (_: Record<string, string>) => 'frozen-v1';
 
     expect(() =>
       assertProductionRenderPlanGate({
         result,
         before: { cart: '{count:number}' },
         after: { cart: '{total:number}' },
-        tokenFn: frozenToken,
+        fingerprintFn: frozenFingerprint,
       }),
     ).toThrow(CompilerDiagnosticError);
   });

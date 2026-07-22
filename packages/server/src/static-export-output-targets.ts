@@ -1,6 +1,13 @@
+import {
+  canonicalClientModuleRepresentation,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+  versionedClientModuleHref,
+} from '@kovojs/core/internal/client-module-url';
 import { confinedPath } from '@kovojs/core/internal/filesystem';
 
 import {
+  buildOwnDataProperty,
   buildSecurityDecodeURIComponent,
   buildSecurityPathJoin,
   buildSecurityPathSeparator,
@@ -13,7 +20,6 @@ import {
   securityMapGet,
   securityMapSet,
   securityObjectKeys,
-  securityRegExpTest,
   securityStringIncludes,
   securityStringSplit,
   securityStringStartsWith,
@@ -155,21 +161,51 @@ export function staticExportOutputTargets(
 
 function assertStaticExportClientModuleTarget(artifact: StaticExportClientModuleArtifact): void {
   const hrefUrl = staticExportClientModuleHrefUrl(artifact);
+  let target: ReturnType<typeof parseVersionedClientModuleTarget>;
+  try {
+    target = parseVersionedClientModuleTarget(
+      `${hrefUrl.pathname}${hrefUrl.search}${hrefUrl.hash}`,
+    );
+  } catch {
+    target = undefined;
+  }
+  const canonicalPath =
+    target === undefined ? undefined : versionedClientModuleHref(target.path, target.digest);
 
   if (
     hrefUrl.origin === 'https://kovo.local' &&
-    securityStringStartsWith(artifact.path, '/c/') &&
-    hrefUrl.pathname === artifact.path &&
-    (securityRegExpTest(/[?&]v=[^&]+/u, hrefUrl.search) ||
-      securityStringStartsWith(hrefUrl.pathname, '/c/__v/'))
+    target !== undefined &&
+    hrefUrl.search === '' &&
+    hrefUrl.pathname === canonicalPath &&
+    artifact.path === canonicalPath
   ) {
-    return;
+    const contentType = buildOwnDataProperty(
+      artifact.headers,
+      'content-type',
+      `static-export client module '${artifact.path}' content type`,
+    );
+    const canonicalBody = canonicalClientModuleRepresentation(artifact.body);
+    if (
+      contentType.present &&
+      contentType.value === 'text/javascript; charset=utf-8' &&
+      canonicalBody === artifact.body &&
+      clientModuleRepresentationDigest(canonicalBody) === target.digest
+    ) {
+      return;
+    }
+
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        artifact.path,
+        `KV229 static export refused client module '${artifact.path}' because its output bytes or fixed Content-Type do not match the full representation digest in its immutable URL (SPEC §5.2.1).`,
+      ),
+    ]);
   }
 
   throw new StaticExportError([
     staticExportDiagnostic(
       artifact.path,
-      `KV229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §4.3 and §9.5 publish same-origin immutable versioned /c/ module URLs, so artifact path and href pathname must match under /c/ with a path or query version.`,
+      `KV229 static export refused client module '${artifact.path}' with href '${artifact.href}'. SPEC §5.2.1 and §9.5 require one same-origin /c/__v/<64-lowercase-hex-representation-digest>/<module> URL with no query string, and the artifact path must match that canonical pathname.`,
     ),
   ]);
 }

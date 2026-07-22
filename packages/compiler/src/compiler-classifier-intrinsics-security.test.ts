@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertRenderPlanTokenMonotonicity,
+  assertRenderPlanFingerprintMonotonicity,
   compileComponentModule,
   CompilerDiagnosticError,
 } from './compile.js';
@@ -1864,10 +1864,10 @@ export const PayButton = component({
     try {
       JSON.stringify = (() => '[]') as typeof JSON.stringify;
       try {
-        assertRenderPlanTokenMonotonicity({
+        assertRenderPlanFingerprintMonotonicity({
           after: { cart: 'field:id,total' },
           before: { cart: 'field:id,count' },
-          tokenFn: () => 'frozen-token',
+          fingerprintFn: () => 'frozen-fingerprint',
         });
       } catch (error) {
         thrown = error;

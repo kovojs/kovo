@@ -243,7 +243,7 @@ and intentionally outside that byte cap.
 - [ ] **No weakening CSP.** Inline hashes or external script policy must remain
       deterministic and compatible with existing document CSP assembly.
 - [ ] **No stale build apply.** Partial navigation responses must validate the
-      same render-plan token as current full-document navigation and fall back to
+      same app build token as current full-document navigation and fall back to
       full navigation on skew.
 - [ ] **No gzip budget regression.** The installed always-loaded bootstrap stays
       at or below `inlineKovoLoaderGzipByteBudget` unless SPEC.md section 4.4 is
