@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(489);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(491);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -868,8 +868,10 @@ describe('security-gate-mutations', () => {
       'request-ingress/recompute-vercel-prepared-verdict',
       'server-response-posture/drop-endpoint-verification-choke',
       'server-response-posture/drop-revalidated-cache-verdict',
+      'server-response-posture/drop-text-media-type-verdict',
       'server-response-posture/restore-substring-cache-directive',
       'server-response-posture/restore-word-boundary-media-type',
+      'server-response-posture/weaken-plain-text-media-type-verdict',
       'server-method/restore-endpoint-extension-uppercase-alias',
       'server-method/restore-shell-extension-uppercase-alias',
       'server-egress/drop-dispatcher-pin',

@@ -1690,6 +1690,27 @@ const restoredEndpointWordBoundaryMediaTypeBranch = [
   '  const mediaType = endpointMediaType(contentType);',
   '  if (mediaType === undefined) return false;',
 ].join('\n');
+const exactEndpointTextMediaTypePostureBranch =
+  '  if (permitsOpaqueBody || (!inspectJson && !inspectHtml && !inspectText)) return true;';
+const droppedEndpointTextMediaTypePostureBranch =
+  '  if (permitsOpaqueBody || (!inspectJson && !inspectHtml)) return true;';
+const exactEndpointPlainTextMediaTypeBranch = [
+  '  if (',
+  '    inspectText &&',
+  "    asciiRangeEquals(contentType, mediaType.typeStart, mediaType.slash, 'text') &&",
+  "    asciiRangeEquals(contentType, mediaType.subtypeStart, mediaType.end, 'plain')",
+  '  ) {',
+  '    return true;',
+  '  }',
+].join('\n');
+const weakenedEndpointPlainTextMediaTypeBranch = [
+  '  if (',
+  '    inspectText &&',
+  "    asciiRangeEquals(contentType, mediaType.typeStart, mediaType.slash, 'text')",
+  '  ) {',
+  '    return true;',
+  '  }',
+].join('\n');
 const exactShellRequestMethodBranch = '  const method = input.method;';
 const uppercasedShellRequestMethodBranch =
   '  const method = input.method === undefined ? undefined : input.method.toUpperCase();';
@@ -7355,6 +7376,28 @@ export const SECURITY_GATE_MUTANTS = [
     search: exactEndpointMediaTypeAdmissionBranch,
     sourceFile: serverResponsePosturePath,
     test: assertEndpointMediaTypeIdentityBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Stops enforcing Content-Type when the endpoint declares only a text body.',
+    expectedKiller:
+      'text-only and text-plus-redirect endpoint postures must reject non-text media types',
+    name: 'server-response-posture/drop-text-media-type-verdict',
+    replacement: droppedEndpointTextMediaTypePostureBranch,
+    search: exactEndpointTextMediaTypePostureBranch,
+    sourceFile: serverResponsePosturePath,
+    test: assertEndpointTextMediaTypePostureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Treats every text/* media type as the declared plain-text endpoint body class.',
+    expectedKiller:
+      'body=text must accept text/plain but reject active text/html unless html is separately declared',
+    name: 'server-response-posture/weaken-plain-text-media-type-verdict',
+    replacement: weakenedEndpointPlainTextMediaTypeBranch,
+    search: exactEndpointPlainTextMediaTypeBranch,
+    sourceFile: serverResponsePosturePath,
+    test: assertEndpointTextMediaTypePostureBehavior,
   },
   {
     behavioralTypeScript: true,
@@ -15287,6 +15330,63 @@ function assertEndpointMediaTypeIdentityBehavior(moduleUnderTest) {
       'Content-Type': 'text/plain; profile=html',
     },
     'endpoint HTML posture accepted a parameter-name lookalike',
+  );
+}
+
+function assertEndpointTextMediaTypePostureBehavior(moduleUnderTest) {
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: 'text', cache: 'no-store' },
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/json',
+    },
+    'endpoint text posture accepted a non-text media type',
+  );
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: 'text', cache: 'no-store' },
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/html',
+    },
+    'endpoint plain-text posture accepted active HTML media type',
+  );
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: ['text', 'redirect'], cache: 'no-store' },
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/octet-stream',
+    },
+    'endpoint text-plus-redirect posture accepted a non-text media type',
+  );
+  assertEndpointPostureAccepts(
+    moduleUnderTest,
+    { body: 'text', cache: 'no-store' },
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+  );
+}
+
+function assertEndpointPostureAccepts(moduleUnderTest, response, headers) {
+  const definition = {
+    csrf: { exempt: true, justification: 'behavioral mutation fixture' },
+    handler: () => new Response('unreachable'),
+    method: 'GET',
+    mount: 'exact',
+    path: '/mutation-harness/endpoint-posture-positive-control',
+    reason: 'behavioral endpoint response identity positive control',
+    response: { appOwnedSafety: true, ...response },
+  };
+  moduleUnderTest.assertEndpointResponsePostureAndSnapshot(
+    definition,
+    new Response('body', { headers }),
+    {
+      request: new Request('https://kovo.test/mutation-harness/endpoint-posture-positive-control'),
+    },
   );
 }
 

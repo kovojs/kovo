@@ -1276,7 +1276,13 @@ function endpointResponseBodyMatchesContentType(
 ): boolean {
   const inspectJson = postureIncludes(bodyPosture, 'json');
   const inspectHtml = postureIncludes(bodyPosture, 'html');
-  if (!inspectJson && !inspectHtml) return true;
+  const inspectText = postureIncludes(bodyPosture, 'text');
+  // SPEC §9.1: a raw Response does not retain whether its stream originated as authored `bytes`
+  // or `stream`, so either declaration deliberately leaves the media type unconstrained. Every
+  // media-type-backed posture must still match when no such opaque representation is declared.
+  const permitsOpaqueBody =
+    postureIncludes(bodyPosture, 'bytes') || postureIncludes(bodyPosture, 'stream');
+  if (permitsOpaqueBody || (!inspectJson && !inspectHtml && !inspectText)) return true;
   const mediaType = endpointMediaType(contentType);
   if (mediaType === undefined) return false;
   if (
@@ -1294,8 +1300,9 @@ function endpointResponseBodyMatchesContentType(
     return true;
   }
   if (
-    postureIncludes(bodyPosture, 'text') &&
-    asciiRangeEquals(contentType, mediaType.typeStart, mediaType.slash, 'text')
+    inspectText &&
+    asciiRangeEquals(contentType, mediaType.typeStart, mediaType.slash, 'text') &&
+    asciiRangeEquals(contentType, mediaType.subtypeStart, mediaType.end, 'plain')
   ) {
     return true;
   }

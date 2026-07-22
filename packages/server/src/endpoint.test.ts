@@ -1055,6 +1055,82 @@ describe('server endpoints', () => {
     ).resolves.toMatchObject({ status: 200 });
   });
 
+  it.each([
+    {
+      body: 'text' as const,
+      contentType: 'application/json',
+      path: '/machine/text-posture-json-drift',
+    },
+    {
+      body: 'text' as const,
+      contentType: 'text/html',
+      path: '/machine/text-posture-html-drift',
+    },
+    {
+      body: ['text', 'redirect'] as const,
+      contentType: 'application/octet-stream',
+      path: '/machine/text-redirect-posture-byte-drift',
+    },
+  ])(
+    'rejects $contentType from the real runtime for declared $body response posture',
+    async ({ body, contentType, path }) => {
+      const mismatched = endpoint(path, {
+        handler: () =>
+          new Response('attacker-controlled response bytes', {
+            headers: { 'Cache-Control': 'no-store', 'Content-Type': contentType },
+          }),
+        method: 'GET',
+        reason: 'runtime text response posture regression',
+        response: { appOwnedSafety: true, body, cache: 'no-store' },
+      });
+
+      await expect(
+        runEndpoint(mismatched, new Request(`https://example.test${path}`)),
+      ).rejects.toThrow(/response posture mismatch/u);
+    },
+  );
+
+  it('accepts exact text/plain for a text-only response posture', async () => {
+    const plainText = endpoint('/machine/text-posture-plain-control', {
+      handler: () =>
+        new Response('plain response bytes', {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        }),
+      method: 'GET',
+      reason: 'runtime text response posture positive control',
+      response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+    });
+
+    await expect(
+      runEndpoint(
+        plainText,
+        new Request('https://example.test/machine/text-posture-plain-control'),
+      ),
+    ).resolves.toMatchObject({ status: 200 });
+  });
+
+  it('keeps an explicit bytes|text posture open to a non-text byte media type', async () => {
+    const binary = endpoint('/machine/bytes-or-text-posture', {
+      handler: () =>
+        new Response(new Uint8Array([0, 1, 2, 3]), {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Content-Type': 'application/octet-stream',
+          },
+        }),
+      method: 'GET',
+      reason: 'runtime opaque bytes posture control',
+      response: { appOwnedSafety: true, body: ['bytes', 'text'], cache: 'no-store' },
+    });
+
+    await expect(
+      runEndpoint(binary, new Request('https://example.test/machine/bytes-or-text-posture')),
+    ).resolves.toMatchObject({ status: 200 });
+  });
+
   it('fails endpoint posture verification for cache, body, and content-type drift', async () => {
     const cases = [
       {
