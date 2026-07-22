@@ -191,6 +191,23 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'does not synthesize empty state for a stateless handler through %s',
+    async (_name, installSource) => {
+      const element = new InlineTriggerElement({
+        'on:click': '/c/theme.js#inspect',
+      });
+      const inspect = vi.fn();
+
+      await dispatchInlineDelegatedClick(element, async () => ({ inspect }), installSource, [
+        '/c/theme.js',
+      ]);
+
+      expect(inspect).toHaveBeenCalledTimes(1);
+      expect(element.getAttribute('kovo-state')).toBeNull();
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'applies inline state bindings after chained handlers through %s',
     async (_name, installSource) => {
       const host = new FakeStatefulBindingElement({

@@ -192,6 +192,18 @@ describe('delegated handler reference dispatch', () => {
     expect(calls).toEqual(['remove', 'sync']);
   });
 
+  it('does not synthesize an empty state stamp for a stateless handler', async () => {
+    const inspect = vi.fn();
+    const element = new FakeStatefulBindingElement({
+      'on:click': '/c/pass.client.js#inspect',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'click' }, async () => ({ inspect }));
+
+    expect(inspect).toHaveBeenCalledOnce();
+    expect(element.getAttribute('kovo-state')).toBeNull();
+  });
+
   it('rejects malformed handler references through delegated dispatch', async () => {
     const element = new FakeElement({ 'on:click': '/c/cart.client.js#' });
 

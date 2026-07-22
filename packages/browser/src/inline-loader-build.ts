@@ -2289,7 +2289,10 @@ function installInlineKovoLoader(im) {
       const serializedState = js(state);
       const preparedBindings = await psb(stateHost, state);
       apb(preparedBindings);
-      bns.setElementAttribute(stateHost, 'kovo-state', serializedState);
+      // SPEC §4.3/§8: do not turn a stateless interaction into navigation shell drift.
+      if (st || serializedState !== '{}') {
+        bns.setElementAttribute(stateHost, 'kovo-state', serializedState);
+      }
       for (let index = 0; index < pc.length; index += 1) {
         const callback = pc[index];
         if (typeof callback !== 'function') continue;

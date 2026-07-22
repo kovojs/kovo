@@ -232,7 +232,8 @@ export async function dispatchDelegatedEvent(
   );
   if (!element) return;
 
-  const stateHost = readElementStateHost(element) ?? element;
+  const serializedStateHost = readElementStateHost(element);
+  const stateHost = serializedStateHost ?? element;
   const previous = securityWeakMapGet(delegatedStateQueues, stateHost);
   const dispatch = (async () => {
     if (previous) {
@@ -245,6 +246,7 @@ export async function dispatchDelegatedEvent(
       importModule,
       element,
       stateHost,
+      serializedStateHost !== null,
       islandSignalScope,
       eventFacts.type,
     );
@@ -273,6 +275,7 @@ async function dispatchDelegatedEventForElement(
   importModule: ImportHandlerModule,
   element: EventElementLike,
   stateHost: EventElementLike,
+  hadSerializedStateHost: boolean,
   islandSignalScope: IslandSignalScope,
   eventType: string,
 ): Promise<void> {
@@ -329,7 +332,13 @@ async function dispatchDelegatedEventForElement(
     ? await prepareStateBindings(stateHost, candidateState, { importModule })
     : undefined;
   if (preparedBindings) applyPreparedStateBindings(preparedBindings);
-  setRuntimeElementAttribute(stateHost, 'kovo-state', serializedState);
+  // SPEC §4.3/§8: a stateless handler must not make an otherwise unchanged navigation
+  // segment look server-different by synthesizing a meaningless `kovo-state="{}"` attribute.
+  // Stateful components arrive with an explicit host stamp, and a handler that creates state
+  // still publishes its non-empty snapshot on the fallback element.
+  if (hadSerializedStateHost || serializedState !== '{}') {
+    setRuntimeElementAttribute(stateHost, 'kovo-state', serializedState);
+  }
   drainPostCommitQueue(postCommitQueue);
 }
 
