@@ -310,9 +310,10 @@ trusted the expected identity supplied by the same subject.
     work. Give stripped-header rejection an unambiguous typed response marker so it cannot be
     confused with an app 409; require exact dev-only `oldBuild` HMR continuity. Use exactly three
     non-nested identities: (1) a full SHA-256 representation digest, derived internally from the
-    canonical content type plus exact well-formed UTF-8 module bytes, names each immutable module
-    URL; (2) a full render-plan fingerprint covers render, wire, and query grammar/shape; and (3) one
-    full app-build token is a domain-separated, byte-length-framed hash of the render-plan
+    canonical content type plus exact final well-formed UTF-8 bytes after every browser-import
+    rewrite, names each immutable module URL; (2) a full render-plan fingerprint covers render,
+    wire, and query grammar/shape; and (3) one full app-build token is a domain-separated,
+    byte-length-framed hash of the render-plan
     fingerprint plus the exact current active-module manifest fingerprint. The active manifest is
     an exact href set (including simultaneous versions of one logical path), not retained resolver
     history. Build finalization seals the manifest and freezes the scalar app token once for
