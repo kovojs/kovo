@@ -1,59 +1,15 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
-
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { BoundedMcpStdin } from './commands/mcp.js';
-import {
-  compileComponentV1,
-  handleKovoMcpRequest,
-  runMcpFallbackStdio,
-  runMcpSdkServer,
-} from './index.js';
+import { compileComponentV1, handleKovoMcpRequest, runMcpStdioServer } from './index.js';
 
 const browserAlertKv449Message =
   'Security-critical operation is outside the compiler-owned finite IR. semantic root=serialized-browser-handler:onClick@8; transfers=<direct>; sink=browser capability call window.alert is outside the finite handler IR; verdict=closed:opaque-transfer.';
-
-class MemoryMcpTransport implements Transport {
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  onmessage?: (message: JSONRPCMessage) => void;
-  readonly sent: JSONRPCMessage[] = [];
-  started = false;
-
-  async close(): Promise<void> {
-    this.onclose?.();
-  }
-
-  receive(message: JSONRPCMessage): void {
-    this.onmessage?.(message);
-  }
-
-  async send(message: JSONRPCMessage): Promise<void> {
-    this.sent.push(message);
-  }
-
-  async start(): Promise<void> {
-    this.started = true;
-  }
-}
-
-async function waitForMcpMessage(
-  transport: MemoryMcpTransport,
-  predicate: (message: JSONRPCMessage) => boolean,
-): Promise<JSONRPCMessage> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const message = transport.sent.find(predicate);
-    if (message) return message;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error(`MCP message was not sent. Sent: ${JSON.stringify(transport.sent)}`);
-}
 
 async function* mcpInputChunks(...chunks: string[]): AsyncIterable<string> {
   yield* chunks;
@@ -488,38 +444,26 @@ export const Shell = component({
     });
   });
 
-  it('preserves the newline-delimited JSON-RPC fallback stdio seam', async () => {
+  it('serves the finite newline-delimited JSON-RPC lifecycle', async () => {
     const chunks: string[] = [];
-    await runMcpFallbackStdio(
+    await runMcpStdioServer(
       mcpInputChunks(
         `${JSON.stringify({
-          id: 'list-fallback',
+          id: 'init',
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: {
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1' },
+            protocolVersion: '2025-06-18',
+          },
+        })}\n`,
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+        `${JSON.stringify({
+          id: 'list',
           jsonrpc: '2.0',
           method: 'tools/list',
         })}\n`,
-      ),
-      { write: (chunk) => chunks.push(chunk) },
-    );
-
-    expect(JSON.parse(chunks.join(''))).toMatchObject({
-      id: 'list-fallback',
-      jsonrpc: '2.0',
-      result: {
-        structuredContent: {
-          tools: expect.arrayContaining([expect.objectContaining({ name: 'compile_component' })]),
-          version: 'kovo-mcp/v1',
-        },
-        version: 'kovo-mcp/v1',
-      },
-    });
-  });
-
-  it('bounds fallback request lines and resumes at the next message', async () => {
-    const chunks: string[] = [];
-    await runMcpFallbackStdio(
-      mcpInputChunks(
-        'x'.repeat(4 * 1024 * 1024 + 1),
-        `\n${JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' })}\n`,
       ),
       { write: (chunk) => chunks.push(chunk) },
     );
@@ -531,37 +475,58 @@ export const Shell = component({
       .map((line) => JSON.parse(line));
     expect(responses).toHaveLength(2);
     expect(responses[0]).toMatchObject({
+      id: 'init',
+      jsonrpc: '2.0',
+      result: {
+        protocolVersion: '2025-06-18',
+        serverInfo: { name: 'kovo', version: 'kovo-mcp/v1' },
+      },
+    });
+    expect(responses[1]).toMatchObject({
+      id: 'list',
+      result: {
+        tools: expect.arrayContaining([expect.objectContaining({ name: 'compile_component' })]),
+      },
+    });
+  });
+
+  it('bounds request lines and resumes with a fresh finite lifecycle', async () => {
+    const chunks: string[] = [];
+    await runMcpStdioServer(
+      mcpInputChunks(
+        'x'.repeat(4 * 1024 * 1024 + 1),
+        `\n${JSON.stringify({
+          id: 'init-after-limit',
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: {
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1' },
+            protocolVersion: '2025-06-18',
+          },
+        })}\n`,
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+        `${JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' })}\n`,
+      ),
+      { write: (chunk) => chunks.push(chunk) },
+    );
+
+    const responses = chunks
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(responses).toHaveLength(3);
+    expect(responses[0]).toMatchObject({
       error: { code: -32001, message: 'request exceeds 4194304 bytes' },
       id: null,
       jsonrpc: '2.0',
     });
-    expect(responses[1]).toMatchObject({
+    expect(responses[1]).toMatchObject({ id: 'init-after-limit' });
+    expect(responses[2]).toMatchObject({
       id: 'after-limit',
-      result: { structuredContent: { version: 'kovo-mcp/v1' } },
+      result: { tools: expect.arrayContaining([expect.objectContaining({ name: 'kovo_check' })]) },
     });
-  });
-
-  it('bounds the SDK transport before its unbounded newline buffer', async () => {
-    const next = JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' });
-    const bounded = new BoundedMcpStdin(
-      Readable.from([Buffer.alloc(4 * 1024 * 1024 + 1, 0x78), Buffer.from(`\n${next}\n`, 'utf8')]),
-    );
-    let output = '';
-    for await (const chunk of bounded) output += Buffer.from(chunk).toString('utf8');
-
-    const messages = output
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line));
-    expect(messages).toEqual([
-      {
-        id: 'kovo-input-limit',
-        jsonrpc: '2.0',
-        method: '__kovo_input_limit__',
-      },
-      { id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' },
-    ]);
-    expect(Buffer.byteLength(output)).toBeLessThan(1024);
   });
 
   it('rejects oversized compile sources before invoking the compiler', async () => {
@@ -585,27 +550,44 @@ export const Shell = component({
     });
   });
 
-  it('serves initialize, tool listing, and tool calls through the SDK MCP lifecycle', async () => {
-    const transport = new MemoryMcpTransport();
-    await runMcpSdkServer(transport);
-
-    expect(transport.started).toBe(true);
-
-    transport.receive({
-      id: 'init-1',
-      jsonrpc: '2.0',
-      method: 'initialize',
-      params: {
-        capabilities: {},
-        clientInfo: { name: 'kovo-test-client', version: '0.0.0' },
-        protocolVersion: '2025-06-18',
+  it('serves initialize, tool listing, and tool calls through the finite MCP lifecycle', async () => {
+    const messages = [
+      {
+        id: 'init-1',
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: {
+          capabilities: {},
+          clientInfo: { name: 'kovo-test-client', version: '0.0.0' },
+          protocolVersion: '2025-06-18',
+        },
       },
-    });
-
-    const initialize = await waitForMcpMessage(
-      transport,
-      (message) => 'id' in message && message.id === 'init-1',
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { id: 'list-1', jsonrpc: '2.0', method: 'tools/list', params: {} },
+      {
+        id: 'compile-1',
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: {
+            fileName: 'cart-badge.tsx',
+            source: '<button onClick={() => window.alert("x")}>x</button>',
+          },
+          name: 'compile_component',
+        },
+      },
+    ];
+    const chunks: string[] = [];
+    await runMcpStdioServer(
+      mcpInputChunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
+      { write: (chunk) => chunks.push(chunk) },
     );
+    const [initialize, list, compile] = chunks
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
     expect(initialize).toMatchObject({
       id: 'init-1',
       jsonrpc: '2.0',
@@ -615,13 +597,6 @@ export const Shell = component({
       },
     });
 
-    transport.receive({ jsonrpc: '2.0', method: 'notifications/initialized' });
-    transport.receive({ id: 'list-1', jsonrpc: '2.0', method: 'tools/list', params: {} });
-
-    const list = await waitForMcpMessage(
-      transport,
-      (message) => 'id' in message && message.id === 'list-1',
-    );
     expect(list).toMatchObject({
       id: 'list-1',
       jsonrpc: '2.0',
@@ -635,23 +610,6 @@ export const Shell = component({
       },
     });
 
-    transport.receive({
-      id: 'compile-1',
-      jsonrpc: '2.0',
-      method: 'tools/call',
-      params: {
-        arguments: {
-          fileName: 'cart-badge.tsx',
-          source: '<button onClick={() => window.alert("x")}>x</button>',
-        },
-        name: 'compile_component',
-      },
-    });
-
-    const compile = await waitForMcpMessage(
-      transport,
-      (message) => 'id' in message && message.id === 'compile-1',
-    );
     expect(compile).toMatchObject({
       id: 'compile-1',
       jsonrpc: '2.0',
@@ -689,5 +647,43 @@ export const Shell = component({
         },
       },
     });
+  });
+
+  it('serves and exits cleanly through the spawned kovo mcp command', () => {
+    const input = [
+      {
+        id: 'init',
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: {
+          capabilities: {},
+          clientInfo: { name: 'spawned-test', version: '1' },
+          protocolVersion: '2025-06-18',
+        },
+      },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { id: 'ping', jsonrpc: '2.0', method: 'ping' },
+    ]
+      .map((message) => JSON.stringify(message))
+      .join('\n');
+    const result = spawnSync(fileURLToPath(new URL('./bin.ts', import.meta.url)), ['mcp'], {
+      encoding: 'utf8',
+      input: `${input}\n`,
+      timeout: 15_000,
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(
+      result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line)),
+    ).toEqual([
+      expect.objectContaining({
+        id: 'init',
+        result: expect.objectContaining({ protocolVersion: '2025-06-18' }),
+      }),
+      { id: 'ping', jsonrpc: '2.0', result: {} },
+    ]);
   });
 });

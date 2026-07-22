@@ -1,6 +1,3 @@
-import { Buffer as NativeBuffer } from 'node:buffer';
-import { Transform, type TransformCallback } from 'node:stream';
-
 import type { CompileComponentOptions, CompileResult } from '@kovojs/compiler';
 import {
   compileComponentModuleForFramework,
@@ -14,8 +11,12 @@ import {
 } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  createFiniteMcpStdioServer,
+  type FiniteMcpOutput,
+  type FiniteMcpStdioServer,
+  type FiniteMcpToolResult,
+} from '@kovojs/core/internal/mcp-stdio';
 
 import { MCP_USAGE } from '../commands-manifest.js';
 import {
@@ -40,7 +41,7 @@ import {
 } from '../shared.js';
 import { buildByteLength } from './build-security-intrinsics.js';
 
-const MCP_MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+const MCP_MAX_LINE_BYTES = 4 * 1024 * 1024;
 const MCP_MAX_COMPILE_SOURCE_BYTES = 2 * 1024 * 1024;
 
 /** @internal Input shape for the internal `compile_component` MCP tool. */
@@ -244,7 +245,7 @@ export async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
     return writeUsageError(message);
   }
 
-  await runMcpSdkServer();
+  await runMcpStdioServer(process.stdin, process.stdout);
   return 0;
 }
 
@@ -256,207 +257,29 @@ function mcpUsage(): string {
   ].join('\n');
 }
 
-/** @internal Newline-delimited JSON-RPC stdio fallback for `kovo mcp`; not a public API. */
-export async function runMcpFallbackStdio(
+/** @internal Runs the finite SPEC §11.5 `kovo mcp` stdio server; not a public API. */
+export async function runMcpStdioServer(
   input: AsyncIterable<Buffer | string>,
-  output: { write(chunk: string): unknown },
+  output: FiniteMcpOutput,
 ): Promise<void> {
-  let pending = '';
-  let discardingOversizedLine = false;
-
-  for await (const chunk of input) {
-    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    const lines = text.split(/\r?\n/);
-    const tail = lines.pop() ?? '';
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index] ?? '';
-      if (discardingOversizedLine) {
-        discardingOversizedLine = false;
-        pending = '';
-        continue;
-      }
-      const completeBytes = buildByteLength(pending) + buildByteLength(line);
-      if (completeBytes > MCP_MAX_REQUEST_BYTES) {
-        pending = '';
-        writeMcpInputLimitError(output);
-        continue;
-      }
-      const complete = pending + line;
-      pending = '';
-      await writeMcpLine(complete, output);
-    }
-
-    if (!discardingOversizedLine) {
-      const pendingBytes = buildByteLength(pending) + buildByteLength(tail);
-      if (pendingBytes > MCP_MAX_REQUEST_BYTES) {
-        pending = '';
-        discardingOversizedLine = true;
-        writeMcpInputLimitError(output);
-      } else {
-        pending += tail;
-      }
-    }
-  }
-
-  if (!discardingOversizedLine && pending.trim()) await writeMcpLine(pending, output);
+  await createKovoMcpServer().serveStdio(input, output);
 }
 
-function writeMcpInputLimitError(output: { write(chunk: string): unknown }): void {
-  output.write(
-    `${JSON.stringify(mcpError(null, -32001, `request exceeds ${MCP_MAX_REQUEST_BYTES} bytes`))}\n`,
-  );
-}
-
-async function writeMcpLine(
-  line: string,
-  output: { write(chunk: string): unknown },
-): Promise<void> {
-  if (!line.trim()) return;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(line);
-  } catch {
-    output.write(`${JSON.stringify(mcpError(null, -32700, 'parse error'))}\n`);
-    return;
-  }
-
-  output.write(`${JSON.stringify(await handleKovoMcpRequest(parsed))}\n`);
-}
-
-/** @internal Connects the internal `kovo mcp` SDK server to a transport; not a public API. */
-export async function runMcpSdkServer(transport?: Transport): Promise<void> {
-  const [{ StdioServerTransport }, server] = await Promise.all([
-    import('@modelcontextprotocol/sdk/server/stdio.js'),
-    createMcpSdkServer(),
-  ]);
-  await server.connect(
-    transport ?? new StdioServerTransport(new BoundedMcpStdin(process.stdin), process.stdout),
-  );
-}
-
-/** @internal Bounds the third-party SDK's otherwise unbounded newline buffer. */
-export class BoundedMcpStdin extends Transform {
-  private buffered: Buffer[] = [];
-  private bufferedBytes = 0;
-  private discarding = false;
-
-  constructor(input: NodeJS.ReadableStream) {
-    super();
-    input.pipe(this);
-  }
-
-  override _transform(
-    chunk: Buffer | string,
-    encoding: BufferEncoding,
-    callback: TransformCallback,
-  ): void {
-    try {
-      const bytes = typeof chunk === 'string' ? NativeBuffer.from(chunk, encoding) : chunk;
-      let start = 0;
-      const length = buildByteLength(bytes);
-      for (let index = 0; index < length; index += 1) {
-        if (bytes[index] !== 0x0a) continue;
-        this.appendLineSegment(bytes.subarray(start, index), true);
-        start = index + 1;
-      }
-      this.appendLineSegment(bytes.subarray(start), false);
-      callback();
-    } catch (error) {
-      callback(error as Error);
-    }
-  }
-
-  override _flush(callback: TransformCallback): void {
-    try {
-      if (this.discarding || this.bufferedBytes > 0) this.emitBufferedLine();
-      callback();
-    } catch (error) {
-      callback(error as Error);
-    }
-  }
-
-  private appendLineSegment(segment: Buffer, complete: boolean): void {
-    if (!this.discarding) {
-      const segmentBytes = buildByteLength(segment);
-      if (this.bufferedBytes + segmentBytes > MCP_MAX_REQUEST_BYTES) {
-        this.buffered = [];
-        this.bufferedBytes = 0;
-        this.discarding = true;
-      } else if (segmentBytes > 0) {
-        this.buffered.push(segment);
-        this.bufferedBytes += segmentBytes;
-      }
-    }
-    if (complete) this.emitBufferedLine();
-  }
-
-  private emitBufferedLine(): void {
-    if (this.discarding) {
-      this.push(
-        `${JSON.stringify({
-          id: 'kovo-input-limit',
-          jsonrpc: '2.0',
-          method: '__kovo_input_limit__',
-        })}\n`,
-      );
-    } else {
-      if (this.bufferedBytes > 0) {
-        this.push(NativeBuffer.concat(this.buffered, this.bufferedBytes));
-      }
-      this.push('\n');
-    }
-    this.buffered = [];
-    this.bufferedBytes = 0;
-    this.discarding = false;
-  }
-}
-
-async function createMcpSdkServer(): Promise<
-  InstanceType<typeof import('@modelcontextprotocol/sdk/server/index.js').Server>
-> {
-  const [{ Server: McpSdkServer }, { CallToolRequestSchema, ListToolsRequestSchema }] =
-    await Promise.all([
-      import('@modelcontextprotocol/sdk/server/index.js'),
-      import('@modelcontextprotocol/sdk/types.js'),
-    ]);
-  const server = new McpSdkServer(
-    { name: 'kovo', version: mcpOutputVersion },
-    {
-      capabilities: { tools: {} },
-      instructions:
-        'Kovo diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
-    },
-  );
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: listMcpTools().tools.map((tool) => ({ ...tool })) as Tool[],
-  }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
-    try {
-      const structuredContent = asMcpStructuredContent(
-        await callMcpTool(request.params.name, request.params.arguments),
-      );
-      return mcpToolResult(structuredContent);
-    } catch (error) {
-      return {
-        content: [
-          {
-            text: error instanceof Error ? error.message : String(error),
-            type: 'text',
-          },
-        ],
-        isError: true,
-      };
-    }
+/** @internal Creates Kovo's closed tool adapter over the shared finite stdio engine. */
+export function createKovoMcpServer(): FiniteMcpStdioServer {
+  const listing = listMcpTools();
+  return createFiniteMcpStdioServer({
+    callTool: async (name, args) =>
+      mcpToolResult(asMcpStructuredContent(await callMcpTool(name, args))),
+    instructions:
+      'Kovo diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
+    maxLineBytes: MCP_MAX_LINE_BYTES,
+    serverInfo: { name: 'kovo', version: mcpOutputVersion },
+    tools: listing.tools,
   });
-
-  return server;
 }
 
-function mcpToolResult(structuredContent: Record<string, unknown>): CallToolResult {
+function mcpToolResult(structuredContent: Record<string, unknown>): FiniteMcpToolResult {
   return {
     content: [{ text: mcpContentText(structuredContent), type: 'text' }],
     structuredContent,

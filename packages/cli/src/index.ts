@@ -37,10 +37,10 @@ import {
 } from './commands/security-disposition.js';
 import {
   compileComponentV1,
+  createKovoMcpServer,
   handleKovoMcpRequest,
   runMcpCommand,
-  runMcpFallbackStdio,
-  runMcpSdkServer,
+  runMcpStdioServer,
 } from './commands/mcp.js';
 import {
   kovoAudit,
@@ -63,12 +63,12 @@ import {
 
 export {
   compileComponentV1,
+  createKovoMcpServer,
   handleKovoMcpRequest,
   kovoAudit,
   kovoCheck,
   kovoExplain,
-  runMcpFallbackStdio,
-  runMcpSdkServer,
+  runMcpStdioServer,
   runUpdateDocsCommand,
 };
 

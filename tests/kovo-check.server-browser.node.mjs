@@ -18,7 +18,7 @@ import {
   kovoExplain,
   handleKovoMcpRequest,
   mainAsync,
-  runMcpFallbackStdio,
+  runMcpStdioServer,
 } from '../dist/cli/src/index.mjs';
 import {
   assertFixpoint,

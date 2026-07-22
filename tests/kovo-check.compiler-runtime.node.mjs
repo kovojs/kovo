@@ -17,7 +17,7 @@ import {
   kovoCheck,
   kovoExplain,
   handleKovoMcpRequest,
-  runMcpFallbackStdio,
+  runMcpStdioServer,
 } from '../dist/cli/src/index.mjs';
 import {
   assertFixpoint,
@@ -1706,7 +1706,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
       }),
     )
     .join('\n');
-  await runMcpFallbackStdio(
+  await runMcpStdioServer(
     (async function* mcpInput() {
       yield `${mcpStdioRequests}\n`;
     })(),

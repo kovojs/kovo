@@ -42,7 +42,6 @@
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/ui": "workspace:*",
-    "@modelcontextprotocol/sdk": "1.29.0",
     "esbuild": "0.28.1",
     "parse5": "8.0.1",
     "sigstore": "5.0.0",

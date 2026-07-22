@@ -100,5 +100,9 @@ export function createMcpServer(opts: { bundles: DataflowBundle[] }): {
   explain: (args: { query: string; app?: string; limit?: number }) => unknown;
   TOOL: unknown;
   appIds: string[];
-  serveStdio: () => Promise<void>;
+  serveStdio: (
+    input?: AsyncIterable<string | Uint8Array>,
+    output?: { write(chunk: string): unknown },
+    errorOutput?: { write(chunk: string): unknown },
+  ) => Promise<void>;
 };
