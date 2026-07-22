@@ -102,6 +102,10 @@ const compilerCapabilityClosureScannerPath = path.join(
   repoRoot,
   'packages/compiler/src/scan/capability-closure.ts',
 );
+const compilerLexicalProvenancePath = path.join(
+  repoRoot,
+  'packages/compiler/src/scan/lexical-provenance.ts',
+);
 const compilerCapabilityClosureVerdictPath = path.join(
   repoRoot,
   'packages/compiler/src/security/capability-closure.ts',
@@ -1506,6 +1510,128 @@ const removedImportEqualsNamespaceMemberProjectionBranch = [
   "    if (origin.kind === 'package') {",
   "      return { kind: 'unknown', reason: `mutant dropped ${member} namespace projection` };",
   '    }',
+].join('\n');
+const sequentialLexicalWriteBranch = '  env.set(key, written);';
+const mergedSequentialLexicalWriteBranch =
+  '  env.set(key, joinValues(state, env.get(key) ?? written, written));';
+const mutableLexicalRootClosureBranch =
+  '          ...(use.uncertain || use.rootWideningRequired || module.lexicalProvenanceBudgetExhausted';
+const removedMutableLexicalRootClosureBranch =
+  '          ...(false || module.lexicalProvenanceBudgetExhausted';
+const lexicalBudgetOverflowRootsBranch =
+  '        module.lexicalProvenanceBudgetExhausted || use.rootWideningRequired';
+const removedLexicalBudgetOverflowRootsBranch = '        false';
+const constructorAndTagEnrollmentBranch =
+  '    } else if (ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node)) {';
+const removedConstructorAndTagEnrollmentBranch = '    } else if (false) {';
+const unknownGlobalCapabilityExpansionBranch =
+  '  for (const capability of unknownGlobalCapabilities) {';
+const weakenedUnknownGlobalCapabilityExpansionBranch =
+  '  for (const capability of unknownGlobalCapabilities.slice(0, 1)) {';
+const unmodeledCallEffectsBranch = [
+  '  if (!callEffectsAreModeled(callee)) {',
+  '    env = invokeTransferredCallables(arguments_, env, scope, state);',
+].join('\n');
+const removedUnmodeledCallEffectsBranch = [
+  '  if (false) {',
+  '    env = invokeTransferredCallables(arguments_, env, scope, state);',
+].join('\n');
+const implicitExecutionFallbackBranch = '  if (hasImplicitExecution(expression)) {';
+const removedImplicitExecutionFallbackBranch = '  if (false) {';
+const accessorInvocationBranch = '      if (accessor) return invokeCallable(accessor, env, state);';
+const removedAccessorInvocationBranch =
+  '      if (false) return invokeCallable(accessor, env, state);';
+const candidateOverflowRootWideningBranch =
+  '    rootWideningRequired: overflow || values.some((value) => value.rootWideningRequired),';
+const removedCandidateOverflowRootWideningBranch =
+  '    rootWideningRequired: values.some((value) => value.rootWideningRequired),';
+const opaqueCallResultRootPropagationBranch = [
+  '    const argumentValues = arguments_.map((argument) =>',
+  '      readExpression(argument, env, scope, state),',
+  '    );',
+  '    const reviewedRootFactory = isReviewedFrameworkRootFactoryCall(callee);',
+  '    const canReturnFrameworkRoot =',
+  '      !reviewedRootFactory &&',
+  '      (callee.containsRoot ||',
+  '        argumentValues.some((argument) => argument.containsRoot) ||',
+  '        callee.candidates.some(candidateCallResultMayContainRoot));',
+  '    const unknownResult = unknownValue(',
+  "      'call result is not a finite binding reference',",
+  '      canReturnFrameworkRoot,',
+  '    );',
+  '    return reviewedRootFactory || argumentValues.length === 0',
+  '      ? unknownResult',
+  '      : joinValues(state, unknownResult, ...argumentValues);',
+].join('\n');
+const removedOpaqueCallResultRootPropagationBranch = [
+  '    const canReturnFrameworkRoot = false;',
+  '    return unknownValue(',
+  "      'call result is not a finite binding reference',",
+  '      canReturnFrameworkRoot,',
+  '    );',
+].join('\n');
+const preciseRelativeImportRootCarrierBranch = [
+  "      (candidate.kind === 'import' &&",
+  "        ((candidate.namespace === true && candidate.specifier.startsWith('@kovojs/')) ||",
+  '          isReviewedFrameworkRootFactoryCandidate(candidate))),',
+].join('\n');
+const widenedRelativeImportRootCarrierBranch = [
+  "      (candidate.kind === 'import' &&",
+  "        (candidate.specifier.startsWith('.') ||",
+  "          (candidate.namespace === true && candidate.specifier.startsWith('@kovojs/')) ||",
+  '          isReviewedFrameworkRootFactoryCandidate(candidate))),',
+].join('\n');
+const transferredCallableInvocationBranch =
+  '    env = invokeTransferredCallables(arguments_, env, scope, state);';
+const removedTransferredCallableInvocationBranch = '    env = new Map(env);';
+const reviewedFrameworkRootFactoryCandidateBranch = [
+  'function isReviewedFrameworkRootFactoryCandidate(candidate: ScannedBindingCandidate): boolean {',
+  '  const id = frameworkCallModelIdForCandidate(candidate);',
+  '  return id !== undefined && reviewedFrameworkRootFactoryCalls.has(id);',
+  '}',
+].join('\n');
+const broadenedFrameworkRootFactoryCandidateBranch = [
+  'function isReviewedFrameworkRootFactoryCandidate(candidate: ScannedBindingCandidate): boolean {',
+  "  return candidate.kind === 'import' && candidate.specifier.startsWith('@kovojs/');",
+  '}',
+].join('\n');
+const catchBlockLexicalScopeBranch = [
+  '    const caught = node.catchClause',
+  '      ? runStatement(',
+  '          node.catchClause.block,',
+  '          joinEnvironments(env, attempted, state),',
+  '          createScope(node.catchClause, scope),',
+  '          state,',
+  '        )',
+  '      : env;',
+].join('\n');
+const removedCatchBlockLexicalScopeBranch = [
+  '    const caught = node.catchClause',
+  '      ? runStatements(',
+  '          node.catchClause.block.statements,',
+  '          joinEnvironments(env, attempted, state),',
+  '          createScope(node.catchClause, scope),',
+  '          state,',
+  '        )',
+  '      : env;',
+].join('\n');
+const implicitInvocationLexicalProvenanceBranch = [
+  '    ...(implicit === undefined',
+  '      ? {',
+  "          calleeCandidates: [{ kind: 'unknown', reason: 'missing implicit invocation provenance' }],",
+  '          calleeRootWideningRequired: true,',
+  '          calleeUncertain: true,',
+  '        }',
+  '      : {',
+  '          calleeCandidates: implicit.callee.candidates,',
+  '          calleeRootWideningRequired: implicit.callee.rootWideningRequired,',
+  '          calleeUncertain: implicit.callee.uncertain,',
+  '        }),',
+].join('\n');
+const removedImplicitInvocationLexicalProvenanceBranch = [
+  "    calleeCandidates: [{ exportName: callee, kind: 'local' }],",
+  '    calleeRootWideningRequired: false,',
+  '    calleeUncertain: false,',
 ].join('\n');
 
 const exactFrameworkImplementationDigestBranch =
@@ -5755,6 +5881,176 @@ export const SECURITY_GATE_MUTANTS = [
     search: importEqualsNamespaceMemberProjectionBranch,
     sourceFile: compilerCapabilityClosureVerdictPath,
     test: assertImportEqualsNamespaceMemberProjectionIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Lets a later sequential lexical write retain an overwritten framework root.',
+    expectedKiller: 'capability roots must use the reaching value at each exact call position',
+    name: 'compiler-capability-closure/merge-sequential-lexical-writes',
+    replacement: mergedSequentialLexicalWriteBranch,
+    search: sequentialLexicalWriteBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Admits a framework root reached through mutable lexical provenance.',
+    expectedKiller: 'mutable or ambiguous framework-root provenance must remain explicitly closed',
+    name: 'compiler-capability-closure/drop-mutable-lexical-root-closure',
+    replacement: removedMutableLexicalRootClosureBranch,
+    search: mutableLexicalRootClosureBranch,
+    sourceFile: compilerCapabilityClosureVerdictPath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Drops bounded root synthesis when lexical loop analysis exhausts its budget.',
+    expectedKiller:
+      'lexical budget exhaustion must preserve and close every observed root candidate',
+    name: 'compiler-capability-closure/drop-lexical-budget-overflow-roots',
+    replacement: removedLexicalBudgetOverflowRootsBranch,
+    search: lexicalBudgetOverflowRootsBranch,
+    sourceFile: compilerCapabilityClosureVerdictPath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Drops constructor and tagged-template invocations from root enrollment.',
+    expectedKiller:
+      'constructors and tagged templates that invoke root factories must remain enrolled',
+    name: 'compiler-capability-closure/drop-constructor-and-tag-enrollment',
+    replacement: removedConstructorAndTagEnrollmentBranch,
+    search: constructorAndTagEnrollmentBranch,
+    sourceFile: compilerCapabilityClosureScannerPath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Replaces per-use decorator and JSX provenance with a text-local guess.',
+    expectedKiller:
+      'implicit invocations must consume exact lexical provenance and fail closed when it is absent',
+    name: 'compiler-capability-closure/drop-implicit-invocation-lexical-provenance',
+    replacement: removedImplicitInvocationLexicalProvenanceBranch,
+    search: implicitInvocationLexicalProvenanceBranch,
+    sourceFile: compilerCapabilityClosureScannerPath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Truncates computed global authority to one raw capability kind.',
+    expectedKiller: 'computed global authority must close the complete finite capability domain',
+    name: 'compiler-capability-closure/truncate-computed-global-authority',
+    replacement: weakenedUnknownGlobalCapabilityExpansionBranch,
+    search: unknownGlobalCapabilityExpansionBranch,
+    sourceFile: compilerCapabilityClosureScannerPath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Treats opaque calls as incapable of invoking captured lexical writes.',
+    expectedKiller: 'unknown callback invocation must retain the unmodeled-effects fallback',
+    name: 'compiler-capability-closure/drop-unmodeled-call-effects',
+    replacement: removedUnmodeledCallEffectsBranch,
+    search: unmodeledCallEffectsBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Drops exact transferred-callable execution from opaque invocation effects.',
+    expectedKiller:
+      'opaque and unreviewed framework calls must retain writes performed by transferred callbacks',
+    name: 'compiler-capability-closure/drop-transferred-callable-invocation',
+    replacement: removedTransferredCallableInvocationBranch,
+    search: transferredCallableInvocationBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Trusts every framework import as if it had the reviewed root-factory call model.',
+    expectedKiller:
+      'framework package posture must not suppress effects for an unreviewed helper call shape',
+    name: 'compiler-capability-closure/trust-all-framework-import-call-effects',
+    replacement: broadenedFrameworkRootFactoryCandidateBranch,
+    search: reviewedFrameworkRootFactoryCandidateBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Treats unsupported call results as unable to carry a supplied or returned root.',
+    expectedKiller:
+      'local suppliers and opaque identity calls must preserve root-bearing result provenance',
+    name: 'compiler-capability-closure/drop-opaque-call-result-root-propagation',
+    replacement: removedOpaqueCallResultRootPropagationBranch,
+    search: opaqueCallResultRootPropagationBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Treats every relative data import as a root-bearing opaque-call argument.',
+    expectedKiller:
+      'ordinary relative schema/data arguments must retain precise candidates instead of widening unrelated roots',
+    name: 'compiler-capability-closure/widen-relative-data-to-root-carrier',
+    replacement: widenedRelativeImportRootCarrierBranch,
+    search: preciseRelativeImportRootCarrierBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Analyzes a catch block without declaring its block-local bindings.',
+    expectedKiller: 'catch blocks must retain root aliases declared without an outer binding',
+    name: 'compiler-capability-closure/drop-catch-block-lexical-scope',
+    replacement: removedCatchBlockLexicalScopeBranch,
+    search: catchBlockLexicalScopeBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Drops the implicit coercion and iteration execution fallback.',
+    expectedKiller: 'coercive expressions must retain bounded captured-write closure',
+    name: 'compiler-capability-closure/drop-implicit-execution-fallback',
+    replacement: removedImplicitExecutionFallbackBranch,
+    search: implicitExecutionFallbackBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Skips exact accessor invocation effects during property reads.',
+    expectedKiller: 'accessor reads must retain captured framework-root writes',
+    name: 'compiler-capability-closure/drop-accessor-invocation-effects',
+    replacement: removedAccessorInvocationBranch,
+    search: accessorInvocationBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
+  },
+  {
+    behavioralEntryFile: compilerCapabilityClosureVerdictPath,
+    behavioralTypeScript: true,
+    description: 'Drops fail-closed root widening when a value exceeds its candidate cap.',
+    expectedKiller: 'candidate overflow must synthesize and close the bounded module root supply',
+    name: 'compiler-capability-closure/drop-candidate-overflow-root-widening',
+    replacement: removedCandidateOverflowRootWideningBranch,
+    search: candidateOverflowRootWideningBranch,
+    sourceFile: compilerLexicalProvenancePath,
+    test: assertLexicalCapabilityProvenanceIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -11220,6 +11516,272 @@ async function assertImportEqualsNamespaceMemberProjectionIsEnforced(moduleUnder
     throw new Error(
       `capability closure dropped an import-equals namespace root (${retainedRoot}/${closedFilesystem})`,
     );
+  }
+}
+
+async function assertLexicalCapabilityProvenanceIsEnforced(moduleUnderTest) {
+  const result = moduleUnderTest.analyzeCapabilityClosure({
+    files: [
+      {
+        fileName: 'app.ts',
+        source: `
+        import { route } from '@kovojs/server';
+        function localFactory() { return null; }
+        let factory = route;
+        factory('/before-write', { render() { return null; } });
+        factory = localFactory;
+        factory('/after-write', { render() { return null; } });
+      `,
+      },
+    ],
+  });
+  const roots = result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name);
+  const mutableClosed = result.facts.some(
+    (fact) =>
+      fact.kind === 'closed' &&
+      fact.name === '/before-write' &&
+      fact.reason?.includes('mutable or ambiguous lexical provenance'),
+  );
+  if (!roots.includes('/before-write') || roots.includes('/after-write') || !mutableClosed) {
+    throw new Error(`capability lexical provenance drifted (${roots.join(',')}/${mutableClosed})`);
+  }
+  const aliases = Array.from({ length: 64 }, (_, index) => `let factory${index} = localFactory;`);
+  const transfers = Array.from(
+    { length: 63 },
+    (_, index) => `factory${index} = factory${index + 1};`,
+  );
+  const exhausted = moduleUnderTest.analyzeCapabilityClosure({
+    files: [
+      {
+        fileName: 'budget.ts',
+        source: `
+        import { route } from '@kovojs/server';
+        function localFactory() { return null; }
+        ${aliases.join('\n')}
+        while (globalThis.choice) {
+          ${transfers.join('\n')}
+          factory63 = route;
+        }
+        factory0('/budget-widening', { render() { return null; } });
+      `,
+      },
+    ],
+  });
+  const budgetRoot = exhausted.facts.some(
+    (fact) => fact.kind === 'root' && fact.name === '/budget-widening',
+  );
+  const budgetClosed = exhausted.facts.some(
+    (fact) => fact.kind === 'closed' && fact.name === '/budget-widening',
+  );
+  if (!budgetRoot || !budgetClosed) {
+    throw new Error(`lexical budget exhaustion drifted (${budgetRoot}/${budgetClosed})`);
+  }
+
+  const assertRoots = (source, expected) => {
+    const analyzed = moduleUnderTest.analyzeCapabilityClosure({
+      files: [{ fileName: 'implicit.ts', source }],
+    });
+    const names = new Set(
+      analyzed.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name),
+    );
+    for (const name of expected) {
+      if (!names.has(name)) throw new Error(`implicit lexical capability closure dropped ${name}`);
+    }
+    return analyzed;
+  };
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    new route('/new-root', { render() { return null; } });
+    route\`/tagged-root\`;
+  `,
+    ['/new-root', '/tagged-root'],
+  );
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    function localFactory() { return null; }
+    let callbackFactory = localFactory;
+    function invoke(callback) { callback(); }
+    function installCallback() { callbackFactory = route; }
+    invoke(installCallback);
+    callbackFactory('/callback-effects', { render() { return null; } });
+  `,
+    ['/callback-effects'],
+  );
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    function localFactory() { return null; }
+    let getterFactory = localFactory;
+    const source = { get install() { getterFactory = route; return 0; } };
+    source.install;
+    getterFactory('/accessor-effects', { render() { return null; } });
+  `,
+    ['/accessor-effects'],
+  );
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    function localFactory() { return null; }
+    let coercionFactory = localFactory;
+    const coercer = { valueOf() { coercionFactory = route; return 1; } };
+    void +coercer;
+    coercionFactory('/coercion-effects', { render() { return null; } });
+  `,
+    ['/coercion-effects'],
+  );
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    function supplier() { return route; }
+    async function consumeSupplier() {
+      (await supplier())('/await-result-effects', { render() { return null; } });
+    }
+    external.identity(route)('/opaque-result-effects', { render() { return null; } });
+  `,
+    ['/await-result-effects', '/opaque-result-effects'],
+  );
+  const relativeData = moduleUnderTest.analyzeCapabilityClosure({
+    files: [
+      {
+        fileName: 'relative-data.ts',
+        source: `
+          import { mutation } from '@kovojs/server';
+          import { account } from './schema.js';
+          export const update = mutation({
+            handler(_input, request) {
+              return request.db.update(account).set({ active: true });
+            },
+          });
+        `,
+      },
+      { fileName: 'schema.ts', source: `export const account = { id: 'account' };` },
+    ],
+  });
+  const relativeDataRoots = relativeData.facts
+    .filter((fact) => fact.kind === 'root')
+    .map((fact) => fact.name);
+  if (relativeDataRoots.length !== 1 || relativeDataRoots[0] !== 'update') {
+    throw new Error(`ordinary relative data widened to roots (${relativeDataRoots.join(',')})`);
+  }
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    try { throw new Error('transfer'); }
+    catch {
+      const caughtFactory = route;
+      caughtFactory('/catch-block-effects', { render() { return null; } });
+    }
+  `,
+    ['/catch-block-effects'],
+  );
+  assertRoots(
+    `
+    import { queue, route } from '@kovojs/server';
+    function localFactory() { return null; }
+    function transferredContainer() {
+      const holder = { factory: localFactory };
+      function installTransferred() { holder.factory = route; }
+      opaqueCallback(installTransferred);
+      holder.factory('/transferred-callable-effects', { render() { return null; } });
+    }
+    transferredContainer();
+
+    let frameworkFactory = localFactory;
+    function installFramework() { frameworkFactory = route; }
+    queue(installFramework);
+    frameworkFactory('/framework-call-effects', { render() { return null; } });
+  `,
+    ['/framework-call-effects', '/transferred-callable-effects'],
+  );
+  const implicitInvocations = moduleUnderTest.analyzeCapabilityClosure({
+    files: [
+      {
+        fileName: 'decorator.ts',
+        source: `
+          import { route as Route } from '@kovojs/server';
+          function Plain() { return null; }
+          @Route class DirectDecorated {}
+          let MutableDecorator = Plain;
+          if (decoratorChoice) MutableDecorator = Route;
+          @MutableDecorator class MutableDecorated {}
+        `,
+      },
+      {
+        fileName: 'view.tsx',
+        source: `
+          import { route as Route } from '@kovojs/server';
+          function Plain() { return null; }
+          let MutableComponent = Plain;
+          if (componentChoice) MutableComponent = Route;
+          export const view = <><Route /><Plain /><MutableComponent /></>;
+        `,
+      },
+      {
+        fileName: 'unsupported-view.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+          export const view = <svg:Route />;
+        `,
+      },
+    ],
+  });
+  const implicitRoots = implicitInvocations.facts.filter(
+    (fact) => fact.kind === 'root' && fact.name === 'route',
+  );
+  const implicitClosed = implicitInvocations.facts.filter(
+    (fact) => fact.kind === 'closed' && fact.reason?.includes('mutable or ambiguous'),
+  );
+  if (implicitRoots.length !== 5 || implicitClosed.length < 3) {
+    throw new Error(
+      `implicit invocation provenance drifted (${implicitRoots.length}/${implicitClosed.length})`,
+    );
+  }
+  const alternatives = Array.from(
+    { length: 40 },
+    (_, index) => `function local${index}() {}\nif (choice${index}) capped = local${index};`,
+  );
+  assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    function localFactory() { return null; }
+    let capped = localFactory;
+    ${alternatives.join('\n')}
+    if (routeChoice) {} else capped = route;
+    capped('/candidate-overflow', { render() { return null; } });
+  `,
+    ['/candidate-overflow'],
+  );
+  const implicit = assertRoots(
+    `
+    import { route } from '@kovojs/server';
+    const key = 'crypto';
+    const raw = globalThis[key];
+    route('/computed-global', { render() { return raw; } });
+  `,
+    ['/computed-global'],
+  );
+  const computedCapabilities = new Set(
+    implicit.facts
+      .filter((fact) => fact.kind === 'closed' && fact.name === '/computed-global')
+      .map((fact) => fact.capability),
+  );
+  for (const capability of [
+    'crypto-acquisition',
+    'database-driver',
+    'declassification',
+    'digest',
+    'dynamic-loader',
+    'filesystem',
+    'network',
+    'process',
+    'vm',
+    'worker',
+  ]) {
+    if (!computedCapabilities.has(capability)) {
+      throw new Error(`computed global capability closure dropped ${capability}`);
+    }
   }
 }
 

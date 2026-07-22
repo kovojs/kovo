@@ -2689,6 +2689,23 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'dependency-lexical-binding-provenance-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-lexical-binding-provenance-closure',
+          'keeps framework roots bound to their exact lexical identities across nested shadows',
+          'resolves mutable aliases at each call position and closes every reaching root candidate',
+          'retains captured root candidates written by later closures and invoked callbacks',
+          'joins loop, exception, switch, and logical writes while honoring definite finally writes',
+          'widens every call and closes when the loop reanalysis budget is exhausted',
+          'enrolls constructors, tagged templates, accessors, and implicit invocation effects',
+          'enrolls decorator and JSX component invocation without treating ordinary components as roots',
+          'uses the catch block lexical scope for bindings without an outer declaration',
+          'keeps ordinary relative data arguments out of opaque fluent root provenance',
+          '/unreviewed-framework-call-effects',
+        ],
+      },
+      {
         id: 'dependency-transitive-bundle-closure',
         file: 'packages/cli/src/dependency-capability-loader.test.ts',
         snippets: [

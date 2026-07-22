@@ -774,6 +774,956 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
   });
 
+  // @kovo-security-certifies C13 dependency-lexical-binding-provenance-closure
+  it('keeps framework roots bound to their exact lexical identities across nested shadows', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { handler } from '@kovojs/browser';
+          import { createApp, route } from '@kovojs/server';
+          function localFactory() { return null; }
+          function defaultShadows(
+            route = localFactory,
+            createApp = localFactory,
+            handler = localFactory,
+          ) {
+            route('/default-parameter-not-root');
+            createApp({});
+            handler(() => {});
+          }
+          {
+            const route = localFactory;
+            route('/block-not-root');
+          }
+          function nestedFunction() {
+            const createApp = localFactory;
+            createApp({});
+          }
+          const immutableRoute = route;
+          export const page = immutableRoute('/immutable-alias', { render() { return null; } });
+          export const app = createApp({});
+          export const browser = handler(() => {});
+          void defaultShadows;
+          void nestedFunction;
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => `${fact.rootKind}:${fact.name}`)
+        .sort(),
+    ).toEqual(['application:app', 'route:/immutable-alias', 'serialized-browser-handler:browser']);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('recognizes var, catch, class, and destructured parameter bindings as local shadows', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          function varShadow() {
+            route('/hoisted-var-not-root');
+            if (globalThis.choice) {
+              var route = localFactory;
+            }
+          }
+          function destructuredParameter({ route } = { route: localFactory }) {
+            route('/parameter-not-root');
+          }
+          try {
+            throw { route: localFactory };
+          } catch ({ route }) {
+            route('/catch-not-root');
+          }
+          {
+            class route {}
+            route('/class-not-root');
+          }
+          export const page = route('/lexical-root', { render() { return null; } });
+          void varShadow;
+          void destructuredParameter;
+        `,
+      },
+    ]);
+
+    expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual([
+      '/lexical-root',
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('resolves mutable aliases at each call position and closes every reaching root candidate', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          let make = route;
+          export const before = make('/before-later-write', { render() { return null; } });
+          make = localFactory;
+          export const after = make('/after-later-write', { render() { return null; } });
+
+          let direct;
+          direct = route;
+          export const directPage = direct('/direct-assignment', { render() { return null; } });
+
+          let conditional = localFactory;
+          if (globalThis.choice) conditional = route;
+          export const conditionalPage = conditional('/conditional-assignment', {
+            render() { return null; },
+          });
+
+          let branch;
+          if (globalThis.choice) branch = route;
+          else branch = localFactory;
+          export const branchPage = branch('/branch-join', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    const roots = result.facts
+      .filter((fact) => fact.kind === 'root')
+      .map((fact) => fact.name)
+      .sort();
+    expect(roots).toEqual([
+      '/before-later-write',
+      '/branch-join',
+      '/conditional-assignment',
+      '/direct-assignment',
+    ]);
+    expect(roots).not.toContain('/after-later-write');
+    for (const name of roots) {
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({
+          kind: 'closed',
+          name,
+          reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+          rootKind: 'route',
+        }),
+      );
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
+  it('preserves immutable declaration destructuring and closes assignment destructuring', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import * as server from '@kovojs/server';
+          const { route: declared } = server;
+          let assigned;
+          ({ route: assigned } = server);
+          export const declaredPage = declared('/declared-destructuring', {
+            render() { return null; },
+          });
+          export const assignedPage = assigned('/assigned-destructuring', {
+            render() { return null; },
+          });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/assigned-destructuring', '/declared-destructuring']);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/assigned-destructuring',
+        reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+        rootKind: 'route',
+      }),
+    );
+    expect(result.facts).not.toContainEqual(
+      expect.objectContaining({ kind: 'closed', name: '/declared-destructuring' }),
+    );
+  });
+
+  it('retains callback-transfer closure when an unrelated nested callable shadows the wrapper', () => {
+    const result = analyze([
+      {
+        fileName: 'wrapper.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export function definePage(config) { return route('/callback-shadow', config); }
+        `,
+      },
+      {
+        fileName: 'caller.ts',
+        source: `
+          import { definePage } from './wrapper.js';
+          function localFactory() { return null; }
+          function nestedFunction() {
+            const definePage = localFactory;
+            definePage({ render() { return null; } });
+          }
+          export const page = definePage({ render() { return process.env.SECRET; } });
+          void nestedFunction;
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/callback-shadow', rootKind: 'route' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'process', kind: 'closed' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
+  it('retains captured root candidates written by later closures and invoked callbacks', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          function invoke(callback) { callback(); }
+
+          let later = localFactory;
+          export function renderLater() {
+            return later('/captured-later-write', { render() { return null; } });
+          }
+          function installLater() { later = route; }
+
+          let callbackFactory = localFactory;
+          invoke(() => { callbackFactory = route; });
+          export const callbackPage = callbackFactory('/callback-write', {
+            render() { return null; },
+          });
+          void installLater;
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/callback-write', '/captured-later-write']);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/callback-write', '/captured-later-write']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
+  });
+
+  it('retains an immutable root captured before its initializer is analyzed', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          const invoke = () => future('/forward-immutable-capture', {
+            render() { return null; },
+          });
+          const future = route;
+          invoke();
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'root',
+        name: '/forward-immutable-capture',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/forward-immutable-capture',
+        reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
+  it('keeps a function-valued const as a separated toNodeHandler root', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import '@kovojs/server/runtime-bootstrap';
+          import { toNodeHandler } from '@kovojs/server';
+          import { handler } from './handler.js';
+          export const listener = toNodeHandler(handler);
+        `,
+      },
+      {
+        fileName: 'handler.ts',
+        source: `
+          import { readFileSync } from 'node:fs';
+          export const handler = async () => new Response(readFileSync('/tmp/secret'));
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', module: 'handler.ts', rootKind: 'endpoint' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'filesystem', kind: 'closed' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
+  it('joins loop, exception, switch, and logical writes while honoring definite finally writes', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let loopFactory = localFactory;
+          while (globalThis.choice) loopFactory = route;
+          export const loopPage = loopFactory('/loop-join', { render() { return null; } });
+
+          let tryFactory = localFactory;
+          try { tryFactory = route; } catch { tryFactory = localFactory; }
+          export const tryPage = tryFactory('/try-join', { render() { return null; } });
+
+          let switchFactory = localFactory;
+          switch (globalThis.choice) {
+            case 'route': switchFactory = route; break;
+            default: switchFactory = localFactory;
+          }
+          export const switchPage = switchFactory('/switch-join', {
+            render() { return null; },
+          });
+
+          let logicalFactory = localFactory;
+          logicalFactory ||= route;
+          export const logicalPage = logicalFactory('/logical-join', {
+            render() { return null; },
+          });
+
+          let finalFactory = route;
+          try { void 0; } catch { finalFactory = route; }
+          finally { finalFactory = localFactory; }
+          export const finalPage = finalFactory('/finally-not-root', {
+            render() { return null; },
+          });
+        `,
+      },
+    ]);
+
+    const roots = result.facts
+      .filter((fact) => fact.kind === 'root')
+      .map((fact) => fact.name)
+      .sort();
+    expect(roots).toEqual(['/logical-join', '/loop-join', '/switch-join', '/try-join']);
+    expect(roots).not.toContain('/finally-not-root');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
+  it('joins exceptional catch entry and reaches a finite loop provenance fixpoint', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let caughtFactory = localFactory;
+          try {
+            caughtFactory = route;
+            throw new Error('transfer');
+          } catch {
+            caughtFactory('/caught-transfer', { render() { return null; } });
+          }
+
+          let first = localFactory;
+          let second = localFactory;
+          while (globalThis.choice) {
+            first = second;
+            second = route;
+          }
+          first('/loop-fixpoint', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/caught-transfer', '/loop-fixpoint']);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/caught-transfer', '/loop-fixpoint']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
+  });
+
+  it('evaluates do bodies before conditions and repeats while and for condition effects', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let doFactory = route;
+          do {
+            doFactory('/do-before-condition', { render() { return null; } });
+          } while ((doFactory = localFactory, false));
+
+          let whileFactory = localFactory;
+          let whileSource = localFactory;
+          while ((whileFactory = whileSource, globalThis.choice)) {
+            whileSource = route;
+          }
+          whileFactory('/repeated-while-condition', { render() { return null; } });
+
+          let forFactory = localFactory;
+          let forSource = localFactory;
+          for (; (forFactory = forSource, globalThis.choice);) {
+            forSource = route;
+          }
+          forFactory('/repeated-for-condition', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/do-before-condition', '/repeated-for-condition', '/repeated-while-condition']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
+  it('widens every call and closes when the loop reanalysis budget is exhausted', () => {
+    const aliases = Array.from({ length: 64 }, (_, index) => `let factory${index} = localFactory;`);
+    const transfers = Array.from(
+      { length: 63 },
+      (_, index) => `factory${index} = factory${index + 1};`,
+    );
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          ${aliases.join('\n')}
+          while (globalThis.choice) {
+            ${transfers.join('\n')}
+            factory63 = route;
+          }
+          factory0('/budget-widening', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/budget-widening', rootKind: 'route' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/budget-widening',
+        reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
+  it('retains writes performed by invoked named functions, nested calls, and methods', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let namedFactory = localFactory;
+          function installNamed() { namedFactory = route; }
+          installNamed();
+          namedFactory('/named-function-write', { render() { return null; } });
+
+          let nestedFactory = localFactory;
+          function installOuter() { installInner(); }
+          function installInner() { nestedFactory = route; }
+          installOuter();
+          nestedFactory('/nested-function-write', { render() { return null; } });
+
+          let methodFactory = localFactory;
+          const installer = { install() { methodFactory = route; } };
+          installer.install();
+          methodFactory('/method-write', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual(
+      expect.arrayContaining(['/method-write', '/named-function-write', '/nested-function-write']),
+    );
+    expect(
+      result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448').length,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('enrolls conditional, comma, invocation-adapter, and computed callees', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          (globalThis.choice ? route : localFactory)('/conditional-callee', {
+            render() { return null; },
+          });
+          (0, route)('/comma-callee', { render() { return null; } });
+          route.call(null, '/call-adapter', { render() { return null; } });
+          route.apply(null, ['/apply-adapter', { render() { return null; } }]);
+          const holder = { route };
+          holder[globalThis.key]('/computed-callee', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    const rootNames = result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name);
+    expect(rootNames).toEqual(
+      expect.arrayContaining(['/comma-callee', '/computed-callee', '/conditional-callee']),
+    );
+    expect(
+      result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448').length,
+    ).toBeGreaterThanOrEqual(5);
+  });
+
+  it('widens unknown callees from the transitive relative root-supply closure', () => {
+    const result = analyze([
+      {
+        fileName: 'bridge.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export function get() { return route; }
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { get } from './bridge.js';
+          get()('/indirect-root', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/indirect-root', rootKind: 'route' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'closed', name: '/indirect-root' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+  });
+
+  it('tracks class-expression methods and class static blocks without losing shadows', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          const Example = class {
+            method() {
+              route('/class-expression-root', { render() { return null; } });
+            }
+            static {
+              const route = localFactory;
+              route('/class-expression-static-shadow');
+            }
+          };
+          class Declared {
+            static {
+              route('/class-declaration-static-root', { render() { return null; } });
+            }
+          }
+          void Example;
+          void Declared;
+        `,
+      },
+    ]);
+
+    const roots = result.facts
+      .filter((fact) => fact.kind === 'root')
+      .map((fact) => fact.name)
+      .sort();
+    expect(roots).toEqual(['/class-declaration-static-root', '/class-expression-root']);
+    expect(roots).not.toContain('/class-expression-static-shadow');
+  });
+
+  it('fails closed at the flat abstract-work and per-value candidate budgets', () => {
+    const padding = Array.from({ length: 9_000 }, (_, index) => `const pad${index} = ${index};`);
+    const alternatives = Array.from(
+      { length: 40 },
+      (_, index) => `function local${index}() {}\nif (choice${index}) factory = local${index};`,
+    );
+    const result = analyze([
+      {
+        fileName: 'candidate-cap.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() {}
+          let factory = localFactory;
+          ${alternatives.join('\n')}
+          if (routeChoice) {} else factory = route;
+          factory('/candidate-cap', { render() { return null; } });
+        `,
+      },
+      {
+        fileName: 'flat-work.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          ${padding.join('\n')}
+          (0, route)('/flat-work-budget', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual(
+      expect.arrayContaining(['/candidate-cap', '/flat-work-budget']),
+    );
+    expect(
+      result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448').length,
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('closes computed and reflective global authority acquisition', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          const key = 'crypto';
+          const direct = globalThis[key];
+          const g = globalThis;
+          const alias = g[key];
+          const reflected = Reflect.get(globalThis, key);
+          const folded = globalThis['pro' + 'cess'];
+          const { [key]: destructured } = globalThis;
+          const { [key]: aliasDestructured } = g;
+          function opaque(value) { return value; }
+          const escaped = opaque(g);
+          export const page = route('/computed-global', {
+            render() {
+              return [direct, alias, reflected, folded, destructured, aliasDestructured, escaped];
+            },
+          });
+        `,
+      },
+    ]);
+
+    for (const capability of [
+      'crypto-acquisition',
+      'database-driver',
+      'declassification',
+      'digest',
+      'dynamic-loader',
+      'filesystem',
+      'network',
+      'process',
+      'vm',
+      'worker',
+    ]) {
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({ capability, kind: 'closed', name: '/computed-global' }),
+      );
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+  });
+
+  it('enrolls constructors, tagged templates, accessors, and implicit invocation effects', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { queue, route } from '@kovojs/server';
+          import { mutate } from './mutator.js';
+          function localFactory() { return null; }
+
+          new route('/new-root', { render() { return null; } });
+          new (globalThis.choice ? route : localFactory)('/conditional-new', {
+            render() { return null; },
+          });
+          route\`/tagged-root\`;
+
+          let constructedFactory = localFactory;
+          function Installer() { constructedFactory = route; }
+          new Installer();
+          constructedFactory('/constructor-write', { render() { return null; } });
+
+          let getterFactory = localFactory;
+          const accessors = {
+            get install() { getterFactory = route; return 0; },
+            get factory() { return route; },
+          };
+          accessors.install;
+          getterFactory('/getter-write', { render() { return null; } });
+          accessors.factory('/getter-return', { render() { return null; } });
+
+          let callbackFactory = localFactory;
+          function invoke(callback) { callback(); }
+          function installCallback() { callbackFactory = route; }
+          invoke(installCallback);
+          callbackFactory('/callback-substitution-fallback', { render() { return null; } });
+
+          function functionLocalFallback() {
+            let functionLocalFactory = localFactory;
+            function installLocal() { functionLocalFactory = route; }
+            opaqueCallback(installLocal);
+            functionLocalFactory('/function-local-callback-fallback', {
+              render() { return null; },
+            });
+          }
+          functionLocalFallback();
+
+          function functionLocalContainerFallback() {
+            const callbackHolder = { factory: localFactory };
+            function installHolder() { callbackHolder.factory = route; }
+            opaqueCallback(installHolder);
+            callbackHolder.factory('/function-local-callback-container', {
+              render() { return null; },
+            });
+          }
+          functionLocalContainerFallback();
+
+          function supplier() { return route; }
+          async function awaitFactory() {
+            (await supplier())('/await-result-fallback', { render() { return null; } });
+          }
+          opaqueIdentity(route)('/opaque-result-fallback', { render() { return null; } });
+
+          let frameworkCallbackFactory = localFactory;
+          function installFrameworkCallback() { frameworkCallbackFactory = route; }
+          queue(installFrameworkCallback);
+          frameworkCallbackFactory('/unreviewed-framework-call-effects', {
+            render() { return null; },
+          });
+
+          let coercionFactory = localFactory;
+          const coercer = { valueOf() { coercionFactory = route; return 1; } };
+          void +coercer;
+          coercionFactory('/coercion-fallback', { render() { return null; } });
+
+          let destructuredFactory = localFactory;
+          const destructuredSource = {
+            get value() { destructuredFactory = route; return 1; },
+          };
+          const { [globalThis.key]: ignored } = destructuredSource;
+          destructuredFactory('/computed-destructuring-fallback', {
+            render() { return null; },
+          });
+
+          let iterationFactory = localFactory;
+          const iterable = {
+            *[Symbol.iterator]() { iterationFactory = route; yield 1; },
+          };
+          [...iterable];
+          iterationFactory('/iterator-fallback', { render() { return null; } });
+
+          const holder = { factory: localFactory };
+          mutate(holder);
+          holder.factory('/relative-object-mutation', { render() { return null; } });
+
+          const plain = { factory: localFactory };
+          plain.factory('/plain-data-not-root');
+        `,
+      },
+      {
+        fileName: 'mutator.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export function mutate(value) { value.factory = route; }
+        `,
+      },
+    ]);
+
+    const roots = result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name);
+    expect(roots).toEqual(
+      expect.arrayContaining([
+        '/callback-substitution-fallback',
+        '/coercion-fallback',
+        '/computed-destructuring-fallback',
+        '/conditional-new',
+        '/constructor-write',
+        '/getter-return',
+        '/getter-write',
+        '/function-local-callback-fallback',
+        '/function-local-callback-container',
+        '/iterator-fallback',
+        '/new-root',
+        '/opaque-result-fallback',
+        '/relative-object-mutation',
+        '/tagged-root',
+        '/unreviewed-framework-call-effects',
+        '/await-result-fallback',
+      ]),
+    );
+    expect(roots).not.toContain('/plain-data-not-root');
+    expect(
+      result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448').length,
+    ).toBeGreaterThanOrEqual(6);
+  });
+
+  it('keeps ordinary relative data arguments out of opaque fluent root provenance', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { mutation } from '@kovojs/server';
+          import { account } from './schema.js';
+          export const update = mutation({
+            handler(_input, request) {
+              return request.db.update(account).set({ active: true });
+            },
+          });
+        `,
+      },
+      {
+        fileName: 'schema.ts',
+        source: `export const account = { id: 'account' };`,
+      },
+    ]);
+
+    expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual([
+      'update',
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('fails closed for class accessors while keeping plain class data precise', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          let installed = localFactory;
+          class Accessors {
+            static get install() { installed = route; return 0; }
+            static get factory() { return route; }
+            get instanceFactory() { return route; }
+          }
+          Accessors.install;
+          installed('/class-getter-write', { render() { return null; } });
+          Accessors.factory('/class-static-getter', { render() { return null; } });
+          const instance = new Accessors();
+          instance.instanceFactory('/class-instance-getter', { render() { return null; } });
+
+          class Plain { static factory = localFactory; }
+          Plain.factory('/plain-class-data-not-root');
+        `,
+      },
+    ]);
+
+    const roots = result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name);
+    expect(roots).toEqual(
+      expect.arrayContaining([
+        '/class-getter-write',
+        '/class-instance-getter',
+        '/class-static-getter',
+      ]),
+    );
+    expect(roots).not.toContain('/plain-class-data-not-root');
+  });
+
+  it('enrolls decorator and JSX component invocation without treating ordinary components as roots', () => {
+    const result = analyze([
+      {
+        fileName: 'decorator.ts',
+        source: `
+          import { route as Route } from '@kovojs/server';
+          function Plain() { return null; }
+          @Route
+          class Decorated {}
+          let MutableDecorator = Plain;
+          if (decoratorChoice) MutableDecorator = Route;
+          @MutableDecorator
+          class MutableDecorated {}
+        `,
+      },
+      {
+        fileName: 'view.tsx',
+        source: `
+          import { route as Route } from '@kovojs/server';
+          function Plain() { return null; }
+          let MutableComponent = Plain;
+          if (componentChoice) MutableComponent = Route;
+          export const view = <><Route /><Plain /><MutableComponent /></>;
+        `,
+      },
+      {
+        fileName: 'unsupported-view.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+          export const view = <svg:Route />;
+        `,
+      },
+    ]);
+
+    const roots = result.facts.filter((fact) => fact.kind === 'root');
+    expect(roots.filter((fact) => fact.name === 'route')).toHaveLength(5);
+    expect(roots.some((fact) => fact.name === 'Plain')).toBe(false);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448')).toHaveLength(3);
+  });
+
+  it('uses the catch block lexical scope for bindings without an outer declaration', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          try { throw new Error('transfer'); }
+          catch {
+            const caughtFactory = route;
+            caughtFactory('/catch-block-root', { render() { return null; } });
+          }
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/catch-block-root', rootKind: 'route' }),
+    );
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {

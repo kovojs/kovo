@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(450);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(465);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -341,7 +341,22 @@ describe('security-gate-mutations', () => {
     const behavioralNames = [
       'compiler-capability-closure/drop-import-equals-closure',
       'compiler-capability-closure/drop-import-equals-namespace-member-projection',
+      'compiler-capability-closure/drop-accessor-invocation-effects',
+      'compiler-capability-closure/drop-candidate-overflow-root-widening',
+      'compiler-capability-closure/drop-catch-block-lexical-scope',
+      'compiler-capability-closure/drop-constructor-and-tag-enrollment',
+      'compiler-capability-closure/drop-implicit-execution-fallback',
+      'compiler-capability-closure/drop-implicit-invocation-lexical-provenance',
+      'compiler-capability-closure/drop-lexical-budget-overflow-roots',
+      'compiler-capability-closure/drop-mutable-lexical-root-closure',
+      'compiler-capability-closure/drop-opaque-call-result-root-propagation',
+      'compiler-capability-closure/drop-transferred-callable-invocation',
+      'compiler-capability-closure/drop-unmodeled-call-effects',
       'compiler-capability-closure/drop-webrtc-network-global',
+      'compiler-capability-closure/merge-sequential-lexical-writes',
+      'compiler-capability-closure/truncate-computed-global-authority',
+      'compiler-capability-closure/trust-all-framework-import-call-effects',
+      'compiler-capability-closure/widen-relative-data-to-root-carrier',
       'compiler-compile/drop-framework-identity-project-registration',
       'compiler-render-equivalence/drop-project-identity-files',
       'compiler-vite/drop-js-to-ts-sibling-candidates',

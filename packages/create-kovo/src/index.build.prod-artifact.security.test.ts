@@ -264,6 +264,46 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  // @kovo-security-certifies KV448 production-lexical-binding-provenance-closure
+  it('blocks authority when lexical shadows and mutable aliases obscure route factories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-lexical-provenance-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Lexical Provenance Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src', 'lexical-provenance-route.tsx'),
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { route } from '@kovojs/server';",
+          "import { readFileSync } from 'node:fs';",
+          'function localFactory(_path: string, _config?: unknown) { return null; }',
+          'function nestedShadow() {',
+          '  const route = localFactory;',
+          "  return route('/not-a-framework-root');",
+          '}',
+          'let mutableFactory = route;',
+          "export const lexicalRoute = route('/lexical-shadow', {",
+          "  page() { return <p>{readFileSync('/etc/hosts', 'utf8')}</p>; },",
+          '});',
+          "export const mutableRoute = mutableFactory('/mutable-lexical-root', {",
+          '  page() { return <p>closed</p>; },',
+          '});',
+          'void nestedShadow;',
+        ].join('\n'),
+      );
+
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV448');
+      expect(output).toContain('/lexical-shadow');
+      expect(output).toContain('raw filesystem authority');
+      expect(output).toContain('/mutable-lexical-root');
+      expect(output).toContain('mutable or ambiguous lexical provenance');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV435 runtime-secret-view-egress
   it('refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode', async () => {
     const tempParent = tmpdir();
