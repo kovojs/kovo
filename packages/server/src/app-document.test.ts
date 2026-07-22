@@ -312,6 +312,10 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
     expect(tokenA).toBeTruthy();
     expect(tokenB).toBeTruthy();
     expect(tokenA).not.toBe(tokenB);
+    expect(tokenA).not.toBe(fp1);
+    expect(tokenB).not.toBe(fp2);
+    expect(resA.body as string).not.toContain(fp1);
+    expect(resB.body as string).not.toContain(fp2);
   });
 });
 

@@ -29,7 +29,7 @@ import {
 
 const BASELINE_SCHEMA = 'kovo-security-convergence-baseline/v2';
 const CHARTER_SCHEMA = 'kovo-security-audit-charter/v1';
-const DEFAULT_BASELINE_FILE = 'security/security-convergence-baseline.json';
+export const defaultSecurityConvergenceBaselinePath = 'security/security-convergence-baseline.json';
 const DEFAULT_CHARTER_FILE = 'security/security-convergence-audit-charter.json';
 const TRUST_STATIC_FILE = 'packages/drizzle/src/trust-escapes-static.ts';
 const EGRESS_FILE = 'packages/server/src/egress.ts';
@@ -476,7 +476,11 @@ export function updateSecurityConvergenceRecord({
 
 export function parseSecurityConvergenceMode(args, { live = false } = {}) {
   if (!Array.isArray(args)) throw new TypeError('convergence CLI arguments must be an array');
-  if (args.length === 0) return Object.freeze({ mode: live ? 'live' : 'check' });
+  if (args.length === 0) return Object.freeze({ mode: live ? 'live' : 'retained' });
+  if (args.length === 1 && args[0] === '--artifact') {
+    if (live) throw new Error('--artifact cannot be combined with live convergence measurement');
+    return Object.freeze({ mode: 'artifact' });
+  }
   if (args.length === 1 && args[0] === '--live') return Object.freeze({ mode: 'live' });
   if (live) throw new Error('--live cannot be combined with convergence evidence writes');
   const options = parseExactCliArguments(args, {
@@ -486,55 +490,65 @@ export function parseSecurityConvergenceMode(args, { live = false } = {}) {
   return Object.freeze({ mode: 'write', options });
 }
 
-export async function main(options = {}) {
-  const root = options.repoRoot ?? findRepoRoot();
-  const baselinePath = path.join(root, options.baselineFile ?? DEFAULT_BASELINE_FILE);
-  let baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
-  const actual = collectSecurityConvergenceSnapshot({ repoRoot: root });
-  const actualSources = buildSourceSet({
-    paths: SECURITY_CONVERGENCE_SOURCE_PATHS,
-    repoRoot: root,
-  });
-  const args = options.args ?? process.argv.slice(2);
-  const invocation = parseSecurityConvergenceMode(args, { live: options.live === true });
-  const live = invocation.mode === 'live';
-  if (invocation.mode === 'write') {
-    const writeOptions = invocation.options;
-    const codeSubjectSha = writeOptions['subject-sha'];
-    const reason = writeOptions.reason;
-    assertCleanCurrentCodeSubject({ repoRoot: root, subjectSha: codeSubjectSha });
-    baseline = updateSecurityConvergenceRecord({
-      baseline,
-      codeSubjectSha,
-      reason,
-      repoRoot: root,
-      snapshot: actual,
-    });
-    writeFileSync(baselinePath, canonicalJson(baseline), 'utf8');
+/**
+ * Validate retained convergence evidence against its named code subjects. Final-candidate callers
+ * additionally require a complete current-snapshot binding and equality with the live checkout;
+ * retained-mode callers validate historical bindings without turning every edit into a restamp.
+ */
+export function validateSecurityConvergenceRecord(
+  baseline,
+  { actualSnapshot, actualSources, repoRoot = findRepoRoot(), requireLive = true } = {},
+) {
+  const findings = [];
+  if (requireLive) {
+    const liveSnapshot = actualSnapshot ?? collectSecurityConvergenceSnapshot({ repoRoot });
+    const liveSources =
+      actualSources ??
+      buildSourceSet({
+        paths: SECURITY_CONVERGENCE_SOURCE_PATHS,
+        repoRoot,
+      });
+    findings.push(...compareSnapshot(baseline?.currentSnapshot?.snapshot, liveSnapshot));
+    actualSources = liveSources;
   }
-  const findings = compareSnapshot(baseline.currentSnapshot?.snapshot, actual);
-  if (baseline.schema !== 'kovo-security-convergence-record/v2') {
+  if (baseline?.schema !== 'kovo-security-convergence-record/v2') {
     findings.push('committed convergence record schema is unsupported');
   }
+  const hasCurrentSourceBinding = baseline?.currentSnapshot?.sources !== undefined;
+  const hasCurrentSubjectProtocol = baseline?.subjectProtocol !== undefined;
+  const requireCurrentSourceBinding =
+    requireLive || hasCurrentSourceBinding || hasCurrentSubjectProtocol;
   if (
-    JSON.stringify(baseline.subjectProtocol) !== JSON.stringify(SECURITY_EVIDENCE_SUBJECT_PROTOCOL)
+    requireCurrentSourceBinding &&
+    JSON.stringify(baseline?.subjectProtocol) !== JSON.stringify(SECURITY_EVIDENCE_SUBJECT_PROTOCOL)
   ) {
     findings.push('convergence code-subject/evidence-commit protocol drifted');
   }
-  if (!/^[0-9a-f]{40}$/u.test(baseline.currentSnapshot?.measuredCodeSha ?? '')) {
+  if (!/^[0-9a-f]{40}$/u.test(baseline?.currentSnapshot?.measuredCodeSha ?? '')) {
     findings.push('current structural snapshot is missing its exact measured code SHA');
   } else {
     try {
-      const retainedSources = buildSourceSetAtCodeSubject({
-        paths: SECURITY_CONVERGENCE_SOURCE_PATHS,
-        repoRoot: root,
-        subjectSha: baseline.currentSnapshot.measuredCodeSha,
-      });
-      if (canonicalJson(baseline.currentSnapshot?.sources) !== canonicalJson(retainedSources)) {
-        findings.push('current structural snapshot subject does not retain its measured inputs');
-      }
-      if (canonicalJson(baseline.currentSnapshot?.sources) !== canonicalJson(actualSources)) {
-        findings.push('current structural snapshot source inputs drifted');
+      if (requireCurrentSourceBinding) {
+        const retainedPaths = baseline.currentSnapshot?.sources?.files?.map((file) => file?.path);
+        const retainedSources = buildSourceSetAtCodeSubject({
+          paths: retainedPaths,
+          repoRoot,
+          subjectSha: baseline.currentSnapshot.measuredCodeSha,
+        });
+        if (canonicalJson(baseline.currentSnapshot?.sources) !== canonicalJson(retainedSources)) {
+          findings.push('current structural snapshot subject does not retain its measured inputs');
+        }
+        if (
+          requireLive &&
+          canonicalJson(baseline.currentSnapshot?.sources) !== canonicalJson(actualSources)
+        ) {
+          findings.push('current structural snapshot source inputs drifted');
+        }
+      } else {
+        assertRetainedCodeSubject({
+          repoRoot,
+          subjectSha: baseline.currentSnapshot.measuredCodeSha,
+        });
       }
     } catch (error) {
       findings.push(
@@ -542,10 +556,10 @@ export async function main(options = {}) {
       );
     }
   }
-  if (!Array.isArray(baseline.historicalRows) || baseline.historicalRows.length === 0) {
+  if (!Array.isArray(baseline?.historicalRows) || baseline.historicalRows.length === 0) {
     findings.push('convergence record must preserve at least one immutable historical row');
   }
-  for (const [index, row] of (baseline.historicalRows ?? []).entries()) {
+  for (const [index, row] of (baseline?.historicalRows ?? []).entries()) {
     const auditRound = row?.auditRound;
     if (
       !hasExactObjectKeys(row, ['auditRound', 'auditedCodeSha', 'measurements', 'recordedAt']) ||
@@ -562,13 +576,21 @@ export async function main(options = {}) {
       findings.push(`historical convergence row ${index} is incomplete`);
       continue;
     }
-    const auditRoundSource = readFileSync(path.join(root, auditRound.file), 'utf8');
+    let auditRoundSource;
+    try {
+      auditRoundSource = readFileSync(path.join(repoRoot, auditRound.file), 'utf8');
+    } catch (error) {
+      findings.push(
+        `executed audit-round record ${index} cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      continue;
+    }
     if (sha256(auditRoundSource) !== auditRound.sha256) {
       findings.push(`executed audit-round record ${index} drifted`);
     }
     try {
       const auditedCodeSha = assertRetainedCodeSubject({
-        repoRoot: root,
+        repoRoot,
         subjectSha: row.auditedCodeSha,
       });
       const auditRoundDocument = JSON.parse(auditRoundSource);
@@ -584,10 +606,52 @@ export async function main(options = {}) {
       );
     }
   }
-  if (findings.length > 0) {
-    process.stderr.write(
-      `${BASELINE_SCHEMA} FAIL: deterministic metrics changed; review and record a new exact-SHA row.\n`,
-    );
+  return Object.freeze({ findings: Object.freeze(findings), ok: findings.length === 0 });
+}
+
+export async function main(options = {}) {
+  const root = options.repoRoot ?? findRepoRoot();
+  const baselinePath = path.join(
+    root,
+    options.baselineFile ?? defaultSecurityConvergenceBaselinePath,
+  );
+  let baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+  const args = options.args ?? process.argv.slice(2);
+  const invocation = parseSecurityConvergenceMode(args, { live: options.live === true });
+  const live = invocation.mode === 'live';
+  const requireLive = invocation.mode !== 'retained';
+  const actual = requireLive ? collectSecurityConvergenceSnapshot({ repoRoot: root }) : undefined;
+  const actualSources = requireLive
+    ? buildSourceSet({
+        paths: SECURITY_CONVERGENCE_SOURCE_PATHS,
+        repoRoot: root,
+      })
+    : undefined;
+  if (invocation.mode === 'write') {
+    const writeOptions = invocation.options;
+    const codeSubjectSha = writeOptions['subject-sha'];
+    const reason = writeOptions.reason;
+    assertCleanCurrentCodeSubject({ repoRoot: root, subjectSha: codeSubjectSha });
+    baseline = updateSecurityConvergenceRecord({
+      baseline,
+      codeSubjectSha,
+      reason,
+      repoRoot: root,
+      snapshot: actual,
+    });
+    writeFileSync(baselinePath, canonicalJson(baseline), 'utf8');
+  }
+  const validation = validateSecurityConvergenceRecord(baseline, {
+    actualSnapshot: actual,
+    actualSources,
+    repoRoot: root,
+    requireLive,
+  });
+  if (!validation.ok) {
+    const detail = requireLive
+      ? 'final artifact differs from the live checkout; review the drift before refreshing the frozen subject'
+      : 'retained historical subject/source binding is invalid';
+    process.stderr.write(`${BASELINE_SCHEMA} FAIL: ${detail}.\n`);
     return false;
   }
   if (live) {
@@ -601,9 +665,14 @@ export async function main(options = {}) {
     process.stdout.write(
       `${BASELINE_SCHEMA} LIVE mutants=${liveMeasurement.m.killed}/${liveMeasurement.m.total} greenMs=${liveMeasurement.g.durationMs} peakRssBytes=${liveMeasurement.g.peakRssBytes}\n`,
     );
+  } else if (requireLive) {
+    const mode = invocation.mode === 'artifact' ? 'ARTIFACT' : 'WRITTEN';
+    process.stdout.write(
+      `${BASELINE_SCHEMA} ${mode} sha=${baseline.currentSnapshot.measuredCodeSha} mutants=${actual.m.mutantCount} P=${actual.p.total} greenRows=${actual.g.acceptedFixtureRows} c13=${actual.c13.corpusCount}/${actual.c13.anchorCount} OK\n`,
+    );
   } else {
     process.stdout.write(
-      `${BASELINE_SCHEMA} OK sha=${baseline.currentSnapshot.measuredCodeSha} mutants=${actual.m.mutantCount} P=${actual.p.total} greenRows=${actual.g.acceptedFixtureRows} c13=${actual.c13.corpusCount}/${actual.c13.anchorCount}\n`,
+      `${BASELINE_SCHEMA} RETAINED sha=${baseline.currentSnapshot.measuredCodeSha} historicalRows=${baseline.historicalRows.length} OK\n`,
     );
   }
   return true;

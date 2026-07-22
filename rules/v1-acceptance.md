@@ -63,9 +63,15 @@ pnpm run test:authz-paranoid   # 16.9 — Postgres paranoid generative cross-own
 ```
 
 Ordinary `pnpm run check:decided-surface` computes the declared finite-domain verdict directly from
-the live checkout and writes nothing. Only the final evidence workflow may run
-`pnpm run generate:decided-surface -- --subject-sha <codeSubjectSha>`; the evidence checkout then
-verifies that retained artifact with `pnpm run check:decided-surface-artifact`.
+the live checkout and writes nothing. Ordinary
+`pnpm run check:security-convergence-baseline` validates retained historical subject/source binding;
+it does not require equality to moving implementation sources. Unit tests exercise the stricter
+current-row binding against isolated committed fixtures. Only the final evidence workflow may run
+`generate:final-security-evidence` with the required
+`--subject-sha` and `--reason` values; it asserts the clean subject once and writes the convergence
+and decided-surface artifacts as one validated file set. The evidence checkout then verifies live
+equality with `pnpm run check:security-convergence-baseline-artifact` and verifies the finite
+artifact with `pnpm run check:decided-surface-artifact`.
 
 The `acceptance` script must keep `test:authz-paranoid` wired in. Without it, the release gate only
 sees the static checks and misses the paranoid, served-artifact, every-shape cross-owner proof that

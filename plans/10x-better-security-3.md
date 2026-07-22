@@ -929,8 +929,8 @@ does not duplicate either external action or its evidence.
       zero unsigned escapes and no unreviewed ceiling increase.
 - [ ] Δ is 100% of every declared finite fragment at that frozen code subject. Ordinary CI proves the
       live decision with no retained artifact; the one Plan-1 evidence child alone retains
-      `security/decided-surface.json` for `codeSubjectSha` and runs
-      `check:decided-surface-artifact`.
+      `security/decided-surface.json` for the same `codeSubjectSha` as the convergence record through
+      `generate:final-security-evidence`, then runs `check:decided-surface-artifact`.
 - [ ] An outside party validates a `kovo.certificate/v1` with disjoint code, and the three negative
       controls fail on three distinct obligations.
 - [x] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;

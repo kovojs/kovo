@@ -435,21 +435,41 @@ Measurements are versioned and reproducible:
 
 ## Phase 6 — Scoped v1 security signoff
 
-- [ ] Freeze the intended code-subject commit, then generate the retained evidence in one
-      evidence-only descendant commit. Generated evidence records only `codeSubjectSha`; it must not
-      attempt to embed the descendant commit's own SHA. Git/CI identifies that descendant as the
-      evidence/release SHA and the release attestation binds its exact archive bytes. Prove the
-      descendant's ancestry and evidence-only diff, then perform one final-candidate reconciliation of
-      this ledger: refresh the framework-export posture, convergence row, C9/C13/mutation denominators,
+- [ ] Freeze the intended code-subject commit, then run `generate:final-security-evidence` exactly
+      once with the clean `codeSubjectSha` and reason `final v1 candidate` to generate both retained
+      artifacts in one evidence-only descendant commit. The orchestrator asserts the clean subject
+      once, builds and validates both documents before writing, requires the same subject in both,
+      and restores the original file set if a write fails. Do not invoke the two strict individual
+      writers sequentially for final
+      evidence: the first write would correctly make the subject checkout dirty. Generated evidence
+      records only `codeSubjectSha`; it must not attempt to embed the descendant commit's own SHA.
+      Git/CI identifies that descendant as the evidence/release SHA and the release attestation binds
+      its exact archive bytes. Prove the descendant's ancestry and evidence-only diff, then reconcile
+      this ledger for the final candidate: refresh the framework-export posture, convergence row,
+      C9/C13/mutation denominators,
       survivor register, and an independent architecture/security re-review that explicitly accepts
       or rejects the Phase 3C deletions after the historical REJECT above.
+  - Exact command:
+
+    ```sh
+    pnpm run generate:final-security-evidence -- \
+      --subject-sha <codeSubjectSha> \
+      --reason "final v1 candidate"
+    ```
+
   - Do not create this descendant while any recordable prerequisite is still pending. In particular,
     finish the three qualifying R=0 rounds, fourteen terminal-green nightly runs, three comparable
     Metric E rounds, third-party implementation audit/retest, outside certificate validation,
     advisory drill, and release-analysis dry run first. Ordinary `main` uses the live no-write
-    `check:decided-surface`; only this final workflow retains `security/decided-surface.json` and
-    verifies it with `check:decided-surface-artifact`. Framework source/posture digests remain
-    ordinary reviewed code-subject inputs and must be refreshed before the freeze, not in this child.
+    `check:decided-surface`; only this final workflow retains
+    `security/security-convergence-baseline.json` and `security/decided-surface.json`, then verifies
+    them with `check:security-convergence-baseline-artifact` and
+    `check:decided-surface-artifact`. Framework source/posture digests remain ordinary reviewed
+    code-subject inputs and must be refreshed before the freeze, not in this child.
+  - SPEC §5.2.1 has exactly three derived build-coherence values but only two external carriers: the
+    client-module URL carries the representation digest, while `Kovo-Build` and its meta/response
+    equivalents carry the app build token. The render-plan fingerprint is folded into the app token;
+    this workflow must not invent a third fingerprint stamp or another runtime hash manifest.
   - The evidence-only descendant has one predeclared path allowlist:
     `security/security-convergence-baseline.json`, `security/decided-surface.json`,
     `plans/10x-better-security.md`, `plans/10x-better-security-2.md`,
@@ -464,6 +484,7 @@ Measurements are versioned and reproducible:
     evidence-only diff, review artifact, and proving commands are intentionally absent until
     implementation stops moving; no earlier checkpoint is final-tip evidence. This protocol uses no
     self-referential or ledger-only SHA-stamping commit.
+
 - [x] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
       specifically owned and signed-off out-of-scope disposition.
   - Evidence: `pnpm run check:framework-export-posture` closes 12 packages / 1,839 subpaths / 2,344

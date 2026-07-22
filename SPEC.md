@@ -216,7 +216,7 @@ Normative module: [spec/05-compiler.md](spec/05-compiler.md).
 
 The compiler lowers authored TSX into readable server/client modules, generated registries, CSS assets, query/update metadata, and verification artifacts. Its hard rules keep generated output authorable, deterministic, source-derived, and security-preserving. The compiler must prove its own fixpoint and prod render-equivalence instead of relying on opaque optimizer behavior.
 
-The local invariant is that every emitted artifact remains auditable: generated names survive minification, app-authored TSX remains the source of truth, representation digests identify exact final module bytes, render-plan fingerprints move with shape-changing grammar edits, app build tokens bind the exact active deployment snapshot, and `kovo explain` exposes the graph facts needed for review without executing a browser.
+The local invariant is that every emitted artifact remains auditable: generated names survive minification, app-authored TSX remains the source of truth, and three derived build-coherence values use only two external carriers. Client-module URLs carry exact-representation digests; document/request/response `Kovo-Build` carriers use the app build token; the internal render-plan fingerprint moves with shape-changing grammar edits and is folded into that token rather than stamped separately. `kovo explain` exposes the graph facts needed for review without executing a browser.
 
 ## 6. Type System
 

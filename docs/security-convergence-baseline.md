@@ -39,10 +39,10 @@ the reproduction; remediation and matrix routing remain separate work.
 Informational only: `trust-escapes-static.ts` was 38,480 lines and `egress.ts` was 2,299 lines.
 LOC does not contribute to P.
 
-## Current structural snapshot
+## Retained structural snapshot
 
 The immutable comparable row above remains measured at `e5f613be9` with R=1 and 143 C13 anchors.
-The deterministic structural snapshot at `fa326cdfd` has M=114 catalogued mutants, G=18 fixture
+The retained deterministic structural snapshot at `fa326cdfd` has M=114 catalogued mutants, G=18 fixture
 rows, and C13=21 corpora / 198 anchors. Its expanded P is 8,021: 7,964 generic static-predicate
 obligations across 13 explicitly named production files, eight imperative-DOM sink identities, and
 49 egress obligations. This refresh is not a new audit round and does not manufacture a new R value;
@@ -53,9 +53,16 @@ generic counter covers `Node.is*` and `ts.is*` calls, `SyntaxKind.*` and `ts.Syn
 string/numeric literal equality branches and `case` clauses, literal inline `includes` / `Set.has`
 entries, and top-level uppercase array/object/Set/Map inventories (including literal `map`/`filter`
 wrappers). The snapshot records the exact scope paths, each file's counters and source digest, plus
-scope and row digests. Moving a classifier file or changing a scoped source therefore requires an
-explicit reviewed refresh instead of silently shrinking P.
+the exact measured source-set binding. Moving a classifier file or changing a scoped source
+therefore requires an explicit reviewed refresh instead of silently shrinking P.
 
-Run `pnpm run check:security-convergence-baseline` to detect deterministic catalog/count drift.
-Run it with `-- --live` to rerun all exported mutants and remeasure the green corpus. Timing and RSS
-remain environment-specific observations; structural drift requires an explicit new exact-SHA row.
+Ordinary `pnpm run check:security-convergence-baseline` validates the retained historical audit-file
+digest and Git subject, while `pnpm test` exercises the complete current-row source-binding validator
+in an isolated committed fixture. Neither requires the deferred checked-in snapshot to equal moving
+implementation sources or restamps final-candidate evidence. After the code-subject freeze, run the
+final evidence orchestrator and then
+`pnpm run check:security-convergence-baseline-artifact` to require exact equality with the live
+checkout. That explicit final-artifact gate is intentionally red while measured implementation
+sources have moved. Run it with `-- --live` to also rerun all exported mutants and remeasure the green
+corpus. Timing and RSS remain environment-specific observations; structural drift requires an
+explicit reviewed refresh against the frozen subject.

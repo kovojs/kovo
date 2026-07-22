@@ -20,6 +20,7 @@ import {
   parseSecurityConvergenceMode,
   SECURITY_CONVERGENCE_SOURCE_PATHS,
   updateSecurityConvergenceRecord,
+  validateSecurityConvergenceRecord,
 } from './security-convergence-baseline.mjs';
 
 const temporaryRoots = [];
@@ -84,13 +85,10 @@ function git(root, args) {
 }
 
 describe('security convergence baseline', () => {
-  it('keeps the committed deterministic snapshot synchronized', () => {
+  it('preserves and validates retained history until final-candidate evidence is generated', async () => {
     const baseline = JSON.parse(
       readFileSync(path.join(repoRoot(), 'security/security-convergence-baseline.json'), 'utf8'),
     );
-    expect(
-      compareSnapshot(baseline.currentSnapshot.snapshot, collectSecurityConvergenceSnapshot()),
-    ).toEqual([]);
     expect(baseline.historicalRows[0]).toMatchObject({
       auditedCodeSha: 'e5f613be9f1bb1f1cfc568a53e88ee741b3a4ded',
       measurements: { c13: '17 corpora / 143 anchors', p: 5956 },
@@ -107,9 +105,8 @@ describe('security convergence baseline', () => {
         },
       },
     });
-    expect(baseline.subjectProtocol).toMatchObject({
-      schema: 'kovo.security-evidence-subject/v1',
-    });
+    expect(baseline).not.toHaveProperty('evidenceCommitSha');
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: repoRoot() })).toBe(true);
   });
 
   it('mechanically separates the clean code subject from its later evidence commit', () => {
@@ -155,8 +152,31 @@ describe('security convergence baseline', () => {
 
     const { baselinePath: driftBaselinePath, root: driftRoot } = convergenceRepository();
     writeFileSync(path.join(driftRoot, SECURITY_CONVERGENCE_SOURCE_PATHS[0]), '// drift\n');
-    expect(await runSecurityConvergenceGate({ args: [], repoRoot: driftRoot })).toBe(false);
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: driftRoot })).toBe(true);
+    expect(await runSecurityConvergenceGate({ args: ['--artifact'], repoRoot: driftRoot })).toBe(
+      false,
+    );
     expect(readFileSync(driftBaselinePath, 'utf8')).toContain('test subject binding');
+  });
+
+  it('keeps retained-subject checks green during development while the final live gate rejects drift', async () => {
+    const { baselinePath, root } = convergenceRepository();
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
+    expect(
+      validateSecurityConvergenceRecord(baseline, { repoRoot: root, requireLive: false }),
+    ).toMatchObject({ findings: [], ok: true });
+
+    const charterPath = path.join(root, 'security/security-convergence-audit-charter.json');
+    writeFileSync(charterPath, `${readFileSync(charterPath, 'utf8')}\n`);
+
+    expect(
+      validateSecurityConvergenceRecord(baseline, { repoRoot: root, requireLive: false }),
+    ).toMatchObject({ findings: [], ok: true });
+    expect(
+      validateSecurityConvergenceRecord(baseline, { repoRoot: root, requireLive: true }),
+    ).toMatchObject({ ok: false });
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: root })).toBe(true);
+    expect(await runSecurityConvergenceGate({ args: ['--artifact'], repoRoot: root })).toBe(false);
   });
 
   it('rejects decorative fields that are not joined to historical evidence', async () => {
@@ -167,9 +187,14 @@ describe('security convergence baseline', () => {
     expect(await runSecurityConvergenceGate({ args: [], repoRoot: root })).toBe(false);
   });
 
-  it('keeps check, live, and writer CLI modes explicit and mutually exclusive', () => {
-    expect(parseSecurityConvergenceMode([])).toEqual({ mode: 'check' });
+  it('keeps retained, artifact, live, and writer CLI modes explicit and mutually exclusive', () => {
+    expect(parseSecurityConvergenceMode([])).toEqual({ mode: 'retained' });
+    expect(parseSecurityConvergenceMode(['--artifact'])).toEqual({ mode: 'artifact' });
     expect(parseSecurityConvergenceMode(['--live'])).toEqual({ mode: 'live' });
+    expect(parseSecurityConvergenceMode([], { live: true })).toEqual({ mode: 'live' });
+    expect(() => parseSecurityConvergenceMode(['--artifact'], { live: true })).toThrow(
+      'cannot be combined',
+    );
     expect(
       parseSecurityConvergenceMode([
         '--write',
@@ -195,16 +220,16 @@ describe('security convergence baseline', () => {
     expect(collectSecurityConvergenceSnapshot()).toMatchObject({
       d: {
         checkedIntent: 0,
-        derived: 2,
+        derived: 8,
         reviewedExempt: 0,
         total: 8,
-        uncovered: 6,
+        uncovered: 0,
       },
       w: {
         reviewedExempt: 0,
-        rewitnessed: 3,
+        rewitnessed: 9,
         total: 9,
-        uncovered: 6,
+        uncovered: 0,
       },
     });
   });
