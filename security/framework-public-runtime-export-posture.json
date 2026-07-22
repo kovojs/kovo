@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-22.1",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-22.2",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -707,7 +707,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "3fd4f8558b59d2e73643b8b25d8e401c05992fec376f5f53a762a533c4ec7ac1"
+      "sourceTreeSha256": "525ffc27cd409480a03b3daccfbb35b236068202f0171be1c3a774306f9a7604"
     },
     {
       "manifestVariants": [
@@ -769,7 +769,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "76c1705688c7430f1d797e3fa3fe911483dc440b0f031cf5d0e5c90ba70a5428"
+      "sourceTreeSha256": "9664bf99df8ce7bfed989aa3a55ed8d27c552dc05fa58eadd845689cc758473b"
     },
     {
       "manifestVariants": [
@@ -1610,7 +1610,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "00a6886c144d47d5a237ed1a01f1a93a60d885fdf739fa62b31c83532211eca0"
+      "sourceTreeSha256": "77344031123cf022d4f0a13d1247545cb471f5cdd1a467ff5f975414bf4d03c0"
     },
     {
       "manifestVariants": [
@@ -1878,7 +1878,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "71d041e8325cde21b3df5c8bbd2f4c1d1bd40760295b22bd50e41a7e6ea176de"
+      "sourceTreeSha256": "05d0ab06e076f0bf6a741dc4e01ebefb6250ae8d8721992fa6e556256b00f9fc"
     },
     {
       "manifestVariants": [
@@ -9763,7 +9763,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "2df2703b479bf616a71fa9dced01dd4773687f9ff06849002fc5835f54ca8f9b"
+      "sourceTreeSha256": "5651685b8ab1149df242253c3f90079a02dd3885c9159a21ab17a41e15c12591"
     },
     {
       "manifestVariants": [
@@ -10110,7 +10110,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "e8cf6a7770df1773c3eeadc7aebb0126af4dbbcfe956fb54f1866a244d59548a"
+      "sourceTreeSha256": "396922dcc4d3ebbaa7063ddcee40863d96bcc59edf48069ddd68910d3ae5884c"
     },
     {
       "manifestVariants": [
@@ -10698,7 +10698,7 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "4f7d64e749ccfa69ac814f60ae1a1b0629f4ee575af671cf73ca532477969c9f"
+      "sourceTreeSha256": "6ca56ee98148e8e35acc0e024622e945a650b8fe48ee953ec8998819b4211647"
     }
   ]
 }
