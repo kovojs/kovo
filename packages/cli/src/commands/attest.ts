@@ -1,12 +1,3 @@
-import {
-  closeSync as builtinCloseSync,
-  constants as builtinFileSystemConstants,
-  fstatSync as builtinFstatSync,
-  lstatSync as builtinLstatSync,
-  openSync as builtinOpenSync,
-  readSync as builtinReadSync,
-  type BigIntStats,
-} from 'node:fs';
 import { resolve as builtinResolve } from 'node:path';
 
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
@@ -28,17 +19,11 @@ import {
   parsedStringOption,
   parseCommandArgv,
 } from '../commands-manifest.js';
+import { readBoundedRegularFile } from './bounded-regular-file.js';
 import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
 import type { CliCommandResult } from '../shared.js';
 
-const closeSync = builtinCloseSync;
-const fstatSync = builtinFstatSync;
-const lstatSync = builtinLstatSync;
-const openSync = builtinOpenSync;
-const readSync = builtinReadSync;
 const resolve = builtinResolve;
-const attestationInputOpenFlags =
-  builtinFileSystemConstants.O_RDONLY | builtinFileSystemConstants.O_NOFOLLOW;
 const attestationVerification = createRuntimeAttestationVerificationHandle();
 const runtimeFetch = globalThis.fetch;
 const NativeURL = globalThis.URL;
@@ -172,7 +157,7 @@ interface ReviewedArtifact {
 }
 
 function readReviewedArtifact(path: string): ReviewedArtifact {
-  const source = readBoundedAttestationInput(path, 'reviewed graph').toString('utf8');
+  const source = readAttestationInput(path, 'reviewed graph').toString('utf8');
   const graph = JSON.parse(source) as unknown;
   const record = requireRecord(graph, 'reviewed graph');
   const posture = requireRecord(record.runtimePosture, 'reviewed graph runtimePosture');
@@ -234,7 +219,7 @@ function verifyReviewedEscapeCensusRoots(
 
 function readEscapeCensusReviewFile(path: string): EscapeCensusReviewEnvelope[] {
   const value = JSON.parse(
-    readBoundedAttestationInput(path, 'escape-census review file').toString('utf8'),
+    readAttestationInput(path, 'escape-census review file').toString('utf8'),
   ) as unknown;
   const record = requireRecord(value, 'escape-census review file');
   if (record.schema !== 'kovo.escape-census-reviews/v1' || !Array.isArray(record.reviews)) {
@@ -328,7 +313,7 @@ function verifyReviewedEscapeObligations(
 
 function readEscapeReviewFile(path: string): EscapeObligationReviewEnvelope[] {
   const value = JSON.parse(
-    readBoundedAttestationInput(path, 'escape review file').toString('utf8'),
+    readAttestationInput(path, 'escape review file').toString('utf8'),
   ) as unknown;
   const record = requireRecord(value, 'escape review file');
   if (record.schema !== 'kovo.escape-obligation-reviews/v1' || !Array.isArray(record.reviews)) {
@@ -338,66 +323,12 @@ function readEscapeReviewFile(path: string): EscapeObligationReviewEnvelope[] {
   return record.reviews as EscapeObligationReviewEnvelope[];
 }
 
-/** @internal Read one identity-pinned local attestation input through a fixed maximum-plus-one cap. */
-export function readBoundedAttestationInput(path: string, label: string): Buffer {
-  let lexical: BigIntStats;
-  let fileDescriptor: number;
-  try {
-    lexical = lstatSync(path, { bigint: true });
-    if (!lexical.isFile()) throw new Error('not a regular file');
-    fileDescriptor = openSync(path, attestationInputOpenFlags);
-  } catch {
-    throw new Error(`${label} must be a regular non-symlink file`);
-  }
-  try {
-    const initial = fstatSync(fileDescriptor, { bigint: true });
-    if (!initial.isFile() || !sameAttestationInputVersion(lexical, initial)) {
-      throw new Error(`${label} changed before its bounded descriptor read`);
-    }
-    if (initial.size > BigInt(MAX_ARTIFACT_BYTES)) {
-      throw new Error(`${label} exceeds the artifact size limit`);
-    }
-    const expectedLength = Number(initial.size);
-    const bytes = Buffer.allocUnsafe(expectedLength + 1);
-    let length = 0;
-    while (length < bytes.byteLength) {
-      const count = readSync(fileDescriptor, bytes, length, bytes.byteLength - length, null);
-      if (count === 0) break;
-      length += count;
-    }
-    const completed = fstatSync(fileDescriptor, { bigint: true });
-    let completedLexical: BigIntStats;
-    try {
-      completedLexical = lstatSync(path, { bigint: true });
-    } catch {
-      throw new Error(`${label} changed during its bounded descriptor read`);
-    }
-    if (length > MAX_ARTIFACT_BYTES) {
-      throw new Error(`${label} exceeds the artifact size limit`);
-    }
-    if (
-      length !== expectedLength ||
-      !sameAttestationInputVersion(initial, completed) ||
-      !sameAttestationInputVersion(completed, completedLexical)
-    ) {
-      throw new Error(`${label} changed during its bounded descriptor read`);
-    }
-    return Buffer.from(bytes.subarray(0, length));
-  } finally {
-    closeSync(fileDescriptor);
-  }
-}
-
-function sameAttestationInputVersion(left: BigIntStats, right: BigIntStats): boolean {
-  return (
-    left.dev === right.dev &&
-    left.ino === right.ino &&
-    left.mode === right.mode &&
-    left.nlink === right.nlink &&
-    left.size === right.size &&
-    left.mtimeNs === right.mtimeNs &&
-    left.ctimeNs === right.ctimeNs
-  );
+function readAttestationInput(path: string, label: string): Buffer {
+  return readBoundedRegularFile(path, {
+    label,
+    limitMessage: `${label} exceeds the artifact size limit`,
+    maxBytes: MAX_ARTIFACT_BYTES,
+  });
 }
 
 async function boundedResponseText(response: Response): Promise<string> {

@@ -11,7 +11,8 @@ import { createRuntimeAttestationCryptoHandle } from '../../../server/src/crypto
 import { createEscapeCensusReviewEnvelope } from '../../../server/src/escape-census-review.js';
 import { createEscapeObligationReviewEnvelope } from '../../../server/src/escape-obligation-review.js';
 import { createRuntimePostureAttestor } from '../../../server/src/runtime-attestation.js';
-import { parseAttestArgs, readBoundedAttestationInput, runAttestCommand } from './attest.js';
+import { parseAttestArgs, runAttestCommand } from './attest.js';
+import { readBoundedRegularFile } from './bounded-regular-file.js';
 
 const roots: string[] = [];
 const escapeCensusCoverage = {
@@ -49,15 +50,15 @@ describe('kovo explain --attest', () => {
     writeFileSync(oversized, '');
     truncateSync(oversized, 32 * 1024 * 1024 + 1);
 
-    expect(readBoundedAttestationInput(reviewed, 'reviewed graph').toString('utf8')).toBe(
-      '{"reviewed":true}\n',
-    );
-    expect(() => readBoundedAttestationInput(alias, 'reviewed graph')).toThrow(
-      'reviewed graph must be a regular non-symlink file',
-    );
-    expect(() => readBoundedAttestationInput(oversized, 'reviewed graph')).toThrow(
-      'reviewed graph exceeds the artifact size limit',
-    );
+    const readReviewed = (path: string): Buffer =>
+      readBoundedRegularFile(path, {
+        label: 'reviewed graph',
+        limitMessage: 'reviewed graph exceeds the artifact size limit',
+        maxBytes: 32 * 1024 * 1024,
+      });
+    expect(readReviewed(reviewed).toString('utf8')).toBe('{"reviewed":true}\n');
+    expect(() => readReviewed(alias)).toThrow('reviewed graph must be a regular non-symlink file');
+    expect(() => readReviewed(oversized)).toThrow('reviewed graph exceeds the artifact size limit');
   });
 
   it('requires the reviewed artifact and out-of-band trust anchor', () => {

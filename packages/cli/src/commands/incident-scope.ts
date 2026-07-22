@@ -1,4 +1,3 @@
-import { readFileSync as builtinReadFileSync, statSync as builtinStatSync } from 'node:fs';
 import { resolve as builtinResolve } from 'node:path';
 
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
@@ -16,10 +15,9 @@ import {
 } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
+import { readBoundedRegularFile } from './bounded-regular-file.js';
 
-const readFileSync = builtinReadFileSync;
 const resolve = builtinResolve;
-const statSync = builtinStatSync;
 const MAX_INCIDENT_INPUT_BYTES = 32 * 1024 * 1024;
 const INCIDENT_PRINCIPAL_IDENTITY_MAX_LENGTH = 1_024;
 
@@ -593,13 +591,11 @@ function matches(predicate: IncidentPredicate, record: IncidentDecisionRecord): 
 }
 
 function readBoundedJson(path: string, label: string): unknown {
-  if (statSync(path).size > MAX_INCIDENT_INPUT_BYTES) {
-    throw new Error(`${label} exceeds the ${MAX_INCIDENT_INPUT_BYTES}-byte size limit`);
-  }
-  const source = readFileSync(path, 'utf8');
-  if (Buffer.byteLength(source) > MAX_INCIDENT_INPUT_BYTES) {
-    throw new Error(`${label} exceeds the ${MAX_INCIDENT_INPUT_BYTES}-byte size limit`);
-  }
+  const source = readBoundedRegularFile(path, {
+    label,
+    limitMessage: `${label} exceeds the ${MAX_INCIDENT_INPUT_BYTES}-byte size limit`,
+    maxBytes: MAX_INCIDENT_INPUT_BYTES,
+  }).toString('utf8');
   try {
     return JSON.parse(source) as unknown;
   } catch {

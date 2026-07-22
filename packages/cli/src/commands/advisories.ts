@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import {
@@ -17,6 +17,7 @@ import {
 } from '../commands-manifest.js';
 import { discoverGraphInputPaths } from '../graph-input.js';
 import type { CliCommandResult, CliProcessResult } from '../shared.js';
+import { readBoundedRegularFile } from './bounded-regular-file.js';
 
 const DEFAULT_ADVISORY_FEED_URL =
   'https://raw.githubusercontent.com/kovojs/kovo/main/security/advisories/feed.json';
@@ -595,12 +596,11 @@ async function defaultFetchBytes(source: string): Promise<Uint8Array> {
 }
 
 function readBoundedFile(path: string, label: string): Uint8Array {
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    throw new TypeError(`${label} must be a regular non-symlink file`);
-  }
-  if (stat.size > MAX_DOCUMENT_BYTES) throw new TypeError(`${label} exceeds the byte limit`);
-  return readFileSync(path);
+  return readBoundedRegularFile(path, {
+    label,
+    limitMessage: `${label} exceeds the byte limit`,
+    maxBytes: MAX_DOCUMENT_BYTES,
+  });
 }
 
 function parseBoundedJson(bytes: Uint8Array, label: string): unknown {
