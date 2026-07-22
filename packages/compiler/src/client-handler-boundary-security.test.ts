@@ -453,7 +453,6 @@ describe('client-handler dynamic-code boundary', () => {
   }
 
   for (const [label, handlerBody] of [
-    ['local eval', `const eval = (source) => source; return eval('safe value');`],
     [
       'local Function',
       `const Function = (source) => () => source; return Function('safe value')();`,
@@ -481,6 +480,20 @@ describe('client-handler dynamic-code boundary', () => {
       expectOpen(result, ['safe value']);
     });
   }
+
+  it('fails closed on an impossible strict-mode eval binding', () => {
+    expect(() =>
+      compile(`
+        import { component } from '@kovojs/core';
+        export const Page = component({
+          render: () => <button onClick={() => {
+            const eval = (source) => source;
+            return eval('safe value');
+          }}>Go</button>,
+        });
+      `),
+    ).toThrow('Binding eval in strict mode');
+  });
 
   it('closes direct and aliased published string timer code', () => {
     for (const handlerBody of [
