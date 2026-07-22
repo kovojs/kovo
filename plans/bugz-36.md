@@ -308,14 +308,23 @@ trusted the expected identity supplied by the same subject.
     retained exact build when the deployment owns one, and make the current app reject
     missing/mismatched builds after mandatory coarse admission but before target decode or handler
     work. Give stripped-header rejection an unambiguous typed response marker so it cannot be
-    confused with an app 409; require exact dev-only `oldBuild` HMR continuity. Define the build
-    identity as one length-framed composition of (a) render/wire/query grammar and (b) the active
-    immutable client-module graph. Reject conflicting source/content-type reuse of one immutable
-    path+version, include exact module bytes in the module-graph identity, and exclude retained
-    historical versions so replica history cannot change the current token. Prove the historical
-    delimiter-collision pair, conflicting overwrite, replica-history invariance, custom registries
-    that ignore the render setter, module-less grammar rotation, and that old/current grammars never
-    use heuristic dual decoding. The token remains a public compatibility identity, not authority.
+    confused with an app 409; require exact dev-only `oldBuild` HMR continuity. Use exactly three
+    non-nested identities: (1) a full SHA-256 representation digest, derived internally from the
+    canonical content type plus exact well-formed UTF-8 module bytes, names each immutable module
+    URL; (2) a full render-plan fingerprint covers render, wire, and query grammar/shape; and (3) one
+    full app-build token is a domain-separated, byte-length-framed hash of the render-plan
+    fingerprint plus the exact current active-module manifest fingerprint. The active manifest is
+    an exact href set (including simultaneous versions of one logical path), not retained resolver
+    history. Build finalization seals the manifest and freezes the scalar app token once for
+    production requests; development HMR replaces an explicit atomic snapshot. Remove
+    author-supplied module identity, truncated digests, request-time token callbacks, and a custom
+    registry's ability to supply or mutate compatibility identity; wrap resolution so a sealed URL
+    cannot later serve different bytes or metadata. Prove UTF-8/lone-surrogate framing,
+    delimiter-collision, conflicting overwrite, full-digest shape, multi-version active graphs,
+    replica-history/order invariance, ignored custom setters/tokens, token freeze, module-less
+    grammar rotation, and that old/current grammars never use heuristic dual decoding. HMR fact
+    hashes remain dev-only and Git SHAs remain evidence references. None of these public
+    compatibility/cache identities are authentication or authorization.
 
 - [ ] **M15 — Typed-read refetch trusted foreign final responses as query truth.**
   - The modular and inline lifecycle `/_q/` refetch paths validated fragment media and a public
