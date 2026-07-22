@@ -117,8 +117,8 @@ Measurements are versioned and reproducible:
 - [x] Run `pnpm run test:authz-paranoid` against a real external Postgres toolchain and record
       which cases executed or skipped. A green run containing skipped required Postgres cases is
       not acceptance evidence.
-  - Evidence: clean `a6dae7223`, local PostgreSQL toolchain, 2 files and 7/7 tests passed in 653.48s;
-    all three real-Postgres served-artifact cases executed and zero tests skipped.
+  - Evidence: at the same clean baseline, the local PostgreSQL toolchain ran 2 files and 7/7 tests in
+    653.48s; all three real-Postgres served-artifact cases executed and zero tests skipped.
 - [x] Reproduce or close every unintegrated ordinary-threat finding at the baseline, including the
       HTTP/2 method-case differential currently carried by test-only commit `6abd0f36b`, and
       route confirmed findings through the threat matrix before architectural work proceeds.
@@ -139,10 +139,8 @@ Measurements are versioned and reproducible:
     9/9, and the three security workflow skills use the registry instead of filename counts.
 - [x] Add a reproducible baseline command/report for R, M, P, G, classifier-corpus anchors, and
       informational LOC. Record the first comparable row in the table below.
-  - Evidence: `f7a82a75c` adds the fixed charter, exact audit-round record, deterministic collector,
-    six-test gate, and report; `b3de9e512` preserves the immutable e5 row while refreshing the
-    post-M35 structural snapshot; `497f6eee6` refreshes it after the bounded-diamond repair.
-    `pnpm run check:security-convergence-baseline` passes with M=37, P=5,958, G=18, and
+  - Evidence: `pnpm run check:security-convergence-baseline` validates the fixed charter, exact audit
+    round, deterministic collector, six-test gate, and report with M=37, P=5,958, G=18, and
     C13=17/144. The immutable comparable e5 row remains P=5,956 below.
 
 ## Phase 1 — Make the forcing gates non-skippable
@@ -170,8 +168,9 @@ Measurements are versioned and reproducible:
     authorization canaries; the rebased focused forcing-gate suites pass 12/12.
 - [x] Reconcile `rules/v1-acceptance.md`, `docs/v1-acceptance-ledger.md`, and the historical
       B1–B4 finding ledgers with current executed evidence.
-  - Evidence: `e5f613be9`; gate 16.9, the acceptance ledger, `plans/claude-bugz-32.md`, and the
-    threat-matrix plan now distinguish executed local proof from still-open external/freeze work.
+  - Evidence: the Phase 0 reconciliation makes gate 16.9, the acceptance ledger,
+    `plans/claude-bugz-32.md`, and the threat-matrix plan distinguish executed local proof from
+    still-open external/freeze work.
 
 ## Phase 2 — Build the shared structural substrate
 
@@ -196,7 +195,10 @@ Measurements are versioned and reproducible:
     plus 1,838 module initializers against package versions, source-tree digests, manifest targets,
     conditional arms, authority/root/security roles, and matrix posture; omission, duplication,
     same-version implementation drift, root deletion, and security-role omission mutants fail.
-    `capability-closure-packages.test.ts` retains the corresponding third-party summary proofs.
+    `capability-closure-packages.test.ts` retains the corresponding third-party summary proofs. The
+    reviewer-authored source-tree digest is a local drift detector and review boundary: it forces
+    posture re-review when production sources move, but does not prove correctness or resist a
+    reviewer co-editing the source and accepted ledger.
 - [x] Prove closure with adversarial wrapper/re-export/conditional/dynamic-loading fixtures and
       with positive fixtures for each supported framework capability. Emit a provenance path in
       diagnostics and `kovo explain`.
@@ -269,10 +271,10 @@ Measurements are versioned and reproducible:
     and `static-diagnostic`, leaving only reconstruct/box/own mechanisms.
 - [x] Obtain an independent architecture review of the 2A–2D design before deleting a production
       classifier family.
-  - Evidence: `plans/security-architecture-review-phase-2-2026-07-18.md` records an exact-tip
-    independent **REJECT** verdict after 102 focused tests, C13=20, M=68/68, G=18, and C9=23/23.
+  - Evidence: `plans/security-architecture-review-phase-2-2026-07-18.md` records an independent
+    historical **REJECT** verdict after 102 focused tests, C13=20, M=68/68, G=18, and C9=23/23.
     Its three provenance/summary blockers keep Phase 2C migration and every production-classifier
-    deletion open until repaired and independently re-reviewed. The final exact-tip review below
+    deletion open until repaired and independently re-reviewed. The final-candidate review below
     must explicitly disposition this historical REJECT before the treadmill can be declared retired.
 
 ## Phase 3 — Migrate the three enumerative treadmills
@@ -342,7 +344,7 @@ Measurements are versioned and reproducible:
         referenced/shared mutation handlers, distinct write keys, and target-id derivation visible.
     - Evidence: `index.mutation-private-scope-transfers.test.ts` proves adjacent alias/container/
       rebinding rejects plus `account/exact`, `account/shared-one`, and `account/shared-two` effects.
-  - [x] Close the adversarial gaps found during exact-tip review: zero-authority raw `Response`
+  - [x] Close the adversarial gaps found during the integration review: zero-authority raw `Response`
         laundering through aliases/containers/wrappers/rebinding/shadowing/cross-file imports, and
         owner-table reads hidden in a nested query helper invoked with validated input.
     - Evidence: the focused compiler/CLI suites pass; `index.phase2c-exact-tip-adversarial.test.ts`
@@ -437,8 +439,8 @@ Measurements are versioned and reproducible:
       evidence-only descendant commit. Generated evidence records only `codeSubjectSha`; it must not
       attempt to embed the descendant commit's own SHA. Git/CI identifies that descendant as the
       evidence/release SHA and the release attestation binds its exact archive bytes. Prove the
-      descendant's ancestry and evidence-only diff, then perform one exact-tip reconciliation of this
-      ledger: refresh the framework-export posture, convergence row, C9/C13/mutation denominators,
+      descendant's ancestry and evidence-only diff, then perform one final-candidate reconciliation of
+      this ledger: refresh the framework-export posture, convergence row, C9/C13/mutation denominators,
       survivor register, and an independent architecture/security re-review that explicitly accepts
       or rejects the Phase 3C deletions after the historical REJECT above.
   - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the

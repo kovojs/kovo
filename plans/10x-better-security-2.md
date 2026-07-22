@@ -1,9 +1,9 @@
 # 10x Better Security 2 — Derive-and-Re-Witness Roadmap
 
-Status: ACTIVE (created 2026-07-18; historical premise checkpoint `b18aae90f` recorded 2026-07-20).
+Status: ACTIVE (created 2026-07-18; historical premise checkpoint recorded 2026-07-20).
 Successor frontier layered on `plans/10x-better-security.md` (the four-layer closure roadmap) and
 `plans/threat-matrix-plan.md` (the scoped coverage matrix). The implementation phases have landed;
-the active ledger now owns one final exact-tip reconciliation, duration evidence, clean-candidate
+the active ledger now owns one final-candidate reconciliation, duration evidence, clean-candidate
 verification, and CI exits still listed below. No item lands as a point fix.
 
 ## Authority, scope, and honesty boundary
@@ -25,8 +25,8 @@ inexpressibility claims — they are honestly labeled as such and do not extend 
 Plan-1 converts enumerative classifiers into structural closure **at build time**: capability-closed
 module graph, finite compiler-owned security IR, narrow normalized abstract interpretation, runtime
 sink floors, plus forcing gates (`test:authz-paranoid`, `check:security-gate-mutations`, C13 corpus,
-C9 inventory). The original taxonomy and the `b18aae90f` then-candidate reconciliation were both checked
-against plan-1's full text and check scripts; no Plan-2 section has since been subsumed and dropped.
+C9 inventory). The original taxonomy and recorded Phase 0 checkpoint were both checked against
+plan-1's full text and check scripts; no Plan-2 section has since been subsumed and dropped.
 Plan-1's Layer-3 dependencies are now present as consumable data. Several items deliberately reuse
 plan-1's own machinery (the KV414 provenance engine, the C9 sink registry closure, the capability
 census, and the fuzz/counterexample infrastructure) at surfaces plan-1 does not own.
@@ -56,12 +56,13 @@ Plan-2's move is mechanical:
 ## Dependency-driven execution order
 
 The numbered sections below are a reference taxonomy, not the implementation order. Execution uses
-these release trains; a train starts only when its entry gate is evidenced at the exact current SHA:
+these release trains; a train starts only when its entry gate is evidenced at the current integration
+checkpoint recorded for that train:
 
 | Train                                      | Work                                                                       | Entry gate                                                                 | Exit                                                                    |
 | ------------------------------------------ | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | A — reproduce and close live defects       | §2.2 config-secret runtime boxing; §3.1 blob and durable-job key isolation | Phase 0 has one red test and threat-matrix cell per channel                | The exact red tests pass through runtime-owned doors                    |
-| B — contain ambient/runtime authority      | §3.4 async context; §4.5 dev host; §4.1 DB posture lease                   | Plan-1 runtime doors and the relevant door censuses are exact-tip green    | Cross-request, dev-tier, and posture-decay oracles pass                 |
+| B — contain ambient/runtime authority      | §3.4 async context; §4.5 dev host; §4.1 DB posture lease                   | Plan-1 runtime doors and the relevant door censuses are checkpoint-green  | Cross-request, dev-tier, and posture-decay oracles pass                 |
 | C — resolve high-risk architecture choices | §2.4 cache influence; §4.2 deadlines; §3.3 revocation epochs; §3.2 crypto  | Phase 0 decision records define the enforceable boundary and non-claims    | Each design has a bounded finite/static door plus a runtime floor       |
 | D — derive remaining declarations          | §2.1, §2.3, §2.5                                                           | Plan-1 finite IR, normalized graph, and C9 inventories are consumable data | D has a frozen denominator and zero uncovered obligations               |
 | E — meta-assurance and deployed evidence   | §1.1–§1.3, §4.3–§4.4                                                       | Trains A–D are stable enough that their inventories no longer churn        | Falsification, conformance, reproducibility, and observation gates pass |
@@ -89,7 +90,7 @@ or served artifact.
 
 ## Phase 0 — Reconcile against the current tip and rank
 
-- [x] Rebase every §-item premise on the then-current integration checkpoint `b18aae90f`; re-confirm
+- [x] Rebase every §-item premise on the then-current integration checkpoint; re-confirm
       stale file/line and red-state premises, classify later-plan drift separately from missing
       implementation, and record the baseline SHA. This is historical checkpoint evidence, not the
       final-candidate reconciliation below.
@@ -97,7 +98,7 @@ or served artifact.
     `19a8fb06e` and `origin/main` was `635fbea78`, so this is explicitly candidate-tip evidence, not
     a claim that delivery or final CI has happened. No Plan-2 section was superseded by plan-1.
 
-  | Section | `b18aae90f` premise classification                                                       | Checkpoint evidence                                                                                         |
+  | Section | Checkpoint premise classification                                                        | Checkpoint evidence                                                                                         |
   | ------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
   | §1.1    | Implemented; bounded-language non-claim retained                                         | `analyzer-soundness-oracle.mjs`: lattice 44, transfers/productions 33/33, doors 9                           |
   | §1.2    | Implementation present; exact evidence bindings drifted after later KV/source additions  | `check-spec-conformance-closure`: 92 codes, 72 error classes, 200 sites, currently red                      |
@@ -117,7 +118,7 @@ or served artifact.
   | §4.4    | Implemented and policy denominator current                                               | response-observation gate green for 3 remotely reachable surfaces                                           |
   | §4.5    | Implemented and tier mapping current                                                     | runtime-tier parity green for 1 production and 5 development doors                                          |
 
-- [x] Repair the four `b18aae90f` Plan-2 forcing-gate drifts exposed by this reconciliation before
+- [x] Repair the four Plan-2 forcing-gate drifts exposed by the Phase 0 checkpoint before
       final acceptance: diagnostic conformance bindings (including KV452), the stale TCB
       `validateRevealReason` row, the missing `server.data.declassify` coverage cell/summary, and the
       five crypto-boundary acquisition/ratchet/ceiling findings. This premise-only checkpoint does
@@ -125,16 +126,12 @@ or served artifact.
   - Evidence: the merged coverage gate reports 48/47/1 with 277 anchors; crypto reports 58 reviewed
     rows with a high-authority ceiling of 30; conformance reports 92 codes, 72 errors, 200 sites, and
     37 evidence files / 108 witnesses / six mandatory executions.
-- [ ] At the frozen intended code-subject commit, rerun the complete Plan-2 premise audit and every
-      digest/manifest-backed forcing gate, then generate the retained evidence in one evidence-only
-      descendant commit under Plan 1's canonical identity protocol. Replace stale checkpoint counts
-      instead of appending a transcript; generated artifacts record `codeSubjectSha`, while Git/CI
-      supplies the descendant evidence/release SHA externally. Prove their ancestry and evidence-only
-      diff, and record terminal command results at the applicable commit without a self-stamping
-      follow-up commit.
-  - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the
-    evidence-only diff, and commands are intentionally absent while implementation is still moving;
-    `b18aae90f` must not be presented as final-tip proof.
+- [ ] At Plan 1 Phase 6's frozen code subject, rerun the complete Plan-2 premise audit and every
+      Plan-2 digest/manifest-backed forcing gate. Replace stale checkpoint counts instead of appending
+      a transcript, and contribute the terminal Plan-2 commands and results to Plan 1's single
+      canonical final identity/evidence record; do not create a Plan-2 SHA block or descendant commit.
+  - Evidence pending: Plan-2 terminal commands and results in the Plan 1 Phase 6 record. The historical
+    Phase 0 checkpoint must not be presented as final-candidate proof.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
   - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
@@ -142,7 +139,7 @@ or served artifact.
     C/I/Au matrix cell records the remotely influenced-key prerequisite and KV450/ScopedKey door.
 - [x] Reproduce durable-job cross-principal coalescing for both memory and Postgres queues; record
       debounce/throttle behavior, attacker prerequisites, severity, threat-matrix cell, and red test.
-  - Evidence: red commit `b9c5a4daf` covers both debounce replacement and throttle suppression;
+  - Evidence: the same red commit covers both debounce replacement and throttle suppression;
     `task-queue.test.ts` now preserves four distinct jobs across memory and Postgres/PGlite queues,
     and the same Runtime C/I/Au matrix cell records the shared-key prerequisite and scoped door.
 - [x] Reproduce `s.secret(...).parse` returning `isSecret() === false`, then prove which wire, log,
@@ -155,7 +152,7 @@ or served artifact.
       single-context-envelope vs shared ALS contract, cooperative vs hard deadlines, explicit
       cross-origin isolation, and the deployed-attestation trust anchor.
   - Evidence: `plans/security-architecture-decisions-phase-0-2026-07-19.md` freezes all seven
-    enforcement shapes and non-claims at baseline `635fbea78`; the exact-tip audit confirms the
+    enforcement shapes and non-claims at baseline `635fbea78`; the current-state audit confirms the
     shipping phases and normative deltas are present, with forcing-gate drift isolated above.
 - [x] Materialize frozen, stable-ID D and W denominator inventories. Each row names its owner,
       authoritative source, applicability, proof/re-witness, and reviewed exemption; deletion or an
@@ -165,7 +162,7 @@ or served artifact.
 - [x] Add D and W uncovered-obligation counts—not only percentages—to the baseline collector so
       progress remains comparable when the implementation grows.
   - Evidence: the collector preserved the initial D `uncovered=6/8` and W `uncovered=6/9` baseline;
-    the exact-tip inventory gate now reports D `8/8` and W `9/9`, both with zero uncovered rows.
+    the current inventory gate reports D `8/8` and W `9/9`, both with zero uncovered rows.
 
 ---
 
@@ -185,7 +182,7 @@ semantic-graph rule table as data (schema is `kovo-security-semantic-graph/v3`,
 supported-language grammar, independent concrete semantics, minimized counterexamples, and nightly
 falsification results. **Blocks:** the §1.1 exit claim only; absence of findings is evidence, not proof.
 
-The exact-tip analyzer still deliberately does not execute or model general JavaScript; that is the
+The current analyzer still deliberately does not execute or model general JavaScript; that is the
 published honesty boundary, not an unresolved implementation premise. The former missing-registry
 gap is closed by `security-abstract-interpreter-census.v1.json`, whose current 44 lattice values and
 33 transfers feed the bounded falsification oracle below.
@@ -227,8 +224,8 @@ gap is closed by `security-abstract-interpreter-census.v1.json`, whose current 4
 enforces what SPEC no longer promises. **Leverage:** medium (process closure, not a new attacker
 class) · **Effort:** L · generalizes the proven `check:security-guarantee` tri-binding to the full KV
 surface. The original unbound-coverage premise is closed by the constructor/site/witness binding
-below. The reviewed-manifest drift found at `b18aae90f` was repaired as the historical Phase 0
-checkpoint; the open final-tip reconciliation owns any later source or digest movement.
+below. The reviewed-manifest drift was repaired at the historical Phase 0 checkpoint; the open
+final-candidate reconciliation owns any later source or digest movement.
 
 **Depends on:** the exact diagnostics registry and Phase 0 baseline. **Produces:** generated
 diagnostic constructors and a registry↔enforcement↔test binding. **Blocks:** spec-conformance exit,
@@ -237,7 +234,7 @@ not live-channel remediation.
 - [x] Add a machine-readable enforcement-class column (`compile-error | fail-closed-runtime |
 audited-escape`, per SPEC §2 precedence) to the `spec/11-diagnostics.md` KV table.
   - Landing evidence: the gate parsed all then-current normative rows and matched every generated
-    runtime enforcement class; the `b18aae90f` repair derived 92 rows.
+    runtime enforcement class; the Phase 0 checkpoint repair derived 92 rows.
 - [x] Generate typed KV constructors from the registry and route production emission through the
       validating diagnostics door; stage removal of ad hoc `{ code: 'KV###' }` production literals
       under the classifier-refactor rule without banning test fixtures that consume generated IDs.
@@ -294,7 +291,7 @@ used by §4.3; it does not establish runtime host integrity.
     `validateRevealReason` checkpoint row was repaired in Phase 0.
 - [x] `check:analysis-time-closure`: walk the import graph of every gate entrypoint + the compile
       path, derive the loaded third-party set, fail on any package absent from the TCB manifest.
-  - Evidence: the exact-tip closure gate is green with 136 roots closing over 381
+  - Evidence: the closure gate is green with 136 roots closing over 381
     optional-inclusive integrity-pinned package subjects.
 - [x] Monotone shrink ratchet on `totalTcbMaxLines`/entry count/closure size (explicit reviewed-raise
       marker; mutation-killed).
@@ -342,7 +339,7 @@ checkpoint repair bound that cell into the reviewed 48/47/1 denominator.
 - [x] Replace the capability-census regex pins with a TS-symbol-identity walk over every
       `createWitnessWeakMap`/`systemDb` mint site, fail-closed classifying each as mint vs internal
       registry with reason; missing census row → fail.
-  - Evidence: the exact-tip capability census is green for 116 resolved sites (4 mints and 112
+  - Evidence: the capability census is green for 116 resolved sites (4 mints and 112
     internal registries), including the retained structural C13 rejects.
 - [x] Sequence the encoding/carrier grammar generator LAST as a versioned closed grammar (weakest
       component; must not become a denylist). Keep all historical anchors as mapped witnesses so C13
@@ -399,7 +396,7 @@ decision. **Produces:** a compiler-derived CSP/Permissions-Policy intent manifes
 browser portion of D, §4.5 door comparison, and optional isolation posture.
 
 The original gap was a free-form CSP allowlist, duplicated Permissions-Policy ownership, and no
-explicit isolation posture. The exact-tip compiler manifest, shared response-posture owner, and
+explicit isolation posture. The compiler manifest, shared response-posture owner, and
 cross-origin-isolation decision now own those facts; the focused structural gate is green.
 
 - [x] Compiler emits an external-origin census (static asset-position URLs keyed by CSP directive,
@@ -427,7 +424,7 @@ cross-origin-isolation decision now own those facts; the focused structural gate
 
 **Class:** web cache poisoning + cache deception via CDN. The original posture checked emitted
 headers against authored intent without proving public-cache generality or complete `Vary`
-influence. The exact-tip compiler/runtime manifest and intermediary oracle now own that proof.
+influence. The compiler/runtime manifest and intermediary oracle now own that proof.
 **Leverage:** high · **Effort:** M-L.
 
 **Depends on:** plan-1 Layer 3 and the Phase 0 cache-key/influence decision. **Produces:** a finite
@@ -472,7 +469,7 @@ registry, derived encoder/decoder, and the `/_q/` reject default. **Blocks:** th
 it is not a prerequisite for live Train A fixes.
 
 The original gap was a hand-parsed target grammar with three independent browser encoders and an
-argsless `/_q/` search record reaching `load`. The exact-tip shared grammar owns 52 read sites, and
+argsless `/_q/` search record reaching `load`. The shared grammar owns 52 read sites, and
 the query endpoint rejects non-empty argsless search before lifecycle providers, guards, or loaders.
 
 - [x] Core-owned grammar declared once as typed data; derive BOTH the browser encoder and server
@@ -483,7 +480,7 @@ the query endpoint rejects non-empty argsless search before lifecycle providers,
 - [x] `check:wire-input-boundary` (patterned on `check:c9-sink-inventory`): symbol-identity census of
       framework protocol header/cookie/search-param reads vs the registry. App-owned reads and reviewed
       third-party adapters are outside this grammar unless they enter through a named framework door.
-  - Evidence: the exact-tip wire-input boundary closes 52 exact symbol-identity sites, including
+  - Evidence: the wire-input boundary closes 52 exact symbol-identity sites, including
     five reviewed dynamic doors, and enrolls the C13 census witness.
 - [x] Make `/_q/` reject-by-default: 422 when no `args` schema is declared and search input is
       non-empty; update SPEC §9.4 + conformance sweep.
@@ -497,7 +494,7 @@ the query endpoint rejects non-empty argsless search before lifecycle providers,
 ### 3.1 ScopedKey — owner provenance for every non-DB stateful sink
 
 **Class:** cross-tenant blob IDOR/overwrite and durable-job coalescing collision. These were the two
-Phase-0 live red channels; exact-tip storage and queue doors now require the shared runtime-witnessed
+Phase-0 live red channels; the storage and queue doors now require the shared runtime-witnessed
 scope frame. **Leverage:** high · **Effort:** L.
 
 **Depends on:** the two distinct Phase 0 red channels, C9 stateful-sink ownership, and the Phase 0
@@ -541,7 +538,7 @@ use; C9's 33/33 current inventory keeps that obligation closed for future statef
 **Class:** divergent intrinsic pinning, duplicate compare implementations, cross-purpose raw-key
 reuse, and unrotatable keys. The purpose-bound authority and rotation envelope are present; the
 later-consumer drift found at the historical checkpoint was repaired, and final source movement is
-owned by the open exact-tip reconciliation.
+owned by the open final-candidate reconciliation.
 **Leverage:** high · **Effort:** L.
 
 **Depends on:** plan-1 capability closure and a purpose/algorithm compatibility decision. **Produces:**
@@ -610,7 +607,7 @@ census. **Produces:** a persistent monotone revocation version and bounded-stale
 ### 3.4 Async-context authority confinement + non-interference oracle
 
 **Class:** cross-request principal/credential/lifecycle bleed and TOCTOU over pinned facts. The
-exact-tip census closes eight runtime lifecycle/cell doors plus one separately reviewed non-runtime
+current census closes eight runtime lifecycle/cell doors plus one separately reviewed non-runtime
 observer, and the concurrency oracle is distinct from generic race-repeat evidence. **Leverage:**
 high · **Effort:** L-M.
 
@@ -644,8 +641,8 @@ oracle. **Blocks:** §4.2 deadline propagation and async-context W coverage.
 
 ### 4.1 Database posture lease
 
-**Class:** silent decay of the least-privilege proof supporting SPEC §10.3. The exact-tip production
-owner now renews a bounded posture digest/lease and fails closed on divergence; the final candidate
+**Class:** silent decay of the least-privilege proof supporting SPEC §10.3. The production owner now
+renews a bounded posture digest/lease and fails closed on divergence; the final candidate
 still owes the plan-wide real-Postgres rerun. **Leverage:** high · **Effort:** L.
 
 **Depends on:** the real-Postgres posture suite and sole connection/transaction doors. **Produces:**
@@ -679,7 +676,7 @@ a bounded-cost posture digest, lease state, and recovery protocol. **Blocks:** D
 ### 4.2 Mandatory request deadline + occupancy budget
 
 **Class:** availability across handler occupancy, hung owned effects, and response draining. The
-exact-tip request shell extends §9.5's mandatory finite posture to time and occupancy through the
+request shell extends §9.5's mandatory finite posture to time and occupancy through the
 pre-dispatch admission door; arbitrary synchronous app JavaScript remains explicitly outside the
 hard bound. **Leverage:** high · **Effort:** L.
 
@@ -712,7 +709,7 @@ effects. **Blocks:** availability W coverage; it cannot bound arbitrary synchron
 
 ### 4.3 Security-event door + signed runtime posture attestation
 
-**Class:** deployed posture and floor observability. The exact-tip single `securityEvent()` journal,
+**Class:** deployed posture and floor observability. The single `securityEvent()` journal,
 signed posture report, and seven-door no-payload decision coverage now own this detection/integrity
 surface; they do not extend the inexpressibility claim. **Leverage:** high · **Effort:** L.
 
@@ -725,7 +722,7 @@ host integrity or fleet-wide identity without a separate remote-attestation/depl
       projection of the Layer-2 security-operation IR / a gate-emitted denial-site census (correction:
       no verdict inventory exists to read yet); then extend `check:classifier-verdict-routing` with an
       emits-event obligation so a floor that doesn't route its denial fails the gate.
-  - Evidence: the exact-tip verdict-routing gate scans 522 source files and validates the
+  - Evidence: the verdict-routing gate scans 522 source files and validates the
     generated denial-site taxonomy plus the event-before-close obligation.
 - [x] Route egress-deny, CSRF-reject, closure-audit refusal, budget-exhaustion, capability-closed
       through it; stable `kovo-security-event/v1` schema, `reporting.ts` redaction discipline,
@@ -797,7 +794,7 @@ equivalence claim. **Leverage:** high · **Effort:** L.
 ### 4.5 Dev-tier door parity + single dev-host door
 
 **Class:** the dev-server CVE class: localhost DNS rebinding, HMR websocket abuse, and source/env
-exfiltration. The exact-tip dev-host door and tier manifest replace the former scattered point
+exfiltration. The dev-host door and tier manifest replace the former scattered point
 checks and classify five development doors against one production posture. **Leverage:** high ·
 **Effort:** L-M.
 
@@ -863,10 +860,10 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
   - Evidence: `check:spec-index`, `check:framework-export-posture`, and `check:threat-matrix` pass;
     the exact seven contracts live in SPEC §§6.6/9.2/9.4/9.5/10.3 and the liveness projection now
     maps all 14 C9 sinks, including derived-data persistence.
-- [ ] After the final-tip reconciliation above, every changed public API/export passes
-      `check:api-surface`; full classifier, compiler, browser,
-      integration, package, real-Postgres, performance, memory, and availability gates pass from a
-      clean checkout with zero required skips at the evidence/release SHA, followed by required CI jobs.
+- [ ] Under the shared Plan 1 Phase 6 final-candidate record, every changed public API/export passes
+      `check:api-surface`; full classifier, compiler, browser, integration, package, real-Postgres,
+      performance, memory, and availability gates pass from its clean checkout with zero required
+      skips, followed by required CI jobs.
 
 ## Notes on sequencing and honesty
 
