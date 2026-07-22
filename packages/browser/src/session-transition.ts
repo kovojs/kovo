@@ -6,8 +6,16 @@ import {
   securityGetPrototypeOf,
 } from './security-witness-intrinsics.js';
 
-const bootSessionTransitionSecurity = createBrowserNavigationSecurityControls();
-const bootSessionTransitionReloadPinned = bootSessionTransitionSecurity.hasReloadControl();
+// SPEC §6.6/§9.3: a server-side Vite evaluator has no document reload authority to capture. In
+// particular, the compiler bootstrap deliberately guards Map methods with immutable accessors so
+// Vite can decorate its own Map instances; evaluating browser realm witnesses in that server realm
+// is both unnecessary and a false poison verdict. A real browser (or a focused structural test)
+// exposes Location before authored modules, so capture the complete browser controls immediately.
+const bootSessionTransitionLocation = (globalThis as { location?: unknown }).location;
+const bootSessionTransitionSecurity =
+  typeof bootSessionTransitionLocation === 'object' && bootSessionTransitionLocation !== null
+    ? createBrowserNavigationSecurityControls()
+    : undefined;
 let fallbackSessionTransitionLocation: unknown;
 let fallbackSessionTransitionSecurity:
   | ReturnType<typeof createBrowserNavigationSecurityControls>
@@ -82,7 +90,7 @@ function capturedBroadcastMethod(
 }
 
 function sessionTransitionSecurity(): ReturnType<typeof createBrowserNavigationSecurityControls> {
-  if (bootSessionTransitionReloadPinned) return bootSessionTransitionSecurity;
+  if (bootSessionTransitionSecurity) return bootSessionTransitionSecurity;
 
   // Node/SSR imports have no Location at module initialization. Admit a late browser/test realm
   // only when the whole Location object appears or changes, then pin that receiver and exact

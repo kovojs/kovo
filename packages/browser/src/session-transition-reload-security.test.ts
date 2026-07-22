@@ -38,6 +38,69 @@ describe('session-transition reload security', () => {
     expect(poison).not.toHaveBeenCalled();
   });
 
+  it('keeps compiler-locked SSR imports out of the browser realm witness', async () => {
+    const mapGetDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'get');
+    if (!mapGetDescriptor || !('value' in mapGetDescriptor)) {
+      throw new Error('Map.get descriptor unavailable');
+    }
+    const mapGet = mapGetDescriptor.value;
+    vi.stubGlobal('location', undefined);
+    Object.defineProperty(Map.prototype, 'get', {
+      configurable: true,
+      enumerable: mapGetDescriptor.enumerable,
+      get() {
+        return mapGet;
+      },
+      set(replacement) {
+        Object.defineProperty(this, 'get', {
+          configurable: true,
+          enumerable: mapGetDescriptor.enumerable,
+          value: replacement,
+          writable: true,
+        });
+      },
+    });
+    try {
+      const serverImport = await import('./session-transition.js');
+      expect(serverImport.reloadSessionTransitionDocument).toBeTypeOf('function');
+    } finally {
+      Object.defineProperty(Map.prototype, 'get', mapGetDescriptor);
+    }
+  });
+
+  it('still rejects a poisoned browser realm before session-transition capture', async () => {
+    const mapGetDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'get');
+    if (!mapGetDescriptor || !('value' in mapGetDescriptor)) {
+      throw new Error('Map.get descriptor unavailable');
+    }
+    const mapGet = mapGetDescriptor.value;
+    const location = {
+      assign: vi.fn(),
+      hash: '',
+      href: 'https://kovo.test/private',
+      origin: 'https://kovo.test',
+      pathname: '/private',
+      reload: vi.fn(),
+      search: '',
+    };
+    vi.stubGlobal('location', location);
+    Object.defineProperty(Map.prototype, 'get', {
+      ...mapGetDescriptor,
+      value(this: Map<unknown, unknown>, key: unknown) {
+        if (key === 'kovo-browser-map-control') return undefined;
+        return Reflect.apply(mapGet, this, [key]);
+      },
+    });
+    try {
+      await expect(import('./session-transition.js')).rejects.toThrow(
+        /realm intrinsics were modified before runtime initialization/,
+      );
+      expect(location.reload).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(Map.prototype, 'get', mapGetDescriptor);
+    }
+  });
+
   it('uses the same boot-pinned reload after an unconfirmed progressive stream', async () => {
     const reload = vi.fn();
     const poison = vi.fn();
