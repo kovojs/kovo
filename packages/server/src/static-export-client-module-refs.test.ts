@@ -4,18 +4,34 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import {
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleSource,
+} from '@kovojs/browser/internal/inline-loader';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 
 import { createApp, createRequestHandler } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import {
+  createMemoryVersionedClientModuleRegistry,
+  versionedClientModuleHref,
+  type VersionedClientModuleInput,
+  type VersionedClientModuleStore,
+} from './client-modules.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 
-const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const runtimeClientModuleHref = versionedClientModuleHref(
+  kovoDeferredRuntimeModulePath,
+  clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource),
+);
 const runtimeClientModuleArtifact = expect.objectContaining({
-  href: expect.stringMatching(runtimeClientModulePath),
-  path: expect.stringMatching(runtimeClientModulePath),
+  href: runtimeClientModuleHref,
+  path: runtimeClientModuleHref,
   status: 200,
 });
+
+const clientModuleHref = (module: VersionedClientModuleInput): string =>
+  versionedClientModuleHref(module.path, clientModuleRepresentationDigest(module.source));
 
 describe('server static export', () => {
   it('discovers referenced client modules without requiring an output directory', async () => {
@@ -23,7 +39,6 @@ describe('server static export', () => {
     const cartHref = registry.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "dry-run";',
-      version: 'cart-dry-run',
     });
     const app = createApp({
       clientModules: registry,
@@ -44,9 +59,10 @@ describe('server static export', () => {
           'cache-control': 'public, max-age=31536000, immutable',
           'cross-origin-resource-policy': 'same-origin',
           'content-type': 'text/javascript; charset=utf-8',
+          'x-content-type-options': 'nosniff',
         },
         href: `${cartHref}#Cart$add`,
-        path: '/c/__v/cart-dry-run/cart.client.js',
+        path: cartHref,
         status: 200,
       },
       runtimeClientModuleArtifact,
@@ -60,12 +76,10 @@ describe('server static export', () => {
       const cartHref = registry.put({
         path: '/c/cart.client.js',
         source: 'export const cart = "build-1";',
-        version: 'cart-1',
       });
       const menuHref = registry.put({
         path: '/c/menu.client.js',
         source: 'export const menu = "build-1";',
-        version: 'menu-1',
       });
       const app = createApp({
         clientModules: registry,
@@ -82,25 +96,24 @@ describe('server static export', () => {
       const handler = createRequestHandler(app);
 
       const result = await exportStaticApp(app, { outDir });
+      const referencedHrefs = [cartHref, `${menuHref}#Menu$open`].sort();
 
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
-        cartHref,
-        `${menuHref}#Menu$open`,
-        expect.stringMatching(runtimeClientModulePath),
+        ...referencedHrefs,
+        runtimeClientModuleHref,
       ]);
       expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
-        '/c/__v/cart-1/cart.client.js',
-        '/c/__v/menu-1/menu.client.js',
-        expect.stringMatching(runtimeClientModulePath),
+        ...referencedHrefs.map((href) => href.split('#', 1)[0]),
+        runtimeClientModuleHref,
       ]);
 
       const cartResponse = await handler(new Request(`https://kovo.local${cartHref}`));
       const menuResponse = await handler(new Request(`https://kovo.local${menuHref}`));
       await expect(
-        readFile(path.join(outDir, 'c/__v/cart-1/cart.client.js'), 'utf8'),
+        readFile(path.join(outDir, cartHref.slice(1)), 'utf8'),
       ).resolves.toBe(await cartResponse.text());
       await expect(
-        readFile(path.join(outDir, 'c/__v/menu-1/menu.client.js'), 'utf8'),
+        readFile(path.join(outDir, menuHref.slice(1)), 'utf8'),
       ).resolves.toBe(await menuResponse.text());
     } finally {
       await rm(outDir, { force: true, recursive: true });
@@ -113,12 +126,10 @@ describe('server static export', () => {
     const publicHref = registry.put({
       path: '/c/public.client.js',
       source: 'export const publicModule = true;',
-      version: 'public-build',
     });
     const privateHref = registry.put({
       path: '/c/private-admin.client.js',
       source: 'export const serverOnlyAdminToken = "internal-build-token";',
-      version: 'private-build',
     });
     const originalAdd = Set.prototype.add;
     let result: Awaited<ReturnType<typeof exportStaticApp>>;
@@ -151,14 +162,14 @@ describe('server static export', () => {
 
     try {
       expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
-        '/c/__v/public-build/public.client.js',
-        expect.stringMatching(runtimeClientModulePath),
+        publicHref,
+        runtimeClientModuleHref,
       ]);
       expect(result.clientModules.map((artifact) => artifact.body)).not.toContain(
         'export const serverOnlyAdminToken = "internal-build-token";',
       );
       await expect(
-        readFile(path.join(outDir, 'c/__v/private-build/private-admin.client.js'), 'utf8'),
+        readFile(path.join(outDir, privateHref.slice(1)), 'utf8'),
       ).rejects.toThrow();
     } finally {
       await rm(outDir, { force: true, recursive: true });
@@ -172,12 +183,10 @@ describe('server static export', () => {
       const cartHref = registry.put({
         path: '/c/cart.client.js',
         source: 'export const cart = "absolute-build";',
-        version: 'cart-absolute',
       });
       const menuHref = registry.put({
         path: '/c/menu.client.js',
         source: 'export const menu = "absolute-build";',
-        version: 'menu-absolute',
       });
       const cartUrl = new URL(cartHref, 'https://shop.example.test').href;
       const menuUrl = new URL(menuHref, 'https://shop.example.test').href;
@@ -198,17 +207,17 @@ describe('server static export', () => {
         origin: 'https://shop.example.test',
         outDir,
       });
+      const referencedHrefs = [cartHref, `${menuHref}#Menu$open`].sort();
 
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
-        '/c/__v/cart-absolute/cart.client.js',
-        '/c/__v/menu-absolute/menu.client.js#Menu$open',
-        expect.stringMatching(runtimeClientModulePath),
+        ...referencedHrefs,
+        runtimeClientModuleHref,
       ]);
       await expect(
-        readFile(path.join(outDir, 'c/__v/cart-absolute/cart.client.js'), 'utf8'),
+        readFile(path.join(outDir, cartHref.slice(1)), 'utf8'),
       ).resolves.toBe('export const cart = "absolute-build";');
       await expect(
-        readFile(path.join(outDir, 'c/__v/menu-absolute/menu.client.js'), 'utf8'),
+        readFile(path.join(outDir, menuHref.slice(1)), 'utf8'),
       ).resolves.toBe('export const menu = "absolute-build";');
     } finally {
       await rm(outDir, { force: true, recursive: true });
@@ -218,27 +227,40 @@ describe('server static export', () => {
   it('rejects referenced client modules that replay to non-JavaScript before writing files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
-      const clientModules = {
-        buildToken() {
-          return 'static-export-wrong-content-type';
-        },
+      const cartModule = {
+        path: '/c/cart.client.js',
+        source: 'export const cart = "wrong-content-type";',
+      };
+      const cartHref = clientModuleHref(cartModule);
+      const retained = new Map<string, VersionedClientModuleInput>([
+        [cartHref, cartModule],
+      ]);
+      const clientModules: VersionedClientModuleStore = {
         entries() {
-          return [];
+          return [cartModule];
         },
-        put(module: { path: string; version: string }) {
-          return `/c/__v/${module.version}/${module.path.slice('/c/'.length)}`;
+        put(module) {
+          const href = clientModuleHref(module);
+          retained.set(href, { path: module.path, source: module.source });
+          return href;
         },
-        resolve(href?: string) {
-          if (href?.includes('/kovo-runtime.client.js')) {
+        resolve(href) {
+          const module = retained.get(href);
+          if (module === undefined) {
             return {
-              body: 'export {};',
-              headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
-              status: 200,
+              body: 'Not Found',
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+              status: 404,
             };
           }
           return {
-            body: '<!doctype html><h1>Wrong handler</h1>',
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            body: module.source,
+            headers: {
+              'Content-Type':
+                href === cartHref
+                  ? 'text/html; charset=utf-8'
+                  : 'text/javascript; charset=utf-8',
+            },
             status: 200,
           };
         },
@@ -247,11 +269,15 @@ describe('server static export', () => {
         clientModules,
         routes: [
           route('/', {
-            modulepreloads: ['/c/cart.client.js?v=cart-1'],
+            modulepreloads: [cartHref],
             page: () => trustedHtml('<main>Home</main>'),
           }),
         ],
       });
+
+      expect(() => app.clientModules.resolve(cartHref)).toThrow(
+        'Client-module store returned non-canonical representation metadata.',
+      );
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
         code: 'KV229',
@@ -259,14 +285,14 @@ describe('server static export', () => {
           {
             code: 'KV229',
             message: expect.stringContaining(
-              "client module '/c/cart.client.js?v=cart-1' because the app handler returned status 200 with Content-Type 'text/html; charset=utf-8'",
+              `client module '${cartHref}' because the app handler returned status 404 with Content-Type 'text/plain; charset=utf-8'`,
             ),
-            routePath: '/c/cart.client.js',
+            routePath: cartHref,
           },
         ],
       });
       await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
-      await expect(readFile(path.join(outDir, 'c', 'cart.client.js'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, cartHref.slice(1)))).rejects.toThrow();
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
@@ -275,27 +301,34 @@ describe('server static export', () => {
   it('refuses unsafe client module output paths', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
-      const badHref = '/c/%2Fescape.client.js?v=v1';
-      const clientModules = {
-        buildToken() {
-          return 'static-export-unsafe-path';
-        },
+      const unsafeModule = {
+        path: '/c/%2Fescape.client.js',
+        source: 'export const unsafe = true;',
+      };
+      const badHref = clientModuleHref(unsafeModule);
+      const retained = new Map<string, VersionedClientModuleInput>([
+        [badHref, unsafeModule],
+      ]);
+      const clientModules: VersionedClientModuleStore = {
         entries() {
-          return [];
+          return [unsafeModule];
         },
-        put(module: { path: string; version: string }) {
-          return `/c/__v/${module.version}/${module.path.slice('/c/'.length)}`;
+        put(module) {
+          const href = clientModuleHref(module);
+          retained.set(href, { path: module.path, source: module.source });
+          return href;
         },
-        resolve(href?: string) {
-          if (href?.includes('/kovo-runtime.client.js')) {
+        resolve(href) {
+          const module = retained.get(href);
+          if (module === undefined) {
             return {
-              body: 'export {};',
-              headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
-              status: 200,
+              body: 'Not Found',
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+              status: 404,
             };
           }
           return {
-            body: 'export const unsafe = true;',
+            body: module.source,
             headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
             status: 200,
           };
@@ -305,8 +338,10 @@ describe('server static export', () => {
         clientModules,
         routes: [
           route('/unsafe', {
-            modulepreloads: [badHref],
-            page: () => trustedHtml('<main>Unsafe module path</main>'),
+            page: () =>
+              trustedHtml(
+                `<main>Unsafe module path<script type="module" src="${badHref}"></script></main>`,
+              ),
           }),
         ],
       });

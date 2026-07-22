@@ -4,13 +4,24 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import {
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleSource,
+} from '@kovojs/browser/internal/inline-loader';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 
 import { createApp } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import {
+  createMemoryVersionedClientModuleRegistry,
+  versionedClientModuleHref,
+} from './client-modules.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 
-const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const runtimeClientModuleHref = versionedClientModuleHref(
+  kovoDeferredRuntimeModulePath,
+  clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource),
+);
 
 describe('server static export', () => {
   it('rejects exported documents that reference server mutation or query endpoints', async () => {
@@ -253,7 +264,6 @@ describe('server static export', () => {
     const cartHref = registry.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "island";',
-      version: 'cart-island',
     });
     const app = createApp({
       clientModules: registry,
@@ -278,7 +288,7 @@ describe('server static export', () => {
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/cart/index.html']);
     expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
       cartHref,
-      expect.stringMatching(runtimeClientModulePath),
+      runtimeClientModuleHref,
     ]);
   });
 
@@ -287,12 +297,10 @@ describe('server static export', () => {
     const realHref = registry.put({
       path: '/c/real.client.js',
       source: 'export const real = "module";',
-      version: 'real-module',
     });
-    registry.put({
+    const exampleOnlyHref = registry.put({
       path: '/c/example-only.client.js',
       source: 'throw new Error("example-only module should not be copied");',
-      version: 'example-only',
     });
     const app = createApp({
       clientModules: registry,
@@ -304,7 +312,7 @@ describe('server static export', () => {
                 '<main>',
                 '<!-- <form action="/_m/comment/add"><button>Add</button></form> -->',
                 '<script type="application/json">',
-                '{"example":"<button on:click=\\"/c/example-only.client.js?v=example-only#open\\" formaction=\\"/_m/script/add\\">Add</button>"}',
+                `{"example":"<button on:click=\\"${exampleOnlyHref}#open\\" formaction=\\"/_m/script/add\\">Add</button>"}`,
                 '</script>',
                 '<style>.example::before { content: \'<a href="/_q/style">\'; }</style>',
                 `<button on:click="${realHref}#Guide$open">Open</button>`,
@@ -321,7 +329,7 @@ describe('server static export', () => {
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/guide/index.html']);
     expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
       realHref,
-      expect.stringMatching(runtimeClientModulePath),
+      runtimeClientModuleHref,
     ]);
   });
 });

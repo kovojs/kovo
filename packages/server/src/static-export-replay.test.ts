@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import {
   createInlineKovoLoaderSource,
   kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleVersion,
+  kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
 
 import { createApp, createRequestHandler } from './app.js';
@@ -19,10 +20,9 @@ import { replayStaticExportApp } from './static-export-replay.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
 import { renderedHtml } from './html.js';
 
-const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const staticExportRuntimeHref = versionedClientModuleHref(
   kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleVersion,
+  clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource),
 );
 const staticExportBootstrapCspHash = cspSha256(
   createInlineKovoLoaderSource(JSON.stringify(staticExportRuntimeHref), '(url)=>import(url)'),
@@ -71,7 +71,6 @@ describe('server static export app replay boundary', () => {
     const href = registry.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "static";',
-      version: 'cart-static',
     });
     const app = createApp({
       clientModules: registry,
@@ -93,7 +92,7 @@ describe('server static export app replay boundary', () => {
     await expect(replayStaticExportApp({ app, onNonExportable: 'skip' })).resolves.toEqual({
       artifacts: [
         {
-          body: expect.stringContaining('<button on:click="/c/__v/cart-static/cart.client.js'),
+          body: expect.stringContaining(`<button on:click="${href}`),
           headers: {
             'content-security-policy': staticExportDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
@@ -117,14 +116,15 @@ describe('server static export app replay boundary', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
+            'x-content-type-options': 'nosniff',
           },
-          href: '/c/__v/cart-static/cart.client.js#Cart$open',
-          path: '/c/__v/cart-static/cart.client.js',
+          href: `${href}#Cart$open`,
+          path: href,
           status: 200,
         },
         expect.objectContaining({
-          href: expect.stringMatching(runtimeClientModulePath),
-          path: expect.stringMatching(runtimeClientModulePath),
+          href: staticExportRuntimeHref,
+          path: staticExportRuntimeHref,
           status: 200,
         }),
       ],

@@ -5,11 +5,12 @@ import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { trustedHtml } from '@kovojs/browser';
 import {
   createInlineKovoLoaderSource,
   kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleVersion,
+  kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
 
 import { createApp } from './app.js';
@@ -34,22 +35,21 @@ import {
   staticExportManifest,
 } from './static-export-result.js';
 
-const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const staticExportRuntimeHref = versionedClientModuleHref(
+  kovoDeferredRuntimeModulePath,
+  clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource),
+);
 const runtimeClientModuleArtifact = expect.objectContaining({
-  href: expect.stringMatching(runtimeClientModulePath),
-  path: expect.stringMatching(runtimeClientModulePath),
+  href: staticExportRuntimeHref,
+  path: staticExportRuntimeHref,
   status: 200,
 });
 const runtimeClientModuleFile = expect.objectContaining({
-  href: expect.stringMatching(runtimeClientModulePath),
+  href: staticExportRuntimeHref,
   kind: 'client-module',
-  path: expect.stringMatching(runtimeClientModulePath),
+  path: staticExportRuntimeHref,
   status: 200,
 });
-const staticExportRuntimeHref = versionedClientModuleHref(
-  kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleVersion,
-);
 const staticExportBootstrapCspHash = cspSha256(
   createInlineKovoLoaderSource(JSON.stringify(staticExportRuntimeHref), '(url)=>import(url)'),
 );
@@ -65,7 +65,6 @@ describe('server static export', () => {
     const cartHref = registry.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "inventory";',
-      version: 'cart-inventory',
     });
     const app = createApp({
       clientModules: registry,
@@ -111,6 +110,7 @@ describe('server static export', () => {
           'cache-control': 'public, max-age=31536000, immutable',
           'cross-origin-resource-policy': 'same-origin',
           'content-type': 'text/javascript; charset=utf-8',
+          'x-content-type-options': 'nosniff',
         },
         href: cartHref,
         kind: 'client-module',
@@ -136,7 +136,6 @@ describe('server static export', () => {
       const cartHref = registry.put({
         path: '/c/cart.client.js',
         source: 'export const cart = "output-plan";',
-        version: 'cart-output-plan',
       });
       const cssSource = path.join(sourceDir, 'app.css');
       await writeFile(cssSource, 'main { display: block; }\n', 'utf8');
@@ -179,12 +178,8 @@ describe('server static export', () => {
         },
         {
           kind: 'client-module',
-          path: expect.stringMatching(runtimeClientModulePath),
-          targetPath: expect.stringMatching(
-            new RegExp(
-              `${outDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[/\\\\]c[/\\\\]__v[/\\\\][^/\\\\]+[/\\\\]kovo-runtime\\.client\\.js$`,
-            ),
-          ),
+          path: staticExportRuntimeHref,
+          targetPath: path.join(outDir, staticExportRuntimeHref.slice(1)),
         },
         {
           kind: 'static-asset',
@@ -204,12 +199,8 @@ describe('server static export', () => {
       await expect(readFile(path.join(outDir, cartHref.replace(/^\//, '')), 'utf8')).resolves.toBe(
         'export const cart = "output-plan";',
       );
-      const runtimePath = writeResult.clientModules.find((artifact) =>
-        runtimeClientModulePath.test(artifact.path),
-      )?.path;
-      expect(runtimePath).toBeTruthy();
       await expect(
-        readFile(path.join(outDir, runtimePath!.replace(/^\//, '')), 'utf8'),
+        readFile(path.join(outDir, staticExportRuntimeHref.slice(1)), 'utf8'),
       ).resolves.toContain('installKovoDeferredRuntime');
       await expect(readFile(path.join(outDir, 'assets', 'app.css'), 'utf8')).resolves.toBe(
         'main { display: block; }\n',
@@ -225,7 +216,6 @@ describe('server static export', () => {
     const cartHref = registry.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "manifest";',
-      version: 'cart-manifest',
     });
     const app = createApp({
       clientModules: registry,
@@ -268,6 +258,7 @@ describe('server static export', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
+            'x-content-type-options': 'nosniff',
           },
           href: cartHref,
           path: cartHref,
@@ -317,6 +308,7 @@ describe('server static export', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
+            'x-content-type-options': 'nosniff',
           },
           href: cartHref,
           kind: 'client-module',

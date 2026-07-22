@@ -129,7 +129,6 @@ describe('server static export', () => {
       const cartHref = registry.put({
         path: '/c/cart.client.js',
         source: moduleSource,
-        version: 'cart-sri',
       });
       const app = createApp({
         clientModules: registry,
