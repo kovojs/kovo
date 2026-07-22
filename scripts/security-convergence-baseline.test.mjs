@@ -256,6 +256,7 @@ describe('security convergence baseline', () => {
       total: 4,
     });
     expect(measured.files.every((row) => /^[0-9a-f]{64}$/u.test(row.sourceSha256))).toBe(true);
+    expect(measured.files.every((row) => !Object.hasOwn(row, 'namedInventorySha256'))).toBe(true);
     expect(Object.keys(measured).sort()).toEqual(['fileCount', 'files', 'scopeFiles', 'total']);
     const sourceChanged = measureProductionPredicateObligations([
       { file: 'a-classifier.ts', source: `const NAMES = ['a', 'changed'];` },
@@ -272,6 +273,15 @@ describe('security convergence baseline', () => {
     expect(compareSnapshot(measured, { ...measured, rowsSha256: '0'.repeat(64) })).toEqual([
       'deterministic convergence snapshot drifted',
     ]);
+    expect(
+      compareSnapshot(measured, {
+        ...measured,
+        files: [
+          { ...measured.files[0], namedInventorySha256: '0'.repeat(64) },
+          ...measured.files.slice(1),
+        ],
+      }),
+    ).toEqual(['deterministic convergence snapshot drifted']);
   });
 
   it('derives the residual dangerous-call lexicon without the deleted raw-handler classifier', () => {

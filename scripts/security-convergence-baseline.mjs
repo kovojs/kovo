@@ -265,7 +265,6 @@ export function measureStaticPredicateObligations(source, fileName = 'security-p
     inlineMembershipEntries,
     nameBranches,
     namedInventoryEntries,
-    namedInventorySha256: sha256(JSON.stringify(inventories)),
     namedInventoryTableCount: inventories.length,
     switchLiteralCases,
     syntaxBranches,
