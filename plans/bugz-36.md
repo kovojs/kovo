@@ -357,12 +357,13 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from M15's credential-bearing typed-read redirect and M14's request-side
     decoder selection. Mutation transport already rejected cross-origin results; it failed to bind
     an unredirected response to the exact mutation action URL.
-  - **Open work:** snapshot the absolute action URL before transport. Before reading any `Kovo-*`
-    header or body, require either (a) `redirected === false` plus an exact final action URL, which is
-    the only branch eligible for fragment authority, or (b) `redirected === true` plus a canonical
-    same-origin final URL, treated solely as navigation. Keep an exact manual 303 plus sanitized
-    `Location` navigation-only, fail closed on absent/ambiguous redirect facts, and prove modular
-    and generated-inline wrong-endpoint, followed-redirect, PRG, session, and fragment cases.
+  - **Open work:** snapshot the absolute action URL before transport and set enhanced Fetch redirect
+    handling to `error`. Before reading any `Kovo-*` header or body, require `redirected === false`
+    plus the exact final action URL; no followed or manual redirect response is eligible for
+    fragment or navigation authority. Enhanced Kovo mutations already use the fragment/reauth
+    vocabulary, while the native no-JavaScript path retains ordinary 303 PRG. Fail closed on
+    absent/ambiguous redirect facts, and prove modular and generated-inline wrong-endpoint, every
+    3xx/followed-redirect shape, session, and fragment case.
 
 ## Low
 
