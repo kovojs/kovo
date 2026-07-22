@@ -774,6 +774,225 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
   });
 
+  // @kovo-security-certifies C13 dependency-lexical-binding-provenance-closure
+  it('keeps framework roots bound to their exact lexical identities across nested shadows', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { handler } from '@kovojs/browser';
+          import { createApp, route } from '@kovojs/server';
+          function localFactory() { return null; }
+          function defaultShadows(
+            route = localFactory,
+            createApp = localFactory,
+            handler = localFactory,
+          ) {
+            route('/default-parameter-not-root');
+            createApp({});
+            handler(() => {});
+          }
+          {
+            const route = localFactory;
+            route('/block-not-root');
+          }
+          function nestedFunction() {
+            const createApp = localFactory;
+            createApp({});
+          }
+          const immutableRoute = route;
+          export const page = immutableRoute('/immutable-alias', { render() { return null; } });
+          export const app = createApp({});
+          export const browser = handler(() => {});
+          void defaultShadows;
+          void nestedFunction;
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => `${fact.rootKind}:${fact.name}`)
+        .sort(),
+    ).toEqual([
+      'application:app',
+      'route:/immutable-alias',
+      'serialized-browser-handler:browser',
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('recognizes var, catch, class, and destructured parameter bindings as local shadows', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          function varShadow() {
+            route('/hoisted-var-not-root');
+            if (globalThis.choice) {
+              var route = localFactory;
+            }
+          }
+          function destructuredParameter({ route } = { route: localFactory }) {
+            route('/parameter-not-root');
+          }
+          try {
+            throw { route: localFactory };
+          } catch ({ route }) {
+            route('/catch-not-root');
+          }
+          {
+            class route {}
+            route('/class-not-root');
+          }
+          export const page = route('/lexical-root', { render() { return null; } });
+          void varShadow;
+          void destructuredParameter;
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name),
+    ).toEqual(['/lexical-root']);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('resolves mutable aliases at each call position and closes every reaching root candidate', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          let make = route;
+          export const before = make('/before-later-write', { render() { return null; } });
+          make = localFactory;
+          export const after = make('/after-later-write', { render() { return null; } });
+
+          let direct;
+          direct = route;
+          export const directPage = direct('/direct-assignment', { render() { return null; } });
+
+          let conditional = localFactory;
+          if (globalThis.choice) conditional = route;
+          export const conditionalPage = conditional('/conditional-assignment', {
+            render() { return null; },
+          });
+
+          let branch;
+          if (globalThis.choice) branch = route;
+          else branch = localFactory;
+          export const branchPage = branch('/branch-join', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    const roots = result.facts
+      .filter((fact) => fact.kind === 'root')
+      .map((fact) => fact.name)
+      .sort();
+    expect(roots).toEqual([
+      '/before-later-write',
+      '/branch-join',
+      '/conditional-assignment',
+      '/direct-assignment',
+    ]);
+    expect(roots).not.toContain('/after-later-write');
+    for (const name of roots) {
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({
+          kind: 'closed',
+          name,
+          reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+          rootKind: 'route',
+        }),
+      );
+    }
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
+  it('preserves immutable declaration destructuring and closes assignment destructuring', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import * as server from '@kovojs/server';
+          const { route: declared } = server;
+          let assigned;
+          ({ route: assigned } = server);
+          export const declaredPage = declared('/declared-destructuring', {
+            render() { return null; },
+          });
+          export const assignedPage = assigned('/assigned-destructuring', {
+            render() { return null; },
+          });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/assigned-destructuring', '/declared-destructuring']);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/assigned-destructuring',
+        reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+        rootKind: 'route',
+      }),
+    );
+    expect(result.facts).not.toContainEqual(
+      expect.objectContaining({ kind: 'closed', name: '/declared-destructuring' }),
+    );
+  });
+
+  it('retains callback-transfer closure when an unrelated nested callable shadows the wrapper', () => {
+    const result = analyze([
+      {
+        fileName: 'wrapper.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          export function definePage(config) { return route('/callback-shadow', config); }
+        `,
+      },
+      {
+        fileName: 'caller.ts',
+        source: `
+          import { definePage } from './wrapper.js';
+          function localFactory() { return null; }
+          function nestedFunction() {
+            const definePage = localFactory;
+            definePage({ render() { return null; } });
+          }
+          export const page = definePage({ render() { return process.env.SECRET; } });
+          void nestedFunction;
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/callback-shadow', rootKind: 'route' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'process', kind: 'closed' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {
