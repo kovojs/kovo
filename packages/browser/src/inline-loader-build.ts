@@ -874,7 +874,17 @@ function installInlineKovoLoader(im) {
       }
     }
   };
-  const rd = (val) => tk(val ?? '', /[\s,]/u);
+  const rd = (val) => {
+    const source = val ?? '';
+    if (source.length > frameworkWireInputGrammar.maxHeaderCharacters) {
+      throw new TypeError(
+        'Kovo dependency input exceeds the ' +
+          frameworkWireInputGrammar.maxHeaderCharacters +
+          '-character wire budget.',
+      );
+    }
+    return tk(source, /[\s,]/u);
+  };
   ${fragmentTargetEscapeReadableSource}
   const sq = escapeCssString;
   const hsaf = frameworkWireTargetCodec.identityIsValid;
@@ -886,20 +896,6 @@ function installInlineKovoLoader(im) {
     ras(el, 'kovo-live-component') ??
     ras(el, 'kovo-c') ??
     targetIdentity(el);
-  const liveProps = (el) => {
-    try {
-      const props = bns.call(intrinsicJsonParse, intrinsicJson, [
-        ras(el, 'kovo-props') || '{}',
-      ]);
-      return props &&
-        typeof props === 'object' &&
-        bns.call(intrinsicArrayIsArray, intrinsicArray, [props]) !== true
-        ? props
-        : {};
-    } catch {
-      return {};
-    }
-  };
   const hasSnapshotValue = (values, value) => {
     for (let index = 0; index < values.length; index += 1) {
       if (values[index] === value) return true;
@@ -907,6 +903,7 @@ function installInlineKovoLoader(im) {
     return false;
   };
   const rt = () => {
+    const seen = [];
     const targets = [];
     const elements = qa(doc, '[kovo-deps]');
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
@@ -918,11 +915,11 @@ function installInlineKovoLoader(im) {
       for (let depIndex = 0; safe && depIndex < deps.length; depIndex += 1) {
         safe = !!hsaf(deps[depIndex]);
       }
-      if (!safe || !target) continue;
+      if (!safe || !target || hasSnapshotValue(seen, target)) continue;
+      bns.appendDenseSecurityValue(seen, target, 'Inline target identity snapshot');
       const value = frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }]);
-      if (!hasSnapshotValue(targets, value)) {
-        bns.appendDenseSecurityValue(targets, value, 'Inline target header snapshot');
-      }
+      bns.appendDenseSecurityValue(targets, value, 'Inline target header snapshot');
+      if (targets.length === frameworkWireInputGrammar.maxEntries) break;
     }
     return targets;
   };
@@ -942,11 +939,18 @@ function installInlineKovoLoader(im) {
       bns.appendDenseSecurityValue(
         targets,
         frameworkWireTargetCodec.encodeLiveTargetHeader(
-          [{ attestation: token, component, props: liveProps(el), target }],
-          js,
+          [
+            {
+              attestation: token,
+              ['component']: component,
+              propsSource: ras(el, 'kovo-props'),
+              target,
+            },
+          ],
         ),
         'Inline live target header snapshot',
       );
+      if (targets.length === frameworkWireInputGrammar.maxEntries) break;
     }
     return targets;
   };

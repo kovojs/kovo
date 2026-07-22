@@ -74,4 +74,66 @@ describe('mutation target browser security', () => {
     });
     expect(documentSnapshot).toEqual(snapshot);
   });
+
+  it('keeps post-bootstrap prototype facts and toJSON callbacks out of live headers', () => {
+    const unattested = document.createElement('section');
+    unattested.setAttribute('kovo-deps', 'public');
+    unattested.setAttribute('kovo-fragment-target', 'unattested-panel');
+    unattested.setAttribute('kovo-live-component', 'components/public/unattested');
+    unattested.setAttribute('kovo-props', '{"scope":"public"}');
+    const attested = document.createElement('section');
+    attested.setAttribute('kovo-deps', 'catalog');
+    attested.setAttribute('kovo-fragment-target', 'catalog-panel');
+    attested.setAttribute('kovo-live-component', 'components/public/catalog');
+    attested.setAttribute('kovo-live-token', 'tok_catalog');
+    attested.setAttribute(
+      'kovo-props',
+      '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first"}',
+    );
+    document.body.append(unattested, attested);
+
+    const attestationDescriptor = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'attestation',
+    );
+    const toJsonDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    let callbackHits = 0;
+    let snapshot: ReturnType<typeof readLiveTargetSnapshot> | undefined;
+    try {
+      Object.defineProperty(Object.prototype, 'attestation', {
+        configurable: true,
+        enumerable: true,
+        value: 'tok_substituted',
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value() {
+          callbackHits += 1;
+          return { scope: 'admin-substituted' };
+        },
+      });
+      snapshot = readLiveTargetSnapshot(createBrowserKovoRoot());
+    } finally {
+      if (attestationDescriptor) {
+        Object.defineProperty(Object.prototype, 'attestation', attestationDescriptor);
+      } else {
+        delete (Object.prototype as { attestation?: unknown }).attestation;
+      }
+      if (toJsonDescriptor) {
+        Object.defineProperty(Object.prototype, 'toJSON', toJsonDescriptor);
+      } else {
+        delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      }
+      unattested.remove();
+      attested.remove();
+    }
+
+    expect(callbackHits).toBe(0);
+    expect(snapshot?.liveHeader).toBe(
+      'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+    );
+    expect(snapshot?.liveTargets).toHaveLength(2);
+    expect(Object.hasOwn(snapshot!.liveTargets[0]!, 'attestation')).toBe(false);
+  });
 });

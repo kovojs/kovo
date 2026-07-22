@@ -5,7 +5,7 @@ import {
   frameworkWireAttestationIsValid,
   frameworkWireComponentIsValid,
   frameworkWireIdentityIsValid,
-  type FrameworkWireLiveTarget,
+  type FrameworkWireLiveTargetInput,
   type FrameworkWireTarget,
 } from '@kovojs/core/internal/wire-input-grammar';
 
@@ -17,7 +17,6 @@ import {
   securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
   securityJsonParse,
-  securityJsonStringify,
   securityOwnArrayEntry,
 } from './security-witness-intrinsics.js';
 
@@ -50,34 +49,16 @@ export function readLiveTargets(root: TargetCollectorRoot): string[] {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSnapshot {
   const collected = collectLiveTargetSnapshot(root);
-  const attestedLiveTargets: FrameworkWireLiveTarget[] = [];
-  for (let index = 0; index < collected.liveTargetCount; index += 1) {
-    const descriptor = securityOwnArrayEntry(collected.liveTargets, index);
-    if (!descriptor.ok) {
-      throw new TypeError('Kovo live target snapshot must contain dense own-data entries.');
-    }
-    if (descriptor.value.attestation === undefined) continue;
-    securityArrayAppend(
-      attestedLiveTargets,
-      {
-        attestation: descriptor.value.attestation,
-        component: descriptor.value.component,
-        props: descriptor.value.props,
-        target: descriptor.value.target,
-      },
-      'Kovo attested live target snapshot',
-    );
-  }
   return {
     header: encodeFrameworkTargetHeader(collected.targetEntries),
-    liveHeader: encodeFrameworkLiveTargetHeader(attestedLiveTargets, stringifyLiveTargetProps),
+    liveHeader: encodeFrameworkLiveTargetHeader(collected.attestedLiveTargets),
     liveTargets: collected.liveTargets,
     targets: collected.targets,
   };
 }
 
 function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
-  liveTargetCount: number;
+  attestedLiveTargets: FrameworkWireLiveTargetInput[];
   liveTargets: LiveTargetDescriptor[];
   targetEntries: FrameworkWireTarget[];
   targets: string[];
@@ -85,6 +66,7 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
   const targetEntries: FrameworkWireTarget[] = [];
   const targetIdentities: string[] = [];
   const liveTargets: LiveTargetDescriptor[] = [];
+  const attestedLiveTargets: FrameworkWireLiveTargetInput[] = [];
   const liveTargetIdentities: string[] = [];
   let targetEntryCount = 0;
   let liveTargetCount = 0;
@@ -129,7 +111,8 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
       target;
     if (!frameworkWireComponentIsValid(component)) continue;
     const attestation = readLiveTargetAttestation(element);
-    const props = readLiveProps(readRuntimeElementAttribute(element, 'kovo-props'));
+    const propsSource = readRuntimeElementAttribute(element, 'kovo-props');
+    const props = readLiveProps(propsSource);
     securityArrayAppend(liveTargetIdentities, target, 'Kovo live target identity snapshot');
     if (attestation === undefined) {
       securityArrayAppend(
@@ -142,6 +125,11 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
         liveTargets,
         { attestation, component, props, target },
         'Kovo live target descriptor snapshot',
+      );
+      securityArrayAppend(
+        attestedLiveTargets,
+        { attestation, component, propsSource, target },
+        'Kovo attested live target input snapshot',
       );
     }
     liveTargetCount += 1;
@@ -167,7 +155,7 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
     );
   }
   return {
-    liveTargetCount,
+    attestedLiveTargets,
     liveTargets,
     targetEntries,
     targets,
@@ -248,6 +236,13 @@ function snapshotContains(
 
 function readLiveProps(value: string | null): Record<string, unknown> {
   if (!value) return {};
+  if (value.length > FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters) {
+    throw new TypeError(
+      'Kovo live-target props exceed the ' +
+        FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters +
+        '-character wire budget.',
+    );
+  }
   try {
     const props = securityJsonParse(value);
     return isRecord(props) ? props : {};
@@ -258,12 +253,4 @@ function readLiveProps(value: string | null): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !securityArrayIsArray(value);
-}
-
-function stringifyLiveTargetProps(value: unknown): string {
-  const encoded = securityJsonStringify(value);
-  if (encoded === undefined) {
-    throw new TypeError('Kovo live target props must be JSON-serializable.');
-  }
-  return encoded;
 }

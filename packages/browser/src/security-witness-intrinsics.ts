@@ -118,6 +118,12 @@ const definePropertiesResult = invoke<object>(intrinsicObjectDefineProperties, I
   },
 ]);
 const nullRecordControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
+const jsonStringifyControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
+invoke(intrinsicObjectDefineProperty, IntrinsicObject, [
+  jsonStringifyControl,
+  'kovo',
+  { configurable: false, enumerable: true, value: 418, writable: false },
+]);
 
 function failIntrinsic(name: string): never {
   throw new TypeError(`Kovo security intrinsic integrity check failed: ${name}`);
@@ -278,6 +284,12 @@ function assertDefinePropertiesIntegrity(): void {
 
 function assertStringIntegrity(): void {
   const match = invoke<RegExpExecArray | null>(intrinsicRegExpExec, /^([a-z]+):/, ['https:']);
+  const parsedJson = invoke<object>(intrinsicJsonParse, JSON, ['{"kovo":418}']);
+  const parsedKovo = invoke<PropertyDescriptor | undefined>(
+    intrinsicObjectGetOwnPropertyDescriptor,
+    IntrinsicObject,
+    [parsedJson, 'kovo'],
+  );
   if (
     invoke(intrinsicString, undefined, ['kovo-security-control']) !== 'kovo-security-control' ||
     invoke(intrinsicString, undefined, [418]) !== '418' ||
@@ -298,8 +310,8 @@ function assertStringIntegrity(): void {
     invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||
     invoke(intrinsicRegExpExec, /^https:/, ['https://kovo.test']) === null ||
     invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||
-    invoke(intrinsicJsonStringify, JSON, [{ kovo: 418 }]) !== '{"kovo":418}' ||
-    invoke<{ kovo?: unknown }>(intrinsicJsonParse, JSON, ['{"kovo":418}']).kovo !== 418
+    invoke(intrinsicJsonStringify, JSON, [jsonStringifyControl]) !== '{"kovo":418}' ||
+    parsedKovo?.value !== 418
   ) {
     failIntrinsic('String');
   }

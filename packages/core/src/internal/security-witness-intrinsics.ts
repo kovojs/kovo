@@ -117,6 +117,12 @@ const definePropertyResult = invoke<object>(intrinsicObjectDefineProperty, Intri
 ]);
 const nullPrototypeControl = { __proto__: null } as object;
 const createdNullPrototypeControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
+const jsonStringifyControl = invoke<object>(intrinsicObjectCreate, IntrinsicObject, [null]);
+invoke(intrinsicObjectDefineProperty, IntrinsicObject, [
+  jsonStringifyControl,
+  'kovo',
+  { configurable: false, enumerable: true, value: 418, writable: false },
+]);
 class HasInstanceControl {}
 const hasInstancePositive = new HasInstanceControl();
 const hasInstanceNegative = {};
@@ -342,7 +348,7 @@ function assertStringIntegrity(): void {
     invoke(intrinsicStringToUpperCase, 'x-kovo', []) !== 'X-KOVO' ||
     invoke(intrinsicEncodeURIComponent, undefined, ['a/b c']) !== 'a%2Fb%20c' ||
     invoke(intrinsicDecodeURIComponent, undefined, ['a%2Fb%20c']) !== 'a/b c' ||
-    invoke(intrinsicJsonStringify, JSON, [{ kovo: 418 }]) !== '{"kovo":418}' ||
+    invoke(intrinsicJsonStringify, JSON, [jsonStringifyControl]) !== '{"kovo":418}' ||
     match?.[0] !== 'https:' ||
     match[1] !== 'https' ||
     invoke(intrinsicRegExpExec, /^https:/, ['javascript:']) !== null ||

@@ -1228,20 +1228,18 @@ const frameworkWireInputGrammar = ${JSON.stringify(FRAMEWORK_WIRE_INPUT_GRAMMAR)
 const createFrameworkWireTargetCodec = ${createFrameworkWireTargetCodec.toString()};
 const frameworkWireTargetCodec = createFrameworkWireTargetCodec(frameworkWireInputGrammar);
 const qa = (root, selector) => root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
-const rd = (value) => (value || "").split(/[\s,]+/).map((dep) => dep.trim()).filter(Boolean);
+const rd = (value) => {
+  const source = value || "";
+  if (source.length > frameworkWireInputGrammar.maxHeaderCharacters) {
+    throw new TypeError("Kovo dependency input exceeds the wire character budget.");
+  }
+  return source.split(/[\s,]+/).map((dep) => dep.trim()).filter(Boolean);
+};
 const targetIdentity = (el) => el.getAttribute("kovo-fragment-target") || el.id || el.getAttribute("kovo-c") || "";
 const liveTargetIdentity = (el) => el.getAttribute("kovo-live-component") || el.getAttribute("kovo-c") || targetIdentity(el);
 const safeHeaderToken = frameworkWireTargetCodec.identityIsValid;
 const safeAttestation = frameworkWireTargetCodec.attestationIsValid;
 const safeComponent = frameworkWireTargetCodec.componentIsValid;
-const liveProps = (el) => {
-  try {
-    const props = JSON.parse(el.getAttribute("kovo-props") || "{}");
-    return props && typeof props === "object" && !Array.isArray(props) ? props : {};
-  } catch {
-    return {};
-  }
-};
 const currentBuild = () => document.querySelector('meta[name="kovo-build"]')?.getAttribute("content") || "";
 const liveTargets = () => {
   const seen = new Set();
@@ -1254,8 +1252,7 @@ const liveTargets = () => {
     if (!target || seen.has(target)) continue;
     seen.add(target);
     targets.push(frameworkWireTargetCodec.encodeLiveTargetHeader(
-      [{ attestation: token, component, props: liveProps(el), target }],
-      JSON.stringify,
+      [{ attestation: token, component, propsSource: el.getAttribute("kovo-props"), target }],
     ));
     if (targets.length === frameworkWireInputGrammar.maxEntries) break;
   }

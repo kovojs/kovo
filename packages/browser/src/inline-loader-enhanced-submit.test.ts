@@ -1410,6 +1410,271 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'keeps post-bootstrap prototype facts and JSON callbacks out of inline live headers through %s',
+    async (_name, installSource) => {
+      const formData = Object.assign(createStructuralFormData(), { kind: 'form-data' });
+      const form = {
+        action: '/_m/catalog/select',
+        getAttribute(name: string) {
+          return mutationFormAttribute('catalog/select', name, { enhance: '' });
+        },
+        method: 'post',
+      };
+      const elementAttributes: Array<Record<string, string>> = [
+        {
+          'kovo-deps': 'public',
+          'kovo-fragment-target': 'unattested-panel',
+          'kovo-live-component': 'components/public/unattested',
+          'kovo-props': '{"scope":"public"}',
+        },
+        {
+          'kovo-deps': 'catalog',
+          'kovo-fragment-target': 'catalog-panel',
+          'kovo-live-component': 'components/public/catalog',
+          'kovo-live-token': 'tok_catalog',
+          'kovo-props':
+            '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first"}',
+        },
+      ];
+      for (let index = 0; index < 70; index += 1) {
+        elementAttributes.push({
+          'kovo-deps': `query-${index}`,
+          'kovo-fragment-target': `extra-panel-${index}`,
+          'kovo-live-token': `tok_extra_${index}`,
+        });
+      }
+      const elements = elementAttributes.map((attrs) => ({
+        getAttribute(name: string) {
+          return Object.prototype.hasOwnProperty.call(attrs, name)
+            ? (attrs[name] ?? null)
+            : null;
+        },
+      }));
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const inlineFetch = vi.fn(async () =>
+        mutationResponse('/_m/catalog/select', {
+          async text() {
+            return '';
+          },
+        }),
+      );
+      const attestationDescriptor = Object.getOwnPropertyDescriptor(
+        Object.prototype,
+        'attestation',
+      );
+      const toJsonDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+      let callbackHits = 0;
+
+      try {
+        globalRecord.FormData = function FormData() {
+          return formData;
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector() {
+            return null;
+          },
+          querySelectorAll(selector: string) {
+            return selector === '[kovo-deps]' ? elements : [];
+          },
+        };
+        globalRecord.fetch = inlineFetch;
+        globalRecord.location = {
+          hash: '',
+          href: 'https://kovo.test/catalog',
+          origin: 'https://kovo.test',
+          pathname: '/catalog',
+          search: '',
+        };
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        Object.defineProperty(Object.prototype, 'attestation', {
+          configurable: true,
+          enumerable: true,
+          value: 'tok_substituted',
+          writable: true,
+        });
+        Object.defineProperty(Object.prototype, 'toJSON', {
+          configurable: true,
+          value() {
+            callbackHits += 1;
+            return { scope: 'admin-substituted' };
+          },
+        });
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      } finally {
+        if (attestationDescriptor) {
+          Object.defineProperty(Object.prototype, 'attestation', attestationDescriptor);
+        } else {
+          delete (Object.prototype as { attestation?: unknown }).attestation;
+        }
+        if (toJsonDescriptor) {
+          Object.defineProperty(Object.prototype, 'toJSON', toJsonDescriptor);
+        } else {
+          delete (Object.prototype as { toJSON?: unknown }).toJSON;
+        }
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+
+      expect(callbackHits).toBe(0);
+      expect(inlineFetch).toHaveBeenCalledTimes(1);
+      const requestHeaders = inlineFetch.mock.calls[0]?.[1].headers;
+      const targetEntries = requestHeaders['Kovo-Targets'].split('; ');
+      const liveEntries = requestHeaders['Kovo-Live-Targets'].split('; ');
+      expect(targetEntries).toHaveLength(64);
+      expect(liveEntries).toHaveLength(64);
+      expect(targetEntries.slice(0, 2)).toEqual([
+        'unattested-panel=public',
+        'catalog-panel=catalog',
+      ]);
+      expect(liveEntries[0]).toBe(
+        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+      );
+      expect(requestHeaders['Kovo-Live-Targets']).not.toContain('unattested-panel');
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'rejects dependency attributes above the shared wire-input bound through %s',
+    async (_name, installSource) => {
+      const originals = {
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const attributes = new Map<string, string>();
+      const inlineFetch = vi.fn();
+      const form = {
+        action: '/_m/catalog/select',
+        getAttribute(name: string) {
+          return mutationFormAttribute('catalog/select', name, { enhance: '' });
+        },
+        method: 'post',
+        removeAttribute(name: string) {
+          attributes.delete(name);
+        },
+        requestSubmit: vi.fn(),
+        setAttribute(name: string, value: string) {
+          attributes.set(name, value);
+        },
+      };
+      const target = {
+        getAttribute(name: string) {
+          if (name === 'kovo-deps') return 'x'.repeat(65_537);
+          if (name === 'kovo-fragment-target') return 'catalog-panel';
+          return null;
+        },
+      };
+
+      try {
+        globalRecord.FormData = function FormData() {
+          return createStructuralFormData();
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector() {
+            return null;
+          },
+          querySelectorAll(selector: string) {
+            return selector === '[kovo-deps]' ? [target] : [];
+          },
+        };
+        globalRecord.fetch = inlineFetch;
+        globalRecord.location = {
+          hash: '',
+          href: 'https://kovo.test/catalog',
+          origin: 'https://kovo.test',
+          pathname: '/catalog',
+          search: '',
+        };
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        const preventDefault = vi.fn();
+        listeners.get('submit')?.({
+          preventDefault,
+          target: { closest: () => form },
+          type: 'submit',
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        expect(inlineFetch).not.toHaveBeenCalled();
+        expect(attributes).toEqual(
+          new Map([
+            ['data-error-code', 'NETWORK_ERROR'],
+            ['kovo-error', ''],
+          ]),
+        );
+      } finally {
+        Object.assign(globalRecord, {
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+          location: originals.location,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'includes the clicked submitter in inline enhanced form data through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

@@ -295,6 +295,14 @@ export interface FrameworkWireLiveTarget<Props extends object = Record<string, u
   readonly target: string;
 }
 
+/** Raw browser-side descriptor accepted by the closed live-target encoder. @internal */
+export interface FrameworkWireLiveTargetInput {
+  readonly attestation: string;
+  readonly component: string;
+  readonly propsSource: string | null | undefined;
+  readonly target: string;
+}
+
 /** @internal */
 export interface FrameworkWireTargetCodec {
   attestationIsValid(value: unknown): value is string;
@@ -305,12 +313,10 @@ export interface FrameworkWireTargetCodec {
   ): FrameworkWireLiveTarget[];
   decodeTargetHeader(value: string): FrameworkWireTarget[];
   encodeEntryList(values: readonly string[]): string;
-  encodeLiveTargetHeader(
-    values: readonly FrameworkWireLiveTarget[],
-    stringifyJson: (value: unknown) => string | undefined,
-  ): string;
+  encodeLiveTargetHeader(values: readonly FrameworkWireLiveTargetInput[]): string;
   encodeTargetHeader(values: readonly FrameworkWireTarget[]): string;
   identityIsValid(value: unknown): value is string;
+  snapshotLiveTargetProps(source: string | null | undefined): string;
 }
 
 /** @internal */
@@ -331,9 +337,18 @@ export function createFrameworkWireTargetCodec(
   // §6.6 rule 6 / §9.1). Keep these captures local: the emitted loader must remain a
   // self-contained rendering of this function plus the frozen grammar data.
   const apply = Reflect.apply;
+  const IntrinsicJson = JSON;
+  const IntrinsicNumber = Number;
+  const IntrinsicObject = Object;
+  const IntrinsicString = String;
   const arrayIsArray = Array.isArray;
   const arrayJoin = Array.prototype.join;
   const arrayPush = Array.prototype.push;
+  const arraySort = Array.prototype.sort;
+  const jsonParse = JSON.parse;
+  const numberIsFinite = Number.isFinite;
+  const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const objectKeys = Object.keys;
   const regexpTest = RegExp.prototype.test;
   const stringCharCodeAt = String.prototype.charCodeAt;
   const stringIncludes = String.prototype.includes;
@@ -342,6 +357,48 @@ export function createFrameworkWireTargetCodec(
   const stringSlice = String.prototype.slice;
   const stringTrim = String.prototype.trim;
   const whitespace = /\s/u;
+  const hexadecimal = '0123456789abcdef';
+
+  const ownData = <Value>(
+    carrier: unknown,
+    name: string | number,
+  ): { readonly found: boolean; readonly value?: Value } => {
+    if (
+      carrier === null ||
+      (typeof carrier !== 'object' && typeof carrier !== 'function')
+    ) {
+      return { found: false };
+    }
+    const descriptor = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [
+      carrier,
+      name,
+    ]) as PropertyDescriptor | undefined;
+    if (descriptor === undefined) return { found: false };
+    const descriptorValue = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [
+      descriptor,
+      'value',
+    ]) as PropertyDescriptor | undefined;
+    return descriptorValue === undefined
+      ? { found: false }
+      : { found: true, value: descriptorValue.value as Value };
+  };
+
+  const arrayLength = (value: unknown, label: string): number => {
+    if (!apply(arrayIsArray, Array, [value])) {
+      throw new TypeError(label + ' must be an array.');
+    }
+    const length = ownData<number>(value, 'length');
+    if (
+      !length.found ||
+      typeof length.value !== 'number' ||
+      length.value < 0 ||
+      length.value % 1 !== 0 ||
+      length.value > grammar.maxHeaderCharacters
+    ) {
+      throw new TypeError(label + ' must have a bounded own-data length.');
+    }
+    return length.value;
+  };
 
   const push = <Value>(values: Value[], value: Value): void => {
     apply(arrayPush, values, [value]);
@@ -358,6 +415,126 @@ export function createFrameworkWireTargetCodec(
   const lastIndexOf = (value: string, search: string): number =>
     apply(stringLastIndexOf, value, [search]);
   const isWhitespace = (value: string): boolean => apply(regexpTest, whitespace, [value]);
+
+  const escapeJsonString = (value: string): string => {
+    let output = '"';
+    for (let index = 0; index < value.length; index += 1) {
+      const code = apply(stringCharCodeAt, value, [index]);
+      if (code === 0x22) {
+        output += '\\"';
+      } else if (code === 0x5c) {
+        output += '\\\\';
+      } else if (code === 0x08) {
+        output += '\\b';
+      } else if (code === 0x09) {
+        output += '\\t';
+      } else if (code === 0x0a) {
+        output += '\\n';
+      } else if (code === 0x0c) {
+        output += '\\f';
+      } else if (code === 0x0d) {
+        output += '\\r';
+      } else if (code < 0x20 || (code >= 0xd800 && code <= 0xdfff)) {
+        if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+          const next = apply(stringCharCodeAt, value, [index + 1]);
+          if (next >= 0xdc00 && next <= 0xdfff) {
+            output += slice(value, index, index + 2);
+            index += 1;
+            continue;
+          }
+        }
+        output +=
+          '\\u' +
+          hexadecimal[(code >>> 12) & 0x0f] +
+          hexadecimal[(code >>> 8) & 0x0f] +
+          hexadecimal[(code >>> 4) & 0x0f] +
+          hexadecimal[code & 0x0f];
+      } else {
+        output += slice(value, index, index + 1);
+      }
+    }
+    return output + '"';
+  };
+
+  const snapshotLiveTargetProps = (source: string | null | undefined): string => {
+    if (source === null || source === undefined || source === '') return '{}';
+    if (typeof source !== 'string') {
+      throw new TypeError('Kovo live-target props source must be JSON text.');
+    }
+    if (source.length > grammar.maxHeaderCharacters) {
+      throw new TypeError(
+        'Kovo live-target props exceed the ' +
+          grammar.maxHeaderCharacters +
+          '-character wire budget.',
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = apply(jsonParse, IntrinsicJson, [source]);
+    } catch {
+      return '{}';
+    }
+    if (parsed === null || typeof parsed !== 'object' || apply(arrayIsArray, Array, [parsed])) {
+      return '{}';
+    }
+
+    let nodeCount = 0;
+    const encodeJsonValue = (value: unknown, depth: number): string => {
+      nodeCount += 1;
+      if (depth > 64 || nodeCount > grammar.maxHeaderCharacters) {
+        throw new TypeError('Kovo live-target props exceed the bounded JSON snapshot budget.');
+      }
+      if (value === null) return 'null';
+      if (typeof value === 'string') return escapeJsonString(value);
+      if (typeof value === 'boolean') return value ? 'true' : 'false';
+      if (typeof value === 'number') {
+        if (!apply(numberIsFinite, IntrinsicNumber, [value])) {
+          throw new TypeError('Kovo live-target props contain a non-finite number.');
+        }
+        return apply(IntrinsicString, undefined, [value]);
+      }
+      if (typeof value !== 'object') {
+        throw new TypeError('Kovo live-target props contain a non-JSON value.');
+      }
+
+      if (apply(arrayIsArray, Array, [value])) {
+        const length = arrayLength(value, 'Kovo live-target props array');
+        let output = '[';
+        for (let index = 0; index < length; index += 1) {
+          const entry = ownData<unknown>(value, index);
+          if (!entry.found) {
+            throw new TypeError('Kovo live-target props arrays must contain dense own-data values.');
+          }
+          output += (index === 0 ? '' : ',') + encodeJsonValue(entry.value, depth + 1);
+        }
+        return output + ']';
+      }
+
+      const keys = apply(objectKeys, IntrinsicObject, [value]) as string[];
+      apply(arraySort, keys, []);
+      const keyCount = arrayLength(keys, 'Kovo live-target props key snapshot');
+      let output = '{';
+      for (let index = 0; index < keyCount; index += 1) {
+        const keyEntry = ownData<string>(keys, index);
+        if (!keyEntry.found || typeof keyEntry.value !== 'string') {
+          throw new TypeError('Kovo live-target props keys must be dense strings.');
+        }
+        const entry = ownData<unknown>(value, keyEntry.value);
+        if (!entry.found) {
+          throw new TypeError('Kovo live-target props must contain own-data values.');
+        }
+        output +=
+          (index === 0 ? '' : ',') +
+          escapeJsonString(keyEntry.value) +
+          ':' +
+          encodeJsonValue(entry.value, depth + 1);
+      }
+      return output + '}';
+    };
+
+    return encodeJsonValue(parsed, 0);
+  };
 
   const identityIsValid = (value: unknown): value is string => {
     if (typeof value !== 'string' || value.length === 0) return false;
@@ -399,16 +576,17 @@ export function createFrameworkWireTargetCodec(
   };
 
   const encodeEntryList = (values: readonly string[]): string => {
-    if (values.length > grammar.maxEntries) {
+    const valueCount = arrayLength(values, 'Kovo wire input entry list');
+    if (valueCount > grammar.maxEntries) {
       throw new TypeError('Kovo wire input exceeds the ' + grammar.maxEntries + '-entry budget.');
     }
     let output = '';
-    for (let index = 0; index < values.length; index += 1) {
-      const value = values[index];
-      if (typeof value !== 'string' || value.length === 0) {
+    for (let index = 0; index < valueCount; index += 1) {
+      const entry = ownData<string>(values, index);
+      if (!entry.found || typeof entry.value !== 'string' || entry.value.length === 0) {
         throw new TypeError('Kovo wire input entries must be non-empty strings.');
       }
-      output += (index === 0 ? '' : grammar.presentationSeparator) + value;
+      output += (index === 0 ? '' : grammar.presentationSeparator) + entry.value;
       if (output.length > grammar.maxHeaderCharacters) {
         throw new TypeError(
           'Kovo wire input exceeds the ' + grammar.maxHeaderCharacters + '-character budget.',
@@ -420,20 +598,33 @@ export function createFrameworkWireTargetCodec(
 
   const encodeTargetHeader = (values: readonly FrameworkWireTarget[]): string => {
     const encoded: string[] = [];
-    for (let index = 0; index < values.length; index += 1) {
-      const value = values[index];
-      if (value === undefined || !identityIsValid(value.target)) {
+    const valueCount = arrayLength(values, 'Kovo target header input');
+    if (valueCount > grammar.maxEntries) {
+      throw new TypeError('Kovo wire input exceeds the ' + grammar.maxEntries + '-entry budget.');
+    }
+    for (let index = 0; index < valueCount; index += 1) {
+      const value = ownData<FrameworkWireTarget>(values, index);
+      const target = ownData<unknown>(value.value, 'target');
+      const dependencies = ownData<unknown>(value.value, 'deps');
+      if (!value.found || !target.found || !identityIsValid(target.value)) {
         throw new TypeError('Kovo target header contains an invalid wire identity.');
       }
-      let entry = value.target;
-      if (value.deps.length > 0) {
+      if (!dependencies.found) {
+        throw new TypeError('Kovo target header contains an invalid dependency list.');
+      }
+      const dependencyCount = arrayLength(
+        dependencies.value,
+        'Kovo target header dependency list',
+      );
+      let entry = target.value;
+      if (dependencyCount > 0) {
         const deps: string[] = [];
-        for (let depIndex = 0; depIndex < value.deps.length; depIndex += 1) {
-          const dep = value.deps[depIndex];
-          if (!identityIsValid(dep)) {
+        for (let depIndex = 0; depIndex < dependencyCount; depIndex += 1) {
+          const dep = ownData<unknown>(dependencies.value, depIndex);
+          if (!dep.found || !identityIsValid(dep.value)) {
             throw new TypeError('Kovo target header contains an invalid dependency wire identity.');
           }
-          push(deps, dep);
+          push(deps, dep.value);
         }
         entry +=
           grammar.target.assignmentSeparator +
@@ -445,34 +636,46 @@ export function createFrameworkWireTargetCodec(
   };
 
   const encodeLiveTargetHeader = (
-    values: readonly FrameworkWireLiveTarget[],
-    stringifyJson: (value: unknown) => string | undefined,
+    values: readonly FrameworkWireLiveTargetInput[],
   ): string => {
     const encoded: string[] = [];
-    for (let index = 0; index < values.length; index += 1) {
-      const value = values[index];
-      if (value === undefined || !identityIsValid(value.target)) {
+    const valueCount = arrayLength(values, 'Kovo live-target header input');
+    if (valueCount > grammar.maxEntries) {
+      throw new TypeError('Kovo wire input exceeds the ' + grammar.maxEntries + '-entry budget.');
+    }
+    for (let index = 0; index < valueCount; index += 1) {
+      const value = ownData<FrameworkWireLiveTargetInput>(values, index);
+      const target = ownData<unknown>(value.value, 'target');
+      const component = ownData<unknown>(value.value, 'component');
+      const attestation = ownData<unknown>(value.value, 'attestation');
+      const propsSource = ownData<unknown>(value.value, 'propsSource');
+      if (!value.found || !target.found || !identityIsValid(target.value)) {
         throw new TypeError('Kovo live-target header contains an invalid target wire identity.');
       }
-      if (!componentIsValid(value.component)) {
+      if (!component.found || !componentIsValid(component.value)) {
         throw new TypeError('Kovo live-target header contains an invalid component wire identity.');
       }
-      if (!attestationIsValid(value.attestation)) {
+      if (!attestation.found || !attestationIsValid(attestation.value)) {
         throw new TypeError(
           'Kovo live-target header contains an invalid attestation wire identity.',
         );
       }
-      const props = stringifyJson(value.props);
-      if (typeof props !== 'string') {
-        throw new TypeError('Kovo live-target props must serialize to JSON text.');
+      if (
+        !propsSource.found ||
+        (typeof propsSource.value !== 'string' &&
+          propsSource.value !== null &&
+          propsSource.value !== undefined)
+      ) {
+        throw new TypeError('Kovo live-target props source must be own JSON text.');
       }
+      const props = snapshotLiveTargetProps(propsSource.value);
       push(
         encoded,
-        value.target +
+        target.value +
           grammar.descriptor.targetComponentSeparator +
-          value.component +
+          component.value +
           grammar.descriptor.componentAttestationSeparator +
-          value.attestation +
+          attestation.value +
           grammar.descriptor.attestationPropsSeparator +
           props,
       );
@@ -598,7 +801,7 @@ export function createFrameworkWireTargetCodec(
       if (props === null || typeof props !== 'object' || arrayIsArray(props)) continue;
       appendUniqueByTarget(output, {
         attestation,
-        component,
+        ['component']: component,
         props: props as Record<string, unknown>,
         target,
       });
@@ -615,6 +818,7 @@ export function createFrameworkWireTargetCodec(
     encodeLiveTargetHeader,
     encodeTargetHeader,
     identityIsValid,
+    snapshotLiveTargetProps,
   };
 }
 
@@ -635,8 +839,7 @@ export const encodeFrameworkWireEntryList: FrameworkWireTargetCodec['encodeEntry
 /** @internal */
 export const encodeFrameworkLiveTargetHeader: FrameworkWireTargetCodec['encodeLiveTargetHeader'] = (
   values,
-  stringifyJson,
-) => frameworkWireTargetCodec.encodeLiveTargetHeader(values, stringifyJson);
+) => frameworkWireTargetCodec.encodeLiveTargetHeader(values);
 /** @internal */
 export const encodeFrameworkTargetHeader: FrameworkWireTargetCodec['encodeTargetHeader'] = (
   values,
@@ -652,3 +855,6 @@ export const frameworkWireComponentIsValid: FrameworkWireTargetCodec['componentI
 /** @internal */
 export const frameworkWireIdentityIsValid: FrameworkWireTargetCodec['identityIsValid'] = (value) =>
   frameworkWireTargetCodec.identityIsValid(value);
+/** @internal */
+export const snapshotFrameworkLiveTargetProps: FrameworkWireTargetCodec['snapshotLiveTargetProps'] =
+  (source) => frameworkWireTargetCodec.snapshotLiveTargetProps(source);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { canonicalJsonStringify } from '../json-clone.js';
 import {
   decodeFrameworkLiveTargetHeader,
   decodeFrameworkTargetHeader,
@@ -7,6 +8,7 @@ import {
   encodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
   FRAMEWORK_WIRE_INPUT_REGISTRY,
+  snapshotFrameworkLiveTargetProps,
 } from './wire-input-grammar.js';
 
 function seededIdentity(seed: number): string {
@@ -67,14 +69,23 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         { deps: [`query:${seed}`, `query/${seed + 1}`], target },
         { deps: [], target: `${target}-empty` },
       ];
+      const props = {
+        nested: { quote: '"', separator: ';', slash: '\\' },
+        seed,
+      };
+      const descriptorInputs = [
+        {
+          attestation: `token_${seed}`,
+          component: `components/card-${seed}`,
+          propsSource: JSON.stringify(props),
+          target,
+        },
+      ];
       const descriptors = [
         {
           attestation: `token_${seed}`,
           component: `components/card-${seed}`,
-          props: {
-            nested: { quote: '"', separator: ';', slash: '\\' },
-            seed,
-          },
+          props,
           target,
         },
       ];
@@ -82,7 +93,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       expect(decodeFrameworkTargetHeader(encodeFrameworkTargetHeader(entries))).toEqual(entries);
       expect(
         decodeFrameworkLiveTargetHeader(
-          encodeFrameworkLiveTargetHeader(descriptors, JSON.stringify),
+          encodeFrameworkLiveTargetHeader(descriptorInputs),
           JSON.parse,
         ),
       ).toEqual(descriptors);
@@ -106,15 +117,98 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     );
     expect(() =>
       encodeFrameworkLiveTargetHeader(
-        [{ attestation: 'token', component: 'bad:component', props: {}, target: 'safe' }],
-        JSON.stringify,
+        [{ attestation: 'token', component: 'bad:component', propsSource: '{}', target: 'safe' }],
       ),
     ).toThrow(/component/iu);
+  });
+
+  it('keeps raw live-target props byte-for-byte equivalent to server canonical JSON', () => {
+    const corpus = [
+      '{"z":1,"a":{"z":2,"a":[true,null,"nested"]}}',
+      '{"controls":"\\b\\t\\n\\f\\r\\u0000","quote":"\\\"","slash":"\\\\"}',
+      '{"pair":"\\ud83d\\ude00","loneHigh":"\\ud800","loneLow":"\\udfff"}',
+      '{"exponent":1e+21,"fraction":1.25e-7,"negativeZero":-0}',
+      '{"array":[{"z":2,"a":1},[3,2,1]],"semi":"left;right"}',
+      '{"toJSON":"data-only","__proto__":{"role":"public"}}',
+      '{"lineSeparators":"\u2028\u2029"}',
+    ];
+
+    for (const source of corpus) {
+      expect(snapshotFrameworkLiveTargetProps(source)).toBe(
+        canonicalJsonStringify(JSON.parse(source)),
+      );
+    }
+  });
+
+  it('bounds and normalizes invalid, non-record, and whitespace-padded props sources', () => {
+    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
+    expect(snapshotFrameworkLiveTargetProps(' { "z": 1, "a": [2, 3] } ')).toBe(
+      '{"a":[2,3],"z":1}',
+    );
+    expect(snapshotFrameworkLiveTargetProps('{"message":"left;right"}')).toBe(
+      '{"message":"left;right"}',
+    );
+    expect(snapshotFrameworkLiveTargetProps('{bad')).toBe('{}');
+    expect(snapshotFrameworkLiveTargetProps('null')).toBe('{}');
+    expect(snapshotFrameworkLiveTargetProps('[]')).toBe('{}');
+    expect(snapshotFrameworkLiveTargetProps('418')).toBe('{}');
+    expect(snapshotFrameworkLiveTargetProps(' '.repeat(maximum - 2) + '{}')).toBe('{}');
+    expect(() => snapshotFrameworkLiveTargetProps(' '.repeat(maximum - 1) + '{}')).toThrow(
+      /character wire budget/iu,
+    );
+  });
+
+  it('does not dispatch inherited JSON callbacks or accept inherited descriptor facts', () => {
+    const inheritedToJson = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    let callbackHits = 0;
+    let props = '';
+    try {
+      Object.defineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value() {
+          callbackHits += 1;
+          return { role: 'admin-substituted' };
+        },
+      });
+      props = snapshotFrameworkLiveTargetProps(
+        '{"toJSON":"ordinary-data","nested":{"role":"public"}}',
+      );
+    } finally {
+      if (inheritedToJson) {
+        Object.defineProperty(Object.prototype, 'toJSON', inheritedToJson);
+      } else {
+        delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      }
+    }
+
+    expect(callbackHits).toBe(0);
+    expect(props).toBe('{"nested":{"role":"public"},"toJSON":"ordinary-data"}');
+
+    const inherited = Object.create({
+      attestation: 'tok_substituted',
+      component: 'components/admin',
+      propsSource: '{"role":"admin-substituted"}',
+      target: 'admin-panel',
+    }) as {
+      attestation: string;
+      component: string;
+      propsSource: string;
+      target: string;
+    };
+    expect(() => encodeFrameworkLiveTargetHeader([inherited])).toThrow(/target wire identity/iu);
   });
 
   it('keeps codec acceptance and rejection exact after late intrinsic replacement', () => {
     const targetEntries = [{ deps: ['public', 'catalog'], target: 'public-panel' }];
     const descriptors = [
+      {
+        attestation: 'token_1',
+        component: 'components/public/card',
+        propsSource: '{"id":"safe"}',
+        target: 'public-panel',
+      },
+    ];
+    const decodedDescriptorExpectation = [
       {
         attestation: 'token_1',
         component: 'components/public/card',
@@ -125,7 +219,6 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     const targetHeader = ' public-panel=public catalog ';
     const descriptorHeader = ' public-panel#components/public/card@token_1:{"id":"safe"} ';
     const parseJson = JSON.parse;
-    const stringifyJson = JSON.stringify;
     const originalApply = Reflect.apply;
     const originalArrayIsArray = Array.isArray;
     const originalArrayJoin = Array.prototype.join;
@@ -164,7 +257,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       String.prototype.trim = () => 'admin';
 
       encodedTargets = encodeFrameworkTargetHeader(targetEntries);
-      encodedDescriptors = encodeFrameworkLiveTargetHeader(descriptors, stringifyJson);
+      encodedDescriptors = encodeFrameworkLiveTargetHeader(descriptors);
       decodedTargets = decodeFrameworkTargetHeader(targetHeader);
       decodedDescriptors = decodeFrameworkLiveTargetHeader(descriptorHeader, parseJson);
       decodedInvalidTargets = decodeFrameworkTargetHeader('bad\u0000target=admin');
@@ -179,8 +272,14 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       }
       try {
         encodeFrameworkLiveTargetHeader(
-          [{ attestation: 'token', component: 'bad:component', props: {}, target: 'safe' }],
-          stringifyJson,
+          [
+            {
+              attestation: 'token',
+              component: 'bad:component',
+              propsSource: '{}',
+              target: 'safe',
+            },
+          ],
         );
       } catch {
         invalidDescriptorRejected = true;
@@ -202,7 +301,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     expect(encodedTargets).toBe('public-panel=public catalog');
     expect(encodedDescriptors).toBe('public-panel#components/public/card@token_1:{"id":"safe"}');
     expect(decodedTargets).toEqual(targetEntries);
-    expect(decodedDescriptors).toEqual(descriptors);
+    expect(decodedDescriptors).toEqual(decodedDescriptorExpectation);
     expect(decodedInvalidTargets).toEqual([]);
     expect(decodedInvalidDescriptors).toEqual([]);
     expect(invalidTargetRejected).toBe(true);

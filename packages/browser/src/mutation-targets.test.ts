@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from '@kovojs/core/internal/wire-input-grammar';
+
 import * as mutationTargetsModule from './mutation-targets.js';
 import { readLiveTargetSnapshot, readLiveTargets } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
@@ -243,6 +245,112 @@ describe('mutation targets', () => {
       ],
       targets: ['public-panel=public'],
     });
+  });
+
+  it('ignores inherited attestation and JSON callbacks poisoned after module boot', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'unattested-panel',
+        'kovo-live-component': 'components/public/unattested',
+        'kovo-props': '{"scope":"public"}',
+      }),
+      new FakeTargetElement({
+        'kovo-deps': 'catalog',
+        'kovo-fragment-target': 'catalog-panel',
+        'kovo-live-component': 'components/public/catalog',
+        'kovo-live-token': 'tok_catalog',
+        'kovo-props':
+          '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first"}',
+      }),
+    ]);
+    const attestationDescriptor = Object.getOwnPropertyDescriptor(
+      Object.prototype,
+      'attestation',
+    );
+    const toJsonDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    let callbackHits = 0;
+    let snapshot: ReturnType<typeof readLiveTargetSnapshot> | undefined;
+    try {
+      Object.defineProperty(Object.prototype, 'attestation', {
+        configurable: true,
+        enumerable: true,
+        value: 'tok_substituted',
+        writable: true,
+      });
+      Object.defineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value() {
+          callbackHits += 1;
+          return { scope: 'admin-substituted' };
+        },
+      });
+      snapshot = readLiveTargetSnapshot(root);
+    } finally {
+      if (attestationDescriptor) {
+        Object.defineProperty(Object.prototype, 'attestation', attestationDescriptor);
+      } else {
+        delete (Object.prototype as { attestation?: unknown }).attestation;
+      }
+      if (toJsonDescriptor) {
+        Object.defineProperty(Object.prototype, 'toJSON', toJsonDescriptor);
+      } else {
+        delete (Object.prototype as { toJSON?: unknown }).toJSON;
+      }
+    }
+
+    // SPEC §6.6 rule 6 / §9.1: optional browser facts are own-data snapshots and
+    // raw props normalization cannot dispatch an inherited serialization callback.
+    expect(callbackHits).toBe(0);
+    expect(snapshot).toEqual({
+      header: 'unattested-panel=public; catalog-panel=catalog',
+      liveHeader:
+        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+      liveTargets: [
+        {
+          component: 'components/public/unattested',
+          props: { scope: 'public' },
+          target: 'unattested-panel',
+        },
+        {
+          attestation: 'tok_catalog',
+          component: 'components/public/catalog',
+          props: {
+            a: 'first',
+            nested: { a: [{ a: 1, z: 2 }], z: 'last' },
+            z: 1,
+          },
+          target: 'catalog-panel',
+        },
+      ],
+      targets: ['unattested-panel=public', 'catalog-panel=catalog'],
+    });
+    expect(Object.hasOwn(snapshot!.liveTargets[0]!, 'attestation')).toBe(false);
+  });
+
+  it('accepts the live-props character bound exactly and rejects one character over it', () => {
+    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
+    const exactRoot = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'exact-panel',
+        'kovo-live-token': 'tok_exact',
+        'kovo-props': ' '.repeat(maximum - 2) + '{}',
+      }),
+    ]);
+    const oversizedRoot = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'oversized-panel',
+        'kovo-live-token': 'tok_oversized',
+        'kovo-props': ' '.repeat(maximum - 1) + '{}',
+      }),
+    ]);
+
+    expect(readLiveTargetSnapshot(exactRoot).liveHeader).toBe(
+      'exact-panel#exact-panel@tok_exact:{}',
+    );
+    expect(() => readLiveTargetSnapshot(oversizedRoot)).toThrow(/character wire budget/iu);
   });
 
   it('keeps target collection closed over boot controls after collection intrinsic poisoning', () => {
