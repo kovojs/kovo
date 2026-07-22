@@ -1518,6 +1518,98 @@ export const Demo = component({
   });
 
   it.each([
+    `const box = {}; state.saved = box;`,
+    `const box = {}; state.saved = { box };`,
+    `const box = {}; state.saved = { outer: [{ box }] };`,
+    `const box = {}; state.saved = [box];`,
+    `const box = {}; const wrapper = { box }; state.saved = wrapper;`,
+    `const box = {}; const holder = { box }; state.saved = holder.box;`,
+    `const box = {}; state.saved = true ? box : {};`,
+    `const box = {}; state.saved = box ?? {};`,
+    `const run = () => { state.count += 1; }; state.saved = run;`,
+    `const box = {}; state.items.push(box);`,
+    `const box = {}; state.saved = box; Object.assign(box, { admin: true });`,
+    `const box = {}; state.saved = box; box.admin = true;`,
+    `const box = {}; state.saved = box; setTimeout(() => { void box.admin; }, 0);`,
+    `const box = {}; state.saved = box;
+     [box].map((entry) => { setTimeout(() => { void entry.admin; }, 0); });`,
+  ])('rejects local reference identity retained by a state write: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'cannot retain a local object/function identity',
+    );
+  });
+
+  it.each([
+    `const box = {}; state.items.splice(0, 0, box);`,
+    `const box = {}; state.items.fill(box);`,
+  ])('keeps unreviewed state container mutators closed: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'is not a reviewed callable data method',
+    );
+  });
+
+  it.each([
+    `const boxes = [{}]; state.saved = boxes.at(0);`,
+    `const boxes = [{}]; state.saved = boxes.slice(0)[0];`,
+    `const boxes = [{}]; state.saved = boxes.map((box) => box);`,
+  ])('rejects opaque local-array return identity at a state write: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      "outside the compiler's closed JSON/scalar state vocabulary",
+    );
+  });
+
+  it('retains fresh recursive JSON and proven scalars at exact state-write sinks', () => {
+    expect(
+      browserHandlerBoundaryDiagnostics(`
+        const label = String(state.value);
+        const holder = { label: 'safe' };
+        state.saved = { nested: [{ label }], prior: state.saved };
+        state.items.push({ nested: [{ label }] });
+        state.value = holder.label;
+      `),
+    ).toEqual([]);
+  });
+
+  it.each([
+    `Object.freeze(state);`,
+    `Object.freeze(state.saved);`,
+    `const model = state; Object.freeze(model);`,
+    `Object.freeze(true ? state.saved : {});`,
+  ])('rejects descriptor mutation of handler state: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'Object.freeze cannot change handler-state object identity or descriptors',
+    );
+  });
+
+  it('retains Object.freeze for an unrelated closed local object', () => {
+    expect(
+      browserHandlerBoundaryDiagnostics(
+        `const box = { value: 'safe' }; Object.freeze(box); void box.value;`,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    `let box = {}; Object.assign(box, { value: 'safe' });`,
+    `const box = {}; const alias = box; Object.assign(alias, { value: 'safe' });`,
+    `function destination() { return {}; } Object.assign(destination(), { value: 'safe' });`,
+  ])('rejects Object.assign without an exact fresh destination: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'Object.assign requires one exact fresh handler-local destination',
+    );
+  });
+
+  it.each([
     `const box = {}; Object.assign(box, { value: String(state.value) });
      [box].map((entry) => { setTimeout(() => { void entry.value; }, 0); });`,
     `const box = {}; const leaked = {};

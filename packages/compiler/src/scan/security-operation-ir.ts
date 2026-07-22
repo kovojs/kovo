@@ -1634,6 +1634,21 @@ export function scanBrowserSecurityOperations(
   );
   for (let index = 0; index < stateWriteSnapshot.length; index += 1) {
     const candidate = stateWriteSnapshot[index]!;
+    const retainedIdentity = browserStateWriteRetainedIdentityNode(
+      sourceFile,
+      body,
+      candidate.node,
+      aliases,
+      compilerCreateSet<string>(),
+    );
+    if (retainedIdentity !== undefined) {
+      appendViolation(
+        retainedIdentity,
+        'computed-security-operation',
+        `${candidate.detail} cannot retain a local object/function identity; construct fresh recursive JSON or pass a compiler-proven scalar at the state-write sink`,
+      );
+      continue;
+    }
     const unsafe = browserStateWriteExecutableEscapeNode(
       sourceFile,
       body,
@@ -2441,6 +2456,174 @@ function browserStateMethodStoredArguments(
   }
   const first = method === 'fill' ? call.arguments[0] : undefined;
   return first === undefined ? [] : [first];
+}
+
+/**
+ * SPEC §4.3/§5.2: a state write may retain a fresh recursive-JSON construction or a proven
+ * scalar, never an app-visible local object/function identity. The `aliased` bit distinguishes a
+ * direct fresh literal from the same literal reached through a local binding or property.
+ */
+function browserStateWriteRetainedIdentityNode(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+  aliased = false,
+): ts.Node | undefined {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}:${aliased ? 1 : 0}`;
+  if (compilerSetHas(active, key)) return current;
+  compilerSetAdd(active, key);
+  try {
+    if (
+      ts.isArrowFunction(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isClassExpression(current)
+    ) {
+      return current;
+    }
+    if (ts.isIdentifier(current)) {
+      if (
+        browserExpressionProvenance(current, aliases, boundary) === 'state' &&
+        expressionPath(current) === 'state'
+      ) {
+        return current;
+      }
+      if (securityIrIdentifierBindingScope(sourceFile, current) !== 'local') return undefined;
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      return initializer === undefined
+        ? undefined
+        : browserStateWriteRetainedIdentityNode(
+            sourceFile,
+            boundary,
+            initializer,
+            aliases,
+            active,
+            true,
+          );
+    }
+    if (ts.isObjectLiteralExpression(current)) {
+      if (aliased) return current;
+      const properties = compilerSnapshotDenseArray(
+        current.properties,
+        'State retained-identity object properties',
+      );
+      for (let index = 0; index < properties.length; index += 1) {
+        const property = properties[index]!;
+        const value = ts.isPropertyAssignment(property)
+          ? property.initializer
+          : ts.isShorthandPropertyAssignment(property)
+            ? (property.objectAssignmentInitializer ?? property.name)
+            : undefined;
+        if (value === undefined) continue;
+        const retained = browserStateWriteRetainedIdentityNode(
+          sourceFile,
+          boundary,
+          value,
+          aliases,
+          active,
+        );
+        if (retained !== undefined) return retained;
+      }
+      return undefined;
+    }
+    if (ts.isArrayLiteralExpression(current)) {
+      if (aliased) return current;
+      const elements = compilerSnapshotDenseArray(
+        current.elements,
+        'State retained-identity array elements',
+      );
+      for (let index = 0; index < elements.length; index += 1) {
+        const element = elements[index]!;
+        if (ts.isOmittedExpression(element) || ts.isSpreadElement(element)) continue;
+        const retained = browserStateWriteRetainedIdentityNode(
+          sourceFile,
+          boundary,
+          element,
+          aliases,
+          active,
+        );
+        if (retained !== undefined) return retained;
+      }
+      return undefined;
+    }
+    if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      if (browserExpressionProvenance(current, aliases, boundary) === 'state') return undefined;
+      const member = staticMember(current);
+      const receiver = member === undefined ? undefined : unwrapExpression(member.receiver);
+      if (member === undefined || receiver === undefined || !ts.isIdentifier(receiver)) {
+        return undefined;
+      }
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, receiver);
+      const value =
+        initializer === undefined
+          ? undefined
+          : browserStaticObjectPropertyValue(initializer, member.name);
+      return value === undefined
+        ? undefined
+        : browserStateWriteRetainedIdentityNode(sourceFile, boundary, value, aliases, active, true);
+    }
+    if (ts.isConditionalExpression(current)) {
+      return (
+        browserStateWriteRetainedIdentityNode(
+          sourceFile,
+          boundary,
+          current.whenTrue,
+          aliases,
+          active,
+          aliased,
+        ) ??
+        browserStateWriteRetainedIdentityNode(
+          sourceFile,
+          boundary,
+          current.whenFalse,
+          aliases,
+          active,
+          aliased,
+        )
+      );
+    }
+    if (ts.isBinaryExpression(current)) {
+      if (current.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+        return browserStateWriteRetainedIdentityNode(
+          sourceFile,
+          boundary,
+          current.right,
+          aliases,
+          active,
+          aliased,
+        );
+      }
+      if (
+        current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+        current.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+        current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+      ) {
+        return (
+          browserStateWriteRetainedIdentityNode(
+            sourceFile,
+            boundary,
+            current.left,
+            aliases,
+            active,
+            aliased,
+          ) ??
+          browserStateWriteRetainedIdentityNode(
+            sourceFile,
+            boundary,
+            current.right,
+            aliases,
+            active,
+            aliased,
+          )
+        );
+      }
+    }
+    return undefined;
+  } finally {
+    compilerSetDelete(active, key);
+  }
 }
 
 /**
@@ -3667,11 +3850,21 @@ function classifyBrowserCall(
     return;
   }
   if (provenance === 'unknown' && globalMember === 'Object.assign') {
-    const stateDerivedBindings = browserStateDerivedBindingNames(body, aliases);
     const argumentsSnapshot = compilerSnapshotDenseArray(
       call.arguments,
       'Finite browser Object.assign arguments',
     );
+    if (
+      argumentsSnapshot[0] === undefined ||
+      browserObjectAssignDestination(sourceFile, argumentsSnapshot[0]!) === undefined
+    ) {
+      appendViolation(
+        argumentsSnapshot[0] ?? call,
+        'computed-security-operation',
+        'Object.assign requires one exact fresh handler-local destination',
+      );
+      return;
+    }
     for (let index = 1; index < argumentsSnapshot.length; index += 1) {
       const source = argumentsSnapshot[index]!;
       if (
@@ -3691,32 +3884,19 @@ function classifyBrowserCall(
         return;
       }
     }
-    let carriesState = false;
-    for (let index = 1; index < argumentsSnapshot.length; index += 1) {
-      if (
-        browserExpressionMayCarryStateOrDerived(
-          argumentsSnapshot[index]!,
-          stateDerivedBindings,
-          aliases,
-          body,
-        )
-      ) {
-        carriesState = true;
-        break;
-      }
-    }
-    if (
-      carriesState &&
-      (argumentsSnapshot[0] === undefined ||
-        browserObjectAssignDestination(sourceFile, argumentsSnapshot[0]!) === undefined)
-    ) {
-      appendViolation(
-        argumentsSnapshot[0] ?? call,
-        'computed-security-operation',
-        'state-derived Object.assign requires one exact fresh handler-local destination',
-      );
-      return;
-    }
+  }
+  if (
+    provenance === 'unknown' &&
+    globalMember === 'Object.freeze' &&
+    call.arguments[0] !== undefined &&
+    browserExpressionMayCarryState(call.arguments[0], aliases, body)
+  ) {
+    appendViolation(
+      call.arguments[0],
+      'computed-security-operation',
+      'Object.freeze cannot change handler-state object identity or descriptors',
+    );
+    return;
   }
   if (
     provenance === 'unknown' &&
