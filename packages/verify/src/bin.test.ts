@@ -23,31 +23,35 @@ describe('kovo-verify CLI', () => {
     const source = 'export {};';
     mkdirSync(path.join(artifactRoot, '@kovojs/server/dist'), { recursive: true });
     writeFileSync(path.join(artifactRoot, module), source, 'utf8');
+    const manifest = { exports: { '.': './dist/index.mjs' }, name: '@kovojs/server' };
+    writeFileSync(path.join(artifactRoot, '@kovojs/server/package.json'), JSON.stringify(manifest));
+    const policy = policyFor(module, manifest);
+    const policyPath = path.join(root, 'policy.json');
+    writeFileSync(policyPath, policy);
     const certificatePath = path.join(root, 'certificate.json');
     writeFileSync(
       certificatePath,
       `${JSON.stringify({
-        artifacts: [
-          {
-            path: module,
-            sha512: `sha512-${createHash('sha512').update(source).digest('base64')}`,
-          },
-        ],
+        artifacts: [module],
         cap: { [module]: [] },
         domain: KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
         doors: [],
         edges: [],
         opaque: [],
+        policySha512: sha512(policy),
         roots: [],
         schema: 'kovo.certificate/v1',
       })}\n`,
     );
     let stdout = '';
     let stderr = '';
-    const exitCode = await runKovoVerify([certificatePath, '--artifacts', artifactRoot], {
-      stderr: (text) => (stderr += text),
-      stdout: (text) => (stdout += text),
-    });
+    const exitCode = await runKovoVerify(
+      [certificatePath, '--policy', policyPath, '--artifacts', artifactRoot],
+      {
+        stderr: (text) => (stderr += text),
+        stdout: (text) => (stdout += text),
+      },
+    );
     expect(exitCode).toBe(0);
     expect(stderr).toBe('');
     expect(stdout).toBe(
@@ -65,6 +69,12 @@ describe('kovo-verify CLI', () => {
       "import 'node:child_process';",
       'utf8',
     );
+    const module = '@kovojs/server/dist/index.mjs';
+    const manifest = { exports: { '.': './dist/index.mjs' }, name: '@kovojs/server' };
+    writeFileSync(path.join(artifactRoot, '@kovojs/server/package.json'), JSON.stringify(manifest));
+    const policy = policyFor(module, manifest);
+    const policyPath = path.join(root, 'policy.json');
+    writeFileSync(policyPath, policy);
     const certificatePath = path.join(root, 'certificate.json');
     writeFileSync(
       certificatePath,
@@ -75,6 +85,7 @@ describe('kovo-verify CLI', () => {
         doors: [],
         edges: [],
         opaque: [],
+        policySha512: sha512(policy),
         roots: [],
         schema: 'kovo.certificate/v1',
       })}\n`,
@@ -82,10 +93,13 @@ describe('kovo-verify CLI', () => {
 
     let stdout = '';
     let stderr = '';
-    const exitCode = await runKovoVerify([certificatePath, '--artifacts', artifactRoot], {
-      stderr: (text) => (stderr += text),
-      stdout: (text) => (stdout += text),
-    });
+    const exitCode = await runKovoVerify(
+      [certificatePath, '--policy', policyPath, '--artifacts', artifactRoot],
+      {
+        stderr: (text) => (stderr += text),
+        stdout: (text) => (stdout += text),
+      },
+    );
 
     expect(exitCode).toBe(1);
     expect(stderr).toBe('');
@@ -97,6 +111,32 @@ describe('kovo-verify CLI', () => {
     await expect(
       runKovoVerify([], { stderr: (text) => (stderr += text), stdout: () => {} }),
     ).resolves.toBe(2);
-    expect(stderr).toBe('usage: kovo-verify <certificate.json> --artifacts <root>\n');
+    expect(stderr).toBe(
+      'usage: kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>\n',
+    );
   });
 });
+
+function policyFor(module: string, manifest: { exports: { '.': string }; name: string }): string {
+  return `${JSON.stringify(
+    {
+      artifacts: [{ path: module, sha512: sha512('export {};') }],
+      doors: [],
+      opaque: [],
+      packages: [
+        {
+          manifest,
+          name: manifest.name,
+        },
+      ],
+      roots: [],
+      schema: 'kovo.certificate-policy/v1',
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function sha512(bytes: string): string {
+  return `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+}

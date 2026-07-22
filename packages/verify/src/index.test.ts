@@ -6,6 +6,7 @@ import {
   formatCertificateVerification,
   KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
   type KovoCertificateArtifactSource,
+  type KovoCertificatePolicyV1,
   type KovoCertificateV1,
   verifyCertificate,
 } from './index.js';
@@ -25,7 +26,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       roots: [{ module: rootModule, rootKind: 'endpoint' }],
     });
 
-    await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({
+    await expect(verifyBound(certificate, artifacts)).resolves.toMatchObject({
       findings: [],
       ok: true,
       stats: { artifacts: 2, edges: 1, roots: 1 },
@@ -39,7 +40,11 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       [rootModule]: "require('node:child_process');\nexport const root = true;",
     });
 
-    const result = await verifyCertificate(certificate, injected);
+    const result = await verifyCertificate(
+      certificate,
+      policyBytesFor(certificate, original),
+      injected,
+    );
     expect(result.ok).toBe(false);
     expect(result.findings.map((finding) => finding.obligation)).toEqual(['coverage']);
     expect(result.findings[0]).toMatchObject({ code: 'artifact-hash' });
@@ -55,7 +60,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       edges: [],
     });
 
-    const result = await verifyCertificate(certificate, artifacts);
+    const result = await verifyBound(certificate, artifacts);
     expect(result.findings.map((finding) => finding.obligation)).toEqual(['coverage']);
     expect(result.findings[0]).toMatchObject({ code: 'edge-missing' });
   });
@@ -66,7 +71,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     });
     const certificate = certificateFor(artifacts, { cap: { [rootModule]: [] } });
 
-    const result = await verifyCertificate(certificate, artifacts);
+    const result = await verifyBound(certificate, artifacts);
     expect(result.findings.map((finding) => finding.obligation)).toEqual(['stability']);
     expect(result.findings[0]).toMatchObject({ code: 'local-capability-missing' });
     expect(result.findings[0]?.message).toContain('process');
@@ -81,7 +86,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       cap: { [rootModule]: [], [workerModule]: ['filesystem'] },
       edges: [[rootModule, workerModule]],
     });
-    const unstableResult = await verifyCertificate(unstable, artifacts);
+    const unstableResult = await verifyBound(unstable, artifacts);
     expect(unstableResult.findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'edge-capability-missing', obligation: 'stability' }),
@@ -93,7 +98,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       edges: [[rootModule, workerModule]],
       roots: [{ module: rootModule, rootKind: 'endpoint' }],
     });
-    const unclosedResult = await verifyCertificate(unclosed, artifacts);
+    const unclosedResult = await verifyBound(unclosed, artifacts);
     expect(unclosedResult.findings).toEqual([
       expect.objectContaining({ code: 'root-capability-unclosed', obligation: 'closure' }),
     ]);
@@ -112,7 +117,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       roots: [{ module: rootModule, rootKind: 'endpoint' }],
     });
 
-    await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({ ok: true });
+    await expect(verifyBound(certificate, artifacts)).resolves.toMatchObject({ ok: true });
   });
 
   it('rejects an authority-bearing certificate that omits every real root', async () => {
@@ -124,7 +129,11 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       roots: [],
     });
 
-    await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({
+    await expect(
+      verifyBound(certificate, artifacts, {
+        roots: [{ module: rootModule, rootKind: 'application' }],
+      }),
+    ).resolves.toMatchObject({
       findings: expect.arrayContaining([expect.objectContaining({ obligation: 'closure' })]),
       ok: false,
     });
@@ -140,8 +149,46 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       roots: [{ module: rootModule, rootKind: 'application' }],
     });
 
-    await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({
+    await expect(verifyBound(certificate, artifacts, { doors: [] })).resolves.toMatchObject({
       findings: expect.arrayContaining([expect.objectContaining({ obligation: 'closure' })]),
+      ok: false,
+    });
+  });
+
+  it('rejects a certificate-authored opaque premise absent from independently reviewed policy', async () => {
+    const artifacts = artifactSource({
+      [rootModule]: "import 'third-party-parser';",
+    });
+    const certificate = certificateFor(artifacts, {
+      opaque: [
+        {
+          module: rootModule,
+          reason:
+            'imports external module "third-party-parser" outside the nine-kind lexical capability domain',
+        },
+      ],
+    });
+
+    await expect(verifyBound(certificate, artifacts, { opaque: [] })).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'policy-opaque' })]),
+      ok: false,
+    });
+  });
+
+  it('rejects noncanonical or differently bound reviewer policy bytes', async () => {
+    const artifacts = artifactSource({ [rootModule]: 'export {};' });
+    const certificate = certificateFor(artifacts);
+    const canonical = policyBytesFor(certificate, artifacts);
+    const noncanonical = Buffer.from(JSON.stringify(JSON.parse(canonical.toString('utf8'))));
+    await expect(verifyCertificate(certificate, noncanonical, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'policy-noncanonical' })]),
+      ok: false,
+    });
+    const different = policyBytesFor(certificate, artifacts, {
+      roots: [{ module: rootModule, rootKind: 'application' }],
+    });
+    await expect(verifyCertificate(certificate, different, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'policy-hash' })]),
       ok: false,
     });
   });
@@ -152,19 +199,19 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       [rootModule]: 'export {};',
       [workerModule]: 'export {};',
     });
-    expect((await verifyCertificate(certificateFor(one), extra)).findings).toEqual(
+    expect((await verifyBound(certificateFor(one), extra)).findings).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'artifact-unlisted' })]),
     );
 
     const computed = artifactSource({
       [rootModule]: 'export const load = (name) => import(name);',
     });
-    expect((await verifyCertificate(certificateFor(computed), computed)).findings).toEqual(
+    expect((await verifyBound(certificateFor(computed), computed)).findings).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'computed-import' })]),
     );
 
     const unresolved = artifactSource({ [rootModule]: "import './missing.mjs';" });
-    expect((await verifyCertificate(certificateFor(unresolved), unresolved)).findings).toEqual(
+    expect((await verifyBound(certificateFor(unresolved), unresolved)).findings).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'edge-unresolved' })]),
     );
 
@@ -174,7 +221,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       "import '/absolute.mjs';",
     ]) {
       const unsupported = artifactSource({ [rootModule]: source });
-      expect((await verifyCertificate(certificateFor(unsupported), unsupported)).findings).toEqual(
+      expect((await verifyBound(certificateFor(unsupported), unsupported)).findings).toEqual(
         expect.arrayContaining([expect.objectContaining({ code: 'unsupported-import' })]),
       );
     }
@@ -186,11 +233,11 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     });
     const reason =
       'imports external module "third-party-parser" outside the nine-kind lexical capability domain';
-    expect((await verifyCertificate(certificateFor(artifacts), artifacts)).findings).toEqual([
+    expect((await verifyBound(certificateFor(artifacts), artifacts)).findings).toEqual([
       expect.objectContaining({ code: 'opaque-missing', obligation: 'coverage' }),
     ]);
     await expect(
-      verifyCertificate(
+      verifyBound(
         certificateFor(artifacts, { opaque: [{ module: rootModule, reason }] }),
         artifacts,
       ),
@@ -222,7 +269,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
             }
           : {}),
       });
-      const result = await verifyCertificate(certificate, artifacts);
+      const result = await verifyBound(certificate, artifacts);
       expect(result.findings, specifier).toEqual([
         expect.objectContaining({
           code: 'local-capability-missing',
@@ -270,7 +317,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
 
     for (const { capability, source } of specimens) {
       const artifacts = artifactSource({ [rootModule]: source });
-      const result = await verifyCertificate(certificateFor(artifacts), artifacts);
+      const result = await verifyBound(certificateFor(artifacts), artifacts);
       expect(result.findings, source).toEqual([
         expect.objectContaining({
           code: 'local-capability-missing',
@@ -299,18 +346,15 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     for (const malformed of [
       { ...valid, extra: true },
       { ...valid, domain: [...KOVO_CERTIFICATE_CAPABILITY_DOMAIN, 'socket'] },
-      { ...valid, artifacts: [{ ...valid.artifacts[0]!, path: '../root.mjs' }] },
-      {
-        ...valid,
-        artifacts: [{ ...valid.artifacts[0]!, path: '@kovojs/server/private/dist/root.mjs' }],
-      },
+      { ...valid, artifacts: ['../root.mjs'] },
+      { ...valid, artifacts: ['@kovojs/server/private/dist/root.mjs'] },
       { ...valid, artifacts: [valid.artifacts[0]!, valid.artifacts[0]!] },
       { ...valid, artifacts: nonenumerableArrayProperty },
       { ...valid, artifacts: noncanonicalArrayIndex },
       inherited,
       symbolProperty,
     ]) {
-      const result = await verifyCertificate(malformed, artifacts);
+      const result = await verifyBound(malformed, artifacts);
       expect(result.ok).toBe(false);
       expect(result.findings.every((finding) => finding.obligation === 'schema')).toBe(true);
     }
@@ -318,7 +362,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
 
   it('renders one byte-stable report with obligation-tagged failures', async () => {
     const artifacts = artifactSource({ [rootModule]: "import 'node:process';" });
-    const result = await verifyCertificate(
+    const result = await verifyBound(
       certificateFor(artifacts, { cap: { [rootModule]: [] } }),
       artifacts,
     );
@@ -337,21 +381,60 @@ function certificateFor(
   overrides: Partial<KovoCertificateV1> = {},
 ): KovoCertificateV1 {
   const paths = [...artifacts.listArtifactPaths()].sort();
-  const artifactRows = paths.map((path) => ({
-    path,
-    sha512: sha512(artifacts.readArtifact(path)!),
-  }));
-  return {
-    artifacts: artifactRows,
+  const certificate = {
+    artifacts: paths,
     cap: Object.fromEntries(paths.map((path) => [path, []])),
     domain: KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
     doors: [],
     edges: [],
     opaque: [],
+    policySha512: sha512(Buffer.alloc(0)),
     roots: [],
     schema: 'kovo.certificate/v1',
     ...overrides,
   };
+  const policyBytes = policyBytesFor(certificate, artifacts);
+  return { ...certificate, policySha512: sha512(policyBytes) };
+}
+
+async function verifyBound(
+  certificate: KovoCertificateV1,
+  artifacts: KovoCertificateArtifactSource,
+  policyOverrides: Partial<KovoCertificatePolicyV1> = {},
+) {
+  const policyBytes = policyBytesFor(certificate, artifacts, policyOverrides);
+  const bound =
+    Object.keys(policyOverrides).length === 0
+      ? certificate
+      : { ...certificate, policySha512: sha512(policyBytes) };
+  return await verifyCertificate(bound, policyBytes, artifacts);
+}
+
+function policyBytesFor(
+  certificate: Pick<KovoCertificateV1, 'artifacts' | 'doors' | 'opaque' | 'roots'>,
+  artifactSource: KovoCertificateArtifactSource,
+  overrides: Partial<KovoCertificatePolicyV1> = {},
+): Buffer {
+  const artifactPaths = certificate.artifacts;
+  const packageNames = [
+    ...new Set(artifactPaths.map((entry) => entry.split('/').slice(0, 2).join('/'))),
+  ].sort();
+  const policy: KovoCertificatePolicyV1 = {
+    artifacts: artifactPaths.map((path) => ({
+      path,
+      sha512: sha512(artifactSource.readArtifact(path) ?? Buffer.alloc(0)),
+    })),
+    doors: certificate.doors,
+    opaque: certificate.opaque,
+    packages: packageNames.map((name) => ({
+      manifest: { name },
+      name,
+    })),
+    roots: certificate.roots,
+    schema: 'kovo.certificate-policy/v1',
+    ...overrides,
+  };
+  return Buffer.from(`${JSON.stringify(policy, null, 2)}\n`, 'utf8');
 }
 
 function artifactSource(sources: Record<string, string>): KovoCertificateArtifactSource {

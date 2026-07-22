@@ -36,7 +36,7 @@ export type KovoCertificateRootKind =
 
 /** Frozen independently-checkable artifact certificate (Plan 3 §2.1). */
 export interface KovoCertificateV1 {
-  artifacts: readonly { path: string; sha512: string }[];
+  artifacts: readonly string[];
   cap: Readonly<Record<string, readonly KovoCertificateCapabilityKind[]>>;
   domain: typeof KOVO_CERTIFICATE_CAPABILITY_DOMAIN;
   doors: readonly {
@@ -46,8 +46,22 @@ export interface KovoCertificateV1 {
   }[];
   edges: readonly (readonly [string, string])[];
   opaque: readonly { module: string; reason: string }[];
+  policySha512: string;
   roots: readonly { module: string; rootKind: KovoCertificateRootKind }[];
   schema: 'kovo.certificate/v1';
+}
+
+/** Independently supplied reviewer policy that owns certificate scope and authority posture. */
+export interface KovoCertificatePolicyV1 {
+  artifacts: readonly { path: string; sha512: string }[];
+  doors: KovoCertificateV1['doors'];
+  opaque: KovoCertificateV1['opaque'];
+  packages: readonly {
+    manifest: Readonly<Record<string, unknown>>;
+    name: string;
+  }[];
+  roots: KovoCertificateV1['roots'];
+  schema: 'kovo.certificate-policy/v1';
 }
 
 /** One independently-derived checker failure. */
@@ -82,21 +96,37 @@ export interface KovoCertificateVerificationResult {
 /** Verify a certificate without importing Kovo's analyzer or runtime. */
 export async function verifyCertificate(
   certificateInput: unknown,
+  policyBytes: Uint8Array,
+  artifacts: KovoCertificateArtifactSource,
+): Promise<KovoCertificateVerificationResult> {
+  const policySnapshot = Uint8Array.from(policyBytes);
+  return await verifyCertificateSnapshot(certificateInput, policySnapshot, artifacts);
+}
+
+async function verifyCertificateSnapshot(
+  certificateInput: unknown,
+  policyBytes: Uint8Array,
   artifacts: KovoCertificateArtifactSource,
 ): Promise<KovoCertificateVerificationResult> {
   const schemaFindings: KovoCertificateFinding[] = [];
   const certificate = validateCertificate(certificateInput, schemaFindings);
-  if (certificate === undefined) return verificationResult(schemaFindings);
+  const policy = validatePolicyBytes(policyBytes, schemaFindings);
+  if (certificate === undefined || policy === undefined) {
+    return verificationResult(schemaFindings, certificate);
+  }
+
+  const policyFindings = compareCertificatePolicy(certificate, policy, policyBytes);
+  if (policyFindings.length > 0) return verificationResult(policyFindings, certificate);
 
   const coverageFindings: KovoCertificateFinding[] = [];
   const artifactPaths = snapshotArtifactPaths(artifacts, coverageFindings);
-  const expectedPaths = certificate.artifacts.map((artifact) => artifact.path);
+  const expectedPaths = policy.artifacts.map((entry) => entry.path);
   compareArtifactCoverage(expectedPaths, artifactPaths, coverageFindings);
   compareCapabilityCoverage(certificate, expectedPaths, coverageFindings);
   compareReferencedModuleCoverage(certificate, new Set(expectedPaths), coverageFindings);
 
   const bytesByPath = new Map<string, Uint8Array>();
-  for (const artifact of certificate.artifacts) {
+  for (const artifact of policy.artifacts) {
     const bytes = snapshotArtifactBytes(artifacts, artifact.path, coverageFindings);
     if (bytes === undefined) continue;
     bytesByPath.set(artifact.path, bytes);
@@ -148,27 +178,31 @@ export async function verifyCertificate(
   if (stabilityFindings.length > 0) {
     return verificationResult(stabilityFindings, certificate);
   }
-  return verificationResult(checkClosure(certificate), certificate);
+  return verificationResult(checkClosure(certificate, policy), certificate);
 }
 
 /**
  * Verify against regular non-symlink files below an artifact root such as an unpacked
- * `node_modules` directory. Only package dist trees named by the certificate are enumerated.
+ * `node_modules` directory. Only package dist trees named by the separately supplied policy are
+ * enumerated; executable siblings and package entrypoint retargeting fail closed.
  */
 export async function verifyCertificateDirectory(
   certificateInput: unknown,
+  policyBytes: Uint8Array,
   artifactRoot: string,
 ): Promise<KovoCertificateVerificationResult> {
+  const policySnapshot = Uint8Array.from(policyBytes);
   const findings: KovoCertificateFinding[] = [];
   const certificate = validateCertificate(certificateInput, findings);
-  if (certificate === undefined) return verificationResult(findings);
-  return await verifyCertificate(
-    certificate,
-    directoryArtifactSource(
-      artifactRoot,
-      certificate.artifacts.map((artifact) => artifact.path),
-    ),
-  );
+  const policy = validatePolicyBytes(policySnapshot, findings);
+  if (certificate === undefined || policy === undefined) {
+    return verificationResult(findings, certificate);
+  }
+  const directory = directoryArtifactSource(artifactRoot, policy);
+  if (directory.findings.length > 0) {
+    return verificationResult(directory.findings, certificate);
+  }
+  return await verifyCertificateSnapshot(certificate, policySnapshot, directory.source);
 }
 
 /** Render a byte-stable human report for the standalone verifier CLI. */
@@ -248,7 +282,7 @@ function validateCertificate(
   const record = exactRecord(
     input,
     'certificate',
-    ['artifacts', 'cap', 'domain', 'doors', 'edges', 'opaque', 'roots', 'schema'],
+    ['artifacts', 'cap', 'domain', 'doors', 'edges', 'opaque', 'policySha512', 'roots', 'schema'],
     findings,
   );
   if (record === undefined) return undefined;
@@ -262,6 +296,11 @@ function validateCertificate(
   const roots = validateRoots(record.roots, findings);
   const doors = validateDoors(record.doors, findings);
   const opaque = validateOpaque(record.opaque, findings);
+  if (!isSha512(record.policySha512)) {
+    findings.push(
+      finding('schema', 'policy-sha512', 'policySha512 must be a canonical sha512 integrity'),
+    );
+  }
   if (
     findings.length > 0 ||
     artifacts === undefined ||
@@ -280,9 +319,257 @@ function validateCertificate(
     doors,
     edges,
     opaque,
+    policySha512: record.policySha512 as string,
     roots,
     schema: 'kovo.certificate/v1',
   };
+}
+
+function validatePolicyBytes(
+  input: Uint8Array,
+  findings: KovoCertificateFinding[],
+): KovoCertificatePolicyV1 | undefined {
+  if (!(input instanceof Uint8Array)) {
+    findings.push(finding('schema', 'policy-bytes', 'policy must be supplied as exact bytes'));
+    return undefined;
+  }
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(input));
+  } catch {
+    findings.push(finding('schema', 'policy-utf8', 'policy bytes must be valid UTF-8'));
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    findings.push(finding('schema', 'policy-json', 'policy bytes must contain valid JSON'));
+    return undefined;
+  }
+  const policy = validatePolicy(parsed, findings);
+  if (policy === undefined) return undefined;
+  if (text !== stablePolicyJson(policy)) {
+    findings.push(
+      finding(
+        'schema',
+        'policy-noncanonical',
+        'policy bytes must equal the canonical two-space JSON encoding with one trailing newline',
+      ),
+    );
+    return undefined;
+  }
+  return policy;
+}
+
+function validatePolicy(
+  input: unknown,
+  findings: KovoCertificateFinding[],
+): KovoCertificatePolicyV1 | undefined {
+  const record = exactRecord(
+    input,
+    'policy',
+    ['artifacts', 'doors', 'opaque', 'packages', 'roots', 'schema'],
+    findings,
+  );
+  if (record === undefined) return undefined;
+  if (record.schema !== 'kovo.certificate-policy/v1') {
+    findings.push(
+      finding('schema', 'policy-schema', 'policy schema must equal kovo.certificate-policy/v1'),
+    );
+  }
+  const artifacts = validatePolicyArtifacts(record.artifacts, findings);
+  const doors = validateDoors(record.doors, findings);
+  const opaque = validateOpaque(record.opaque, findings);
+  const artifactSet = new Set(artifacts?.map((entry) => entry.path) ?? []);
+  const packages = validatePolicyPackages(record.packages, artifactSet, findings);
+  const roots = validateRoots(record.roots, findings);
+  if (
+    artifacts === undefined ||
+    doors === undefined ||
+    opaque === undefined ||
+    packages === undefined ||
+    roots === undefined
+  ) {
+    return undefined;
+  }
+  const artifactPackages = [
+    ...new Set(artifacts.map((artifact) => packageNameFromArtifact(artifact.path))),
+  ].sort(compareStrings);
+  const policyPackages = packages.map((entry) => entry.name);
+  if (!sameValues(artifactPackages, policyPackages)) {
+    findings.push(
+      finding(
+        'schema',
+        'policy-package-scope',
+        'policy packages must exactly equal the package set named by policy artifacts',
+      ),
+    );
+  }
+  for (const row of [...roots, ...doors, ...opaque]) {
+    if (!artifactSet.has(row.module)) {
+      findings.push(
+        finding('schema', 'policy-module-unlisted', `${row.module} is outside policy artifacts`),
+      );
+    }
+  }
+  if (findings.length > 0) return undefined;
+  return {
+    artifacts,
+    doors,
+    opaque,
+    packages,
+    roots,
+    schema: 'kovo.certificate-policy/v1',
+  };
+}
+
+function validatePolicyArtifacts(
+  value: unknown,
+  findings: KovoCertificateFinding[],
+): KovoCertificatePolicyV1['artifacts'] | undefined {
+  const values = denseArray(value, 'policy.artifacts', findings);
+  if (values === undefined) return undefined;
+  const artifacts: { path: string; sha512: string }[] = [];
+  for (const [index, item] of values.entries()) {
+    const row = exactRecord(item, `policy.artifacts[${index}]`, ['path', 'sha512'], findings);
+    if (row === undefined || !isCanonicalArtifactPath(row.path) || !isSha512(row.sha512)) {
+      findings.push(
+        finding(
+          'schema',
+          'policy-artifact',
+          `policy.artifacts[${index}] must contain a canonical path and sha512`,
+        ),
+      );
+      continue;
+    }
+    artifacts.push({ path: row.path, sha512: row.sha512 });
+  }
+  if (artifacts.length === 0) {
+    findings.push(
+      finding('schema', 'policy-artifacts', 'policy.artifacts must be a non-empty array'),
+    );
+  }
+  validateSortedUnique(artifacts, (entry) => entry.path, 'policy.artifacts', findings);
+  return artifacts;
+}
+
+function validatePolicyPackages(
+  value: unknown,
+  artifactSet: ReadonlySet<string>,
+  findings: KovoCertificateFinding[],
+): KovoCertificatePolicyV1['packages'] | undefined {
+  const values = denseArray(value, 'policy.packages', findings);
+  if (values === undefined) return undefined;
+  const packages: KovoCertificatePolicyV1['packages'][number][] = [];
+  for (const [index, item] of values.entries()) {
+    const label = `policy.packages[${index}]`;
+    const row = exactRecord(item, label, ['manifest', 'name'], findings);
+    if (row === undefined) continue;
+    if (!isCanonicalPackageName(row.name)) {
+      findings.push(finding('schema', 'policy-package', `${label}.name is invalid`));
+      continue;
+    }
+    const manifest = snapshotJsonRecord(row.manifest, `${label}.manifest`, findings);
+    if (manifest === undefined) continue;
+    if (manifest.name !== row.name || Object.hasOwn(manifest, 'publishConfig')) {
+      findings.push(
+        finding(
+          'schema',
+          'policy-manifest',
+          `${label}.manifest must have the exact package name and no publishConfig`,
+        ),
+      );
+      continue;
+    }
+    try {
+      for (const target of packageManifestRuntimeTargets(manifest, row.name)) {
+        if (!artifactSet.has(target)) {
+          findings.push(
+            finding(
+              'schema',
+              'policy-entrypoint-unlisted',
+              `${row.name} runtime target ${target} is outside policy artifacts`,
+            ),
+          );
+        }
+      }
+    } catch (error) {
+      findings.push(
+        finding(
+          'schema',
+          'policy-manifest-entrypoint',
+          `${label}.manifest is unsupported: ${error instanceof Error ? error.message : 'unknown error'}`,
+        ),
+      );
+    }
+    packages.push({ manifest, name: row.name });
+  }
+  validateSortedUnique(packages, (entry) => entry.name, 'policy.packages', findings);
+  if (packages.length === 0) {
+    findings.push(finding('schema', 'policy-packages', 'policy.packages must be non-empty'));
+  }
+  return packages;
+}
+
+function compareCertificatePolicy(
+  certificate: KovoCertificateV1,
+  policy: KovoCertificatePolicyV1,
+  policyBytes: Uint8Array,
+): KovoCertificateFinding[] {
+  const findings: KovoCertificateFinding[] = [];
+  const actualPolicySha512 = sha512(policyBytes);
+  if (certificate.policySha512 !== actualPolicySha512) {
+    findings.push(
+      finding(
+        'coverage',
+        'policy-hash',
+        `certificate policySha512 mismatch: expected ${certificate.policySha512}, observed ${actualPolicySha512}`,
+      ),
+    );
+  }
+  const policyArtifacts = policy.artifacts.map((entry) => entry.path);
+  if (!sameValues(certificate.artifacts, policyArtifacts)) {
+    findings.push(
+      finding(
+        'coverage',
+        'policy-artifact-scope',
+        'certificate artifacts must exactly equal reviewer policy artifacts',
+      ),
+    );
+  }
+  if (JSON.stringify(certificate.roots) !== JSON.stringify(policy.roots)) {
+    findings.push(
+      finding(
+        'closure',
+        'policy-roots',
+        'certificate roots must exactly equal reviewer policy roots',
+      ),
+    );
+  }
+  if (JSON.stringify(certificate.doors) !== JSON.stringify(policy.doors)) {
+    findings.push(
+      finding(
+        'closure',
+        'policy-doors',
+        'certificate doors must exactly equal reviewer policy doors',
+      ),
+    );
+  }
+  if (JSON.stringify(certificate.opaque) !== JSON.stringify(policy.opaque)) {
+    findings.push(
+      finding(
+        'coverage',
+        'policy-opaque',
+        'certificate opaque assumptions must exactly equal reviewer policy opaque assumptions',
+      ),
+    );
+  }
+  return findings.sort(compareFindings);
+}
+
+function stablePolicyJson(policy: KovoCertificatePolicyV1): string {
+  return `${JSON.stringify(policy, null, 2)}\n`;
 }
 
 function validateDomain(value: unknown, findings: KovoCertificateFinding[]): void {
@@ -308,30 +595,22 @@ function validateArtifacts(
 ): KovoCertificateV1['artifacts'] | undefined {
   const values = denseArray(value, 'artifacts', findings);
   if (values === undefined) return undefined;
-  const rows: { path: string; sha512: string }[] = [];
+  const artifacts: string[] = [];
   for (const [index, item] of values.entries()) {
-    const row = exactRecord(item, `artifacts[${index}]`, ['path', 'sha512'], findings);
-    if (row === undefined) continue;
-    if (!isCanonicalArtifactPath(row.path)) {
+    if (!isCanonicalArtifactPath(item)) {
       findings.push(
         finding(
           'schema',
           'artifact-path',
-          `artifacts[${index}].path must be canonical @kovojs/*/dist/*.mjs`,
+          `artifacts[${index}] must be canonical @kovojs/*/dist/*.mjs`,
         ),
       );
       continue;
     }
-    if (!isSha512(row.sha512)) {
-      findings.push(
-        finding('schema', 'artifact-sha512', `artifacts[${index}].sha512 is not canonical sha512`),
-      );
-      continue;
-    }
-    rows.push({ path: row.path, sha512: row.sha512 });
+    artifacts.push(item);
   }
-  validateSortedUnique(rows, (row) => row.path, 'artifacts', findings);
-  return rows;
+  validateSortedUnique(artifacts, (entry) => entry, 'artifacts', findings);
+  return artifacts;
 }
 
 function validateCapabilityMap(
@@ -587,6 +866,52 @@ function denseArray(
   }
 }
 
+function snapshotJsonRecord(
+  value: unknown,
+  label: string,
+  findings: KovoCertificateFinding[],
+): Record<string, unknown> | undefined {
+  const snapshotted = snapshotJsonValue(value, label, findings, 0);
+  return isPlainJsonRecord(snapshotted) ? snapshotted : undefined;
+}
+
+function snapshotJsonValue(
+  value: unknown,
+  label: string,
+  findings: KovoCertificateFinding[],
+  depth: number,
+): unknown {
+  if (depth > 64) {
+    findings.push(finding('schema', 'json-depth', `${label} exceeds the JSON depth limit`));
+    return undefined;
+  }
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value))
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const values = denseArray(value, label, findings);
+    return values?.map((entry, index) =>
+      snapshotJsonValue(entry, `${label}[${index}]`, findings, depth + 1),
+    );
+  }
+  const record = dataRecord(value, label, findings);
+  if (record === undefined) {
+    findings.push(finding('schema', 'json-value', `${label} must contain only JSON data`));
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.keys(record).map((key) => [
+      key,
+      snapshotJsonValue(record[key], `${label}.${key}`, findings, depth + 1),
+    ]),
+  );
+}
+
 function validateSortedUnique<T>(
   values: readonly T[],
   key: (value: T) => string,
@@ -601,34 +926,267 @@ function validateSortedUnique<T>(
 
 function directoryArtifactSource(
   artifactRoot: string,
-  expectedPaths: readonly string[],
-): KovoCertificateArtifactSource {
-  const root = realpathSync(artifactRoot);
-  const packageNames = [
-    ...new Set(
-      expectedPaths.map((artifactPath) => {
-        const parts = artifactPath.split('/');
-        return `${parts[0]}/${parts[1]}`;
-      }),
-    ),
-  ].sort(compareStrings);
-  return {
-    listArtifactPaths() {
-      const paths: string[] = [];
-      for (const packageName of packageNames) {
-        const dist = checkedPath(root, `${packageName}/dist`, 'directory');
-        collectModuleFiles(root, dist, `${packageName}/dist`, paths);
+  policy: KovoCertificatePolicyV1,
+): { findings: KovoCertificateFinding[]; source: KovoCertificateArtifactSource } {
+  const findings: KovoCertificateFinding[] = [];
+  let root = path.resolve(artifactRoot);
+  const modulePaths: string[] = [];
+  const moduleBytes = new Map<string, Uint8Array>();
+  try {
+    root = realpathSync(root);
+    const actualPackages = listKovoPackageNames(root);
+    const policyPackages = policy.packages.map((entry) => entry.name);
+    comparePackageCoverage(policyPackages, actualPackages, findings);
+    const packageByName = new Map(policy.packages.map((entry) => [entry.name, entry]));
+    for (const packageName of policyPackages) {
+      const packagePolicy = packageByName.get(packageName)!;
+      const manifestPath = checkedPath(root, `${packageName}/package.json`, 'file');
+      try {
+        const manifest = parsePackageManifest(readFileSync(manifestPath, 'utf8'), packageName);
+        comparePackagePolicy(packagePolicy, manifest, findings);
+      } catch (error) {
+        findings.push(
+          finding(
+            'coverage',
+            'manifest-invalid',
+            `${packageName}/package.json is invalid: ${error instanceof Error ? error.message : 'unknown error'}`,
+          ),
+        );
       }
-      return paths.sort(compareStrings);
-    },
-    readArtifact(artifactPath) {
-      const absolute = checkedPath(root, artifactPath, 'file');
-      return Uint8Array.from(readFileSync(absolute));
-    },
-    resolveArtifactSpecifier(_from, specifier) {
-      return resolveDirectoryPackageSpecifier(root, specifier);
+      const dist = checkedPath(root, `${packageName}/dist`, 'directory');
+      collectModuleFiles(root, dist, `${packageName}/dist`, modulePaths, findings);
+    }
+    for (const modulePath of modulePaths) {
+      moduleBytes.set(
+        modulePath,
+        Uint8Array.from(readFileSync(checkedPath(root, modulePath, 'file'))),
+      );
+    }
+  } catch (error) {
+    findings.push(
+      finding(
+        'coverage',
+        'artifact-list',
+        `artifact directory could not be enumerated: ${error instanceof Error ? error.message : 'unknown error'}`,
+      ),
+    );
+  }
+  const paths = modulePaths.sort(compareStrings);
+  return {
+    findings: findings.sort(compareFindings),
+    source: {
+      listArtifactPaths: () => paths,
+      readArtifact(artifactPath) {
+        const bytes = moduleBytes.get(artifactPath);
+        return bytes === undefined ? undefined : Uint8Array.from(bytes);
+      },
+      resolveArtifactSpecifier(_from, specifier) {
+        return resolvePolicyPackageSpecifier(policy, specifier);
+      },
     },
   };
+}
+
+function parsePackageManifest(text: string, packageName: string): Record<string, unknown> {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(text) as unknown;
+  } catch {
+    throw new TypeError('manifest is not valid JSON');
+  }
+  if (!isPlainJsonRecord(manifest) || manifest.name !== packageName) {
+    throw new TypeError(`manifest name must equal ${packageName}`);
+  }
+  if (Object.hasOwn(manifest, 'publishConfig')) {
+    throw new TypeError('installed manifest must not contain publishConfig resolver overrides');
+  }
+  assertJsonValue(manifest, `${packageName} package manifest`);
+  packageManifestRuntimeTargets(manifest, packageName);
+  return manifest;
+}
+
+function packageManifestRuntimeTargets(
+  manifest: Record<string, unknown>,
+  packageName: string,
+): Set<string> {
+  const targets = new Set<string>();
+  if (manifest.exports !== undefined) {
+    const exportsMap = checkerPackageExports(manifest.exports);
+    for (const subpath of Object.keys(exportsMap)) {
+      if (!isCanonicalExportSubpath(subpath)) {
+        throw new TypeError(`exports contains unsupported subpath ${JSON.stringify(subpath)}`);
+      }
+      targets.add(
+        packageManifestTarget(
+          singleManifestRuntimeTarget(exportsMap[subpath], `exports ${JSON.stringify(subpath)}`),
+          packageName,
+        ),
+      );
+    }
+  }
+  for (const target of packageManifestBinTargets(manifest.bin, packageName)) targets.add(target);
+  for (const field of ['main', 'module'] as const) {
+    if (manifest[field] === undefined) continue;
+    if (typeof manifest[field] !== 'string') {
+      throw new TypeError(`${field} must be a string when present`);
+    }
+    targets.add(packageManifestTarget(manifest[field], packageName));
+  }
+  return targets;
+}
+
+function collectManifestRuntimeTargets(value: unknown): Set<string> {
+  if (typeof value === 'string') return new Set([value]);
+  if (Array.isArray(value)) {
+    const targets = new Set<string>();
+    for (const entry of value) {
+      for (const target of collectManifestRuntimeTargets(entry)) targets.add(target);
+    }
+    return targets;
+  }
+  if (!isPlainJsonRecord(value)) return new Set();
+  const targets = new Set<string>();
+  for (const key of Object.keys(value)) {
+    if (key === 'types' || key.startsWith('types@')) continue;
+    for (const target of collectManifestRuntimeTargets(value[key])) targets.add(target);
+  }
+  return targets;
+}
+
+function singleManifestRuntimeTarget(value: unknown, label: string): string {
+  const targets = [...collectManifestRuntimeTargets(value)];
+  if (targets.length !== 1) {
+    throw new TypeError(
+      `${label} must collapse every runtime condition and fallback to one target`,
+    );
+  }
+  return targets[0]!;
+}
+
+function packageManifestBinTargets(value: unknown, packageName: string): readonly string[] {
+  if (value === undefined) return [];
+  const entries =
+    typeof value === 'string'
+      ? [[packageName.slice(packageName.indexOf('/') + 1), value] as const]
+      : isPlainJsonRecord(value)
+        ? Object.entries(value).sort(([left], [right]) => compareStrings(left, right))
+        : undefined;
+  if (entries === undefined) throw new TypeError('bin must be a string or a plain object');
+  return entries.map(([name, target]) => {
+    if (!isNonemptyText(name) || typeof target !== 'string') {
+      throw new TypeError('bin names and targets must be non-empty strings');
+    }
+    return packageManifestTarget(target, packageName);
+  });
+}
+
+function packageManifestTarget(value: string, packageName: string): string {
+  if (
+    !value.startsWith('./dist/') ||
+    value.includes('\\') ||
+    value.includes('?') ||
+    value.includes('#') ||
+    path.posix.normalize(value) !== value.slice(2) ||
+    !value.endsWith('.mjs')
+  ) {
+    throw new TypeError(
+      `runtime entrypoint ${JSON.stringify(value)} must be a canonical ./dist/*.mjs target`,
+    );
+  }
+  return `${packageName}/${value.slice(2)}`;
+}
+
+function assertJsonValue(value: unknown, label: string): void {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value))
+  ) {
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) assertJsonValue(entry, `${label}[${index}]`);
+    return;
+  }
+  if (isPlainJsonRecord(value)) {
+    for (const [key, entry] of Object.entries(value)) assertJsonValue(entry, `${label}.${key}`);
+    return;
+  }
+  throw new TypeError(`${label} must contain only JSON data`);
+}
+
+function isReviewedNonRuntimeDistPath(value: string): boolean {
+  return /(?:\.d\.(?:cts|mts|ts)|\.(?:d\.(?:cts|mts|ts)|mjs)\.map)$/u.test(value);
+}
+
+function executableDistPath(value: string): boolean {
+  const base = path.posix.basename(value);
+  return /\.(?:cjs|js|node|wasm)$/u.test(base) || !base.includes('.');
+}
+
+function listKovoPackageNames(root: string): string[] {
+  const scope = checkedPath(root, '@kovojs', 'directory');
+  const packages: string[] = [];
+  for (const entry of readdirSync(scope, { withFileTypes: true }).sort((left, right) =>
+    compareStrings(left.name, right.name),
+  )) {
+    const relativePath = `@kovojs/${entry.name}`;
+    const absolutePath = path.join(scope, entry.name);
+    const stat = lstatSync(absolutePath);
+    if (stat.isSymbolicLink()) {
+      throw new TypeError(`artifact package contains a symlink: ${relativePath}`);
+    }
+    if (!stat.isDirectory() || !isCanonicalPackageName(relativePath)) {
+      throw new TypeError(`artifact package scope contains an unsupported entry: ${relativePath}`);
+    }
+    ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
+    packages.push(relativePath);
+  }
+  return packages;
+}
+
+function comparePackageCoverage(
+  expected: readonly string[],
+  actual: readonly string[],
+  findings: KovoCertificateFinding[],
+): void {
+  const expectedSet = new Set(expected);
+  const actualSet = new Set(actual);
+  for (const packageName of expected) {
+    if (!actualSet.has(packageName)) {
+      findings.push(
+        finding('coverage', 'package-missing', `${packageName} is absent from artifact root`),
+      );
+    }
+  }
+  for (const packageName of actual) {
+    if (!expectedSet.has(packageName)) {
+      findings.push(
+        finding(
+          'coverage',
+          'package-unlisted',
+          `${packageName} is installed but absent from reviewer policy`,
+        ),
+      );
+    }
+  }
+}
+
+function comparePackagePolicy(
+  expected: KovoCertificatePolicyV1['packages'][number],
+  actualManifest: Readonly<Record<string, unknown>>,
+  findings: KovoCertificateFinding[],
+): void {
+  if (JSON.stringify(expected.manifest) !== JSON.stringify(actualManifest)) {
+    findings.push(
+      finding(
+        'coverage',
+        'manifest-mismatch',
+        `${expected.name}/package.json differs from the exact reviewer-owned installed manifest`,
+      ),
+    );
+  }
 }
 
 function collectModuleFiles(
@@ -636,6 +1194,7 @@ function collectModuleFiles(
   directory: string,
   relativeDirectory: string,
   output: string[],
+  findings: KovoCertificateFinding[],
 ): void {
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
     compareStrings(left.name, right.name),
@@ -647,10 +1206,25 @@ function collectModuleFiles(
       throw new TypeError(`artifact path contains a symlink: ${relativePath}`);
     }
     if (stat.isDirectory()) {
-      collectModuleFiles(root, absolutePath, relativePath, output);
+      collectModuleFiles(root, absolutePath, relativePath, output, findings);
     } else if (stat.isFile() && relativePath.endsWith('.mjs')) {
       ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
       output.push(relativePath);
+    } else if (stat.isFile() && isReviewedNonRuntimeDistPath(relativePath)) {
+      ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
+    } else if (stat.isFile()) {
+      ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
+      findings.push(
+        finding(
+          'coverage',
+          executableDistPath(relativePath)
+            ? 'unsupported-executable-artifact'
+            : 'unsupported-dist-artifact',
+          `${relativePath} is not a reviewed non-runtime declaration or source-map artifact`,
+        ),
+      );
+    } else {
+      throw new TypeError(`artifact dist contains an unsupported entry: ${relativePath}`);
     }
   }
 }
@@ -979,39 +1553,27 @@ function externalOpaqueReason(specifier: string): string {
   return `imports external module ${JSON.stringify(specifier)} outside the nine-kind lexical capability domain`;
 }
 
-function resolveDirectoryPackageSpecifier(root: string, specifier: string): string | undefined {
+function resolvePolicyPackageSpecifier(
+  policy: KovoCertificatePolicyV1,
+  specifier: string,
+): string | undefined {
   if (!specifier.startsWith('@kovojs/')) return undefined;
   const parts = specifier.split('/');
   if (parts.length < 2) return undefined;
   const packageName = `${parts[0]}/${parts[1]}`;
   const subpath = parts.length === 2 ? '.' : `./${parts.slice(2).join('/')}`;
-  let manifest: unknown;
+  const manifest = policy.packages.find((entry) => entry.name === packageName)?.manifest;
+  if (manifest === undefined) return undefined;
   try {
-    manifest = JSON.parse(
-      readFileSync(checkedPath(root, `${packageName}/package.json`, 'file'), 'utf8'),
-    ) as unknown;
+    const exportsMap = checkerPackageExports(manifest.exports);
+    const target = singleManifestRuntimeTarget(
+      exportsMap[subpath],
+      `${packageName} export ${JSON.stringify(subpath)}`,
+    );
+    return packageManifestTarget(target, packageName);
   } catch {
     return undefined;
   }
-  if (!isPlainJsonRecord(manifest)) return undefined;
-  const publishConfig = isPlainJsonRecord(manifest.publishConfig)
-    ? manifest.publishConfig
-    : undefined;
-  const exportsValue = publishConfig?.exports ?? manifest.exports;
-  const exportsMap = checkerPackageExports(exportsValue);
-  const target = checkerExportTarget(exportsMap[subpath]);
-  if (
-    target === undefined ||
-    !target.startsWith('./dist/') ||
-    target.includes('\\') ||
-    target.includes('?') ||
-    target.includes('#') ||
-    path.posix.normalize(target) !== target.slice(2) ||
-    !target.endsWith('.mjs')
-  ) {
-    return undefined;
-  }
-  return `${packageName}/${target.slice(2)}`;
 }
 
 function checkerPackageExports(value: unknown): Record<string, unknown> {
@@ -1019,24 +1581,6 @@ function checkerPackageExports(value: unknown): Record<string, unknown> {
   return Object.keys(value).some((key) => key === '.' || key.startsWith('./'))
     ? value
     : { '.': value };
-}
-
-function checkerExportTarget(value: unknown): string | undefined {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const target = checkerExportTarget(entry);
-      if (target !== undefined) return target;
-    }
-    return undefined;
-  }
-  if (!isPlainJsonRecord(value)) return undefined;
-  for (const condition of ['import', 'node', 'default']) {
-    if (!Object.hasOwn(value, condition)) continue;
-    const target = checkerExportTarget(value[condition]);
-    if (target !== undefined) return target;
-  }
-  return undefined;
 }
 
 function isPlainJsonRecord(value: unknown): value is Record<string, unknown> {
@@ -1144,15 +1688,20 @@ function checkStability(
   return findings.sort(compareFindings);
 }
 
-function checkClosure(certificate: KovoCertificateV1): KovoCertificateFinding[] {
+function checkClosure(
+  certificate: KovoCertificateV1,
+  policy: KovoCertificatePolicyV1,
+): KovoCertificateFinding[] {
   const doors = new Map<string, Set<KovoCertificateCapabilityKind>>();
-  for (const door of certificate.doors) {
+  // Door admission is deliberately coarse at module + capability granularity. `site` remains an
+  // exact reviewer label in the policy binding, but it is not a source-location proof.
+  for (const door of policy.doors) {
     const capabilities = doors.get(door.module) ?? new Set<KovoCertificateCapabilityKind>();
     capabilities.add(door.escapeId);
     doors.set(door.module, capabilities);
   }
   const findings: KovoCertificateFinding[] = [];
-  for (const root of certificate.roots) {
+  for (const root of policy.roots) {
     const admitted = doors.get(root.module) ?? new Set<KovoCertificateCapabilityKind>();
     for (const capability of certificate.cap[root.module] ?? []) {
       if (!admitted.has(capability)) {
@@ -1259,6 +1808,28 @@ function isCanonicalArtifactPath(value: unknown): value is string {
     !value.includes('#') &&
     !value.includes('\0') &&
     path.posix.normalize(value) === value &&
+    !value.split('/').includes('..')
+  );
+}
+
+function packageNameFromArtifact(value: string): string {
+  return value.split('/').slice(0, 2).join('/');
+}
+
+function isCanonicalPackageName(value: unknown): value is string {
+  return typeof value === 'string' && /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
+}
+
+function isCanonicalExportSubpath(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (value === '.') return true;
+  return (
+    value.startsWith('./') &&
+    !value.includes('\\') &&
+    !value.includes('*') &&
+    !value.includes('?') &&
+    !value.includes('#') &&
+    path.posix.normalize(value.slice(2)) === value.slice(2) &&
     !value.split('/').includes('..')
   );
 }
