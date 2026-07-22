@@ -21,8 +21,8 @@ trusted the expected identity supplied by the same subject.
 | -------- | ---: | -----: |
 | Critical |    0 |      3 |
 | High     |    0 |     10 |
-| Medium   |    2 |     10 |
-| Low      |    1 |      2 |
+| Medium   |    4 |     10 |
+| Low      |    2 |      2 |
 
 ## Critical
 
@@ -277,6 +277,32 @@ trusted the expected identity supplied by the same subject.
     require an explicit `true` fact before lowering. Cover the executable helper repro, containers,
     property keys, mutation, destructuring, prototype paths, and unrelated same-name bindings.
 
+- [ ] **M13 — The live-target emitter reparsed executable query text after parser analysis.**
+  - The emitter reconstructed a TypeScript source file from a raw query-expression string to decide
+    executable imports and identifiers, while generated helper aliases were chosen without the
+    parser's complete authored-name set. This created a second, source-text decision layer after the
+    parser facts and could either disagree with analysis or collide with an authored binding
+    (compiler hard rule 10; SPEC §5.2).
+  - **Dedup:** distinct from M11's runtime query identity and earlier parser-completeness findings:
+    the authoritative parse had already completed, but emission discarded its typed facts and made a
+    new executable decision from text.
+  - **Open work:** carry parser-owned import, identifier, executable-use, and complete-name facts into
+    emission; derive collision-free aliases from those facts; delete the emitter reparse; prove a
+    fixpoint and authored-name collision matrix.
+
+- [ ] **M14 — Versioned enhanced requests were decoded by the current build without document-build
+      selection.**
+  - A browser retained across deploys did not send its immutable document build on query and mutation
+    target requests. The current app therefore decoded old target bytes under the new wire grammar;
+    the v1 colon/literal-percent form and later framed forms had no unambiguous cross-version meaning
+    (SPEC §9 and §14 deploy skew).
+  - **Dedup:** distinct from M11's same-version identity collapse and previous response-only build
+    mismatch checks: this root occurred before the server selected a grammar and registry.
+  - **Open work:** bind the wire grammar into the render-plan/build token, carry `Kovo-Build` on every
+    enhanced target-bearing request, route to a retained exact build when the deployment owns one,
+    and make the current app reject missing/mismatched builds before target decode or handler work.
+    Prove old and current grammars never use heuristic dual decoding.
+
 ## Low
 
 - [x] **L1 — Dry-run release dispatch still exercised attestation authority.**
@@ -294,7 +320,9 @@ trusted the expected identity supplied by the same subject.
   - **Open work:** `17ea432f8`, `389fcd68d`, and `664e81803` close inherited metadata and `toJSON`
     substitution, but independent review found the replacement encoder orders integer-index keys
     differently from the server canonicalizer and the HMR collector still performs late mutable
-    dispatch. Close both residuals and rerun Node plus real-browser parity evidence.
+    dispatch. Snapshot once, reject an entire mixed-valid/malformed collection atomically, validate
+    fragment media type and disposition before applying a body, and rerun Node plus real-browser
+    parity evidence.
 
 - [x] **L3 — The compiler posture gate circularly authenticated its own implementation digest.**
   - The analyzer hashed its real source bytes but also supplied the expected digest, so an edit plus
@@ -306,6 +334,15 @@ trusted the expected identity supplied by the same subject.
     separately reviewed CLI posture subject.
   - **Evidence:** the focused compiler posture suite passes 94/94, and review finds no self/fixed-point
     identity marker in the remaining compiler root.
+
+- [ ] **L4 — An absent optional live-target header consumed budget at the exact transport limit.**
+  - When required mutation headers plus `Kovo-Targets` used exactly the 9,216-byte application-header
+    budget, the planner still reserved line overhead for an empty `Kovo-Live-Targets` value and
+    rejected a request that the emitted transport would safely omit.
+  - **Dedup:** distinct from earlier oversized-header and sparse-array work bounds: this was a
+    conservative-accounting false rejection at the documented inclusive boundary.
+  - **Open work:** omit empty optional fields before accounting, retain strict over-budget rejection,
+    and cover exact-limit, one-byte-over, and required-plus-optional cases through the real planner.
 
 ## Latest verification
 
