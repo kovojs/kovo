@@ -263,4 +263,38 @@ describe('delegated island ctx.signal abort', () => {
 
     abortRemovedIslandSignals('<li kovo-c="cart-row" kovo-key="row-2"></li>', '');
   });
+
+  it('keeps a present empty kovo-key distinct from an absent instance identity', async () => {
+    const scope = createIslandSignalScope();
+    const signals: AbortSignal[] = [];
+    const importModule = vi.fn(async () => ({
+      CartRow$mount: (_event: Event, ctx: { signal: AbortSignal }) => {
+        signals.push(ctx.signal);
+      },
+    }));
+    const emptyKey = new FakeElement({
+      'kovo-c': 'cart-row',
+      'kovo-key': '',
+      'on:visible': '/c/cart-row.client.js#CartRow$mount',
+    });
+    const absentKey = new FakeElement({
+      'kovo-c': 'cart-row',
+      'on:visible': '/c/cart-row.client.js#CartRow$mount',
+    });
+
+    await dispatchDelegatedEvent({ target: emptyKey, type: 'visible' }, importModule, scope);
+    await dispatchDelegatedEvent({ target: absentKey, type: 'visible' }, importModule, scope);
+
+    expect(signals[0]).not.toBe(signals[1]);
+    expect(
+      abortRemovedIslandSignals(
+        '<i kovo-c="cart-row" kovo-key=""></i><i kovo-c="cart-row"></i>',
+        '<i kovo-c="cart-row"></i>',
+        scope,
+      ),
+    ).toEqual(['cart-row\0']);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+    abortIslandSignalScope(scope);
+  });
 });

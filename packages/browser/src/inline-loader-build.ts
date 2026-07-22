@@ -86,6 +86,7 @@ const mutationIdemIntrinsicsSourcePath = fileURLToPath(
 const documentLifecycleSourcePath = fileURLToPath(
   new URL('./document-lifecycle.ts', import.meta.url),
 );
+const queryStoreSourcePath = fileURLToPath(new URL('./query-store.ts', import.meta.url));
 const trustedTypesSourcePath = fileURLToPath(new URL('./trusted-types.ts', import.meta.url));
 
 const inlineHelperSpecs = {
@@ -136,7 +137,10 @@ const inlineHelperSpecs = {
     rootFunctionNames: ['createDocumentLifecycleRecovery'],
     sourceFileName: 'document-lifecycle.ts',
     sourcePath: documentLifecycleSourcePath,
-    sourcePaths: [documentLifecycleSourcePath],
+    // createQueryIdentity is part of the canonical lifecycle closure. Include its declaration
+    // explicitly so generation cannot accidentally rely on a module import that does not exist
+    // inside the inline artifact.
+    sourcePaths: [queryStoreSourcePath, documentLifecycleSourcePath],
   },
   trustedTypes: {
     label: 'Trusted Types security controls',
@@ -230,6 +234,7 @@ function installInlineKovoLoader(im) {
   const intrinsicObject = Object;
   const intrinsicObjectCreate = intrinsicObject.create;
   const intrinsicObjectDefineProperty = intrinsicObject.defineProperty;
+  const intrinsicObjectFreeze = intrinsicObject.freeze;
   const intrinsicObjectGetPrototypeOf = intrinsicObject.getPrototypeOf;
   const intrinsicObjectKeys = intrinsicObject.keys;
   const intrinsicObjectPrototype = intrinsicObject.prototype;
@@ -345,6 +350,8 @@ function installInlineKovoLoader(im) {
       fail();
     }
   };
+  const freezeQueryIdentity = (value) =>
+    bns.call(intrinsicObjectFreeze, intrinsicObject, [value]);
   // SPEC §4.8/§5.2: state/query values may update visible attributes, but may not mint or replace
   // compiler-owned lowered IR. These arrays are generated from core's single semantic manifest so
   // the always-loaded bootstrap, modular runtime, and compiler output gate share one denominator.
@@ -1020,14 +1027,26 @@ function installInlineKovoLoader(im) {
   };
   const rd = (val) => {
     const source = val ?? '';
-    if (source.length > frameworkWireInputGrammar.maxHeaderCharacters) {
-      throw new TypeError(
-        'Kovo dependency input exceeds the ' +
-          frameworkWireInputGrammar.maxHeaderCharacters +
-          '-character wire budget.',
-      );
+    const dependencies = [];
+    let start = 0;
+    for (let index = 0; index <= source.length; index += 1) {
+      const character = index === source.length ? ' ' : source[index];
+      if (character !== ' ') continue;
+      if (index > start) {
+        const token = bns.slice(source, start, index);
+        const dependency = frameworkWireTargetCodec.decodeIdentityToken(token);
+        if (typeof dependency !== 'string') {
+          throw new TypeError('Kovo dependency input must contain canonical identity tokens.');
+        }
+        bns.appendDenseSecurityValue(
+          dependencies,
+          dependency,
+          'Inline dependency identity snapshot',
+        );
+      }
+      start = index + 1;
     }
-    return tk(source, /[\s,]/u);
+    return dependencies;
   };
   ${fragmentTargetEscapeReadableSource}
   const sq = escapeCssString;
@@ -1061,8 +1080,13 @@ function installInlineKovoLoader(im) {
       }
       if (!safe || !target || hasSnapshotValue(seen, target)) continue;
       bns.appendDenseSecurityValue(seen, target, 'Inline target identity snapshot');
-      const value = frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }]);
-      bns.appendDenseSecurityValue(targets, value, 'Inline target header snapshot');
+      const wireEntry = frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }]);
+      if (!wireEntry) continue;
+      bns.appendDenseSecurityValue(
+        targets,
+        { target, wireEntry },
+        'Inline target header snapshot',
+      );
       if (targets.length === frameworkWireInputGrammar.maxEntries) break;
     }
     return targets;
@@ -1080,9 +1104,9 @@ function installInlineKovoLoader(im) {
       if (!hsaf(target) || !hsc(component) || !hsa(token)) continue;
       if (!target || hasSnapshotValue(seen, target)) continue;
       bns.appendDenseSecurityValue(seen, target, 'Inline live target identity snapshot');
-      bns.appendDenseSecurityValue(
-        targets,
-        frameworkWireTargetCodec.encodeLiveTargetHeader(
+      let wireEntry = '';
+      try {
+        wireEntry = frameworkWireTargetCodec.encodeLiveTargetHeader(
           [
             {
               attestation: token,
@@ -1091,7 +1115,14 @@ function installInlineKovoLoader(im) {
               target,
             },
           ],
-        ),
+        );
+      } catch {
+        continue;
+      }
+      if (!wireEntry) continue;
+      bns.appendDenseSecurityValue(
+        targets,
+        { target, wireEntry },
         'Inline live target header snapshot',
       );
       if (targets.length === frameworkWireInputGrammar.maxEntries) break;
@@ -1132,12 +1163,8 @@ function installInlineKovoLoader(im) {
   const sfp = sessionMeta ? bns.readAttribute(sessionMeta, 'content') ?? undefined : undefined;
   const bh = (res) => bns.readHeader(res, 'Kovo-Build') ?? '';
   const qwk = (name, key) => {
-    if (!name) return '';
-    return key == null || key === ''
-      ? name
-      : bns.indexOf(key, name + ':') === 0
-        ? key
-        : name + ':' + key;
+    if (!hsaf(name) || (key !== null && !hsaf(key))) return;
+    return freezeQueryIdentity(key === null ? { name } : { key, name });
   };
   const eqp = (name) => {
     let encoded = '';
@@ -1150,11 +1177,14 @@ function installInlineKovoLoader(im) {
       remaining = bns.slice(remaining, separator + 1);
     }
   };
-  const qurl = (wireKey) => {
-    const i = bns.indexOf(wireKey, ':');
-    const n = i > 0 ? bns.slice(wireKey, 0, i) : wireKey;
-    const k = i > 0 ? bns.slice(wireKey, i + 1) : undefined;
-    return n ? '/_q/' + eqp(n) + (k == null ? '' : '?key=' + ec(k)) : '';
+  const qurl = (identity) => {
+    const n = identity?.name;
+    const k = identity?.key;
+    if (!n) return '';
+    if (k === undefined) return '/_q/' + eqp(n);
+    const prefix = n + ':';
+    const keyValue = bns.indexOf(k, prefix) === 0 ? bns.slice(k, prefix.length) : k;
+    return '/_q/' + eqp(n) + '?key=' + ec(keyValue);
   };
   const rbd = (nextBody) => {
     const currentBody = bns.readDocumentField(doc, 'body');
@@ -1399,14 +1429,17 @@ function installInlineKovoLoader(im) {
     applyBody: fab,
     buildHeader: bh,
     currentBuild: (root) => root ? kb(root) : pbt,
-    currentHref: () => bns.currentUrl()?.href,
+    currentHref: () => {
+      const current = bns.currentUrl();
+      return current ? current.origin + current.pathname + current.search : undefined;
+    },
     document: doc,
     encodeAttribute: ea,
-    encodeWireEntries: frameworkWireTargetCodec.encodeEntryList,
     fetchValue: (input, init) => bns.fetchValue(input, init),
     findTarget: ftd,
     liveTargets: rlt,
     parseHtmlDocument: (value) => bns.parseHtmlDocument(value),
+    planTargetRequestHeaders: frameworkWireTargetCodec.planTargetRequestHeaders,
     queryOne: (root, selector) => bns.queryOne(root, selector),
     queryAll: qa,
     queryUrl: qurl,
@@ -1438,7 +1471,7 @@ function installInlineKovoLoader(im) {
     const key = bns.readAttribute(element, 'kovo-key');
     const id = bns.readAttribute(element, 'id');
     const instance = key ?? id;
-    return instance ? component + '\0' + instance : component;
+    return instance !== null ? component + '\0' + instance : component;
   };
   const aq = (queries, applyQueries) => {
     for (let index = 0; index < queries.length; index += 1) {
@@ -1862,6 +1895,7 @@ function installInlineKovoLoader(im) {
     const streaming = bns.readAttribute(form, 'data-mutation-stream') !== null;
     let body;
     let idem;
+    let requestPlan;
     try {
       body = bns.createFormData(form, submitter);
       // SPEC §10.3: the rendered hidden value is the no-JS retry token, not a form-instance
@@ -1869,10 +1903,31 @@ function installInlineKovoLoader(im) {
       // to both the body field and header through the boot-captured FormData setter.
       idem = ci(bns.readFormDataValue(body, 'Kovo-Idem'));
       bns.setFormDataValue(body, 'Kovo-Idem', idem);
+      const explicitTarget = ras(form, 'kovo-fragment-target');
+      const idTarget = explicitTarget === null ? ras(form, 'id') : null;
+      const componentTarget =
+        explicitTarget === null && idTarget === null ? ras(form, 'kovo-c') : null;
+      const formTarget =
+        explicitTarget !== null
+          ? explicitTarget
+          : idTarget !== null
+            ? idTarget
+            : componentTarget === null
+              ? undefined
+              : componentTarget;
+      requestPlan = frameworkWireTargetCodec.planTargetRequestHeaders({
+        currentUrl: transport.sourceUrl,
+        ...(formTarget === undefined ? {} : { formTarget }),
+        idem,
+        liveTargets: rlt(),
+        stream: streaming,
+        targets: rt(),
+      });
     } catch {
       // Preparation is known to precede dispatch, so leave the native event and rendered token.
       return;
     }
+    if (!requestPlan) return;
     if (!bns.preventDelegatedEventDefault(event)) return;
     void (async () => {
       try {
@@ -1882,16 +1937,11 @@ function installInlineKovoLoader(im) {
             Accept: streaming
               ? 'text/vnd.kovo.fragment+html; stream=1'
               : 'text/vnd.kovo.fragment+html',
-            'Kovo-Form-Target': targetIdentity(form),
-            'Kovo-Current-Url': transport.sourceUrl,
-            'Kovo-Fragment': 'true',
-            'Kovo-Idem': ss(idem),
-            'Kovo-Live-Targets': frameworkWireTargetCodec.encodeEntryList(rlt()),
-            ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
-            'Kovo-Targets': frameworkWireTargetCodec.encodeEntryList(rt()),
+            ...requestPlan.headers,
           },
           keepalive: !streaming,
           method: transport.method,
+          referrerPolicy: 'origin',
         });
         const responseUrl = bns.readResponseField(response, 'url');
         const finalUrl = typeof responseUrl === 'string' && responseUrl
@@ -3154,6 +3204,15 @@ function readInlineDocumentLifecycleReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.documentLifecycle);
 }
 
+export function extractInlineDocumentLifecycleReadableSource(
+  source: string,
+  rootFunctionNames: readonly string[] = inlineHelperSpecs.documentLifecycle.rootFunctionNames,
+): string {
+  return extractInlineHelperReadableSourceForSpec(inlineHelperSpecs.documentLifecycle, source, {
+    rootFunctionNames,
+  });
+}
+
 function readInlineTrustedTypesReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.trustedTypes);
 }
@@ -3415,6 +3474,8 @@ function extractInlineHelperReadableSource({
     new Map([
       ['securityArrayAppend', 'bns.appendDenseSecurityValue'],
       ['securityGetOwnPropertyDescriptor', 'bns.getOwnSecurityPropertyDescriptor'],
+      ['freezeSecurityValue', 'freezeQueryIdentity'],
+      ['frameworkWireIdentityIsValid', 'hsaf'],
       ['elementContextSecurityControl', 'elementContextSecurityControl'],
       ['elementContextSecurityStaticValueIssue', 'elementContextSecurityStaticValueIssue'],
     ]),
@@ -3855,6 +3916,8 @@ function collectInlineHelperFunctionDependencies(
       if (
         name !== 'securityArrayAppend' &&
         name !== 'securityGetOwnPropertyDescriptor' &&
+        name !== 'freezeSecurityValue' &&
+        name !== 'frameworkWireIdentityIsValid' &&
         name !== 'elementContextSecurityControl' &&
         name !== 'elementContextSecurityStaticValueIssue' &&
         unsupportedTopLevelBindings.has(name) &&

@@ -1,11 +1,13 @@
 import { definedProps } from './defined-props.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { applyQueryChunksToRuntime, type ApplyQueryChunksToRuntimeOptions } from './query-apply.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
+import { createQueryIdentity } from './query-store.js';
 import { readQueryScriptChunk, readQueryScriptChunks } from './wire-parser.js';
 import type { QueryChunk, QueryScriptChunkLike } from './wire-parser.js';
 import {
   applySecurityIntrinsic,
+  freezeSecurityValue,
   securityArrayAppend,
   securityGetOwnPropertyDescriptor,
   securityOwnArrayEntry,
@@ -24,7 +26,7 @@ export interface QueryScriptHydrationLedger {
   hydrate(
     scripts: Iterable<QueryScriptLike>,
     options?: QueryScriptHydrationOptions,
-  ): readonly string[];
+  ): readonly QueryIdentity[];
 }
 
 export interface QueryScriptHydrationOptions extends ApplyQueryChunksToRuntimeOptions {
@@ -35,7 +37,7 @@ export function hydrateQueryScripts(
   store: QueryStore,
   scripts: Iterable<QueryScriptLike>,
   options: QueryScriptHydrationOptions = {},
-): readonly string[] {
+): readonly QueryIdentity[] {
   // SPEC.md §9.1/§9.4: initial hydration uses the same batched query chunk
   // application path as mutation responses, deferred streams, and typed reads.
   return applyQueryChunksToRuntime(store, readQueryScriptChunks(scripts, options.onError), {
@@ -59,7 +61,7 @@ export function createQueryScriptHydrationLedger(
     hydrate(
       scripts: Iterable<QueryScriptLike>,
       hydrationOptions: QueryScriptHydrationOptions = {},
-    ): readonly string[] {
+    ): readonly QueryIdentity[] {
       const mergedOptions = {
         ...definedProps({
           afterApplyQuery: options.afterApplyQuery,
@@ -96,7 +98,7 @@ export function createQueryScriptHydrationLedger(
       // refetches must converge on the same query-store apply path without
       // replaying already applied server-provided scripts. Malformed transient
       // script data is intentionally left observable for a later hydration pass.
-      const hydrated = applyQueryChunksToRuntime(store, queryChunksFromHydrationRecords(records), {
+      applyQueryChunksToRuntime(store, queryChunksFromHydrationRecords(records), {
         ...definedProps({
           applyQuery: mergedOptions.applyQuery,
           onError: mergedOptions.onError,
@@ -108,14 +110,20 @@ export function createQueryScriptHydrationLedger(
           securitySetAdd(appliedQueries, query);
         },
       });
+      const hydrated: QueryIdentity[] = [];
       for (let index = 0; index < records.length; index += 1) {
         const record = securityOwnArrayEntry(records, index);
         if (!record.ok) throw new TypeError('Kovo query hydration records must be dense.');
         if (securitySetHas(appliedQueries, record.value.query)) {
           securitySetAdd(seen, record.value.script);
+          securityArrayAppend(
+            hydrated,
+            createQueryIdentity(record.value.query.name, record.value.query.key),
+            'Browser hydrated query identity snapshot',
+          );
         }
       }
-      return hydrated;
+      return freezeSecurityValue(hydrated);
     },
   };
 }

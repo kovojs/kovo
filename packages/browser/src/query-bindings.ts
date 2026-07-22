@@ -26,7 +26,6 @@ import {
   securityJsonStringify,
   securityNumber,
   securityString,
-  securityStringCharCodeAt,
   securityStringIndexOf,
   securityStringSlice,
   securityStringStartsWith,
@@ -36,6 +35,7 @@ import {
 import { kovoCreateHTML } from './trusted-types.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
+import { readDeps } from './pending.js';
 import { closestRuntimeElement, readRuntimeElementAttribute } from './runtime-dom-security.js';
 
 // SPEC §6.6 rule 6: query-plan DOM selection, parsing, and commits use controls captured before any
@@ -124,7 +124,10 @@ export interface AppliedCompiledQueryUpdatePlan {
   templateStamps: string[];
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/**
+ * Runtime API used by generated integration. Query-name keys select the general plan; an exact
+ * keyed-instance override uses the collision-free `queryStoreKey(name, key)` identity.
+ */
 export type CompiledQueryUpdatePlans = Readonly<
   Record<string, CompiledQueryUpdatePlan | undefined>
 >;
@@ -952,32 +955,6 @@ function elementBelongsToQueryKey(
     if (deps[index] === queryKey) return true;
   }
   return false;
-}
-
-function readDeps(value: string | null | undefined): string[] {
-  const source = value ?? '';
-  const deps: string[] = [];
-  let start = 0;
-  for (let index = 0; index <= source.length; index += 1) {
-    const code = index < source.length ? securityStringCharCodeAt(source, index) : 0x20;
-    const delimiter =
-      code === 0x2c ||
-      code === 0x09 ||
-      code === 0x0a ||
-      code === 0x0c ||
-      code === 0x0d ||
-      code === 0x20;
-    if (!delimiter) continue;
-    if (start < index) {
-      securityArrayAppend(
-        deps,
-        securityStringSlice(source, start, index),
-        'Browser query dependency snapshot',
-      );
-    }
-    start = index + 1;
-  }
-  return deps;
 }
 
 function isQueryBindingElement(value: unknown): value is QueryBindingElement {

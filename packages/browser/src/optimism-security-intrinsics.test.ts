@@ -72,7 +72,7 @@ it('rolls a failed submit back after late Object.keys replacement', async () => 
       },
       form: { action: '/_m/account/elevate', method: 'post' },
       formData: new FormData(),
-      idem: 'rejected-role-submit',
+      idem: 'v1_1750000000000_00000000000000000000000000000002',
       input: {},
       optimistic: { transforms },
       rebaser,

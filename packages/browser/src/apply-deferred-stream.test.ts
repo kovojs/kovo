@@ -88,7 +88,7 @@ describe('deferred stream response apply', () => {
 
     // SPEC §6.6/§9.1: decoded server wire facts are dense, framework-owned carriers. Late
     // collection prototype mutation cannot erase their application or forge aggregation output.
-    expect(applied?.queries).toEqual(['cart']);
+    expect(applied?.queries).toEqual([{ name: 'cart' }]);
     expect(applied?.appliedFragments).toEqual(['cart-badge']);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(root.targets.get('cart-badge')?.html).toBe('<span>2</span>');
@@ -116,7 +116,7 @@ describe('deferred stream response apply', () => {
       store,
     });
 
-    expect(applied.queries).toEqual(['reviews', 'recommendations']);
+    expect(applied.queries).toEqual([{ name: 'reviews' }, { name: 'recommendations' }]);
     expect(applied.appliedFragments).toEqual(['reviews:p1', 'recommendations:p1']);
     expect(applied.chunks).toHaveLength(2);
     expect(store.get('reviews')).toEqual({ items: [{ id: 'r1' }] });
@@ -162,7 +162,10 @@ describe('deferred stream response apply', () => {
       store,
     });
 
-    expect(applied.queries).toEqual(['cart', 'cart:primary']);
+    expect(applied.queries).toEqual([
+      { name: 'cart' },
+      { key: 'cart:primary', name: 'cart' },
+    ]);
     expect(applied.appliedFragments).toEqual(['cart-badge', 'cart-total']);
     expect(observed).toEqual(['11', '12']);
     expect(store.get('cart')).toEqual({ count: 11 });
@@ -247,7 +250,7 @@ describe('deferred stream response apply', () => {
         {
           appliedFragments: ['reviews:p1'],
           fragments: [{ html: '<section>Reviews ready</section>', target: 'reviews:p1' }],
-          queries: ['reviews'],
+          queries: [{ name: 'reviews' }],
         },
         {
           appliedFragments: ['recommendations:p1'],
@@ -257,14 +260,14 @@ describe('deferred stream response apply', () => {
               target: 'recommendations:p1',
             },
           ],
-          queries: ['recommendations'],
+          queries: [{ name: 'recommendations' }],
         },
       ],
       fragments: [
         { html: '<section>Reviews ready</section>', target: 'reviews:p1' },
         { html: '<section>Recommendations ready</section>', target: 'recommendations:p1' },
       ],
-      queries: ['reviews', 'recommendations'],
+      queries: [{ name: 'reviews' }, { name: 'recommendations' }],
     });
     expect(root.targets.get('reviews:p1')?.html).toBe('<section>Reviews ready</section>');
     expect(root.targets.get('recommendations:p1')?.html).toBe(
@@ -299,13 +302,13 @@ describe('deferred stream response apply', () => {
       store,
     });
 
-    expect(applied.queries).toEqual(['cart']);
+    expect(applied.queries).toEqual([{ name: 'cart' }]);
     expect(applied.appliedFragments).toEqual(['cart-badge']);
     expect(deferredSnapshot(applied).chunks).toEqual([
       {
         appliedFragments: [],
         fragments: [],
-        queries: ['cart'],
+        queries: [{ name: 'cart' }],
       },
       {
         appliedFragments: ['cart-badge'],

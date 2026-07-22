@@ -25,7 +25,7 @@ import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 import { securityGetOwnPropertyDescriptor } from './security-witness-intrinsics.js';
 import { readPageBuildToken } from './build-token.js';
 
@@ -91,7 +91,7 @@ export interface KovoGeneratedLoaderOptions {
   requestIdle?: (callback: () => void) => void;
   visibleObserver?: VisibleObserverFactory;
   queryStore?: QueryStore;
-  refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
+  refetchOnFocus?: (queries: readonly QueryIdentity[]) => void | Promise<void>;
   refetchOnFocusOptOut?: readonly string[];
   root: LoaderRoot;
 }
@@ -172,7 +172,7 @@ export function installGeneratedKovoLoader(
   );
   const disposers: Array<() => void> = [];
   let queryRuntime: InstalledLoaderQueryRuntime | undefined;
-  const rememberAppliedQueries = (queries: readonly string[]): void => {
+  const rememberAppliedQueries = (queries: readonly QueryIdentity[]): void => {
     queryRuntime?.rememberAppliedQueries(queries);
   };
   // bugs-1 F13 / SPEC §9.3: the server stamps an opaque per-session fingerprint as

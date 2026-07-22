@@ -507,7 +507,7 @@ function islandSignalIdentity(
 ): string | null {
   if (!component) return null;
   const instance = key ?? id;
-  return instance ? `${component}\0${instance}` : component;
+  return instance !== null ? `${component}\0${instance}` : component;
 }
 
 function camelCase(value: string): string {

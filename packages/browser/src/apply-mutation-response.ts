@@ -3,7 +3,8 @@ import {
   type OnDeltaMiss,
   type QueryApplyInterposition,
 } from './query-apply.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
+import { createQueryIdentity } from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
@@ -51,7 +52,7 @@ type RuntimeStreamTextOptions = StreamTextBufferOptions & {
 /** @generated Facts about an applied mutation response: the `fragments` and `queries` it touched (SPEC §9.1). */
 export interface AppliedMutationResponse {
   fragments: FragmentChunk[];
-  queries: string[];
+  queries: QueryIdentity[];
   streams?: string[];
   texts?: StreamTextChunk[];
 }
@@ -137,7 +138,7 @@ export function applyMutationResponseChunksToRuntime(
       root: options.queryRoot ?? options.root,
     }),
   });
-  const queryFacts: string[] = [];
+  const queryFacts: QueryIdentity[] = [];
   appendDenseSecurityValues(queryFacts, appliedQueries, 'Browser applied mutation query facts');
   const applied: AppliedMutationResponse = {
     fragments: effectiveChunks.fragments,
@@ -489,7 +490,7 @@ function mergeAppliedMutationResponses(
   if (!current) return next;
 
   const fragments: FragmentChunk[] = [];
-  const queries: string[] = [];
+  const queries: QueryIdentity[] = [];
   appendDenseSecurityValues(fragments, current.fragments, 'Browser merged mutation fragments');
   appendDenseSecurityValues(fragments, next.fragments, 'Browser merged mutation fragments');
   appendDenseSecurityValues(queries, current.queries, 'Browser merged mutation queries');
@@ -537,7 +538,7 @@ function mergeAppliedMutationResponses(
   return merged;
 }
 
-function snapshotQueryIdentity(query: QueryChunk): { key?: string; name: string } {
+function snapshotQueryIdentity(query: QueryChunk): QueryIdentity {
   const name = securityGetOwnPropertyDescriptor(query, 'name');
   const key = securityGetOwnPropertyDescriptor(query, 'key');
   if (!name || !('value' in name) || typeof name.value !== 'string') {
@@ -546,9 +547,10 @@ function snapshotQueryIdentity(query: QueryChunk): { key?: string; name: string 
   if (key && (!('value' in key) || (key.value !== undefined && typeof key.value !== 'string'))) {
     throw new TypeError('Kovo streamed query key must be own string data.');
   }
-  return key && 'value' in key && typeof key.value === 'string'
-    ? { key: key.value, name: name.value }
-    : { name: name.value };
+  return createQueryIdentity(
+    name.value,
+    key && 'value' in key && typeof key.value === 'string' ? key.value : undefined,
+  );
 }
 
 function ownOptionalArray<Value>(

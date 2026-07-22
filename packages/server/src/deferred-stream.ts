@@ -452,8 +452,8 @@ function deferredCloseCleanupScriptBody(boundary: string): string {
 }
 
 function deferredChunkApplyScriptBody(boundary: string): string {
-  const collectBody = `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}`;
-  return `${collectBody}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){var m=b.match(/<kovo-fragment\\b[^>]*>/g)||[];for(var h of m){if(!/\\bpriority=["']visible["']/.test(h))continue;var v=(h.match(/\\btarget=["']([^"']+)["']/)||[])[1];var d=v&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
+  const collectBody = `var s=document.currentScript,n=s.previousSibling,e=[],v=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML){e.unshift(n.outerHTML);if(n.localName==="kovo-fragment"&&n.getAttribute("priority")==="visible")v.unshift(n.getAttribute("target"))}n.remove();if(t.includes("--${boundary}"))break;n=p}`;
+  return `${collectBody}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var w of v){var d=w!==null&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===w);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
 }
 
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {

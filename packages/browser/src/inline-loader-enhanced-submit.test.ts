@@ -1235,7 +1235,7 @@ describe('inline loader enhanced submit source', () => {
         { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
         {
           component: 'components/inventory/inventory',
-          deps: 'inventory, stock',
+          deps: 'inventory stock',
           id: 'inventory-panel',
           props: '{"warehouseId":"w1"}',
           target: 'inventory',
@@ -1247,7 +1247,6 @@ describe('inline loader enhanced submit source', () => {
           component: 'cart-summary',
           deps: 'cart summary',
           id: 'cart-summary',
-          token: 'tok_summary',
           token: 'tok_summary',
         },
       ];
@@ -1384,7 +1383,7 @@ describe('inline loader enhanced submit source', () => {
           'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
         );
         expect(inlineRequest?.[1].headers['Kovo-Live-Targets']).toBe(
-          'cart-badge#cart-badge@tok_cart:{}; inventory#components/inventory/inventory@tok_inventory:{"warehouseId":"w1"}; standalone-target#standalone-target@tok_standalone:{}; cart-summary#cart-summary@tok_summary:{}',
+          'cart-badge#cart-badge@tok_cart:{}; inventory#components%2Finventory%2Finventory@tok_inventory:{"warehouseId":"w1"}; standalone-target#standalone-target@tok_standalone:{}; cart-summary#cart-summary@tok_summary:{}',
         );
         expect(inlineRequest?.[1].headers['Kovo-Form-Target']).toBe('your-answer');
       } finally {
@@ -1566,7 +1565,7 @@ describe('inline loader enhanced submit source', () => {
         'catalog-panel=catalog',
       ]);
       expect(liveEntries[0]).toBe(
-        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+        'catalog-panel#components%2Fpublic%2Fcatalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
       );
       expect(() => new Headers(requestHeaders)).not.toThrow();
       expect(requestHeaders['Kovo-Live-Targets']).not.toContain('unattested-panel');
@@ -1574,19 +1573,29 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'rejects dependency attributes above the shared wire-input bound through %s',
+    'drops dependency attributes above the shared wire-input bound through %s',
     async (_name, installSource) => {
       const originals = {
+        CustomEvent: globalRecord.CustomEvent,
         FormData: globalRecord.FormData,
         addEventListener: globalRecord.addEventListener,
         document: globalRecord.document,
+        dispatchEvent: globalRecord.dispatchEvent,
         fetch: globalRecord.fetch,
         importModule: globalRecord.__kovoInlineImport,
         location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const attributes = new Map<string, string>();
-      const inlineFetch = vi.fn();
+      const inlineFetch = vi.fn(async () =>
+        mutationResponse('/_m/catalog/select', {
+          ok: true,
+          status: 200,
+          async text() {
+            return '';
+          },
+        }),
+      );
       const form = {
         action: '/_m/catalog/select',
         getAttribute(name: string) {
@@ -1610,6 +1619,15 @@ describe('inline loader enhanced submit source', () => {
       };
 
       try {
+        globalRecord.CustomEvent = class CustomEvent {
+          detail: unknown;
+          type: string;
+
+          constructor(type: string, init: { detail?: unknown } = {}) {
+            this.type = type;
+            this.detail = init.detail;
+          }
+        };
         globalRecord.FormData = function FormData() {
           return createStructuralFormData();
         };
@@ -1628,6 +1646,7 @@ describe('inline loader enhanced submit source', () => {
           },
         };
         globalRecord.fetch = inlineFetch;
+        globalRecord.dispatchEvent = () => true;
         globalRecord.location = {
           hash: '',
           href: 'https://kovo.test/catalog',
@@ -1649,18 +1668,18 @@ describe('inline loader enhanced submit source', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(preventDefault).toHaveBeenCalledTimes(1);
-        expect(inlineFetch).not.toHaveBeenCalled();
-        expect(attributes).toEqual(
-          new Map([
-            ['data-error-code', 'NETWORK_ERROR'],
-            ['kovo-error', ''],
-          ]),
-        );
+        expect(inlineFetch).toHaveBeenCalledTimes(1);
+        const requestHeaders = inlineFetch.mock.calls[0]?.[1].headers;
+        expect(requestHeaders['Kovo-Targets']).toBeUndefined();
+        expect(requestHeaders['Kovo-Live-Targets']).toBeUndefined();
+        expect(attributes).toEqual(new Map());
       } finally {
         Object.assign(globalRecord, {
+          CustomEvent: originals.CustomEvent,
           FormData: originals.FormData,
           addEventListener: originals.addEventListener,
           document: originals.document,
+          dispatchEvent: originals.dispatchEvent,
           fetch: originals.fetch,
           location: originals.location,
         });

@@ -813,6 +813,7 @@ function emitServerPhase(
           (componentFact) => componentFact.names.registryKey === fact.component,
         )?.component?.localName ?? parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
+      moduleImportInsertionOffset: lowered.model.moduleImportInsertionOffset,
       source: insertDerivedWireKeyImports(patchedServerSource, lowered.model),
     }),
   );
@@ -1735,7 +1736,8 @@ function insertDerivedWireKeyImports(source: string, model: ComponentModuleModel
   if (importDeclarationEnd > 0) {
     return `${compilerStringSlice(source, 0, importDeclarationEnd)}\n${importLine}${compilerStringSlice(source, importDeclarationEnd)}`;
   }
-  return `${importLine}${source}`;
+  const start = model.moduleImportInsertionOffset;
+  return `${compilerStringSlice(source, 0, start)}${importLine}${compilerStringSlice(source, start)}`;
 }
 
 function hasDerivedWireImport(model: ComponentModuleModel, localName: string): boolean {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash, createHmac } from 'node:crypto';
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import {
   MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS,
@@ -12,6 +13,16 @@ import { createMemoryMutationReplayStore } from './replay.js';
 import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';
 import { createFrameworkCsrfSigningSecret, createSigningKeyRing } from './keyring.js';
 
+function liveTargetHeader(
+  descriptor: { component: string; props: Record<string, unknown>; target: string },
+  attestation: string,
+): string {
+  const target = encodeFrameworkIdentityToken(descriptor.target);
+  const component = encodeFrameworkIdentityToken(descriptor.component);
+  if (!target || !component) throw new TypeError('Test live-target identity is invalid.');
+  return `${target}#${component}@${attestation}:${JSON.stringify(descriptor.props)}`;
+}
+
 describe('mutation wire headers', () => {
   it('reads enhanced mutation wire headers case-insensitively', () => {
     expect(
@@ -19,8 +30,8 @@ describe('mutation wire headers', () => {
         'kovo-fragment': 'true',
         'Kovo-Idem': ' idem_01HX ',
         'Kovo-Live-Targets':
-          'cart-badge#components/cart/cart-badge/cart-badge@tok_cart:{}; recommendations#components/recommendations/recommendations@tok_rec:{"productId":"p1;still-json"}; cart-badge#ignored@tok_ignored:{}',
-        'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1, cart-badge=cart',
+          'cart-badge#components%2Fcart%2Fcart-badge%2Fcart-badge@tok_cart:{}; recommendations#components%2Frecommendations%2Frecommendations@tok_rec:{"productId":"p1;still-json"}; cart-badge#ignored@tok_ignored:{}',
+        'Kovo-Targets': 'cart-badge=cart; recommendations=product%3Ap1, cart-badge=cart',
       }),
     ).toEqual({
       fragment: true,
@@ -99,14 +110,11 @@ describe('mutation wire headers', () => {
         csrf,
         headers: new Map([
           ['Kovo-Fragment', 'true'],
-          ['Kovo-Form-Target', 'product-form:p1'],
+          ['Kovo-Form-Target', 'product-form%3Ap1'],
           ['Kovo-Idem', 'idem_01HY'],
           ['Kovo-Stream', 'true'],
-          [
-            'Kovo-Live-Targets',
-            `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
-          ],
-          ['Kovo-Targets', 'product-form:p1=product:p1'],
+          ['Kovo-Live-Targets', liveTargetHeader(descriptor, token)],
+          ['Kovo-Targets', 'product-form%3Ap1=product%3Ap1'],
         ]),
         rawInput: { productId: 'p1', quantity: 99 },
         replayStore,
@@ -167,7 +175,7 @@ describe('mutation wire headers', () => {
         buildToken: 'scoped-build',
         csrf,
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
         },
         liveTargetAudience: 'scoped-build',
         rawInput: {},
@@ -195,7 +203,7 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-a',
         csrf,
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
         },
         rawInput: {},
         request,
@@ -211,7 +219,7 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-b',
         csrf,
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
         },
         rawInput: {},
         request,
@@ -224,7 +232,7 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-a',
         csrf: { ...csrf, secret: 'different-live-target-secret-0123456789abcdef' },
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
         },
         rawInput: {},
         request,
@@ -237,7 +245,7 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-a',
         csrf,
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token.slice(0, -1)}:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, token.slice(0, -1)),
         },
         rawInput: {},
         request,
@@ -250,7 +258,7 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-a',
         csrf,
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}a:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, `${token}a`),
         },
         rawInput: {},
         request,
@@ -285,7 +293,7 @@ describe('mutation wire headers', () => {
       request: originalRequest,
     });
     const headers = {
-      'Kovo-Live-Targets': `account-summary#components/account/summary@${token}:{"accountId":"account-a"}`,
+      'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
     };
 
     expect(
@@ -336,7 +344,7 @@ describe('mutation wire headers', () => {
       request: originalRequest,
     });
     const headers = {
-      'Kovo-Live-Targets': `account-summary#components/account/summary@${token}:{"accountId":"account-a"}`,
+      'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
     };
 
     expect(
@@ -396,7 +404,7 @@ describe('mutation wire headers', () => {
       request: requestA,
     });
     const headers = {
-      'Kovo-Live-Targets': `account-summary#components/account/summary@${token}:{"accountId":"account-a"}`,
+      'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
     };
 
     expect(
@@ -459,7 +467,7 @@ describe('mutation wire headers', () => {
       request,
     });
     const headers = {
-      'Kovo-Live-Targets': `contextual#components/contextual/contextual@${token}:{}`,
+      'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
     };
 
     expect(
@@ -508,7 +516,7 @@ describe('mutation wire headers', () => {
         liveTargetAudience: 'build-a',
         csrf,
         headers: {
-          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${attestation}:{"productId":"p1"}`,
+          'Kovo-Live-Targets': liveTargetHeader(descriptor, attestation),
         },
         rawInput: {},
         request,
@@ -536,7 +544,7 @@ describe('mutation wire headers', () => {
           buildToken: 'mutation-wire-test-build',
           liveTargetAudience: 'mutation-wire-test-build',
           headers: {
-            'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+            'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
           },
           rawInput: {},
           request,
@@ -549,7 +557,7 @@ describe('mutation wire headers', () => {
           buildToken: 'mutation-wire-test-build',
           liveTargetAudience: 'mutation-wire-test-build',
           headers: {
-            'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}:{"productId":"p1"}`,
+            'Kovo-Live-Targets': liveTargetHeader(descriptor, token),
           },
           rawInput: {},
           request,
@@ -589,7 +597,7 @@ describe('mutation wire headers', () => {
         mutationWireRequestFromHeaders({
           buildToken: 'mutation-wire-test-build',
           liveTargetAudience: 'mutation-wire-test-build',
-          headers: { 'Kovo-Live-Targets': `a#components/a@${token}:{"id":"1"}` },
+          headers: { 'Kovo-Live-Targets': liveTargetHeader(descriptor, token) },
           rawInput: {},
           request: {},
         }).liveTargetDescriptors,
@@ -641,7 +649,7 @@ describe('mutation wire headers', () => {
     const liveTargetsHeader = Array.from({ length: count }, (_, i) => `t${i}=dep${i}`).join(',');
     const descriptorsHeader = Array.from(
       { length: count },
-      (_, i) => `t${i}#components/x/x@tok${i}:{"i":${i}}`,
+      (_, i) => `t${i}#components%2Fx%2Fx@tok${i}:{"i":${i}}`,
     ).join(';');
 
     const headers = readMutationWireHeaders({

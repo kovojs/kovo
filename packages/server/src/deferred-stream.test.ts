@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import vm from 'node:vm';
 
 import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import { renderDeferredStream } from './deferred-stream.js';
@@ -6,7 +7,7 @@ import { renderDeferredStream } from './deferred-stream.js';
 // G1 (bugs-part3 CSP-1): the apply/cleanup scripts now carry a CSP hash attribute and
 // their bodies are hashed for `response.csp`.
 const applyScriptBodyFor = (boundary: string) =>
-  `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){var m=b.match(/<kovo-fragment\\b[^>]*>/g)||[];for(var h of m){if(!/\\bpriority=["']visible["']/.test(h))continue;var v=(h.match(/\\btarget=["']([^"']+)["']/)||[])[1];var d=v&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
+  `var s=document.currentScript,n=s.previousSibling,e=[],v=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML){e.unshift(n.outerHTML);if(n.localName==="kovo-fragment"&&n.getAttribute("priority")==="visible")v.unshift(n.getAttribute("target"))}n.remove();if(t.includes("--${boundary}"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var w of v){var d=w!==null&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===w);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
 const cleanupScriptBodyFor = (boundary: string) =>
   `for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
 const applyScriptBody = applyScriptBodyFor('kovo-boundary');
@@ -197,6 +198,53 @@ describe('deferred streams', () => {
       ].join('\n'),
     );
     expect(result.csp.scripts).toEqual([applyHash, cleanupHash]);
+  });
+
+  it('matches visible placeholders by the browser-decoded semantic target', () => {
+    const semanticTarget = 'rail&details';
+    const placeholder = {
+      getAttribute: (name: string) => (name === 'target' ? semanticTarget : null),
+    };
+    const boundaryNode = {
+      outerHTML: undefined,
+      previousSibling: null,
+      remove() {},
+      textContent: '--kovo-boundary',
+    };
+    const fragmentNode = {
+      getAttribute: (name: string) =>
+        name === 'priority' ? 'visible' : name === 'target' ? semanticTarget : null,
+      localName: 'kovo-fragment',
+      outerHTML:
+        '<kovo-fragment target="rail&amp;details" priority="visible">ready</kovo-fragment>',
+      previousSibling: boundaryNode,
+      remove() {},
+      textContent: 'ready',
+    };
+    const currentScript = {
+      previousSibling: fragmentNode,
+      remove() {},
+    };
+    const observed: unknown[] = [];
+    class TestIntersectionObserver {
+      constructor(_callback: unknown, _options: unknown) {}
+      disconnect() {}
+      observe(value: unknown) {
+        observed.push(value);
+      }
+    }
+
+    vm.runInNewContext(applyScriptBody, {
+      IntersectionObserver: TestIntersectionObserver,
+      __kovo_a() {},
+      document: {
+        currentScript,
+        getElementsByTagName: () => [placeholder],
+      },
+    });
+
+    // The serialized fragment carries `&amp;`, but DOM getAttribute exposes `&` on both sides.
+    expect(observed).toEqual([placeholder]);
   });
 
   // L2-deferred-2 (bugs-part3): same-target append/replace fragments in one chunk keep

@@ -17,12 +17,16 @@ export const FRAMEWORK_WIRE_INPUT_GRAMMAR = Object.freeze({
   }),
   entrySeparator: ';',
   maxEntries: 64,
+  maxCurrentUrlCharacters: 1_536,
   // Node's default HTTP parser accepts roughly 16 KiB across the entire request-header block.
   // Two 4 KiB Kovo target headers plus a normal maximum-size cookie still leave room for the
   // origin, content type, CSRF/idempotency metadata, names, and ordinary transport headers.
   maxHeaderCharacters: 4 * 1024,
+  // Count exact framework-owned header-line bytes (name + `: ` + value + CRLF), leaving roughly
+  // 7 KiB of Node's default door for a 4 KiB cookie and ordinary browser transport headers.
+  maxTargetRequestHeaderBytes: 9 * 1024,
   presentationSeparator: '; ',
-  schema: 'kovo.wire-input-grammar/v1',
+  schema: 'kovo.wire-input-grammar/v2',
   target: Object.freeze({
     assignmentSeparator: '=',
     dependencySeparator: ' ',
@@ -306,19 +310,52 @@ export interface FrameworkWireLiveTargetInput {
   readonly target: string;
 }
 
+/** One semantic DOM target paired with its canonical ASCII wire entry. @internal */
+export interface FrameworkWireEntrySnapshot {
+  readonly target: string;
+  readonly wireEntry: string;
+}
+
+/** Inputs to the shared target-bearing request-header planner. @internal */
+export interface FrameworkTargetRequestHeaderInput {
+  readonly currentUrl: string;
+  readonly formTarget?: string;
+  readonly idem?: string;
+  readonly liveTargets: readonly FrameworkWireEntrySnapshot[];
+  readonly stream?: boolean;
+  readonly targets: readonly FrameworkWireEntrySnapshot[];
+}
+
+/** Exact admitted target-bearing request headers and their semantic snapshots. @internal */
+export interface FrameworkTargetRequestHeaderPlan {
+  readonly headers: Readonly<Record<string, string>>;
+  readonly liveTargets: readonly FrameworkWireEntrySnapshot[];
+  readonly targets: readonly FrameworkWireEntrySnapshot[];
+}
+
 /** @internal */
 export interface FrameworkWireTargetCodec {
   attestationIsValid(value: unknown): value is string;
   componentIsValid(value: unknown): value is string;
+  decodeFormTargetHeader(value: unknown): string | undefined;
+  decodeIdentityToken(value: unknown): string | undefined;
   decodeLiveTargetHeader(
     value: string,
     parseJson: (source: string) => unknown,
   ): FrameworkWireLiveTarget[];
   decodeTargetHeader(value: string): FrameworkWireTarget[];
-  encodeEntryList(values: readonly string[]): string;
+  encodeEntryList(values: readonly string[], maxCharacters?: number): string;
+  encodeFormTargetHeader(value: unknown): string | undefined;
+  encodeIdentityToken(value: unknown): string | undefined;
   encodeLiveTargetHeader(values: readonly FrameworkWireLiveTargetInput[]): string;
   encodeTargetHeader(values: readonly FrameworkWireTarget[]): string;
+  /** Scalar DOM identity validity; an explicitly present empty identity remains distinct. */
+  domIdentityIsValid(value: unknown): value is string;
+  /** Header/query identity validity, where the empty string is an ambiguous absence. */
   identityIsValid(value: unknown): value is string;
+  planTargetRequestHeaders(
+    input: FrameworkTargetRequestHeaderInput,
+  ): FrameworkTargetRequestHeaderPlan | undefined;
   snapshotLiveTargetProps(source: string | null | undefined): string;
 }
 
@@ -349,13 +386,16 @@ export function createFrameworkWireTargetCodec(
   const arrayJoin = IntrinsicArray.prototype.join;
   const arrayPush = IntrinsicArray.prototype.push;
   const arraySort = IntrinsicArray.prototype.sort;
+  const decodeUriComponent = decodeURIComponent;
+  const encodeUriComponent = encodeURIComponent;
   const jsonParse = JSON.parse;
   const numberIsFinite = Number.isFinite;
   const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const objectCreate = Object.create;
+  const objectFreeze = Object.freeze;
   const objectKeys = Object.keys;
   const regexpTest = RegExp.prototype.test;
   const stringCharCodeAt = String.prototype.charCodeAt;
-  const stringIncludes = String.prototype.includes;
   const stringIndexOf = String.prototype.indexOf;
   const stringLastIndexOf = String.prototype.lastIndexOf;
   const stringSlice = String.prototype.slice;
@@ -434,7 +474,7 @@ export function createFrameworkWireTargetCodec(
         output += '\\f';
       } else if (code === 0x0d) {
         output += '\\r';
-      } else if (code < 0x20 || code === 0x7f || code > 0xff) {
+      } else if (code < 0x20 || code === 0x7f || code > 0x7e) {
         // Fetch converts header values through Web IDL ByteString, while Node's outgoing HTTP
         // transport also rejects DEL. Preserve every JSON string code unit while keeping the
         // emitted field value transport-safe; DEL, surrogate pairs, and U+2028/U+2029 therefore
@@ -565,26 +605,40 @@ export function createFrameworkWireTargetCodec(
     return encodeJsonValue(parsed, 0);
   };
 
-  const identityIsValid = (value: unknown): value is string => {
-    if (typeof value !== 'string' || value.length === 0) return false;
+  const domIdentityIsValid = (value: unknown): value is string => {
+    if (typeof value !== 'string') return false;
     for (let index = 0; index < value.length; index += 1) {
       const code = apply(stringCharCodeAt, value, [index]);
-      const character = value[index] ?? '';
+      if (code === 0x00 || code === 0x0d) return false;
+      if (code >= 0xd800 && code <= 0xdbff) {
+        if (index + 1 >= value.length) return false;
+        const next = apply(stringCharCodeAt, value, [index + 1]);
+        if (next < 0xdc00 || next > 0xdfff) return false;
+        index += 1;
+      } else if (code >= 0xdc00 && code <= 0xdfff) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const identityIsValid = (value: unknown): value is string =>
+    domIdentityIsValid(value) && value.length > 0;
+
+  const componentIsValid = (value: unknown): value is string => identityIsValid(value);
+
+  const attestationIsValid = (value: unknown): value is string => {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 512) return false;
+    for (let index = 0; index < value.length; index += 1) {
+      const code = apply(stringCharCodeAt, value, [index]);
       if (
-        code <= 0x1f ||
-        code > 0xff ||
-        code === 0x7f ||
-        isWhitespace(character) ||
-        character === grammar.entrySeparator ||
-        character === ',' ||
-        character === grammar.descriptor.targetComponentSeparator ||
-        character === grammar.target.assignmentSeparator ||
-        character === '{' ||
-        character === '}' ||
-        character === '[' ||
-        character === ']' ||
-        character === '"' ||
-        character === '\\'
+        !(
+          (code >= 0x30 && code <= 0x39) ||
+          (code >= 0x41 && code <= 0x5a) ||
+          code === 0x5f ||
+          (code >= 0x61 && code <= 0x7a) ||
+          code === 0x2d
+        )
       ) {
         return false;
       }
@@ -592,14 +646,53 @@ export function createFrameworkWireTargetCodec(
     return true;
   };
 
-  const componentIsValid = (value: unknown): value is string =>
-    identityIsValid(value) &&
-    !apply(stringIncludes, value, [grammar.descriptor.attestationPropsSeparator]);
+  const encodeIdentityToken = (value: unknown): string | undefined => {
+    if (!identityIsValid(value)) return undefined;
+    let encoded: string;
+    try {
+      encoded = apply(encodeUriComponent, undefined, [value]);
+    } catch {
+      return undefined;
+    }
+    // encodeURIComponent deliberately leaves five reserved punctuation characters raw. Encode
+    // them too so the sole canonical alphabet is RFC 3986 unreserved plus uppercase %HH bytes.
+    let canonical = '';
+    for (let index = 0; index < encoded.length; index += 1) {
+      const code = apply(stringCharCodeAt, encoded, [index]);
+      if (code === 0x21) canonical += '%21';
+      else if (code === 0x27) canonical += '%27';
+      else if (code === 0x28) canonical += '%28';
+      else if (code === 0x29) canonical += '%29';
+      else if (code === 0x2a) canonical += '%2A';
+      else canonical += encoded[index] ?? '';
+    }
+    return canonical;
+  };
 
-  const attestationIsValid = (value: unknown): value is string =>
-    identityIsValid(value) &&
-    !apply(stringIncludes, value, [grammar.descriptor.componentAttestationSeparator]) &&
-    !apply(stringIncludes, value, [grammar.descriptor.attestationPropsSeparator]);
+  const decodeIdentityToken = (value: unknown): string | undefined => {
+    if (typeof value !== 'string' || value.length === 0) {
+      return undefined;
+    }
+    let decoded: string;
+    try {
+      decoded = apply(decodeUriComponent, undefined, [value]);
+    } catch {
+      return undefined;
+    }
+    return identityIsValid(decoded) && encodeIdentityToken(decoded) === value ? decoded : undefined;
+  };
+
+  const encodeFormTargetHeader = (value: unknown): string | undefined => {
+    const encoded = encodeIdentityToken(value);
+    return encoded !== undefined && encoded.length <= grammar.maxHeaderCharacters
+      ? encoded
+      : undefined;
+  };
+
+  const decodeFormTargetHeader = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.length <= grammar.maxHeaderCharacters
+      ? decodeIdentityToken(value)
+      : undefined;
 
   const appendUniqueByTarget = <Value extends { readonly target: string }>(
     output: Value[],
@@ -611,9 +704,18 @@ export function createFrameworkWireTargetCodec(
     push(output, value);
   };
 
-  const encodeEntryList = (values: readonly string[]): string => {
+  const encodeEntryList = (
+    values: readonly string[],
+    maxCharacters: number = grammar.maxHeaderCharacters,
+  ): string => {
     const valueCount = arrayLength(values, 'Kovo wire input entry list');
-    if (valueCount > grammar.maxEntries) {
+    if (
+      valueCount > grammar.maxEntries ||
+      typeof maxCharacters !== 'number' ||
+      maxCharacters < 0 ||
+      maxCharacters % 1 !== 0 ||
+      maxCharacters > grammar.maxHeaderCharacters
+    ) {
       throw new TypeError('Kovo wire input exceeds the ' + grammar.maxEntries + '-entry budget.');
     }
     let output = '';
@@ -622,12 +724,9 @@ export function createFrameworkWireTargetCodec(
       if (!entry.found || typeof entry.value !== 'string' || entry.value.length === 0) {
         throw new TypeError('Kovo wire input entries must be non-empty strings.');
       }
-      output += (index === 0 ? '' : grammar.presentationSeparator) + entry.value;
-      if (output.length > grammar.maxHeaderCharacters) {
-        throw new TypeError(
-          'Kovo wire input exceeds the ' + grammar.maxHeaderCharacters + '-character budget.',
-        );
-      }
+      const candidate = output + (output === '' ? '' : grammar.presentationSeparator) + entry.value;
+      if (candidate.length > maxCharacters) break;
+      output = candidate;
     }
     return output;
   };
@@ -642,22 +741,24 @@ export function createFrameworkWireTargetCodec(
       const value = ownData<FrameworkWireTarget>(values, index);
       const target = ownData<unknown>(value.value, 'target');
       const dependencies = ownData<unknown>(value.value, 'deps');
-      if (!value.found || !target.found || !identityIsValid(target.value)) {
+      const targetToken = encodeIdentityToken(target.value);
+      if (!value.found || !target.found || targetToken === undefined) {
         throw new TypeError('Kovo target header contains an invalid wire identity.');
       }
       if (!dependencies.found) {
         throw new TypeError('Kovo target header contains an invalid dependency list.');
       }
       const dependencyCount = arrayLength(dependencies.value, 'Kovo target header dependency list');
-      let entry = target.value;
+      let entry = targetToken;
       if (dependencyCount > 0) {
         const deps: string[] = [];
         for (let depIndex = 0; depIndex < dependencyCount; depIndex += 1) {
           const dep = ownData<unknown>(dependencies.value, depIndex);
-          if (!dep.found || !identityIsValid(dep.value)) {
+          const depToken = encodeIdentityToken(dep.value);
+          if (!dep.found || depToken === undefined) {
             throw new TypeError('Kovo target header contains an invalid dependency wire identity.');
           }
-          push(deps, dep.value);
+          push(deps, depToken);
         }
         entry +=
           grammar.target.assignmentSeparator +
@@ -680,10 +781,12 @@ export function createFrameworkWireTargetCodec(
       const component = ownData<unknown>(value.value, 'component');
       const attestation = ownData<unknown>(value.value, 'attestation');
       const propsSource = ownData<unknown>(value.value, 'propsSource');
-      if (!value.found || !target.found || !identityIsValid(target.value)) {
+      const targetToken = encodeIdentityToken(target.value);
+      const componentToken = encodeIdentityToken(component.value);
+      if (!value.found || !target.found || targetToken === undefined) {
         throw new TypeError('Kovo live-target header contains an invalid target wire identity.');
       }
-      if (!component.found || !componentIsValid(component.value)) {
+      if (!component.found || componentToken === undefined) {
         throw new TypeError('Kovo live-target header contains an invalid component wire identity.');
       }
       if (!attestation.found || !attestationIsValid(attestation.value)) {
@@ -702,9 +805,9 @@ export function createFrameworkWireTargetCodec(
       const props = snapshotLiveTargetProps(propsSource.value);
       push(
         encoded,
-        target.value +
+        targetToken +
           grammar.descriptor.targetComponentSeparator +
-          component.value +
+          componentToken +
           grammar.descriptor.componentAttestationSeparator +
           attestation.value +
           grammar.descriptor.attestationPropsSeparator +
@@ -769,8 +872,8 @@ export function createFrameworkWireTargetCodec(
       const entry = trim(entries[index] ?? '');
       if (entry === '') continue;
       const separator = indexOf(entry, grammar.target.assignmentSeparator);
-      const target = trim(separator < 0 ? entry : slice(entry, 0, separator));
-      if (!identityIsValid(target)) continue;
+      const target = decodeIdentityToken(trim(separator < 0 ? entry : slice(entry, 0, separator)));
+      if (target === undefined) continue;
       const deps: string[] = [];
       if (separator >= 0) {
         const rawDeps = slice(entry, separator + 1);
@@ -779,8 +882,8 @@ export function createFrameworkWireTargetCodec(
           const character = depIndex === rawDeps.length ? ' ' : (rawDeps[depIndex] ?? '');
           if (character !== ',' && !isWhitespace(character)) continue;
           if (depIndex > start) {
-            const dep = trim(slice(rawDeps, start, depIndex));
-            if (identityIsValid(dep)) push(deps, dep);
+            const dep = decodeIdentityToken(trim(slice(rawDeps, start, depIndex)));
+            if (dep !== undefined) push(deps, dep);
           }
           start = depIndex + 1;
         }
@@ -813,14 +916,12 @@ export function createFrameworkWireTargetCodec(
         grammar.descriptor.componentAttestationSeparator,
       );
       if (attestationStart <= 0) continue;
-      const target = trim(slice(entry, 0, targetEnd));
-      const component = trim(slice(componentAndAttestation, 0, attestationStart));
+      const target = decodeIdentityToken(trim(slice(entry, 0, targetEnd)));
+      const component = decodeIdentityToken(
+        trim(slice(componentAndAttestation, 0, attestationStart)),
+      );
       const attestation = trim(slice(componentAndAttestation, attestationStart + 1));
-      if (
-        !identityIsValid(target) ||
-        !componentIsValid(component) ||
-        !attestationIsValid(attestation)
-      ) {
+      if (target === undefined || component === undefined || !attestationIsValid(attestation)) {
         continue;
       }
       let props: unknown;
@@ -840,21 +941,232 @@ export function createFrameworkWireTargetCodec(
     return output;
   };
 
+  const headerValueIsAscii = (value: unknown): value is string => {
+    if (typeof value !== 'string') return false;
+    for (let index = 0; index < value.length; index += 1) {
+      const code = apply(stringCharCodeAt, value, [index]);
+      if (code < 0x20 || code > 0x7e) return false;
+    }
+    return true;
+  };
+
+  const idemIsCanonical = (value: unknown): value is string => {
+    if (typeof value !== 'string' || value.length !== 49) return false;
+    if (
+      apply(stringCharCodeAt, value, [0]) !== 0x76 ||
+      apply(stringCharCodeAt, value, [1]) !== 0x31 ||
+      apply(stringCharCodeAt, value, [2]) !== 0x5f ||
+      apply(stringCharCodeAt, value, [16]) !== 0x5f
+    ) {
+      return false;
+    }
+    for (let index = 3; index < 16; index += 1) {
+      const code = apply(stringCharCodeAt, value, [index]);
+      if (code < 0x30 || code > 0x39) return false;
+    }
+    for (let index = 17; index < 49; index += 1) {
+      const code = apply(stringCharCodeAt, value, [index]);
+      if (!((code >= 0x30 && code <= 0x39) || (code >= 0x61 && code <= 0x66))) return false;
+    }
+    return true;
+  };
+
+  const canonicalTargetEntryTarget = (wireEntry: string): string | undefined => {
+    const decoded = decodeTargetHeader(wireEntry);
+    if (arrayLength(decoded, 'Kovo decoded target entry') !== 1) return undefined;
+    const entry = ownData<FrameworkWireTarget>(decoded, 0);
+    if (!entry.found || encodeTargetHeader([entry.value!]) !== wireEntry) return undefined;
+    const target = ownData<unknown>(entry.value, 'target');
+    return target.found && typeof target.value === 'string' ? target.value : undefined;
+  };
+
+  const canonicalLiveTargetEntryTarget = (wireEntry: string): string | undefined => {
+    if (!boundedInput(wireEntry) || trim(wireEntry) !== wireEntry) return undefined;
+    const targetEnd = indexOf(wireEntry, grammar.descriptor.targetComponentSeparator);
+    const propsStart = indexOf(
+      wireEntry,
+      grammar.descriptor.attestationPropsSeparator,
+      targetEnd + 1,
+    );
+    if (targetEnd <= 0 || propsStart <= targetEnd + 1) return undefined;
+    const componentAndAttestation = slice(wireEntry, targetEnd + 1, propsStart);
+    const attestationStart = lastIndexOf(
+      componentAndAttestation,
+      grammar.descriptor.componentAttestationSeparator,
+    );
+    if (attestationStart <= 0) return undefined;
+    const targetToken = slice(wireEntry, 0, targetEnd);
+    const componentToken = slice(componentAndAttestation, 0, attestationStart);
+    const attestation = slice(componentAndAttestation, attestationStart + 1);
+    const propsSource = slice(wireEntry, propsStart + 1);
+    const target = decodeIdentityToken(targetToken);
+    const component = decodeIdentityToken(componentToken);
+    if (target === undefined || component === undefined || !attestationIsValid(attestation)) {
+      return undefined;
+    }
+    try {
+      if (snapshotLiveTargetProps(propsSource) !== propsSource) return undefined;
+    } catch {
+      return undefined;
+    }
+    return encodeIdentityToken(target)! +
+      grammar.descriptor.targetComponentSeparator +
+      encodeIdentityToken(component)! +
+      grammar.descriptor.componentAttestationSeparator +
+      attestation +
+      grammar.descriptor.attestationPropsSeparator +
+      propsSource ===
+      wireEntry
+      ? target
+      : undefined;
+  };
+
+  const encodeSnapshotEntries = (
+    snapshots: unknown,
+    maxCharacters: number,
+    kind: 'live-target' | 'target',
+  ): { readonly entries: FrameworkWireEntrySnapshot[]; readonly header: string } => {
+    const count = arrayLength(snapshots, 'Kovo target request snapshot');
+    const accepted: FrameworkWireEntrySnapshot[] = [];
+    let header = '';
+    for (let index = 0; index < count && index < grammar.maxEntries; index += 1) {
+      const snapshot = ownData<unknown>(snapshots, index);
+      const target = ownData<unknown>(snapshot.value, 'target');
+      const wireEntry = ownData<unknown>(snapshot.value, 'wireEntry');
+      const decodedTarget =
+        typeof wireEntry.value === 'string'
+          ? kind === 'target'
+            ? canonicalTargetEntryTarget(wireEntry.value)
+            : canonicalLiveTargetEntryTarget(wireEntry.value)
+          : undefined;
+      if (
+        !snapshot.found ||
+        !target.found ||
+        typeof target.value !== 'string' ||
+        !wireEntry.found ||
+        !headerValueIsAscii(wireEntry.value) ||
+        wireEntry.value.length === 0 ||
+        decodedTarget !== target.value
+      ) {
+        continue;
+      }
+      const candidate =
+        header + (header === '' ? '' : grammar.presentationSeparator) + wireEntry.value;
+      if (candidate.length > maxCharacters) break;
+      header = candidate;
+      push(
+        accepted,
+        apply(objectFreeze, IntrinsicObject, [
+          { target: target.value, wireEntry: wireEntry.value },
+        ]) as FrameworkWireEntrySnapshot,
+      );
+    }
+    return { entries: accepted, header };
+  };
+
+  const planTargetRequestHeaders = (
+    input: FrameworkTargetRequestHeaderInput,
+  ): FrameworkTargetRequestHeaderPlan | undefined => {
+    const currentUrl = ownData<unknown>(input, 'currentUrl');
+    const formTarget = ownData<unknown>(input, 'formTarget');
+    const idem = ownData<unknown>(input, 'idem');
+    const liveTargets = ownData<unknown>(input, 'liveTargets');
+    const stream = ownData<unknown>(input, 'stream');
+    const targets = ownData<unknown>(input, 'targets');
+    if (
+      !currentUrl.found ||
+      !headerValueIsAscii(currentUrl.value) ||
+      currentUrl.value.length === 0 ||
+      currentUrl.value.length > grammar.maxCurrentUrlCharacters ||
+      indexOf(currentUrl.value, '#') >= 0 ||
+      !liveTargets.found ||
+      !targets.found
+    ) {
+      return undefined;
+    }
+    if (idem.found && !idemIsCanonical(idem.value)) return undefined;
+    if (stream.found && typeof stream.value !== 'boolean') return undefined;
+
+    const headers = apply(objectCreate, IntrinsicObject, [null]) as Record<string, string>;
+    let used = 0;
+    const addRequired = (name: string, value: string): boolean => {
+      const lineBytes = name.length + 2 + value.length + 2;
+      if (used + lineBytes > grammar.maxTargetRequestHeaderBytes) return false;
+      headers[name] = value;
+      used += lineBytes;
+      return true;
+    };
+
+    if (!addRequired('Kovo-Fragment', 'true')) return undefined;
+    if (idem.found && !addRequired('Kovo-Idem', idem.value as string)) return undefined;
+    if (stream.value === true && !addRequired('Kovo-Stream', 'true')) return undefined;
+    if (!addRequired('Kovo-Current-Url', currentUrl.value)) return undefined;
+    if (formTarget.found) {
+      const encodedFormTarget = encodeFormTargetHeader(formTarget.value);
+      if (encodedFormTarget === undefined || !addRequired('Kovo-Form-Target', encodedFormTarget)) {
+        return undefined;
+      }
+    }
+
+    const addEntries = (
+      name: string,
+      snapshots: unknown,
+      kind: 'live-target' | 'target',
+    ): { readonly entries: FrameworkWireEntrySnapshot[]; readonly ok: boolean } => {
+      const lineOverhead = name.length + 4;
+      const remaining = grammar.maxTargetRequestHeaderBytes - used - lineOverhead;
+      if (remaining < 0) return { entries: [], ok: false };
+      const maxCharacters =
+        remaining < grammar.maxHeaderCharacters ? remaining : grammar.maxHeaderCharacters;
+      const encoded = encodeSnapshotEntries(snapshots, maxCharacters, kind);
+      return {
+        entries: encoded.entries,
+        ok: encoded.header === '' || addRequired(name, encoded.header),
+      };
+    };
+
+    const targetPlan = addEntries('Kovo-Targets', targets.value, 'target');
+    if (!targetPlan.ok) return undefined;
+    const liveTargetPlan = addEntries('Kovo-Live-Targets', liveTargets.value, 'live-target');
+    if (!liveTargetPlan.ok) return undefined;
+    return apply(objectFreeze, IntrinsicObject, [
+      {
+        headers: apply(objectFreeze, IntrinsicObject, [headers]),
+        liveTargets: apply(objectFreeze, IntrinsicObject, [liveTargetPlan.entries]),
+        targets: apply(objectFreeze, IntrinsicObject, [targetPlan.entries]),
+      },
+    ]) as FrameworkTargetRequestHeaderPlan;
+  };
+
   return {
     attestationIsValid,
     componentIsValid,
+    decodeFormTargetHeader,
+    decodeIdentityToken,
     decodeLiveTargetHeader,
     decodeTargetHeader,
+    domIdentityIsValid,
     encodeEntryList,
+    encodeFormTargetHeader,
+    encodeIdentityToken,
     encodeLiveTargetHeader,
     encodeTargetHeader,
     identityIsValid,
+    planTargetRequestHeaders,
     snapshotLiveTargetProps,
   };
 }
 
 const frameworkWireTargetCodec = createFrameworkWireTargetCodec(FRAMEWORK_WIRE_INPUT_GRAMMAR);
 
+/** @internal */
+export const decodeFrameworkFormTargetHeader: FrameworkWireTargetCodec['decodeFormTargetHeader'] = (
+  value,
+) => frameworkWireTargetCodec.decodeFormTargetHeader(value);
+/** @internal */
+export const decodeFrameworkIdentityToken: FrameworkWireTargetCodec['decodeIdentityToken'] = (
+  value,
+) => frameworkWireTargetCodec.decodeIdentityToken(value);
 /** @internal */
 export const decodeFrameworkLiveTargetHeader: FrameworkWireTargetCodec['decodeLiveTargetHeader'] = (
   value,
@@ -865,8 +1177,18 @@ export const decodeFrameworkTargetHeader: FrameworkWireTargetCodec['decodeTarget
   value,
 ) => frameworkWireTargetCodec.decodeTargetHeader(value);
 /** @internal */
-export const encodeFrameworkWireEntryList: FrameworkWireTargetCodec['encodeEntryList'] = (values) =>
-  frameworkWireTargetCodec.encodeEntryList(values);
+export const encodeFrameworkWireEntryList: FrameworkWireTargetCodec['encodeEntryList'] = (
+  values,
+  maxCharacters,
+) => frameworkWireTargetCodec.encodeEntryList(values, maxCharacters);
+/** @internal */
+export const encodeFrameworkFormTargetHeader: FrameworkWireTargetCodec['encodeFormTargetHeader'] = (
+  value,
+) => frameworkWireTargetCodec.encodeFormTargetHeader(value);
+/** @internal */
+export const encodeFrameworkIdentityToken: FrameworkWireTargetCodec['encodeIdentityToken'] = (
+  value,
+) => frameworkWireTargetCodec.encodeIdentityToken(value);
 /** @internal */
 export const encodeFrameworkLiveTargetHeader: FrameworkWireTargetCodec['encodeLiveTargetHeader'] = (
   values,
@@ -884,8 +1206,15 @@ export const frameworkWireComponentIsValid: FrameworkWireTargetCodec['componentI
   value,
 ) => frameworkWireTargetCodec.componentIsValid(value);
 /** @internal */
+export const frameworkDomIdentityIsValid: FrameworkWireTargetCodec['domIdentityIsValid'] = (
+  value,
+) => frameworkWireTargetCodec.domIdentityIsValid(value);
+/** @internal */
 export const frameworkWireIdentityIsValid: FrameworkWireTargetCodec['identityIsValid'] = (value) =>
   frameworkWireTargetCodec.identityIsValid(value);
+/** @internal */
+export const planFrameworkTargetRequestHeaders: FrameworkWireTargetCodec['planTargetRequestHeaders'] =
+  (input) => frameworkWireTargetCodec.planTargetRequestHeaders(input);
 /** @internal */
 export const snapshotFrameworkLiveTargetProps: FrameworkWireTargetCodec['snapshotLiveTargetProps'] =
   (source) => frameworkWireTargetCodec.snapshotLiveTargetProps(source);

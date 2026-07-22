@@ -1,46 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, queryWireKey, splitQueryWireKey } from './query-store.js';
+import { createQueryIdentity, createQueryStore, queryIdentityDisplay } from './query-store.js';
 
-// SPEC §9.4/§10.2 (F5): the typed-read endpoint dispatches by query NAME, so a
-// refetch must split the canonical `name:keyValue` wireKey and use the name as
-// the path. `splitQueryWireKey` is the inverse of `queryWireKey`.
-describe('splitQueryWireKey (F5)', () => {
-  it('splits a keyed wireKey into its name and instance key value', () => {
-    expect(splitQueryWireKey('recommendations:user-1')).toEqual({
-      keyValue: 'user-1',
-      name: 'recommendations',
-    });
+// SPEC §9.4/§10.2: query names may contain `:`, so a display wire key has no sound inverse.
+// Callers retain structured `{ name, key }` facts and use this helper only to render them.
+describe('queryIdentityDisplay', () => {
+  it('renders unkeyed, keyed, colon-bearing, and empty-value instance identities', () => {
+    expect(queryIdentityDisplay(createQueryIdentity('cart'))).toBe('cart');
+    expect(
+      queryIdentityDisplay(createQueryIdentity('recommendations', 'recommendations:user-1')),
+    ).toBe('recommendations:user-1');
+    expect(queryIdentityDisplay(createQueryIdentity('catalog:product', 'catalog:product:p1'))).toBe(
+      'catalog:product:p1',
+    );
+    expect(queryIdentityDisplay(createQueryIdentity('cart', 'cart:'))).toBe('cart:');
+    expect(() => createQueryIdentity('cart', '')).toThrow(/non-empty valid scalar/u);
   });
 
-  it('returns just the name for an unkeyed wireKey', () => {
-    expect(splitQueryWireKey('cart')).toEqual({ name: 'cart' });
-  });
-
-  it('keeps colons after the first inside the instance key value', () => {
-    // The instance key value itself may contain colons (e.g. a composite key).
-    expect(splitQueryWireKey('product:a:b')).toEqual({ keyValue: 'a:b', name: 'product' });
-  });
-
-  it('does not dispatch canonical query identities through late String prototype changes', () => {
-    const indexOf = Object.getOwnPropertyDescriptor(String.prototype, 'indexOf');
-    const slice = Object.getOwnPropertyDescriptor(String.prototype, 'slice');
+  it('does not dispatch structured query identities through late String prototype changes', () => {
     const startsWith = Object.getOwnPropertyDescriptor(String.prototype, 'startsWith');
-    if (!indexOf || !slice || !startsWith) throw new Error('Missing String security descriptors');
-    Object.defineProperty(String.prototype, 'indexOf', { ...indexOf, value: () => -1 });
-    Object.defineProperty(String.prototype, 'slice', { ...slice, value: () => 'attacker' });
+    if (!startsWith) throw new Error('Missing String security descriptor');
     Object.defineProperty(String.prototype, 'startsWith', { ...startsWith, value: () => false });
     try {
-      expect(splitQueryWireKey('recommendations:user-1')).toEqual({
-        keyValue: 'user-1',
-        name: 'recommendations',
-      });
-      expect(queryWireKey('recommendations', 'recommendations:user-1')).toBe(
-        'recommendations:user-1',
-      );
+      expect(
+        queryIdentityDisplay(createQueryIdentity('recommendations', 'recommendations:user-1')),
+      ).toBe('recommendations:user-1');
     } finally {
-      Object.defineProperty(String.prototype, 'indexOf', indexOf);
-      Object.defineProperty(String.prototype, 'slice', slice);
       Object.defineProperty(String.prototype, 'startsWith', startsWith);
     }
   });

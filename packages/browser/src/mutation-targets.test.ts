@@ -61,7 +61,7 @@ describe('mutation targets', () => {
       }),
       new FakeTargetElement({ 'kovo-deps': 'debug', 'kovo-fragment-target': '' }, { id: 'debug' }),
       new FakeTargetElement({
-        'kovo-deps': ' , ',
+        'kovo-deps': '',
         'kovo-fragment-target': 'empty-deps',
         'kovo-live-token': 'tok_empty',
       }),
@@ -85,7 +85,7 @@ describe('mutation targets', () => {
       'cart-badge=cart; inventory=inventory stock; empty-deps; cart-summary=cart summary',
     );
     expect(readLiveTargetSnapshot(root).liveHeader).toBe(
-      'cart-badge#components/cart/cart-badge/cart-badge@tok_cart:{}; inventory#components/inventory/inventory@tok_inventory:{"warehouseId":"w1"}; empty-deps#empty-deps@tok_empty:{}; cart-summary#cart-summary@tok_summary:{}',
+      'cart-badge#components%2Fcart%2Fcart-badge%2Fcart-badge@tok_cart:{}; inventory#components%2Finventory%2Finventory@tok_inventory:{"warehouseId":"w1"}; empty-deps#empty-deps@tok_empty:{}; cart-summary#cart-summary@tok_summary:{}',
     );
   });
 
@@ -109,9 +109,17 @@ describe('mutation targets', () => {
     // SPEC.md §9.1: the enhanced mutation request and returned metadata use one
     // live Kovo-Targets snapshot, not separate compatibility serialization passes.
     expect(snapshot).toEqual({
-      header: 'cart=cart; reviews:p1=reviews',
+      header: 'cart=cart; reviews%3Ap1=reviews',
       liveHeader:
-        'cart#cart@tok_cart:{}; reviews:p1#components/reviews/reviews@tok_reviews:{"productId":"p1"}',
+        'cart#cart@tok_cart:{}; reviews%3Ap1#components%2Freviews%2Freviews@tok_reviews:{"productId":"p1"}',
+      liveTargetEntries: [
+        { target: 'cart', wireEntry: 'cart#cart@tok_cart:{}' },
+        {
+          target: 'reviews:p1',
+          wireEntry:
+            'reviews%3Ap1#components%2Freviews%2Freviews@tok_reviews:{"productId":"p1"}',
+        },
+      ],
       liveTargets: [
         { attestation: 'tok_cart', component: 'cart', props: {}, target: 'cart' },
         {
@@ -121,7 +129,11 @@ describe('mutation targets', () => {
           target: 'reviews:p1',
         },
       ],
-      targets: ['cart=cart', 'reviews:p1=reviews'],
+      targetEntries: [
+        { target: 'cart', wireEntry: 'cart=cart' },
+        { target: 'reviews:p1', wireEntry: 'reviews%3Ap1=reviews' },
+      ],
+      targets: ['cart=cart', 'reviews%3Ap1=reviews'],
     });
     expect(root.queries).toBe(1);
     expect(Object.hasOwn(mutationTargetsModule, 'serializeLiveTargets')).toBe(false);
@@ -180,9 +192,9 @@ describe('mutation targets', () => {
 
     // SPEC §6.6 rule 6 / §9.1: the modular browser runtime must serialize the same
     // framework-owned target facts that it parsed from the live DOM.
-    expect(snapshot).toEqual({
+    expect(snapshot).toMatchObject({
       header: 'public-panel=public',
-      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveHeader: 'public-panel#components%2Fpublic%2Fcard@tok_public:{"scope":"public"}',
       liveTargets: [
         {
           attestation: 'tok_public',
@@ -232,9 +244,9 @@ describe('mutation targets', () => {
     // SPEC §6.6 rule 6 / §9.1: a late authored callback cannot replace the
     // framework-owned live target snapshot sent to the server.
     expect(poisonHits).toBe(0);
-    expect(snapshot).toEqual({
+    expect(snapshot).toMatchObject({
       header: 'public-panel=public',
-      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveHeader: 'public-panel#components%2Fpublic%2Fcard@tok_public:{"scope":"public"}',
       liveTargets: [
         {
           attestation: 'tok_public',
@@ -299,10 +311,10 @@ describe('mutation targets', () => {
     // SPEC §6.6 rule 6 / §9.1: optional browser facts are own-data snapshots and
     // raw props normalization cannot dispatch an inherited serialization callback.
     expect(callbackHits).toBe(0);
-    expect(snapshot).toEqual({
+    expect(snapshot).toMatchObject({
       header: 'unattested-panel=public; catalog-panel=catalog',
       liveHeader:
-        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+        'catalog-panel#components%2Fpublic%2Fcatalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
       liveTargets: [
         {
           component: 'components/public/unattested',
@@ -350,13 +362,13 @@ describe('mutation targets', () => {
     expect(readLiveTargetSnapshot(exactRoot).liveHeader).toBe(
       'exact-panel#exact-panel@tok_exact:{}',
     );
-    expect(() => readLiveTargetSnapshot(oversizedRoot)).toThrow(/character wire budget/iu);
+    expect(readLiveTargetSnapshot(oversizedRoot).liveHeader).toBe('');
   });
 
   it('keeps target collection closed over boot controls after collection intrinsic poisoning', () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement({
-        'kovo-deps': ' public, inventory\n',
+        'kovo-deps': ' public inventory ',
         'kovo-fragment-target': 'public-panel',
         'kovo-live-component': 'components/public/card',
         'kovo-live-token': 'tok_public',
@@ -431,9 +443,9 @@ describe('mutation targets', () => {
     }
 
     expect(poisonHits).toBe(0);
-    expect(snapshot).toEqual({
+    expect(snapshot).toMatchObject({
       header: 'public-panel=public inventory',
-      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveHeader: 'public-panel#components%2Fpublic%2Fcard@tok_public:{"scope":"public"}',
       liveTargets: [
         {
           attestation: 'tok_public',

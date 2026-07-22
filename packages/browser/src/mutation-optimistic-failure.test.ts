@@ -37,7 +37,7 @@ describe('optimistic enhanced mutation failure handling', () => {
         fetch,
         form: { action: '/_m/cart/add', method: 'post' },
         formData: new FormData(),
-        idem: 'idem_failed_optimistic',
+        idem: 'v1_1750000000000_00000000000000000000000000000023',
         input: { quantity: 2 },
         onError,
         optimistic: {
@@ -98,7 +98,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_first',
+      idem: 'v1_1750000000000_00000000000000000000000000000024',
       input: { quantity: 2 },
       onError,
       optimistic,
@@ -143,7 +143,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_await_fragment_missing_truth',
+      idem: 'v1_1750000000000_00000000000000000000000000000025',
       input: { productId: 'p1' },
       onError,
       optimistic: {
@@ -197,7 +197,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_await_fragment_server_truth',
+      idem: 'v1_1750000000000_00000000000000000000000000000026',
       input: { productId: 'p1' },
       onError,
       optimistic: {
@@ -211,7 +211,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       store,
     });
 
-    expect(result.queries).toEqual(['productGrid']);
+    expect(result.queries).toEqual([{ name: 'productGrid' }]);
     expect(root.targets.get('product-grid')?.html).toBe('<section>fresh</section>');
     expect(onError).not.toHaveBeenCalled();
     expect(store.get('productGrid')).toEqual({ products: [{ id: 'p1', stock: 1 }] });
@@ -244,7 +244,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_malformed_optimistic',
+      idem: 'v1_1750000000000_00000000000000000000000000000027',
       input: { quantity: 2 },
       onError,
       optimistic: {
@@ -316,7 +316,7 @@ describe('optimistic enhanced mutation failure handling', () => {
       ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'm2',
+      idem: 'v1_1750000000000_00000000000000000000000000000028',
       input: { quantity: 5 },
       optimistic,
       rebaser,

@@ -72,7 +72,7 @@ describe('component root stamp security', () => {
     });
     const props = { filters: { z: 2, a: 1 }, productId: 'p1' };
     const request = {};
-    const html = '<card-root kovo-c="card-root" kovo-deps="legacy, local">safe</card-root>';
+    const html = '<card-root kovo-c="card-root" kovo-deps="legacy local">safe</card-root>';
     const native = {
       arrayFilter: Array.prototype.filter,
       arrayJoin: Array.prototype.join,
@@ -183,7 +183,7 @@ describe('component root stamp security', () => {
 
     expect(stamped).not.toContain('<img');
     expect(stamped).not.toContain('admin');
-    expect(stamped).toContain('kovo-deps="legacy catalog/items"');
+    expect(stamped).toContain('kovo-deps="legacy catalog%2Fitems"');
     expect(stamped).toContain(`kovo-fragment-target="${target}"`);
     expect(stamped).toContain(`kovo-live-token="${expectedToken}"`);
     expect(stamped).toContain(

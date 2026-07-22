@@ -95,7 +95,7 @@ describe('queryRef visible-return refetch', () => {
     await Promise.resolve();
 
     // SPEC.md section 4.4: visible-return refetch follows queryRef data discovered after install.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
     expect(fetch).toHaveBeenCalledTimes(1);
 
     resolveFetchText?.('<kovo-query name="cart">{"count":2}</kovo-query>');
@@ -147,7 +147,7 @@ describe('queryRef visible-return refetch', () => {
 
     // SPEC.md §8/§9.3: a bfcache pageshow resumes from server truth through
     // the same typed-read recovery path as visible-return refetch.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     expect(fetch).toHaveBeenCalledWith('/_q/cart', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
@@ -274,9 +274,9 @@ describe('queryRef visible-return refetch', () => {
         url === '/_q/cart'
           ? [
               '<kovo-query name="cart">{"count":2}</kovo-query>',
-              '<kovo-query name="recommendations:user-1">{"items":["p1"]}</kovo-query>',
+              '<kovo-query name="group:catalog" key="group:catalog:item">{"items":["p1"]}</kovo-query>',
             ].join('')
-          : '<kovo-query name="recommendations:user-1">{"items":["p2"]}</kovo-query>',
+          : '<kovo-query name="group:catalog" key="group:catalog:item">{"items":["p2"]}</kovo-query>',
     }));
 
     root.scripts = [
@@ -295,35 +295,37 @@ describe('queryRef visible-return refetch', () => {
 
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
-    expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart']);
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(1, [{ name: 'cart' }]);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
     expect(store.get('cart')).toEqual({ count: 2 });
-    expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p1'] });
+    expect(store.get('group:catalog', 'group:catalog:item')).toEqual({ items: ['p1'] });
 
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
     // SPEC.md §4.4: typed-read queryRef chunks join the same visible-return
     // ledger as server-rendered hydration and later mutation/deferred chunks,
     // including canonical instance keys from SPEC.md §10.2.
-    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'recommendations:user-1']);
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, [
+      { name: 'cart' },
+      { key: 'group:catalog:item', name: 'group:catalog' },
+    ]);
     expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    // SPEC.md §9.4/§10.2 (F5): a keyed queryRef refetch dispatches by NAME with the instance
-    // key as a search param (`/_q/recommendations?key=user-1`), not the canonical key as a
-    // path (`/_q/recommendations%3Auser-1`), which would 404 and never replace the stale base.
-    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations?key=user-1', {
+    // SPEC.md §9.4/§10.2: even when the query name itself contains `:`, the retained structured
+    // facts dispatch by exact NAME and derive the args value from the matching canonical key.
+    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/group%3Acatalog?key=item', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p2'] });
+    expect(store.get('group:catalog', 'group:catalog:item')).toEqual({ items: ['p2'] });
   });
 
   it('forwards visible-return typed read parse errors to the loader error seam', async () => {
@@ -467,7 +469,7 @@ describe('queryRef visible-return refetch', () => {
     await visibleReturn;
 
     // SPEC.md §4.4: disposal stops the remaining typed-read leg of a visible-return pass.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     expect(fetch).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 1 });
   });
@@ -509,7 +511,7 @@ describe('queryRef visible-return refetch', () => {
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
     // `productGrid` was declared `refetchOnFocus: false`, so it is excluded; `cart` still refetches.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledWith('/_q/cart', {
       cache: 'no-store',

@@ -426,7 +426,7 @@ function canReuseDomElement(
 }
 
 function domMorphKey(element: Element, security = requireBrowserDomSecurity()): string | null {
-  return security.readAttribute(element, 'kovo-key') ?? security.readAttribute(element, 'data-key');
+  return security.readAttribute(element, 'kovo-key');
 }
 
 function syncDomAttributes(
@@ -522,7 +522,7 @@ function restoreActiveDomState(state: ActiveDomState | null): void {
 function captureDomScrollStates(root: Element) {
   const security = requireBrowserDomSecurity();
   return security
-    .queryAllElements(root, '[kovo-key], [data-key]')
+    .queryAllElements(root, '[kovo-key]')
     .map((element) => element as HTMLElement)
     .filter((element) => element.scrollLeft !== 0 || element.scrollTop !== 0)
     .map((element) => ({

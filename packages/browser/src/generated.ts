@@ -31,7 +31,7 @@ export type {
   TemplateStampItem,
 } from './query-bindings.js';
 export { createQueryStore } from './query-store.js';
-export type { QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
+export type { QueryIdentity, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
 export type { QueryApplyInterposition } from './query-apply.js';
 export type {
   InlineQueryEvent,

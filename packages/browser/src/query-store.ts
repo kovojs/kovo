@@ -1,4 +1,7 @@
+import { frameworkWireIdentityIsValid } from '@kovojs/core/internal/wire-input-grammar';
+
 import {
+  freezeSecurityValue,
   securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapDelete,
@@ -13,7 +16,6 @@ import {
   securitySetForEach,
   securityStringIndexOf,
   securityStringSlice,
-  securityStringStartsWith,
 } from './security-witness-intrinsics.js';
 
 /**
@@ -51,6 +53,12 @@ export interface QueryStore {
  * A point-in-time copy of query values, used to roll back optimistic updates.
  */
 export type QuerySnapshot = Map<string, unknown>;
+
+/** Exact query identity; `key` is separate because query names may contain `:`. */
+export interface QueryIdentity {
+  readonly key?: string;
+  readonly name: string;
+}
 
 /**
  * Create the client-side query store: the in-memory source of truth the loader
@@ -158,43 +166,46 @@ export function createQueryStore(): QueryStore {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function queryStoreKey(name: string, key: string | undefined): string {
+  if (
+    !frameworkWireIdentityIsValid(name) ||
+    (key !== undefined && !frameworkWireIdentityIsValid(key))
+  ) {
+    throw new TypeError('Kovo query store identities must be non-empty valid scalar strings.');
+  }
   return key === undefined ? name : `${name}\0${key}`;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
-export function queryWireKey(name: string, key: string | undefined): string {
-  if (key === undefined) return name;
-
-  return securityStringStartsWith(key, `${name}:`) ? key : `${name}:${key}`;
+/** @internal Construct the single frozen query-identity currency used by runtime results/hooks. */
+export function createQueryIdentity(name: string, key?: string): QueryIdentity {
+  if (
+    !frameworkWireIdentityIsValid(name) ||
+    (key !== undefined && !frameworkWireIdentityIsValid(key))
+  ) {
+    throw new TypeError('Kovo query identities must be non-empty valid scalar strings.');
+  }
+  return freezeSecurityValue(key === undefined ? { name } : { key, name });
 }
 
-/**
- * Split a `queryWireKey` back into its query `name` and (optional) instance
- * `keyValue` (SPEC §9.4/§10.2, F5). The canonical instance key is `name:keyValue`;
- * the typed-read endpoint dispatches by query NAME (`/_q/<name>`), so a refetch
- * must use the name as the path and never `/_q/<name:keyValue>` (which 404s — the
- * server registers no query named `name:keyValue`). `keyValue` is the §10.2
- * instance-key value (e.g. `user-1` for `recommendations:user-1`).
- *
- * Runtime API used by Kovo applications and generated runtime integration.
- */
-export function splitQueryWireKey(wireKey: string): { keyValue?: string; name: string } {
-  const separator = securityStringIndexOf(wireKey, ':');
-  if (separator === -1) return { name: wireKey };
-
-  return {
-    keyValue: securityStringSlice(wireKey, separator + 1),
-    name: securityStringSlice(wireKey, 0, separator),
-  };
+/** @internal Explicit presentation conversion for DOM dependency stamps and legacy wire labels. */
+export function queryIdentityDisplay(identity: QueryIdentity): string {
+  const name = securityGetOwnPropertyDescriptor(identity, 'name');
+  const key = securityGetOwnPropertyDescriptor(identity, 'key');
+  if (!name || !('value' in name) || !frameworkWireIdentityIsValid(name.value)) {
+    throw new TypeError('Kovo query display identity requires a non-empty own-data scalar name.');
+  }
+  if (key && (!('value' in key) || !frameworkWireIdentityIsValid(key.value))) {
+    throw new TypeError('Kovo query display identity key must be non-empty own-data scalar text.');
+  }
+  return key && 'value' in key ? (key.value as string) : name.value;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
-export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
+export function queryIdentityFromStoreKey(storeKey: string): QueryIdentity {
   const separator = securityStringIndexOf(storeKey, '\0');
-  if (separator === -1) return { name: storeKey };
+  if (separator === -1) return createQueryIdentity(storeKey);
 
-  return {
-    key: securityStringSlice(storeKey, separator + 1),
-    name: securityStringSlice(storeKey, 0, separator),
-  };
+  return createQueryIdentity(
+    securityStringSlice(storeKey, 0, separator),
+    securityStringSlice(storeKey, separator + 1),
+  );
 }

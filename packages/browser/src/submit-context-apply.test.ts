@@ -71,7 +71,7 @@ describe('submit context apply', () => {
     });
 
     const result = await ctx.submit(addToCart, {
-      idem: 'idem_ctx',
+      idem: 'v1_1750000000000_00000000000000000000000000000001',
       input: { productId: 'p1', quantity: 2 },
     });
 
@@ -81,12 +81,13 @@ describe('submit context apply', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_ctx',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000001',
         'Kovo-Live-Targets': 'cart-badge#cart-badge@tok_cart:{}',
         'Kovo-Targets': 'cart-badge',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
     expect(result.appliedFragments).toEqual(['cart-badge']);
     expect(observed).toEqual(['morph:2:2 items']);

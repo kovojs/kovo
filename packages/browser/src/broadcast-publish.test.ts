@@ -97,7 +97,7 @@ describe('mutation broadcast publish', () => {
     // direct enhanced submits, updating query data before fragment morphing.
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
-    expect(onAppliedQueries).toHaveBeenCalledWith(['cart']);
+    expect(onAppliedQueries).toHaveBeenCalledWith([{ name: 'cart' }]);
     expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart:1'] }]);
   });
 

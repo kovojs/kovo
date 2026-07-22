@@ -52,7 +52,7 @@ describe('query visible-return refetch ledger', () => {
 
     // SPEC §6.6/§9.4: the visible-return ledger ultimately selects credential-bearing
     // /_q/ requests, so only dense remembered facts may influence eligibility.
-    expect(eligible).toEqual(['cart']);
+    expect(eligible).toEqual([{ name: 'cart' }]);
   });
 
   it('dedupes hydrated and later-applied query names while preserving first-seen order', () => {
@@ -61,18 +61,51 @@ describe('query visible-return refetch ledger', () => {
     ledger.remember(['reviews', 'cart', 'recommendations', 'inventory']);
 
     // SPEC.md section 4.4: visible-return refetch follows successfully hydrated/applied query data.
-    expect(ledger.eligible()).toEqual(['cart', 'inventory', 'reviews', 'recommendations']);
-    expect(ledger.eligible(['inventory', 'recommendations'])).toEqual(['cart', 'reviews']);
+    expect(ledger.eligible()).toEqual([
+      { name: 'cart' },
+      { name: 'inventory' },
+      { name: 'reviews' },
+      { name: 'recommendations' },
+    ]);
+    expect(ledger.eligible(['inventory', 'recommendations'])).toEqual([
+      { name: 'cart' },
+      { name: 'reviews' },
+    ]);
   });
 
   it('excludes every instance key when a keyed query name is opted out (SPEC §9.3/§9.4)', () => {
     // SPEC §9.4: typed reads dispatch `/_q/` by NAME, so a declared `refetchOnFocus: false`
     // opt-out is keyed by query name and must exclude every instance key of that query.
-    const ledger = createRefetchQueryLedger(['cart', 'product:p1', 'product:p2', 'reviews']);
+    const ledger = createRefetchQueryLedger([
+      'cart',
+      { key: 'product:p1', name: 'product' },
+      { key: 'product:p2', name: 'product' },
+      'reviews',
+    ]);
 
-    expect(ledger.eligible(['product'])).toEqual(['cart', 'reviews']);
-    // An exact instance-key opt-out still matches only that one instance.
-    expect(ledger.eligible(['product:p1'])).toEqual(['cart', 'product:p2', 'reviews']);
+    expect(ledger.eligible(['product'])).toEqual([{ name: 'cart' }, { name: 'reviews' }]);
+    // String opt-outs are names only; an instance identity cannot masquerade as a query name.
+    expect(ledger.eligible(['product:p1'])).toEqual([
+      { name: 'cart' },
+      { key: 'product:p1', name: 'product' },
+      { key: 'product:p2', name: 'product' },
+      { name: 'reviews' },
+    ]);
+  });
+
+  it('keeps colon-bearing names distinct from keyed query identities', () => {
+    const ledger = createRefetchQueryLedger([
+      'catalog:featured',
+      { key: 'catalog:product:p1', name: 'catalog:product' },
+    ]);
+
+    const eligible = ledger.eligible();
+    expect(eligible).toEqual([
+      { name: 'catalog:featured' },
+      { key: 'catalog:product:p1', name: 'catalog:product' },
+    ]);
+    expect(Object.isFrozen(eligible)).toBe(true);
+    expect(eligible.every((identity) => Object.isFrozen(identity))).toBe(true);
   });
 
   it('reads only kovo-query hydration scripts from the visible-return root', () => {

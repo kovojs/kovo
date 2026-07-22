@@ -63,7 +63,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: firstFormData,
-      idem: 'idem_first',
+      idem: 'v1_1750000000000_00000000000000000000000000000001',
       input: { quantity: 1 },
       optimistic,
       queue,
@@ -75,7 +75,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: secondFormData,
-      idem: 'idem_second',
+      idem: 'v1_1750000000000_00000000000000000000000000000002',
       input: { quantity: 2 },
       optimistic,
       queue,
@@ -99,8 +99,14 @@ describe('optimistic enhanced mutation queueing', () => {
     releaseFirst?.();
 
     await expect(Promise.all([first, second])).resolves.toMatchObject([
-      { idem: 'idem_first', queries: ['cart'] },
-      { idem: 'idem_second', queries: ['cart'] },
+      {
+        idem: 'v1_1750000000000_00000000000000000000000000000001',
+        queries: [{ name: 'cart' }],
+      },
+      {
+        idem: 'v1_1750000000000_00000000000000000000000000000002',
+        queries: [{ name: 'cart' }],
+      },
     ]);
     // Predictions applied on enqueue; the head drains and reconciles (re-applying the still-pending
     // tail transform over the head's truth — the extra '2:optimistic'), then the tail's fetch sends.
@@ -133,7 +139,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_direct',
+      idem: 'v1_1750000000000_00000000000000000000000000000003',
       input: { quantity: 1 },
       optimistic: {
         queue: 'cart',
@@ -152,7 +158,10 @@ describe('optimistic enhanced mutation queueing', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(store.get('cart')).toEqual({ count: 1 });
 
-    await expect(result).resolves.toMatchObject({ idem: 'idem_direct', queries: ['cart'] });
+    await expect(result).resolves.toMatchObject({
+      idem: 'v1_1750000000000_00000000000000000000000000000003',
+      queries: [{ name: 'cart' }],
+    });
     expect(store.get('cart')).toEqual({ count: 2 });
   });
 
@@ -203,7 +212,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: firstFormData,
-      idem: 'idem_first',
+      idem: 'v1_1750000000000_00000000000000000000000000000001',
       input: { quantity: 1 },
       onError,
       optimistic,
@@ -217,7 +226,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: secondFormData,
-      idem: 'idem_second',
+      idem: 'v1_1750000000000_00000000000000000000000000000002',
       input: { quantity: 2 },
       onError,
       optimistic,
@@ -247,7 +256,10 @@ describe('optimistic enhanced mutation queueing', () => {
       }),
     );
 
-    await expect(second).resolves.toMatchObject({ idem: 'idem_second', queries: ['cart'] });
+    await expect(second).resolves.toMatchObject({
+      idem: 'v1_1750000000000_00000000000000000000000000000002',
+      queries: [{ name: 'cart' }],
+    });
     expect(order).toEqual(['1:optimistic', '2:optimistic', '1:fetch', '2:optimistic', '2:fetch']);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(rebaser.pendingCount('cart')).toBe(0);
@@ -304,7 +316,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: firstFormData,
-      idem: 'idem_first',
+      idem: 'v1_1750000000000_00000000000000000000000000000001',
       input: { quantity: 1 },
       onError,
       optimistic,
@@ -318,7 +330,7 @@ describe('optimistic enhanced mutation queueing', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: secondFormData,
-      idem: 'idem_second',
+      idem: 'v1_1750000000000_00000000000000000000000000000002',
       input: { quantity: 2 },
       onError,
       optimistic,
@@ -331,7 +343,10 @@ describe('optimistic enhanced mutation queueing', () => {
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(10);
     await expect(firstSettled).resolves.toMatchObject({ name: 'AbortError' });
-    await expect(second).resolves.toMatchObject({ idem: 'idem_second', queries: ['cart'] });
+    await expect(second).resolves.toMatchObject({
+      idem: 'v1_1750000000000_00000000000000000000000000000002',
+      queries: [{ name: 'cart' }],
+    });
     expect(store.get('cart')).toEqual({ count: 2 });
 
     releaseFirst?.();
@@ -366,7 +381,7 @@ describe('optimistic enhanced mutation queueing', () => {
       ),
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_first',
+      idem: 'v1_1750000000000_00000000000000000000000000000001',
       input: { quantity: 1 },
       optimistic,
       queue,
@@ -389,7 +404,7 @@ describe('optimistic enhanced mutation queueing', () => {
         })),
         form: { action: '/_m/cart/add', method: 'post' },
         formData: new FormData(),
-        idem: 'idem_second',
+        idem: 'v1_1750000000000_00000000000000000000000000000002',
         input: { quantity: 2 },
         onError,
         optimistic,

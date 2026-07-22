@@ -7,7 +7,7 @@ import {
   type QueryEventHydrationTarget,
 } from './query-events.js';
 import { applyQueryChunksToRuntime } from './query-apply.js';
-import { createQueryStore } from './query-store.js';
+import { createQueryStore, type QueryIdentity } from './query-store.js';
 
 describe('inline query events', () => {
   it('applies wire-shaped inline query events through the mutation query apply path', () => {
@@ -37,7 +37,7 @@ describe('inline query events', () => {
           store,
         },
       ),
-    ).toEqual(['cart:c1']);
+    ).toEqual([{ key: 'cart:c1', name: 'cart' }]);
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 3 });
     expect(binding.textContent).toBe('3');
 
@@ -50,7 +50,7 @@ describe('inline query events', () => {
         queryPlans: { cart: { bindings: true } },
         root,
       }),
-    ).toEqual(['cart:c1']);
+    ).toEqual([{ key: 'cart:c1', name: 'cart' }]);
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
     expect(binding.textContent).toBe('4');
   });
@@ -73,7 +73,7 @@ describe('inline query events', () => {
         },
         { onError, store },
       ),
-    ).toEqual(['product:product>p1']);
+    ).toEqual([{ key: 'product>p1', name: 'product' }]);
     expect(store.get('product', 'product>p1')).toEqual({
       label: "Alice's & Bob's",
     });
@@ -99,26 +99,26 @@ describe('inline query events', () => {
     );
   });
 
-  it('normalizes canonical inline query event instance keys before runtime apply', () => {
+  it('retains canonical inline query event instance keys as separate facts', () => {
     const store = createQueryStore();
     const plan = vi.fn();
 
-    store.subscribe('product', plan, 'p1');
+    store.subscribe('product', plan, 'product:p1');
 
     expect(
       applyInlineQueryEventToRuntime(
         {
           detail: {
-            queries: [{ attrs: ' name="product:p1"', content: '{"stock":7}' }],
+            queries: [{ attrs: ' name="product" key="product:p1"', content: '{"stock":7}' }],
           },
         },
         { store },
       ),
-    ).toEqual(['product:p1']);
+    ).toEqual([{ key: 'product:p1', name: 'product' }]);
 
     // SPEC.md §4.4/§9.4: inline enhanced responses dispatch raw kovo-query wire
     // chunks, so canonical typed-read keys must normalize before store apply.
-    expect(store.get('product', 'p1')).toEqual({ stock: 7 });
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 7 });
     expect(store.get('product')).toBeUndefined();
     expect(plan).toHaveBeenCalledWith({ stock: 7 });
   });
@@ -133,7 +133,7 @@ describe('inline query events', () => {
           detail: {
             queries: [
               { attrs: ' name="cart" key="cart:c1"', content: '{"count":3}' },
-              { attrs: ' name="product:p1"', content: '{"stock":7}' },
+              { attrs: ' name="product" key="product:p1"', content: '{"stock":7}' },
             ],
           },
         },
@@ -144,12 +144,15 @@ describe('inline query events', () => {
           store,
         },
       ),
-    ).toEqual(['cart:c1', 'product:p1']);
+    ).toEqual([
+      { key: 'cart:c1', name: 'cart' },
+      { key: 'product:p1', name: 'product' },
+    ]);
 
     // SPEC.md §4.4/§9.1: the inline loader publishes one parsed kovo-query
     // batch per enhanced response, so modular hydration shares the batched
     // query apply path used by mutation responses instead of per-query drift.
-    expect(seen).toEqual(['cart:cart:c1', 'product:p1']);
+    expect(seen).toEqual(['cart:cart:c1', 'product:product:p1']);
   });
 
   it('reports inline query event apply failures while applying later queries', () => {
@@ -158,7 +161,7 @@ describe('inline query events', () => {
     const productPlan = vi.fn();
     const applyError = new Error('inline query apply failed');
 
-    store.subscribe('product', productPlan, 'p1');
+    store.subscribe('product', productPlan, 'product:p1');
 
     expect(
       applyInlineQueryEventToRuntime(
@@ -166,7 +169,7 @@ describe('inline query events', () => {
           detail: {
             queries: [
               { attrs: ' name="cart"', content: '{"count":3}' },
-              { attrs: ' name="product:p1"', content: '{"stock":7}' },
+              { attrs: ' name="product" key="product:p1"', content: '{"stock":7}' },
             ],
           },
         },
@@ -178,13 +181,13 @@ describe('inline query events', () => {
           store,
         },
       ),
-    ).toEqual(['product:p1']);
+    ).toEqual([{ key: 'product:p1', name: 'product' }]);
 
     // SPEC.md §9.1/§9.4: inline query hydration shares the decoded mutation
     // query apply primitive, so one failed query reports through the runtime
     // error seam without aborting later query truth in the same batch.
     expect(store.get('cart')).toBeUndefined();
-    expect(store.get('product', 'p1')).toEqual({ stock: 7 });
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 7 });
     expect(productPlan).toHaveBeenCalledWith({ stock: 7 });
     expect(onError).toHaveBeenCalledWith(applyError);
   });
@@ -245,7 +248,7 @@ describe('inline query events', () => {
       },
     });
     expect(store.get('cart')).toEqual({ count: 1 });
-    expect(onAppliedQueries).toHaveBeenCalledWith(['cart']);
+    expect(onAppliedQueries).toHaveBeenCalledWith([{ name: 'cart' }]);
 
     dispose();
     listeners.get('kovo:query')?.({
@@ -264,7 +267,7 @@ describe('inline query events', () => {
     const attackerQueries = [{ attrs: ' name="account"', content: '{"role":"attacker"}' }];
     const nativeIterator = Array.prototype[Symbol.iterator];
     let substituted = false;
-    let applied: readonly string[] = [];
+    let applied: readonly QueryIdentity[] = [];
 
     Array.prototype[Symbol.iterator] = function poisonedInlineQueryIterator() {
       if (this === queries) {
@@ -280,7 +283,7 @@ describe('inline query events', () => {
     }
 
     expect(substituted).toBe(false);
-    expect(applied).toEqual(['account']);
+    expect(applied).toEqual([{ name: 'account' }]);
     expect(store.get('account')).toEqual({ role: 'server' });
   });
 
@@ -329,7 +332,7 @@ describe('inline query events', () => {
 
     expect(originalStore.get('account')).toEqual({ role: 'server' });
     expect(replacementStore.get('account')).toBeUndefined();
-    expect(originalApplied).toHaveBeenCalledWith(['account']);
+    expect(originalApplied).toHaveBeenCalledWith([{ name: 'account' }]);
     expect(replacementApplied).not.toHaveBeenCalled();
   });
 });

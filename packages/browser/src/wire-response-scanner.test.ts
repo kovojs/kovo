@@ -70,6 +70,11 @@ describe('wire response scanner', () => {
     expect(readAttribute("name='cart' key='cart&apos;c2'", 'key')).toBe("cart'c2");
   });
 
+  it('distinguishes a present empty wire attribute from an absent attribute', () => {
+    expect(readAttribute('key="" name="cart"', 'key')).toBe('');
+    expect(readAttribute('name="cart"', 'key')).toBeNull();
+  });
+
   it('shares quoted tag-close scanning for mutation wire element chunks', () => {
     // SPEC.md §9.2: failure payload parsing and query/fragment parsing use the
     // same mutation-wire element scanner, including quoted > characters.

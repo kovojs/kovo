@@ -108,6 +108,7 @@ describe('loader enhanced mutation submits', () => {
       keepalive: true,
       method: 'POST',
       onUploadProgress: expect.any(Function),
+      referrerPolicy: 'origin',
     });
     expect(uploadProgress).toHaveBeenCalledWith({ loaded: 512, total: 1024 }, form);
     expect(progressElement.getAttribute('value')).toBe('50');

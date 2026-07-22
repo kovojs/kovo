@@ -1,5 +1,6 @@
 import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
 import { securityOperationIrSchema } from '@kovojs/core/internal/security-operation-ir';
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { compilerIrHeader } from '../ir.js';
 import {
@@ -89,6 +90,8 @@ export interface ServerRenderComponentStampTarget {
   registryComponentName: string;
 }
 
+const generatedDependencyEncoderBase = '__kovoEncodeGeneratedDependencyIdentity';
+
 export function emitServerModule(
   renderedSource: string,
   model?: ComponentModuleModel,
@@ -164,6 +167,7 @@ function serverRenderPatches(
   const patches: SourceReplacement[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
   const stampWrites: ServerRenderStampWriteFact[] = [];
+  const dependencyEncoder = generatedDependencyEncoderBinding(model);
   const chained = chainedPrimitiveHandlerPatches(handlerSnapshot, model);
   const chainedHandlers = compilerCreateSet<HandlerLowering>();
   const chainedHandlerSnapshot = compilerSnapshotDenseArray(
@@ -267,7 +271,12 @@ function serverRenderPatches(
     const hostElement = componentRenderHostElementFor(model, target.component);
     if (!hostElement) continue;
 
-    const hostStamps = renderHostStampWrites(target.component, hostElement, target);
+    const hostStamps = renderHostStampWrites(
+      target.component,
+      hostElement,
+      target,
+      dependencyEncoder.localName,
+    );
     appendServerValues(stampWrites, hostStamps.writes, 'Host stamp writes');
     appendServerValues(
       patches,
@@ -288,7 +297,69 @@ function serverRenderPatches(
     }
   }
 
+  if (options && dependencyEncoderImportRequired(stampWrites) && dependencyEncoder.importRequired) {
+    const start = model.moduleImportInsertionOffset;
+    compilerArrayAppend(
+      patches,
+      {
+        end: start,
+        replacement: `import { encodeGeneratedDependencyIdentity as ${dependencyEncoder.localName} } from '@kovojs/server/internal/wire';\n`,
+        start,
+      },
+      'Compiler generated dependency encoder import',
+    );
+  }
+
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
+}
+
+function dependencyEncoderImportRequired(writes: readonly ServerRenderStampWriteFact[]): boolean {
+  const snapshot = compilerSnapshotDenseArray(writes, 'Server dependency stamp writes');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const write = snapshot[index]!;
+    if (write.attr === 'kovo-deps' && write.valueKind === 'expression') return true;
+  }
+  return false;
+}
+
+function generatedDependencyEncoderBinding(model: ComponentModuleModel): {
+  importRequired: boolean;
+  localName: string;
+} {
+  const imports = compilerSnapshotDenseArray(
+    model.namedImports,
+    'Generated dependency encoder imports',
+  );
+  for (let index = 0; index < imports.length; index += 1) {
+    const imported = imports[index]!;
+    if (
+      imported.moduleSpecifier === '@kovojs/server/internal/wire' &&
+      imported.importedName === 'encodeGeneratedDependencyIdentity'
+    ) {
+      return { importRequired: false, localName: imported.localName };
+    }
+  }
+
+  const identifiers = compilerSnapshotDenseArray(
+    model.sourceIdentifierNames,
+    'Source identifier name parser facts',
+  );
+  // There are at most `identifiers.length` occupied candidates, so this bounded sequence always
+  // has a free member. Reserve every identifier occurrence, not just module declarations: that
+  // also prevents a nested authored binding from shadowing the generated helper expression.
+  for (let suffix = 0; suffix <= identifiers.length; suffix += 1) {
+    const candidate =
+      suffix === 0 ? generatedDependencyEncoderBase : `${generatedDependencyEncoderBase}_${suffix}`;
+    let occupied = false;
+    for (let index = 0; index < identifiers.length; index += 1) {
+      if (identifiers[index] === candidate) {
+        occupied = true;
+        break;
+      }
+    }
+    if (!occupied) return { importRequired: true, localName: candidate };
+  }
+  throw new TypeError('Kovo could not select a collision-free dependency encoder binding.');
 }
 
 function appendServerValues<Value>(target: Value[], values: readonly Value[], label: string): void {
@@ -712,6 +783,7 @@ function renderHostStampWrites(
   component: ComponentModel,
   hostElement: JsxElementModel,
   target: Pick<ServerRenderComponentStampTarget, 'domComponentName' | 'registryComponentName'>,
+  dependencyEncoder: string,
 ): {
   conflicts: readonly HostStampConflict[];
   writes: readonly ServerRenderStampWriteFact[];
@@ -719,7 +791,7 @@ function renderHostStampWrites(
   const conflicts: HostStampConflict[] = [];
   const writes: ServerRenderStampWriteFact[] = [];
   const componentIdentity = componentIdentityStamp(hostElement, target.domComponentName);
-  const declaredQueryDeps = declaredQueryDepsStamp(component, hostElement);
+  const declaredQueryDeps = declaredQueryDepsStamp(component, hostElement, dependencyEncoder);
   const fragmentTarget = inferredFragmentTargetStamp(
     component,
     hostElement,
@@ -892,6 +964,7 @@ function componentIdentityStamp(
 function declaredQueryDepsStamp(
   component: ComponentModel,
   hostElement: JsxElementModel,
+  dependencyEncoder: string,
 ): ServerRenderStampWriteFact | null {
   const deps = componentQueryDependencyTokens(component);
   if (deps.length === 0) return null;
@@ -907,7 +980,7 @@ function declaredQueryDepsStamp(
     );
   }
   const mergedDeps = mergeDepValues(existingTokens, deps);
-  const depValue = renderQueryDependencyTokens(mergedDeps);
+  const depValue = renderQueryDependencyTokens(mergedDeps, dependencyEncoder);
   let hasExpression = false;
   for (let index = 0; index < mergedDeps.length; index += 1) {
     if (mergedDeps[index]!.kind === 'expression') {
@@ -987,7 +1060,10 @@ function mergeDepValues(
   return merged;
 }
 
-function renderQueryDependencyTokens(deps: readonly QueryDependencyToken[]): string {
+function renderQueryDependencyTokens(
+  deps: readonly QueryDependencyToken[],
+  dependencyEncoder: string,
+): string {
   const snapshot = compilerSnapshotDenseArray(deps, 'Rendered query dependency tokens');
   let hasExpression = false;
   for (let index = 0; index < snapshot.length; index += 1) {
@@ -999,9 +1075,13 @@ function renderQueryDependencyTokens(deps: readonly QueryDependencyToken[]): str
   const values: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {
     const dep = snapshot[index]!;
+    const encoded = dep.kind === 'expression' ? undefined : encodeFrameworkIdentityToken(dep.value);
+    if (dep.kind !== 'expression' && encoded === undefined) {
+      throw new TypeError('Generated kovo-deps identity must be a non-empty scalar string.');
+    }
     compilerArrayAppend(
       values,
-      hasExpression ? renderQueryDependencyExpressionElement(dep) : dep.value,
+      hasExpression ? renderQueryDependencyExpressionElement(dep, dependencyEncoder) : encoded!,
       'Compiler packages/compiler/src/emit/server-render.ts collection',
     );
   }
@@ -1010,10 +1090,13 @@ function renderQueryDependencyTokens(deps: readonly QueryDependencyToken[]): str
     : joinServerStrings(values, ' ');
 }
 
-function renderQueryDependencyExpressionElement(dep: QueryDependencyToken): string {
+function renderQueryDependencyExpressionElement(
+  dep: QueryDependencyToken,
+  dependencyEncoder: string,
+): string {
   return dep.kind === 'expression'
-    ? `(${dep.value})`
-    : serverJsonSource(dep.value, 'Query dependency literal');
+    ? `${dependencyEncoder}(${dep.value})`
+    : serverJsonSource(encodeFrameworkIdentityToken(dep.value), 'Query dependency literal');
 }
 
 function staticStateJson(component: ComponentModel): string | null {

@@ -1,7 +1,15 @@
+import type {
+  FrameworkTargetRequestHeaderPlan,
+  FrameworkWireEntrySnapshot,
+} from '@kovojs/core/internal/wire-input-grammar';
+import { frameworkWireIdentityIsValid } from '@kovojs/core/internal/wire-input-grammar';
+
 import {
   securityArrayAppend,
   securityGetOwnPropertyDescriptor,
 } from './security-witness-intrinsics.js';
+import type { QueryIdentity } from './query-store.js';
+import { createQueryIdentity } from './query-store.js';
 
 export interface DocumentLifecycleRecoveryOptions {
   acceptHeader: string;
@@ -13,15 +21,19 @@ export interface DocumentLifecycleRecoveryOptions {
   currentHref: () => string | undefined;
   document: Document;
   encodeAttribute: (value: string) => string;
-  /** Core-owned mutation-wire entry encoder (SPEC §9.1). */
-  encodeWireEntries: (values: readonly string[]) => string;
   fetchValue: (input: string, init: object) => Promise<unknown>;
   findTarget: (root: ParentNode, target: string) => Element | undefined;
-  liveTargets: () => string[];
+  liveTargets: () => readonly FrameworkWireEntrySnapshot[];
   parseHtmlDocument: (value: string) => Document | undefined;
+  /** Core-owned exact target-bearing request planner (SPEC §9.1). */
+  planTargetRequestHeaders: (input: {
+    currentUrl: string;
+    liveTargets: readonly FrameworkWireEntrySnapshot[];
+    targets: readonly FrameworkWireEntrySnapshot[];
+  }) => FrameworkTargetRequestHeaderPlan | undefined;
   /** Boot-pinned real-document query used by the session-dependent bfcache guard. */
   queryOne: (root: ParentNode, selector: string) => Element | null;
-  queryUrl: (wireKey: string) => string;
+  queryUrl: (identity: QueryIdentity) => string;
   readAttribute: (attrs: string, name: string) => string | null;
   readElementAttribute: (
     element: { attrs?: string; attributes?: readonly unknown[] } | string,
@@ -40,8 +52,8 @@ export interface DocumentLifecycleRecoveryOptions {
   reload: () => boolean;
   /** Boot-pinned serialization for fetched live-target truth (SPEC §6.6/§8). */
   snapshotElementHtml: (element: Element) => string | undefined;
-  targetHeader: () => string[];
-  wireKey: (name: string | null, key: string | null) => string;
+  targetHeader: () => readonly FrameworkWireEntrySnapshot[];
+  wireKey: (name: string | null, key: string | null) => QueryIdentity | undefined;
 }
 
 export interface DocumentLifecycleRecovery {
@@ -84,9 +96,6 @@ export function createDocumentLifecycleRecovery(
   const encodeAttribute = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['encodeAttribute']
   >(options, 'encodeAttribute');
-  const encodeWireEntries = lifecycleFunctionOption<
-    DocumentLifecycleRecoveryOptions['encodeWireEntries']
-  >(options, 'encodeWireEntries');
   const fetchValue = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['fetchValue']>(
     options,
     'fetchValue',
@@ -102,6 +111,9 @@ export function createDocumentLifecycleRecovery(
   const parseHtmlDocument = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['parseHtmlDocument']
   >(options, 'parseHtmlDocument');
+  const planTargetRequestHeaders = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['planTargetRequestHeaders']
+  >(options, 'planTargetRequestHeaders');
   const queryOne = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['queryOne']>(
     options,
     'queryOne',
@@ -157,14 +169,19 @@ export function createDocumentLifecycleRecovery(
   // SPEC §6.6/§9.1.1: the active app-build token is page-load authority. Snapshot it once so
   // authored DOM changes cannot weaken later visibility/pageshow recovery checks.
   const pageBuild = currentBuild();
-  const fqs: string[] = [];
+  const fqs: QueryIdentity[] = [];
   const isDeltaQuery = (query: { attrs: string; attributes?: readonly unknown[] }) =>
     readElementAttribute(query, 'delta').present;
-  const refreshQuery = (query: string | { attrs: string; attributes?: readonly unknown[] }) => {
-    const u =
-      typeof query === 'string'
-        ? queryUrl(query)
-        : queryUrl(wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key')));
+  const refreshQueryIdentity = (identity: QueryIdentity) => {
+    let snapshot: QueryIdentity;
+    let u: string;
+    try {
+      snapshot = lifecycleSnapshotQueryIdentity(identity, 'Kovo lifecycle refresh query');
+      u = queryUrl(snapshot);
+    } catch {
+      reload();
+      return;
+    }
     if (!u) return;
     void (async () => {
       try {
@@ -194,26 +211,54 @@ export function createDocumentLifecycleRecovery(
       } catch {}
     })();
   };
+  const refreshQuery = (query: string | { attrs: string; attributes?: readonly unknown[] }) => {
+    try {
+      const identity =
+        typeof query === 'string'
+          ? createQueryIdentity(query)
+          : wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
+      if (identity) refreshQueryIdentity(identity);
+    } catch {
+      reload();
+    }
+  };
   const refreshLiveTargets = () => {
-    const live = lifecycleSnapshotStringArray(liveTargets(), 'Kovo lifecycle live targets');
+    let live: FrameworkWireEntrySnapshot[];
+    let targets: FrameworkWireEntrySnapshot[];
+    try {
+      live = lifecycleSnapshotWireEntries(liveTargets(), 'Kovo lifecycle live targets');
+      targets = lifecycleSnapshotWireEntries(targetHeader(), 'Kovo lifecycle target header');
+    } catch {
+      reload();
+      return;
+    }
     if (!live.length) return;
     const href = currentHref();
-    if (!href) return;
-    const targets = lifecycleSnapshotStringArray(targetHeader(), 'Kovo lifecycle target header');
+    if (!href) {
+      reload();
+      return;
+    }
+    const requestPlan = planTargetRequestHeaders({ currentUrl: href, liveTargets: live, targets });
+    if (!requestPlan) {
+      reload();
+      return;
+    }
     void (async () => {
       try {
         const res = await fetchValue(href, {
           cache: 'no-store',
           headers: {
             Accept: acceptHeader,
-            'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': encodeWireEntries(live),
-            'Kovo-Targets': encodeWireEntries(targets),
+            ...requestPlan.headers,
           },
           method: 'GET',
+          referrerPolicy: 'origin',
         });
         const status = readResponseStatus(res);
-        if (status === undefined || status >= 400) return;
+        if (status === undefined || status >= 400) {
+          reload();
+          return;
+        }
         if (!responseAllowsInlineBody(res)) {
           reload();
           return;
@@ -254,10 +299,10 @@ export function createDocumentLifecycleRecovery(
           }
           let fragments = '';
           const seen: string[] = [];
-          for (let index = 0; index < live.length; index += 1) {
-            const entry = live[index];
+          for (let index = 0; index < requestPlan.liveTargets.length; index += 1) {
+            const entry = requestPlan.liveTargets[index];
             if (entry === undefined) continue;
-            const target = lifecycleBeforeHash(entry);
+            const target = entry.target;
             if (!target || lifecycleIncludes(seen, target)) continue;
             securityArrayAppend(seen, target, 'Kovo lifecycle seen live targets');
             const next = findTarget(nextDoc, target);
@@ -276,12 +321,18 @@ export function createDocumentLifecycleRecovery(
           return;
         }
         reload();
-      } catch {}
+      } catch {
+        reload();
+      }
     })();
   };
   const rememberQueryChunk = (query: { attrs: string; attributes?: readonly unknown[] }) => {
-    const w = wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
-    if (w) lifecycleRememberUnique(fqs, w);
+    try {
+      const w = wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
+      if (w) lifecycleRememberQueryIdentity(fqs, w);
+    } catch {
+      reload();
+    }
   };
   const rememberQueryScripts = () => {
     const scripts = lifecycleSnapshotOwnArray<Element>(
@@ -291,16 +342,27 @@ export function createDocumentLifecycleRecovery(
     for (let index = 0; index < scripts.length; index += 1) {
       const script = scripts[index];
       if (!script) continue;
-      const w = wireKey(readDomAttribute(script, 'kovo-query'), readDomAttribute(script, 'key'));
-      if (w) lifecycleRememberUnique(fqs, w);
+      try {
+        const w = wireKey(readDomAttribute(script, 'kovo-query'), readDomAttribute(script, 'key'));
+        if (w) lifecycleRememberQueryIdentity(fqs, w);
+      } catch {
+        reload();
+        return;
+      }
     }
   };
   const visibleReturnRefresh = () => {
     rememberQueryScripts();
-    const remembered = lifecycleSnapshotStringArray(fqs, 'Kovo lifecycle remembered queries');
+    let remembered: QueryIdentity[];
+    try {
+      remembered = lifecycleSnapshotQueryIdentities(fqs, 'Kovo lifecycle remembered queries');
+    } catch {
+      reload();
+      return;
+    }
     for (let index = 0; index < remembered.length; index += 1) {
       const query = remembered[index];
-      if (query !== undefined) refreshQuery(query);
+      if (query !== undefined) refreshQueryIdentity(query);
     }
     refreshLiveTargets();
   };
@@ -404,15 +466,57 @@ function lifecycleSnapshotOwnArray<Value>(value: unknown, label: string): Value[
   return snapshot;
 }
 
-function lifecycleSnapshotStringArray(value: unknown, label: string): string[] {
+function lifecycleSnapshotWireEntries(value: unknown, label: string): FrameworkWireEntrySnapshot[] {
   const values = lifecycleSnapshotOwnArray<unknown>(value, label);
-  const snapshot: string[] = [];
+  const snapshot: FrameworkWireEntrySnapshot[] = [];
   for (let index = 0; index < values.length; index += 1) {
     const entry = values[index];
-    if (typeof entry !== 'string') throw new TypeError(label + ' entries must be strings.');
-    securityArrayAppend(snapshot, entry, label);
+    if (entry === null || typeof entry !== 'object') {
+      throw new TypeError(label + ' entries must be wire snapshots.');
+    }
+    const target = securityGetOwnPropertyDescriptor(entry, 'target');
+    const wireEntry = securityGetOwnPropertyDescriptor(entry, 'wireEntry');
+    if (
+      !target ||
+      !('value' in target) ||
+      typeof target.value !== 'string' ||
+      !wireEntry ||
+      !('value' in wireEntry) ||
+      typeof wireEntry.value !== 'string'
+    ) {
+      throw new TypeError(label + ' entries must contain semantic and wire identities.');
+    }
+    securityArrayAppend(snapshot, { target: target.value, wireEntry: wireEntry.value }, label);
   }
   return snapshot;
+}
+
+function lifecycleSnapshotQueryIdentities(value: unknown, label: string): QueryIdentity[] {
+  const values = lifecycleSnapshotOwnArray<unknown>(value, label);
+  const snapshot: QueryIdentity[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    securityArrayAppend(
+      snapshot,
+      lifecycleSnapshotQueryIdentity(values[index], label + ' entry'),
+      label,
+    );
+  }
+  return snapshot;
+}
+
+function lifecycleSnapshotQueryIdentity(value: unknown, label: string): QueryIdentity {
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError(label + ' must be a query identity.');
+  }
+  const name = securityGetOwnPropertyDescriptor(value, 'name');
+  const key = securityGetOwnPropertyDescriptor(value, 'key');
+  if (!name || !('value' in name) || !frameworkWireIdentityIsValid(name.value)) {
+    throw new TypeError(label + ' must contain a non-empty valid scalar query name.');
+  }
+  if (key && (!('value' in key) || !frameworkWireIdentityIsValid(key.value))) {
+    throw new TypeError(label + ' key must be non-empty own-data valid scalar text.');
+  }
+  return createQueryIdentity(name.value, key && 'value' in key ? (key.value as string) : undefined);
 }
 
 function lifecycleIncludes(values: readonly string[], value: string): boolean {
@@ -422,18 +526,13 @@ function lifecycleIncludes(values: readonly string[], value: string): boolean {
   return false;
 }
 
-function lifecycleRememberUnique(values: string[], value: string): void {
-  if (!lifecycleIncludes(values, value)) {
-    securityArrayAppend(values, value, 'Kovo lifecycle remembered queries');
+function lifecycleRememberQueryIdentity(values: QueryIdentity[], value: QueryIdentity): void {
+  const snapshot = lifecycleSnapshotQueryIdentity(value, 'Kovo lifecycle remembered query');
+  for (let index = 0; index < values.length; index += 1) {
+    const existing = values[index];
+    if (existing && existing.name === snapshot.name && existing.key === snapshot.key) return;
   }
-}
-
-function lifecycleBeforeHash(value: string): string {
-  let target = '';
-  for (let index = 0; index < value.length && value[index] !== '#'; index += 1) {
-    target += value[index];
-  }
-  return target;
+  securityArrayAppend(values, snapshot, 'Kovo lifecycle remembered queries');
 }
 
 function lifecycleMediaTypeEquals(value: unknown, expected: string): boolean {

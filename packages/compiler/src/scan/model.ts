@@ -543,11 +543,15 @@ export interface ComponentModuleModel {
   /** @internal Non-enumerable parser facts; security consumers must not rescan source comments. */
   readonly jsxPragmas: readonly JsxPragmaModel[];
   moduleScopeBindings: readonly ModuleScopeBindingModel[];
+  /** Parser-owned byte offset where generated value imports may be inserted. */
+  moduleImportInsertionOffset: number;
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];
   namedImports: readonly NamedImportModel[];
   queryHandlers: readonly MutationHandlerModel[];
   renderSourceReturns: readonly StringRenderModel[];
+  /** @internal Non-enumerable parser facts used to choose collision-free generated bindings. */
+  readonly sourceIdentifierNames: readonly string[];
   taskRunHandlers: readonly TaskRunHandlerModel[];
   webhookHandlers: readonly WebhookHandlerModel[];
   /**

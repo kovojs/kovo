@@ -526,6 +526,44 @@ describe('browser inline loader response apply', () => {
       method: 'GET',
     });
   });
+
+  it('builds structured query URLs and rejects invalid remembered identities', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a">';
+    document.body.innerHTML = [
+      '<script type="application/json" kovo-query="product" key="product:p1">{}</script>',
+      '<script type="application/json" kovo-query="productDetail" key="inventory:p1">{}</script>',
+      '<script type="application/json" kovo-query="group:catalog">{}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:">{}</script>',
+      '<script type="application/json" kovo-query="invalid-empty" key="">{}</script>',
+    ].join('');
+    const invalidScalar = document.createElement('script');
+    invalidScalar.type = 'application/json';
+    invalidScalar.setAttribute('kovo-query', 'invalid\rname');
+    invalidScalar.textContent = '{}';
+    document.body.append(invalidScalar);
+    const fetch = vi.fn(
+      async () =>
+        new Response('', {
+          headers: {
+            'Content-Type': 'text/vnd.kovo.fragment+html',
+            'Kovo-Build': 'build-a',
+          },
+          status: 200,
+        }),
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    installTestInlineKovoLoader(async () => ({}));
+    dispatchEvent(new Event('visibilitychange'));
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      '/_q/product?key=p1',
+      '/_q/productDetail?key=inventory%3Ap1',
+      '/_q/group%3Acatalog',
+      '/_q/cart?key=',
+    ]);
+  });
 });
 
 function installTestInlineKovoLoader(

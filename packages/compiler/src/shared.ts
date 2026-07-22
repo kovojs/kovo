@@ -1,4 +1,5 @@
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
+import { decodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 import {
   compilerArrayAppend,
   compilerCreateSet,
@@ -12,7 +13,6 @@ import {
   compilerStringSlice,
   compilerStringSplit,
   compilerStringToLowerCase,
-  compilerStringTrim,
 } from './compiler-security-intrinsics.js';
 
 export function escapeAttribute(value: string): string {
@@ -613,20 +613,38 @@ function sourceReplacementDiagnosticsMessage(
   return message;
 }
 
-export function splitDepValue(value: string): string[] {
-  const parts = compilerStringSplit(compilerRegExpReplace(/[\s,]+/g, value, '\n'), '\n');
-  const result: string[] = [];
-  for (let index = 0; index < parts.length; index += 1) {
-    const part = parts[index]!;
-    const dependency = compilerStringTrim(part);
-    if (dependency.length > 0)
-      compilerArrayAppend(
-        result,
-        dependency,
-        'Compiler packages/compiler/src/shared.ts collection',
-      );
+export interface ParsedDepValue {
+  dependencies: string[];
+  invalidTokens: string[];
+}
+
+export function parseDepValue(value: string): ParsedDepValue {
+  const dependencies: string[] = [];
+  const invalidTokens: string[] = [];
+  let start = 0;
+  for (let index = 0; index <= value.length; index += 1) {
+    const character = index === value.length ? ' ' : value[index];
+    if (character !== ' ') continue;
+    if (index > start) {
+      const token = compilerStringSlice(value, start, index);
+      const dependency = decodeFrameworkIdentityToken(token);
+      if (dependency === undefined) {
+        compilerArrayAppend(invalidTokens, token, 'Compiler invalid kovo-deps identity tokens');
+      } else {
+        compilerArrayAppend(
+          dependencies,
+          dependency,
+          'Compiler packages/compiler/src/shared.ts collection',
+        );
+      }
+    }
+    start = index + 1;
   }
-  return result;
+  return { dependencies, invalidTokens };
+}
+
+export function splitDepValue(value: string): string[] {
+  return parseDepValue(value).dependencies;
 }
 
 function stableSortedCopy<Value>(

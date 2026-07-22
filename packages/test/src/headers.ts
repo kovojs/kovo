@@ -1,6 +1,11 @@
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
-  verifierArrayJoin,
+  encodeFrameworkFormTargetHeader,
+  encodeFrameworkLiveTargetHeader,
+  encodeFrameworkTargetHeader,
+  encodeFrameworkWireEntryList,
+} from '@kovojs/core/internal/wire-input-grammar';
+import {
   verifierArraySlice,
   verifierDenseArraySnapshot,
   verifierGetOwnPropertyDescriptor,
@@ -71,6 +76,7 @@ export interface EnhancedMutationTarget {
 
 /** Structured live-target descriptor for enhanced scenario requests. */
 export interface EnhancedMutationLiveTarget {
+  attestation: string;
   component: string;
   props?: Record<string, unknown>;
   target: string;
@@ -98,23 +104,33 @@ export function enhancedMutationHeaders(
   }
   return {
     'Kovo-Fragment': 'true',
-    ...(formTarget === undefined ? {} : { 'Kovo-Form-Target': formTarget }),
-    'Kovo-Live-Targets': headerList(liveTargets),
-    'Kovo-Targets': headerList(targets),
+    ...(formTarget === undefined
+      ? {}
+      : { 'Kovo-Form-Target': requireEncodedFormTarget(formTarget) }),
+    'Kovo-Live-Targets': liveTargetHeaderList(liveTargets),
+    'Kovo-Targets': targetHeaderList(targets),
   };
 }
 
-function headerList(value: unknown): string {
+function targetHeaderList(value: unknown): string {
   if (value === undefined) return '';
   if (typeof value === 'string') return value;
   const values = verifierDenseArraySnapshot(value, 'Enhanced mutation target list', (entry) =>
-    headerListItem(entry),
+    typeof entry === 'string' ? entry : encodeStructuredTarget(entry),
   );
-  return verifierArrayJoin(values, '; ');
+  return encodeFrameworkWireEntryList(values);
 }
 
-function headerListItem(value: unknown): string {
+function liveTargetHeaderList(value: unknown): string {
+  if (value === undefined) return '';
   if (typeof value === 'string') return value;
+  const values = verifierDenseArraySnapshot(value, 'Enhanced live-target list', (entry) =>
+    typeof entry === 'string' ? entry : encodeStructuredLiveTarget(entry),
+  );
+  return encodeFrameworkWireEntryList(values);
+}
+
+function encodeStructuredTarget(value: unknown): string {
   if (typeof value !== 'object' || value === null || verifierIsArray(value)) {
     throw verifierTypeError('Enhanced mutation target entries must be strings or plain objects.');
   }
@@ -122,30 +138,43 @@ function headerListItem(value: unknown): string {
     throw verifierTypeError('Enhanced mutation target entries must not be Proxy objects.');
   }
 
-  const component = optionalOwnDataValue(value, 'component', 'Enhanced live target');
   const target = requiredStringOwnDataValue(value, 'target', 'Enhanced mutation target');
-  if (component !== undefined) {
-    if (typeof component !== 'string') {
-      throw verifierTypeError('Enhanced live target component must be a string.');
-    }
-    const props = optionalOwnDataValue(value, 'props', 'Enhanced live target');
-    const json = canonicalJsonStringify(props ?? {}, { root: 'enhanced live target props' });
-    return `${target}#${component}:${json}`;
-  }
   const queries = optionalOwnDataValue(value, 'queries', 'Enhanced mutation target');
-  if (queries === undefined) return target;
-  if (typeof queries === 'string') return `${target}=${queries}`;
-  const queryValues = verifierDenseArraySnapshot(
-    queries,
-    'Enhanced mutation query list',
-    (entry) => {
-      if (typeof entry !== 'string') {
-        throw verifierTypeError('Enhanced mutation query names must be strings.');
-      }
-      return entry;
-    },
-  );
-  return `${target}=${verifierArrayJoin(queryValues, ' ')}`;
+  const deps =
+    queries === undefined
+      ? []
+      : typeof queries === 'string'
+        ? [queries]
+        : verifierDenseArraySnapshot(queries, 'Enhanced mutation query list', (entry) => {
+            if (typeof entry !== 'string') {
+              throw verifierTypeError('Enhanced mutation query names must be strings.');
+            }
+            return entry;
+          });
+  return encodeFrameworkTargetHeader([{ deps, target }]);
+}
+
+function encodeStructuredLiveTarget(value: unknown): string {
+  if (typeof value !== 'object' || value === null || verifierIsArray(value)) {
+    throw verifierTypeError('Enhanced live-target entries must be strings or plain objects.');
+  }
+  if (verifierIsProxy(value)) {
+    throw verifierTypeError('Enhanced live-target entries must not be Proxy objects.');
+  }
+  const attestation = requiredStringOwnDataValue(value, 'attestation', 'Enhanced live target');
+  const component = requiredStringOwnDataValue(value, 'component', 'Enhanced live target');
+  const target = requiredStringOwnDataValue(value, 'target', 'Enhanced live target');
+  const props = optionalOwnDataValue(value, 'props', 'Enhanced live target');
+  const propsSource = canonicalJsonStringify(props ?? {}, { root: 'enhanced live target props' });
+  return encodeFrameworkLiveTargetHeader([{ attestation, component, propsSource, target }]);
+}
+
+function requireEncodedFormTarget(value: string): string {
+  const encoded = encodeFrameworkFormTargetHeader(value);
+  if (encoded === undefined) {
+    throw verifierTypeError('Enhanced mutation formTarget must be a non-empty valid identity.');
+  }
+  return encoded;
 }
 
 function optionalOwnDataValue(value: object, property: PropertyKey, label: string): unknown {

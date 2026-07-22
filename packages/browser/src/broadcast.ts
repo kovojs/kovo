@@ -8,7 +8,7 @@ import type { MorphFragment, MorphRoot } from './morph.js';
 import { sanitizeMutationChangeRecord } from './mutation-response.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
 
@@ -63,7 +63,7 @@ export interface InstallMutationBroadcastOptions {
   onDeltaMiss?: OnDeltaMiss;
   onError?: RuntimeErrorReporter;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
-  onAppliedQueries?: (queries: readonly string[]) => void;
+  onAppliedQueries?: (queries: readonly QueryIdentity[]) => void;
   /**
    * bugs-1 F13 / SPEC §9.3: an opaque per-session fingerprint. BroadcastChannel is
    * origin-scoped, not principal-scoped, so a rebroadcast envelope carries the sender's
@@ -94,7 +94,7 @@ export interface DefaultMutationBroadcastOptions {
   morph?: MorphFragment;
   /** D3 / SPEC §9.1.1: handler that refetches a query whose rebroadcast delta missed. */
   onDeltaMiss?: OnDeltaMiss;
-  onAppliedQueries?: (queries: readonly string[]) => void;
+  onAppliedQueries?: (queries: readonly QueryIdentity[]) => void;
   /** bugs-1 F13: opaque per-session fingerprint for cross-principal discard (SPEC §9.3). */
   principal?: string;
   /** SPEC §8/§9.3: fail closed when session-dependent state has no resolved principal. */

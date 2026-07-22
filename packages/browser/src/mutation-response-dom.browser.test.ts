@@ -213,6 +213,35 @@ describe('browser mutation response DOM apply', () => {
     ]);
   });
 
+  it('does not treat undocumented data-key attributes as morph identity', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<ul kovo-fragment-target="rows">',
+      '<li data-key="a">A</li>',
+      '<li data-key="b">B</li>',
+      '</ul>',
+    ].join('');
+    document.body.append(root);
+    const first = root.querySelector('li');
+    if (!first) throw new Error('missing data-key fixture');
+
+    applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target="rows"><ul kovo-fragment-target="rows">',
+        '<li data-key="b">B2</li>',
+        '<li data-key="a">A2</li>',
+        '</ul></kovo-fragment>',
+      ].join(''),
+      morph: keyedDomMorph,
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    // Without kovo-key these are positional ordinary DOM nodes; data-key cannot steer identity.
+    expect(root.querySelector('li[data-key="b"]')).toBe(first);
+    expect(first.textContent).toBe('B2');
+  });
+
   it('resolves browser fragment targets through component stamps, ids, and target attributes', () => {
     const root = document.createElement('main');
     root.innerHTML = [
@@ -381,7 +410,7 @@ describe('browser mutation response DOM apply', () => {
     // query apply path, so hook failures report while later server truth and
     // fragments continue through the same DOM apply pass.
     expect(onError).toHaveBeenCalledWith(hookError);
-    expect(applied.queries).toEqual(['cart']);
+    expect(applied.queries).toEqual([{ name: 'cart' }]);
     expect(applied.appliedFragments).toEqual(['cart-badge']);
     expect(store.get('cart')).toMatchObject({ count: 2 });
     expect(root.querySelector('[data-bind="cart.count"]')?.textContent).toBe('2');

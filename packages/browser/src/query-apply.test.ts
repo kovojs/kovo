@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as queryApplyModule from './query-apply.js';
 import { applyQueryChunksToRuntime } from './query-apply.js';
-import { createQueryStore } from './query-store.js';
+import { createQueryStore, queryStoreKey } from './query-store.js';
 import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
 
 describe('decoded query runtime apply', () => {
@@ -36,7 +36,7 @@ describe('decoded query runtime apply', () => {
 
     // SPEC.md §9.1/§9.4: mutation responses, typed reads, and decoded
     // hydration chunks converge on the same batched query apply path.
-    expect(applied).toEqual(['cart', 'product']);
+    expect(applied).toEqual([{ name: 'cart' }, { name: 'product' }]);
     expect(root.wildcardSelectorCalls).toBe(1);
     expect(cartLabel.getAttribute('aria-label')).toBe('Cart ready');
     expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
@@ -45,8 +45,8 @@ describe('decoded query runtime apply', () => {
   it('scopes keyed query chunks to matching kovo-deps consumers', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
-    const p1Stock = scopedBinding('product:p1', 'product.stock', '2');
-    const p2Stock = scopedBinding('product:p2', 'product.stock', '9');
+    const p1Stock = scopedBinding('product%3Ap1', 'product.stock', '2');
+    const p2Stock = scopedBinding('product%3Ap2', 'product.stock', '9');
     root.bindings.push(p1Stock, p2Stock);
 
     const applied = applyQueryChunksToRuntime(
@@ -55,7 +55,7 @@ describe('decoded query runtime apply', () => {
       {
         queryPlans: {
           product: { bindings: false },
-          'product:p1': { bindings: true },
+          [queryStoreKey('product', 'product:p1')]: { bindings: true },
         },
         root,
       },
@@ -63,10 +63,30 @@ describe('decoded query runtime apply', () => {
 
     // SPEC.md §10.2: canonical query instance keys partition same-query
     // consumers, so a product:p1 chunk cannot overwrite product:p2 bindings.
-    expect(applied).toEqual(['product:p1']);
+    expect(applied).toEqual([{ key: 'product:p1', name: 'product' }]);
     expect(store.get('product', 'product:p1')).toEqual({ stock: 7 });
     expect(p1Stock.textContent).toBe('7');
     expect(p2Stock.textContent).toBe('9');
+  });
+
+  it('does not select another query plan through a foreign keyed identity', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const expectedSelect = vi.fn(() => 'expected');
+    const unrelatedSelect = vi.fn(() => 'unrelated');
+
+    applyQueryChunksToRuntime(store, [{ key: 'bar', name: 'foo', value: { value: 1 } }], {
+      queryPlans: {
+        bar: { derives: [{ name: 'result', select: unrelatedSelect }] },
+        foo: { derives: [{ name: 'result', select: expectedSelect }] },
+      },
+      root,
+    });
+
+    // A domain-owned key can equal another registered query name. Exact-instance lookup uses the
+    // collision-free `(name, key)` store framing, then falls back only to the same query's plan.
+    expect(expectedSelect).toHaveBeenCalledTimes(1);
+    expect(unrelatedSelect).not.toHaveBeenCalled();
   });
 
   it('applies query chunks through one canonical runtime batch with interposed values', () => {
@@ -97,7 +117,10 @@ describe('decoded query runtime apply', () => {
 
     // SPEC.md §9.1/§9.4: mutation, deferred, hydration, and typed-read paths
     // share canonical query instance keys while allowing runtime apply hooks.
-    expect(applied).toEqual(['cart', 'product:p1']);
+    expect(applied).toEqual([
+      { name: 'cart' },
+      { key: 'p1', name: 'product' },
+    ]);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('product', 'p1')).toEqual({ stock: 4 });
     expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
@@ -150,7 +173,7 @@ describe('delta query chunk apply (SPEC §9.1.1)', () => {
     );
 
     // Applied and store contain the merged full value (SPEC §9.1.1).
-    expect(applied).toEqual(['cart']);
+    expect(applied).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 2, items: [{ id: 'p1', qty: 2 }] });
     // Update plan ran on the merged result.
     expect(countEl.textContent).toBe('2');

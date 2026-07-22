@@ -47,7 +47,7 @@ export const Recommendations = component({
   queries: { cart: cartQuery },
   state: () => ({ open: true }),
   render: ({ cart }) => (
-    <section class="card" kovo-deps='product:p1'>
+    <section class="card" kovo-deps='product%3Ap1'>
       {renderOnce(cart.count)}
     </section>
   ),
@@ -55,13 +55,13 @@ export const Recommendations = component({
 `;
     const model = parseComponentModule('recommendations.tsx', source);
     const lowering = serverRenderLowering([], model, 'recommendations');
-    const kovoDepsStart = source.indexOf("kovo-deps='product:p1'");
+    const kovoDepsStart = source.indexOf("kovo-deps='product%3Ap1'");
     const insertPosition = source.indexOf('>', kovoDepsStart);
 
     expect(lowering.replacements).toEqual([
       {
-        end: kovoDepsStart + "kovo-deps='product:p1'".length,
-        replacement: 'kovo-deps="product:p1 cart"',
+        end: kovoDepsStart + "kovo-deps='product%3Ap1'".length,
+        replacement: 'kovo-deps="product%3Ap1 cart"',
         start: kovoDepsStart,
       },
       {
@@ -82,7 +82,7 @@ export const Recommendations = component({
         },
         {
           "context": "attribute",
-          "expression": "product:p1 cart",
+          "expression": "product%3Ap1 cart",
           "sink": "kovo-deps",
           "source": "server-render",
           "writer": "host dependency stamp",
@@ -121,7 +121,7 @@ export const Recommendations = component({
         {
           "attr": "kovo-deps",
           "mode": "replace",
-          "value": "product:p1 cart",
+          "value": "product%3Ap1 cart",
           "writer": "host dependency stamp",
         },
         {
@@ -1374,9 +1374,91 @@ export const QuestionDetail = component({
 
     const serverSource = result.files[0]?.source ?? '';
     expect(serverSource).toContain(
-      'kovo-deps={[(questionAnswers.key ?? "answers"), (questionDetail.key ?? "question")].join(\' \')}',
+      'kovo-deps={[__kovoEncodeGeneratedDependencyIdentity(questionAnswers.key ?? "answers"), __kovoEncodeGeneratedDependencyIdentity(questionDetail.key ?? "question")].join(\' \')}',
     );
     expect(serverSource).not.toContain('kovo-deps="answers question"');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('inserts the dynamic dependency encoder after the complete leading JSX pragma comment', () => {
+    const result = compileComponentModule({
+      fileName: 'question-detail.tsx',
+      source: `/**
+ * @jsxImportSource @kovojs/server
+ * compiler-owned transform posture
+ */
+export const QuestionDetail = component({
+  queries: {
+    question: questionDetail.args((props) => ({ id: props.id })),
+  },
+  render: ({ question }) => <section>{question.title}</section>,
+});
+`,
+    });
+
+    const serverSource = requireLoweredSource(result);
+    const pragmaEnd = serverSource.indexOf(' */') + ' */'.length;
+    const dependencyImport = serverSource.indexOf(
+      'encodeGeneratedDependencyIdentity as __kovoEncodeGeneratedDependencyIdentity',
+    );
+    const escapeImport = serverSource.indexOf(
+      "import { escapeText } from '@kovojs/server/internal/escape';",
+    );
+    expect(serverSource).toContain(' * compiler-owned transform posture\n */');
+    expect(dependencyImport).toBeGreaterThan(pragmaEnd);
+    expect(escapeImport).toBeGreaterThan(pragmaEnd);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('selects a parser-proved collision-free dynamic dependency encoder binding', () => {
+    const result = compileComponentModule({
+      fileName: 'question-detail.tsx',
+      source: `
+const __kovoEncodeGeneratedDependencyIdentity = 'authored collision';
+export const QuestionDetail = component({
+  queries: {
+    question: questionDetail.args((props) => ({ id: props.id })),
+  },
+  render: ({ question }) => <section>{question.title}</section>,
+});
+`,
+    });
+
+    const serverSource = requireLoweredSource(result);
+    expect(serverSource).toContain(
+      'encodeGeneratedDependencyIdentity as __kovoEncodeGeneratedDependencyIdentity_1',
+    );
+    expect(serverSource).toContain('__kovoEncodeGeneratedDependencyIdentity_1(questionDetail.key');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps a generated dependency import after a TypeScript shebang', () => {
+    const result = compileComponentModule({
+      fileName: 'question-detail.tsx',
+      source: `#!/usr/bin/env -S node --import tsx
+export const QuestionDetail = component({
+  queries: {
+    question: questionDetail.args((props) => ({ id: props.id })),
+  },
+  render: ({ question }) => <section>{question.title}</section>,
+});
+`,
+    });
+
+    const serverSource = requireLoweredSource(result);
+    const shebang = '#!/usr/bin/env -S node --import tsx';
+    const dependencyImport = serverSource.indexOf(
+      'encodeGeneratedDependencyIdentity as __kovoEncodeGeneratedDependencyIdentity',
+    );
+    const liveTargetImport = serverSource.indexOf('componentLiveTargetRenderer');
+    const escapeImport = serverSource.indexOf(
+      "import { escapeText } from '@kovojs/server/internal/escape';",
+    );
+    expect(serverSource.startsWith(`${shebang}\n`)).toBe(true);
+    expect(dependencyImport).toBeGreaterThan(shebang.length);
+    expect(liveTargetImport).toBeGreaterThan(shebang.length);
+    expect(escapeImport).toBeGreaterThan(shebang.length);
+    expect(() => assertFixpoint(result)).not.toThrow();
   });
 
   it('lints hand-written fragment target hooks on inferred query roots', () => {
@@ -1584,7 +1666,7 @@ export const CartBadge = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section kovo-c="recommendations" kovo-deps="product:p1 cart">
+    <section kovo-c="recommendations" kovo-deps="product%3Ap1 cart">
       {renderOnce(cart.count)}
     </section>
   ),
@@ -1593,7 +1675,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section kovo-c="recommendations" kovo-deps="product:p1 cart" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
+      '<section kovo-c="recommendations" kovo-deps="product%3Ap1 cart" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -1606,7 +1688,7 @@ export const Recommendations = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section class="card" kovo-deps='product:p1'>
+    <section class="card" kovo-deps='product%3Ap1'>
       {renderOnce(cart.count)}
     </section>
   ),
@@ -1615,7 +1697,7 @@ export const Recommendations = component({
     });
 
     expect(result.files[0]?.source).toContain(
-      '<section class="card" kovo-deps="product:p1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
+      '<section class="card" kovo-deps="product%3Ap1 cart" kovo-c="recommendations" kovo-fragment-target="recommendations" kovo-live-component="recommendations/recommendations">',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -1632,7 +1714,7 @@ export const Recommendations = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section kovo-c="recommendations" kovo-deps="product:p1 cart">
+    <section kovo-c="recommendations" kovo-deps="product%3Ap1 cart">
       <span data-bind="cart.count">{cart.count}</span>
     </section>
   ),
@@ -1660,7 +1742,7 @@ export const Recommendations = component({
 export const Recommendations = component({
   queries: { cart: cartQuery },
   render: ({ cart }) => (
-    <section kovo-c="unknown-component" kovo-deps="cart missingQuery:p1">
+    <section kovo-c="unknown-component" kovo-deps="cart missingQuery%3Ap1">
       <span data-bind="cart.count">{cart.count}</span>
     </section>
   ),
@@ -1703,9 +1785,37 @@ export const Recommendations = component({
           'kovo-deps or kovo-c names an unknown query instance or component. kovo-deps="missingQuery:p1"',
         severity: 'error',
         start: { column: 41, line: 5 },
-        length: 32,
+        length: 34,
       },
     ]);
+  });
+
+  it.each([
+    ['raw delimiter', 'product:p1'],
+    ['lowercase percent escape', 'product%3ap1'],
+  ])('reports KV226 instead of throwing for a %s in residual kovo-deps', (_label, token) => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      registryFacts: {
+        queries: {
+          product: 'typeof productQuery',
+        },
+      },
+      source: `
+export const Recommendations = component({
+  render: () => <section kovo-deps="${token}">Recommendations</section>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV226',
+        message:
+          'kovo-deps or kovo-c names an unknown query instance or component. ' +
+          `kovo-deps contains a non-canonical identity token. kovo-deps="${token}"`,
+      }),
+    );
   });
 
   it('ignores residual stamp text inside strings and comments', () => {

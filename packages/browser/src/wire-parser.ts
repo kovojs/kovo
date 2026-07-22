@@ -1,4 +1,5 @@
 import { createRenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+import { frameworkWireIdentityIsValid } from '@kovojs/core/internal/wire-input-grammar';
 
 import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
@@ -267,6 +268,13 @@ function readQueryChunkPayload(
   }
 
   const identity = readQueryChunkIdentity(payload.name, payload.key);
+  if (!identity) {
+    reportRuntimeError(
+      onError,
+      malformedQueryError('name/key must be non-empty valid scalar identities'),
+    );
+    return undefined;
+  }
   const settles = parseSettlementSet(payload.settles);
   return {
     ...(payload.delta ? { delta: true } : {}),
@@ -299,19 +307,15 @@ function parseSettlementSet(settles?: string | null): string[] {
   return tokens;
 }
 
-function readQueryChunkIdentity(name: string, key?: string | null): { key?: string; name: string } {
-  if (key != null) return { key, name };
-
-  const separator = securityStringIndexOf(name, ':');
-  if (separator <= 0 || separator === name.length - 1) return { name };
-
-  // SPEC.md §9.4/§10.2: typed reads and hydration may carry the canonical
-  // instance key directly as `name:key`, while the runtime store still applies
-  // decoded chunks as `{ name, key }`.
-  return {
-    key: securityStringSlice(name, separator + 1),
-    name: securityStringSlice(name, 0, separator),
-  };
+function readQueryChunkIdentity(
+  name: string,
+  key?: string | null,
+): { key?: string; name: string } | undefined {
+  if (!frameworkWireIdentityIsValid(name)) return undefined;
+  if (key != null) return frameworkWireIdentityIsValid(key) ? { key, name } : undefined;
+  // SPEC §9.4/§10.2: query name and instance key are separate wire facts. A colon is valid data
+  // in a query name, so absence of the key attribute must never trigger delimiter inference.
+  return { name };
 }
 
 export function readMutationResponseBodyChunks(

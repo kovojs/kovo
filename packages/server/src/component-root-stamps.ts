@@ -1,4 +1,8 @@
 import type { Component } from '@kovojs/core';
+import {
+  decodeFrameworkIdentityToken,
+  encodeFrameworkIdentityToken,
+} from '@kovojs/core/internal/wire-input-grammar';
 
 import { isKovoComponentDescriptor } from './component-authority.js';
 import { escapeWireAttribute } from './html.js';
@@ -9,7 +13,6 @@ import {
 import type { QueryDefinition } from './query.js';
 import {
   securityArrayIsArray,
-  securityArrayJoin,
   securityArrayPush,
   securityArraySort,
   securityCreateRegExp,
@@ -17,15 +20,12 @@ import {
   securityJsonStringify,
   securityObjectKeys,
   securityRegExpExec,
-  securityRegExpReplace,
   securityRegExpReplaceMatches,
   securityString,
-  securityStringIncludes,
   securityStringReplaceAll,
   securityStringSlice,
   securityStringSplit,
   securityStringStartsWith,
-  securityStringTrim,
 } from './response-security-intrinsics.js';
 import {
   createWitnessSet,
@@ -44,10 +44,18 @@ import {
 type StampComponent = Component<any>;
 
 const rootOpeningPattern = securityCreateRegExp('^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>');
-const tokenSeparatorPattern = securityCreateRegExp('[\\s,]+', 'g');
 const regexpSyntaxPattern = securityCreateRegExp('[.*+?^${}()|[\\]\\\\]', 'g');
 const attributeNamePattern = securityCreateRegExp('^[A-Za-z][A-Za-z0-9:-]*$');
 const emptyStampProps = witnessFreeze(witnessCreateNullRecord<unknown>());
+
+/** @internal Compiler-generated ABI for canonical kovo-deps DOM tokens (SPEC §9.1/§13.2). */
+export function encodeGeneratedDependencyIdentity(value: unknown): string {
+  const encoded = encodeFrameworkIdentityToken(value);
+  if (encoded === undefined) {
+    throw new TypeError('Generated kovo-deps identity must be a non-empty scalar string.');
+  }
+  return encoded;
+}
 
 /**
  * @internal Compiler-emitted/generated ABI for SPEC §4.1/§4.8 source-derived component identity.
@@ -544,20 +552,15 @@ export function mergeHtmlAttributeTokens(
 
   const merged: string[] = [];
   const seen = createWitnessSet<string>();
-  const normalizedExisting = securityRegExpReplace(existing ?? '', tokenSeparatorPattern, ' ');
-  const existingTokens = securityStringSplit(normalizedExisting, ' ');
+  const existingTokens = securityStringSplit(existing ?? '', ' ');
   for (let index = 0; index < existingTokens.length; index += 1) {
-    const token = securityStringTrim(
-      denseArrayDataValue(existingTokens, index, 'Existing dependency tokens'),
-    );
-    if (
-      token.length === 0 ||
-      witnessSetHas(stale, token) ||
-      witnessSetHas(seen, token) ||
-      securityStringIncludes(token, '\0')
-    ) {
-      continue;
+    const wireToken = denseArrayDataValue(existingTokens, index, 'Existing dependency tokens');
+    if (wireToken.length === 0) continue;
+    const token = decodeFrameworkIdentityToken(wireToken);
+    if (token === undefined) {
+      throw new TypeError('Existing kovo-deps must contain canonical identity tokens.');
     }
+    if (witnessSetHas(stale, token) || witnessSetHas(seen, token)) continue;
     witnessSetAdd(seen, token);
     securityArrayPush(merged, token);
   }
@@ -565,9 +568,10 @@ export function mergeHtmlAttributeTokens(
   const additionSnapshot = snapshotDenseStrings(additions, 'Dependency tokens');
   for (let index = 0; index < additionSnapshot.length; index += 1) {
     const token = denseArrayDataValue(additionSnapshot, index, 'Dependency tokens');
-    if (token.length === 0 || witnessSetHas(seen, token) || securityStringIncludes(token, '\0')) {
-      continue;
+    if (encodeFrameworkIdentityToken(token) === undefined) {
+      throw new TypeError('Kovo dependencies must contain non-empty scalar identities.');
     }
+    if (witnessSetHas(seen, token)) continue;
     witnessSetAdd(seen, token);
     securityArrayPush(merged, token);
   }
@@ -576,7 +580,17 @@ export function mergeHtmlAttributeTokens(
 
 /** @internal Join a private token snapshot without mutable Array.join dispatch. */
 export function joinHtmlAttributeTokens(tokens: readonly string[]): string {
-  return securityArrayJoin(snapshotDenseStrings(tokens, 'HTML attribute tokens'), ' ');
+  const snapshot = snapshotDenseStrings(tokens, 'HTML attribute tokens');
+  let joined = '';
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const semantic = denseArrayDataValue(snapshot, index, 'HTML attribute tokens');
+    const token = encodeFrameworkIdentityToken(semantic);
+    if (token === undefined) {
+      throw new TypeError('Kovo dependencies must contain non-empty scalar identities.');
+    }
+    joined += (joined === '' ? '' : ' ') + token;
+  }
+  return joined;
 }
 
 function attributePattern(name: string): RegExp {

@@ -1,3 +1,5 @@
+import { frameworkWireIdentityIsValid } from '@kovojs/core/internal/wire-input-grammar';
+
 import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import {
@@ -6,12 +8,13 @@ import {
   type QueryApplyInterposition,
 } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import type { QueryStore } from './query-store.js';
-import { queryWireKey, splitQueryWireKey } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
+import { createQueryIdentity, queryStoreKey } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import {
+  freezeSecurityValue,
   securityArrayAppend,
   securityGetOwnPropertyDescriptor,
   securityMap,
@@ -107,7 +110,8 @@ export interface QueryRefetchOptions {
    * single full navigation reload of the current route (SPEC §14). No chunks are applied.
    */
   onBuildSkew?: () => void;
-  urlForQuery?: (query: string) => string | undefined;
+  /** Receives the exact frozen query identity; names and keys are never collapsed into one string. */
+  urlForQuery?: (query: QueryIdentity) => string | undefined;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -134,23 +138,19 @@ export interface QueryRefetchResponse {
 export interface RefetchQueriesOptions extends QueryRefetchOptions {
   applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
-  queries: readonly string[];
+  queries: readonly (string | QueryIdentity)[];
   queryStore: QueryStore;
   root?: unknown;
 }
 
-/** @internal The applied result of a refetched query: empty fragments plus query wire keys (SPEC §9.4). */
+/** @internal The applied result of a refetched query: exact structured identities (SPEC §9.4). */
 export interface RefetchedQueryResponse {
   fragments: [];
-  queries: readonly string[];
+  queries: readonly QueryIdentity[];
 }
 
 interface RefetchedQueryBody {
   queries: QueryChunk[];
-}
-
-interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
-  decodedQueryCount: number;
 }
 
 /**
@@ -172,7 +172,7 @@ export async function refetchQueries(
   const onBuildSkew = options.onBuildSkew;
   const onError = options.onError;
   const urlForQuery = options.urlForQuery;
-  const queryNames = snapshotQueryNames(options.queries);
+  const queryNames = snapshotQueryIdentities(options.queries);
 
   for (let index = 0; index < queryNames.length; index += 1) {
     const queryEntry = securityOwnArrayEntry(queryNames, index);
@@ -184,7 +184,8 @@ export async function refetchQueries(
     // wireKey, never the canonical `name:keyValue` (which the server registers no
     // query for → 404, silently stale base + broken deploy-skew recovery). Apps
     // that need to carry per-instance args build the full `/_q/<name>?<args>` URL
-    // via `urlForQuery`.
+    // via `urlForQuery`. The hook receives name/key as separate frozen facts, because an unkeyed
+    // name containing `:` can have the same display string as a keyed query instance.
     const customUrl = urlForQuery?.(query);
     const url = customUrl ?? defaultQueryRefetchUrl(query);
     if (!url) continue;
@@ -274,27 +275,22 @@ export async function refetchQueries(
     const bodyEntry = securityOwnArrayEntry(bodies, bodyIndex);
     if (!bodyEntry.ok) continue;
     const body = bodyEntry.value;
-    const appliedWireKeys: string[] = [];
+    const appliedIdentities: QueryIdentity[] = [];
     for (let queryIndex = 0; queryIndex < body.queries.length; queryIndex += 1) {
       const queryEntry = securityOwnArrayEntry(body.queries, queryIndex);
       if (!queryEntry.ok || !securitySetHas(appliedQueries, queryEntry.value)) continue;
       securityArrayAppend(
-        appliedWireKeys,
-        queryWireKey(queryEntry.value.name, queryEntry.value.key),
-        'Browser typed-read applied query keys',
+        appliedIdentities,
+        createQueryIdentity(queryEntry.value.name, queryEntry.value.key),
+        'Browser typed-read applied query identities',
       );
     }
-    const appliedBody: AppliedRefetchedQueryBody = {
-      decodedQueryCount: body.queries.length,
+    const appliedBody: RefetchedQueryResponse = {
       fragments: [],
-      queries: appliedWireKeys,
+      queries: freezeSecurityValue(appliedIdentities),
     };
-    if (appliedBody.decodedQueryCount === 0 || appliedBody.queries.length > 0) {
-      securityArrayAppend(
-        appliedBodies,
-        { fragments: [], queries: appliedBody.queries },
-        'Browser typed-read applied response facts',
-      );
+    if (body.queries.length === 0 || appliedBody.queries.length > 0) {
+      securityArrayAppend(appliedBodies, appliedBody, 'Browser typed-read applied response facts');
     }
   }
   return appliedBodies;
@@ -307,13 +303,19 @@ export async function refetchQueries(
  * rides as the reserved `key` search param so a keyed query whose `args` schema reads it can
  * scope the read; an unkeyed query gets `/_q/<name>` with no params.
  */
-function defaultQueryRefetchUrl(wireKey: string): string {
+function defaultQueryRefetchUrl(identity: QueryIdentity): string {
   if (!queryRefetchEncodingSound) {
     throw new TypeError('Kovo query URL encoding controls are unavailable.');
   }
-  const { keyValue, name } = splitQueryWireKey(wireKey);
-  const path = `/_q/${encodeQueryPath(name)}`;
-  return keyValue === undefined ? path : `${path}?key=${queryRefetchEncodeURIComponent(keyValue)}`;
+  const path = `/_q/${encodeQueryPath(identity.name)}`;
+  if (identity.key === undefined) return path;
+  const security = queryRefetchSecurityControls();
+  const prefix = `${identity.name}:`;
+  const keyValue =
+    security.indexOf(identity.key, prefix) === 0
+      ? security.slice(identity.key, prefix.length)
+      : identity.key;
+  return `${path}?key=${queryRefetchEncodeURIComponent(keyValue)}`;
 }
 
 function encodeQueryPath(name: string): string {
@@ -351,19 +353,19 @@ export function createDeltaMissRefetcher(options: CreateDeltaMissRefetcherOption
   const pending = securityMap<string, true>();
 
   return (name: string, key: string | undefined): void => {
-    const wireKey = queryWireKey(name, key);
-    if (securityMapHas(pending, wireKey)) return;
-    securityMapSet(pending, wireKey, true);
+    const storeKey = queryStoreKey(name, key);
+    if (securityMapHas(pending, storeKey)) return;
+    securityMapSet(pending, storeKey, true);
 
     void (async () => {
       try {
         await refetchQueries({
           ...options,
-          queries: [wireKey],
+          queries: [key === undefined ? { name } : { key, name }],
           queryStore: options.queryStore,
         });
       } finally {
-        securityMapDelete(pending, wireKey);
+        securityMapDelete(pending, storeKey);
       }
     })();
   };
@@ -377,15 +379,41 @@ function ownDeclarationData(
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
-function snapshotQueryNames(queries: readonly string[]): string[] {
+function snapshotQueryIdentities(queries: readonly (string | QueryIdentity)[]): QueryIdentity[] {
   if (queries.length > 100_000) throw new TypeError('Kovo query refetch list is too large.');
-  const snapshot: string[] = [];
+  const snapshot: QueryIdentity[] = [];
   for (let index = 0; index < queries.length; index += 1) {
     const entry = securityOwnArrayEntry(queries, index);
-    if (!entry.ok || typeof entry.value !== 'string') {
-      throw new TypeError('Kovo query refetch list must be a dense string array.');
+    if (!entry.ok) throw new TypeError('Kovo query refetch list must be dense.');
+    if (typeof entry.value === 'string') {
+      if (!frameworkWireIdentityIsValid(entry.value)) {
+        throw new TypeError('Kovo query names must be non-empty valid scalar strings.');
+      }
+      securityArrayAppend(
+        snapshot,
+        createQueryIdentity(entry.value),
+        'Browser typed-read query snapshot',
+      );
+      continue;
     }
-    securityArrayAppend(snapshot, entry.value, 'Browser typed-read query snapshot');
+    if (entry.value === null || typeof entry.value !== 'object') {
+      throw new TypeError('Kovo query refetch entries must be names or structured identities.');
+    }
+    const name = securityGetOwnPropertyDescriptor(entry.value, 'name');
+    const key = securityGetOwnPropertyDescriptor(entry.value, 'key');
+    if (!name || !('value' in name) || !frameworkWireIdentityIsValid(name.value)) {
+      throw new TypeError('Kovo structured query identity requires a non-empty valid scalar name.');
+    }
+    if (key && (!('value' in key) || !frameworkWireIdentityIsValid(key.value))) {
+      throw new TypeError(
+        'Kovo structured query identity key must be a non-empty own-data valid scalar string.',
+      );
+    }
+    securityArrayAppend(
+      snapshot,
+      createQueryIdentity(name.value, key && 'value' in key ? (key.value as string) : undefined),
+      'Browser typed-read query snapshot',
+    );
   }
   return snapshot;
 }

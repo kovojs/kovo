@@ -77,7 +77,7 @@ describe('query refetch', () => {
 
     await expect(
       refetchQueries({ fetch: () => response, queries: ['cart'], queryStore: store }),
-    ).resolves.toEqual([{ fragments: [], queries: ['cart'] }]);
+    ).resolves.toEqual([{ fragments: [], queries: [{ name: 'cart' }] }]);
     expect(store.get('cart')).toEqual({ count: 3 });
   });
 
@@ -121,7 +121,7 @@ describe('query refetch', () => {
 
     // SPEC §6.6/§9.4: the query apply loop consumes the scanner's dense carrier, not an
     // ambient iterator that authored code can redirect to attacker-chosen server truth.
-    expect(applied).toEqual([{ fragments: [], queries: ['cart'] }]);
+    expect(applied).toEqual([{ fragments: [], queries: [{ name: 'cart' }] }]);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('attacker')).toBeUndefined();
   });
@@ -168,8 +168,8 @@ describe('query refetch', () => {
         root,
       }),
     ).resolves.toEqual([
-      { fragments: [], queries: ['cart'] },
-      { fragments: [], queries: ['reviews'] },
+      { fragments: [], queries: [{ name: 'cart' }] },
+      { fragments: [], queries: [{ name: 'reviews' }] },
     ]);
 
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
@@ -214,8 +214,8 @@ describe('query refetch', () => {
         root,
       }),
     ).resolves.toEqual([
-      { fragments: [], queries: ['cart'] },
-      { fragments: [], queries: ['reviews'] },
+      { fragments: [], queries: [{ name: 'cart' }] },
+      { fragments: [], queries: [{ name: 'reviews' }] },
     ]);
 
     // SPEC.md §4.4/§9.4: a visible-return typed-read pass should share the
@@ -231,18 +231,20 @@ describe('query refetch', () => {
     const plan = vi.fn();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<kovo-query name="product:p1">{"stock":6}</kovo-query>',
+      text: async () => '<kovo-query name="product" key="product:p1">{"stock":6}</kovo-query>',
     }));
 
-    store.subscribe('product', plan, 'p1');
+    store.subscribe('product', plan, 'product:p1');
 
     await expect(
       refetchQueries({
         fetch,
-        queries: ['product:p1'],
+        queries: [{ key: 'product:p1', name: 'product' }],
         queryStore: store,
       }),
-    ).resolves.toEqual([{ fragments: [], queries: ['product:p1'] }]);
+    ).resolves.toEqual([
+      { fragments: [], queries: [{ key: 'product:p1', name: 'product' }] },
+    ]);
 
     // SPEC.md §9.4/§10.2 (F5): the typed-read endpoint dispatches by query NAME and a keyed
     // query's args arrive as search params. A refetch MUST hit `/_q/product?key=p1`, NOT the
@@ -253,25 +255,130 @@ describe('query refetch', () => {
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(store.get('product', 'p1')).toEqual({ stock: 6 });
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 6 });
     expect(store.get('product')).toBeUndefined();
     expect(plan).toHaveBeenCalledWith({ stock: 6 });
+  });
+
+  it('derives key values from structured facts without splitting colon-bearing query names', async () => {
+    const store = createQueryStore();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 200,
+        text: async () =>
+          '<kovo-query name="group:catalog" key="group:catalog:item">{"stock":3}</kovo-query>',
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        text: async () =>
+          '<kovo-query name="productDetail" key="product:p1">{"stock":4}</kovo-query>',
+      });
+
+    await refetchQueries({
+      fetch,
+      queries: [
+        { key: 'group:catalog:item', name: 'group:catalog' },
+        { key: 'product:p1', name: 'productDetail' },
+      ],
+      queryStore: store,
+    });
+
+    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/group%3Acatalog?key=item', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
+    // A domain-owned canonical instance key may legitimately differ from the registry name.
+    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/productDetail?key=product%3Ap1', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
+  });
+
+  it('passes frozen structured identities to custom URL hooks without colon ambiguity', async () => {
+    const store = createQueryStore();
+    const seen: unknown[] = [];
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/unkeyed-colon-name'
+          ? '<kovo-query name="foo:bar">{"kind":"unkeyed"}</kovo-query>'
+          : '<kovo-query name="foo" key="foo:bar">{"kind":"keyed"}</kovo-query>',
+    }));
+
+    await refetchQueries({
+      fetch,
+      queries: ['foo:bar', { key: 'foo:bar', name: 'foo' }],
+      queryStore: store,
+      urlForQuery(identity) {
+        expect(Object.isFrozen(identity)).toBe(true);
+        seen.push(identity);
+        return identity.key === undefined ? '/unkeyed-colon-name' : '/keyed-colon-instance';
+      },
+    });
+
+    expect(seen).toEqual([{ name: 'foo:bar' }, { key: 'foo:bar', name: 'foo' }]);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      '/unkeyed-colon-name',
+      '/keyed-colon-instance',
+    ]);
+    expect(store.get('foo:bar')).toEqual({ kind: 'unkeyed' });
+    expect(store.get('foo', 'foo:bar')).toEqual({ kind: 'keyed' });
+  });
+
+  it('rejects a raw empty structured key but permits the canonical empty-value identity', async () => {
+    const store = createQueryStore();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<kovo-query name="cart" key="cart:">{"count":1}</kovo-query>',
+    }));
+
+    await expect(
+      refetchQueries({ fetch, queries: [{ key: '', name: 'cart' }], queryStore: store }),
+    ).rejects.toThrow(/non-empty own-data valid scalar/u);
+    expect(fetch).not.toHaveBeenCalled();
+
+    await refetchQueries({
+      fetch,
+      queries: [{ key: 'cart:', name: 'cart' }],
+      queryStore: store,
+    });
+    expect(fetch).toHaveBeenCalledWith('/_q/cart?key=', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
   });
 
   it('preserves query-name path hierarchy while encoding each path segment', async () => {
     const store = createQueryStore();
     const fetch = vi.fn(async () => ({
       status: 200,
-      text: async () => '<kovo-query name="queries/product details:p 1">{"stock":4}</kovo-query>',
+      text: async () =>
+        '<kovo-query name="queries/product details" key="queries/product details:p 1">{"stock":4}</kovo-query>',
     }));
 
     await expect(
       refetchQueries({
         fetch,
-        queries: ['queries/product details:p 1'],
+        queries: [
+          {
+            key: 'queries/product details:p 1',
+            name: 'queries/product details',
+          },
+        ],
         queryStore: store,
       }),
-    ).resolves.toEqual([{ fragments: [], queries: ['queries/product details:p 1'] }]);
+    ).resolves.toEqual([
+      {
+        fragments: [],
+        queries: [
+          { key: 'queries/product details:p 1', name: 'queries/product details' },
+        ],
+      },
+    ]);
 
     // SPEC.md §9.4/§10.2: query names retain their registered slash hierarchy. Encoding
     // the complete name would produce `%2F`, which the request-ingress floor rejects as an
@@ -281,7 +388,9 @@ describe('query refetch', () => {
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(store.get('queries/product details', 'p 1')).toEqual({ stock: 4 });
+    expect(store.get('queries/product details', 'queries/product details:p 1')).toEqual({
+      stock: 4,
+    });
   });
 
   it('does not apply failed or disabled typed read responses', async () => {
@@ -297,7 +406,7 @@ describe('query refetch', () => {
         fetch,
         queries: ['cart', 'inventory'],
         queryStore: store,
-        urlForQuery: (query) => (query === 'inventory' ? '' : `/_q/${query}`),
+        urlForQuery: (query) => (query.name === 'inventory' ? '' : `/_q/${query.name}`),
       }),
     ).resolves.toEqual([]);
 
@@ -363,8 +472,8 @@ describe('query refetch', () => {
     // chunks through the same decoded runtime apply primitive as mutation bodies
     // without accepting a second fragment parser surface.
     expect(applied).toEqual([
-      { fragments: [], queries: ['inventory'] },
-      { fragments: [], queries: ['reviews'] },
+      { fragments: [], queries: [{ name: 'inventory' }] },
+      { fragments: [], queries: [{ name: 'reviews' }] },
     ]);
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
@@ -402,7 +511,7 @@ describe('query refetch', () => {
     // SPEC.md §4.4/§9.4: visible-return typed reads are background hydration
     // work; a bad apply hook for one decoded query must report through the
     // runtime error seam without preventing later typed-read truth from applying.
-    expect(applied).toEqual([{ fragments: [], queries: ['reviews'] }]);
+    expect(applied).toEqual([{ fragments: [], queries: [{ name: 'reviews' }] }]);
     expect(onError).toHaveBeenCalledWith(applyError);
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('reviews')).toEqual({ total: 4 });
@@ -430,7 +539,7 @@ describe('query refetch', () => {
 
     // SPEC.md §4.4: one failed visible-return typed read must not prevent
     // later hydrated queries from receiving fresh server data.
-    expect(applied).toEqual([{ fragments: [], queries: ['reviews'] }]);
+    expect(applied).toEqual([{ fragments: [], queries: [{ name: 'reviews' }] }]);
     expect(onError).toHaveBeenCalledWith(transportError);
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('reviews')).toEqual({ total: 2 });
@@ -519,15 +628,16 @@ describe('query refetch', () => {
       resolveFetch?.();
       return {
         status: 200,
-        text: async () => '<kovo-query name="recommendations:user-1">{"items":["p9"]}</kovo-query>',
+        text: async () =>
+          '<kovo-query name="recommendations" key="recommendations:user-1">{"items":["p9"]}</kovo-query>',
       };
     });
 
     const onDeltaMiss = createDeltaMissRefetcher({ fetch, queryStore: store });
-    onDeltaMiss('recommendations', 'user-1');
+    onDeltaMiss('recommendations', 'recommendations:user-1');
     await done;
     await vi.waitFor(() => {
-      expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p9'] });
+      expect(store.get('recommendations', 'recommendations:user-1')).toEqual({ items: ['p9'] });
     });
 
     expect(fetch).toHaveBeenCalledWith('/_q/recommendations?key=user-1', {

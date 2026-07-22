@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through captured Reflect.apply. */
 
 import type {
+  FrameworkWireEntrySnapshot,
   FrameworkWireInputGrammar,
   FrameworkWireTargetCodec,
 } from '@kovojs/core/internal/wire-input-grammar';
@@ -20,7 +21,6 @@ export function createHmrTargetSnapshotReader(
   const NativeNodeList = scope.NodeList;
   const NativeObject = Object;
   const NativeReflect = Reflect;
-  const NativeRegExp = RegExp;
   const NativeTypeError = TypeError;
   const bootDocument = scope.document;
   const nativeReflectApply = NativeReflect.apply;
@@ -28,9 +28,7 @@ export function createHmrTargetSnapshotReader(
   const arrayPush = NativeArray.prototype.push;
   const objectFreeze = NativeObject.freeze;
   const objectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
-  const regexpTest = NativeRegExp.prototype.test;
   const stringSlice = String.prototype.slice;
-  const dependencySeparator = /\s/u;
   const maxCollectionElements = 100_000;
 
   const apply = <Result>(method: Function, receiver: unknown, args: readonly unknown[]): Result =>
@@ -95,6 +93,7 @@ export function createHmrTargetSnapshotReader(
   const nodeListItem = ownMethod(nodeListPrototype, 'item');
   const encodeLiveTargetHeader = ownMethod(codec, 'encodeLiveTargetHeader');
   const encodeTargetHeader = ownMethod(codec, 'encodeTargetHeader');
+  const decodeIdentityToken = ownMethod(codec, 'decodeIdentityToken');
   const identityIsValid = ownMethod(codec, 'identityIsValid');
   const componentIsValid = ownMethod(codec, 'componentIsValid');
   const attestationIsValid = ownMethod(codec, 'attestationIsValid');
@@ -139,6 +138,7 @@ export function createHmrTargetSnapshotReader(
       !nodeListItem ||
       !encodeLiveTargetHeader ||
       !encodeTargetHeader ||
+      !decodeIdentityToken ||
       !identityIsValid ||
       !componentIsValid ||
       !attestationIsValid ||
@@ -153,8 +153,6 @@ export function createHmrTargetSnapshotReader(
       const arrayControl: unknown[] = [];
       appendDense(arrayControl, 'array-control', 'Kovo HMR array control');
       if (ownArrayEntry(arrayControl, 0) !== 'array-control') return false;
-      if (apply(regexpTest, dependencySeparator, [' ']) !== true) return false;
-      if (apply(regexpTest, dependencySeparator, ['x']) !== false) return false;
       const element = apply<unknown>(documentCreateElement, bootDocument, ['div']);
       if (element === null || typeof element !== 'object') return false;
       apply(elementSetAttribute, element, ['data-kovo-hmr-control', 'exact']);
@@ -167,7 +165,10 @@ export function createHmrTargetSnapshotReader(
       const htmlElement = apply<unknown>(nodeListItem, html, [0]);
       if (htmlElement === null || typeof htmlElement !== 'object') return false;
       if (apply<boolean>(identityIsValid, codec, ['hmr-control']) !== true) return false;
-      if (apply<boolean>(identityIsValid, codec, ['bad target']) !== false) return false;
+      if (apply<boolean>(identityIsValid, codec, ['bad\0target']) !== false) return false;
+      if (apply<string>(decodeIdentityToken, codec, ['query%3Acontrol']) !== 'query:control') {
+        return false;
+      }
       if (
         apply<string>(encodeTargetHeader, codec, [
           [{ deps: ['query-control'], target: 'target-control' }],
@@ -239,25 +240,20 @@ export function createHmrTargetSnapshotReader(
   const readDependencies = (value: string | null): string[] => {
     assertControls();
     const source = value ?? '';
-    if (source.length > (maxHeaderCharacters as number)) {
-      throw new NativeTypeError('Kovo dependency input exceeds the wire character budget.');
-    }
     const output: string[] = [];
     let start = 0;
     for (let index = 0; index <= source.length; index += 1) {
-      const character = index === source.length ? ',' : (source[index] ?? '');
-      if (
-        character !== ',' &&
-        apply<boolean>(regexpTest, dependencySeparator, [character]) !== true
-      ) {
-        continue;
-      }
+      const character = index === source.length ? ' ' : (source[index] ?? '');
+      if (character !== ' ') continue;
       if (index > start) {
-        appendDense(
-          output,
-          apply<string>(stringSlice, source, [start, index]),
-          'Kovo HMR dependency snapshot',
-        );
+        const token = apply<string>(stringSlice, source, [start, index]);
+        const dependency = apply<unknown>(decodeIdentityToken!, codec, [token]);
+        if (typeof dependency !== 'string') {
+          throw new NativeTypeError(
+            'Kovo HMR dependency input must contain canonical identity tokens.',
+          );
+        }
+        appendDense(output, dependency, 'Kovo HMR dependency snapshot');
       }
       start = index + 1;
     }
@@ -275,9 +271,9 @@ export function createHmrTargetSnapshotReader(
     readAttribute(element, 'kovo-c') ??
     targetIdentity(element);
 
-  const liveTargets = (root: unknown): string[] => {
+  const liveTargets = (root: unknown): readonly FrameworkWireEntrySnapshot[] => {
     const seen: string[] = [];
-    const output: string[] = [];
+    const output: FrameworkWireEntrySnapshot[] = [];
     const elements = queryElements(root, '[kovo-deps]');
     const elementCount = ownArrayLength(
       elements,
@@ -299,9 +295,9 @@ export function createHmrTargetSnapshotReader(
         continue;
       }
       appendDense(seen, target, 'Kovo HMR live-target identity snapshot');
-      appendDense(
-        output,
-        apply<string>(encodeLiveTargetHeader!, codec, [
+      let wireEntry = '';
+      try {
+        wireEntry = apply<string>(encodeLiveTargetHeader!, codec, [
           [
             {
               attestation,
@@ -310,7 +306,14 @@ export function createHmrTargetSnapshotReader(
               target,
             },
           ],
-        ]),
+        ]);
+      } catch {
+        continue;
+      }
+      if (wireEntry === '') continue;
+      appendDense(
+        output,
+        apply(objectFreeze, NativeObject, [{ target, wireEntry }]) as FrameworkWireEntrySnapshot,
         'Kovo HMR live-target header snapshot',
       );
       if (
@@ -320,12 +323,12 @@ export function createHmrTargetSnapshotReader(
         break;
       }
     }
-    return output;
+    return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
   };
 
-  const dependencyTargets = (root: unknown): string[] => {
+  const dependencyTargets = (root: unknown): readonly FrameworkWireEntrySnapshot[] => {
     const seen: string[] = [];
-    const output: string[] = [];
+    const output: FrameworkWireEntrySnapshot[] = [];
     const elements = queryElements(root, '[kovo-deps]');
     const elementCount = ownArrayLength(
       elements,
@@ -340,7 +343,7 @@ export function createHmrTargetSnapshotReader(
       const dependencyCount = ownArrayLength(
         dependencies,
         'Kovo HMR dependency snapshot',
-        maxHeaderCharacters as number,
+        maxCollectionElements,
       );
       for (
         let dependencyIndex = 0;
@@ -354,9 +357,13 @@ export function createHmrTargetSnapshotReader(
       }
       if (!safe || target === '' || contains(seen, target)) continue;
       appendDense(seen, target, 'Kovo HMR target identity snapshot');
+      const wireEntry = apply<string>(encodeTargetHeader!, codec, [
+        [{ deps: dependencies, target }],
+      ]);
+      if (wireEntry === '') continue;
       appendDense(
         output,
-        apply<string>(encodeTargetHeader!, codec, [[{ deps: dependencies, target }]]),
+        apply(objectFreeze, NativeObject, [{ target, wireEntry }]) as FrameworkWireEntrySnapshot,
         'Kovo HMR target header snapshot',
       );
       if (
@@ -366,7 +373,7 @@ export function createHmrTargetSnapshotReader(
         break;
       }
     }
-    return output;
+    return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
   };
 
   const currentBuild = (root: unknown): string => {

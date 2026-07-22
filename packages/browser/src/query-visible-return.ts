@@ -13,16 +13,20 @@ import type { QueryRefetchOptions, RefetchOnFocusDeclaration } from './query-ref
 import { readPageBuildToken } from './build-token.js';
 import { createQueryScriptHydrationLedger } from './query-script-hydration.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
-import { splitQueryWireKey } from './query-store.js';
-import type { QueryStore } from './query-store.js';
+import { createQueryIdentity, queryStoreKey } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
 import {
   securityArrayAppend,
+  freezeSecurityValue,
+  securityGetOwnPropertyDescriptor,
+  securityMap,
+  securityMapForEach,
+  securityMapSet,
   securityOwnArrayEntry,
   securitySet,
   securitySetAdd,
-  securitySetForEach,
   securitySetHas,
 } from './security-witness-intrinsics.js';
 
@@ -33,8 +37,9 @@ const browserLifecycleSecurity =
   typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
 
 export interface RefetchQueryLedger {
-  eligible(optOut?: readonly string[]): readonly string[];
-  remember(queries: readonly string[]): void;
+  /** Exact frozen identities eligible for refetch; opt-outs are exact query names. */
+  eligible(optOut?: readonly string[]): readonly QueryIdentity[];
+  remember(queries: readonly (string | QueryIdentity)[]): void;
 }
 
 export interface QueryVisibleReturnRefetchRoot
@@ -57,59 +62,62 @@ export interface QueryVisibleReturnRefetchOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
   queryStore?: QueryStore;
-  refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
+  refetchOnFocus?: (queries: readonly QueryIdentity[]) => void | Promise<void>;
   refetchOnFocusOptOut?: readonly string[];
   root: QueryVisibleReturnRefetchRoot;
 }
 
 export interface InstalledQueryVisibleReturnRefetch {
   dispose(): void;
-  rememberAppliedQueries(queries: readonly string[]): void;
+  rememberAppliedQueries(queries: readonly (string | QueryIdentity)[]): void;
 }
 
 export function createRefetchQueryLedger(
-  initialQueries: readonly string[] = [],
+  initialQueries: readonly (string | QueryIdentity)[] = [],
 ): RefetchQueryLedger {
-  const queries = securitySet<string>();
+  const queries = securityMap<string, QueryIdentity>();
 
-  const remember = (nextQueries: readonly string[]): void => {
+  const remember = (nextQueries: readonly (string | QueryIdentity)[]): void => {
     for (let index = 0; index < nextQueries.length; index += 1) {
       const entry = securityOwnArrayEntry(nextQueries, index);
-      if (!entry.ok || typeof entry.value !== 'string') {
-        throw new TypeError('Kovo visible-return query ledger requires dense string facts.');
-      }
-      securitySetAdd(queries, entry.value);
+      if (!entry.ok) throw new TypeError('Kovo visible-return query ledger requires dense facts.');
+      const identity = snapshotVisibleReturnQueryIdentity(entry.value);
+      securityMapSet(queries, queryStoreKey(identity.name, identity.key), identity);
     }
   };
 
   remember(initialQueries);
 
   return {
-    eligible(optOut: readonly string[] = []): readonly string[] {
-      const excluded = securitySet<string>();
-      for (let index = 0; index < optOut.length; index += 1) {
-        const entry = securityOwnArrayEntry(optOut, index);
-        if (!entry.ok || typeof entry.value !== 'string') {
-          throw new TypeError('Kovo visible-return opt-out list requires dense string facts.');
-        }
-        securitySetAdd(excluded, entry.value);
-      }
-      const eligible: string[] = [];
-
-      securitySetForEach(queries, (query) => {
-        // SPEC §9.3/§9.4: the declared `refetchOnFocus: false` opt-out is per query NAME
-        // (typed reads dispatch `/_q/` by name), so a keyed query's every instance key is
-        // excluded when its name is opted out. Exact wire-key entries still match too.
-        const { name } = splitQueryWireKey(query);
-        if (!securitySetHas(excluded, query) && !securitySetHas(excluded, name)) {
-          securityArrayAppend(eligible, query, 'Browser visible-return eligible query facts');
-        }
-      });
-
-      return eligible;
-    },
+    eligible,
     remember,
   };
+
+  function eligible(optOut: readonly string[] = []): readonly QueryIdentity[] {
+    const excluded = securitySet<string>();
+    for (let index = 0; index < optOut.length; index += 1) {
+      const entry = securityOwnArrayEntry(optOut, index);
+      if (!entry.ok || typeof entry.value !== 'string') {
+        throw new TypeError('Kovo visible-return opt-out list requires dense string facts.');
+      }
+      securitySetAdd(excluded, entry.value);
+    }
+    const eligible: QueryIdentity[] = [];
+
+    securityMapForEach(queries, (identity) => {
+      // SPEC §9.3/§9.4: opt-outs are query NAME facts, so one declaration excludes every
+      // keyed instance. Canonical instance strings are never overloaded as name opt-outs.
+      if (!securitySetHas(excluded, identity.name)) {
+        securityArrayAppend(
+          eligible,
+          identity,
+          'Browser visible-return eligible query identity facts',
+        );
+      }
+    });
+
+    return freezeSecurityValue(eligible);
+  }
 }
 
 export function readVisibleReturnQueryScripts(
@@ -188,9 +196,9 @@ export function installQueryVisibleReturnRefetch(
     // query scripts introduced by later fragment/stream DOM updates.
     hydrateNewQueryScripts();
     if (disposed) return;
-    const queries = ledger.eligible(refetchOnFocusOptOut);
+    const queryIdentities = ledger.eligible(refetchOnFocusOptOut);
     try {
-      await options.refetchOnFocus?.(queries);
+      await options.refetchOnFocus?.(queryIdentities);
     } catch (error) {
       reportRuntimeError(options.onError, error);
     }
@@ -208,14 +216,14 @@ export function installQueryVisibleReturnRefetch(
           queryPlans: options.queryPlans,
           root: options.root,
         }),
-        queries,
+        queries: queryIdentities,
         queryStore: options.queryStore,
       });
-      const appliedQueries: string[] = [];
+      const appliedQueries: QueryIdentity[] = [];
       for (let index = 0; index < applied.length; index += 1) {
         const result = securityOwnArrayEntry(applied, index);
         if (!result.ok) throw new TypeError('Kovo typed-read results must be dense.');
-        appendDenseStrings(
+        appendDenseQueryIdentities(
           appliedQueries,
           result.value.queries,
           'Browser visible-return applied query facts',
@@ -260,6 +268,38 @@ export function installQueryVisibleReturnRefetch(
       ledger.remember(queries);
     },
   };
+}
+
+function snapshotVisibleReturnQueryIdentity(value: string | QueryIdentity): QueryIdentity {
+  if (typeof value === 'string') {
+    if (value === '') throw new TypeError('Kovo visible-return query names must be non-empty.');
+    // A raw string is deliberately an exact unkeyed name. It may contain `:`.
+    return createQueryIdentity(value);
+  }
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError('Kovo visible-return query facts must be names or structured identities.');
+  }
+  const name = securityGetOwnPropertyDescriptor(value, 'name');
+  const key = securityGetOwnPropertyDescriptor(value, 'key');
+  if (!name || !('value' in name) || typeof name.value !== 'string' || name.value === '') {
+    throw new TypeError('Kovo visible-return query identity requires a non-empty own-data name.');
+  }
+  if (key && (!('value' in key) || typeof key.value !== 'string')) {
+    throw new TypeError('Kovo visible-return query identity key must be an own-data string.');
+  }
+  return createQueryIdentity(name.value, key && 'value' in key ? (key.value as string) : undefined);
+}
+
+function appendDenseQueryIdentities(
+  target: QueryIdentity[],
+  source: readonly QueryIdentity[],
+  label: string,
+): void {
+  for (let index = 0; index < source.length; index += 1) {
+    const entry = securityOwnArrayEntry(source, index);
+    if (!entry.ok) throw new TypeError(`${label} must be dense.`);
+    securityArrayAppend(target, snapshotVisibleReturnQueryIdentity(entry.value), label);
+  }
 }
 
 function addVisibleReturnListener(

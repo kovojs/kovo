@@ -11,6 +11,7 @@ import {
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   createFrameworkWireTargetCodec,
+  decodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
 } from '@kovojs/core/internal/wire-input-grammar';
 import { createHmrTargetSnapshotReader } from '@kovojs/browser/internal/mutation';
@@ -1247,10 +1248,23 @@ const dependencyTargets = () => hmrTargetSnapshotReader.dependencyTargets(docume
 
 async function refreshLiveTargets(event) {
   const apply = globalThis.__kovo_a;
-  const live = liveTargets();
+  let live;
+  let targets;
+  try {
+    live = liveTargets();
+    targets = dependencyTargets();
+  } catch {
+    return reload();
+  }
   if (typeof apply !== "function" || live.length === 0) return reload();
 
   const currentUrl = location.origin + location.pathname + location.search;
+  const requestPlan = frameworkWireTargetCodec.planTargetRequestHeaders({
+    currentUrl,
+    liveTargets: live,
+    targets,
+  });
+  if (!requestPlan) return reload();
   const url = new URL("${kovoHmrLiveTargetRefreshPath}", currentUrl);
   url.searchParams.set("url", currentUrl);
   const build = currentBuild();
@@ -1258,13 +1272,9 @@ async function refreshLiveTargets(event) {
   if (event?.oldFactHash) url.searchParams.set("oldFactHash", event.oldFactHash);
 
   const response = await fetch(url, {
-    headers: {
-      "Kovo-Current-Url": currentUrl,
-      "Kovo-Fragment": "true",
-      "Kovo-Live-Targets": frameworkWireTargetCodec.encodeEntryList(live),
-      "Kovo-Targets": frameworkWireTargetCodec.encodeEntryList(dependencyTargets()),
-    },
+    headers: requestPlan.headers,
     method: "POST",
+    referrerPolicy: "origin",
   });
 
   const previousBuild = response.headers.get("Kovo-Previous-Build") || "";
@@ -1430,31 +1440,9 @@ function renderDiagnosticDocumentForRecord(
 }
 
 function firstMutationDiagnosticTarget(headers: IncomingMessage['headers']): string {
-  const source = readHeader(headers, 'Kovo-Targets') ?? '';
-  let start = 0;
-  while (start <= source.length) {
-    const comma = securityStringIndexOf(source, ',', start);
-    const semicolon = securityStringIndexOf(source, ';', start);
-    const end =
-      comma === -1
-        ? semicolon === -1
-          ? source.length
-          : semicolon
-        : semicolon === -1
-          ? comma
-          : comma < semicolon
-            ? comma
-            : semicolon;
-    const candidate = securityStringTrim(securityStringSlice(source, start, end));
-    const equals = securityStringIndexOf(candidate, '=');
-    const target = securityStringTrim(
-      equals === -1 ? candidate : securityStringSlice(candidate, 0, equals),
-    );
-    if (target !== '') return target;
-    if (end === source.length) break;
-    start = end + 1;
-  }
-  return 'error';
+  return (
+    decodeFrameworkTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '')[0]?.target ?? 'error'
+  );
 }
 
 function clearModuleRecord(

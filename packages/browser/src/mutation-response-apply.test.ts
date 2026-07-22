@@ -84,7 +84,7 @@ describe('decoded mutation response apply', () => {
     expect(plan).toHaveBeenCalledWith({ count: 3 });
     expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }],
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
   });
 
@@ -144,7 +144,7 @@ describe('decoded mutation response apply', () => {
     expect(applySnapshot(applied)).toEqual({
       appliedFragments: ['cart-badge'],
       fragments: [{ html: '<cart-badge>11</cart-badge>', target: 'cart-badge' }],
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect(store.get('cart')).toEqual({ count: 11 });
     expect(count.textContent).toBe('11');
@@ -169,7 +169,10 @@ describe('decoded mutation response apply', () => {
       store,
     });
 
-    expect(applied).toEqual({ fragments: [], queries: ['cart:c1'] });
+    expect(applied).toEqual({
+      fragments: [],
+      queries: [{ key: 'cart:c1', name: 'cart' }],
+    });
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 16 });
     expect(beforeApplyQueries).toHaveBeenCalledWith([
       { key: 'cart:c1', name: 'cart', value: { count: 6 } },
@@ -200,7 +203,7 @@ describe('decoded mutation response apply', () => {
 
     expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>8</cart-badge>', target: 'cart-badge' }],
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect('appliedFragments' in applied).toBe(false);
     expect(store.get('cart')).toEqual({ count: 8 });
@@ -231,7 +234,7 @@ describe('decoded mutation response apply', () => {
 
     expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>9</cart-badge>', target: 'cart-badge' }],
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect('appliedFragments' in applied).toBe(false);
     expect(count.textContent).toBe('9');
@@ -268,7 +271,7 @@ describe('decoded mutation response apply', () => {
     expect(applySnapshot(applied)).toEqual({
       appliedFragments: ['cart-badge'],
       fragments: [{ html: '<cart-badge>2</cart-badge>', target: 'cart-badge' }],
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(count.textContent).toBe('2');
@@ -360,7 +363,7 @@ describe('decoded mutation response apply', () => {
         target: 'messages',
       },
     ]);
-    expect(applied.queries).toEqual(['chat']);
+    expect(applied.queries).toEqual([{ name: 'chat' }]);
     expect(applied.streams).toEqual(['assistant:a1']);
   });
 

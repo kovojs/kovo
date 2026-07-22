@@ -51,12 +51,11 @@ describe('inline loader minified artifact', () => {
       assertMinifiedInlineKovoLoaderInstallerWireParserParity(inlineKovoLoaderInstallerSource),
     ).not.toThrow();
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'frameworkWireTargetCodec.encodeEntryList(rlt())',
+      'frameworkWireTargetCodec.planTargetRequestHeaders({',
     );
-    expect(inlineKovoLoaderInstallerSource).toContain(
-      'frameworkWireTargetCodec.encodeEntryList(rt())',
-    );
-    expect(inlineKovoLoaderInstallerSource).toContain('kovo.wire-input-grammar/v1');
+    expect(inlineKovoLoaderInstallerSource).toContain('liveTargets:rlt()');
+    expect(inlineKovoLoaderInstallerSource).toContain('targets:rt()');
+    expect(inlineKovoLoaderInstallerSource).toContain('kovo.wire-input-grammar/v2');
     expect(inlineKovoLoaderInstallerSource).not.toContain(".join('; ')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('[...new Set(');
     expect(inlineKovoLoaderInstallerSource).toContain('function ri(');

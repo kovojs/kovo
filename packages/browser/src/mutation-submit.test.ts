@@ -550,7 +550,7 @@ describe('enhanced mutation submit', () => {
       store,
     });
 
-    expect(result.queries).toEqual(['account']);
+    expect(result.queries).toEqual([{ name: 'account' }]);
     expect(store.get('account')).toEqual({ owner: 'same-principal' });
     expect(channel.closed).toBe(false);
     expect(channel.onmessage).not.toBeNull();
@@ -584,7 +584,7 @@ describe('enhanced mutation submit', () => {
       },
       {
         component: 'components/recommendations/recommendations',
-        deps: 'product:p1',
+        deps: 'product%3Ap1',
         props: '{"productId":"p1"}',
         token: 'tok_recommendations',
         target: 'recommendations',
@@ -623,7 +623,7 @@ describe('enhanced mutation submit', () => {
       formData,
       broadcast,
       expectedBuildToken: TEST_BUILD,
-      idem: 'idem_01HX',
+      idem: 'v1_1750000000000_00000000000000000000000000000003',
       morph(target, html) {
         observed.push(
           `morph:${count.textContent}:${summary.textContent}:${host.getAttribute('data-count')}`,
@@ -657,13 +657,14 @@ describe('enhanced mutation submit', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_01HX',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000003',
         'Kovo-Live-Targets':
-          'cart-badge#components/cart/cart-badge/cart-badge@tok_cart:{}; recommendations#components/recommendations/recommendations@tok_recommendations:{"productId":"p1"}',
-        'Kovo-Targets': 'cart-badge=cart; recommendations=product:p1',
+          'cart-badge#components%2Fcart%2Fcart-badge%2Fcart-badge@tok_cart:{}; recommendations#components%2Frecommendations%2Frecommendations@tok_recommendations:{"productId":"p1"}',
+        'Kovo-Targets': 'cart-badge=cart; recommendations=product%3Ap1',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
     expect(mutationSubmitSnapshot(result)).toEqual({
       appliedFragments: ['cart-badge', 'recommendations'],
@@ -672,9 +673,9 @@ describe('enhanced mutation submit', () => {
         { html: '<section></section>', target: 'recommendations' },
       ],
       changes: [{ domain: 'cart' }],
-      idem: 'idem_01HX',
-      queries: ['cart'],
-      targets: ['cart-badge=cart', 'recommendations=product:p1'],
+      idem: 'v1_1750000000000_00000000000000000000000000000003',
+      queries: [{ name: 'cart' }],
+      targets: ['cart-badge=cart', 'recommendations=product%3Ap1'],
     });
     expect(channel.messages).toEqual([
       {
@@ -729,7 +730,7 @@ describe('enhanced mutation submit', () => {
     });
 
     expect(result.changes).toEqual([]);
-    expect(result.queries).toEqual(['cart']);
+    expect(result.queries).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
     expect(channel.messages).toEqual([
@@ -943,7 +944,7 @@ describe('enhanced mutation submit', () => {
         method: 'post',
       },
       formData: new FormData(),
-      idem: 'idem_stream_01',
+      idem: 'v1_1750000000000_00000000000000000000000000000004',
       root,
       store,
     });
@@ -954,13 +955,12 @@ describe('enhanced mutation submit', () => {
         Accept: 'text/vnd.kovo.fragment+html; stream=1',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_stream_01',
-        'Kovo-Live-Targets': '',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000004',
         'Kovo-Stream': 'true',
-        'Kovo-Targets': '',
       },
       keepalive: false,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
     expect(text).not.toHaveBeenCalled();
     expect(root.targets.get('messages')?.html).toBe(
@@ -971,8 +971,8 @@ describe('enhanced mutation submit', () => {
     expect(result).toMatchObject({
       appliedFragments: ['messages'],
       changes: [{ domain: 'chat' }],
-      idem: 'idem_stream_01',
-      queries: ['chat'],
+      idem: 'v1_1750000000000_00000000000000000000000000000004',
+      queries: [{ name: 'chat' }],
       streams: ['assistant:a1'],
       targets: [],
     });

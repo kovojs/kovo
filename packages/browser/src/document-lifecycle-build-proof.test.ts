@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { planFrameworkTargetRequestHeaders } from '@kovojs/core/internal/wire-input-grammar';
 
 import {
   createDocumentLifecycleRecovery,
@@ -19,11 +20,11 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     currentHref: () => 'https://kovo.test/account',
     document: {} as Document,
     encodeAttribute: (value) => value,
-    encodeWireEntries: (values) => values.join('; '),
     fetchValue: async () => ({ status: 200 }),
     findTarget: () => nextTarget,
-    liveTargets: () => ['account#account@token:{}'],
+    liveTargets: () => [{ target: 'account', wireEntry: 'account#account@token:{}' }],
     parseHtmlDocument: () => nextDocument,
+    planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
     queryAll: () => [],
     queryOne: () => null,
     queryUrl: () => '',
@@ -38,7 +39,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     reload,
     snapshotElementHtml: () => '<section kovo-fragment-target="account">next</section>',
     targetHeader: () => [],
-    wireKey: () => '',
+    wireKey: () => undefined,
     ...overrides,
   };
   return { applied, nextDocument, options, reload };
@@ -51,6 +52,22 @@ async function refresh(options: DocumentLifecycleRecoveryOptions): Promise<void>
 }
 
 describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
+  it('rejects invalid direct and injected query identities before URL construction', () => {
+    const queryUrl = vi.fn(() => '/_q/unsafe');
+    const { options, reload } = recoveryOptions({
+      queryUrl,
+      wireKey: () => ({ key: '', name: 'cart' }),
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+
+    lifecycle.refreshQuery('');
+    lifecycle.refreshQuery('\ud800');
+    lifecycle.rememberQueryChunk({ attrs: ' name="cart" key=""' });
+
+    expect(queryUrl).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(3);
+  });
+
   it('reloads before reading an attachment live-target response', async () => {
     const fetchValue = vi.fn(async () => ({ status: 200 }));
     const readResponseText = vi.fn(

@@ -96,7 +96,6 @@ import {
   compilerNumberValue,
   compilerObjectKeys,
   compilerOwnDataValue,
-  compilerRegExpExec,
   compilerRegExpReplace,
   compilerRegExpTest,
   compilerSetAdd,
@@ -373,7 +372,7 @@ export function lowerStructuralJsx(
     'Structural JSX replacements',
   );
   if (prefix.length > 0) {
-    const start = derivePrefixInsertionOffset(options.source);
+    const start = model.moduleImportInsertionOffset;
     appendCompilerFact(
       replacements,
       { end: start, replacement: prefix, start },
@@ -5143,27 +5142,6 @@ function stateBindingAttributeName(name: string): string {
 
 function trustedUrlMarkerAttributeName(name: string): string {
   return `data-kovo-trusted-url:${compilerStringToLowerCase(name)}`;
-}
-
-function derivePrefixInsertionOffset(source: string): number {
-  const leadingWhitespace = compilerRegExpExec(/^\s*/, source)?.[0].length ?? 0;
-  let offset = leadingWhitespace;
-  let matchedJsxPragma = false;
-
-  while (offset < source.length) {
-    const comment = compilerRegExpExec(
-      /^\/\*\*?[\s\S]*?\*\/[ \t]*(?:\r?\n)?/,
-      compilerStringSlice(source, offset),
-    );
-    if (!comment || !compilerRegExpTest(/@jsx(?:ImportSource|Runtime|Frag)?(?:\s|$)/, comment[0])) {
-      break;
-    }
-
-    offset += comment[0].length;
-    matchedJsxPragma = true;
-  }
-
-  return matchedJsxPragma ? offset : 0;
 }
 
 function trimTrailingSemicolon(value: string): string {

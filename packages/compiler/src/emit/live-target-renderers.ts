@@ -34,6 +34,7 @@ export interface EmitLiveTargetRendererExportsOptions {
   componentExpression: string;
   componentExpressionForFact?: (fact: LiveTargetFact) => string;
   liveTargetFacts: readonly LiveTargetFact[];
+  moduleImportInsertionOffset: number;
   source: string;
 }
 
@@ -43,7 +44,10 @@ export function appendLiveTargetRendererExports(
   const facts = compilerSnapshotDenseArray(options.liveTargetFacts, 'Live-target renderer facts');
   if (facts.length === 0) return options.source;
 
-  const sourceWithImport = insertLiveTargetRendererImport(options.source);
+  const sourceWithImport = insertLiveTargetRendererImport(
+    options.source,
+    options.moduleImportInsertionOffset,
+  );
   const exports: string[] = [];
   for (let index = 0; index < facts.length; index += 1) {
     const fact = facts[index]!;
@@ -60,7 +64,10 @@ export function appendLiveTargetRendererExports(
   return `${compilerRegExpReplace(/\s+$/g, sourceWithImport, '')}\n\n${joinRendererStrings(exports, '\n\n')}\n`;
 }
 
-function insertLiveTargetRendererImport(source: string): string {
+function insertLiveTargetRendererImport(
+  source: string,
+  moduleImportInsertionOffset: number,
+): string {
   const sourceFile = compilerTsCreateSourceFile(
     'lowered.tsx',
     source,
@@ -102,7 +109,9 @@ function insertLiveTargetRendererImport(source: string): string {
     return `${prefix}\n${importLine}${suffix}`;
   }
 
-  return `${importLine}${source}`;
+  const prefix = compilerStringSlice(source, 0, moduleImportInsertionOffset);
+  const suffix = compilerStringSlice(source, moduleImportInsertionOffset);
+  return `${prefix}${importLine}${suffix}`;
 }
 
 function augmentLiveTargetRendererImport(

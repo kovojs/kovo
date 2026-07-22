@@ -190,7 +190,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [],
       textContent: '',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('cart:c1') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('cart%3Ac1') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? 'cart.count' : null;
@@ -203,7 +203,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [{ name: 'data-bind:aria-label', value: 'product.stock' }],
       textContent: '',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('product:product>p1') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('product%3Ep1') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? null : null;
@@ -216,7 +216,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [],
       textContent: 'unchanged',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('product>p2') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('product%3Ep2') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? 'product.stock' : null;
@@ -299,17 +299,19 @@ export async function expectInlineResponseApplyParity(
         return selector === '[kovo-deps]' ? [] : [];
       },
     };
-    globalRecord.fetch = vi.fn(async () => ({
+    const responseText = vi.fn(async () => body);
+    const inlineFetch = vi.fn(async () => ({
       headers: {
         get(name: string) {
-          return name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null;
+          const normalized = name.toLowerCase();
+          if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+          return normalized === 'content-disposition' ? 'inline' : null;
         },
       },
-      async text() {
-        return body;
-      },
+      text: responseText,
       url: 'https://kovo.test/_m/cart/add',
     }));
+    globalRecord.fetch = inlineFetch;
     globalRecord.location = {
       href: 'https://kovo.test/cart',
       origin: 'https://kovo.test',
@@ -327,8 +329,9 @@ export async function expectInlineResponseApplyParity(
         store: createQueryStore(),
       });
     });
+    const preventDefault = vi.fn();
     listeners.get('submit')?.({
-      preventDefault: vi.fn(),
+      preventDefault,
       target: {
         closest(selector: string) {
           return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
@@ -374,7 +377,11 @@ export async function expectInlineResponseApplyParity(
           target: 'cart-summary',
         },
       ],
-      queries: ['cart:c1', 'productGrid', 'product:product>p1'],
+      queries: [
+        { key: 'cart:c1', name: 'cart' },
+        { name: 'productGrid' },
+        { key: 'product>p1', name: 'product' },
+      ],
     });
   } finally {
     Object.assign(globalRecord, {

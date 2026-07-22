@@ -1,3 +1,5 @@
+import type { FrameworkTargetRequestHeaderPlan } from '@kovojs/core/internal/wire-input-grammar';
+
 import { definedProps } from './defined-props.js';
 import type { DelegatedEvent } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
@@ -9,6 +11,7 @@ import type { TargetCollectorRoot } from './mutation-targets.js';
 import {
   createEnhancedMutationIdem,
   fetchEnhancedMutation,
+  prepareEnhancedMutationRequest,
   type EnhancedFormLike,
   type EnhancedMutationFetch,
   type UploadProgress,
@@ -35,7 +38,7 @@ import { readPageBuildToken } from './build-token.js';
 import { createDeltaMissRefetcher, type QueryRefetchFetch } from './query-refetch.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
 import type { ImportHandlerModule } from './handlers.js';
@@ -84,7 +87,7 @@ export interface EnhancedMutationLoaderOptions {
 }
 
 interface EnhancedFormSubmitHooks {
-  onAppliedQueries?: (queries: readonly string[]) => void;
+  onAppliedQueries?: (queries: readonly QueryIdentity[]) => void;
 }
 
 /** @internal Handle a delegated form submit as an enhanced mutation (SPEC §§9.1-9.2). */
@@ -120,6 +123,20 @@ export async function dispatchEnhancedFormSubmit(
     ? options.formData(form, event)
     : formDataForSubmit(form, eventFacts.submitter);
   const idem = createEnhancedMutationIdem(formData, true);
+  const streaming = isStreamingEnhancedMutationForm(form);
+  let requestPlan: FrameworkTargetRequestHeaderPlan | undefined;
+  try {
+    requestPlan = prepareEnhancedMutationRequest({
+      form,
+      idem,
+      root: options.root,
+      streaming,
+      transport,
+    });
+  } catch {
+    return false;
+  }
+  if (requestPlan === undefined) return false;
   if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
     const applied = await submitEnhancedMutation({
@@ -147,6 +164,7 @@ export async function dispatchEnhancedFormSubmit(
         pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('kovo-deps')) : undefined,
         pendingRoot: options.pendingRoot,
         queryPlans: options.queryPlans,
+        requestPlan,
       }),
       root: options.root,
       store: options.store,
@@ -231,6 +249,8 @@ export interface EnhancedMutationSubmitOptions {
   pendingQueries?: readonly string[];
   pendingRoot?: PendingRoot;
   queryPlans?: CompiledQueryUpdatePlans;
+  /** @internal Module-minted request plan prepared before delegated preventDefault. */
+  requestPlan?: FrameworkTargetRequestHeaderPlan;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
   /** Effective submitter transport snapshotted before preventDefault (SPEC §§6.3, 7, 9.1). */
@@ -305,6 +325,7 @@ function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDe
       headers: init.headers,
       keepalive: false,
       method: init.method,
+      referrerPolicy: 'origin',
     });
 
   return createDeltaMissRefetcher({

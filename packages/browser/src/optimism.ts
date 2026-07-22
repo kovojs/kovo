@@ -2,7 +2,7 @@ import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/c
 import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
-import { queryIdentityFromStoreKey, queryStoreKey, queryWireKey } from './query-store.js';
+import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 import { addRuntimeEventListener, removeRuntimeEventListener } from './runtime-dom-security.js';
 import {
@@ -812,8 +812,8 @@ export function optimisticPlanFromAuthoredMap<Input>(
     // lands on the SAME slot as server-truth/hydration instead of an orphaned bare-value slot
     // (the L13/KV313 divergence). A STRING derivation IS that full instance key (symmetric with the
     // query's own `instanceKey: (input) => string`, e.g. `product:p1`) and passes through; an args
-    // object yields only the `keyValue`, which we prefix with the query name via `queryWireKey`
-    // (idempotent — never double-prefixed) to form the canonical instance key.
+    // object yields only the `keyValue`, which we prefix explicitly with the query name. String
+    // derivations remain exact full identities, including identities owned by a foreign domain.
     const transform = securityGetOwnPropertyDescriptor(entry, 'transform');
     const keyDerivation = securityGetOwnPropertyDescriptor(entry, 'keys');
     if (
@@ -841,7 +841,7 @@ export function optimisticPlanFromAuthoredMap<Input>(
       const derived = derive(change.input);
       return typeof derived === 'string'
         ? derived
-        : queryWireKey(queryName, canonicalInstanceKeyValue(derived));
+        : canonicalFullQueryInstanceIdentity(queryName, canonicalInstanceKeyValue(derived));
     };
     defineSecurityProperties(keys, {
       [queryName]: { configurable: true, enumerable: true, value: key, writable: true },
@@ -854,4 +854,12 @@ export function optimisticPlanFromAuthoredMap<Input>(
     ...(keyedCount === 0 ? {} : { keys }),
     ...(queue === undefined ? {} : { queue }),
   };
+}
+
+function canonicalFullQueryInstanceIdentity(queryName: string, keyValue: string): string {
+  const identity = `${queryName}:${keyValue}`;
+  // Reuse the collision-free store framing validator without conflating that framing with the
+  // canonical wire identity returned to the optimistic engine.
+  queryStoreKey(queryName, identity);
+  return identity;
 }

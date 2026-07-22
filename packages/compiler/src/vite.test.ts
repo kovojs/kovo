@@ -655,6 +655,19 @@ export const ExportedRegion = component({ queries: { cart: cartQuery }, render()
     );
   });
 
+  it('keeps standalone source-derived helper imports after a TypeScript shebang', () => {
+    const transformed = lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: 'src/app-shell.ts',
+      source: `#!/usr/bin/env -S node --import tsx
+export const cartQuery = query({ load: () => ({ count: 1 }), output: {}, reads: [] });
+`,
+    });
+
+    expect(transformed).toMatch(
+      /^#!\/usr\/bin\/env -S node --import tsx\nimport \{ assignDerivedQueryKey as __kovoAssignDerivedQueryKey \} from '@kovojs\/server\/internal\/wire';/u,
+    );
+  });
+
   it('lowers standalone source-derived declarations through aliases and API subpaths', () => {
     const transformed = lowerStandaloneSourceDerivedRegistryDeclarations({
       fileName: 'src/app-shell.tsx',

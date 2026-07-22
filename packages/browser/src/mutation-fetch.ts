@@ -1,3 +1,8 @@
+import {
+  planFrameworkTargetRequestHeaders,
+  type FrameworkTargetRequestHeaderPlan,
+} from '@kovojs/core/internal/wire-input-grammar';
+
 import type { RuntimeErrorReporter } from './error-policy.js';
 import {
   createMutationIdem,
@@ -16,6 +21,10 @@ import {
 } from './mutation-form.js';
 import {
   securityGetOwnPropertyDescriptor,
+  securityArrayAppend,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
   securityWeakMap,
   securityWeakMapGet,
   securityWeakMapSet,
@@ -32,6 +41,7 @@ const bootMutationFetchSecurity =
 // property. Consumers classify after body reads and optimistic work, so retaining the carrier and
 // rereading mutable `ok`/`status` would let same-realm code turn a witnessed failure into success.
 const mutationResponseFailures = securityWeakMap<object, boolean>();
+const preparedMutationPlans = securityWeakSet<FrameworkTargetRequestHeaderPlan>();
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedFormLike {
@@ -48,6 +58,7 @@ export interface EnhancedMutationFetchOptions {
   keepalive: boolean;
   method: string;
   onUploadProgress?: (progress: UploadProgress) => void;
+  referrerPolicy: 'origin';
   signal?: AbortSignal;
 }
 
@@ -92,6 +103,8 @@ export interface FetchEnhancedMutationOptions {
   streaming?: boolean;
   /** Effective submitter transport snapshotted before preventDefault. */
   transport?: EnhancedMutationTransport;
+  /** @internal Module-minted preflight plan prepared before delegated preventDefault. */
+  requestPlan?: FrameworkTargetRequestHeaderPlan;
 }
 
 export interface FetchedEnhancedMutation {
@@ -128,8 +141,6 @@ export async function fetchEnhancedMutation(
   const onUploadProgress = options.onUploadProgress;
   const signal = options.signal;
   const streaming = options.streaming === true;
-  const targetSnapshot = readLiveTargetSnapshot(options.root);
-  const submittedFormTarget = readSubmittedFormTarget(form);
   const transportCandidate =
     options.transport ??
     readEligibleEnhancedMutationTransport(form) ??
@@ -138,22 +149,31 @@ export async function fetchEnhancedMutation(
   if (typeof fetchMutation !== 'function' || transport === undefined) {
     throw new TypeError('Kovo enhanced mutation transport is invalid.');
   }
+  const requestPlan =
+    options.requestPlan && securityWeakSetHas(preparedMutationPlans, options.requestPlan)
+      ? options.requestPlan
+      : prepareEnhancedMutationRequest({
+          form,
+          idem,
+          root: options.root,
+          streaming,
+          transport,
+        });
+  if (requestPlan === undefined) {
+    throw new TypeError('Kovo enhanced mutation target headers exceed their transport budget.');
+  }
+  const responseTargets: string[] = [];
+  for (let index = 0; index < requestPlan.targets.length; index += 1) {
+    securityArrayAppend(
+      responseTargets,
+      requestPlan.targets[index]!.wireEntry,
+      'Kovo admitted mutation target snapshot',
+    );
+  }
   const headers: Record<string, string> = {
     Accept: streaming ? 'text/vnd.kovo.fragment+html; stream=1' : 'text/vnd.kovo.fragment+html',
-    'Kovo-Fragment': 'true',
-    'Kovo-Idem': idem,
-    'Kovo-Live-Targets': targetSnapshot.liveHeader,
-    'Kovo-Targets': targetSnapshot.header,
+    ...requestPlan.headers,
   };
-  // SPEC §9.1: bind response-side rendering to the canonical source document. URL fragments are
-  // browser-local state and must never cross the reserved request-header boundary.
-  headers['Kovo-Current-Url'] = transport.sourceUrl;
-  if (submittedFormTarget !== undefined) {
-    headers['Kovo-Form-Target'] = submittedFormTarget;
-  }
-  if (streaming) {
-    headers['Kovo-Stream'] = 'true';
-  }
   // SPEC §6.6/§9.1: invoke the injected mutation transport through the same response-carrier
   // membrane as generated/global fetch. This pins the callable selected for this submit, rejects
   // foreign promises, and snapshots native or explicit own-data response facts before any sink
@@ -163,6 +183,7 @@ export async function fetchEnhancedMutation(
     headers,
     keepalive: !streaming,
     method: transport.method,
+    referrerPolicy: 'origin',
     ...definedProps({ onUploadProgress, signal }),
   })) as EnhancedMutationResponseLike;
   assertSameOriginMutationResponse(response, transport, security);
@@ -181,7 +202,7 @@ export async function fetchEnhancedMutation(
         changes: [],
         idem,
         response,
-        targets: targetSnapshot.targets,
+        targets: responseTargets,
       };
     }
     throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
@@ -200,7 +221,7 @@ export async function fetchEnhancedMutation(
       idem,
       response,
       sessionTransition: true,
-      targets: targetSnapshot.targets,
+      targets: responseTargets,
     };
   }
   const reauth = security.readHeader(response, 'Kovo-Reauth');
@@ -215,7 +236,7 @@ export async function fetchEnhancedMutation(
       changes: [],
       idem,
       response,
-      targets: targetSnapshot.targets,
+      targets: responseTargets,
     };
   }
   if (redirectLocation) {
@@ -225,7 +246,7 @@ export async function fetchEnhancedMutation(
       changes: [],
       idem,
       response,
-      targets: targetSnapshot.targets,
+      targets: responseTargets,
     };
   }
   const changesHeader = security.readHeader(response, 'Kovo-Changes');
@@ -257,7 +278,7 @@ export async function fetchEnhancedMutation(
       changes: [],
       idem,
       response,
-      targets: targetSnapshot.targets,
+      targets: responseTargets,
     };
   }
 
@@ -268,8 +289,33 @@ export async function fetchEnhancedMutation(
     idem,
     response,
     ...(usesStreamBody ? { streamBody: responseBody } : {}),
-    targets: targetSnapshot.targets,
+    targets: responseTargets,
   };
+}
+
+/** @internal Build and mint the exact request plan before delegated submit suppression. */
+export function prepareEnhancedMutationRequest(options: {
+  form: EnhancedFormLike;
+  idem: string;
+  root: TargetCollectorRoot;
+  streaming: boolean;
+  transport: EnhancedMutationTransport;
+}): FrameworkTargetRequestHeaderPlan | undefined {
+  const security = bootMutationFetchSecurity ?? createBrowserNavigationSecurityControls();
+  const transport = snapshotEnhancedMutationTransport(options.transport, security);
+  if (transport === undefined) return undefined;
+  const snapshot = readLiveTargetSnapshot(options.root);
+  const formTarget = readSubmittedFormTarget(options.form);
+  const plan = planFrameworkTargetRequestHeaders({
+    currentUrl: transport.sourceUrl,
+    idem: options.idem,
+    liveTargets: snapshot.liveTargetEntries,
+    stream: options.streaming,
+    targets: snapshot.targetEntries,
+    ...(formTarget === undefined ? {} : { formTarget }),
+  });
+  if (plan !== undefined) securityWeakSetAdd(preparedMutationPlans, plan);
+  return plan;
 }
 
 /**
@@ -515,14 +561,13 @@ function readFormDataString(
 }
 
 function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
-  const target =
-    form.getAttribute?.('kovo-fragment-target') ??
-    form.getAttribute?.('id') ??
-    (typeof form.id === 'string' ? form.id : undefined) ??
-    form.getAttribute?.('kovo-c') ??
-    undefined;
-
-  return target === '' ? undefined : target;
+  const fragmentTarget = form.getAttribute?.('kovo-fragment-target');
+  if (fragmentTarget !== null && fragmentTarget !== undefined) return fragmentTarget;
+  const idAttribute = form.getAttribute?.('id');
+  if (idAttribute !== null && idAttribute !== undefined) return idAttribute;
+  if (typeof form.id === 'string' && form.id !== '') return form.id;
+  const component = form.getAttribute?.('kovo-c');
+  return component === null ? undefined : component;
 }
 
 export function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {

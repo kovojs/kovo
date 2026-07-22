@@ -30,10 +30,10 @@ describe('query script hydration ledger', () => {
 
     store.subscribe('cart', cartPlan);
 
-    expect(ledger.hydrate([originalScript])).toEqual(['cart']);
+    expect(ledger.hydrate([originalScript])).toEqual([{ name: 'cart' }]);
     originalScript.textContent = '{"count":99}';
     expect(ledger.hydrate([originalScript])).toEqual([]);
-    expect(ledger.hydrate([laterScript])).toEqual(['cart']);
+    expect(ledger.hydrate([laterScript])).toEqual([{ name: 'cart' }]);
 
     // SPEC.md §9.1/§9.4: later browser hydration discoveries share the query
     // apply path, but already observed server script nodes are not replayed.
@@ -60,7 +60,7 @@ describe('query script hydration ledger', () => {
     expect(onError).toHaveBeenCalledTimes(1);
 
     script.textContent = '{"count":2}';
-    expect(ledger.hydrate([script], { onError })).toEqual(['cart']);
+    expect(ledger.hydrate([script], { onError })).toEqual([{ name: 'cart' }]);
     script.textContent = '{"count":99}';
     expect(ledger.hydrate([script], { onError })).toEqual([]);
 
@@ -97,7 +97,7 @@ describe('query script hydration ledger', () => {
     expect(store.get('cart')).toBeUndefined();
     expect(onError).toHaveBeenCalledWith(applyError);
 
-    expect(ledger.hydrate([script])).toEqual(['cart']);
+    expect(ledger.hydrate([script])).toEqual([{ name: 'cart' }]);
     script.textContent = '{"count":99}';
     expect(ledger.hydrate([script])).toEqual([]);
 
@@ -145,8 +145,8 @@ describe('query script hydration ledger', () => {
     });
 
     expect(ledger.hydrate([malformedScript, cartScript, productScript], { onError })).toEqual([
-      'cart',
-      'product',
+      { name: 'cart' },
+      { name: 'product' },
     ]);
 
     // SPEC.md §9.1/§9.4: visible-return script hydration enters the same
@@ -159,7 +159,7 @@ describe('query script hydration ledger', () => {
 
     malformedScript.textContent = '{"label":"Inventory ready"}';
     expect(ledger.hydrate([malformedScript, cartScript, productScript], { onError })).toEqual([
-      'inventory',
+      { name: 'inventory' },
     ]);
     expect(store.get('inventory')).toEqual({ label: 'Inventory ready' });
   });

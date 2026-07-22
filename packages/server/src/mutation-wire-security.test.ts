@@ -165,8 +165,8 @@ describe('mutation wire intrinsic security', () => {
     });
     const headers = {
       'Kovo-Fragment': 'TRUE',
-      'Kovo-Form-Target': ' public-panel ',
-      'Kovo-Live-Targets': `public-panel#components/public/public@${token}:{"id":"safe"}`,
+      'Kovo-Form-Target': 'public-panel',
+      'Kovo-Live-Targets': `public-panel#components%2Fpublic%2Fpublic@${token}:{"id":"safe"}`,
       'Kovo-Targets': 'public-panel=public; public-panel=admin',
     };
     const originalJsonParse = JSON.parse;

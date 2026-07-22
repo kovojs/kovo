@@ -94,8 +94,16 @@ describe('@kovojs/test header fixtures', () => {
       enhancedMutationHeaders({
         formTarget: 'product-grid',
         liveTargets: [
-          { component: 'components/cart-badge', target: 'cart-badge' },
-          { component: 'components/grid', target: 'product-grid' },
+          {
+            attestation: 'test-attestation',
+            component: 'components/cart-badge',
+            target: 'cart-badge',
+          },
+          {
+            attestation: 'test-attestation',
+            component: 'components/grid',
+            target: 'product-grid',
+          },
         ],
         targets: [
           { queries: 'cart', target: 'cart-badge' },
@@ -105,7 +113,8 @@ describe('@kovojs/test header fixtures', () => {
     ).toEqual({
       'Kovo-Form-Target': 'product-grid',
       'Kovo-Fragment': 'true',
-      'Kovo-Live-Targets': 'cart-badge#components/cart-badge:{}; product-grid#components/grid:{}',
+      'Kovo-Live-Targets':
+        'cart-badge#components%2Fcart-badge@test-attestation:{}; product-grid#components%2Fgrid@test-attestation:{}',
       'Kovo-Targets': 'cart-badge=cart; product-grid=productGrid',
     });
   });
@@ -133,6 +142,7 @@ describe('@kovojs/test header fixtures', () => {
       headers = enhancedMutationHeaders({
         liveTargets: [
           {
+            attestation: 'test-attestation',
             component: 'components/cart',
             props: { count: 1, items: ['safe'] },
             target: 'cart',
@@ -153,7 +163,7 @@ describe('@kovojs/test header fixtures', () => {
 
     expect(headers).toEqual({
       'Kovo-Fragment': 'true',
-      'Kovo-Live-Targets': 'cart#components/cart:{"count":1,"items":["safe"]}',
+      'Kovo-Live-Targets': 'cart#components%2Fcart@test-attestation:{"count":1,"items":["safe"]}',
       'Kovo-Targets': 'cart=cart viewer',
     });
   });
@@ -161,11 +171,11 @@ describe('@kovojs/test header fixtures', () => {
   it('keeps string header fixtures available for package-level wire tests', () => {
     expect(
       enhancedMutationHeaders({
-        liveTargets: 'cart#components/cart:{}',
+        liveTargets: 'cart#components%2Fcart@test-attestation:{}',
         targets: 'cart=cart',
       }),
     ).toMatchObject({
-      'Kovo-Live-Targets': 'cart#components/cart:{}',
+      'Kovo-Live-Targets': 'cart#components%2Fcart@test-attestation:{}',
       'Kovo-Targets': 'cart=cart',
     });
   });

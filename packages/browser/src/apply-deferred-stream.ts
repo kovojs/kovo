@@ -1,5 +1,6 @@
 import { definedProps } from './defined-props.js';
 import type { MorphRoot } from './morph.js';
+import type { QueryIdentity } from './query-store.js';
 import { deferredStreamChunks } from './wire-parser.js';
 import {
   applyMutationResponseBodyToRuntime,
@@ -80,7 +81,7 @@ export function applyDeferredStreamResponseToRuntime(
   }
 
   const fragments: AppliedMutationResponse['fragments'][number][] = [];
-  const queries: string[] = [];
+  const queries: QueryIdentity[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = securityOwnArrayEntry(chunks, index);
     if (!chunk.ok) throw new TypeError('Kovo applied deferred stream chunks must be dense.');

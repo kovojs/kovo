@@ -120,7 +120,10 @@ describe('query hydration browser runtime', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.waitFor(() => {
-      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations:homepage']);
+      expect(refetchOnFocus).toHaveBeenCalledWith([
+        { name: 'cart' },
+        { key: 'recommendations:homepage', name: 'recommendations' },
+      ]);
     });
 
     // SPEC.md §9.1/§9.4: browser-visible hydration discoveries use the shared
@@ -162,7 +165,7 @@ describe('query hydration browser runtime', () => {
 
     await vi.waitFor(() => {
       expect(store.get('cart')).toEqual({ count: 2 });
-      expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+      expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     });
 
     // SPEC.md §9.4: hydrated script data, mutation chunks, and typed reads all
@@ -210,7 +213,7 @@ describe('query hydration browser runtime', () => {
 
     await vi.waitFor(() => {
       expect(store.get('cart')).toEqual({ count: 2 });
-      expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+      expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     });
 
     // SPEC.md §4.4/§9.4: browser query hydration uses the same runtime apply
@@ -251,7 +254,7 @@ describe('query hydration browser runtime', () => {
 
     document.dispatchEvent(new Event('visibilitychange'));
     await vi.waitFor(() => {
-      expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+      expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     });
 
     loader.dispose();

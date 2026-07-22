@@ -15,10 +15,11 @@ import type {
   QueryBindingIndex,
   QueryBindingRoot,
 } from './query-bindings.js';
-import type { QueryStore } from './query-store.js';
-import { queryWireKey } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
+import { createQueryIdentity, queryIdentityDisplay, queryStoreKey } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 import {
+  freezeSecurityValue,
   securityArrayAppend,
   securityGetOwnPropertyDescriptor,
   securityOwnArrayEntry,
@@ -139,8 +140,8 @@ function applyQueryChunks(
   store: QueryStore,
   queries: readonly QueryChunk[],
   options: ApplyQueryChunksOptions = {},
-): readonly string[] {
-  const applied: string[] = [];
+): readonly QueryIdentity[] {
+  const applied: QueryIdentity[] = [];
 
   for (let index = 0; index < queries.length; index += 1) {
     const queryEntry = securityOwnArrayEntry(queries, index);
@@ -153,8 +154,8 @@ function applyQueryChunks(
       options.afterApplyQuery?.(query, value);
       securityArrayAppend(
         applied,
-        queryWireKey(query.name, query.key),
-        'Browser applied query wire keys',
+        createQueryIdentity(query.name, query.key),
+        'Browser applied query identities',
       );
     } catch (error) {
       // Delta-miss errors are handled by onDeltaMiss; swallow them silently here
@@ -169,24 +170,26 @@ function applyQueryChunks(
     }
   }
 
-  return applied;
+  return freezeSecurityValue(applied);
 }
 
 export function applyQueryChunksToRuntime(
   store: QueryStore,
   queries: readonly QueryChunk[],
   options: ApplyQueryChunksToRuntimeOptions = {},
-): readonly string[] {
+): readonly QueryIdentity[] {
   const readBindingIndex = createLazyBindingIndexReader();
 
   return applyQueryChunks(store, queries, {
     afterApplyQuery(query, value) {
-      const queryKey = queryWireKey(query.name, query.key);
+      const identity = createQueryIdentity(query.name, query.key);
+      const queryKey = queryIdentityDisplay(identity);
+      const planKey = queryStoreKey(query.name, query.key);
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
         query.name,
         value,
-        options.queryPlans?.[queryKey] ?? options.queryPlans?.[query.name],
+        options.queryPlans?.[planKey] ?? options.queryPlans?.[query.name],
         readBindingIndex,
         query.key === undefined ? undefined : queryKey,
         store,

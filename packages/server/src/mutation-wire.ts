@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import type { JsonValue, Redirect, ScopedKey } from '@kovojs/core';
 import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
+  decodeFrameworkFormTargetHeader,
   decodeFrameworkLiveTargetHeader,
   decodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
@@ -434,7 +435,7 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   const stream = streamHeader !== undefined && securityStringToLowerCase(streamHeader) === 'true';
   const formTargetHeader = readHeader(headers, 'Kovo-Form-Target');
   const submittedFormTarget =
-    formTargetHeader === undefined ? undefined : securityStringTrim(formTargetHeader);
+    formTargetHeader === undefined ? undefined : decodeFrameworkFormTargetHeader(formTargetHeader);
   const liveTargets = decodeFrameworkTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
   const liveTargetDescriptors = decodeFrameworkLiveTargetHeader(
     readHeader(headers, 'Kovo-Live-Targets') ?? '',

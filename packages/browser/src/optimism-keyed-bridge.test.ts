@@ -72,6 +72,31 @@ describe('instance-keyed optimistic bridge', () => {
     ).toBe('questionDetail:q3');
   });
 
+  it('prefixes object keys with the full colon-bearing name and preserves string domains', () => {
+    const objectPlan = optimisticPlanFromAuthoredMap<{ id: string }>({
+      'catalog:product': {
+        keys: (input) => ({ id: input.id }),
+        transform() {},
+      },
+    });
+    const stringPlan = optimisticPlanFromAuthoredMap<{ id: string }>({
+      productDetail: {
+        keys: (input) => `inventory:${input.id}`,
+        transform() {},
+      },
+    });
+
+    expect(
+      objectPlan.keys?.['catalog:product']?.({
+        domain: 'mutation',
+        input: { id: 'p1' },
+      }),
+    ).toBe('catalog:product:p1');
+    expect(stringPlan.keys?.productDetail?.({ domain: 'mutation', input: { id: 'p1' } })).toBe(
+      'inventory:p1',
+    );
+  });
+
   it('predicts on the targeted instance only, never a sibling instance', () => {
     const store = createQueryStore();
     // Two instances of the SAME keyed query coexist on the page, slotted by the canonical

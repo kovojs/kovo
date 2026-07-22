@@ -165,7 +165,7 @@ describe('loader enhanced mutation broadcasts', () => {
         data: {
           body: [
             '<kovo-query name="cart">{"count":2}</kovo-query>',
-            '<kovo-query name="product:p1">{"stock":8}</kovo-query>',
+            '<kovo-query name="product" key="p1">{"stock":8}</kovo-query>',
           ].join('\n'),
           buildToken: TEST_BUILD,
           changes: [],

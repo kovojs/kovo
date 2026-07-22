@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 import { canonicalJsonStringify } from '../json-clone.js';
 import {
+  decodeFrameworkFormTargetHeader,
+  decodeFrameworkIdentityToken,
   decodeFrameworkLiveTargetHeader,
   decodeFrameworkTargetHeader,
+  encodeFrameworkFormTargetHeader,
+  encodeFrameworkIdentityToken,
   encodeFrameworkLiveTargetHeader,
   encodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
   FRAMEWORK_WIRE_INPUT_REGISTRY,
+  frameworkDomIdentityIsValid,
+  planFrameworkTargetRequestHeaders,
   snapshotFrameworkLiveTargetProps,
 } from './wire-input-grammar.js';
 
@@ -60,8 +66,10 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
   it('derives target encoders and decoders from one finite grammar with seeded round trips', () => {
     expect(FRAMEWORK_WIRE_INPUT_GRAMMAR).toMatchObject({
       maxEntries: 64,
+      maxCurrentUrlCharacters: 1536,
       maxHeaderCharacters: 4 * 1024,
-      schema: 'kovo.wire-input-grammar/v1',
+      maxTargetRequestHeaderBytes: 9 * 1024,
+      schema: 'kovo.wire-input-grammar/v2',
     });
 
     for (let seed = 1; seed <= 256; seed += 1) {
@@ -125,101 +133,91 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       ),
     ).toHaveLength(64);
 
-    expect(() => encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }])).toThrow(
-      /wire identity/iu,
-    );
+    expect(
+      decodeFrameworkTargetHeader(
+        encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }]),
+      ),
+    ).toEqual([{ deps: ['query;admin'], target: 'safe' }]);
     expect(() =>
       encodeFrameworkLiveTargetHeader([
-        { attestation: 'token', component: 'bad:component', propsSource: '{}', target: 'safe' },
+        { attestation: 'bad:token', component: 'component', propsSource: '{}', target: 'safe' },
       ]),
-    ).toThrow(/component/iu);
+    ).toThrow(/attestation/iu);
   });
 
-  it('rejects identities that can alter framing or cannot enter a browser header', () => {
-    const unsafeSuffixes = ['{', '}', '[', ']', '"', '\\', '#', ';', '=', ',', '漢'];
-    for (const suffix of unsafeSuffixes) {
-      expect(() =>
-        encodeFrameworkTargetHeader([
-          { deps: ['public'], target: `card${suffix}` },
-          { deps: [], target: 'safe-second' },
-        ]),
-      ).toThrow(/wire identity/iu);
-      expect(() =>
-        encodeFrameworkTargetHeader([{ deps: [`query${suffix}`], target: 'safe' }]),
-      ).toThrow(/dependency wire identity/iu);
-      expect(() =>
-        encodeFrameworkLiveTargetHeader([
-          {
-            attestation: 'token',
-            component: 'components/card',
-            propsSource: '{}',
-            target: `card${suffix}`,
-          },
-          {
-            attestation: 'token_second',
-            component: 'components/second',
-            propsSource: '{}',
-            target: 'safe-second',
-          },
-        ]),
-      ).toThrow(/target wire identity/iu);
-      expect(() =>
-        encodeFrameworkLiveTargetHeader([
-          {
-            attestation: 'token',
-            component: `components/card${suffix}`,
-            propsSource: '{}',
-            target: 'safe',
-          },
-        ]),
-      ).toThrow(/component wire identity/iu);
-      expect(() =>
-        encodeFrameworkLiveTargetHeader([
-          {
-            attestation: `token${suffix}`,
-            component: 'components/card',
-            propsSource: '{}',
-            target: 'safe',
-          },
-        ]),
-      ).toThrow(/attestation wire identity/iu);
+  it('canonically tokenizes every wire-stable semantic identity and rejects malformed tokens', () => {
+    expect(frameworkDomIdentityIsValid('')).toBe(true);
+    expect(encodeFrameworkIdentityToken('')).toBeUndefined();
+    const identities = [
+      'plain-target',
+      'braces{}[] "quotes" \\',
+      'punctuation;#@=/%',
+      ' leading and trailing ',
+      'product:crème brûlée',
+      '漢字',
+      'emoji-😀',
+      'delete-\u007f',
+      'line\nfeed',
+      'é',
+      'e\u0301',
+    ];
+    for (const identity of identities) {
+      const token = encodeFrameworkIdentityToken(identity);
+      expect(token).toBeTypeOf('string');
+      expect(decodeFrameworkIdentityToken(token)).toBe(identity);
+      expect(decodeFrameworkFormTargetHeader(encodeFrameworkFormTargetHeader(identity))).toBe(
+        identity,
+      );
+      expect(() => new Headers({ 'Kovo-Form-Target': token! })).not.toThrow();
+
+      const targets = [{ deps: [identity], target: identity }];
+      expect(decodeFrameworkTargetHeader(encodeFrameworkTargetHeader(targets))).toEqual(targets);
+      expect(
+        decodeFrameworkLiveTargetHeader(
+          encodeFrameworkLiveTargetHeader([
+            {
+              attestation: 'token_safe',
+              component: `component/${identity}`,
+              propsSource: '{}',
+              target: identity,
+            },
+          ]),
+          JSON.parse,
+        ),
+      ).toEqual([
+        {
+          attestation: 'token_safe',
+          component: `component/${identity}`,
+          props: {},
+          target: identity,
+        },
+      ]);
     }
 
-    const targets = [
-      { deps: ['product:p1', 'catalog/v2'], target: 'card:primary' },
-      { deps: ['inventory.current'], target: 'card-secondary' },
-    ];
-    const descriptors = [
-      {
-        attestation: 'token_primary',
-        component: 'components/cards/primary',
-        propsSource: '{"label":"primary"}',
-        target: 'card:primary',
-      },
-      {
-        attestation: 'token_secondary',
-        component: 'components/cards/secondary',
-        propsSource: '{"label":"secondary"}',
-        target: 'card-secondary',
-      },
-    ];
-    expect(decodeFrameworkTargetHeader(encodeFrameworkTargetHeader(targets))).toEqual(targets);
-    expect(
-      decodeFrameworkLiveTargetHeader(encodeFrameworkLiveTargetHeader(descriptors), JSON.parse),
-    ).toEqual([
-      {
-        attestation: 'token_primary',
-        component: 'components/cards/primary',
-        props: { label: 'primary' },
-        target: 'card:primary',
-      },
-      {
-        attestation: 'token_secondary',
-        component: 'components/cards/secondary',
-        props: { label: 'secondary' },
-        target: 'card-secondary',
-      },
-    ]);
+    for (const invalidIdentity of ['nul\0target', 'carriage\rreturn', '\ud800', '\udc00']) {
+      expect(encodeFrameworkIdentityToken(invalidIdentity)).toBeUndefined();
+      expect(encodeFrameworkFormTargetHeader(invalidIdentity)).toBeUndefined();
+    }
+    for (const malformed of [
+      '%',
+      '%2f',
+      '%C0%AF',
+      '%ED%A0%80',
+      '%00',
+      '%0D',
+      'raw:colon',
+      'raw space',
+    ]) {
+      expect(decodeFrameworkIdentityToken(malformed)).toBeUndefined();
+      expect(decodeFrameworkFormTargetHeader(malformed)).toBeUndefined();
+    }
+
+    const longIdentity = `product:${'漢'.repeat(5_000)}`;
+    const longToken = encodeFrameworkIdentityToken(longIdentity)!;
+    expect(longToken.length).toBeGreaterThan(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters);
+    expect(decodeFrameworkIdentityToken(longToken)).toBe(longIdentity);
+    expect(encodeFrameworkFormTargetHeader(longIdentity)).toBeUndefined();
+    expect(encodeFrameworkTargetHeader([{ deps: [longIdentity], target: 'card' }])).toBe('');
   });
 
   it('keeps live-target props semantically canonical and transport-header-safe', () => {
@@ -256,31 +254,126 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       },
     ]);
     expect(unicode).toBe(
-      'card#components/card@token:{"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","latin":"café","line":"\\u2028\\u2029"}',
+      'card#components%2Fcard@token:{"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","latin":"caf\\u00e9","line":"\\u2028\\u2029"}',
     );
     expect(() => new Headers({ 'Kovo-Live-Targets': unicode })).not.toThrow();
   });
 
-  it('keeps both maximum framework headers and a maximum cookie inside Node transport', async () => {
-    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
-    const livePrefix = 'card#components/card@token:';
-    const propsPrefix = '{"payload":"';
-    const propsSuffix = '"}';
-    const liveHeader = encodeFrameworkLiveTargetHeader([
+  it('plans exact aggregate header lines, freezes snapshots, and rejects required overflow', () => {
+    const lineBytes = (name: string, value: string): number => name.length + 2 + value.length + 2;
+    const totalLineBytes = (headers: Readonly<Record<string, string>>): number => {
+      let total = 0;
+      for (const name of Object.keys(headers)) total += lineBytes(name, headers[name]!);
+      return total;
+    };
+    const idem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+    const currentPrefix = 'https://kovo.test/';
+    const currentUrl =
+      currentPrefix +
+      'a'.repeat(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxCurrentUrlCharacters - currentPrefix.length);
+    const formTarget = ' form:#@=/% 漢字\n';
+    const encodedFormTarget = encodeFrameworkFormTargetHeader(formTarget)!;
+    const targetPrefix = 'card=';
+    const targetWireEntry = encodeFrameworkTargetHeader([
       {
-        attestation: 'token',
-        component: 'components/card',
-        propsSource:
-          propsPrefix +
-          'x'.repeat(maximum - livePrefix.length - propsPrefix.length - propsSuffix.length) +
-          propsSuffix,
+        deps: ['x'.repeat(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters - targetPrefix.length)],
         target: 'card',
       },
     ]);
-    const targetPrefix = 'card=';
-    const targetHeader = encodeFrameworkTargetHeader([
-      { deps: ['x'.repeat(maximum - targetPrefix.length)], target: 'card' },
+    expect(targetWireEntry).toHaveLength(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters);
+    const fixedBytes =
+      lineBytes('Kovo-Fragment', 'true') +
+      lineBytes('Kovo-Idem', idem) +
+      lineBytes('Kovo-Current-Url', currentUrl) +
+      lineBytes('Kovo-Form-Target', encodedFormTarget) +
+      lineBytes('Kovo-Targets', targetWireEntry);
+    const liveValueCharacters =
+      FRAMEWORK_WIRE_INPUT_GRAMMAR.maxTargetRequestHeaderBytes -
+      fixedBytes -
+      lineBytes('Kovo-Live-Targets', '');
+    const emptyLive = encodeFrameworkLiveTargetHeader([
+      {
+        attestation: 'token',
+        component: 'components/card',
+        propsSource: '{"payload":""}',
+        target: 'card',
+      },
     ]);
+    const liveWireEntry = encodeFrameworkLiveTargetHeader([
+      {
+        attestation: 'token',
+        component: 'components/card',
+        propsSource: `{"payload":"${'x'.repeat(liveValueCharacters - emptyLive.length)}"}`,
+        target: 'card',
+      },
+    ]);
+    expect(liveWireEntry).toHaveLength(liveValueCharacters);
+
+    const targetSnapshot = { target: 'card', wireEntry: targetWireEntry };
+    const liveSnapshot = { target: 'card', wireEntry: liveWireEntry };
+    const plan = planFrameworkTargetRequestHeaders({
+      currentUrl,
+      formTarget,
+      idem,
+      liveTargets: [liveSnapshot],
+      targets: [targetSnapshot],
+    });
+    expect(plan).toBeDefined();
+    expect(totalLineBytes(plan!.headers)).toBe(
+      FRAMEWORK_WIRE_INPUT_GRAMMAR.maxTargetRequestHeaderBytes,
+    );
+    expect(Object.getPrototypeOf(plan!.headers)).toBeNull();
+    expect(Object.isFrozen(plan)).toBe(true);
+    expect(Object.isFrozen(plan!.headers)).toBe(true);
+    expect(Object.isFrozen(plan!.targets)).toBe(true);
+    expect(Object.isFrozen(plan!.targets[0])).toBe(true);
+    targetSnapshot.target = 'attacker';
+    expect(plan!.targets[0]).toEqual({ target: 'card', wireEntry: targetWireEntry });
+
+    const empty = planFrameworkTargetRequestHeaders({
+      currentUrl: 'https://kovo.test/',
+      idem,
+      liveTargets: [],
+      targets: [],
+    });
+    expect(empty?.headers).toEqual({
+      'Kovo-Current-Url': 'https://kovo.test/',
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
+    });
+    expect(Object.hasOwn(empty!.headers, 'Kovo-Targets')).toBe(false);
+    expect(Object.hasOwn(empty!.headers, 'Kovo-Live-Targets')).toBe(false);
+
+    expect(
+      planFrameworkTargetRequestHeaders({
+        currentUrl: `https://kovo.test/${'x'.repeat(1536)}`,
+        idem,
+        liveTargets: [],
+        targets: [],
+      }),
+    ).toBeUndefined();
+    expect(
+      planFrameworkTargetRequestHeaders({
+        currentUrl: 'https://kovo.test/',
+        formTarget: 'x'.repeat(4097),
+        idem,
+        liveTargets: [],
+        targets: [],
+      }),
+    ).toBeUndefined();
+    expect(
+      planFrameworkTargetRequestHeaders({
+        currentUrl: 'https://kovo.test/',
+        idem,
+        liveTargets: [],
+        targets: [{ target: 'safe', wireEntry: 'safe=public;admin=secret' }],
+      })?.headers,
+    ).not.toHaveProperty('Kovo-Targets');
+  });
+
+  it('keeps both maximum framework headers and a maximum cookie inside Node transport', async () => {
+    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
+    const targetPrefix = 'card=';
     const delHeader = encodeFrameworkLiveTargetHeader([
       {
         attestation: 'token',
@@ -289,14 +382,12 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         target: 'card',
       },
     ]);
-    expect(delHeader).toBe('card#components/card@token:{"del":"\\u007f"}');
-    expect(liveHeader).toHaveLength(maximum);
-    expect(targetHeader).toHaveLength(maximum);
-    expect(() =>
+    expect(delHeader).toBe('card#components%2Fcard@token:{"del":"\\u007f"}');
+    expect(
       encodeFrameworkTargetHeader([
         { deps: ['x'.repeat(maximum - targetPrefix.length + 1)], target: 'card' },
       ]),
-    ).toThrow(/character budget/iu);
+    ).toBe('');
 
     let handlerHits = 0;
     const server = createServer((_incoming, response) => {
@@ -313,28 +404,70 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       if (address === null || typeof address === 'string') {
         throw new Error('Node HTTP test server address unavailable');
       }
-      const currentUrl = `http://127.0.0.1:${address.port}/catalog?page=1`;
+      const currentUrlPrefix = `http://127.0.0.1:${address.port}/catalog?page=`;
+      const currentUrl =
+        currentUrlPrefix +
+        'x'.repeat(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxCurrentUrlCharacters - currentUrlPrefix.length);
       const csrfCookiePrefix = '__Host-kovo_csrf=';
       const cookie = csrfCookiePrefix + 'x'.repeat(4_096 - csrfCookiePrefix.length);
       expect(cookie).toHaveLength(4_096);
-      const representativeMutationHeaders = (
-        liveTargets: string,
-        targets: string,
-      ): Readonly<Record<string, string>> => ({
+      const formTarget = 'catalog-panel';
+      const idem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+      const targetWireEntry = encodeFrameworkTargetHeader([
+        { deps: ['x'.repeat(maximum - targetPrefix.length)], target: 'card' },
+      ]);
+      const encodedFormTarget = encodeFrameworkFormTargetHeader(formTarget)!;
+      const lineBytes = (name: string, value: string): number => name.length + 2 + value.length + 2;
+      const fixedBytes =
+        lineBytes('Kovo-Fragment', 'true') +
+        lineBytes('Kovo-Idem', idem) +
+        lineBytes('Kovo-Current-Url', currentUrl) +
+        lineBytes('Kovo-Form-Target', encodedFormTarget) +
+        lineBytes('Kovo-Targets', targetWireEntry);
+      const liveValueCharacters =
+        FRAMEWORK_WIRE_INPUT_GRAMMAR.maxTargetRequestHeaderBytes -
+        fixedBytes -
+        lineBytes('Kovo-Live-Targets', '');
+      const emptyLive = encodeFrameworkLiveTargetHeader([
+        {
+          attestation: 'token',
+          component: 'components/card',
+          propsSource: '{"payload":""}',
+          target: 'card',
+        },
+      ]);
+      const liveWireEntry = encodeFrameworkLiveTargetHeader([
+        {
+          attestation: 'token',
+          component: 'components/card',
+          propsSource: `{"payload":"${'x'.repeat(liveValueCharacters - emptyLive.length)}"}`,
+          target: 'card',
+        },
+      ]);
+      const plan = planFrameworkTargetRequestHeaders({
+        currentUrl,
+        formTarget,
+        idem,
+        liveTargets: [{ target: 'card', wireEntry: liveWireEntry }],
+        targets: [{ target: 'card', wireEntry: targetWireEntry }],
+      });
+      expect(plan).toBeDefined();
+      expect(
+        Object.keys(plan!.headers).reduce(
+          (total, name) => total + lineBytes(name, plan!.headers[name]!),
+          0,
+        ),
+      ).toBe(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxTargetRequestHeaderBytes);
+      const representativeMutationHeaders = (): Readonly<Record<string, string>> => ({
         Accept: 'text/vnd.kovo.fragment+html',
         'Accept-Language': 'en-US,en;q=0.9',
         'Content-Length': '0',
         'Content-Type': 'multipart/form-data; boundary=----kovo-transport-boundary',
         Cookie: cookie,
-        'Kovo-Current-Url': currentUrl,
-        'Kovo-Form-Target': 'catalog-panel',
-        'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'v1_1750000000000_000102030405060708090a0b0c0d0e0f',
-        'Kovo-Live-Targets': liveTargets,
-        'Kovo-Targets': targets,
         Origin: `http://127.0.0.1:${address.port}`,
         Referer: currentUrl,
         'User-Agent': 'Kovo transport-boundary regression',
+        ...plan!.headers,
       });
       const requestStatus = (headers: Readonly<Record<string, string>>): Promise<number> =>
         new Promise((resolve, reject) => {
@@ -355,13 +488,15 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
           outgoing.end();
         });
 
-      await expect(
-        requestStatus(representativeMutationHeaders(liveHeader, targetHeader)),
-      ).resolves.toBe(204);
+      await expect(requestStatus(representativeMutationHeaders())).resolves.toBe(204);
       expect(handlerHits).toBe(1);
 
       await expect(
-        requestStatus(representativeMutationHeaders('x'.repeat(6 * 1024), 'x'.repeat(6 * 1024))),
+        requestStatus({
+          ...representativeMutationHeaders(),
+          'Kovo-Live-Targets': 'x'.repeat(6 * 1024),
+          'Kovo-Targets': 'x'.repeat(6 * 1024),
+        }),
       ).resolves.toBe(431);
       expect(handlerHits).toBe(1);
 
@@ -504,7 +639,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
 
     expect(getterHits).toBe(0);
     expect(props).toBe('{"3":683,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57"}');
-    expect(targets).toBe('card:primary=product:p1');
+    expect(targets).toBe('card%3Aprimary=product%3Ap1');
   });
 
   it('keeps codec acceptance and rejection exact after late intrinsic replacement', () => {
@@ -526,7 +661,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       },
     ];
     const targetHeader = ' public-panel=public catalog ';
-    const descriptorHeader = ' public-panel#components/public/card@token_1:{"id":"safe"} ';
+    const descriptorHeader = ' public-panel#components%2Fpublic%2Fcard@token_1:{"id":"safe"} ';
     const parseJson = JSON.parse;
     const originalApply = Reflect.apply;
     const originalArrayIsArray = Array.isArray;
@@ -575,15 +710,15 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         parseJson,
       );
       try {
-        encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }]);
+        encodeFrameworkTargetHeader([{ deps: ['query\0admin'], target: 'safe' }]);
       } catch {
         invalidTargetRejected = true;
       }
       try {
         encodeFrameworkLiveTargetHeader([
           {
-            attestation: 'token',
-            component: 'bad:component',
+            attestation: 'bad:token',
+            component: 'component',
             propsSource: '{}',
             target: 'safe',
           },
@@ -606,7 +741,9 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     }
 
     expect(encodedTargets).toBe('public-panel=public catalog');
-    expect(encodedDescriptors).toBe('public-panel#components/public/card@token_1:{"id":"safe"}');
+    expect(encodedDescriptors).toBe(
+      'public-panel#components%2Fpublic%2Fcard@token_1:{"id":"safe"}',
+    );
     expect(decodedTargets).toEqual(targetEntries);
     expect(decodedDescriptors).toEqual(decodedDescriptorExpectation);
     expect(decodedInvalidTargets).toEqual([]);

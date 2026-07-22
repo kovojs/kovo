@@ -17,9 +17,9 @@ import {
   compilerOwnDataValue,
   compilerRegExpReplace,
   compilerSetAdd,
+  compilerSetForEach,
   compilerSetHas,
   compilerStringIndexOf,
-  compilerStringSlice,
   compilerStringSplit,
   compilerStringStartsWith,
   compilerStringToLowerCase,
@@ -37,7 +37,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { dedupeBy, splitDepValue } from '../shared.js';
+import { dedupeBy, parseDepValue } from '../shared.js';
 import type { PackageComponentPrefixFact, RegistryFacts } from '../types.js';
 
 interface IdrefValue {
@@ -300,13 +300,34 @@ export function validateResidualStamps(
 
     if (attribute.name !== 'kovo-deps') continue;
 
-    const dependencies = splitDepValue(attribute.value ?? '');
+    const parsedDependencies = parseDepValue(attribute.value ?? '');
+    const invalidTokenLength = compilerArrayLength(
+      parsedDependencies.invalidTokens,
+      'Residual-stamp invalid dependency tokens',
+    );
+    for (let invalidIndex = 0; invalidIndex < invalidTokenLength; invalidIndex += 1) {
+      const token = ownArrayEntry(
+        parsedDependencies.invalidTokens,
+        invalidIndex,
+        'Residual-stamp invalid dependency tokens',
+      );
+      appendMarkupFact(
+        found,
+        kv226Diagnostic(
+          diagnostics,
+          `kovo-deps contains a non-canonical identity token. kovo-deps="${token}"`,
+          attribute.start,
+          attribute.end - attribute.start,
+        ),
+        'Residual-stamp diagnostics',
+      );
+    }
+
+    const dependencies = parsedDependencies.dependencies;
     const dependencyLength = compilerArrayLength(dependencies, 'Residual-stamp dependencies');
     for (let dependencyIndex = 0; dependencyIndex < dependencyLength; dependencyIndex += 1) {
       const dep = ownArrayEntry(dependencies, dependencyIndex, 'Residual-stamp dependencies');
-      const separator = compilerStringIndexOf(dep, ':');
-      const query = separator < 0 ? dep : compilerStringSlice(dep, 0, separator);
-      if (!compilerSetHas(knownQueries, query)) {
+      if (!dependencyMatchesKnownQuery(dep, knownQueries)) {
         appendMarkupFact(
           found,
           kv226Diagnostic(
@@ -322,6 +343,15 @@ export function validateResidualStamps(
   }
 
   return dedupeBy(found, diagnosticKey);
+}
+
+function dependencyMatchesKnownQuery(dependency: string, knownQueries: Set<string>): boolean {
+  if (compilerSetHas(knownQueries, dependency)) return true;
+  let matched = false;
+  compilerSetForEach(knownQueries, (query) => {
+    if (!matched && compilerStringStartsWith(dependency, `${query}:`)) matched = true;
+  });
+  return matched;
 }
 
 const ambiguousRelationshipAttributes = compilerCreateSet<string>();

@@ -22,7 +22,7 @@ describe('query script hydration direct', () => {
       },
     ]);
 
-    expect(hydrated).toEqual(['cart']);
+    expect(hydrated).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(plan).toHaveBeenCalledWith({ count: 2 });
   });
@@ -32,36 +32,41 @@ describe('query script hydration direct', () => {
     const p1Plan = vi.fn();
     const p2Plan = vi.fn();
 
-    store.subscribe('product', p1Plan, 'p1');
-    store.subscribe('product', p2Plan, 'p2');
+    store.subscribe('product', p1Plan, 'product:p1');
+    store.subscribe('product', p2Plan, 'product:p2');
     const hydrated = hydrateQueryScripts(store, [
       {
-        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p1' : null),
+        getAttribute: (name) =>
+          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p1' : null,
         textContent: '{"stock":4}',
       },
       {
-        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p2' : null),
+        getAttribute: (name) =>
+          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p2' : null,
         textContent: '{"stock":9}',
       },
     ]);
 
     // SPEC.md §9.4: query instance keys use one canonical currency across
     // hydration, the client store, and typed-read refetch.
-    expect(hydrated).toEqual(['product:p1', 'product:p2']);
-    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
-    expect(store.get('product', 'p2')).toEqual({ stock: 9 });
+    expect(hydrated).toEqual([
+      { key: 'product:p1', name: 'product' },
+      { key: 'product:p2', name: 'product' },
+    ]);
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 4 });
+    expect(store.get('product', 'product:p2')).toEqual({ stock: 9 });
     expect(store.get('product')).toBeUndefined();
     expect(p1Plan).toHaveBeenCalledWith({ stock: 4 });
     expect(p2Plan).toHaveBeenCalledWith({ stock: 9 });
   });
 
-  it('hydrates canonical script query keys into keyed store instances', () => {
+  it('treats colon-bearing kovo-query names as exact unkeyed names', () => {
     const store = createQueryStore();
     const p1Plan = vi.fn();
     const p2Plan = vi.fn();
 
-    store.subscribe('product', p1Plan, 'p1');
-    store.subscribe('product', p2Plan, 'p2');
+    store.subscribe('product:p1', p1Plan);
+    store.subscribe('product:p2', p2Plan);
     const hydrated = hydrateQueryScripts(store, [
       {
         getAttribute: (name) => (name === 'kovo-query' ? 'product:p1' : null),
@@ -73,12 +78,11 @@ describe('query script hydration direct', () => {
       },
     ]);
 
-    // SPEC.md §9.4/§10.2: server-authored hydration scripts may encode the
-    // canonical instance key directly in `kovo-query`, matching typed-read URLs.
-    expect(hydrated).toEqual(['product:p1', 'product:p2']);
-    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
-    expect(store.get('product', 'p2')).toEqual({ stock: 9 });
-    expect(store.get('product')).toBeUndefined();
+    // Query names may contain `:`. Only a separate `key` attribute makes an identity keyed.
+    expect(hydrated).toEqual([{ name: 'product:p1' }, { name: 'product:p2' }]);
+    expect(store.get('product:p1')).toEqual({ stock: 4 });
+    expect(store.get('product:p2')).toEqual({ stock: 9 });
+    expect(store.get('product', 'product:p1')).toBeUndefined();
     expect(p1Plan).toHaveBeenCalledWith({ stock: 4 });
     expect(p2Plan).toHaveBeenCalledWith({ stock: 9 });
   });
@@ -89,18 +93,19 @@ describe('query script hydration direct', () => {
     const hydratedPlan = vi.fn();
     const appliedPlan = vi.fn();
 
-    hydratedStore.subscribe('product', hydratedPlan, 'p1');
-    appliedStore.subscribe('product', appliedPlan, 'p1');
+    hydratedStore.subscribe('product', hydratedPlan, 'product:p1');
+    appliedStore.subscribe('product', appliedPlan, 'product:p1');
 
     const hydrated = hydrateQueryScripts(hydratedStore, [
       {
-        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p1' : null),
+        getAttribute: (name) =>
+          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p1' : null,
         textContent: '{"stock":4}',
       },
     ]);
     const applied = applyQueryChunksToRuntime(appliedStore, [
       {
-        key: 'p1',
+        key: 'product:p1',
         name: 'product',
         value: { stock: 4 },
       },
@@ -108,9 +113,11 @@ describe('query script hydration direct', () => {
 
     // SPEC.md §9.4: hydrated scripts and later mutation/deferred query chunks
     // must write the same keyed store slot and publish the same typed-read key.
-    expect(hydrated).toEqual(['product:p1']);
-    expect(applied).toEqual(['product:p1']);
-    expect(hydratedStore.get('product', 'p1')).toEqual(appliedStore.get('product', 'p1'));
+    expect(hydrated).toEqual([{ key: 'product:p1', name: 'product' }]);
+    expect(applied).toEqual([{ key: 'product:p1', name: 'product' }]);
+    expect(hydratedStore.get('product', 'product:p1')).toEqual(
+      appliedStore.get('product', 'product:p1'),
+    );
     expect(hydratedStore.get('product')).toBeUndefined();
     expect(appliedStore.get('product')).toBeUndefined();
     expect(hydratedPlan).toHaveBeenCalledWith({ stock: 4 });
@@ -136,7 +143,7 @@ describe('query script hydration direct', () => {
       { onError },
     );
 
-    expect(hydrated).toEqual(['cart']);
+    expect(hydrated).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(store.get('inventory')).toBeUndefined();
     expect(onError).toHaveBeenCalledTimes(1);
@@ -151,7 +158,7 @@ describe('query script hydration direct', () => {
     const productPlan = vi.fn();
     const applyError = new Error('direct query hydration apply failed');
 
-    store.subscribe('product', productPlan, 'p1');
+    store.subscribe('product', productPlan, 'product:p1');
 
     const hydrated = hydrateQueryScripts(
       store,
@@ -161,7 +168,8 @@ describe('query script hydration direct', () => {
           textContent: '{"count":1}',
         },
         {
-          getAttribute: (name) => (name === 'kovo-query' ? 'product:p1' : null),
+          getAttribute: (name) =>
+            name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p1' : null,
           textContent: '{"stock":9}',
         },
       ],
@@ -176,9 +184,9 @@ describe('query script hydration direct', () => {
     // SPEC.md §9.1/§9.4: direct script hydration, visible-return hydration,
     // mutation responses, and typed reads use one decoded query apply path; a
     // failed query must not fork batch continuation behavior.
-    expect(hydrated).toEqual(['product:p1']);
+    expect(hydrated).toEqual([{ key: 'product:p1', name: 'product' }]);
     expect(store.get('cart')).toBeUndefined();
-    expect(store.get('product', 'p1')).toEqual({ stock: 9 });
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 9 });
     expect(productPlan).toHaveBeenCalledWith({ stock: 9 });
     expect(onError).toHaveBeenCalledWith(applyError);
   });

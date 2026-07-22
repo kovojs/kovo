@@ -72,7 +72,7 @@ describe('loader query runtime', () => {
 
     // SPEC.md §4.4/§9.4: mutation query applications feed the same
     // visible-return ledger as hydrated query scripts.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
 
     runtime.dispose();
     expect(root.listeners.has('visibilitychange')).toBe(false);

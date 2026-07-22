@@ -41,22 +41,22 @@ describe('parsed mutation response wire apply', () => {
     const store = createQueryStore();
     const plan = vi.fn();
 
-    store.subscribe('product', plan, 'p1');
+    store.subscribe('product', plan, 'product:p1');
     const applied = applyMutationResponseChunksToRuntime(
       readMutationResponseBodyChunks(
-        '<kovo-query name="product" key="p1">{"stock":4}</kovo-query>',
+        '<kovo-query name="product" key="product:p1">{"stock":4}</kovo-query>',
       ),
       { store },
     );
 
     // SPEC.md §9.4: query instance keys are the shared currency for store, wire,
     // optimistic transforms, and refetch-on-focus typed reads.
-    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 4 });
     expect(store.get('product')).toBeUndefined();
     expect(plan).toHaveBeenCalledWith({ stock: 4 });
     expect(applySnapshot(applied)).toEqual({
       fragments: [],
-      queries: ['product:p1'],
+      queries: [{ key: 'product:p1', name: 'product' }],
     });
   });
 
@@ -86,7 +86,7 @@ describe('parsed mutation response wire apply', () => {
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
     expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<li>p1</li>', mode: 'append', target: 'cart-list' }],
-      queries: ['cart:c1'],
+      queries: [{ key: 'cart:c1', name: 'cart' }],
     });
   });
 
@@ -104,7 +104,7 @@ describe('parsed mutation response wire apply', () => {
     expect(store.get('product', 'product>p1')).toEqual({ stock: 7 });
     expect(applySnapshot(applied)).toEqual({
       fragments: [],
-      queries: ['product:product>p1'],
+      queries: [{ key: 'product>p1', name: 'product' }],
     });
   });
 
@@ -126,7 +126,7 @@ describe('parsed mutation response wire apply', () => {
 
     expect(applySnapshot(applied)).toEqual({
       fragments: [],
-      queries: ['inventory'],
+      queries: [{ name: 'inventory' }],
     });
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
@@ -152,7 +152,7 @@ describe('parsed mutation response wire apply', () => {
     expect(store.get('inventory')).toEqual({ available: true });
     expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>Ready</cart-badge>', target: 'cart-badge' }],
-      queries: ['inventory'],
+      queries: [{ name: 'inventory' }],
     });
   });
 

@@ -13,6 +13,7 @@ import type {
 } from './events.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import type { IslandSignalScope } from './handler-context.js';
+import type { QueryIdentity } from './query-store.js';
 import type { ImportHandlerModule } from './handlers.js';
 import {
   dispatchEnhancedFormSubmit,
@@ -70,7 +71,7 @@ export interface DelegatedEventLifecycleOptions {
   events: readonly string[];
   importModule: ImportHandlerModule;
   islandSignalScope: IslandSignalScope;
-  onAppliedQueries?: (queries: readonly string[]) => void;
+  onAppliedQueries?: (queries: readonly QueryIdentity[]) => void;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
   root: LoaderRoot;
 }

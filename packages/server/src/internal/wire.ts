@@ -3,7 +3,10 @@ export {
   type ComponentLiveTargetQueryBinding,
   type ComponentLiveTargetRendererOptions,
 } from '../live-target-renderer.js';
-export { assignDerivedComponentName } from '../component-root-stamps.js';
+export {
+  assignDerivedComponentName,
+  encodeGeneratedDependencyIdentity,
+} from '../component-root-stamps.js';
 export { assignDerivedAgentModelOperations, assignDerivedAgentToolOperations } from '../agent.js';
 export { assignDerivedDomainKey } from '../domain.js';
 export {

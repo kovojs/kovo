@@ -103,18 +103,18 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual([{ key: 'product:p1', name: 'productDetail', value: { id: 'p1' } }]);
   });
 
-  it('normalizes canonical query instance names into the shared query chunk shape', () => {
-    // SPEC.md §9.4/§10.2: typed reads and hydration carry instance keys as
-    // `query:key`; runtime apply paths decode that once before hitting the store.
+  it('preserves colon-bearing query names without an explicit key attribute', () => {
+    // SPEC.md §9.4/§10.2: `:` is valid in a declared query name. Instance identity comes only
+    // from the separate key attribute, never from punctuation guessing.
     expect(readQueryChunks('<kovo-query name="product:p1">{"stock":7}</kovo-query>')).toEqual([
-      { key: 'p1', name: 'product', value: { stock: 7 } },
+      { name: 'product:p1', value: { stock: 7 } },
     ]);
     expect(
       readQueryElementChunk({
         attrs: ' name="product:p2"',
         content: '{"stock":8}',
       }),
-    ).toEqual({ key: 'p2', name: 'product', value: { stock: 8 } });
+    ).toEqual({ name: 'product:p2', value: { stock: 8 } });
     expect(
       readQueryScriptChunks([
         {
@@ -122,7 +122,7 @@ describe('wire parser HTML entity handling', () => {
           textContent: '{"stock":9}',
         },
       ]),
-    ).toEqual([{ key: 'p3', name: 'product', value: { stock: 9 } }]);
+    ).toEqual([{ name: 'product:p3', value: { stock: 9 } }]);
   });
 
   it('decodes apostrophe entities in kovo-query JSON bodies', () => {

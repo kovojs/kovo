@@ -48,7 +48,7 @@ describe('browser deferred stream response apply', () => {
       store,
     });
 
-    expect(applied.queries).toEqual(['cart']);
+    expect(applied.queries).toEqual([{ name: 'cart' }]);
     expect(applied.appliedFragments).toEqual(['cart-badge']);
     expect(store.get('cart')).toEqual({ count: 4 });
     expect(observed).toEqual(['4']);

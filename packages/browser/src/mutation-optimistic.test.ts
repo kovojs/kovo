@@ -124,7 +124,7 @@ describe('optimistic enhanced mutation submission', () => {
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
       broadcast,
-      idem: 'idem_optimistic',
+      idem: 'v1_1750000000000_00000000000000000000000000000006',
       input: { quantity: 2 },
       optimistic: {
         transforms: {
@@ -140,7 +140,7 @@ describe('optimistic enhanced mutation submission', () => {
       store,
     });
 
-    expect(result.queries).toEqual(['cart']);
+    expect(result.queries).toEqual([{ name: 'cart' }]);
     expect(result.changes).toEqual([{ domain: 'cart' }]);
     expect(channel.messages).toEqual([
       {
@@ -192,7 +192,7 @@ describe('optimistic enhanced mutation submission', () => {
         input: { reviewId: 'draft' },
         keys: ['p1'],
       },
-      idem: 'idem_keyed_optimistic',
+      idem: 'v1_1750000000000_00000000000000000000000000000007',
       input: { reviewId: 'ignored' },
       optimistic: {
         keys: { reviews: (change) => `product:${change.keys?.[0]}` },
@@ -208,7 +208,7 @@ describe('optimistic enhanced mutation submission', () => {
       store,
     });
 
-    expect(result.queries).toEqual(['reviews:product:p1']);
+    expect(result.queries).toEqual([{ key: 'product:p1', name: 'reviews' }]);
     expect(store.get('reviews')).toBeUndefined();
     expect(store.get('reviews', 'product:p1')).toEqual({
       items: [{ id: 'r1' }, { id: 'server' }],
@@ -248,7 +248,7 @@ describe('optimistic enhanced mutation submission', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_delta',
+      idem: 'v1_1750000000000_00000000000000000000000000000008',
       input: { quantity: 1 },
       optimistic: {
         transforms: {
@@ -309,7 +309,7 @@ describe('optimistic enhanced mutation submission', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
-      idem: 'idem_first',
+      idem: 'v1_1750000000000_00000000000000000000000000000009',
       input: { quantity: 2 },
       morph(target, html) {
         observed.push(`morph:${count.textContent}:${summary.textContent}:${html}`);

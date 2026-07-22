@@ -104,7 +104,7 @@ describe('loader query hydration', () => {
     // malformed server query data through the same query-store apply path.
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     expect(onError).toHaveBeenCalledTimes(1);
   });
 });

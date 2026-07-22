@@ -122,7 +122,7 @@ describe('enhanced mutation fetch', () => {
       }),
       form: typedMutationForm('auth/sign-in'),
       formData: new FormData(),
-      idem: 'idem_late_array_poison',
+      idem: 'v1_1750000000000_00000000000000000000000000000010',
       onSessionTransition,
       root: new FakeTargetRoot([]),
       transport: {
@@ -183,7 +183,7 @@ describe('enhanced mutation fetch', () => {
         }),
         form: typedMutationForm('auth/sign-in'),
         formData,
-        idem: 'idem_late_decode',
+        idem: 'v1_1750000000000_00000000000000000000000000000011',
         onSessionTransition: () => lifecycleOrder.push('retire'),
         root: new FakeTargetRoot([]),
         transport: {
@@ -232,7 +232,7 @@ describe('enhanced mutation fetch', () => {
       }),
       form: typedMutationForm('auth/custom-sign-in'),
       formData: new FormData(),
-      idem: 'idem_session_transition',
+      idem: 'v1_1750000000000_00000000000000000000000000000012',
       onSessionTransition,
       root: new FakeTargetRoot([]),
     });
@@ -279,7 +279,7 @@ describe('enhanced mutation fetch', () => {
     const formData = new FormData();
     const uploadProgress = vi.fn();
     const root = new FakeTargetRoot([
-      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product:p1' }),
+      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product%3Ap1' }),
       new FakeTargetElement(undefined, {
         'kovo-deps': 'recommendations',
         'kovo-fragment-target': 'recommendations:p1',
@@ -287,7 +287,7 @@ describe('enhanced mutation fetch', () => {
         'kovo-live-token': 'tok_rec',
         'kovo-props': '{"productId":"p1"}',
       }),
-      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product:p1' }),
+      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product%3Ap1' }),
     ]);
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders((name) => {
@@ -306,7 +306,7 @@ describe('enhanced mutation fetch', () => {
       fetch,
       form: typedMutationForm('cart/add'),
       formData,
-      idem: 'idem_fetch',
+      idem: 'v1_1750000000000_00000000000000000000000000000013',
       onUploadProgress: uploadProgress,
       root,
     });
@@ -319,22 +319,23 @@ describe('enhanced mutation fetch', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_fetch',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000013',
         'Kovo-Live-Targets':
-          'recommendations:p1#components/recommendations/recommendations@tok_rec:{"productId":"p1"}',
-        'Kovo-Targets': 'cart-badge=cart product:p1; recommendations:p1=recommendations',
+          'recommendations%3Ap1#components%2Frecommendations%2Frecommendations@tok_rec:{"productId":"p1"}',
+        'Kovo-Targets': 'cart-badge=cart product%3Ap1; recommendations%3Ap1=recommendations',
       },
       keepalive: true,
       method: 'POST',
       onUploadProgress: expect.any(Function),
+      referrerPolicy: 'origin',
     });
     expect(uploadProgress).toHaveBeenCalledWith({ loaded: 5, total: 10 });
     expect(fetched).toEqual({
       body: '<kovo-query name="cart">{"count":1}</kovo-query>',
       changes: [{ domain: 'cart', keys: ['c1'] }],
-      idem: 'idem_fetch',
+      idem: 'v1_1750000000000_00000000000000000000000000000013',
       response: expect.any(Object),
-      targets: ['cart-badge=cart product:p1', 'recommendations:p1=recommendations'],
+      targets: ['cart-badge=cart product%3Ap1', 'recommendations%3Ap1=recommendations'],
     });
     expect(root.queries).toBe(1);
   });
@@ -578,10 +579,10 @@ describe('enhanced mutation fetch', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects identities with descriptor framing or JSON structural metacharacters', async () => {
+  it('percent-encodes framing characters and rejects noncanonical dependency tokens', async () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement('target"bad\\id', {
-        'kovo-deps': 'cart product:p1',
+        'kovo-deps': 'cart product%3Ap1',
         'kovo-live-component': 'components/cart/cart-panel',
         'kovo-live-token': 'tok_cart',
       }),
@@ -618,26 +619,33 @@ describe('enhanced mutation fetch', () => {
       fetch,
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
-      idem: 'idem_header_safe',
+      idem: 'v1_1750000000000_00000000000000000000000000000014',
       root,
     });
 
-    // SPEC.md §9.1: the shared finite grammar rejects identities that could alter descriptor
-    // framing before either target header enters the transport.
+    // SPEC.md §9.1: the shared finite grammar percent-encodes identities that could alter
+    // descriptor framing, while noncanonical dependency tokens remain inadmissible.
     expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_header_safe',
-        'Kovo-Live-Targets': '',
-        'Kovo-Targets': 'safe-target=cart; safe-target-with-bad-component=cart',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000014',
+        'Kovo-Live-Targets': 'target%22bad%5Cid#components%2Fcart%2Fcart-panel@tok_cart:{}',
+        'Kovo-Targets':
+          'target%22bad%5Cid=cart product%3Ap1; bad%23target=cart; safe-target=cart; safe-target-with-bad-component=cart',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
-    expect(fetched.targets).toEqual(['safe-target=cart', 'safe-target-with-bad-component=cart']);
+    expect(fetched.targets).toEqual([
+      'target%22bad%5Cid=cart product%3Ap1',
+      'bad%23target=cart',
+      'safe-target=cart',
+      'safe-target-with-bad-component=cart',
+    ]);
   });
 
   it('sends the submitted enhanced form target when the form carries runtime identity', async () => {
@@ -662,7 +670,7 @@ describe('enhanced mutation fetch', () => {
         'post',
       ),
       formData: new FormData(),
-      idem: 'idem_form_target',
+      idem: 'v1_1750000000000_00000000000000000000000000000015',
       root: new FakeTargetRoot([]),
     });
 
@@ -671,14 +679,13 @@ describe('enhanced mutation fetch', () => {
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
-        'Kovo-Form-Target': 'product-form:p1',
+        'Kovo-Form-Target': 'product-form%3Ap1',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_form_target',
-        'Kovo-Live-Targets': '',
-        'Kovo-Targets': '',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000015',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
   });
 
@@ -705,7 +712,7 @@ describe('enhanced mutation fetch', () => {
         id: { toString: () => '[object HTMLInputElement]' },
       },
       formData: new FormData(),
-      idem: 'idem_shadowed_id',
+      idem: 'v1_1750000000000_00000000000000000000000000000016',
       root: new FakeTargetRoot([]),
     });
 
@@ -716,12 +723,11 @@ describe('enhanced mutation fetch', () => {
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Form-Target': 'your-answer',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_shadowed_id',
-        'Kovo-Live-Targets': '',
-        'Kovo-Targets': '',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000016',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
   });
 
@@ -738,7 +744,7 @@ describe('enhanced mutation fetch', () => {
       fetch,
       form: typedMutationForm('cart/add'),
       formData: 'body',
-      idem: 'idem_default',
+      idem: 'v1_1750000000000_00000000000000000000000000000017',
       root: new FakeTargetRoot([]),
     });
 
@@ -748,12 +754,11 @@ describe('enhanced mutation fetch', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_default',
-        'Kovo-Live-Targets': '',
-        'Kovo-Targets': '',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000017',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
     expect(fetched.changes).toEqual([]);
     expect(fetched.targets).toEqual([]);
@@ -772,7 +777,7 @@ describe('enhanced mutation fetch', () => {
       }),
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
-      idem: 'idem_malformed_changes',
+      idem: 'v1_1750000000000_00000000000000000000000000000018',
       onError,
       root: new FakeTargetRoot([]),
     });
@@ -794,7 +799,7 @@ describe('enhanced mutation fetch', () => {
         fetch: async () => inherited,
         form: typedMutationForm('cart/add'),
         formData: new FormData(),
-        idem: 'idem_inherited_response',
+        idem: 'v1_1750000000000_00000000000000000000000000000019',
         root: new FakeTargetRoot([]),
       }),
     ).rejects.toThrow(/invalid response carrier/);
@@ -820,7 +825,7 @@ describe('enhanced mutation fetch', () => {
       fetch: async () => response,
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
-      idem: 'idem_failure_snapshot',
+      idem: 'v1_1750000000000_00000000000000000000000000000020',
       root: new FakeTargetRoot([]),
     });
 
@@ -859,7 +864,7 @@ describe('enhanced mutation fetch', () => {
       }),
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
-      idem: 'idem_build',
+      idem: 'v1_1750000000000_00000000000000000000000000000021',
       root: new FakeTargetRoot([]),
     });
 
@@ -877,7 +882,7 @@ describe('enhanced mutation fetch', () => {
       }),
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
-      idem: 'idem_no_build',
+      idem: 'v1_1750000000000_00000000000000000000000000000022',
       root: new FakeTargetRoot([]),
     });
 

@@ -85,7 +85,7 @@ describe('loader visible-return refetch', () => {
 
     // SPEC.md §4.4: visible-return refetch follows query data introduced by
     // later mutation query chunks, not just server-rendered hydration scripts.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'recommendations' }]);
     expect(refetchFetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
@@ -161,7 +161,7 @@ describe('loader visible-return refetch', () => {
 
       // SPEC.md §9.2: same-user tab sync consumes mutation wire bodies through
       // the same query-store path as the submitting tab.
-      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+      expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
       expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
         cache: 'no-store',
         headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
@@ -189,22 +189,24 @@ describe('loader visible-return refetch', () => {
       status: 200,
       text: async () =>
         url === '/_q/product?key=p1'
-          ? '<kovo-query name="product" key="p1">{"stock":5}</kovo-query>'
-          : '<kovo-query name="product" key="p2">{"stock":10}</kovo-query>',
+          ? '<kovo-query name="product" key="product:p1">{"stock":5}</kovo-query>'
+          : '<kovo-query name="product" key="product:p2">{"stock":10}</kovo-query>',
     }));
 
     root.scripts = [
       {
-        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p1' : null),
+        getAttribute: (name) =>
+          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p1' : null,
         textContent: '{"stock":4}',
       },
       {
-        getAttribute: (name) => (name === 'kovo-query' ? 'product' : name === 'key' ? 'p2' : null),
+        getAttribute: (name) =>
+          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p2' : null,
         textContent: '{"stock":9}',
       },
     ];
-    store.subscribe('product', p1Plan, 'p1');
-    store.subscribe('product', p2Plan, 'p2');
+    store.subscribe('product', p1Plan, 'product:p1');
+    store.subscribe('product', p2Plan, 'product:p2');
 
     installKovoLoader({
       importModule: vi.fn(),
@@ -219,7 +221,10 @@ describe('loader visible-return refetch', () => {
 
     // SPEC.md §9.4: refetch-on-focus talks to the typed-read endpoint with the
     // same query instance key that hydration and mutation chunks expose.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['product:p1', 'product:p2']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([
+      { key: 'product:p1', name: 'product' },
+      { key: 'product:p2', name: 'product' },
+    ]);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/product?key=p1', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
@@ -230,8 +235,8 @@ describe('loader visible-return refetch', () => {
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(store.get('product', 'p1')).toEqual({ stock: 5 });
-    expect(store.get('product', 'p2')).toEqual({ stock: 10 });
+    expect(store.get('product', 'product:p1')).toEqual({ stock: 5 });
+    expect(store.get('product', 'product:p2')).toEqual({ stock: 10 });
     expect(p1Plan).toHaveBeenLastCalledWith({ stock: 5 });
     expect(p2Plan).toHaveBeenLastCalledWith({ stock: 10 });
   });
@@ -285,7 +290,7 @@ describe('loader visible-return refetch', () => {
     await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
 
     // SPEC.md §4.4: visible-return refetch tracks hydrated query data discovered after install.
-    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+    expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
     expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },

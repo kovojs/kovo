@@ -23,7 +23,9 @@ import {
   buildInlineKovoLoaderInstallerSource,
   buildInlineKovoLoaderStubInstallerSource,
   emitInlineKovoLoaderModule,
+  extractInlineDocumentLifecycleReadableSource,
   inlineDelegatedEvents,
+  inlineDocumentLifecycleReadableSource,
   inlineFragmentTargetEscapeReadableSource,
   inlineKovoLoaderGzipByteBudget,
   inlineKovoLoaderInstallerReadableSource,
@@ -55,6 +57,28 @@ function createOversizedInlineLoaderSource(): string {
 }
 
 describe('inline loader build source', () => {
+  it('keeps the query-identity constructor inside the lifecycle extraction closure', () => {
+    // SPEC §§4.4 and 9.4: generated lifecycle code has no module scope. Its frozen identity
+    // constructor must be an explicit closure dependency, and freshness generation must fail if
+    // that declaration disappears rather than shipping a free imported reference.
+    expect(inlineDocumentLifecycleReadableSource).toContain(
+      'function createQueryIdentity(name, key)',
+    );
+    expect(inlineDocumentLifecycleReadableSource).toContain('freezeQueryIdentity(');
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      inlineDocumentLifecycleReadableSource,
+    );
+
+    expect(() =>
+      extractInlineDocumentLifecycleReadableSource(`
+import { createQueryIdentity } from './query-store.js';
+export function createDocumentLifecycleRecovery() {
+  return createQueryIdentity('cart');
+}
+`),
+    ).toThrow('references top-level binding createQueryIdentity');
+  });
+
   it('pins the shipped minified installer to the deterministic source helper', () => {
     // SPEC.md §4.4: drift checks must compare the shipped bootstrap to readable source.
     expect(inlineKovoLoaderInstallerReadableSource).toBe(
@@ -62,7 +86,7 @@ describe('inline loader build source', () => {
     );
     expect(inlineKovoLoaderInstallerReadableSource).toContain('\nfunction installInlineKovoLoader');
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
-      "'Kovo-Targets': frameworkWireTargetCodec.encodeEntryList(rt())",
+      'planTargetRequestHeaders: frameworkWireTargetCodec.planTargetRequestHeaders',
     );
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
       "bns.createMutationBroadcastChannel('kovo:mutation-response')",

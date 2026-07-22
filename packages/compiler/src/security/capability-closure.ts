@@ -209,6 +209,7 @@ const compilerGeneratedInternalAbi = new Map<string, CompilerGeneratedAbiPosture
           'assignDerivedTaskKey',
           'assignDerivedWebhookName',
           'componentLiveTargetRenderer',
+          'encodeGeneratedDependencyIdentity',
           'registerGeneratedLiveTargetRenderer',
         ].map((name) => [name, generatedAuthorityFree]),
       ),

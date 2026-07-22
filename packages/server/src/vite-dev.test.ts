@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
@@ -57,7 +58,12 @@ function attestedLiveTargetHeader(
     { component, props, target },
     { buildToken, request: {}, ...(sourceUrl === undefined ? {} : { sourceUrl }) },
   );
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+  const encodedTarget = encodeFrameworkIdentityToken(target);
+  const encodedComponent = encodeFrameworkIdentityToken(component);
+  if (!encodedTarget || !encodedComponent) {
+    throw new TypeError('Test live-target identity is invalid.');
+  }
+  return `${encodedTarget}#${encodedComponent}@${token}:${JSON.stringify(props)}`;
 }
 
 describe('server app shell Vite dev seam', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from '@kovojs/core/internal/wire-input-grammar';
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { readDeps, stampPendingQueries } from './pending.js';
 import { FakePendingElement, FakePendingRoot } from './runtime-test-fakes.js';
@@ -8,9 +8,9 @@ import { FakePendingElement, FakePendingRoot } from './runtime-test-fakes.js';
 describe('pending query stamps', () => {
   it('stamps only islands that depend on affected queries', () => {
     const cart = new FakePendingElement({ 'kovo-deps': 'cart' });
-    const recommendations = new FakePendingElement({ 'kovo-deps': 'product:p1, cart' });
+    const recommendations = new FakePendingElement({ 'kovo-deps': 'product%3Ap1 cart' });
     const profile = new FakePendingElement({ 'kovo-deps': 'profile' });
-    const empty = new FakePendingElement({ 'kovo-deps': ' , ' });
+    const empty = new FakePendingElement({ 'kovo-deps': '   ' });
     const root = new FakePendingRoot([cart, recommendations, profile, empty]);
 
     // SPEC.md §10.4: optimistic mutation predictions mark dependent islands
@@ -28,23 +28,23 @@ describe('pending query stamps', () => {
     expect(recommendations.attributes).not.toHaveProperty('aria-busy');
   });
 
-  it('parses dependency lists with whitespace and comma separators', () => {
-    expect(readDeps(' cart, product:p1\ninventory\t\tcart ')).toEqual([
+  it('strictly decodes canonical dependency tokens separated by ASCII spaces', () => {
+    expect(readDeps(' cart product%3Ap1  inventory cart ')).toEqual([
       'cart',
       'product:p1',
       'inventory',
       'cart',
     ]);
     expect(readDeps(null)).toEqual([]);
+    expect(() => readDeps('cart,product%3Ap1')).toThrow(/canonical identity tokens/iu);
+    expect(() => readDeps('product:p1')).toThrow(/canonical identity tokens/iu);
+    expect(() => readDeps('cart\ninventory')).toThrow(/canonical identity tokens/iu);
   });
 
-  it('rejects dependency input before scanning past the shared wire budget', () => {
-    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
-    const atLimit = 'a'.repeat(maximum);
-
-    expect(readDeps(atLimit)).toEqual([atLimit]);
-    expect(() => readDeps(atLimit + 'a')).toThrow(
-      'Kovo dependency input exceeds the 4096-character wire budget.',
-    );
+  it('preserves long valid DOM identities independently of the HTTP budget', () => {
+    const identity = `product:${'漢'.repeat(5_000)}`;
+    const token = encodeFrameworkIdentityToken(identity)!;
+    expect(token.length).toBeGreaterThan(4_096);
+    expect(readDeps(token)).toEqual([identity]);
   });
 });

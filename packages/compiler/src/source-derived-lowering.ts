@@ -24,7 +24,7 @@ import {
   compilerStringSlice,
 } from './compiler-security-intrinsics.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
-import { parseComponentModule, parseSourceFile } from './scan/parse.js';
+import { parseComponentModule, type ComponentModuleModel } from './scan/parse.js';
 import { applySourceReplacements, type SourceReplacement } from './shared.js';
 
 const helperModule = '@kovojs/server/internal/wire';
@@ -147,9 +147,10 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   fileName: string;
   source: string;
 }): string | null {
-  const sourceFile = parseSourceFile(options.fileName, options.source);
+  const model = parseComponentModule(options.fileName, options.source);
+  const sourceFile = model.sourceFile;
   const assignments = exportedRegistryAssignments(sourceFile);
-  const agentAssignments = agentWitnessAssignments(sourceFile, options.source);
+  const agentAssignments = agentWitnessAssignments(sourceFile, model);
   const assignmentCount = compilerArrayLength(assignments, 'Source-derived assignments');
   const agentAssignmentCount = compilerArrayLength(agentAssignments, 'Agent witness assignments');
   if (assignmentCount === 0 && agentAssignmentCount === 0) return null;
@@ -210,6 +211,7 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   return insertHelperImport(
     transformed,
     sourceFile,
+    model.moduleImportInsertionOffset,
     requiredPrimitives(assignments),
     agentAssignmentCount === 0
       ? []
@@ -230,9 +232,8 @@ interface AgentWitnessAssignment {
 
 function agentWitnessAssignments(
   sourceFile: ts.SourceFile,
-  source: string,
+  model: ComponentModuleModel,
 ): readonly AgentWitnessAssignment[] {
-  const model = parseComponentModule(sourceFile.fileName, source);
   const assignments: AgentWitnessAssignment[] = [];
   const statements = compilerSnapshotStatements(sourceFile);
   for (let statementIndex = 0; statementIndex < statements.length; statementIndex += 1) {
@@ -409,6 +410,7 @@ function isPathFirstWebhookCall(call: ts.CallExpression): boolean {
 function insertHelperImport(
   source: string,
   originalSourceFile: ts.SourceFile,
+  moduleImportInsertionOffset: number,
   primitives: ReadonlySet<SourceDerivedPrimitive>,
   extraImports: readonly string[] = [],
 ): string {
@@ -454,7 +456,7 @@ function insertHelperImport(
       importDeclarationEnd,
     )}`;
   }
-  return `${importLine}${source}`;
+  return `${compilerStringSlice(source, 0, moduleImportInsertionOffset)}${importLine}${compilerStringSlice(source, moduleImportInsertionOffset)}`;
 }
 
 function requiredPrimitives(

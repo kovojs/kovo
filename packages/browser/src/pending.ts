@@ -1,14 +1,7 @@
-import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from '@kovojs/core/internal/wire-input-grammar';
+import { decodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import type { AttributeMutatorLike, QuerySelectorAllRootLike } from './dom-like.js';
-import {
-  securityArrayAppend,
-  securityRegExpTest,
-  securityStringSlice,
-} from './security-witness-intrinsics.js';
-
-const dependencySeparator = /[\s,]/u;
-const maxDependencyTokens = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters / 2;
+import { securityArrayAppend, securityStringSlice } from './security-witness-intrinsics.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface PendingElementLike extends AttributeMutatorLike {}
@@ -47,29 +40,18 @@ export function stampPendingQueries(
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function readDeps(value: string | null): string[] {
   const source = value ?? '';
-  if (source.length > FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters) {
-    throw new TypeError(
-      'Kovo dependency input exceeds the ' +
-        FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters +
-        '-character wire budget.',
-    );
-  }
   const deps: string[] = [];
-  let dependencyCount = 0;
   let start = 0;
   for (let index = 0; index <= source.length; index += 1) {
-    const character = index === source.length ? ',' : (source[index] ?? '');
-    if (character !== ',' && !securityRegExpTest(dependencySeparator, character)) continue;
+    const character = index === source.length ? ' ' : (source[index] ?? '');
+    if (character !== ' ') continue;
     if (index > start) {
-      if (dependencyCount >= maxDependencyTokens) {
-        throw new TypeError('Kovo dependency input exceeds its bounded token budget.');
+      const token = securityStringSlice(source, start, index);
+      const dependency = decodeFrameworkIdentityToken(token);
+      if (dependency === undefined) {
+        throw new TypeError('Kovo dependency input must contain canonical identity tokens.');
       }
-      securityArrayAppend(
-        deps,
-        securityStringSlice(source, start, index),
-        'Kovo dependency snapshot',
-      );
-      dependencyCount += 1;
+      securityArrayAppend(deps, dependency, 'Kovo dependency snapshot');
     }
     start = index + 1;
   }

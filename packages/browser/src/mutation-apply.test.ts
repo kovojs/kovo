@@ -103,7 +103,7 @@ describe('enhanced mutation response apply orchestration', () => {
       changes: [{ domain: 'cart', keys: ['cart:1'] }],
       fragments: [{ html: '<span>2</span>', target: 'cart-badge' }],
       idem: 'idem_success',
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
       targets: ['cart-badge=cart'],
     });
     expect(broadcast.publish).toHaveBeenCalledWith(

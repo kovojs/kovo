@@ -77,7 +77,7 @@ describe('mutation response DOM apply', () => {
       store,
     });
 
-    expect(applied.queries).toEqual(['cart', 'product']);
+    expect(applied.queries).toEqual([{ name: 'cart' }, { name: 'product' }]);
     expect(root.wildcardSelectorCalls).toBe(1);
     expect(cartLabel.getAttribute('aria-label')).toBe('Cart ready');
     expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
@@ -103,7 +103,7 @@ describe('mutation response DOM apply', () => {
     expect(result).toEqual({
       appliedFragments: [],
       fragments: [],
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect(count.textContent).toBe('2');
     expect(total.value).toBe('2998');
@@ -176,7 +176,7 @@ describe('mutation response DOM apply', () => {
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>Ready</cart-badge>');
-    expect(applied.queries).toEqual(['inventory']);
+    expect(applied.queries).toEqual([{ name: 'inventory' }]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
@@ -203,7 +203,7 @@ describe('mutation response DOM apply', () => {
     expect(applied).toEqual({
       appliedFragments: ['cart-badge'],
       fragments: expect.any(Array),
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect(fragmentSnapshots(applied.fragments)).toEqual([
       { html: '<cart-badge>3</cart-badge>', target: 'cart-badge' },
@@ -251,7 +251,7 @@ describe('mutation response DOM apply', () => {
     expect(applied).toEqual({
       appliedFragments: ['cart-badge'],
       fragments: expect.any(Array),
-      queries: ['cart'],
+      queries: [{ name: 'cart' }],
     });
     expect(fragmentSnapshots(applied.fragments)).toEqual([
       { html: '<cart-badge>ready</cart-badge>', target: 'cart-badge' },

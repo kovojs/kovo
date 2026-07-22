@@ -19,7 +19,7 @@ import {
   installQueryVisibleReturnRefetch,
 } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 
 export interface InstallLoaderQueryRuntimeOptions {
   applyQuery?: QueryApplyInterposition;
@@ -29,14 +29,14 @@ export interface InstallLoaderQueryRuntimeOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
   queryStore?: QueryStore;
-  refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
+  refetchOnFocus?: (queries: readonly QueryIdentity[]) => void | Promise<void>;
   refetchOnFocusOptOut?: readonly string[];
   root: LoaderRoot;
 }
 
 export interface InstalledLoaderQueryRuntime {
   dispose(): void;
-  rememberAppliedQueries(queries: readonly string[]): void;
+  rememberAppliedQueries(queries: readonly (string | QueryIdentity)[]): void;
 }
 
 export function installLoaderQueryRuntime(

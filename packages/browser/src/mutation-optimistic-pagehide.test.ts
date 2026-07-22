@@ -58,7 +58,7 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData,
-      idem: 'idem_bfcache',
+      idem: 'v1_1750000000000_00000000000000000000000000000005',
       input: { quantity: 2 },
       optimistic: {
         transforms: {
@@ -96,19 +96,18 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
         Accept: 'text/vnd.kovo.fragment+html',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': 'idem_bfcache',
-        'Kovo-Live-Targets': '',
-        'Kovo-Targets': '',
+        'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000005',
       },
       keepalive: true,
       method: 'POST',
+      referrerPolicy: 'origin',
     });
 
     releaseFetch?.();
 
     await expect(submit).resolves.toMatchObject({
-      idem: 'idem_bfcache',
-      queries: ['cart'],
+      idem: 'v1_1750000000000_00000000000000000000000000000005',
+      queries: [{ name: 'cart' }],
     });
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(rebaser.pendingCount('cart')).toBe(0);

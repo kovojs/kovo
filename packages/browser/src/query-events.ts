@@ -4,7 +4,7 @@ import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { applyQueryChunksToRuntime, type QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
 import {
@@ -44,7 +44,7 @@ export interface ApplyInlineQueryEventOptions {
 
 /** @internal Options for installing the inline `kovo:query` event hydration listener (SPEC §9.4). */
 export interface InstallInlineQueryEventHydrationOptions extends ApplyInlineQueryEventOptions {
-  onAppliedQueries?: (queries: readonly string[]) => void;
+  onAppliedQueries?: (queries: readonly QueryIdentity[]) => void;
   target: QueryEventHydrationTarget;
 }
 
@@ -52,7 +52,7 @@ export interface InstallInlineQueryEventHydrationOptions extends ApplyInlineQuer
 export function applyInlineQueryEventToRuntime(
   event: InlineQueryEvent,
   options: ApplyInlineQueryEventOptions,
-): readonly string[] {
+): readonly QueryIdentity[] {
   options = definedProps(options) as ApplyInlineQueryEventOptions;
   const chunks = queryChunksFromInlineEvent(event, options.onError);
   if (chunks.length === 0) return [];

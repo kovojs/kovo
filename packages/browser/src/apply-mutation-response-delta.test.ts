@@ -24,7 +24,7 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
       store,
     });
 
-    expect(result.queries).toEqual(['cart']);
+    expect(result.queries).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 2, items: [{ id: 'p1', qty: 2 }] });
     expect(onDeltaMiss).not.toHaveBeenCalled();
   });
@@ -173,7 +173,7 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
       },
     );
 
-    expect(result.queries).toEqual(['cart']);
+    expect(result.queries).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(onDeltaMiss).not.toHaveBeenCalled();
   });
@@ -192,7 +192,7 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
       { store },
     );
 
-    expect(result.queries).toEqual(['cart']);
+    expect(result.queries).toEqual([{ name: 'cart' }]);
     expect(store.get('cart')).toEqual({ count: 4 });
   });
 

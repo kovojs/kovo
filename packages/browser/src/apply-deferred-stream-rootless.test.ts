@@ -76,15 +76,15 @@ describe('rootless deferred stream runtime apply', () => {
       chunks: [
         {
           fragments: [{ html: '<section>ready</section>', target: 'inventory' }],
-          queries: ['inventory'],
+          queries: [{ name: 'inventory' }],
         },
         {
           fragments: [],
-          queries: ['reviews'],
+          queries: [{ name: 'reviews' }],
         },
       ],
       fragments: [{ html: '<section>ready</section>', target: 'inventory' }],
-      queries: ['inventory', 'reviews'],
+      queries: [{ name: 'inventory' }, { name: 'reviews' }],
     });
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
@@ -132,18 +132,18 @@ describe('rootless deferred stream runtime apply', () => {
       chunks: [
         {
           fragments: [{ html: '<span>badge</span>', target: 'cart-badge' }],
-          queries: ['cart'],
+          queries: [{ name: 'cart' }],
         },
         {
           fragments: [{ html: '<span>total</span>', target: 'cart-total' }],
-          queries: ['cart:primary'],
+          queries: [{ key: 'cart:primary', name: 'cart' }],
         },
       ],
       fragments: [
         { html: '<span>badge</span>', target: 'cart-badge' },
         { html: '<span>total</span>', target: 'cart-total' },
       ],
-      queries: ['cart', 'cart:primary'],
+      queries: [{ name: 'cart' }, { key: 'cart:primary', name: 'cart' }],
     });
     expect('appliedFragments' in applied).toBe(false);
     expect(store.get('cart')).toEqual({ count: 6 });

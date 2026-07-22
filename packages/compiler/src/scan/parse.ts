@@ -385,14 +385,19 @@ export function parseComponentModule(
     appendDenseValues(namedImports, namedImportModels(statement), 'Named import models');
   }
   const renderSourceReturns: StringRenderModel[] = [];
+  const sourceIdentifierNames: string[] = [];
   const taskRunHandlers: TaskRunHandlerModel[] = [];
   const webhookHandlers: WebhookHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
   const moduleScopeMutationFormControlNames = moduleScopeMutationFormControlNameModels(sourceFile);
   const moduleScopeStaticStringBindings = moduleScopeConstStaticStringBindings(sourceFile);
+  const moduleImportInsertionOffset = generatedImportInsertionOffset(sourceFile, source);
   const domainBindings = domainBindingKeys(sourceFile);
 
   const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) {
+      compilerArrayAppend(sourceIdentifierNames, node.text, 'Source identifier name parser facts');
+    }
     appendDenseValues(
       compilerJsxRuntimeImports,
       compilerJsxRuntimeImportModels(sourceFile, node),
@@ -567,12 +572,14 @@ export function parseComponentModule(
     jsxExpressions,
     jsxElements,
     jsxPragmas,
+    moduleImportInsertionOffset,
     moduleScopeBindings,
     moduleSpecifiers,
     mutationHandlers,
     namedImports,
     queryHandlers,
     renderSourceReturns,
+    sourceIdentifierNames,
     sourceFile,
     taskRunHandlers,
     webhookHandlers,
@@ -583,7 +590,49 @@ export function parseComponentModule(
   // SPEC §5.2 rule 10: keep comment-derived JSX transform authority as non-serialized parser
   // facts so every post-parse consumer uses the same comment ranges and closed verdict.
   compilerDefineOwnDataProperty(model, 'jsxPragmas', jsxPragmas, false);
+  // SPEC §5.2 rule 10: generated-binding collision checks consume this scanner-owned AST fact,
+  // never a post-parse search of raw source or emitted text.
+  compilerDefineOwnDataProperty(model, 'sourceIdentifierNames', sourceIdentifierNames, false);
   return model;
+}
+
+function generatedImportInsertionOffset(sourceFile: ts.SourceFile, source: string): number {
+  const firstStatement = compilerOwnDataValue(
+    sourceFile.statements,
+    0,
+    'Generated import first statement',
+  ) as ts.Statement | undefined;
+  const ranges = ts.getLeadingCommentRanges(source, firstStatement?.getFullStart() ?? 0) ?? [];
+  // TypeScript parses a shebang as source-file trivia rather than a statement/comment range. Keep
+  // a generated value import after it; inserting at byte zero would invalidate the module.
+  let insertionOffset = ts.getShebang(source)?.length ?? 0;
+  const rangeLength = compilerArrayLength(ranges, 'Generated import leading comment ranges');
+  for (let index = 0; index < rangeLength; index += 1) {
+    const range = compilerOwnDataValue(ranges, index, 'Generated import leading comment ranges') as
+      | ts.CommentRange
+      | undefined;
+    if (!range) throw new TypeError(`Generated import leading comment ranges[${index}] missing.`);
+    if (
+      jsxPragmaModelsFromComment(compilerStringSlice(source, range.pos, range.end), range.pos)
+        .length > 0
+    ) {
+      insertionOffset = range.end;
+    }
+  }
+  if (insertionOffset === 0) return 0;
+
+  // Include the trivia through the first line ending after the shebang/last JSX pragma. Emitters
+  // can then splice an import at this one parser-owned boundary without duplicating comment or
+  // shebang parsing and without leaving the original line ending behind as an extra blank line.
+  let lineEnd = insertionOffset;
+  while (lineEnd < source.length) {
+    const code = compilerStringCharCodeAt(source, lineEnd);
+    if (code !== 0x20 && code !== 0x09) break;
+    lineEnd += 1;
+  }
+  if (compilerStringCharCodeAt(source, lineEnd) === 0x0d) lineEnd += 1;
+  if (compilerStringCharCodeAt(source, lineEnd) === 0x0a) lineEnd += 1;
+  return lineEnd;
 }
 
 function jsxPragmaModels(sourceFile: ts.SourceFile, source: string): JsxPragmaModel[] {
