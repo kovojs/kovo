@@ -3,7 +3,7 @@
 <!-- kovo-security-ledger: transient -->
 
 **Date:** 2026-07-21
-**Status:** OPEN — one browser metadata root remains under remediation
+**Status:** OPEN — seven compiler/browser/deploy roots remain under remediation
 **Baseline:** `11ba9ce4fbb0da08a458ce25ba575851efbc9082`
 **Lifecycle:** `active`; archive after the verified closing tip is published and required CI is
 green.
@@ -21,7 +21,7 @@ trusted the expected identity supplied by the same subject.
 | -------- | ---: | -----: |
 | Critical |    0 |      3 |
 | High     |    0 |     10 |
-| Medium   |    4 |     10 |
+| Medium   |    5 |     10 |
 | Low      |    2 |      2 |
 
 ## Critical
@@ -276,8 +276,11 @@ trusted the expected identity supplied by the same subject.
     helper argument and container/callee escape unless a finite local summary proves it safe, and
     require an explicit `true` fact before lowering. Reject laundering through mutable handler state
     (`state.saved = item.fn; state.saved()`) and every dynamic state callee/constructor/tag variant.
-    Cover the executable helper repro, containers, property keys, mutation, destructuring, prototype
-    paths, and unrelated same-name bindings.
+    Prove every state write remains recursive JSON data so a callable nested under an allowlisted
+    method name cannot cross a chained-handler boundary and impersonate an intrinsic data method.
+    Cover the executable helper repro, containers, callback-only data methods, property keys,
+    mutation, destructuring, prototype paths, callable state writes, and unrelated same-name
+    bindings.
 
 - [ ] **M13 — The live-target emitter reparsed executable query text after parser analysis.**
   - The emitter reconstructed a TypeScript source file from a raw query-expression string to decide
@@ -289,8 +292,9 @@ trusted the expected identity supplied by the same subject.
     the authoritative parse had already completed, but emission discarded its typed facts and made a
     new executable decision from text.
   - **Open work:** carry parser-owned import, identifier, executable-use, and complete-name facts into
-    emission; derive collision-free aliases from those facts; delete the emitter reparse; prove a
-    fixpoint and authored-name collision matrix.
+    emission; derive collision-free helper aliases and generated export bindings from those facts;
+    delete the emitter reparse; prove a fixpoint plus authored import/local/export collision and
+    suffix-chain matrix.
 
 - [ ] **M14 — Versioned enhanced requests were decoded by the current build without document-build
       selection.**
@@ -300,10 +304,28 @@ trusted the expected identity supplied by the same subject.
     (SPEC §9 and §14 deploy skew).
   - **Dedup:** distinct from M11's same-version identity collapse and previous response-only build
     mismatch checks: this root occurred before the server selected a grammar and registry.
-  - **Open work:** bind the wire grammar into the render-plan/build token, carry `Kovo-Build` on every
-    enhanced target-bearing request, route to a retained exact build when the deployment owns one,
-    and make the current app reject missing/mismatched builds before target decode or handler work.
-    Prove old and current grammars never use heuristic dual decoding.
+  - **Open work:** bind the wire grammar into every default and injected-registry app build token,
+    carry `Kovo-Build` on every enhanced query, mutation, and HMR request, route to a retained exact
+    build when the deployment owns one, and make the current app reject missing/mismatched builds
+    after mandatory coarse admission but before target decode or handler work. Give stripped-header
+    rejection an unambiguous typed response marker so it cannot be confused with an app 409; require
+    exact dev-only `oldBuild` HMR continuity. Prove module-less apps rotate tokens and old/current
+    grammars never use heuristic dual decoding.
+
+- [ ] **M15 — Typed-read refetch trusted foreign final responses as query truth.**
+  - The modular and inline lifecycle `/_q/` refetch paths validated fragment media and a public
+    compatibility token but did not prove the final response URL. A same-origin request that followed
+    a CORS-readable cross-origin redirect could therefore accept a foreign `Kovo-Build` /
+    `Kovo-Build-Skew` header as reload authority or apply a foreign `<kovo-query>` body (SPEC §9.4 and
+    §14).
+  - **Dedup:** distinct from M14's request-side decoder selection: this root is response-origin
+    authority after fetch redirect handling, and the build token is deliberately not an
+    authenticator.
+  - **Open work:** snapshot a canonical same-origin `/_q/` request URL before fetch, then require a
+    non-redirected, nonempty final response URL with exact canonical href/origin identity before
+    reading build/skew headers or body. Require the exact fragment media/disposition envelope for
+    both success and skew 409, and cover foreign/cross-origin redirects and forged public tokens in
+    modular and generated-inline paths.
 
 ## Low
 
