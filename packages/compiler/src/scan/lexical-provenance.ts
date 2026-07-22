@@ -465,10 +465,12 @@ function runExpression(
   if (ts.isClassExpression(expression)) {
     return runClassMembers(expression.members, env, scope, state);
   }
-  if (ts.isJsxElement(expression) || ts.isJsxSelfClosingElement(expression)) {
-    const opening = ts.isJsxElement(expression) ? expression.openingElement : expression;
-    const callee = jsxTagExpression(opening.tagName);
-    if (callee) env = runImplicitInvocation(opening, callee, env, scope, state);
+  if (
+    ts.isJsxElement(expression) ||
+    ts.isJsxSelfClosingElement(expression) ||
+    ts.isJsxFragment(expression)
+  ) {
+    return runJsxExpression(expression, env, scope, state);
   }
   if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
     env = runExpression(expression.expression, env, scope, state);
@@ -621,6 +623,80 @@ function runExpression(
   return result;
 }
 
+// SPEC §5.2 rule 10: JSX is executable typed syntax. Walk its attribute and child expression
+// containers explicitly because `ts.forEachChild()` exposes the containers themselves, not their
+// nested expressions, to the generic expression callback. Missing one here would turn an ordinary
+// nested call into absent lexical provenance and make capability-root synthesis depend on an
+// unrelated transitive import.
+function runJsxExpression(
+  expression: ts.JsxElement | ts.JsxSelfClosingElement | ts.JsxFragment,
+  env: Environment,
+  scope: Scope,
+  state: AnalysisState,
+): Environment {
+  const opening = ts.isJsxElement(expression)
+    ? expression.openingElement
+    : ts.isJsxSelfClosingElement(expression)
+      ? expression
+      : undefined;
+  let invocation: { readonly callee: Value; readonly node: ts.JsxOpeningLikeElement } | undefined;
+  if (opening !== undefined) {
+    const callee = jsxTagExpression(opening.tagName);
+    if (callee) {
+      const begun = beginImplicitInvocation(opening, callee, env, scope, state);
+      env = begun.env;
+      invocation = { callee: begun.callee, node: opening };
+    }
+    for (const attribute of opening.attributes.properties) {
+      if (ts.isJsxSpreadAttribute(attribute)) {
+        env = runExpression(attribute.expression, env, scope, state);
+        env = markUnmodeledEffects(
+          env,
+          scope,
+          state,
+          lexicalNodeKey(attribute, state.sourceFile),
+        );
+        continue;
+      }
+      const initializer = attribute.initializer;
+      if (initializer === undefined || ts.isStringLiteral(initializer)) continue;
+      if (ts.isJsxExpression(initializer)) {
+        if (initializer.expression !== undefined) {
+          env = runExpression(initializer.expression, env, scope, state);
+        }
+      } else {
+        env = runExpression(initializer, env, scope, state);
+      }
+    }
+  }
+
+  const children = ts.isJsxSelfClosingElement(expression) ? [] : expression.children;
+  for (const child of children) {
+    if (ts.isJsxExpression(child)) {
+      if (child.expression === undefined) continue;
+      env = runExpression(child.expression, env, scope, state);
+      if (child.dotDotDotToken !== undefined) {
+        env = markUnmodeledEffects(
+          env,
+          scope,
+          state,
+          lexicalNodeKey(child, state.sourceFile),
+        );
+      }
+    } else if (
+      ts.isJsxElement(child) ||
+      ts.isJsxSelfClosingElement(child) ||
+      ts.isJsxFragment(child)
+    ) {
+      env = runJsxExpression(child, env, scope, state);
+    }
+  }
+  if (invocation !== undefined) {
+    env = finishImplicitInvocation(invocation.node, invocation.callee, env, scope, state);
+  }
+  return env;
+}
+
 function hasImplicitExecution(expression: ts.Expression): boolean {
   return (
     ts.isAwaitExpression(expression) ||
@@ -697,6 +773,17 @@ function runImplicitInvocation(
   scope: Scope,
   state: AnalysisState,
 ): Environment {
+  const invocation = beginImplicitInvocation(node, calleeExpression, env, scope, state);
+  return finishImplicitInvocation(node, invocation.callee, invocation.env, scope, state);
+}
+
+function beginImplicitInvocation(
+  node: ts.Decorator | ts.JsxOpeningLikeElement,
+  calleeExpression: ts.Expression,
+  env: Environment,
+  scope: Scope,
+  state: AnalysisState,
+): { readonly callee: Value; readonly env: Environment } {
   env = runExpression(calleeExpression, env, scope, state);
   const callee = readExpression(calleeExpression, env, scope, state);
   const key = lexicalCallKey(node, state.sourceFile);
@@ -704,6 +791,16 @@ function runImplicitInvocation(
   state.calls.set(key, {
     callee: prior ? joinValues(state, prior.callee, callee) : callee,
   });
+  return { callee, env };
+}
+
+function finishImplicitInvocation(
+  node: ts.Decorator | ts.JsxOpeningLikeElement,
+  callee: Value,
+  env: Environment,
+  scope: Scope,
+  state: AnalysisState,
+): Environment {
   env = invokeKnownCallables(callee, env, state);
   if (!callEffectsAreModeled(callee)) {
     env = markUnmodeledEffects(env, scope, state, lexicalNodeKey(node, state.sourceFile));

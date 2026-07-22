@@ -819,6 +819,140 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('keeps ordinary calls in JSX attributes and children bound to exact lexical provenance', () => {
+    const result = analyze([
+      {
+        fileName: 'queries.ts',
+        source: `
+          import { query } from '@kovojs/server';
+          export const contactsQuery = query({ run() { return { items: [] }; } });
+        `,
+      },
+      {
+        fileName: 'mutations.ts',
+        source: `
+          import { mutation } from '@kovojs/server';
+          export const addContact = mutation({ run() { return null; } });
+        `,
+      },
+      {
+        fileName: 'contacts.tsx',
+        source: `
+          import { component } from '@kovojs/core';
+          import { mutationFormAttributes } from '@kovojs/server';
+          import { addContact } from './mutations.js';
+          import { contactsQuery } from './queries.js';
+
+          function submittedFieldValue(value) { return typeof value === 'string' ? value : ''; }
+          function renderContactCard(contact) { return contact.name; }
+          const Badge = { definition: { render(options) { return options.children; } } };
+
+          export const ContactsRegion = component({
+            mutations: { addContact },
+            queries: { contacts: contactsQuery },
+            render: ({ contacts }, _state, slots = { submitted: {} }) => {
+              const items = contacts.items;
+              const submitted = submittedFieldValue(slots.submitted.name);
+              return <section data-submitted={submittedFieldValue(submitted)}>
+                {Badge.definition.render({ children: items.length })}
+                <form {...mutationFormAttributes(addContact)}>
+                  {items.map((contact) => <span>{renderContactCard(contact)}</span>)}
+                </form>
+              </section>;
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts.filter(
+        (fact) =>
+          fact.kind === 'root' &&
+          fact.module === 'contacts.tsx' &&
+          (fact.rootKind === 'mutation' || fact.rootKind === 'query'),
+      ),
+    ).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('retains root assignments and spread effects nested in JSX', () => {
+    const result = analyze([
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let assignedFactory = localFactory;
+          const assignment = <div>{assignedFactory = route}</div>;
+          assignedFactory('/jsx-assignment-root', { render() { return null; } });
+
+          let spreadFactory = localFactory;
+          const spreadSource = {
+            get install() { spreadFactory = route; return true; },
+          };
+          const spread = <div {...spreadSource} />;
+          spreadFactory('/jsx-spread-root', { render() { return null; } });
+
+          let tagFactory = localFactory;
+          function LocalComponent() { return null; }
+          const componentHolder = {
+            get Installer() { tagFactory = route; return LocalComponent; },
+          };
+          const tag = <componentHolder.Installer />;
+          tagFactory('/jsx-tag-getter-root', { render() { return null; } });
+
+          let invokedFactory = localFactory;
+          function Installer() { invokedFactory = route; return null; }
+          const invoked = <Installer data-reset={(invokedFactory = localFactory)} />;
+          invokedFactory('/jsx-component-invocation-root', { render() { return null; } });
+          void assignment;
+          void invoked;
+          void spread;
+          void tag;
+        `,
+      },
+    ]);
+
+    for (const name of [
+      '/jsx-assignment-root',
+      '/jsx-component-invocation-root',
+      '/jsx-spread-root',
+      '/jsx-tag-getter-root',
+    ]) {
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({ kind: 'root', name, rootKind: 'route' }),
+      );
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({
+          kind: 'closed',
+          name,
+          reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+          rootKind: 'route',
+        }),
+      );
+    }
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => `${fact.rootKind}:${fact.name}`),
+    ).toEqual([
+      'route:/jsx-assignment-root',
+      'route:/jsx-component-invocation-root',
+      'route:/jsx-spread-root',
+      'route:/jsx-tag-getter-root',
+      'route:route',
+    ]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
   it('recognizes var, catch, class, and destructured parameter bindings as local shadows', () => {
     const result = analyze([
       {
