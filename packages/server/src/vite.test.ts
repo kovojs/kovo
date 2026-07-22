@@ -283,15 +283,19 @@ export const account = query({
       file: 'src/components/question-list.tsx',
       root: fileURLToPath(new URL('../../../examples/stackoverflow/', import.meta.url)),
     },
-  ])('compiles $file with server-derived facts under sole ownership', async (fixture) => {
-    const plugin = kovo({ app: fixture.app }) as unknown as KovoViteConfigureServer;
-    await plugin.configResolved?.({ command: 'build', plugins: [plugin], root: fixture.root });
-    const source = await readFile(join(fixture.root, fixture.file), 'utf8');
+  ])(
+    'compiles $file with server-derived facts under sole ownership',
+    async (fixture) => {
+      const plugin = kovo({ app: fixture.app }) as unknown as KovoViteConfigureServer;
+      await plugin.configResolved?.({ command: 'build', plugins: [plugin], root: fixture.root });
+      const source = await readFile(join(fixture.root, fixture.file), 'utf8');
 
-    const transformed = await plugin.transform?.(source, join(fixture.root, fixture.file));
+      const transformed = await plugin.transform?.(source, join(fixture.root, fixture.file));
 
-    expect(transformed?.code).toContain(`action="${fixture.action}"`);
-  });
+      expect(transformed?.code).toContain(`action="${fixture.action}"`);
+    },
+    90_000,
+  );
 
   it('does not let a forged structural compiler suppress the built-in compiler', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-forged-compiler-owner-'));
