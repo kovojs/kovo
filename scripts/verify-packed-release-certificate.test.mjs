@@ -13,12 +13,6 @@ import {
 import { repoRoot, tarballDir } from './release-packages.mjs';
 import { verifyPackedReleaseCertificate } from './verify-packed-release-certificate.mjs';
 
-const installedVerifierManifest = JSON.parse(
-  readFileSync(path.join(repoRoot, 'packages', 'verify', 'package.json'), 'utf8'),
-);
-const [parserDependency] = Object.entries(installedVerifierManifest.dependencies ?? {});
-if (parserDependency === undefined) throw new Error('@kovojs/verify has no parser dependency');
-
 describe('final packed release certificate', () => {
   it('materializes and verifies the exact attested tarball bytes', () => {
     const fixture = releaseFixture();
@@ -116,20 +110,78 @@ describe('final packed release certificate', () => {
       fixture.cleanup();
     }
   });
+
+  it('rejects a same-version adjacent parser instead of trusting its manifest label', () => {
+    const fixture = releaseFixture({ runtimeDependencies: { acorn: '8.17.0' } });
+    const exec = vi.fn(() => 'PASS from adjacent parser\n');
+
+    try {
+      expect(() =>
+        verifyPackedReleaseCertificate({
+          certificateFile: fixture.certificateFile,
+          exec,
+          expectedPackages: [
+            {
+              manifest: fixture.sourceManifest,
+              name: fixture.packedPackage.name,
+              version: fixture.packedPackage.version,
+            },
+          ],
+          packedManifestFile: fixture.packedManifestFile,
+          policyFile: fixture.policyFile,
+        }),
+      ).toThrow(
+        'reviewer-authenticated @kovojs/verify must be self-contained; dependencies is not empty',
+      );
+      expect(exec).not.toHaveBeenCalled();
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it('rejects a reviewer-hashed verifier module that still resolves bare acorn', () => {
+    const fixture = releaseFixture({
+      runtimeSource: 'import { parse } from "acorn";\nexport const releaseFixture = parse;\n',
+    });
+    const exec = vi.fn(() => 'PASS from bare parser import\n');
+
+    try {
+      expect(() =>
+        verifyPackedReleaseCertificate({
+          certificateFile: fixture.certificateFile,
+          exec,
+          expectedPackages: [
+            {
+              manifest: fixture.sourceManifest,
+              name: fixture.packedPackage.name,
+              version: fixture.packedPackage.version,
+            },
+          ],
+          packedManifestFile: fixture.packedManifestFile,
+          policyFile: fixture.policyFile,
+        }),
+      ).toThrow(
+        '@kovojs/verify/dist/runtime.mjs resolves acorn outside its reviewer-owned sha512 bytes',
+      );
+      expect(exec).not.toHaveBeenCalled();
+    } finally {
+      fixture.cleanup();
+    }
+  });
 });
 
-function releaseFixture() {
+function releaseFixture({ runtimeDependencies, runtimeSource } = {}) {
   const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-packed-certificate-test-'));
   const tarballRoot = path.join(tarballDir, `certificate-test-${randomUUID()}`);
   mkdirSync(tarballRoot, { recursive: true });
   const packageManifest = {
-    dependencies: { [parserDependency[0]]: parserDependency[1] },
+    ...(runtimeDependencies === undefined ? {} : { dependencies: runtimeDependencies }),
     name: '@kovojs/verify',
     version: '1.2.3',
   };
   const sourceManifest = { ...packageManifest, publishConfig: {} };
   const binBytes = Buffer.from('import "./runtime.mjs";\n');
-  const runtimeBytes = Buffer.from('export const releaseFixture = true;\n');
+  const runtimeBytes = Buffer.from(runtimeSource ?? 'export const releaseFixture = true;\n');
   const tarballBytes = canonicalizeTarballBytes(
     fixtureTarball([
       fixtureEntry('package/package.json', JSON.stringify(packageManifest)),

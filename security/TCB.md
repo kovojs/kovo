@@ -74,12 +74,13 @@ summaries and import edges, exact copies of the reviewed posture rows, and one S
 canonical policy bytes. This removes duplicate artifact hashes from the certificate: each hash is an
 immutable join, not an additional source of authority.
 
-The standalone `@kovojs/verify` checker imports no Kovo implementation and has one exact parser
-dependency, `acorn@8.17.0`. It parses every published module byte into a complete ESTree before
-deriving imports and re-exports, compares the actual packed `@kovojs/*` package census and
-complete manifests to policy, rejects resolver remaps and automatic lifecycle hooks, requires every
-runtime entry condition to collapse to one listed target, and scans the complete package trees. It
-reads evidence and module bytes through no-follow descriptors, pins reads to the initial file and
+The standalone `@kovojs/verify` checker imports no Kovo implementation and bundles its one
+exact-pinned build dependency, `acorn@8.17.0`, into its reviewer-hashed dist tree. The published
+checker has no runtime dependency resolution. It parses every published module byte into a complete
+ESTree before deriving imports and re-exports, compares the actual packed `@kovojs/*` package census
+and complete manifests to policy, rejects resolver remaps and automatic lifecycle hooks, requires
+every runtime entry condition to collapse to one listed target, and scans the complete package trees.
+It reads evidence and module bytes through no-follow descriptors, pins reads to the initial file and
 directory identities, uses a fixed cap+1 descriptor buffer so concurrent growth cannot trigger an
 unbounded allocation, and repeats the census after verification. Explicit byte, JSON-node/depth,
 module, package, file-count, and tree-depth limits bound hostile evidence. Packing for policy proposal
@@ -98,7 +99,7 @@ The certificate proves only its three stated structural obligations over the mod
 authority domain. A door is a coarse module-plus-capability approval; `site` is a reviewer label,
 not proof of an exact source location. The checker does not prove the semantics of host globals,
 `eval`, `new Function`, computed runtime loading, or every native/WASM path beyond explicit rejection
-and the reviewed opaque ledger. Its parser dependency, Node/filesystem behavior, platform host, and
+and the reviewed opaque ledger. Its bundled parser, Node/filesystem behavior, platform host, and
 reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 and §4.6.
 
 ```json tcb-manifest
@@ -210,7 +211,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "dependency": "acorn",
       "pinnedVersion": "8.17.0",
       "integrity": "sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==",
-      "role": "Standalone certificate checker full-input JavaScript parsing and complete static, re-export, and dynamic import extraction from exact published bytes.",
+      "role": "Exact-pinned build input bundled into the reviewer-authenticated standalone certificate checker for full-input JavaScript parsing and complete static, re-export, and dynamic import extraction from exact published bytes.",
       "reviewTrigger": "Any bump must re-run the near-4 MiB hidden-tail import regression, certificate schema, three obligation-specific negative controls, lexical-authority audit, packed-package, translation-import, and outside-process CLI verification."
     }
   ],

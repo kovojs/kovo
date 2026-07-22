@@ -10,6 +10,7 @@ import {
   validateBetterAuthMountAuthorityPack,
   validateFirstPartyScopeRegistryPolicy,
   validatePackedPackage,
+  validateSelfContainedVerifierPack,
 } from './check-pack-security.mjs';
 
 function validateFixture(files, overrides = {}) {
@@ -116,6 +117,35 @@ describe('pack-security gate', () => {
         expect.stringContaining('exposes the private adapter mint'),
       ]),
     );
+  });
+
+  it('keeps the standalone verifier parser inside reviewer-authenticated dist bytes', () => {
+    expect(
+      validateSelfContainedVerifierPack({
+        files: [{ path: 'NOTICE' }, { path: 'dist/index.mjs' }],
+        manifest: { devDependencies: { acorn: '8.17.0', vitest: '4.1.8' } },
+        readTextFile: () => 'export const verify = true;',
+      }),
+    ).toEqual([]);
+    expect(
+      validateSelfContainedVerifierPack({
+        files: [{ path: 'dist/index.mjs' }, { path: 'dist/dynamic.mjs' }],
+        manifest: {
+          dependencies: { acorn: '8.17.0' },
+          optionalDependencies: { parser: '1.0.0' },
+          peerDependencies: { parserHost: '1.0.0' },
+        },
+        readTextFile: (file) =>
+          file === 'dist/index.mjs' ? 'import { parse } from "acorn";' : 'import("acorn");',
+      }),
+    ).toEqual([
+      '@kovojs/verify: packed dependencies must be empty; parser bytes belong in dist',
+      '@kovojs/verify: packed optionalDependencies must be empty; parser bytes belong in dist',
+      '@kovojs/verify: packed peerDependencies must be empty; parser bytes belong in dist',
+      '@kovojs/verify: packed NOTICE must retain the bundled parser license',
+      '@kovojs/verify: dist/index.mjs resolves acorn outside reviewer-authenticated dist bytes',
+      '@kovojs/verify: dist/dynamic.mjs resolves acorn outside reviewer-authenticated dist bytes',
+    ]);
   });
 
   it('rejects leaked environment files, test fixtures, and unexpected source files', () => {

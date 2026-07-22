@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -22,7 +22,6 @@ const certificatePath = path.join(repoRoot, 'security', 'kovo-certificate-v1.jso
 const policyPath = path.join(repoRoot, 'security', 'kovo-certificate-policy-v1.json');
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MAX_CERTIFICATE_BYTES = 2 * 1024 * 1024;
-const MAX_DEPENDENCY_MANIFEST_BYTES = 1024 * 1024;
 
 /**
  * Verify the final `.release` tarball bytes rather than repacking source trees. Each tarball first
@@ -103,7 +102,6 @@ export function verifyPackedReleaseCertificate({
     const authenticatedVerifier = authenticatePackedVerifier({
       artifactRoot,
       policy,
-      stagingRoot,
       verifiedTarballs,
     });
 
@@ -130,7 +128,7 @@ export function verifyPackedReleaseCertificate({
   }
 }
 
-function authenticatePackedVerifier({ artifactRoot, policy, stagingRoot, verifiedTarballs }) {
+function authenticatePackedVerifier({ artifactRoot, policy, verifiedTarballs }) {
   if (!Array.isArray(policy.artifacts) || policy.artifacts.length === 0) {
     throw new TypeError('certificate policy has no artifact subjects');
   }
@@ -174,52 +172,43 @@ function authenticatePackedVerifier({ artifactRoot, policy, stagingRoot, verifie
     if (observed !== expected.get(artifactPath)) {
       throw new TypeError(`${artifactPath} does not match its reviewer-owned sha512`);
     }
+    if (hasBareAcornImport(bytes.toString('utf8'))) {
+      throw new TypeError(`${artifactPath} resolves acorn outside its reviewer-owned sha512 bytes`);
+    }
   }
 
   const verifierPackage = policy.packages.find((pkg) => pkg?.name === '@kovojs/verify');
-  const dependencies = verifierPackage?.manifest?.dependencies;
-  if (!dependencies || typeof dependencies !== 'object' || Array.isArray(dependencies)) {
-    throw new TypeError('reviewer policy has no @kovojs/verify parser dependency');
+  if (verifierPackage === undefined) {
+    throw new TypeError('reviewer policy has no @kovojs/verify package manifest');
   }
-  const dependencyEntries = Object.entries(dependencies);
-  if (dependencyEntries.length !== 1) {
-    throw new TypeError('reviewer policy must name exactly one @kovojs/verify parser dependency');
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    const dependencies = verifierPackage.manifest?.[field];
+    if (
+      dependencies !== undefined &&
+      (typeof dependencies !== 'object' ||
+        dependencies === null ||
+        Array.isArray(dependencies) ||
+        Object.keys(dependencies).length > 0)
+    ) {
+      throw new TypeError(
+        `reviewer-authenticated @kovojs/verify must be self-contained; ${field} is not empty`,
+      );
+    }
   }
-  const [dependencyName, dependencyVersion] = dependencyEntries[0];
-  if (
-    !/^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/u.test(
-      dependencyName,
-    ) ||
-    typeof dependencyVersion !== 'string' ||
-    !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u.test(dependencyVersion)
-  ) {
-    throw new TypeError('reviewer policy has an invalid @kovojs/verify parser dependency');
-  }
-  const dependencyRoot = realpathSync(
-    path.join(repoRoot, 'packages', 'verify', 'node_modules', dependencyName),
-  );
-  const dependencyManifest = JSON.parse(
-    readBoundedRegularFile(
-      path.join(dependencyRoot, 'package.json'),
-      MAX_DEPENDENCY_MANIFEST_BYTES,
-      `${dependencyName} manifest`,
-    ).toString('utf8'),
-  );
-  if (
-    dependencyManifest.name !== dependencyName ||
-    dependencyManifest.version !== dependencyVersion
-  ) {
-    throw new TypeError(`${dependencyName} does not match the reviewer-owned parser version`);
-  }
-  const dependencyLink = path.join(stagingRoot, 'node_modules', ...dependencyName.split('/'));
-  mkdirSync(path.dirname(dependencyLink), { recursive: true });
-  symlinkSync(dependencyRoot, dependencyLink, 'dir');
 
   const verifier = path.join(artifactRoot, '@kovojs', 'verify', 'dist', 'bin.mjs');
   if (!actual.has('@kovojs/verify/dist/bin.mjs')) {
     throw new TypeError('reviewer policy has no @kovojs/verify executable subject');
   }
   return verifier;
+}
+
+function hasBareAcornImport(source) {
+  return [
+    /\bfrom\s*["']acorn(?:\/[^"']*)?["']/u,
+    /\bimport\s*(?:\(\s*)?["']acorn(?:\/[^"']*)?["']/u,
+    /\brequire\s*\(\s*["']acorn(?:\/[^"']*)?["']/u,
+  ].some((pattern) => pattern.test(source));
 }
 
 function main() {

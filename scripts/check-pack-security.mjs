@@ -17,7 +17,13 @@ export const packSecuritySnapshotPath = path.join(repoRoot, 'scripts', 'pack-sec
 export const rootNpmConfigPath = path.join(repoRoot, '.npmrc');
 
 const maxPackedFileBytes = 16 * 1024 * 1024;
-const allowedTopLevelFiles = new Set(['package.json', 'README.md', 'LICENSE', 'LICENSE.md']);
+const allowedTopLevelFiles = new Set([
+  'package.json',
+  'README.md',
+  'LICENSE',
+  'LICENSE.md',
+  'NOTICE',
+]);
 const safeFirstPartyRegistry = 'https://registry.npmjs.org/';
 const forbiddenPathSegments = new Set([
   '__fixtures__',
@@ -194,8 +200,51 @@ export function validatePackedPackage({
   if (packageName === '@kovojs/better-auth') {
     findings.push(...validateBetterAuthMountAuthorityPack({ manifest, readTextFile }));
   }
+  if (packageName === '@kovojs/verify') {
+    findings.push(...validateSelfContainedVerifierPack({ files, manifest, readTextFile }));
+  }
 
   return findings;
+}
+
+/**
+ * The certificate checker executes from its reviewer-hashed dist tree. Runtime dependencies would
+ * reopen module resolution onto adjacent bytes that are not subjects of that reviewer policy.
+ */
+export function validateSelfContainedVerifierPack({ files, manifest, readTextFile }) {
+  const findings = [];
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    const dependencies = manifest?.[field];
+    if (
+      dependencies !== undefined &&
+      (typeof dependencies !== 'object' ||
+        dependencies === null ||
+        Array.isArray(dependencies) ||
+        Object.keys(dependencies).length > 0)
+    ) {
+      findings.push(`@kovojs/verify: packed ${field} must be empty; parser bytes belong in dist`);
+    }
+  }
+  if (!files.some((file) => file.path === 'NOTICE')) {
+    findings.push('@kovojs/verify: packed NOTICE must retain the bundled parser license');
+  }
+  for (const file of files.filter((entry) => entry.path.endsWith('.mjs'))) {
+    const source = readTextFile(file.path);
+    if (source !== undefined && hasBareAcornImport(source)) {
+      findings.push(
+        `@kovojs/verify: ${file.path} resolves acorn outside reviewer-authenticated dist bytes`,
+      );
+    }
+  }
+  return findings;
+}
+
+function hasBareAcornImport(source) {
+  return [
+    /\bfrom\s*["']acorn(?:\/[^"']*)?["']/u,
+    /\bimport\s*(?:\(\s*)?["']acorn(?:\/[^"']*)?["']/u,
+    /\brequire\s*\(\s*["']acorn(?:\/[^"']*)?["']/u,
+  ].some((pattern) => pattern.test(source));
 }
 
 /**

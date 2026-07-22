@@ -67,7 +67,8 @@ const lexicalRoutes = Object.freeze([
 /**
  * Search-side certificate generation. This is deliberately allowed a fixpoint; the disjoint
  * `@kovojs/verify` checker is not. Published module extraction stays in the TypeScript probe while
- * the checker re-parses bytes with its sole pinned parser dependency (Plan 3 §2.1).
+ * the checker re-parses bytes with its exact-pinned parser bundled into the reviewer-authenticated
+ * verifier dist tree (Plan 3 §2.1).
  */
 export function analyzeKovoCertificate({
   internalDoorPosture = JSON.parse(readFileSync(kovoCertificateDoorPosturePath, 'utf8')),

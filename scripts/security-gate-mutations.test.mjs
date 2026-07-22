@@ -10,7 +10,19 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(491);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(492);
+  });
+
+  it('enrolls the self-contained verifier parser pack forcing mutant', () => {
+    const mutant = SECURITY_GATE_MUTANTS.find(
+      (candidate) => candidate.name === 'verifier-pack/drop-runtime-parser-dependency-closure',
+    );
+
+    expect(mutant).toMatchObject({
+      expectedKiller:
+        'the verifier pack must resolve its exact-pinned parser only from authenticated dist bytes',
+      sourceOnly: true,
+    });
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {

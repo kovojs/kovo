@@ -9,7 +9,8 @@
     "kovo-verify": "./src/bin.ts"
   },
   "files": [
-    "dist"
+    "dist",
+    "NOTICE"
   ],
   "type": "module",
   "exports": {
@@ -35,10 +36,8 @@
     "build:dist": "vp pack src/bin.ts src/index.ts src/translation.ts --dts",
     "prepack": "pnpm run build:dist"
   },
-  "dependencies": {
-    "acorn": "8.17.0"
-  },
   "devDependencies": {
+    "acorn": "8.17.0",
     "vitest": "4.1.8"
   }
 }

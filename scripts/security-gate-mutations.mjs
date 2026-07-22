@@ -29,6 +29,7 @@ import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
 import * as threatMatrixGate from './threat-matrix-gate.mjs';
+import * as packSecurityGate from './check-pack-security.mjs';
 import * as requestIngressPolicy from '../packages/server/src/request-ingress-policy.ts';
 import * as frameworkImplementationDigest from '../packages/compiler/src/security/framework-implementation-digest.ts';
 
@@ -135,6 +136,7 @@ const frameworkImplementationDigestPath = path.join(
   'packages/compiler/src/security/framework-implementation-digest.ts',
 );
 const threatMatrixGatePath = path.join(scriptsDir, 'threat-matrix-gate.mjs');
+const packSecurityGatePath = path.join(scriptsDir, 'check-pack-security.mjs');
 const drizzleSessionProvenancePath = path.join(
   repoRoot,
   'packages/drizzle/src/static/session-provenance.ts',
@@ -2469,6 +2471,9 @@ const verifyNonblockingFileOpenBranch =
   '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),';
 const removedVerifyNonblockingFileOpenBranch =
   '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),';
+const verifierPackRuntimeDependencyClosureBranch =
+  "  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {";
+const removedVerifierPackRuntimeDependencyClosureBranch = '  for (const field of []) {';
 const installedUpdateDocsSnapshotBranch = '  const resolved = bundledDocs(version);';
 const restoredLiveUpdateDocsFetchBranch = [
   '  const remoteFetch = (options as UpdateDocsOptions & {',
@@ -8442,6 +8447,19 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertVerifierNonblockingSnapshotOpenBehavior,
   },
   {
+    baseModule: packSecurityGate,
+    description:
+      'Stops rejecting runtime dependencies from the reviewer-authenticated verifier package.',
+    expectedKiller:
+      'the verifier pack must resolve its exact-pinned parser only from authenticated dist bytes',
+    name: 'verifier-pack/drop-runtime-parser-dependency-closure',
+    replacement: removedVerifierPackRuntimeDependencyClosureBranch,
+    search: verifierPackRuntimeDependencyClosureBranch,
+    sourceFile: packSecurityGatePath,
+    sourceOnly: true,
+    test: assertVerifierPackRejectsRuntimeParserDependency,
+  },
+  {
     behavioralTypeScript: true,
     description:
       'Lets a tools request execute after initialize but before the required initialized notification.',
@@ -8454,6 +8472,21 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertFiniteMcpReadyLifecycleBehavior,
   },
 ];
+
+async function assertVerifierPackRejectsRuntimeParserDependency(moduleUnderTest, { sourceText }) {
+  const expected = '@kovojs/verify: packed dependencies must be empty; parser bytes belong in dist';
+  assertIncludes(
+    moduleUnderTest.validateSelfContainedVerifierPack({
+      files: [{ path: 'NOTICE' }, { path: 'dist/index.mjs' }],
+      manifest: { dependencies: { acorn: '8.17.0' } },
+      readTextFile: () => 'export const verifier = true;',
+    }),
+    expected,
+  );
+  if (!sourceText.includes(verifierPackRuntimeDependencyClosureBranch)) {
+    throw new Error('verifier pack admitted mutable runtime parser resolution');
+  }
+}
 
 async function assertUpdateDocsUsesInstalledPackageSnapshot(moduleUnderTest) {
   const root = mkdtempSync(path.join(tmpdir(), 'kovo-update-docs-mutant-'));

@@ -209,6 +209,7 @@ function write() {
 function publishFiles(pkg, pkgJson) {
   if (pkg.name === 'create-kovo') return ['dist', 'templates'];
   if (pkg.name === '@kovojs/ui') return ['dist', ...uiVendoredSourceFiles(pkgJson)];
+  if (pkg.name === '@kovojs/verify') return ['dist', 'NOTICE'];
   return ['dist'];
 }
 
