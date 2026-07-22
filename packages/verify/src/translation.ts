@@ -5,6 +5,52 @@ import {
   parseJavaScriptModule,
   staticStringValue,
 } from './javascript-ast.js';
+import {
+  translationArrayAppend,
+  translationArrayAppendAll,
+  translationArrayCopy,
+  translationArrayIsArray,
+  translationArrayJoin,
+  translationArrayLength,
+  translationArrayPop,
+  translationArrayPrototype,
+  translationArraySort,
+  translationCreateMap,
+  translationCreateNullRecord,
+  translationCreateSet,
+  translationDefineOwnDataProperty,
+  translationErrorMessage,
+  translationGetOwnPropertyDescriptor,
+  translationGetOwnPropertyDescriptors,
+  translationGetPrototypeOf,
+  translationJsonParse,
+  translationJsonStringify,
+  translationMapForEach,
+  translationMapGet,
+  translationMapHas,
+  translationMapSet,
+  translationNumberIsSafeInteger,
+  translationNumberParseInt,
+  translationObjectKeys,
+  translationObjectPrototype,
+  translationOwnDataValue,
+  translationOwnKeys,
+  translationRegExpMatches,
+  translationRegExpReplace,
+  translationRegExpTest,
+  translationSameDataDescriptor,
+  translationSetAdd,
+  translationSetHas,
+  translationStringEndsWith,
+  translationStringFromCodePoint,
+  translationStringIncludes,
+  translationStringIndexOf,
+  translationStringSlice,
+  translationStringSplit,
+  translationStringTrim,
+  translationSyntaxError,
+  translationTypeError,
+} from './translation-intrinsics.js';
 
 /** @internal One compiler-emitted artifact checked by the Plan 3 §2.2 translation validator. */
 export interface KovoEmittedTranslationArtifact {
@@ -213,8 +259,9 @@ function normalizeInput(
   if (artifactsInput === undefined || decision === undefined) return undefined;
 
   const artifacts: KovoEmittedTranslationArtifact[] = [];
-  const seenArtifactFiles = new Set<string>();
-  for (const [index, value] of artifactsInput.entries()) {
+  const seenArtifactFiles = translationCreateSet<string>();
+  for (let index = 0; index < translationArrayLength(artifactsInput); index += 1) {
+    const value = artifactsInput[index];
     const artifact = exactRecord(
       value,
       `translation artifacts[${index}]`,
@@ -235,7 +282,7 @@ function normalizeInput(
       );
       continue;
     }
-    if (seenArtifactFiles.has(artifact.fileName)) {
+    if (translationSetHas(seenArtifactFiles, artifact.fileName)) {
       pushFinding(
         findings,
         'decision-record',
@@ -244,8 +291,8 @@ function normalizeInput(
       );
       continue;
     }
-    seenArtifactFiles.add(artifact.fileName);
-    artifacts.push({
+    translationSetAdd(seenArtifactFiles, artifact.fileName);
+    translationArrayAppend(artifacts, {
       fileName: artifact.fileName,
       kind: artifact.kind,
       source: artifact.source,
@@ -266,7 +313,7 @@ function normalizeInput(
     clientHandlers === undefined ||
     secretFieldNames === undefined ||
     serverOperations === undefined ||
-    findings.some((finding) => finding.relation === 'decision-record')
+    hasFindingRelation(findings, 'decision-record')
   ) {
     return undefined;
   }
@@ -283,8 +330,9 @@ function normalizeClientImports(
   const rows = denseArray(value, 'translation decision clientImports', findings);
   if (rows === undefined) return undefined;
   const result: KovoReviewedClientImport[] = [];
-  const seen = new Set<string>();
-  for (const [index, value] of rows.entries()) {
+  const seen = translationCreateSet<string>();
+  for (let index = 0; index < translationArrayLength(rows); index += 1) {
+    const value = rows[index];
     const row = exactRecord(
       value,
       `translation decision clientImports[${index}]`,
@@ -306,7 +354,8 @@ function normalizeClientImports(
       continue;
     }
     const normalizedImports: { importedName: string; localName: string }[] = [];
-    for (const [importIndex, importValue] of imports.entries()) {
+    for (let importIndex = 0; importIndex < translationArrayLength(imports); importIndex += 1) {
+      const importValue = imports[importIndex];
       const imported = exactRecord(
         importValue,
         `translation decision clientImports[${index}].imports[${importIndex}]`,
@@ -327,7 +376,7 @@ function normalizeClientImports(
         continue;
       }
       const key = importKey(row.moduleSpecifier, imported.importedName, imported.localName);
-      if (seen.has(key)) {
+      if (translationSetHas(seen, key)) {
         pushFinding(
           findings,
           'decision-record',
@@ -336,13 +385,16 @@ function normalizeClientImports(
         );
         continue;
       }
-      seen.add(key);
-      normalizedImports.push({
+      translationSetAdd(seen, key);
+      translationArrayAppend(normalizedImports, {
         importedName: imported.importedName,
         localName: imported.localName,
       });
     }
-    result.push({ imports: normalizedImports, moduleSpecifier: row.moduleSpecifier });
+    translationArrayAppend(result, {
+      imports: normalizedImports,
+      moduleSpecifier: row.moduleSpecifier,
+    });
   }
   return result;
 }
@@ -354,8 +406,9 @@ function normalizeClientHandlers(
   const rows = denseArray(value, 'translation decision clientHandlers', findings);
   if (rows === undefined) return undefined;
   const result: { exportName: string; operations: NormalizedOperation[] }[] = [];
-  const seen = new Set<string>();
-  for (const [index, value] of rows.entries()) {
+  const seen = translationCreateSet<string>();
+  for (let index = 0; index < translationArrayLength(rows); index += 1) {
+    const value = rows[index];
     const row = exactRecord(
       value,
       `translation decision clientHandlers[${index}]`,
@@ -371,7 +424,7 @@ function normalizeClientHandlers(
       );
       continue;
     }
-    if (seen.has(row.exportName)) {
+    if (translationSetHas(seen, row.exportName)) {
       pushFinding(
         findings,
         'decision-record',
@@ -380,14 +433,16 @@ function normalizeClientHandlers(
       );
       continue;
     }
-    seen.add(row.exportName);
+    translationSetAdd(seen, row.exportName);
     const operations = normalizeExpectedOperations(
       row.operations,
       'client',
       `translation decision clientHandlers[${index}].operations`,
       findings,
     );
-    if (operations !== undefined) result.push({ exportName: row.exportName, operations });
+    if (operations !== undefined) {
+      translationArrayAppend(result, { exportName: row.exportName, operations });
+    }
   }
   return result;
 }
@@ -399,12 +454,13 @@ function normalizeSecretFieldNames(
   const rows = denseArray(value, 'translation decision secretFieldNames', findings);
   if (rows === undefined) return undefined;
   const names: string[] = [];
-  for (const [index, item] of rows.entries()) {
+  for (let index = 0; index < translationArrayLength(rows); index += 1) {
+    const item = rows[index];
     if (
       typeof item !== 'string' ||
       item.length === 0 ||
       item.length > 1024 ||
-      item.includes('\0')
+      translationStringIncludes(item, '\0')
     ) {
       pushFinding(
         findings,
@@ -414,9 +470,17 @@ function normalizeSecretFieldNames(
       );
       continue;
     }
-    names.push(item);
+    translationArrayAppend(names, item);
   }
-  const sorted = [...new Set(names)].sort(compareStrings);
+  const unique = translationCreateSet<string>();
+  const sorted: string[] = [];
+  for (let index = 0; index < translationArrayLength(names); index += 1) {
+    const name = names[index]!;
+    if (translationSetHas(unique, name)) continue;
+    translationSetAdd(unique, name);
+    translationArrayAppend(sorted, name);
+  }
+  translationArraySort(sorted, compareStrings);
   if (!sameStrings(names, sorted)) {
     pushFinding(
       findings,
@@ -437,9 +501,10 @@ function normalizeExpectedOperations(
   const rows = denseArray(value, label, findings);
   if (rows === undefined) return undefined;
   const operations: NormalizedOperation[] = [];
-  for (const [index, row] of rows.entries()) {
+  for (let index = 0; index < translationArrayLength(rows); index += 1) {
+    const row = rows[index];
     const operation = normalizeOperation(row, context, `${label}[${index}]`, findings, true);
-    if (operation !== undefined) operations.push(operation);
+    if (operation !== undefined) translationArrayAppend(operations, operation);
   }
   return operations;
 }
@@ -448,13 +513,14 @@ function checkArtifactCoverage(
   artifacts: readonly KovoEmittedTranslationArtifact[],
   findings: KovoEmittedTranslationFinding[],
 ): void {
-  for (const artifact of artifacts) {
-    if (!artifactRelations.has(artifact.kind)) {
+  for (let index = 0; index < translationArrayLength(artifacts); index += 1) {
+    const artifact = artifacts[index]!;
+    if (!translationMapHas(artifactRelations, artifact.kind)) {
       pushFinding(
         findings,
         'artifact-coverage',
         'artifact-kind-unreviewed',
-        `${artifact.fileName} has unreviewed emitted kind ${JSON.stringify(artifact.kind)}`,
+        `${artifact.fileName} has unreviewed emitted kind ${translationJsonStringify(artifact.kind)}`,
         artifact.kind,
       );
     }
@@ -480,9 +546,9 @@ function checkArtifactCoverage(
 }
 
 function artifactKindFromReviewedFileName(fileName: string): string | undefined {
-  if (fileName.endsWith('.client.js')) return 'client';
-  if (fileName.endsWith('.server.js')) return 'server';
-  if (fileName.endsWith('.css')) return 'css';
+  if (translationStringEndsWith(fileName, '.client.js')) return 'client';
+  if (translationStringEndsWith(fileName, '.server.js')) return 'server';
+  if (translationStringEndsWith(fileName, '.css')) return 'css';
   if (fileName === 'generated/registries.d.ts') return 'registry';
   return undefined;
 }
@@ -491,14 +557,33 @@ function checkClientImports(
   input: NormalizedInput,
   findings: KovoEmittedTranslationFinding[],
 ): void {
-  const reviewed = new Set<string>();
-  for (const entry of input.decision.clientImports) {
-    for (const imported of entry.imports) {
-      reviewed.add(importKey(entry.moduleSpecifier, imported.importedName, imported.localName));
+  const reviewed = translationCreateSet<string>();
+  for (
+    let entryIndex = 0;
+    entryIndex < translationArrayLength(input.decision.clientImports);
+    entryIndex += 1
+  ) {
+    const entry = input.decision.clientImports[entryIndex]!;
+    for (
+      let importIndex = 0;
+      importIndex < translationArrayLength(entry.imports);
+      importIndex += 1
+    ) {
+      const imported = entry.imports[importIndex]!;
+      translationSetAdd(
+        reviewed,
+        importKey(entry.moduleSpecifier, imported.importedName, imported.localName),
+      );
     }
   }
 
-  for (const artifact of input.artifacts.filter((entry) => entry.kind === 'client')) {
+  for (
+    let artifactIndex = 0;
+    artifactIndex < translationArrayLength(input.artifacts);
+    artifactIndex += 1
+  ) {
+    const artifact = input.artifacts[artifactIndex]!;
+    if (artifact.kind !== 'client') continue;
     let imports: ReturnType<typeof collectJavaScriptModuleReferences>['references'];
     try {
       const collected = collectJavaScriptModuleReferences(parseJavaScriptModule(artifact.source));
@@ -523,7 +608,8 @@ function checkClientImports(
       );
       continue;
     }
-    for (const imported of imports) {
+    for (let importIndex = 0; importIndex < translationArrayLength(imports); importIndex += 1) {
+      const imported = imports[importIndex]!;
       if (imported.kind !== 'import' || imported.specifier === undefined) {
         pushFinding(
           findings,
@@ -540,14 +626,19 @@ function checkClientImports(
           findings,
           'client-import-subset',
           'client-import-unreviewed',
-          `${artifact.fileName} contains non-canonical import or re-export from ${JSON.stringify(imported.specifier)}`,
+          `${artifact.fileName} contains non-canonical import or re-export from ${translationJsonStringify(imported.specifier)}`,
           artifact.kind,
         );
         continue;
       }
-      for (const binding of bindings) {
+      for (
+        let bindingIndex = 0;
+        bindingIndex < translationArrayLength(bindings);
+        bindingIndex += 1
+      ) {
+        const binding = bindings[bindingIndex]!;
         const key = importKey(imported.specifier, binding.importedName, binding.localName);
-        if (reviewed.has(key)) continue;
+        if (translationSetHas(reviewed, key)) continue;
         pushFinding(
           findings,
           'client-import-subset',
@@ -563,32 +654,42 @@ function checkClientImports(
 function staticNamedImportBindings(
   imported: JavaScriptAstNode,
 ): { importedName: string; localName: string }[] | undefined {
+  const importedType = translationOwnDataValue(imported, 'type');
+  const specifiers = translationOwnDataValue(imported, 'specifiers');
+  const attributes = translationOwnDataValue(imported, 'attributes');
+  const assertions = translationOwnDataValue(imported, 'assertions');
   if (
-    imported.type !== 'ImportDeclaration' ||
-    !Array.isArray(imported.specifiers) ||
-    imported.specifiers.length === 0 ||
-    (Array.isArray(imported.attributes) && imported.attributes.length > 0) ||
-    (Array.isArray(imported.assertions) && imported.assertions.length > 0)
+    importedType !== 'ImportDeclaration' ||
+    !translationArrayIsArray(specifiers) ||
+    translationArrayLength(specifiers) === 0 ||
+    (translationArrayIsArray(attributes) && translationArrayLength(attributes) > 0) ||
+    (translationArrayIsArray(assertions) && translationArrayLength(assertions) > 0)
   ) {
     return undefined;
   }
   const result: { importedName: string; localName: string }[] = [];
-  for (const specifier of imported.specifiers) {
+  for (let index = 0; index < translationArrayLength(specifiers); index += 1) {
+    const specifier = translationOwnDataValue(specifiers, index);
     if (
       !isJavaScriptAstNode(specifier) ||
-      specifier.type !== 'ImportSpecifier' ||
-      !isJavaScriptAstNode(specifier.imported) ||
-      !isJavaScriptAstNode(specifier.local)
+      translationOwnDataValue(specifier, 'type') !== 'ImportSpecifier'
     ) {
       return undefined;
     }
+    const importedNode = translationOwnDataValue(specifier, 'imported');
+    const localNode = translationOwnDataValue(specifier, 'local');
+    if (!isJavaScriptAstNode(importedNode) || !isJavaScriptAstNode(localNode)) return undefined;
+    const importedNodeType = translationOwnDataValue(importedNode, 'type');
+    const localNodeType = translationOwnDataValue(localNode, 'type');
+    const importedNodeName = translationOwnDataValue(importedNode, 'name');
+    const localNodeName = translationOwnDataValue(localNode, 'name');
     const importedName =
-      specifier.imported.type === 'Identifier' && typeof specifier.imported.name === 'string'
-        ? specifier.imported.name
-        : staticStringValue(specifier.imported);
+      importedNodeType === 'Identifier' && typeof importedNodeName === 'string'
+        ? importedNodeName
+        : staticStringValue(importedNode);
     const localName =
-      specifier.local.type === 'Identifier' && typeof specifier.local.name === 'string'
-        ? specifier.local.name
+      localNodeType === 'Identifier' && typeof localNodeName === 'string'
+        ? localNodeName
         : undefined;
     if (
       importedName === undefined ||
@@ -598,7 +699,7 @@ function staticNamedImportBindings(
     ) {
       return undefined;
     }
-    result.push({ importedName, localName });
+    translationArrayAppend(result, { importedName, localName });
   }
   return result;
 }
@@ -608,7 +709,12 @@ function checkSecretFields(
   findings: KovoEmittedTranslationFinding[],
 ): void {
   if (input.decision.secretFieldNames.length === 0) return;
-  for (const artifact of input.artifacts) {
+  for (
+    let artifactIndex = 0;
+    artifactIndex < translationArrayLength(input.artifacts);
+    artifactIndex += 1
+  ) {
+    const artifact = input.artifacts[artifactIndex]!;
     if (artifact.kind !== 'client' && artifact.kind !== 'registry') continue;
     let tokens: SourceToken[];
     try {
@@ -623,13 +729,18 @@ function checkSecretFields(
       );
       continue;
     }
-    for (const field of input.decision.secretFieldNames) {
+    for (
+      let fieldIndex = 0;
+      fieldIndex < translationArrayLength(input.decision.secretFieldNames);
+      fieldIndex += 1
+    ) {
+      const field = input.decision.secretFieldNames[fieldIndex]!;
       if (!sourceCarriesField(artifact.source, tokens, field)) continue;
       pushFinding(
         findings,
         'secret-field-absence',
         'secret-field-emitted',
-        `${artifact.fileName} contains refused secret field ${JSON.stringify(field)}`,
+        `${artifact.fileName} contains refused secret field ${translationJsonStringify(field)}`,
         artifact.kind,
       );
     }
@@ -642,42 +753,65 @@ function sourceCarriesField(
   field: string,
 ): boolean {
   const decodedSource = decodeIdentifierEscapes(source);
-  if (identifier(field)) return identifierWords(decodedSource).includes(field);
-  return (
-    decodedSource.includes(field) ||
-    tokens.some((token) => token.kind === 'string' && token.value === field)
-  );
+  if (identifier(field)) return stringArrayIncludes(identifierWords(decodedSource), field);
+  if (translationStringIncludes(decodedSource, field)) return true;
+  for (let index = 0; index < translationArrayLength(tokens); index += 1) {
+    const token = tokens[index]!;
+    if (token.kind === 'string' && token.value === field) return true;
+  }
+  return false;
 }
 
 function decodeIdentifierEscapes(source: string): string {
-  return source.replace(/\\u(?:\{([0-9A-Fa-f]+)\}|([0-9A-Fa-f]{4}))/gu, (match, braced, fixed) => {
-    try {
-      return String.fromCodePoint(parseEscapeDigits((braced ?? fixed) as string));
-    } catch {
-      return match;
-    }
-  });
+  return translationRegExpReplace(
+    /\\u(?:\{([0-9A-Fa-f]+)\}|([0-9A-Fa-f]{4}))/gu,
+    source,
+    (match, braced, fixed) => {
+      try {
+        return translationStringFromCodePoint(parseEscapeDigits((braced ?? fixed) as string));
+      } catch {
+        return match ?? '';
+      }
+    },
+  );
 }
 
 function identifierWords(value: string): string[] {
-  return value.match(/[$A-Z_a-z][$\w]*/gu) ?? [];
+  return translationRegExpMatches(/[$A-Z_a-z][$\w]*/gu, value);
 }
 
 function checkOperationSerialization(
   input: NormalizedInput,
   findings: KovoEmittedTranslationFinding[],
 ): void {
-  const expectedClients = new Map(
-    input.decision.clientHandlers.map((handler) => [handler.exportName, handler.operations]),
-  );
-  const actualClients = new Map<string, NormalizedOperation[]>();
+  const expectedClients = translationCreateMap<string, readonly NormalizedOperation[]>();
+  for (
+    let handlerIndex = 0;
+    handlerIndex < translationArrayLength(input.decision.clientHandlers);
+    handlerIndex += 1
+  ) {
+    const handler = input.decision.clientHandlers[handlerIndex]!;
+    translationMapSet(expectedClients, handler.exportName, handler.operations);
+  }
+  const actualClients = translationCreateMap<string, NormalizedOperation[]>();
   let serverManifestCount = 0;
   const actualServer: NormalizedOperation[] = [];
 
-  for (const artifact of input.artifacts) {
+  for (
+    let artifactIndex = 0;
+    artifactIndex < translationArrayLength(input.artifacts);
+    artifactIndex += 1
+  ) {
+    const artifact = input.artifacts[artifactIndex]!;
     if (artifact.kind === 'client') {
-      for (const extracted of extractClientHandlerOperations(artifact, findings)) {
-        if (actualClients.has(extracted.exportName)) {
+      const extractedHandlers = extractClientHandlerOperations(artifact, findings);
+      for (
+        let extractedIndex = 0;
+        extractedIndex < translationArrayLength(extractedHandlers);
+        extractedIndex += 1
+      ) {
+        const extracted = extractedHandlers[extractedIndex]!;
+        if (translationMapHas(actualClients, extracted.exportName)) {
           pushFinding(
             findings,
             'operation-serialization',
@@ -687,18 +821,18 @@ function checkOperationSerialization(
           );
           continue;
         }
-        actualClients.set(extracted.exportName, extracted.operations);
+        translationMapSet(actualClients, extracted.exportName, extracted.operations);
       }
     } else if (artifact.kind === 'server') {
       const extracted = extractServerOperations(artifact, findings);
       serverManifestCount += extracted.manifests;
-      actualServer.push(...extracted.operations);
+      translationArrayAppendAll(actualServer, extracted.operations);
     }
   }
 
-  for (const [exportName, expected] of expectedClients) {
-    const actual = actualClients.get(exportName);
-    if (actual !== undefined && sameOperationMultiset(actual, expected)) continue;
+  translationMapForEach(expectedClients, (expected, exportName) => {
+    const actual = translationMapGet(actualClients, exportName);
+    if (actual !== undefined && sameOperationMultiset(actual, expected)) return;
     pushFinding(
       findings,
       'operation-serialization',
@@ -706,9 +840,9 @@ function checkOperationSerialization(
       `client handler ${exportName} operation multiset differs from the decision record`,
       'client',
     );
-  }
-  for (const exportName of actualClients.keys()) {
-    if (expectedClients.has(exportName)) continue;
+  });
+  translationMapForEach(actualClients, (_actual, exportName) => {
+    if (translationMapHas(expectedClients, exportName)) return;
     pushFinding(
       findings,
       'operation-serialization',
@@ -716,7 +850,7 @@ function checkOperationSerialization(
       `emitted client handler ${exportName} is absent from the decision record`,
       'client',
     );
-  }
+  });
 
   const expectedServerManifestCount = input.decision.serverOperations.length === 0 ? 0 : 1;
   if (
@@ -751,7 +885,7 @@ function extractClientHandlerOperations(
     return [];
   }
   const result: { exportName: string; operations: NormalizedOperation[] }[] = [];
-  const recognizedCalls = new Set<number>();
+  const recognizedCalls = translationCreateSet<number>();
   for (let index = 0; index + 5 < tokens.length; index += 1) {
     if (
       !tokenIs(tokens[index], 'identifier', 'export') ||
@@ -763,7 +897,7 @@ function extractClientHandlerOperations(
     ) {
       continue;
     }
-    recognizedCalls.add(index + 4);
+    translationSetAdd(recognizedCalls, index + 4);
     const open = tokens[index + 6];
     if (open?.kind !== 'punctuator' || open.value !== '[') {
       pushFinding(
@@ -794,13 +928,17 @@ function extractClientHandlerOperations(
       );
       continue;
     }
-    result.push({ exportName: tokens[index + 2]!.value, operations: parsed.operations });
+    translationArrayAppend(result, {
+      exportName: tokens[index + 2]!.value,
+      operations: parsed.operations,
+    });
   }
-  for (const [index, token] of tokens.entries()) {
+  for (let index = 0; index < translationArrayLength(tokens); index += 1) {
+    const token = tokens[index]!;
     if (
       tokenIs(token, 'identifier', 'securityHandler') &&
       tokenIs(tokens[index + 1], 'punctuator', '(') &&
-      !recognizedCalls.has(index)
+      !translationSetHas(recognizedCalls, index)
     ) {
       pushFinding(
         findings,
@@ -835,8 +973,11 @@ function extractServerOperations(
   if (direct.manifests > 0) return direct;
 
   const nested = { manifests: 0, operations: [] as NormalizedOperation[] };
-  for (const token of tokens) {
-    if (token.kind !== 'string' || !token.value.includes(serverManifestName)) continue;
+  for (let index = 0; index < translationArrayLength(tokens); index += 1) {
+    const token = tokens[index]!;
+    if (token.kind !== 'string' || !translationStringIncludes(token.value, serverManifestName)) {
+      continue;
+    }
     let nestedTokens: SourceToken[];
     try {
       nestedTokens = tokenizeSource(token.value);
@@ -856,7 +997,7 @@ function extractServerOperations(
       findings,
     );
     nested.manifests += extracted.manifests;
-    nested.operations.push(...extracted.operations);
+    translationArrayAppendAll(nested.operations, extracted.operations);
   }
   return nested;
 }
@@ -868,7 +1009,8 @@ function extractServerOperationsFromTokens(
 ): { manifests: number; operations: NormalizedOperation[] } {
   let manifests = 0;
   const operations: NormalizedOperation[] = [];
-  for (const [index, token] of tokens.entries()) {
+  for (let index = 0; index < translationArrayLength(tokens); index += 1) {
+    const token = tokens[index]!;
     if (!tokenIs(token, 'identifier', serverManifestName)) continue;
     manifests += 1;
     if (
@@ -963,7 +1105,9 @@ function extractServerOperationsFromTokens(
       semanticGraphToken === undefined ||
       semanticGraphToken.start >= manifestClose.start ||
       !isOwnDataJsonOrUndefined(
-        artifact.source.slice(semanticGraphToken.start, manifestClose.start).trim(),
+        translationStringTrim(
+          translationStringSlice(artifact.source, semanticGraphToken.start, manifestClose.start),
+        ),
       )
     ) {
       pushFinding(
@@ -975,7 +1119,7 @@ function extractServerOperationsFromTokens(
       );
       continue;
     }
-    operations.push(...parsed.operations);
+    translationArrayAppendAll(operations, parsed.operations);
   }
   return { manifests, operations };
 }
@@ -985,13 +1129,17 @@ function tokenSequenceAt(
   start: number,
   sequence: readonly (readonly [SourceToken['kind'], string])[],
 ): boolean {
-  return sequence.every(([kind, value], offset) => tokenIs(tokens[start + offset], kind, value));
+  for (let offset = 0; offset < translationArrayLength(sequence); offset += 1) {
+    const expected = sequence[offset]!;
+    if (!tokenIs(tokens[start + offset], expected[0], expected[1])) return false;
+  }
+  return true;
 }
 
 function isOwnDataJsonOrUndefined(source: string): boolean {
   if (source === 'undefined') return true;
   try {
-    JSON.parse(source);
+    translationJsonParse(source);
     return true;
   } catch {
     return false;
@@ -1058,7 +1206,7 @@ function parseOperationArray(
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(artifact.source.slice(start, end));
+    parsed = translationJsonParse(translationStringSlice(artifact.source, start, end));
   } catch {
     pushFinding(
       findings,
@@ -1075,7 +1223,8 @@ function parseOperationArray(
   });
   if (rows === undefined) return undefined;
   const operations: NormalizedOperation[] = [];
-  for (const [index, row] of rows.entries()) {
+  for (let index = 0; index < translationArrayLength(rows); index += 1) {
+    const row = rows[index];
     const operation = normalizeOperation(
       row,
       context,
@@ -1084,7 +1233,7 @@ function parseOperationArray(
       false,
       artifact.kind,
     );
-    if (operation !== undefined) operations.push(operation);
+    if (operation !== undefined) translationArrayAppend(operations, operation);
   }
   return { end, operations };
 }
@@ -1105,10 +1254,14 @@ function normalizeOperation(
   if (record === undefined) return undefined;
   const allowed =
     context === 'client'
-      ? new Set(['door', 'kind', 'target'])
-      : new Set(['door', 'justification', 'kind', 'root', 'target']);
-  const keys = Object.keys(record);
-  if (!keys.includes('door') || !keys.includes('kind') || keys.some((key) => !allowed.has(key))) {
+      ? stringSet(['door', 'kind', 'target'])
+      : stringSet(['door', 'justification', 'kind', 'root', 'target']);
+  const keys = translationObjectKeys(record);
+  if (
+    !stringArrayIncludes(keys, 'door') ||
+    !stringArrayIncludes(keys, 'kind') ||
+    hasStringOutsideSet(keys, allowed)
+  ) {
     pushFinding(
       findings,
       relation,
@@ -1129,28 +1282,30 @@ function normalizeOperation(
     return undefined;
   }
   const vocabulary = context === 'client' ? browserOperationKinds : serverOperationKinds;
-  if (!vocabulary.has(record.kind)) {
+  if (!translationSetHas(vocabulary, record.kind)) {
     pushFinding(
       findings,
       relation,
       decision ? 'operation-decision-invalid' : 'operation-kind-unreviewed',
-      `${label} uses unreviewed operation kind ${JSON.stringify(record.kind)}`,
+      `${label} uses unreviewed operation kind ${translationJsonStringify(record.kind)}`,
       artifactKind,
     );
     return undefined;
   }
-  const expectedDoor = operationDoorByKind.get(record.kind);
+  const expectedDoor = translationMapGet(operationDoorByKind, record.kind);
   if (record.door !== expectedDoor) {
     pushFinding(
       findings,
       relation,
       decision ? 'operation-decision-invalid' : 'operation-door-mismatch',
-      `${label} pairs ${record.kind} with ${JSON.stringify(record.door)} instead of ${expectedDoor}`,
+      `${label} pairs ${record.kind} with ${translationJsonStringify(record.door)} instead of ${expectedDoor}`,
       artifactKind,
     );
     return undefined;
   }
-  for (const optional of ['justification', 'root', 'target'] as const) {
+  const optionalKeys = ['justification', 'root', 'target'] as const;
+  for (let index = 0; index < translationArrayLength(optionalKeys); index += 1) {
+    const optional = optionalKeys[index]!;
     if (record[optional] !== undefined && typeof record[optional] !== 'string') {
       pushFinding(
         findings,
@@ -1177,60 +1332,97 @@ function sameOperationMultiset(
   left: readonly NormalizedOperation[],
   right: readonly NormalizedOperation[],
 ): boolean {
-  const leftKeys = left.map(operationKey).sort(compareStrings);
-  const rightKeys = right.map(operationKey).sort(compareStrings);
+  const leftKeys: string[] = [];
+  const rightKeys: string[] = [];
+  for (let index = 0; index < translationArrayLength(left); index += 1) {
+    translationArrayAppend(leftKeys, operationKey(left[index]!));
+  }
+  for (let index = 0; index < translationArrayLength(right); index += 1) {
+    translationArrayAppend(rightKeys, operationKey(right[index]!));
+  }
+  translationArraySort(leftKeys, compareStrings);
+  translationArraySort(rightKeys, compareStrings);
   return sameStrings(leftKeys, rightKeys);
 }
 
 function operationKey(operation: NormalizedOperation): string {
-  return JSON.stringify(operation);
+  const door = translationOwnDataValue(operation, 'door');
+  const justification = translationOwnDataValue(operation, 'justification');
+  const kind = translationOwnDataValue(operation, 'kind');
+  const root = translationOwnDataValue(operation, 'root');
+  const target = translationOwnDataValue(operation, 'target');
+  return translationArrayJoin(
+    [
+      translationJsonStringify(door),
+      translationJsonStringify(justification ?? null),
+      translationJsonStringify(kind),
+      translationJsonStringify(root ?? null),
+      translationJsonStringify(target ?? null),
+    ],
+    '\0',
+  );
 }
 
 function tokenizeSource(source: string): SourceToken[] {
   const tokens: SourceToken[] = [];
   for (let index = 0; index < source.length; ) {
     const char = source[index]!;
-    if (/\s/u.test(char)) {
+    if (translationRegExpTest(/\s/u, char)) {
       index += 1;
       continue;
     }
     if (char === '/' && source[index + 1] === '/') {
-      const newline = source.indexOf('\n', index + 2);
+      const newline = translationStringIndexOf(source, '\n', index + 2);
       index = newline === -1 ? source.length : newline + 1;
       continue;
     }
     if (char === '/' && source[index + 1] === '*') {
-      const close = source.indexOf('*/', index + 2);
-      if (close === -1) throw new SyntaxError('unterminated block comment');
+      const close = translationStringIndexOf(source, '*/', index + 2);
+      if (close === -1) throw translationSyntaxError('unterminated block comment');
       index = close + 2;
       continue;
     }
     if (char === '"' || char === "'") {
       const end = quotedStringEnd(source, index, char);
-      const raw = source.slice(index, end);
-      tokens.push({ end, kind: 'string', start: index, value: decodeQuotedString(raw, char) });
+      const raw = translationStringSlice(source, index, end);
+      translationArrayAppend(tokens, {
+        end,
+        kind: 'string',
+        start: index,
+        value: decodeQuotedString(raw, char),
+      });
       index = end;
       continue;
     }
     if (char === '`') {
       const end = templateEnd(source, index);
-      tokens.push({
+      translationArrayAppend(tokens, {
         end,
         kind: 'string',
         start: index,
-        value: decodeTemplateText(source.slice(index + 1, end - 1)),
+        value: decodeTemplateText(translationStringSlice(source, index + 1, end - 1)),
       });
       index = end;
       continue;
     }
-    if (/[$A-Z_a-z]/u.test(char)) {
+    if (translationRegExpTest(/[$A-Z_a-z]/u, char)) {
       let end = index + 1;
-      while (end < source.length && /[$\w]/u.test(source[end]!)) end += 1;
-      tokens.push({ end, kind: 'identifier', start: index, value: source.slice(index, end) });
+      while (end < source.length && translationRegExpTest(/[$\w]/u, source[end]!)) end += 1;
+      translationArrayAppend(tokens, {
+        end,
+        kind: 'identifier',
+        start: index,
+        value: translationStringSlice(source, index, end),
+      });
       index = end;
       continue;
     }
-    tokens.push({ end: index + 1, kind: 'punctuator', start: index, value: char });
+    translationArrayAppend(tokens, {
+      end: index + 1,
+      kind: 'punctuator',
+      start: index,
+      value: char,
+    });
     index += 1;
   }
   return tokens;
@@ -1244,14 +1436,14 @@ function quotedStringEnd(source: string, start: number, quote: string): number {
     }
     if (source[index] === quote) return index + 1;
     if (source[index] === '\n' || source[index] === '\r') {
-      throw new SyntaxError('newline in quoted string');
+      throw translationSyntaxError('newline in quoted string');
     }
   }
-  throw new SyntaxError('unterminated quoted string');
+  throw translationSyntaxError('unterminated quoted string');
 }
 
 function decodeQuotedString(raw: string, quote: string): string {
-  if (quote === '"') return JSON.parse(raw) as string;
+  if (quote === '"') return translationJsonParse(raw) as string;
   let output = '';
   for (let index = 1; index < raw.length - 1; index += 1) {
     const char = raw[index]!;
@@ -1260,15 +1452,8 @@ function decodeQuotedString(raw: string, quote: string): string {
       continue;
     }
     const escaped = raw[++index];
-    if (escaped === undefined) throw new SyntaxError('truncated string escape');
-    const simple = new Map([
-      ['b', '\b'],
-      ['f', '\f'],
-      ['n', '\n'],
-      ['r', '\r'],
-      ['t', '\t'],
-      ['v', '\v'],
-    ]).get(escaped);
+    if (escaped === undefined) throw translationSyntaxError('truncated string escape');
+    const simple = simpleEscape(escaped);
     if (simple !== undefined) {
       output += simple;
     } else if (escaped === 'x') {
@@ -1276,9 +1461,11 @@ function decodeQuotedString(raw: string, quote: string): string {
       index += 2;
     } else if (escaped === 'u') {
       if (raw[index + 1] === '{') {
-        const close = raw.indexOf('}', index + 2);
-        if (close === -1) throw new SyntaxError('unterminated unicode escape');
-        output += String.fromCodePoint(parseEscapeDigits(raw.slice(index + 2, close)));
+        const close = translationStringIndexOf(raw, '}', index + 2);
+        if (close === -1) throw translationSyntaxError('unterminated unicode escape');
+        output += translationStringFromCodePoint(
+          parseEscapeDigits(translationStringSlice(raw, index + 2, close)),
+        );
         index = close;
       } else {
         output += codePointEscape(raw, index + 1, 4);
@@ -1292,14 +1479,18 @@ function decodeQuotedString(raw: string, quote: string): string {
 }
 
 function codePointEscape(source: string, start: number, length: number): string {
-  return String.fromCodePoint(parseEscapeDigits(source.slice(start, start + length)));
+  return translationStringFromCodePoint(
+    parseEscapeDigits(translationStringSlice(source, start, start + length)),
+  );
 }
 
 function parseEscapeDigits(value: string): number {
-  if (!/^[0-9A-Fa-f]+$/u.test(value)) throw new SyntaxError('invalid hexadecimal escape');
-  const parsed = Number.parseInt(value, 16);
-  if (!Number.isSafeInteger(parsed) || parsed > 0x10ffff) {
-    throw new SyntaxError('invalid unicode code point');
+  if (!translationRegExpTest(/^[0-9A-Fa-f]+$/u, value)) {
+    throw translationSyntaxError('invalid hexadecimal escape');
+  }
+  const parsed = translationNumberParseInt(value, 16);
+  if (!translationNumberIsSafeInteger(parsed) || parsed > 0x10ffff) {
+    throw translationSyntaxError('invalid unicode code point');
   }
   return parsed;
 }
@@ -1322,7 +1513,7 @@ function templateEnd(source: string, start: number): number {
     }
     if (source[index] === '`' && interpolationDepth === 0) return index + 1;
   }
-  throw new SyntaxError('unterminated template literal');
+  throw translationSyntaxError('unterminated template literal');
 }
 
 function decodeTemplateText(raw: string): string {
@@ -1334,7 +1525,7 @@ function decodeTemplateText(raw: string): string {
       continue;
     }
     const escaped = raw[index + 1];
-    if (escaped === undefined) throw new SyntaxError('truncated template escape');
+    if (escaped === undefined) throw translationSyntaxError('truncated template escape');
     output += escaped;
     index += 1;
   }
@@ -1356,10 +1547,10 @@ function jsonArrayEnd(source: string, start: number): number | undefined {
       inString = true;
       continue;
     }
-    if (char === '[') stack.push(']');
-    else if (char === '{') stack.push('}');
+    if (char === '[') translationArrayAppend(stack, ']');
+    else if (char === '{') translationArrayAppend(stack, '}');
     else if (char === ']' || char === '}') {
-      if (stack.pop() !== char) return undefined;
+      if (translationArrayPop(stack) !== char) return undefined;
       if (stack.length === 0) return index + 1;
     }
   }
@@ -1374,14 +1565,16 @@ function exactRecord(
 ): Record<string, unknown> | undefined {
   const record = dataRecord(value, label, findings);
   if (record === undefined) return undefined;
-  const actual = Object.keys(record).sort(compareStrings);
-  const expected = [...expectedKeys].sort(compareStrings);
+  const actual = translationObjectKeys(record);
+  const expected = translationArrayCopy(expectedKeys);
+  translationArraySort(actual, compareStrings);
+  translationArraySort(expected, compareStrings);
   if (!sameStrings(actual, expected)) {
     pushFinding(
       findings,
       'decision-record',
       'decision-record-keys',
-      `${label} keys must equal ${expected.join(',')}; got ${actual.join(',')}`,
+      `${label} keys must equal ${translationArrayJoin(expected, ',')}; got ${translationArrayJoin(actual, ',')}`,
     );
     return undefined;
   }
@@ -1397,61 +1590,74 @@ function dataRecord(
     relation?: KovoEmittedTranslationFinding['relation'];
   } = {},
 ): Record<string, unknown> | undefined {
-  const relation = context.relation ?? 'decision-record';
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  const requestedRelation = translationOwnDataValue(context, 'relation');
+  const relation =
+    requestedRelation === 'operation-serialization' ? 'operation-serialization' : 'decision-record';
+  const contextArtifactKind = translationOwnDataValue(context, 'artifactKind');
+  const artifactKind = typeof contextArtifactKind === 'string' ? contextArtifactKind : undefined;
+  if (typeof value !== 'object' || value === null || translationArrayIsArray(value)) {
     pushFinding(
       findings,
       relation,
       relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
       `${label} must be an own-data object`,
-      context.artifactKind,
+      artifactKind,
     );
     return undefined;
   }
   try {
-    if (Object.getPrototypeOf(value) !== Object.prototype) {
+    const firstPrototype = translationGetPrototypeOf(value);
+    const secondPrototype = translationGetPrototypeOf(value);
+    if (firstPrototype !== translationObjectPrototype || secondPrototype !== firstPrototype) {
       pushFinding(
         findings,
         relation,
         relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
         `${label} must use Object.prototype`,
-        context.artifactKind,
+        artifactKind,
       );
       return undefined;
     }
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    const keys = Reflect.ownKeys(descriptors);
-    if (keys.some((key) => typeof key !== 'string')) {
-      pushFinding(
-        findings,
-        relation,
-        relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
-        `${label} must not contain symbol keys`,
-        context.artifactKind,
-      );
-      return undefined;
-    }
-    for (const key of keys as string[]) {
-      const descriptor = descriptors[key]!;
-      if (!('value' in descriptor)) {
+    const firstDescriptors = translationGetOwnPropertyDescriptors(value);
+    const secondDescriptors = translationGetOwnPropertyDescriptors(value);
+    const keys = translationOwnKeys(firstDescriptors);
+    const secondKeys = translationOwnKeys(secondDescriptors);
+    if (!sameStrings(keys, secondKeys)) throw translationTypeError('unstable object keys');
+    const snapshot = translationCreateNullRecord<unknown>();
+    for (let index = 0; index < translationArrayLength(keys); index += 1) {
+      const key = keys[index]!;
+      if (typeof key !== 'string') {
         pushFinding(
           findings,
           relation,
           relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
-          `${label}.${key} must be own data`,
-          context.artifactKind,
+          `${label} must not contain symbol keys`,
+          artifactKind,
         );
         return undefined;
       }
+      const first = firstDescriptors[key];
+      const second = secondDescriptors[key];
+      if (!translationSameDataDescriptor(first, second)) {
+        pushFinding(
+          findings,
+          relation,
+          relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
+          `${label}.${key} must be stable own data`,
+          artifactKind,
+        );
+        return undefined;
+      }
+      translationDefineOwnDataProperty(snapshot, key, first.value);
     }
-    return Object.fromEntries((keys as string[]).map((key) => [key, descriptors[key]!.value]));
+    return snapshot;
   } catch {
     pushFinding(
       findings,
       relation,
       relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
       `${label} could not be snapshotted`,
-      context.artifactKind,
+      artifactKind,
     );
     return undefined;
   }
@@ -1466,37 +1672,62 @@ function denseArray(
     relation?: KovoEmittedTranslationFinding['relation'];
   } = {},
 ): readonly unknown[] | undefined {
-  const relation = context.relation ?? 'decision-record';
-  if (!Array.isArray(value)) {
+  const requestedRelation = translationOwnDataValue(context, 'relation');
+  const relation =
+    requestedRelation === 'operation-serialization' ? 'operation-serialization' : 'decision-record';
+  const contextArtifactKind = translationOwnDataValue(context, 'artifactKind');
+  const artifactKind = typeof contextArtifactKind === 'string' ? contextArtifactKind : undefined;
+  if (!translationArrayIsArray(value)) {
     pushFinding(
       findings,
       relation,
       relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
       `${label} must be a dense own-data array`,
-      context.artifactKind,
+      artifactKind,
     );
     return undefined;
   }
   try {
-    if (Object.getPrototypeOf(value) !== Array.prototype) {
-      throw new TypeError('array prototype');
+    const firstPrototype = translationGetPrototypeOf(value);
+    const secondPrototype = translationGetPrototypeOf(value);
+    if (firstPrototype !== translationArrayPrototype || secondPrototype !== firstPrototype) {
+      throw translationTypeError('array prototype');
     }
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    const lengthDescriptor = descriptors['length'] as PropertyDescriptor | undefined;
-    if (lengthDescriptor === undefined || typeof lengthDescriptor.value !== 'number') {
-      throw new TypeError('array length');
+    const firstDescriptors = translationGetOwnPropertyDescriptors(value);
+    const secondDescriptors = translationGetOwnPropertyDescriptors(value);
+    const firstKeys = translationOwnKeys(firstDescriptors);
+    const secondKeys = translationOwnKeys(secondDescriptors);
+    if (!sameStrings(firstKeys, secondKeys)) throw translationTypeError('array keys');
+    const lengthDescriptor = firstDescriptors['length'];
+    const secondLengthDescriptor = secondDescriptors['length'];
+    if (
+      !translationSameDataDescriptor(lengthDescriptor, secondLengthDescriptor) ||
+      typeof lengthDescriptor.value !== 'number'
+    ) {
+      throw translationTypeError('array length');
     }
     const length = lengthDescriptor.value;
-    if (!Number.isSafeInteger(length) || length < 0) throw new TypeError('array length');
+    if (!translationNumberIsSafeInteger(length) || length < 0 || length > 1_000_000) {
+      throw translationTypeError('array length');
+    }
     const output: unknown[] = [];
     for (let index = 0; index < length; index += 1) {
-      const descriptor = descriptors[String(index)];
-      if (descriptor === undefined || !('value' in descriptor)) throw new TypeError('array hole');
-      output.push(descriptor.value);
+      const first = firstDescriptors[`${index}`];
+      const second = secondDescriptors[`${index}`];
+      if (!translationSameDataDescriptor(first, second)) {
+        throw translationTypeError('array hole');
+      }
+      translationArrayAppend(output, first.value);
     }
-    const expected = new Set(['length', ...output.map((_, index) => String(index))]);
-    if (Reflect.ownKeys(descriptors).some((key) => !expected.has(key as string))) {
-      throw new TypeError('array property');
+    if (translationArrayLength(firstKeys) !== length + 1) {
+      throw translationTypeError('array property');
+    }
+    for (let index = 0; index < translationArrayLength(firstKeys); index += 1) {
+      const key = firstKeys[index];
+      if (key === 'length') continue;
+      if (typeof key !== 'string' || !canonicalArrayIndex(key, length)) {
+        throw translationTypeError('array property');
+      }
     }
     return output;
   } catch {
@@ -1505,18 +1736,20 @@ function denseArray(
       relation,
       relation === 'decision-record' ? 'decision-record-own-data' : 'operation-json',
       `${label} must be a dense own-data array`,
-      context.artifactKind,
+      artifactKind,
     );
     return undefined;
   }
 }
 
 function result(findings: readonly KovoEmittedTranslationFinding[]): KovoEmittedTranslationResult {
-  const sorted = [...findings].sort(
+  const sorted = translationArrayCopy(findings);
+  translationArraySort(
+    sorted,
     (left, right) =>
       compareStrings(left.relation, right.relation) ||
       compareStrings(left.code, right.code) ||
-      compareStrings(left.artifactKind ?? '', right.artifactKind ?? '') ||
+      compareStrings(findingArtifactKind(left), findingArtifactKind(right)) ||
       compareStrings(left.message, right.message),
   );
   return { findings: sorted, ok: sorted.length === 0 };
@@ -1529,7 +1762,7 @@ function pushFinding(
   message: string,
   artifactKind?: string,
 ): void {
-  findings.push({
+  translationArrayAppend(findings, {
     ...(artifactKind === undefined ? {} : { artifactKind }),
     code,
     message,
@@ -1546,7 +1779,7 @@ function tokenIs(
 }
 
 function identifier(value: unknown): value is string {
-  return typeof value === 'string' && /^[$A-Z_a-z][$\w]*$/u.test(value);
+  return typeof value === 'string' && translationRegExpTest(/^[$A-Z_a-z][$\w]*$/u, value);
 }
 
 function nonemptyString(value: unknown): value is string {
@@ -1558,14 +1791,20 @@ function importKey(moduleSpecifier: string, importedName: string, localName: str
 }
 
 function keyForMessage(key: string): string {
-  return key
-    .split('\0')
-    .map((value) => JSON.stringify(value))
-    .join(' / ');
+  const values = translationStringSplit(key, '\0');
+  const serialized: string[] = [];
+  for (let index = 0; index < translationArrayLength(values); index += 1) {
+    translationArrayAppend(serialized, translationJsonStringify(values[index]));
+  }
+  return translationArrayJoin(serialized, ' / ');
 }
 
 function sameStrings(left: readonly unknown[], right: readonly unknown[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+  if (translationArrayLength(left) !== translationArrayLength(right)) return false;
+  for (let index = 0; index < translationArrayLength(left); index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 function compareStrings(left: string, right: string): number {
@@ -1573,5 +1812,63 @@ function compareStrings(left: string, right: string): number {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'unknown error';
+  return translationErrorMessage(error);
+}
+
+function findingArtifactKind(finding: KovoEmittedTranslationFinding): string {
+  const artifactKind = translationOwnDataValue(finding, 'artifactKind');
+  return typeof artifactKind === 'string' ? artifactKind : '';
+}
+
+function hasFindingRelation(
+  findings: readonly KovoEmittedTranslationFinding[],
+  relation: KovoEmittedTranslationFinding['relation'],
+): boolean {
+  for (let index = 0; index < translationArrayLength(findings); index += 1) {
+    if (findings[index]!.relation === relation) return true;
+  }
+  return false;
+}
+
+function stringArrayIncludes(values: readonly string[], expected: string): boolean {
+  for (let index = 0; index < translationArrayLength(values); index += 1) {
+    if (values[index] === expected) return true;
+  }
+  return false;
+}
+
+function stringSet(values: readonly string[]): Set<string> {
+  const result = translationCreateSet<string>();
+  for (let index = 0; index < translationArrayLength(values); index += 1) {
+    translationSetAdd(result, values[index]!);
+  }
+  return result;
+}
+
+function hasStringOutsideSet(values: readonly string[], allowed: ReadonlySet<string>): boolean {
+  for (let index = 0; index < translationArrayLength(values); index += 1) {
+    if (!translationSetHas(allowed, values[index]!)) return true;
+  }
+  return false;
+}
+
+function simpleEscape(value: string): string | undefined {
+  if (value === 'b') return '\b';
+  if (value === 'f') return '\f';
+  if (value === 'n') return '\n';
+  if (value === 'r') return '\r';
+  if (value === 't') return '\t';
+  if (value === 'v') return '\v';
+  return undefined;
+}
+
+function canonicalArrayIndex(value: string, length: number): boolean {
+  if (value.length === 0) return false;
+  const parsed = translationNumberParseInt(value, 10);
+  return (
+    translationNumberIsSafeInteger(parsed) &&
+    parsed >= 0 &&
+    parsed < length &&
+    `${parsed}` === value
+  );
 }

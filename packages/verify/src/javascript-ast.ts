@@ -1,5 +1,20 @@
 import { parse, type Node, type Program } from 'acorn';
 
+import {
+  translationArrayAppend,
+  translationArrayIsArray,
+  translationArrayLength,
+  translationArrayPop,
+  translationCreateSet,
+  translationNumberIsSafeInteger,
+  translationObjectKeys,
+  translationOwnDataValue,
+  translationSetAdd,
+  translationSetHas,
+  translationTypeError,
+  translationWithParserControls,
+} from './translation-intrinsics.js';
+
 export type JavaScriptAstNode = Node & Record<string, unknown>;
 
 export interface JavaScriptModuleReference {
@@ -25,11 +40,13 @@ interface JavaScriptImportedNames {
 
 /** Parse the complete emitted module with one standards-oriented ESTree parser. */
 export function parseJavaScriptModule(source: string): JavaScriptAstNode {
-  const program = parse(source, {
-    allowHashBang: true,
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-  }) as Program;
+  const program = translationWithParserControls(() =>
+    parse(source, {
+      allowHashBang: true,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    }),
+  ) as Program;
   return program as unknown as JavaScriptAstNode;
 }
 
@@ -37,8 +54,10 @@ export function collectJavaScriptModuleReferences(
   program: JavaScriptAstNode,
   maxReferences = MAX_JAVASCRIPT_MODULE_REFERENCES,
 ): JavaScriptModuleReferenceCollection {
-  if (!Number.isSafeInteger(maxReferences) || maxReferences < 0) {
-    throw new TypeError('JavaScript module reference limit must be a non-negative safe integer');
+  if (!translationNumberIsSafeInteger(maxReferences) || maxReferences < 0) {
+    throw translationTypeError(
+      'JavaScript module reference limit must be a non-negative safe integer',
+    );
   }
   const references: JavaScriptModuleReference[] = [];
   let referenceUnits = 0;
@@ -47,7 +66,8 @@ export function collectJavaScriptModuleReferences(
     const remainingNames = maxReferences - referenceUnits - 1;
     let reference: JavaScriptModuleReference | undefined;
     let referenceNameUnits = 0;
-    if (node.type === 'ImportDeclaration') {
+    const nodeType = translationOwnDataValue(node, 'type');
+    if (nodeType === 'ImportDeclaration') {
       const importedNames = importDeclarationNames(node, remainingNames);
       if (importedNames === undefined) {
         limitExceeded = true;
@@ -57,13 +77,13 @@ export function collectJavaScriptModuleReferences(
         importedNames: importedNames.names,
         kind: 'import',
         node,
-        specifier: staticStringValue(node.source),
+        specifier: staticStringValue(translationOwnDataValue(node, 'source')),
       };
       referenceNameUnits = importedNames.units;
     } else if (
-      node.type === 'ExportNamedDeclaration' &&
-      node.source !== null &&
-      node.source !== undefined
+      nodeType === 'ExportNamedDeclaration' &&
+      translationOwnDataValue(node, 'source') !== null &&
+      translationOwnDataValue(node, 'source') !== undefined
     ) {
       const importedNames = exportDeclarationNames(node, remainingNames);
       if (importedNames === undefined) {
@@ -74,23 +94,23 @@ export function collectJavaScriptModuleReferences(
         importedNames: importedNames.names,
         kind: 'export',
         node,
-        specifier: staticStringValue(node.source),
+        specifier: staticStringValue(translationOwnDataValue(node, 'source')),
       };
       referenceNameUnits = importedNames.units;
-    } else if (node.type === 'ExportAllDeclaration') {
+    } else if (nodeType === 'ExportAllDeclaration') {
       reference = {
         importedNames: ['*'],
         kind: 'export',
         node,
-        specifier: staticStringValue(node.source),
+        specifier: staticStringValue(translationOwnDataValue(node, 'source')),
       };
       referenceNameUnits = 1;
-    } else if (node.type === 'ImportExpression') {
+    } else if (nodeType === 'ImportExpression') {
       reference = {
         importedNames: ['*'],
         kind: 'dynamic-import',
         node,
-        specifier: staticStringValue(node.source),
+        specifier: staticStringValue(translationOwnDataValue(node, 'source')),
       };
       referenceNameUnits = 1;
     }
@@ -101,7 +121,7 @@ export function collectJavaScriptModuleReferences(
       limitExceeded = true;
       return false;
     }
-    references.push(reference);
+    translationArrayAppend(references, reference);
     referenceUnits += units;
     return true;
   });
@@ -116,48 +136,54 @@ function walkJavaScriptAst(
   root: JavaScriptAstNode,
   visitor: (node: JavaScriptAstNode) => boolean,
 ): void {
-  if (!visitor(root)) return;
-  const stack = [childNodes(root)];
-  while (stack.length > 0) {
-    const next = stack.at(-1)!.next();
-    if (next.done) {
-      stack.pop();
-      continue;
+  const stack = [root];
+  while (translationArrayLength(stack) > 0) {
+    const node = translationArrayPop(stack)!;
+    if (!visitor(node)) return;
+    const children = childNodes(node);
+    for (let index = translationArrayLength(children) - 1; index >= 0; index -= 1) {
+      translationArrayAppend(stack, children[index]!);
     }
-    if (!visitor(next.value)) return;
-    stack.push(childNodes(next.value));
   }
 }
 
-function* childNodes(node: JavaScriptAstNode): Generator<JavaScriptAstNode, void, void> {
-  for (const [key, value] of Object.entries(node)) {
+function childNodes(node: JavaScriptAstNode): JavaScriptAstNode[] {
+  const children: JavaScriptAstNode[] = [];
+  const keys = translationObjectKeys(node);
+  for (let keyIndex = 0; keyIndex < translationArrayLength(keys); keyIndex += 1) {
+    const key = keys[keyIndex]!;
     if (key === 'end' || key === 'loc' || key === 'range' || key === 'start' || key === 'type') {
       continue;
     }
+    const value = translationOwnDataValue(node, key);
     if (isJavaScriptAstNode(value)) {
-      yield value;
+      translationArrayAppend(children, value);
       continue;
     }
-    if (!Array.isArray(value)) continue;
-    for (const item of value) {
-      if (isJavaScriptAstNode(item)) yield item;
+    if (!translationArrayIsArray(value)) continue;
+    for (let itemIndex = 0; itemIndex < translationArrayLength(value); itemIndex += 1) {
+      const item = translationOwnDataValue(value, itemIndex);
+      if (isJavaScriptAstNode(item)) translationArrayAppend(children, item);
     }
   }
+  return children;
 }
 
 export function isJavaScriptAstNode(value: unknown): value is JavaScriptAstNode {
+  if (typeof value !== 'object' || value === null) return false;
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { type?: unknown }).type === 'string' &&
-    typeof (value as { start?: unknown }).start === 'number' &&
-    typeof (value as { end?: unknown }).end === 'number'
+    typeof translationOwnDataValue(value, 'type') === 'string' &&
+    typeof translationOwnDataValue(value, 'start') === 'number' &&
+    typeof translationOwnDataValue(value, 'end') === 'number'
   );
 }
 
 export function staticStringValue(value: unknown): string | undefined {
   if (!isJavaScriptAstNode(value)) return undefined;
-  if (value.type === 'Literal' && typeof value.value === 'string') return value.value;
+  const literalValue = translationOwnDataValue(value, 'value');
+  if (translationOwnDataValue(value, 'type') === 'Literal' && typeof literalValue === 'string') {
+    return literalValue;
+  }
   return undefined;
 }
 
@@ -165,46 +191,66 @@ function importDeclarationNames(
   node: JavaScriptAstNode,
   maxNames: number,
 ): JavaScriptImportedNames | undefined {
-  if (!Array.isArray(node.specifiers)) return { names: [], units: 0 };
+  const specifiers = translationOwnDataValue(node, 'specifiers');
+  if (!translationArrayIsArray(specifiers)) return { names: [], units: 0 };
   const names: string[] = [];
-  for (const value of node.specifiers) {
+  for (let index = 0; index < translationArrayLength(specifiers); index += 1) {
+    const value = translationOwnDataValue(specifiers, index);
     if (!isJavaScriptAstNode(value)) continue;
     let name: string | undefined;
-    if (value.type === 'ImportDefaultSpecifier') name = 'default';
-    else if (value.type === 'ImportNamespaceSpecifier') name = '*';
-    else if (value.type === 'ImportSpecifier') {
-      name = identifierOrStringName(value.imported);
+    const valueType = translationOwnDataValue(value, 'type');
+    if (valueType === 'ImportDefaultSpecifier') name = 'default';
+    else if (valueType === 'ImportNamespaceSpecifier') name = '*';
+    else if (valueType === 'ImportSpecifier') {
+      name = identifierOrStringName(translationOwnDataValue(value, 'imported'));
     }
     if (name === undefined) continue;
     if (names.length >= maxNames) return undefined;
-    names.push(name);
+    translationArrayAppend(names, name);
   }
-  return { names: [...new Set(names)], units: names.length };
+  return { names: uniqueStrings(names), units: names.length };
 }
 
 function exportDeclarationNames(
   node: JavaScriptAstNode,
   maxNames: number,
 ): JavaScriptImportedNames | undefined {
-  if (!Array.isArray(node.specifiers) || node.specifiers.length === 0) {
+  const specifiers = translationOwnDataValue(node, 'specifiers');
+  if (!translationArrayIsArray(specifiers) || translationArrayLength(specifiers) === 0) {
     return maxNames >= 1 ? { names: ['*'], units: 1 } : undefined;
   }
   const names: string[] = [];
-  for (const value of node.specifiers) {
+  for (let index = 0; index < translationArrayLength(specifiers); index += 1) {
+    const value = translationOwnDataValue(specifiers, index);
     if (!isJavaScriptAstNode(value)) continue;
-    const local = identifierOrStringName(value.local);
+    const local = identifierOrStringName(translationOwnDataValue(value, 'local'));
     if (local === undefined) continue;
     if (names.length >= maxNames) return undefined;
-    names.push(local);
+    translationArrayAppend(names, local);
   }
   if (names.length > 0) {
-    return { names: [...new Set(names)], units: names.length };
+    return { names: uniqueStrings(names), units: names.length };
   }
   return maxNames >= 1 ? { names: ['*'], units: 1 } : undefined;
 }
 
 function identifierOrStringName(value: unknown): string | undefined {
   if (!isJavaScriptAstNode(value)) return undefined;
-  if (value.type === 'Identifier' && typeof value.name === 'string') return value.name;
+  const name = translationOwnDataValue(value, 'name');
+  if (translationOwnDataValue(value, 'type') === 'Identifier' && typeof name === 'string') {
+    return name;
+  }
   return staticStringValue(value);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  const seen = translationCreateSet<string>();
+  const result: string[] = [];
+  for (let index = 0; index < translationArrayLength(values); index += 1) {
+    const value = values[index]!;
+    if (translationSetHas(seen, value)) continue;
+    translationSetAdd(seen, value);
+    translationArrayAppend(result, value);
+  }
+  return result;
 }

@@ -33,6 +33,140 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     );
   });
 
+  it('does not admit an unreviewed import or delete its finding through late intrinsics', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    );
+    const nativeHas = Set.prototype.has;
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    try {
+      Set.prototype.has = function poisonedReviewedImportHas(value: unknown): boolean {
+        if (typeof value === 'string' && value.includes('STRIPE_SECRET_KEY')) return true;
+        return nativeApply(nativeHas, this, [value]);
+      };
+      Array.prototype.push = function poisonedTranslationFindingPush<T>(...values: T[]): number {
+        if ((values[0] as { code?: unknown } | undefined)?.code === 'client-import-unreviewed') {
+          return this.length;
+        }
+        return nativeApply(nativePush, this, values);
+      };
+      findings = verifyEmittedTranslation(input).findings;
+    } finally {
+      Set.prototype.has = nativeHas;
+      Array.prototype.push = nativePush;
+    }
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
+  it('does not let a late Array.push mutation delete an import from the parser AST', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    );
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    try {
+      Array.prototype.push = function poisonedParserBodyPush<T>(...values: T[]): number {
+        if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+          return this.length;
+        }
+        return nativeApply(nativePush, this, values);
+      };
+      findings = verifyEmittedTranslation(input).findings;
+    } finally {
+      Array.prototype.push = nativePush;
+    }
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
+  it('does not hide an escaped exact secret token through late Array.some', () => {
+    const input = validTranslation();
+    input.decision = { ...input.decision, secretFieldNames: ['password-hash'] };
+    artifact(input, 'registry').source += "\nconst leak = 'password\\x2dhash';\n";
+    const nativeSome = Array.prototype.some;
+    const nativeApply = Reflect.apply;
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    try {
+      Array.prototype.some = function poisonedSecretTokenSome<T>(
+        callback: (value: T, index: number, array: T[]) => unknown,
+        thisArg?: unknown,
+      ): boolean {
+        if (typeof (this[0] as { kind?: unknown } | undefined)?.kind === 'string') return false;
+        return nativeApply(nativeSome, this, [callback, thisArg]);
+      };
+      findings = verifyEmittedTranslation(input).findings;
+    } finally {
+      Array.prototype.some = nativeSome;
+    }
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactKind: 'registry',
+          code: 'secret-field-emitted',
+          relation: 'secret-field-absence',
+        }),
+      ]),
+    );
+  });
+
+  it('does not normalize an operation mismatch through inherited JSON hooks', () => {
+    const input = validTranslation();
+    artifact(input, 'server').source = artifact(input, 'server').source.replace(
+      '"target":"users"',
+      '"target":"admins"',
+    );
+    const nativeDefineProperty = Object.defineProperty;
+    const nativeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    const original = nativeGetOwnPropertyDescriptor(Object.prototype, 'toJSON');
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    try {
+      nativeDefineProperty(Object.prototype, 'toJSON', {
+        configurable: true,
+        value(this: { door?: unknown; kind?: unknown }) {
+          if (typeof this.door === 'string' && typeof this.kind === 'string') {
+            return { door: this.door, kind: this.kind };
+          }
+          return this;
+        },
+        writable: true,
+      });
+      findings = verifyEmittedTranslation(input).findings;
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(Object.prototype, 'toJSON');
+      else nativeDefineProperty(Object.prototype, 'toJSON', original);
+    }
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'operation-decision-mismatch',
+          relation: 'operation-serialization',
+        }),
+      ]),
+    );
+  });
+
   it('derives every client module acquisition from the complete AST and admits only named imports', () => {
     for (const acquisition of [
       'export { safeCall } from "./safe.client.js";',

@@ -158,6 +158,10 @@ const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts'
 const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
 const verifyIndexPath = path.join(repoRoot, 'packages/verify/src/index.ts');
 const verifyFileSnapshotPath = path.join(repoRoot, 'packages/verify/src/file-snapshot.ts');
+const verifyTranslationIntrinsicsPath = path.join(
+  repoRoot,
+  'packages/verify/src/translation-intrinsics.ts',
+);
 const serverAppPath = path.join(repoRoot, 'packages/server/src/app.ts');
 const serverEndpointPath = path.join(repoRoot, 'packages/server/src/endpoint.ts');
 const serverShellPath = path.join(repoRoot, 'packages/server/src/shell.ts');
@@ -2474,6 +2478,8 @@ const removedVerifyNonblockingFileOpenBranch =
 const verifierPackRuntimeDependencyClosureBranch =
   "  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {";
 const removedVerifierPackRuntimeDependencyClosureBranch = '  for (const field of []) {';
+const verifyTranslationCapturedSetHasBranch = '  return apply(nativeSetHas, set, [value]);';
+const weakenedVerifyTranslationCapturedSetHasBranch = '  return set.has(value);';
 const installedUpdateDocsSnapshotBranch = '  const resolved = bundledDocs(version);';
 const restoredLiveUpdateDocsFetchBranch = [
   '  const remoteFetch = (options as UpdateDocsOptions & {',
@@ -8462,6 +8468,18 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralTypeScript: true,
     description:
+      'Restores late mutable Set membership dispatch inside emitted-translation decisions.',
+    expectedKiller:
+      'translation import and operation membership must use the boot-captured verifier control',
+    name: 'translation-verifier/restore-late-set-membership',
+    replacement: weakenedVerifyTranslationCapturedSetHasBranch,
+    search: verifyTranslationCapturedSetHasBranch,
+    sourceFile: verifyTranslationIntrinsicsPath,
+    test: assertTranslationCapturedSetHasBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
       'Lets a tools request execute after initialize but before the required initialized notification.',
     expectedKiller:
       'the finite MCP stdio lifecycle must reject tools before the initialized notification',
@@ -8485,6 +8503,22 @@ async function assertVerifierPackRejectsRuntimeParserDependency(moduleUnderTest,
   );
   if (!sourceText.includes(verifierPackRuntimeDependencyClosureBranch)) {
     throw new Error('verifier pack admitted mutable runtime parser resolution');
+  }
+}
+
+function assertTranslationCapturedSetHasBehavior(moduleUnderTest) {
+  const reviewed = moduleUnderTest.translationCreateSet();
+  moduleUnderTest.translationSetAdd(reviewed, 'reviewed');
+  const nativeHas = Set.prototype.has;
+  try {
+    Set.prototype.has = () => true;
+    if (moduleUnderTest.translationSetHas(reviewed, 'unreviewed')) {
+      throw new Error(
+        'translation verifier admitted membership through a late mutable Set control',
+      );
+    }
+  } finally {
+    Set.prototype.has = nativeHas;
   }
 }
 

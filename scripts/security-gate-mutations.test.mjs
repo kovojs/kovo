@@ -10,7 +10,19 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(492);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(493);
+  });
+
+  it('enrolls the emitted-translation intrinsic forcing mutant', () => {
+    const mutant = SECURITY_GATE_MUTANTS.find(
+      (candidate) => candidate.name === 'translation-verifier/restore-late-set-membership',
+    );
+
+    expect(mutant).toMatchObject({
+      behavioralTypeScript: true,
+      expectedKiller:
+        'translation import and operation membership must use the boot-captured verifier control',
+    });
   });
 
   it('enrolls the self-contained verifier parser pack forcing mutant', () => {
