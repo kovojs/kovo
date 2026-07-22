@@ -1081,6 +1081,30 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     socket.destroy();
   });
 
+  it('does not let a Proxy ignore the classified lookup replacement before Node dials', async () => {
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
+    const target = {
+      host: 'public.test',
+      lookup: loopbackDnsLookup(),
+      port,
+    };
+    const options = new Proxy(target, {
+      defineProperty: () => true,
+    });
+    const socket = new net.Socket();
+    const connected = new Promise<void>((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', reject);
+      socket.connect(options);
+    });
+
+    await expect(connected).rejects.toMatchObject({
+      classification: 'loopback',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
+    socket.destroy();
+  });
+
   it('fails closed on unstable, frozen, and non-configurable valid TCP carriers', () => {
     uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
 
