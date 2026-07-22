@@ -452,9 +452,17 @@ replaced, grown, or otherwise mutated file or directory at any of those boundari
 The v1 checker budgets are part of the denial-of-service boundary: policy bytes are at most 1 MiB,
 CLI certificate bytes at most 2 MiB, one runtime module at most 4 MiB, all runtime modules together
 at most 32 MiB, the policy may name at most 32 packages, the packed tree at most 4,096 files and
-depth 16, and certificate plus policy JSON together at most 262,144 nodes and depth 64. The checker
-MUST snapshot caller-owned JSON and policy bytes once before validation and MUST NOT re-read them
-after making a decision.
+depth 16, and certificate plus policy JSON together at most 262,144 nodes and depth 64. After parsing
+each complete runtime module, reference extraction may consume at most 32,768 reference units for
+that module and 131,072 across the packed tree. Each import, re-export, or dynamic-import occurrence
+costs one unit, plus one unit for each raw imported or re-exported binding it names; an export-all or
+dynamic-import occurrence also costs one wildcard-target unit. Deduplication MUST NOT reduce the
+charged units. Artifact analysis may retain at most 1,024 findings. Exceeding a
+reference or artifact-analysis finding limit MUST discard every partial graph, summary, and finding
+and return exactly one fixed fail-closed budget finding; a syntax error beyond the extraction limit
+MUST still be observed because complete parsing precedes extraction. The checker MUST snapshot
+caller-owned JSON and policy bytes once before validation and MUST NOT re-read them after making a
+decision.
 
 Every non-dry release from the authorized `main` commit MUST publish separate GitHub artifact
 attestations for the exact committed reviewer-policy and certificate files. The attestation job MUST

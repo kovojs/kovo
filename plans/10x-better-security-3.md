@@ -447,12 +447,15 @@ pass**. Requires §0.4 and §0.6 to mean anything.
     separation and lifecycle-disabled packing.
 - [x] `@kovojs/verify` as a standalone checker: three linear obligations (coverage, post-fixpoint
       stability `cap[n] ⊆ cap[m]` per edge and `local(m) ⊆ cap[m]`, closure `cap[r] ⊆ doors(r)`) — no
-      iteration, widening, budget, or recursion logic on the checker side. One pinned parser
-      dependency, **zero Kovo imports**, mechanically enforced by extending `scripts/import-boundary.mjs`.
-      Publish checker LOC and dependency closure as the honesty numbers.
+      semantic iteration, widening, fixpoint, or recursion logic on the checker side. Deterministic
+      byte, row, reference, and finding ceilings are fail-closed denial-of-service boundaries, not
+      semantic convergence heuristics. One pinned parser dependency, **zero Kovo imports**,
+      mechanically enforced by extending `scripts/import-boundary.mjs`. Publish checker LOC and
+      dependency closure as the honesty numbers.
   - Evidence: `pnpm run check:certificate` publishes the current runtime-file/LOC count, reports one
-    exact parser dependency (`es-module-lexer@2.1.0`), enforces zero Kovo imports, and verifies the
-    actual lifecycle-disabled packed tarballs with the standalone CLI.
+    exact parser dependency (`acorn@8.17.0`), enforces zero Kovo imports, and verifies the actual
+    lifecycle-disabled packed tarballs with the standalone CLI. `index.test.ts` proves complete parsing
+    before bounded extraction and exact per-module, aggregate-reference, and finding limit+1 closure.
 - [x] Make the directory subject complete and race-resistant. Require the exact `@kovojs/*` package
       census and full installed manifests; reject resolver remaps, automatic lifecycle hooks,
       ambiguous conditional targets, unsupported package aliases, unlisted executable siblings,
@@ -884,16 +887,18 @@ records an explicit normalization, and each round records its SHA, date, report 
 
 ## Final exact-tip reconciliation
 
-- [ ] Freeze the intended candidate SHA and rerun the certificate/pack identity, provenance and Δ
-      decision procedures, dependency-source closure, Metric E baseline, answerability/advisory,
-      hermetic proof, real-Postgres, API, and release-analysis gates; replace stale checkpoint counts
-      with one compact command/evidence block.
-  - Final evidence placeholder: candidate SHA and terminal results are intentionally absent while
-    implementation is still moving.
+- [ ] Freeze the intended code-subject commit and rerun the certificate/pack identity, provenance and
+      Δ decision procedures, dependency-source closure, Metric E baseline, answerability/advisory,
+      hermetic proof, real-Postgres, API, and release-analysis gates; then generate retained evidence
+      in one evidence-only descendant commit. Replace stale checkpoint counts with one compact block
+      recording `codeSubjectSha`, the evidence/release SHA, their ancestry and evidence-only diff, and
+      the terminal results at the applicable commit.
+  - Final evidence placeholder: both SHAs, the evidence-only diff, and terminal results are
+    intentionally absent while implementation is still moving.
 
 ## Exit
 
-- [ ] All repository-owned §0 work passes at the frozen candidate: defect regressions execute on real
+- [ ] All repository-owned §0 work passes at the evidence/release SHA: defect regressions execute on real
       Postgres, process artifacts are present, the hermetic stage is green, and the provenance stamp
       is emitted.
 
@@ -913,7 +918,7 @@ does not duplicate either external action or its evidence.
     table current, and its focused suite passes 4/4.
 - [ ] Metric E is non-increasing across three consecutive comparable rounds as defined above, with
       zero unsigned escapes and no unreviewed ceiling increase.
-- [ ] Δ is 100% of every declared finite fragment at the frozen candidate SHA.
+- [ ] Δ is 100% of every declared finite fragment at `codeSubjectSha`.
 - [ ] An outside party validates a `kovo.certificate/v1` with disjoint code, and the three negative
       controls fail on three distinct obligations.
 - [x] Each bounded periphery party (§3) has a fail-closed door plus a printed retained-obligation set;

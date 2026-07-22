@@ -125,11 +125,13 @@ or served artifact.
   - Evidence: the merged coverage gate reports 48/47/1 with 277 anchors; crypto reports 58 reviewed
     rows with a high-authority ceiling of 30; conformance reports 92 codes, 72 errors, 200 sites, and
     37 evidence files / 108 witnesses / six mandatory executions.
-- [ ] At the frozen intended candidate SHA, rerun the complete Plan-2 premise audit and every
-      digest/manifest-backed forcing gate, replace stale checkpoint counts instead of appending a
-      transcript, and record the exact SHA plus terminal command results.
-  - Final evidence placeholder: SHA and commands are intentionally absent while implementation is
-    still moving; `b18aae90f` must not be presented as final-tip proof.
+- [ ] At the frozen intended code-subject commit, rerun the complete Plan-2 premise audit and every
+      digest/manifest-backed forcing gate, then generate the retained evidence in one evidence-only
+      descendant commit. Replace stale checkpoint counts instead of appending a transcript; record
+      both `codeSubjectSha` and the evidence/release SHA, prove their ancestry and evidence-only diff,
+      and record terminal command results at the applicable commit.
+  - Final evidence placeholder: both SHAs, the evidence-only diff, and commands are intentionally
+    absent while implementation is still moving; `b18aae90f` must not be presented as final-tip proof.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
   - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
@@ -861,7 +863,7 @@ Exit (extends `threat-matrix-plan.md` and plan-1 Phase 6; does not restate plan-
 - [ ] After the final-tip reconciliation above, every changed public API/export passes
       `check:api-surface`; full classifier, compiler, browser,
       integration, package, real-Postgres, performance, memory, and availability gates pass from a
-      clean checkout with zero required skips at the intended SHA, followed by required CI jobs.
+      clean checkout with zero required skips at the evidence/release SHA, followed by required CI jobs.
 
 ## Notes on sequencing and honesty
 
