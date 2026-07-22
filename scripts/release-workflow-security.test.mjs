@@ -1,4 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -107,6 +110,37 @@ function actionInputSignatures(job, action) {
       const inputs = [...step.matchAll(/^          ([a-z-]+):[ \t]+([^\r\n]+?)[ \t]*$/gmu)];
       return inputs.map((input) => `${input[1]}=${input[2]}`).join('\0');
     });
+}
+
+function releaseMetadataDriftScript(source = releaseWorkflow) {
+  const driftStep = source.slice(
+    source.indexOf('name: Verify release metadata did not drift'),
+    source.indexOf('name: Archive exact verified release payload'),
+  );
+  const runBlock = driftStep.match(/run: \|\n((?: {10}[^\r\n]+\r?\n)+)/u)?.[1] ?? '';
+  return runBlock.replace(/^ {10}/gmu, '').trim();
+}
+
+function initializeDriftFixture() {
+  const root = mkdtempSync(path.join(tmpdir(), 'kovo-release-drift-'));
+  execFileSync('git', ['init', '--quiet'], { cwd: root });
+  execFileSync('git', ['config', 'user.email', 'release-audit@example.invalid'], { cwd: root });
+  execFileSync('git', ['config', 'user.name', 'release-audit'], { cwd: root });
+  writeFileSync(path.join(root, 'policy.json'), 'reviewed\n');
+  execFileSync('git', ['add', 'policy.json'], { cwd: root });
+  execFileSync('git', ['commit', '--quiet', '-m', 'reviewed'], { cwd: root });
+  return {
+    root,
+    sha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  };
+}
+
+function runReleaseMetadataDriftGate(root, sha) {
+  return execFileSync('bash', ['-e', '-u', '-o', 'pipefail', '-c', releaseMetadataDriftScript()], {
+    cwd: root,
+    env: { ...process.env, GITHUB_SHA: sha },
+    stdio: 'pipe',
+  });
 }
 
 describe('release workflow authority', () => {
@@ -306,14 +340,55 @@ describe('release workflow authority', () => {
   });
 
   it('rejects build-time drift anywhere in the tracked release tree', () => {
-    const driftStep = releaseWorkflow.slice(
-      releaseWorkflow.indexOf('name: Verify release metadata did not drift'),
-      releaseWorkflow.indexOf('name: Archive exact verified release payload'),
-    );
-    expect(driftStep).toContain('git diff --check');
-    expect(driftStep).toContain('git diff --exit-code');
-    expect(driftStep).not.toContain('packages/*/package.json');
-    expect(driftStep).not.toMatch(/git diff --exit-code --/u);
+    const commands = releaseMetadataDriftScript().split(/\r?\n/u);
+    expect(commands).toEqual([
+      'set -euo pipefail',
+      'test "$(git --no-replace-objects rev-parse HEAD)" = "$GITHUB_SHA"',
+      'git -c core.filemode=true -c core.symlinks=true -c core.trustctime=true -c core.checkStat=default -c core.fsmonitor=false update-index --really-refresh',
+      'git ls-files -v | awk \'substr($0, 1, 1) != "H" { exit 1 }\'',
+      'git diff --no-ext-diff --no-textconv --ignore-submodules=none --check',
+      'git diff --cached --no-ext-diff --no-textconv --ignore-submodules=none --check "$GITHUB_SHA" --',
+      'git diff --no-ext-diff --no-textconv --ignore-submodules=none --exit-code',
+      'git diff --cached --no-ext-diff --no-textconv --ignore-submodules=none --exit-code "$GITHUB_SHA" --',
+    ]);
+    expect(releaseMetadataDriftScript()).not.toContain('packages/*/package.json');
+    expect(releaseMetadataDriftScript()).not.toMatch(/git diff --exit-code --/u);
+  });
+
+  it('executes the tracked-tree gate against staged, committed, and hidden mutations', () => {
+    const control = initializeDriftFixture();
+    try {
+      expect(() => runReleaseMetadataDriftGate(control.root, control.sha)).not.toThrow();
+    } finally {
+      rmSync(control.root, { force: true, recursive: true });
+    }
+
+    for (const attack of ['staged-textconv', 'local-commit', 'skip-worktree']) {
+      const fixture = initializeDriftFixture();
+      try {
+        writeFileSync(path.join(fixture.root, 'policy.json'), 'attacker-blessed\n');
+        if (attack === 'staged-textconv') {
+          execFileSync('git', ['add', 'policy.json'], { cwd: fixture.root });
+          execFileSync('git', ['config', 'diff.hide.textconv', '/usr/bin/true'], {
+            cwd: fixture.root,
+          });
+          writeFileSync(
+            path.join(fixture.root, '.git', 'info', 'attributes'),
+            'policy.json diff=hide\n',
+          );
+        } else if (attack === 'local-commit') {
+          execFileSync('git', ['add', 'policy.json'], { cwd: fixture.root });
+          execFileSync('git', ['commit', '--quiet', '-m', 'attacker'], { cwd: fixture.root });
+        } else {
+          execFileSync('git', ['update-index', '--skip-worktree', 'policy.json'], {
+            cwd: fixture.root,
+          });
+        }
+        expect(() => runReleaseMetadataDriftGate(fixture.root, fixture.sha), attack).toThrow();
+      } finally {
+        rmSync(fixture.root, { force: true, recursive: true });
+      }
+    }
   });
 
   it('pins every workflow action to an immutable commit', () => {

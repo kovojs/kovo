@@ -148,8 +148,14 @@ jobs:
 
       - name: Verify release metadata did not drift
         run: |
-          git diff --check
-          git diff --exit-code
+          set -euo pipefail
+          test "$(git --no-replace-objects rev-parse HEAD)" = "$GITHUB_SHA"
+          git -c core.filemode=true -c core.symlinks=true -c core.trustctime=true -c core.checkStat=default -c core.fsmonitor=false update-index --really-refresh
+          git ls-files -v | awk 'substr($0, 1, 1) != "H" { exit 1 }'
+          git diff --no-ext-diff --no-textconv --ignore-submodules=none --check
+          git diff --cached --no-ext-diff --no-textconv --ignore-submodules=none --check "$GITHUB_SHA" --
+          git diff --no-ext-diff --no-textconv --ignore-submodules=none --exit-code
+          git diff --cached --no-ext-diff --no-textconv --ignore-submodules=none --exit-code "$GITHUB_SHA" --
 
       - name: Archive exact verified release payload
         env:
