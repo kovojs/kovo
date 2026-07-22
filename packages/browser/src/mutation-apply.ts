@@ -7,7 +7,11 @@ import { definedProps } from './defined-props.js';
 import type { IslandSignalScope } from './handler-context.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { MutationBroadcast } from './broadcast.js';
-import { isFailedMutationResponse, type FetchedEnhancedMutation } from './mutation-fetch.js';
+import {
+  isBuildSkewMutationResponse,
+  isFailedMutationResponse,
+  type FetchedEnhancedMutation,
+} from './mutation-fetch.js';
 import type { MutationChangeRecord } from './optimism.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
@@ -61,6 +65,17 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
 ): EnhancedMutationAppliedResult {
   if (fetched.sessionTransition) return sessionTransitionResult(options, fetched);
   const recoverBuildSkew = captureBuildSkewRecovery(options);
+  if (isBuildSkewMutationResponse(fetched.response)) {
+    recoverBuildSkew();
+    return {
+      appliedFragments: [],
+      changes: [],
+      fragments: [],
+      idem: fetched.idem,
+      queries: [],
+      targets: fetched.targets,
+    };
+  }
   const buildSkew = isFetchedBuildSkew(options, fetched);
 
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and

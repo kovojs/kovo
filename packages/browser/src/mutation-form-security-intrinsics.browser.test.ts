@@ -113,8 +113,12 @@ it('refreshes modular idempotency truth through the boot-pinned FormData setter'
           options.headers['Kovo-Idem'],
         );
         return {
-          headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+          headers: new Headers({
+            'Content-Type': 'text/vnd.kovo.fragment+html',
+            'Kovo-Build': 'build-test',
+          }),
           ok: true,
+          redirected: false,
           status: 204,
           async text() {
             return '';
@@ -125,6 +129,7 @@ it('refreshes modular idempotency truth through the boot-pinned FormData setter'
     );
 
     const fetched = await fetchEnhancedMutation({
+      expectedBuildToken: 'build-test',
       fetch,
       form: { action: '/_m/comment/post', getAttribute: () => null, method: 'post' },
       formData,

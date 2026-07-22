@@ -975,6 +975,11 @@ function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
     options.key === undefined
       ? ''
       : ` key="${escapeWireAttribute(options.key, 'dom-identity', 'script[kovo-query][key]')}"`;
+  const hrefAttribute = ` data-kovo-query-href="${escapeWireAttribute(
+    options.href,
+    'dom-identity',
+    'script[kovo-query][data-kovo-query-href]',
+  )}"`;
   // SPEC §4.1 wire codec: normalize bigint/Date through the shared encode seam so a
   // bigint never throws (bugs-part4 L3/L4) and a Date round-trips as a Date (L5).
   const scriptText = escapeScriptJson(stringifyWireValue(options.value));
@@ -986,7 +991,7 @@ function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
       options.name,
       'dom-identity',
       'script[kovo-query]',
-    )}"${keyAttribute} ${cspHashAttribute(hash)}>${scriptText}</script>`,
+    )}"${keyAttribute}${hrefAttribute} ${cspHashAttribute(hash)}>${scriptText}</script>`,
   };
 }
 

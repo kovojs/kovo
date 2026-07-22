@@ -7,6 +7,7 @@ import {
   decodeFrameworkLiveTargetHeader,
   decodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
+  type FrameworkQueryDependencyIdentity,
 } from '@kovojs/core/internal/wire-input-grammar';
 import {
   frameworkSessionPrincipalPostureFromRequest,
@@ -172,7 +173,7 @@ export interface MutationWireRequest<
  * DOM patch target; `deps` are the target's `kovo-deps` tokens (SPEC §9.1).
  */
 export interface MutationLiveTarget {
-  deps: readonly string[];
+  deps: readonly FrameworkQueryDependencyIdentity[];
   target: string;
 }
 

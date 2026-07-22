@@ -15,7 +15,7 @@ import type {
 } from './dom-like.js';
 import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
-import type { QueryStore } from './query-store.js';
+import type { QueryIdentity, QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue, trustedUrl as mintTrustedUrl } from './security-output.js';
 import {
   applySecurityIntrinsic,
@@ -35,7 +35,7 @@ import {
 import { kovoCreateHTML } from './trusted-types.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import { reconcileKeyed } from './keyed-reconciler.js';
-import { readDeps } from './pending.js';
+import { readQueryDependencyIdentities } from './pending.js';
 import { closestRuntimeElement, readRuntimeElementAttribute } from './runtime-dom-security.js';
 
 // SPEC §6.6 rule 6: query-plan DOM selection, parsing, and commits use controls captured before any
@@ -140,7 +140,7 @@ export interface QueryBindingIndex {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ApplyQueryBindingsOptions {
   bindingIndex?: QueryBindingIndex;
-  queryKey?: string;
+  queryIdentity?: QueryIdentity;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -312,7 +312,7 @@ function applyRootBindings(
   for (let elementIndex = 0; elementIndex < textElements.length; elementIndex += 1) {
     const element = textElements[elementIndex];
     if (!element) continue;
-    if (!elementBelongsToQueryKey(element, options.queryKey)) continue;
+    if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
 
     const path = readBindingAttribute(element, 'data-bind');
     if (!path || !securityStringStartsWith(path, bindingPrefix)) continue;
@@ -330,7 +330,7 @@ function applyRootBindings(
     const element = attributeElements[elementIndex];
     if (!element) continue;
     if (!elementBelongsToScope(element, options.scopeRoot)) continue;
-    if (!elementBelongsToQueryKey(element, options.queryKey)) continue;
+    if (!elementBelongsToQueryIdentity(element, options.queryIdentity)) continue;
 
     const attributes = bindingAttributes(element);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
@@ -379,7 +379,7 @@ export function applyCompiledQueryUpdatePlan(
 ): AppliedCompiledQueryUpdatePlan {
   const bindingOptions = {
     ...(options.bindingIndex ? { bindingIndex: options.bindingIndex } : {}),
-    ...(options.queryKey === undefined ? {} : { queryKey: options.queryKey }),
+    ...(options.queryIdentity === undefined ? {} : { queryIdentity: options.queryIdentity }),
   };
   const applied: AppliedCompiledQueryUpdatePlan = {
     bindings:
@@ -941,18 +941,22 @@ function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown)
   return !closestStateHost || closestStateHost === scopeRoot;
 }
 
-function elementBelongsToQueryKey(
+function elementBelongsToQueryIdentity(
   element: QueryBindingElement,
-  queryKey: string | undefined,
+  queryIdentity: QueryIdentity | undefined,
 ): boolean {
-  if (!queryKey) return true;
+  if (!queryIdentity) return true;
 
   const closestQueryHost = closestRuntimeElement<QueryBindingElement>(element, '[kovo-deps]');
-  if (!closestQueryHost) return true;
+  if (!closestQueryHost) return queryIdentity.key === undefined;
 
-  const deps = readDeps(readRuntimeElementAttribute(closestQueryHost, 'kovo-deps'));
+  const deps = readQueryDependencyIdentities(
+    readRuntimeElementAttribute(closestQueryHost, 'kovo-deps'),
+  );
   for (let index = 0; index < deps.length; index += 1) {
-    if (deps[index] === queryKey) return true;
+    const dependency = deps[index];
+    if (dependency?.name === queryIdentity.name && dependency.key === queryIdentity.key)
+      return true;
   }
   return false;
 }

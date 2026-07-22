@@ -37,6 +37,9 @@ import {
   securityMapHas,
   securityMapSet,
   securityOwnArrayEntry,
+  securityWeakSet,
+  securityWeakSetAdd,
+  securityWeakSetHas,
 } from './security-witness-intrinsics.js';
 
 // SPEC §6.6/§9.1: streaming response bytes remain server truth only when stream
@@ -44,6 +47,10 @@ import {
 // decode are captured and witnessed during framework module initialization before
 // any authored client module can replace browser-realm intrinsics.
 const mutationResponseSecurity = createBrowserNavigationSecurityControls();
+// A build miss retires the store's page-load authority before the recovery callback runs. The
+// callback may be delayed, suppressed, or throw; no later response may resume parsing/apply in the
+// stale realm (SPEC §14).
+const buildRecoveryStores = securityWeakSet<QueryStore>();
 
 type RuntimeStreamTextOptions = StreamTextBufferOptions & {
   buffer?: StreamTextBuffer;
@@ -120,9 +127,12 @@ export function applyMutationResponseChunksToRuntime(
   // SPEC.md §9.1: mutation, deferred, broadcast, and typed-read responses all
   // converge here after their transport-specific parser has decoded wire chunks.
 
+  if (securityWeakSetHas(buildRecoveryStores, options.store)) {
+    return emptyAppliedMutationResponse(options.root);
+  }
+
   if (isWholeResponseBuildTokenMiss(options)) {
-    (options.onBuildSkew ?? reloadSessionTransitionDocument)();
-    notifyWholeResponseBuildTokenMissQueries(chunks, options);
+    recoverWholeResponseBuildTokenMiss(options);
     return emptyAppliedMutationResponse(options.root);
   }
 
@@ -181,16 +191,15 @@ export function applyMutationResponseBodyToRuntime(
   options = definedProps(options) as ApplyMutationResponseBodyToRuntimeOptions;
   const { body, ...applyOptions } = options;
 
+  if (securityWeakSetHas(buildRecoveryStores, options.store)) {
+    return emptyAppliedMutationResponse(options.root);
+  }
+
   // SPEC §6.6/§9.1.1/§14: the response header proof gates the bytes themselves, not merely their
   // decoded chunks. Recover before parsing so malformed foreign-build bytes cannot suppress the
   // mandatory full-render path by failing inside the wire grammar.
   if (isWholeResponseBuildTokenMiss(applyOptions)) {
-    (applyOptions.onBuildSkew ?? reloadSessionTransitionDocument)();
-    // Preserve the existing query-refetch hint after mandatory recovery has been invoked. The
-    // parser is deliberately second: even if foreign-build grammar is malformed, it cannot keep
-    // the stale realm and its origin-wide capabilities alive.
-    const chunks = readMutationResponseBodyChunks(body, options.onError);
-    notifyWholeResponseBuildTokenMissQueries(chunks, applyOptions);
+    recoverWholeResponseBuildTokenMiss(applyOptions);
     return emptyAppliedMutationResponse(options.root);
   }
 
@@ -216,9 +225,13 @@ export async function applyStreamingMutationResponseBodyToRuntime(
 ): Promise<AppliedMutationResponse | AppliedMutationResponseWithRoot> {
   options = definedProps(options) as ApplyStreamingMutationResponseBodyToRuntimeOptions;
   const { body, ...applyOptions } = options;
+  if (securityWeakSetHas(buildRecoveryStores, options.store)) {
+    await mutationResponseSecurity.cancelReadableStream(body);
+    return emptyAppliedMutationResponse(options.root);
+  }
   if (isWholeResponseBuildTokenMiss(applyOptions)) {
     await mutationResponseSecurity.cancelReadableStream(body);
-    (applyOptions.onBuildSkew ?? reloadSessionTransitionDocument)();
+    recoverWholeResponseBuildTokenMiss(applyOptions);
     return emptyAppliedMutationResponse(options.root);
   }
   const readerPlan = await mutationResponseSecurity.acquireStreamReader(body);
@@ -607,13 +620,10 @@ function isWholeResponseBuildTokenMiss(
   );
 }
 
-function notifyWholeResponseBuildTokenMissQueries(
-  chunks: MutationResponseBodyChunks,
+function recoverWholeResponseBuildTokenMiss(
   options: ApplyMutationResponseChunksToRuntimeOptions,
 ): void {
-  for (let index = 0; index < chunks.queries.length; index += 1) {
-    const query = securityOwnArrayEntry(chunks.queries, index);
-    if (!query.ok) throw new TypeError('Kovo mutation response queries must be dense.');
-    options.onDeltaMiss?.(query.value.name, query.value.key);
-  }
+  if (securityWeakSetHas(buildRecoveryStores, options.store)) return;
+  securityWeakSetAdd(buildRecoveryStores, options.store);
+  (options.onBuildSkew ?? reloadSessionTransitionDocument)();
 }

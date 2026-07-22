@@ -1,5 +1,6 @@
 import type { JsonValue } from '@kovojs/core';
 import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
+import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
 import { changeRecordTouchesQueryInstance, type ChangeRecord } from '../change-record.js';
 import { generatedFragmentHtmlValue } from '../html.js';
 import {
@@ -32,7 +33,6 @@ import {
   createWitnessMap,
   createWitnessSet,
   witnessDefineProperty,
-  witnessIsArray,
   witnessMapForEach,
   witnessMapGet,
   witnessMapHas,
@@ -418,12 +418,12 @@ export function selectMutationResponseTargets<Request>(
   const liveTargets = input.liveTargets;
   const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
   const liveRenderersByComponent = liveTargetRenderersByComponent(input.liveTargetRenderers);
-  const affectedQueryTokens = createWitnessSet<string>();
+  const affectedQueryIdentities: FrameworkQueryDependencyIdentity[] = [];
   for (let queryIndex = 0; queryIndex < input.rerunQueries.length; queryIndex += 1) {
     const query = input.rerunQueries[queryIndex]!;
-    const tokens = queryRerunTokens(query);
-    if (someLiveTarget(liveTargets, (target) => depsMatch(target, tokens))) {
-      addQueryTokens(affectedQueryTokens, tokens);
+    const identities = queryRerunIdentities(query);
+    if (someLiveTarget(liveTargets, (target) => depsMatch(target, identities))) {
+      addQueryIdentities(affectedQueryIdentities, identities);
     }
   }
 
@@ -446,9 +446,9 @@ export function selectMutationResponseTargets<Request>(
     );
     witnessMapSet(descriptorReruns, descriptor, reruns);
 
-    if (someQueryRerun(reruns, (query) => depsMatch(liveTarget, queryRerunTokens(query)))) {
+    if (someQueryRerun(reruns, (query) => depsMatch(liveTarget, queryRerunIdentities(query)))) {
       for (let queryIndex = 0; queryIndex < reruns.length; queryIndex += 1) {
-        addQueryTokens(affectedQueryTokens, queryRerunTokens(reruns[queryIndex]!));
+        addQueryIdentities(affectedQueryIdentities, queryRerunIdentities(reruns[queryIndex]!));
       }
     }
   }
@@ -456,12 +456,12 @@ export function selectMutationResponseTargets<Request>(
   const rerunQueries: QueryRerun[] = [];
   for (let queryIndex = 0; queryIndex < input.rerunQueries.length; queryIndex += 1) {
     const query = input.rerunQueries[queryIndex]!;
-    const tokens = queryRerunTokens(query);
+    const identities = queryRerunIdentities(query);
     if (
       someLiveTarget(
         liveTargets,
         (target) =>
-          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
+          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, identities),
       )
     ) {
       witnessArrayAppend(
@@ -477,7 +477,7 @@ export function selectMutationResponseTargets<Request>(
     const renderer = input.fragmentRenderers[rendererIndex]!;
     if (renderer.updateCoverage === 'plan') continue;
     const liveTarget = findLiveTarget(liveTargets, (target) => target.target === renderer.target);
-    if (liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens)) {
+    if (liveTarget !== undefined && depsMatch(liveTarget, affectedQueryIdentities)) {
       witnessArrayAppend(
         fragmentTargets,
         renderer.target,
@@ -500,7 +500,7 @@ export function selectMutationResponseTargets<Request>(
     const liveTarget = findLiveTarget(liveTargets, (target) => target.target === descriptor.target);
     if (liveTarget === undefined) continue;
     const reruns = witnessMapGet(descriptorReruns, descriptor) ?? [];
-    if (someQueryRerun(reruns, (query) => depsMatch(liveTarget, queryRerunTokens(query)))) {
+    if (someQueryRerun(reruns, (query) => depsMatch(liveTarget, queryRerunIdentities(query)))) {
       if (renderer.updateCoverage === 'plan') {
         appendArray(planDescriptorReruns, reruns);
       } else {
@@ -592,9 +592,22 @@ function mergeQueryReruns(queries: readonly QueryRerun[]): QueryRerun[] {
   return merged;
 }
 
-function addQueryTokens(target: Set<string>, tokens: readonly string[]): void {
-  for (let index = 0; index < tokens.length; index += 1) {
-    witnessSetAdd(target, tokens[index]!);
+function addQueryIdentities(
+  target: FrameworkQueryDependencyIdentity[],
+  identities: readonly FrameworkQueryDependencyIdentity[],
+): void {
+  for (let index = 0; index < identities.length; index += 1) {
+    const identity = identities[index]!;
+    let seen = false;
+    for (let existingIndex = 0; existingIndex < target.length; existingIndex += 1) {
+      if (queryDependencyIdentityEquals(target[existingIndex]!, identity)) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) {
+      witnessArrayAppend(target, identity, 'Server affected query dependency identity collection');
+    }
   }
 }
 
@@ -635,20 +648,34 @@ function targetIsPlanCovered(
   return witnessMapGet(renderersByTarget, target)?.updateCoverage === 'plan';
 }
 
-function queryRerunTokens(query: QueryRerun): string[] {
-  if (query.instanceKey === undefined) return [query.key];
-  return query.whole === true ? [query.key, query.instanceKey] : [query.instanceKey];
+function queryRerunIdentities(query: QueryRerun): FrameworkQueryDependencyIdentity[] {
+  const base: FrameworkQueryDependencyIdentity = { name: query.key };
+  if (query.instanceKey === undefined) return [base];
+  const instance: FrameworkQueryDependencyIdentity = {
+    key: query.instanceKey,
+    name: query.key,
+  };
+  return query.whole === true ? [base, instance] : [instance];
 }
 
 function depsMatch(
   liveTarget: MutationLiveTarget,
-  queryTokens: ReadonlySet<string> | readonly string[],
+  queryIdentities: readonly FrameworkQueryDependencyIdentity[],
 ): boolean {
-  const tokens = witnessIsArray(queryTokens) ? createTokenSet(queryTokens) : queryTokens;
   for (let index = 0; index < liveTarget.deps.length; index += 1) {
-    if (witnessSetHas(tokens, liveTarget.deps[index]!)) return true;
+    const dependency = liveTarget.deps[index]!;
+    for (let queryIndex = 0; queryIndex < queryIdentities.length; queryIndex += 1) {
+      if (queryDependencyIdentityEquals(dependency, queryIdentities[queryIndex]!)) return true;
+    }
   }
   return false;
+}
+
+function queryDependencyIdentityEquals(
+  left: FrameworkQueryDependencyIdentity,
+  right: FrameworkQueryDependencyIdentity,
+): boolean {
+  return left.name === right.name && left.key === right.key;
 }
 
 function queryReadsDomain(
@@ -722,10 +749,4 @@ function appendArray<Value>(target: Value[], source: readonly Value[]): void {
       'Server packages/server/src/mutation/targets.ts collection',
     );
   }
-}
-
-function createTokenSet(values: readonly string[]): ReadonlySet<string> {
-  const set = createWitnessSet<string>();
-  for (let index = 0; index < values.length; index += 1) witnessSetAdd(set, values[index]!);
-  return set;
 }

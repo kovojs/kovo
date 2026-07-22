@@ -29,7 +29,11 @@ import {
   runWithAppRequestDeadline,
   type LoadShedSurface,
 } from './app-load-shed.js';
-import { dispatchMatchedAppRequest } from './app-dispatch.js';
+import {
+  dispatchMatchedAppRequest,
+  enhancedRequestBuildSkewResponseForToken,
+  isEnhancedBuildBoundRequest,
+} from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 import { requestMetadataWithoutAmbientAuthority } from './response-posture.js';
 import { schemaMaxUploadBytes, type Schema } from './schema.js';
@@ -38,7 +42,7 @@ import {
   KOVO_RUNTIME_ATTESTATION_ENDPOINT,
   runtimePostureAttestationResponse,
 } from './generated-runtime-posture-registry.js';
-import { denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
+import { denseOwnArrayForEach, denseOwnRegistryEntryByExactKey } from './registry-lookup.js';
 import { admitFrameworkManagedDbProvider } from './guards.js';
 import {
   requestCreateUrl,
@@ -50,10 +54,18 @@ import {
 import { requestStateIsSafeInteger } from './request-state-intrinsics.js';
 import { requestUrlLimitFailure } from './request-url-limits.js';
 import { securityEvent } from './security-event.js';
+import {
+  createWitnessWeakMap,
+  witnessWeakMapGet,
+  witnessWeakMapSet,
+} from './security-witness-intrinsics.js';
 
 const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
+const appEnhancedMutationBodyLimits = createWitnessWeakMap<KovoApp, number>();
 
 interface AppRequestAdmissionHooks {
+  /** Exact app-build token pinned when the request handler closes over the app. */
+  readonly buildToken?: string;
   /**
    * Framework-owned hook invoked only after coarse request admission and any ordinary streamed
    * body ceiling have completed. This is a request-free signal, not an app middleware surface
@@ -87,7 +99,7 @@ export async function handleAppRequest(
     routes: app.routes,
   });
   const surface = loadShedSurface(match.kind);
-  const buildToken = systemResponseBuildToken(app, surface);
+  const buildToken = systemResponseBuildToken(hooks.buildToken, surface);
 
   if (match.normalization.redirect) {
     return appSystemResponse(null, {
@@ -103,8 +115,17 @@ export async function handleAppRequest(
     });
   }
 
-  const reservedKey = resolveReservedDispatchKey(match);
-  if ((match.kind === 'mutation' || match.kind === 'query') && reservedKey === undefined) {
+  // SPEC §5.2.1/§14: classify build-bound traffic without decoding its reserved key. The coarse
+  // load-shed, deadline, and complete-body gates still run first (SPEC §9.5); registries, target
+  // decoders, providers, and app handlers remain behind the eventual skew rejection.
+  const enhancedBuildBound = isEnhancedBuildBoundRequest(request, match.kind, method);
+
+  let reservedKey = enhancedBuildBound ? undefined : resolveReservedDispatchKey(match);
+  if (
+    !enhancedBuildBound &&
+    (match.kind === 'mutation' || match.kind === 'query') &&
+    reservedKey === undefined
+  ) {
     return appSystemResponse('Not Found', {
       buildToken,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -119,7 +140,11 @@ export async function handleAppRequest(
     const maxBodyBytes =
       urlSnapshot.pathname === KOVO_RUNTIME_ATTESTATION_ENDPOINT
         ? 4_096
-        : requestBodyLimitForMatch(app, match, reservedKey);
+        : !enhancedBuildBound
+          ? requestBodyLimitForMatch(app, match, reservedKey)
+          : match.kind === 'mutation'
+            ? enhancedMutationAdmissionBodyLimit(app)
+            : app.requestLimits.maxBodyBytes;
     // Pre-dispatch policy callbacks need only method/URL/client-IP metadata. Give
     // every surface the same bodyless, credential-neutral carrier so a custom
     // limiter cannot accidentally become an ambient-authority consumer.
@@ -171,6 +196,38 @@ export async function handleAppRequest(
         const dispatchRequest = await requestWithVerifiedBodyLimit(deadlineRequest, maxBodyBytes);
         limitedRequest = requestWithBodyLimit(dispatchRequest, maxBodyBytes);
 
+        // The request handler pinned the direct app-build token before accepting traffic. Only
+        // compare that inert snapshot here; no app-owned module-registry code runs on ingress.
+        if (enhancedBuildBound && buildToken !== undefined) {
+          const buildSkew = enhancedRequestBuildSkewResponseForToken(
+            limitedRequest,
+            method,
+            buildToken,
+          );
+          if (buildSkew !== undefined) return buildSkew;
+          reservedKey = resolveReservedDispatchKey(match);
+        }
+        if ((match.kind === 'mutation' || match.kind === 'query') && reservedKey === undefined) {
+          return appSystemResponse('Not Found', {
+            buildToken,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            method,
+            status: 404,
+            surface,
+          });
+        }
+
+        if (enhancedBuildBound && match.kind === 'mutation') {
+          const mutationBodyLimit = requestBodyLimitForMatch(app, match, reservedKey);
+          if (mutationBodyLimit < maxBodyBytes) {
+            const mutationRequest = await requestWithVerifiedBodyLimit(
+              limitedRequest,
+              mutationBodyLimit,
+            );
+            limitedRequest = requestWithBodyLimit(mutationRequest, mutationBodyLimit);
+          }
+        }
+
         // Durable-task startup may resolve/provision its own database. Keep that background work
         // behind the same pre-dispatch admission boundary as the app database: rejected streamed
         // traffic must not be able to trigger either provider (SPEC §9.5/§9.6).
@@ -179,6 +236,7 @@ export async function handleAppRequest(
 
         return dispatchMatchedAppRequest({
           app,
+          ...(buildToken === undefined ? {} : { buildToken }),
           match,
           method,
           request: limitedRequest,
@@ -235,6 +293,24 @@ export async function handleAppRequest(
       errorShellRequest,
     );
   }
+}
+
+/** @internal Snapshot the closed pre-key enhanced mutation ceiling during app construction. */
+export function registerAppEnhancedMutationBodyLimit(app: KovoApp): void {
+  let maximum = app.requestLimits.maxBodyBytes;
+  denseOwnArrayForEach(
+    app.mutations,
+    (mutation) => {
+      const candidate = mutationRequestBodyLimit(maximum, mutation);
+      if (candidate > maximum) maximum = candidate;
+    },
+    'App mutation body-limit registry',
+  );
+  witnessWeakMapSet(appEnhancedMutationBodyLimits, app, maximum);
+}
+
+function enhancedMutationAdmissionBodyLimit(app: KovoApp): number {
+  return witnessWeakMapGet(appEnhancedMutationBodyLimits, app) ?? app.requestLimits.maxBodyBytes;
 }
 
 function requestDeadlineMsForMatch(
@@ -319,6 +395,13 @@ function requestBodyLimitForMatch(
     'App mutation registry',
   );
   if (mutation === undefined) return baseLimit;
+  return mutationRequestBodyLimit(baseLimit, mutation);
+}
+
+function mutationRequestBodyLimit(
+  baseLimit: number,
+  mutation: KovoApp['mutations'][number],
+): number {
   const uploadBytes = schemaMaxUploadBytes(mutation.input as Schema<unknown>);
   if (uploadBytes === undefined) return baseLimit;
 
@@ -366,8 +449,11 @@ function loadShedSurface(kind: string): LoadShedSurface {
   return 'other';
 }
 
-function systemResponseBuildToken(app: KovoApp, surface: LoadShedSurface): string | undefined {
-  return surface === 'mutation' || surface === 'query' ? app.clientModules.buildToken() : undefined;
+function systemResponseBuildToken(
+  handlerBuildToken: string | undefined,
+  surface: LoadShedSurface,
+): string | undefined {
+  return surface === 'mutation' || surface === 'query' ? handlerBuildToken : undefined;
 }
 
 function endpointServerErrorResponse(posture: EndpointResponsePosture): Response {

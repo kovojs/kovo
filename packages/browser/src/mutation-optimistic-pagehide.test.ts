@@ -4,10 +4,14 @@ import type {
   EnhancedMutationFetchOptions,
   EnhancedMutationResponseLike,
 } from './mutation-fetch.js';
-import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
+import {
+  submitOptimisticEnhancedMutation as submitOptimisticEnhancedMutationWithBuild,
+  type OptimisticEnhancedMutationSubmitOptions,
+} from './mutation-optimistic.js';
 import { installPagehideOptimismCleanup, OptimisticRebaser } from './optimism.js';
-import { stampPendingQueries } from './pending.js';
+import { familyPendingQuerySelector, stampPendingQueries } from './pending.js';
 import { createQueryStore } from './query-store.js';
+
 import {
   FakeMorphRoot,
   FakePendingElement,
@@ -15,6 +19,17 @@ import {
   FakeRoot,
   mutationTestResponse,
 } from './runtime-test-fakes.js';
+
+function submitOptimisticEnhancedMutation<Input>(
+  options: Omit<OptimisticEnhancedMutationSubmitOptions<Input>, 'expectedBuildToken'> & {
+    expectedBuildToken?: string;
+  },
+) {
+  return submitOptimisticEnhancedMutationWithBuild({
+    expectedBuildToken: 'build-test',
+    ...options,
+  });
+}
 
 describe('optimistic enhanced mutation pagehide cleanup', () => {
   it('cleans up mid-flight optimistic navigation while the keepalive mutation continues', async () => {
@@ -30,7 +45,11 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
     installPagehideOptimismCleanup({
       discardPendingOptimism() {
         const discarded = rebaser.discardPendingOptimism();
-        stampPendingQueries(pendingRoot, discarded, false);
+        stampPendingQueries(
+          pendingRoot,
+          discarded.map((name) => familyPendingQuerySelector(name)),
+          false,
+        );
         return discarded;
       },
       root: lifecycleRoot,
@@ -94,12 +113,14 @@ describe('optimistic enhanced mutation pagehide cleanup', () => {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': 'build-test',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000005',
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
 

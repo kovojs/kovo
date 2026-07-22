@@ -14,6 +14,7 @@ import {
   prepareEnhancedMutationRequest,
   type EnhancedFormLike,
   type EnhancedMutationFetch,
+  type FetchEnhancedMutationOptions,
   type UploadProgress,
 } from './mutation-fetch.js';
 import {
@@ -40,7 +41,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryIdentity, QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
-import type { PendingRoot } from './pending.js';
+import type { PendingQuerySelector, PendingRoot } from './pending.js';
 import type { ImportHandlerModule } from './handlers.js';
 import {
   captureSessionTransitionPrincipalRetirement,
@@ -117,6 +118,12 @@ export async function dispatchEnhancedFormSubmit(
     return true;
   }
 
+  // The server chooses an enhanced decoder from the immutable page build. If boot did not pin
+  // that proof, leave this form on its rendered native path before constructing FormData, minting
+  // an idem, or suppressing the submit event (SPEC §9.1/§14).
+  const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
+  if (!expectedBuildToken) return false;
+
   // Construct fallible request authority before suppressing the browser's native path. If this
   // preparation fails, the submit event remains unprevented and retains the rendered no-JS token.
   const formData = options.formData
@@ -127,6 +134,7 @@ export async function dispatchEnhancedFormSubmit(
   let requestPlan: FrameworkTargetRequestHeaderPlan | undefined;
   try {
     requestPlan = prepareEnhancedMutationRequest({
+      buildToken: expectedBuildToken,
       form,
       idem,
       root: options.root,
@@ -140,6 +148,7 @@ export async function dispatchEnhancedFormSubmit(
   if (!preventRuntimeDelegatedEventDefault(event)) return false;
   try {
     const applied = await submitEnhancedMutation({
+      expectedBuildToken,
       fetch: options.fetch,
       form,
       formData,
@@ -157,7 +166,6 @@ export async function dispatchEnhancedFormSubmit(
       ...definedProps({
         applyQuery: options.applyQuery,
         broadcast: options.broadcast,
-        expectedBuildToken: options.expectedBuildToken,
         idem,
         importModule: options.importModule,
         morph: options.morph,
@@ -220,7 +228,7 @@ export interface EnhancedMutationSubmitOptions {
    * (`<meta name="kovo-build">`) when omitted; deltas apply only when it matches
    * the response's `Kovo-Build` token.
    */
-  expectedBuildToken?: string;
+  expectedBuildToken: string;
   fetch: EnhancedMutationFetch;
   form: EnhancedFormLike;
   formData: unknown;
@@ -245,8 +253,10 @@ export interface EnhancedMutationSubmitOptions {
    * error has been handled.
    */
   onError?: (error: unknown) => void;
+  /** @internal Framework-owned observation of already-membraned response facts. */
+  onResponseSnapshot?: FetchEnhancedMutationOptions['onResponseSnapshot'];
   onUploadProgress?: (progress: UploadProgress) => void;
-  pendingQueries?: readonly string[];
+  pendingQueries?: readonly PendingQuerySelector[];
   pendingRoot?: PendingRoot;
   queryPlans?: CompiledQueryUpdatePlans;
   /** @internal Module-minted request plan prepared before delegated preventDefault. */
@@ -262,6 +272,12 @@ export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {
   options = definedProps(options) as EnhancedMutationSubmitOptions;
+  const expectedBuildToken = options.expectedBuildToken;
+  if (!expectedBuildToken) {
+    (options.onBuildSkew ?? defaultBuildSkewReload)();
+    throw new TypeError('Kovo refused an enhanced mutation without a document build proof.');
+  }
+  options = { ...options, expectedBuildToken };
   const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
   stampEnhancedMutationPending(options, true);
 
@@ -273,10 +289,8 @@ export async function submitEnhancedMutation(
       streaming: isStreamingEnhancedMutationForm(options.form),
     });
     if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);
-    // SPEC §9.1.1: default the build token (from the page meta) and the
-    // refetch-full handler so the production submit path validates delta bases
-    // and recovers on a miss/skew. Both stay injectable for tests.
-    const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
+    // SPEC §9.1.1: the build proof was captured before transport. Default the refetch-full handler
+    // so the production submit path validates delta bases and recovers on a miss/skew.
     const onDeltaMiss = options.onDeltaMiss ?? defaultDeltaMissRefetcher(options);
     const onBuildSkew = options.onBuildSkew ?? defaultBuildSkewReload;
     if (fetched.streamBody) {
@@ -325,6 +339,7 @@ function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDe
       headers: init.headers,
       keepalive: false,
       method: init.method,
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
 
@@ -335,7 +350,7 @@ function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDe
       applyQuery: options.applyQuery,
       // SPEC §5.2.1 rule 2d / §14: the refetch compares the /_q Kovo-Build token to the document
       // token; on a persistent mismatch it escalates to a full reload instead of merging foreign data.
-      expectedBuildToken: options.expectedBuildToken ?? readPageBuildToken(),
+      expectedBuildToken: options.expectedBuildToken,
       onBuildSkew: options.onBuildSkew ?? defaultBuildSkewReload,
       onError: options.onError,
       queryPlans: options.queryPlans,

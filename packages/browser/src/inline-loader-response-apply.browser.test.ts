@@ -24,6 +24,21 @@ function serverStampedMutationIdemInput(): string {
   return `<input type="hidden" name="Kovo-Idem" value="${token}">`;
 }
 
+function exactQueryResponse(body: string, requestUrl: string): Response {
+  return {
+    headers: new Headers({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Kovo-Build': 'build-a',
+    }),
+    redirected: false,
+    status: 200,
+    async text() {
+      return body;
+    },
+    url: new URL(requestUrl, location.href).href,
+  } as Response;
+}
+
 afterEach(() => {
   for (const entry of testWindowListeners.splice(0)) {
     nativeEventTargetRemoveEventListener.call(
@@ -50,6 +65,7 @@ afterEach(() => {
 
 describe('browser inline loader response apply', () => {
   it('morphs enhanced mutation fragments through the installed inline loader', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a">';
     const style = document.createElement('style');
     style.textContent = [
       '.scroll-panel { height: 20px; overflow: auto }',
@@ -79,7 +95,11 @@ describe('browser inline loader response apply', () => {
     panel.scrollTop = 4;
 
     const fetch = vi.fn(async () => ({
-      headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+      headers: new Headers({
+        'Content-Type': 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': 'build-a',
+      }),
+      redirected: false,
       async text() {
         textarea.focus();
         textarea.setSelectionRange(1, 3, 'forward');
@@ -115,6 +135,7 @@ describe('browser inline loader response apply', () => {
   });
 
   it('applies fragments to explicit fragment targets before conflicting component stamps', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a">';
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
@@ -131,7 +152,11 @@ describe('browser inline loader response apply', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+        headers: new Headers({
+          'Content-Type': 'text/vnd.kovo.fragment+html',
+          'Kovo-Build': 'build-a',
+        }),
+        redirected: false,
         async text() {
           return [
             '<kovo-fragment target="cart">',
@@ -153,6 +178,7 @@ describe('browser inline loader response apply', () => {
   });
 
   it('applies selector-invalid id and fragment-target values through escaped lookup', async () => {
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a">';
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance data-mutation="cart/add" action="/_m/cart/add" method="post">',
@@ -169,7 +195,11 @@ describe('browser inline loader response apply', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
-        headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+        headers: new Headers({
+          'Content-Type': 'text/vnd.kovo.fragment+html',
+          'Kovo-Build': 'build-a',
+        }),
+        redirected: false,
         async text() {
           return [
             "<kovo-fragment target='target\"bad-id'>",
@@ -449,6 +479,7 @@ describe('browser inline loader response apply', () => {
           },
         },
         ok: true,
+        redirected: false,
         status: 200,
         async text() {
           return '<kovo-fragment target="cart"><section kovo-fragment-target="cart">fresh cart</section></kovo-fragment>';
@@ -477,18 +508,11 @@ describe('browser inline loader response apply', () => {
   it('refetches remembered kovo-query scripts when a tab becomes visible again', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a">';
     document.body.innerHTML = [
-      '<script type="application/json" kovo-query="cart" key="cart:c1">{"count":1}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-query-href="/_q/cart?key=c1">{"count":1}</script>',
       '<section kovo-fragment-target="cart">cart</section>',
     ].join('');
-    const fetch = vi.fn(
-      async () =>
-        new Response('<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>', {
-          headers: {
-            'Content-Type': 'text/vnd.kovo.fragment+html',
-            'Kovo-Build': 'build-a',
-          },
-          status: 200,
-        }),
+    const fetch = vi.fn(async (url: string) =>
+      exactQueryResponse('<kovo-query name="cart" key="cart:c1">{"count":2}</kovo-query>', url),
     );
     vi.stubGlobal('fetch', fetch);
     let appliedQueryEvents = 0;
@@ -503,17 +527,23 @@ describe('browser inline loader response apply', () => {
     installTestInlineKovoLoader(async () => ({}));
     dispatchEvent(new Event('visibilitychange'));
 
+    const cartHref = new URL('/_q/cart?key=c1', location.href).href;
     await vi.waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith('/_q/cart?key=c1', {
+      expect(fetch).toHaveBeenCalledWith(cartHref, {
         cache: 'no-store',
-        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+        headers: {
+          Accept: 'text/html',
+          'Kovo-Build': 'build-a',
+          'Kovo-Fragment': 'true',
+        },
         method: 'GET',
+        redirect: 'error',
       }),
     );
     await vi.waitFor(() => expect(appliedQueryEvents).toBe(1));
     const rememberedQueryRefetches = fetch.mock.calls.filter(
       ([url, init]) =>
-        url === '/_q/cart?key=c1' &&
+        url === cartHref &&
         init &&
         typeof init === 'object' &&
         'method' in init &&
@@ -522,35 +552,25 @@ describe('browser inline loader response apply', () => {
     expect(rememberedQueryRefetches).toHaveLength(1);
     expect(rememberedQueryRefetches[0]?.[1]).toEqual({
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: {
+        Accept: 'text/html',
+        'Kovo-Build': 'build-a',
+        'Kovo-Fragment': 'true',
+      },
       method: 'GET',
+      redirect: 'error',
     });
   });
 
-  it('builds structured query URLs and rejects invalid remembered identities', async () => {
+  it('uses exact emitted query URLs without reconstructing name and key transport', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a">';
     document.body.innerHTML = [
-      '<script type="application/json" kovo-query="product" key="product:p1">{}</script>',
-      '<script type="application/json" kovo-query="productDetail" key="inventory:p1">{}</script>',
-      '<script type="application/json" kovo-query="group:catalog">{}</script>',
-      '<script type="application/json" kovo-query="cart" key="cart:">{}</script>',
-      '<script type="application/json" kovo-query="invalid-empty" key="">{}</script>',
+      '<script type="application/json" kovo-query="product" key="product:p1" data-kovo-query-href="/_q/product?key=p1">{}</script>',
+      '<script type="application/json" kovo-query="productDetail" key="inventory:p1" data-kovo-query-href="/_q/productDetail?key=inventory%3Ap1">{}</script>',
+      '<script type="application/json" kovo-query="group:catalog" data-kovo-query-href="/_q/group%3Acatalog">{}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:" data-kovo-query-href="/_q/cart?key=">{}</script>',
     ].join('');
-    const invalidScalar = document.createElement('script');
-    invalidScalar.type = 'application/json';
-    invalidScalar.setAttribute('kovo-query', 'invalid\rname');
-    invalidScalar.textContent = '{}';
-    document.body.append(invalidScalar);
-    const fetch = vi.fn(
-      async () =>
-        new Response('', {
-          headers: {
-            'Content-Type': 'text/vnd.kovo.fragment+html',
-            'Kovo-Build': 'build-a',
-          },
-          status: 200,
-        }),
-    );
+    const fetch = vi.fn(async (url: string) => exactQueryResponse('', url));
     vi.stubGlobal('fetch', fetch);
 
     installTestInlineKovoLoader(async () => ({}));
@@ -558,10 +578,10 @@ describe('browser inline loader response apply', () => {
 
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      '/_q/product?key=p1',
-      '/_q/productDetail?key=inventory%3Ap1',
-      '/_q/group%3Acatalog',
-      '/_q/cart?key=',
+      new URL('/_q/product?key=p1', location.href).href,
+      new URL('/_q/productDetail?key=inventory%3Ap1', location.href).href,
+      new URL('/_q/group%3Acatalog', location.href).href,
+      new URL('/_q/cart?key=', location.href).href,
     ]);
   });
 });

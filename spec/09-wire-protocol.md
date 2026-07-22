@@ -13,7 +13,8 @@ One vocabulary, transport-agnostic: document load, enhanced fetch, and SSE live 
 POST /_m/cart/add HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
 Kovo-Fragment: true
-Kovo-Targets: cart-badge=cart; cart-drawer=cart; recommendations=product%3Ap1
+Kovo-Build: <render-plan-token>
+Kovo-Targets: cart-badge=cart; cart-drawer=cart; recommendations=%21product%21product%3Ap1
 Kovo-Live-Targets: cart-badge#cart-badge@<attestation>:{}; recommendations#recommendations@<attestation>:{"productId":"p1"}
 Kovo-Idem: 7f3a-…                          ← stamped hidden field; server replays duplicates
 
@@ -39,17 +40,29 @@ the same exact codec; independent handwritten implementations of the grammar are
 The codec is covered by a seeded `decode(encode(value)) ≡ value` oracle, including delimiter,
 escaping, Unicode, size, and malformed-input cases.
 
+`Kovo-Build-Skew` is a framework-reserved, response-only field. Its sole valid value is the exact
+ASCII token `true`, and it is meaningful only on an admitted HTTP 409 response that also carries
+the selected app's `Kovo-Build`, the inline fragment media envelope, and the private/no-store
+posture. An ordinary unmarked application 409 (including a typed stale-version conflict) is not a
+deploy-skew verdict. Application response headers cannot mint, replace, or override this marker.
+Intermediaries serving enhanced Kovo traffic MUST preserve it; if they instead alter or remove the
+coupled build stamp, the unequal/missing-token recovery rule still forces a full reload.
+
 Identity tokens use one canonical percent codec: RFC 3986 unreserved bytes remain literal and every
 other UTF-8 byte is `%HH` with uppercase hex. Decoders reject raw delimiters, lowercase/non-minimal
 escapes, invalid UTF-8, NUL, CR, and lone surrogates; they never trim ordinary data. `kovo-deps`
-stores those tokens separated only by ASCII spaces, and component identities are encoded like target
-and dependency identities. A present empty DOM identity (for example `kovo-key=""`) remains distinct
+stores exact query-dependency tokens separated only by ASCII spaces. An unkeyed dependency is the
+canonical query-name token. A keyed dependency is `!<canonical-name>!<canonical-full-key>`; `!` is
+reserved as the structural delimiter and is `%21` inside an ordinary identity, so `{name, key}` is
+injective and can never collide with an unkeyed name equal to the full key. Component identities are
+encoded like target identities. A present empty DOM identity (for example `kovo-key=""`) remains distinct
 from an absent attribute, but header/query names and instance identities are non-empty. DOM token
 decoding is linear and has no HTTP-size ceiling; the 4,096-character ceiling belongs only to each
 HTTP form/list encoder.
 
 Every target-bearing browser request carries a required fragment-free `Kovo-Current-Url` of at most
-1,536 ASCII characters. The framework headers together have an exact 9,216-byte HTTP/1 line budget,
+1,536 ASCII characters and the exact immutable document render-plan token in `Kovo-Build`. The
+framework headers together have an exact 9,216-byte HTTP/1 line budget,
 counting each name, `: `, value, and trailing CRLF. A present form target is required to fit; target
 and live-target lists truncate only at complete entries and empty list headers are omitted. Delegated
 submit performs this preflight before `preventDefault()` and leaves the native submit untouched when
@@ -66,7 +79,7 @@ satisfy the census. App-owned reads and reviewed third-party adapters are outsid
 unless their value enters a named framework protocol door; at that point the normal registry and
 reject-by-default rules apply.
 
-- `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. The semantic form is `target=queryInstance queryInstance`; each identity is encoded by the canonical token codec on the header (`product-form%3Ap2=product%3Ap2`). The server holds **no session of what's on screen** — it answers a stateless question.
+- `Kovo-Targets` is read off the live DOM (`kovo-deps` stamps), so islands patched in after page load participate. Its semantic dependencies are exact `{name, key?}` facts, not colon-split strings. The header encodes the target and each complete dependency token through the canonical identity codec: for query `product` at full instance key `product:p2`, the physical entry is `product-form%3Ap2=%21product%21product%3Ap2`. The server holds **no session of what's on screen** — it answers a stateless question.
 - `Kovo-Live-Targets` is the structured reconstruction companion for server-refreshable component targets. Each entry names the live target, its generated component registry key, and the serialized props/key identity the compiler proved sufficient to reconstruct the component instance. Every entry MUST carry a server-minted attestation over that canonical descriptor, the canonical source-document URL (origin, path, and query; never the fragment), the exact §5.2.1 app build token, the CSRF session binding (including the framework-minted anonymous CSRF cookie when there is no app session), the independently resolved framework principal, and a separate app authority audience. A mutation or HMR sink MUST same-origin validate that source URL, match it to one canonical app route, rerun the route's complete layout/route guard chain, and use only the resulting authorized source-route request for response-side query and component rendering; the mutation or HMR endpoint request is never a substitute render context. A typed failure may select only the compiler-owned component renderer that both matches the submitted form target and declares the submitted mutation key. `createApp({ appId })` supplies the replica-stable app part of the audience; it MUST be a canonical UUIDv4 generated once per distinct app. A production app with live-target renderers MUST declare it, and distinct apps MUST use distinct UUIDs and signing secrets even across processes or isolates. A rendererless production app or development app that omits `appId` receives only a boot-local audience, never distributed authority. The app build token is deploy-skew identity and MUST NOT be treated as the app security principal merely because two apps can share the same render contract and active module set; both values are signed independently. Dev mode keeps the descriptor explicit and inspectable; prod may replace the JSON with a versioned token only when `kovo explain` can recover the same value. App authors never construct this header, import target constants, or route mutations to fragments by hand.
 - The synchronizer token, replay scope, and live-target attestation consume one exact CSRF binding. On a framework lifecycle request, `CsrfOptions.sessionId` MUST return an opaque non-empty string of at most 1,024 characters for a resolved session and `undefined` only for a genuinely anonymous request. A non-string, missing, empty, or oversized authenticated value, an unresolved framework session, or an anonymous framework posture paired with a defined id fails closed; it never falls back to the anonymous cookie. Standalone CSRF helper inputs without framework lifecycle posture continue to treat the callback as their declared session/anonymous authority. Session ids and anonymous-cookie secrets occupy separately labeled, canonical length-framed domains, and the framework-resolved authorization principal is independently framed into authenticated bindings, so shared or namespace-shaped rotation ids cannot validate or replay across principals. Every authorization principal and source-derived mutation identity entering that replay scope is non-empty and at most 1,024 JavaScript code units. An inbound anonymous-cookie secret is 32..1,024 base64url characters (framework minting produces 43); a present malformed or oversized cookie fails closed instead of being silently replaced.
 - A `csrf: false` mutation never derives replay authority from a session field or a mutation-wide
@@ -324,6 +337,7 @@ Every query is addressable over GET — one read surface serving refetch-on-focu
 
 ```http
 GET /_q/product?id=p1 HTTP/1.1
+Kovo-Build: <app-build-token>
 Kovo-Fragment: true
 ```
 
@@ -334,7 +348,7 @@ Content-Type: text/html; charset=utf-8
 <kovo-query name="product" key="product:p1">{ "name": "Mug", "stock": 4 }</kovo-query>
 ```
 
-Every `/_q/` response MUST carry the build's app build token (§5.2.1) so a refetch into a stale tab is detected like a delta is: a client whose document token differs from the response token discards the in-place merge and performs §14 recovery rather than merging a foreign-shape value. Args arrive as search params through the query's `args` schema (§10.2) — the same `s.*` coercion machinery as forms. A query with no declared `args` schema MUST reject a non-empty search input with 422 before running lifecycle providers, guards, or its loader; an absent schema is not an unvalidated-input mode. The query's `guard` (§10.2) is checked on **every** admitted read, and reads are part of the unguarded audit. Query `name` and optional canonical full instance `key` are separate exact facts: a raw string containing `:` is an unkeyed name, never something to split. A present raw empty `key` is malformed, while `name:` is a valid canonical instance identity with an empty value. Refetch dispatch uses the exact name for `/_q/<name>` and derives the search value only from the separately retained key fact (stripping `${name}:` when it is that key's prefix and otherwise preserving the domain-owned full key). The instance key in the response (`product:p1`) remains the §10.2 single currency shared across client store, wire, and optimism.
+Every enhanced `/_q/` request MUST carry its immutable document app build token as `Kovo-Build`, and every `/_q/` response MUST carry the selected build's token (§5.2.1). The current app rejects a missing or unequal enhanced-request token before decoding the query key or entering the query registry. A client compares the response token before generic failure-status handling, so the stamped 409 skew response triggers §14 recovery rather than becoming a silently skipped background failure. An admitted enhanced read whose guard now denies the current principal MUST return an exact, non-redirecting HTTP 401 (unauthenticated) or 403 (forbidden), `text/html`, and the selected build token; native query navigation retains the ordinary 303 login redirect. The enhanced client uses Fetch `redirect: 'error'` and treats only that exact-URL, same-build, admitted 401/403 envelope as revocation: it applies none of the fetched batch and performs a full navigation recovery of the current route, whose native guard then redirects or renders forbidden. A Fetch rejection alone is only a transport failure and MUST NOT be inferred to prove revocation. Args arrive as search params through the query's `args` schema (§10.2) — the same `s.*` coercion machinery as forms. A query with no declared `args` schema MUST reject a non-empty search input with 422 before running lifecycle providers, guards, or its loader; an absent schema is not an unvalidated-input mode. The query's `guard` (§10.2) is checked on **every** admitted read, and reads are part of the unguarded audit. Query `name` and optional canonical full instance `key` are separate exact facts: a raw string containing `:` is an unkeyed name, never something to split. A present raw empty `key` is malformed, while `name:` is a valid canonical instance identity with an empty value. Refetch dispatch uses the exact name for `/_q/<name>` and derives the search value only from the separately retained key fact (stripping `${name}:` when it is that key's prefix and otherwise preserving the domain-owned full key). The instance key in the response (`product:p1`) remains the §10.2 single currency shared across client store, wire, and optimism.
 
 **Caching contract (normative).** `/_q/<key>` is a credentialed GET whose body may vary by identity, so a URL that differs only by args is a shared-cache collision waiting to disclose one principal's data to another. Every compiler-emitted app graph with query or raw-endpoint roots therefore carries one versioned `kovo-cache-influence/v1` manifest. Each query or raw-endpoint root records URL path and search as cache-key axes, each statically named request-header read as a possible `Vary` axis, and cookies, Authorization, principal/session facts, secrets, framework state, declared external-data versions, and unclassified influence as distinct axes. A declared external-data version is cacheable only when its version has a manifest-visible URL or named-request-header key contribution. Framework state without complete keyed external versions, a dynamic header name, an opaque call, or any influence outside the finite reviewed language closes shared caching. One observed execution is never positive evidence. A named audited escape may retain an explicit operator obligation, but it remains distinguishable from `public-proved` compiler evidence.
 
@@ -550,6 +564,12 @@ must reuse existing app-shell render, query, live-target renderer, and fragment-
 route or live-target refresh response, including method and authorization failures, MUST carry
 `Cache-Control: private, no-store` and `Vary: Cookie`, because the bytes can depend on the resolved
 session, route guards, queries, and component render context even in development.
+
+An HMR live-target refresh carries the current document token in `Kovo-Build` like every other
+target-bearing request. The Vite-dev-only endpoint may additionally accept the explicit `oldBuild`
+URL parameter as the prior-render selector needed while an update is crossing builds. That exception
+does not exist in production request dispatch. A malformed HMR snapshot, response envelope, missing
+build token, or response-token mismatch is never partially applied; it escalates to full reload.
 
 ### 9.6 Durable tasks and scheduling
 

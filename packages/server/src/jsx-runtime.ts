@@ -11,6 +11,7 @@ import type {
 import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
+import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
   assertHtmlElementWireValueStable,
@@ -76,7 +77,12 @@ import {
   formHelperStringStartsWith,
   formHelperStringToLowerCase,
 } from './jsx-form-helper-intrinsics.js';
-import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './query.js';
+import {
+  readQueryInstanceKey,
+  recordQueryRuntimeWarnings,
+  runQuery,
+  type QueryDefinition,
+} from './query.js';
 import {
   requestFormDataGet,
   requestFormDataValues,
@@ -84,6 +90,7 @@ import {
 } from './request-body-intrinsics.js';
 import {
   witnessCreateNullRecord,
+  witnessArrayAppend,
   witnessGetOwnPropertyDescriptor,
   witnessObjectIs,
   witnessObjectKeys,
@@ -1135,7 +1142,7 @@ async function renderKovoComponent(
   jsxKey?: unknown,
 ): Promise<RenderedHtml> {
   const request = currentJsxRequestContext();
-  const queries = await loadComponentQueries(component, props, request);
+  const loadedQueries = await loadComponentQueries(component, props, request);
   const state = component.definition.state?.() as JsonValue | undefined;
   const slots = componentRenderSlots(component, props, request);
   const render = component.definition.render as (
@@ -1143,7 +1150,7 @@ async function renderKovoComponent(
     state: JsonValue | undefined,
     slots: ComponentRenderSlots,
   ) => unknown;
-  const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
+  const rendered = render({ ...props, ...loadedQueries.values }, state, slots) as JsxNode;
   const html = await renderJsxChildren(rendered);
   const context = currentJsxFrameworkContext();
   return renderedHtml(
@@ -1155,6 +1162,7 @@ async function renderKovoComponent(
       html,
       jsxKey,
       props,
+      queryIdentities: loadedQueries.identities,
       request: context?.request,
     }),
   );
@@ -1164,11 +1172,15 @@ async function loadComponentQueries(
   component: KovoJsxComponent,
   props: JsxProps,
   request: unknown,
-): Promise<Record<string, unknown>> {
+): Promise<{
+  identities: readonly FrameworkQueryDependencyIdentity[];
+  values: Record<string, unknown>;
+}> {
   const queryBindings = component.definition.queries;
-  if (!isRecord(queryBindings)) return {};
+  if (!isRecord(queryBindings)) return { identities: [], values: {} };
 
   const values = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
+  const identities: FrameworkQueryDependencyIdentity[] = [];
   const names = witnessObjectKeys(queryBindings);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
@@ -1195,8 +1207,14 @@ async function loadComponentQueries(
     }
     recordQueryRuntimeWarnings(request, result.warnings);
     values[name] = result.value;
+    const key = readQueryInstanceKey(resolved.query, result.input);
+    witnessArrayAppend(
+      identities,
+      key === undefined ? { name: resolved.query.key } : { key, name: resolved.query.key },
+      'Rendered component query identities',
+    );
   }
-  return values;
+  return { identities, values };
 }
 
 function componentQueryBinding(

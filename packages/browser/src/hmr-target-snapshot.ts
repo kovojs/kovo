@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through captured Reflect.apply. */
 
 import type {
+  FrameworkQueryDependencyIdentity,
   FrameworkWireEntrySnapshot,
   FrameworkWireInputGrammar,
   FrameworkWireTargetCodec,
@@ -29,6 +30,8 @@ export function createHmrTargetSnapshotReader(
   const objectFreeze = NativeObject.freeze;
   const objectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const stringSlice = String.prototype.slice;
+  const stringToLowerCase = String.prototype.toLowerCase;
+  const stringTrim = String.prototype.trim;
   const maxCollectionElements = 100_000;
 
   const apply = <Result>(method: Function, receiver: unknown, args: readonly unknown[]): Result =>
@@ -94,6 +97,7 @@ export function createHmrTargetSnapshotReader(
   const encodeLiveTargetHeader = ownMethod(codec, 'encodeLiveTargetHeader');
   const encodeTargetHeader = ownMethod(codec, 'encodeTargetHeader');
   const decodeIdentityToken = ownMethod(codec, 'decodeIdentityToken');
+  const decodeQueryDependencyToken = ownMethod(codec, 'decodeQueryDependencyToken');
   const identityIsValid = ownMethod(codec, 'identityIsValid');
   const componentIsValid = ownMethod(codec, 'componentIsValid');
   const attestationIsValid = ownMethod(codec, 'attestationIsValid');
@@ -139,6 +143,7 @@ export function createHmrTargetSnapshotReader(
       !encodeLiveTargetHeader ||
       !encodeTargetHeader ||
       !decodeIdentityToken ||
+      !decodeQueryDependencyToken ||
       !identityIsValid ||
       !componentIsValid ||
       !attestationIsValid ||
@@ -169,9 +174,18 @@ export function createHmrTargetSnapshotReader(
       if (apply<string>(decodeIdentityToken, codec, ['query%3Acontrol']) !== 'query:control') {
         return false;
       }
+      const keyedDependency = apply<unknown>(decodeQueryDependencyToken, codec, [
+        '!query!query%3Acontrol',
+      ]);
+      if (
+        ownData<string>(keyedDependency, 'name') !== 'query' ||
+        ownData<string>(keyedDependency, 'key') !== 'query:control'
+      ) {
+        return false;
+      }
       if (
         apply<string>(encodeTargetHeader, codec, [
-          [{ deps: ['query-control'], target: 'target-control' }],
+          [{ deps: [{ name: 'query-control' }], target: 'target-control' }],
         ]) !== 'target-control=query-control'
       ) {
         return false;
@@ -237,27 +251,85 @@ export function createHmrTargetSnapshotReader(
     }
     return false;
   };
-  const readDependencies = (value: string | null): string[] => {
+  const readDependencies = (value: string | null): FrameworkQueryDependencyIdentity[] => {
     assertControls();
     const source = value ?? '';
-    const output: string[] = [];
+    if (source.length > (maxHeaderCharacters as number)) {
+      throw new NativeTypeError('Kovo HMR dependency input exceeds its bounded wire length.');
+    }
+    const output: FrameworkQueryDependencyIdentity[] = [];
     let start = 0;
     for (let index = 0; index <= source.length; index += 1) {
       const character = index === source.length ? ' ' : (source[index] ?? '');
       if (character !== ' ') continue;
       if (index > start) {
         const token = apply<string>(stringSlice, source, [start, index]);
-        const dependency = apply<unknown>(decodeIdentityToken!, codec, [token]);
-        if (typeof dependency !== 'string') {
+        const dependency = apply<unknown>(decodeQueryDependencyToken!, codec, [token]);
+        if (dependency === undefined) {
           throw new NativeTypeError(
-            'Kovo HMR dependency input must contain canonical identity tokens.',
+            'Kovo HMR dependency input must contain canonical query identity tokens.',
           );
         }
-        appendDense(output, dependency, 'Kovo HMR dependency snapshot');
+        const name = ownData<unknown>(dependency, 'name');
+        const key = ownData<unknown>(dependency, 'key');
+        if (typeof name !== 'string' || (key !== undefined && typeof key !== 'string')) {
+          throw new NativeTypeError('Kovo HMR dependency codec returned malformed identity facts.');
+        }
+        if (
+          ownArrayLength(output, 'Kovo HMR dependency snapshot', maxEntries as number) ===
+          maxEntries
+        ) {
+          throw new NativeTypeError(
+            'Kovo HMR dependency input exceeds its bounded identity count.',
+          );
+        }
+        for (let depIndex = 0; depIndex < output.length; depIndex += 1) {
+          const existing = ownArrayEntry<FrameworkQueryDependencyIdentity>(output, depIndex);
+          if (
+            ownData<string>(existing, 'name') === name &&
+            ownData<string>(existing, 'key') === key
+          ) {
+            throw new NativeTypeError('Kovo HMR dependency identities must be unique.');
+          }
+        }
+        appendDense(
+          output,
+          dependency as FrameworkQueryDependencyIdentity,
+          'Kovo HMR dependency snapshot',
+        );
       }
       start = index + 1;
     }
     return output;
+  };
+  const responseEnvelopeIsFragment = (
+    contentType: unknown,
+    contentDisposition: unknown,
+  ): boolean => {
+    assertControls();
+    if (typeof contentType !== 'string' || contentType.length === 0 || contentType.length > 8_192) {
+      return false;
+    }
+    const normalizedContentType = apply<string>(stringToLowerCase, contentType, []);
+    const trimmedContentType = apply<string>(stringTrim, normalizedContentType, []);
+    if (
+      trimmedContentType !== 'text/vnd.kovo.fragment+html' &&
+      trimmedContentType !== 'text/vnd.kovo.fragment+html; charset=utf-8'
+    ) {
+      return false;
+    }
+    if (contentDisposition === null || contentDisposition === undefined) return true;
+    if (
+      typeof contentDisposition !== 'string' ||
+      contentDisposition.length === 0 ||
+      contentDisposition.length > 8_192
+    ) {
+      return false;
+    }
+    return (
+      apply<string>(stringToLowerCase, apply<string>(stringTrim, contentDisposition, []), []) ===
+      'inline'
+    );
   };
   const targetIdentity = (element: unknown): string => {
     const fragmentTarget = readAttribute(element, 'kovo-fragment-target');
@@ -282,46 +354,43 @@ export function createHmrTargetSnapshotReader(
     );
     for (let index = 0; index < elementCount; index += 1) {
       const element = ownArrayEntry<object>(elements, index);
+      const attestation = readAttribute(element, 'kovo-live-token');
+      // Dependency-only roots are expected in this collection. Once a root advertises a live
+      // attestation, however, its whole descriptor must be usable: silently dropping a malformed
+      // sibling would turn one DOM snapshot into a partially refreshed document (SPEC §9.5).
+      if (attestation === null) continue;
       const target = targetIdentity(element);
       const component = liveComponentIdentity(element);
-      const attestation = readAttribute(element, 'kovo-live-token');
       if (
         apply<boolean>(identityIsValid!, codec, [target]) !== true ||
         apply<boolean>(componentIsValid!, codec, [component]) !== true ||
         apply<boolean>(attestationIsValid!, codec, [attestation]) !== true ||
-        target === '' ||
-        contains(seen, target)
+        target === ''
       ) {
-        continue;
+        throw new NativeTypeError('Kovo HMR live-target metadata is invalid.');
+      }
+      if (contains(seen, target)) {
+        throw new NativeTypeError('Kovo HMR live-target identities must be unique.');
       }
       appendDense(seen, target, 'Kovo HMR live-target identity snapshot');
-      let wireEntry = '';
-      try {
-        wireEntry = apply<string>(encodeLiveTargetHeader!, codec, [
-          [
-            {
-              attestation,
-              component,
-              propsSource: readAttribute(element, 'kovo-props'),
-              target,
-            },
-          ],
-        ]);
-      } catch {
-        continue;
+      const wireEntry = apply<string>(encodeLiveTargetHeader!, codec, [
+        [
+          {
+            attestation,
+            component,
+            propsSource: readAttribute(element, 'kovo-props'),
+            target,
+          },
+        ],
+      ]);
+      if (wireEntry === '') {
+        throw new NativeTypeError('Kovo HMR live-target metadata encoded to an empty entry.');
       }
-      if (wireEntry === '') continue;
       appendDense(
         output,
         apply(objectFreeze, NativeObject, [{ target, wireEntry }]) as FrameworkWireEntrySnapshot,
         'Kovo HMR live-target header snapshot',
       );
-      if (
-        ownArrayLength(output, 'Kovo HMR live-target header snapshot', maxEntries as number) ===
-        maxEntries
-      ) {
-        break;
-      }
     }
     return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
   };
@@ -339,39 +408,25 @@ export function createHmrTargetSnapshotReader(
       const element = ownArrayEntry<object>(elements, index);
       const target = targetIdentity(element);
       const dependencies = readDependencies(readAttribute(element, 'kovo-deps'));
-      let safe = apply<boolean>(identityIsValid!, codec, [target]) === true;
-      const dependencyCount = ownArrayLength(
-        dependencies,
-        'Kovo HMR dependency snapshot',
-        maxCollectionElements,
-      );
-      for (
-        let dependencyIndex = 0;
-        safe && dependencyIndex < dependencyCount;
-        dependencyIndex += 1
-      ) {
-        safe =
-          apply<boolean>(identityIsValid!, codec, [
-            ownArrayEntry<string>(dependencies, dependencyIndex),
-          ]) === true;
+      ownArrayLength(dependencies, 'Kovo HMR dependency snapshot', maxCollectionElements);
+      if (apply<boolean>(identityIsValid!, codec, [target]) !== true || target === '') {
+        throw new NativeTypeError('Kovo HMR dependency-target metadata is invalid.');
       }
-      if (!safe || target === '' || contains(seen, target)) continue;
+      if (contains(seen, target)) {
+        throw new NativeTypeError('Kovo HMR dependency-target identities must be unique.');
+      }
       appendDense(seen, target, 'Kovo HMR target identity snapshot');
       const wireEntry = apply<string>(encodeTargetHeader!, codec, [
         [{ deps: dependencies, target }],
       ]);
-      if (wireEntry === '') continue;
+      if (wireEntry === '') {
+        throw new NativeTypeError('Kovo HMR dependency-target metadata encoded to an empty entry.');
+      }
       appendDense(
         output,
         apply(objectFreeze, NativeObject, [{ target, wireEntry }]) as FrameworkWireEntrySnapshot,
         'Kovo HMR target header snapshot',
       );
-      if (
-        ownArrayLength(output, 'Kovo HMR target header snapshot', maxEntries as number) ===
-        maxEntries
-      ) {
-        break;
-      }
     }
     return apply(objectFreeze, NativeObject, [output]) as readonly FrameworkWireEntrySnapshot[];
   };
@@ -379,15 +434,26 @@ export function createHmrTargetSnapshotReader(
   const currentBuild = (root: unknown): string => {
     const elements = queryElements(root, 'meta[name="kovo-build"]');
     const length = ownArrayLength(elements, 'Kovo HMR build-meta snapshot', maxCollectionElements);
-    return length === 0 ? '' : (readAttribute(ownArrayEntry(elements, 0), 'content') ?? '');
+    if (length === 0) return '';
+    if (length !== 1) {
+      throw new NativeTypeError('Kovo HMR requires exactly one document build identity.');
+    }
+    const value = readAttribute(ownArrayEntry(elements, 0), 'content') ?? '';
+    if (apply<boolean>(identityIsValid!, codec, [value]) !== true) {
+      throw new NativeTypeError('Kovo HMR document build identity is invalid.');
+    }
+    return value;
   };
   const writeBuild = (root: unknown, value: string): void => {
     const elements = queryElements(root, 'meta[name="kovo-build"]');
     const length = ownArrayLength(elements, 'Kovo HMR build-meta snapshot', maxCollectionElements);
-    if (length > 0) writeAttribute(ownArrayEntry(elements, 0), 'content', value);
+    if (length !== 1 || apply<boolean>(identityIsValid!, codec, [value]) !== true) {
+      throw new NativeTypeError('Kovo HMR build transition requires exact document identities.');
+    }
+    writeAttribute(ownArrayEntry(elements, 0), 'content', value);
   };
 
   return apply(objectFreeze, NativeObject, [
-    { currentBuild, dependencyTargets, liveTargets, writeBuild },
+    { currentBuild, dependencyTargets, liveTargets, responseEnvelopeIsFragment, writeBuild },
   ]);
 }

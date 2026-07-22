@@ -106,6 +106,10 @@ function requestInputHref(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function responseUrlWithoutFragment(url: URL): string {
+  return url.origin + url.pathname + url.search;
+}
+
 afterEach(() => {
   document.head.innerHTML = '';
   for (const attribute of Array.from(document.documentElement.attributes)) {
@@ -157,6 +161,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
+        redirected: false,
         url: new URL('/cart', location.href).href,
       })),
     );
@@ -220,6 +225,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
+        redirected: false,
         url: new URL('/account?refresh=1', location.href).href,
       })),
     );
@@ -263,6 +269,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
+        redirected: false,
         url: new URL('/private?refresh=1', location.href).href,
       })),
     );
@@ -308,6 +315,7 @@ describe('browser inline loader enhanced navigation', () => {
       async text() {
         return safeHtml;
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     const attackFetch = vi.fn(async () => ({
@@ -315,6 +323,7 @@ describe('browser inline loader enhanced navigation', () => {
       async text() {
         return '<!doctype html><html><body><main kovo-nav-segment="layout:attack">ATTACKER</main></body></html>';
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', safeFetch);
@@ -364,6 +373,7 @@ describe('browser inline loader enhanced navigation', () => {
       async text() {
         return targetHtml;
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -381,6 +391,7 @@ describe('browser inline loader enhanced navigation', () => {
       expect(click.defaultPrevented).toBe(true);
       expect(fetch).toHaveBeenCalledWith(new URL('/cart', location.href).href, {
         headers: { Accept: 'text/vnd.kovo.document+html, text/html' },
+        redirect: 'error',
       });
       expect(document.querySelector('main')).toBe(layout);
       expect(document.activeElement).toBe(layout);
@@ -441,6 +452,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -500,6 +512,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
+        redirected: false,
         url: new URL('/private?refresh=1', location.href).href,
       })),
     );
@@ -558,6 +571,7 @@ describe('browser inline loader enhanced navigation', () => {
       async text() {
         return targetHtml;
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -626,6 +640,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -696,6 +711,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -767,6 +783,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -818,6 +835,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -873,6 +891,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -921,6 +940,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -976,6 +996,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -1023,6 +1044,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -1062,6 +1084,7 @@ describe('browser inline loader enhanced navigation', () => {
         new Promise<string>((resolve) => {
           resolveText = resolve;
         }),
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -1135,6 +1158,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -1218,6 +1242,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -1283,6 +1308,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -1325,7 +1351,8 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
-      url: new URL('/cart#checkout', location.href).href,
+      redirected: false,
+      url: new URL('/cart', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('scrollTo', vi.fn());
@@ -1371,6 +1398,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api/core/', location.href).href,
     }));
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -1423,7 +1451,8 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
-      url: new URL('/api#symbols%2Fproperty%20value', location.href).href,
+      redirected: false,
+      url: new URL('/api', location.href).href,
     }));
     const originalScrollIntoView = currentElementScrollIntoView();
     Element.prototype.scrollIntoView = function scrollIntoView() {
@@ -1436,7 +1465,8 @@ describe('browser inline loader enhanced navigation', () => {
 
     try {
       installNavigationLoader();
-      dispatchAnchorLikeClick('/api#symbols%2Fproperty%20value');
+      const click = dispatchAnchorLikeClick('/api#symbols%2Fproperty%20value');
+      expect(click.defaultPrevented).toBe(true);
 
       await vi.waitFor(() => expect(document.title).toBe('API'));
 
@@ -1494,7 +1524,8 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
-        url: url.href,
+        redirected: false,
+        url: responseUrlWithoutFragment(url),
       };
     });
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -1564,7 +1595,8 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
-        url: url.href,
+        redirected: false,
+        url: responseUrlWithoutFragment(url),
       };
     });
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -1628,7 +1660,8 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
-      url: new URL('/api#symbols%2Fsticky', location.href).href,
+      redirected: false,
+      url: new URL('/api', location.href).href,
     }));
     const originalGetComputedStyle = globalThis.getComputedStyle;
     const originalGetBoundingClientRect = currentElementGetBoundingClientRect();
@@ -1715,7 +1748,8 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
-      url: new URL('/api#symbols%2Fshifted', location.href).href,
+      redirected: false,
+      url: new URL('/api', location.href).href,
     }));
     const originalGetComputedStyle = globalThis.getComputedStyle;
     const originalGetBoundingClientRect = currentElementGetBoundingClientRect();
@@ -1807,7 +1841,8 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
-        url: url.href,
+        redirected: false,
+        url: responseUrlWithoutFragment(url),
       };
     });
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -1852,7 +1887,8 @@ describe('browser inline loader enhanced navigation', () => {
             new Promise<string>((resolve) => {
               resolveSlowText = resolve;
             }),
-          url: url.href,
+          redirected: false,
+          url: responseUrlWithoutFragment(url),
         };
       }
       return {
@@ -1871,7 +1907,8 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
-        url: url.href,
+        redirected: false,
+        url: responseUrlWithoutFragment(url),
       };
     });
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -1949,7 +1986,8 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
-        url: url.href,
+        redirected: false,
+        url: responseUrlWithoutFragment(url),
       };
     });
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -2017,6 +2055,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api', location.href).href,
     }));
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -2095,6 +2134,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/api?view=details', location.href).href,
     }));
     const originalScrollIntoView = currentElementScrollIntoView();
@@ -2146,6 +2186,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      redirected: false,
       url: new URL('/login', location.href).href,
     }));
     vi.stubGlobal('fetch', fetch);
@@ -2192,6 +2233,7 @@ describe('browser inline loader enhanced navigation', () => {
               '</kovo-fragment>',
             ].join('');
           },
+          redirected: false,
           url: new URL('/_m/cart/add', location.href).href,
         };
       }
@@ -2216,6 +2258,7 @@ describe('browser inline loader enhanced navigation', () => {
             '</body></html>',
           ].join('');
         },
+        redirected: false,
         url: new URL('/cart', location.href).href,
       };
     });
@@ -2250,10 +2293,10 @@ describe('browser inline loader enhanced navigation', () => {
     expect(mutationHeaders['Kovo-Targets']).toContain('layout-shell=viewer');
     expect(mutationHeaders['Kovo-Targets']).not.toContain('old-target');
     expect(mutationHeaders['Kovo-Live-Targets']).toContain(
-      'cart-badge#cart-badge/cart-badge@tok_cart:{}',
+      'cart-badge#cart-badge%2Fcart-badge@tok_cart:{}',
     );
     expect(mutationHeaders['Kovo-Live-Targets']).toContain(
-      'layout-shell#layout-shell/layout-shell@tok_layout:{}',
+      'layout-shell#layout-shell%2Flayout-shell@tok_layout:{}',
     );
   });
 
@@ -2271,12 +2314,14 @@ describe('browser inline loader enhanced navigation', () => {
     const fetch = vi.fn(async () => ({
       headers: {
         get(name: string) {
-          if (name === 'content-type') return 'text/html';
-          if (name === 'Kovo-Build') return 'build-a';
+          const normalized = name.toLowerCase();
+          if (normalized === 'content-type') return 'text/html';
+          if (normalized === 'kovo-build') return 'build-a';
           return null;
         },
       },
       ok: true,
+      redirected: false,
       status: 200,
       async text() {
         return [
@@ -2292,6 +2337,7 @@ describe('browser inline loader enhanced navigation', () => {
           '</body></html>',
         ].join('');
       },
+      url: location.href,
     }));
     vi.stubGlobal('fetch', fetch);
 
@@ -2308,11 +2354,15 @@ describe('browser inline loader enhanced navigation', () => {
       cache: 'no-store',
       headers: {
         Accept: 'text/vnd.kovo.document+html, text/html',
+        'Kovo-Build': 'build-a',
+        'Kovo-Current-Url': location.href,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': 'cart-badge#cart-badge/cart-badge@tok_cart:{}',
+        'Kovo-Live-Targets': 'cart-badge#cart-badge%2Fcart-badge@tok_cart:{}',
         'Kovo-Targets': 'cart-badge=cart',
       },
       method: 'GET',
+      redirect: 'error',
+      referrerPolicy: 'origin',
     });
     expect(document.activeElement?.id).toBe('cart-button');
   });

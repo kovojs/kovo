@@ -33,7 +33,7 @@ import { respond, routeOutcomeResponse, routeResponseToDocumentResponse } from '
 
 // G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
 const deferredApplyScriptBody =
-  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){var m=b.match(/<kovo-fragment\\b[^>]*>/g)||[];for(var h of m){if(!/\\bpriority=["\']visible["\']/.test(h))continue;var v=(h.match(/\\btarget=["\']([^"\']+)["\']/)||[])[1];var d=v&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()';
+  'var s=document.currentScript,n=s.previousSibling,e=[],v=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML){e.unshift(n.outerHTML);if(n.localName==="kovo-fragment"&&n.getAttribute("priority")==="visible")v.unshift(n.getAttribute("target"))}n.remove();if(t.includes("--kovo-boundary"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var w of v){var d=w!==null&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===w);if(d){o.observe(d);c++}}}if(!c)a();s.remove()';
 const deferredCleanupScriptBody =
   'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
 const deferredApplyHash = cspSha256(deferredApplyScriptBody);
@@ -74,7 +74,7 @@ describe('server app shell document assembly', () => {
         modulepreloads: ['/c/cart.client.js'],
         stylesheets: [{ criticalCss: 'body{color:red}', href: '/assets/app.css' }],
       },
-      queries: [{ key: 'cart:c1', name: 'cart', value: { count: 1 } }],
+      queries: [{ href: '/_q/cart?id=c1', key: 'cart:c1', name: 'cart', value: { count: 1 } }],
     });
 
     expect(document.earlyHints).toEqual({
@@ -118,7 +118,7 @@ describe('server app shell document assembly', () => {
       document.html.indexOf('<body>'),
     );
     expect(document.html).toContain(
-      '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-csp-hash="sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=">{"count":1}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-query-href="/_q/cart?id=c1" data-kovo-csp-hash="sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE=">{"count":1}</script>',
     );
     expect(document.html).toContain(
       '<body><main><cart-badge kovo-deps="cart"></cart-badge></main></body></html>',
@@ -130,7 +130,9 @@ describe('server app shell document assembly', () => {
     const document = renderDocument({
       body: '<main>Product</main>',
       loader: 'omit',
-      queries: [{ key: 'product:p1', name: 'product', value: { id: 'p1' } }],
+      queries: [
+        { href: '/_q/product?id=p1', key: 'product:p1', name: 'product', value: { id: 'p1' } },
+      ],
     });
 
     expect(document.html).not.toContain('installInlineKovoLoader');
@@ -155,7 +157,7 @@ describe('server app shell document assembly', () => {
     const withData = renderDocument({
       body: '<main>Product</main>',
       hints: { meta: productFactory },
-      queries: [{ name: 'product', value: { name: 'Coffee', stock: 5 } }],
+      queries: [{ href: '/_q/product', name: 'product', value: { name: 'Coffee', stock: 5 } }],
     });
     expect(withData.html).toContain('<title>Coffee</title>');
     expect(withData.html).toContain('<meta name="description" content="5 in stock">');
@@ -201,7 +203,7 @@ describe('server app shell document assembly', () => {
     const document = renderDocument({
       body: '<main>Home</main>',
       document: structured,
-      queries: [{ name: 'home', value: { ok: true } }],
+      queries: [{ href: '/_q/home', name: 'home', value: { ok: true } }],
     });
 
     expect(document.html).toContain('<html lang="en-US" data-doc="structured">');
@@ -1149,11 +1151,12 @@ describe('server app shell document assembly', () => {
   it('escapes document query script JSON for safe initial hydration', () => {
     expect(
       renderDocumentQueryScript({
+        href: '/_q/cart',
         name: 'cart',
         value: { html: '</script><script>alert(1)</script>' },
       }),
     ).toBe(
-      '<script type="application/json" kovo-query="cart">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"}</script>',
+      '<script type="application/json" kovo-query="cart" data-kovo-query-href="/_q/cart">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"}</script>',
     );
   });
 });

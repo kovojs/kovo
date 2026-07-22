@@ -1,10 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  fetchEnhancedMutation,
+  fetchEnhancedMutation as fetchEnhancedMutationWithBuild,
   isFailedMutationResponse,
   type EnhancedMutationFetchOptions,
+  type FetchEnhancedMutationOptions,
 } from './mutation-fetch.js';
+
+const TEST_BUILD = 'build-test';
+
+function fetchEnhancedMutation(
+  options: Omit<FetchEnhancedMutationOptions, 'expectedBuildToken'> & {
+    expectedBuildToken?: string;
+  },
+  requestedIdem?: string,
+) {
+  return fetchEnhancedMutationWithBuild(
+    { expectedBuildToken: TEST_BUILD, ...options },
+    requestedIdem,
+  );
+}
 
 class FakeTargetElement {
   readonly id?: string;
@@ -68,7 +83,9 @@ function fragmentHeaders(read?: (name: string) => string | null) {
       if (name.toLowerCase() === 'content-type') {
         return 'text/vnd.kovo.fragment+html; charset=utf-8';
       }
-      return read?.(name) ?? null;
+      const value = read?.(name);
+      if (value !== null && value !== undefined) return value;
+      return name.toLowerCase() === 'kovo-build' ? TEST_BUILD : null;
     },
   };
 }
@@ -116,6 +133,7 @@ describe('enhanced mutation fetch', () => {
           name === 'Kovo-Changes' ? '[{"domain":"auth"}]' : null,
         ),
         ok: true,
+        redirected: false,
         status: 200,
         text: async () => '',
         url: 'https://kovo.test/_m/auth/sign-in',
@@ -177,6 +195,7 @@ describe('enhanced mutation fetch', () => {
             name === 'Kovo-Changes' ? '[{"domain":"auth"}]' : null,
           ),
           ok: true,
+          redirected: false,
           status: 200,
           text: async () => '',
           url: 'https://kovo.test/_m/auth/sign-in',
@@ -222,10 +241,12 @@ describe('enhanced mutation fetch', () => {
           get(name: string) {
             const normalized = name.toLowerCase();
             if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+            if (normalized === 'kovo-build') return TEST_BUILD;
             return normalized === 'kovo-session-transition' ? 'reload' : null;
           },
         },
         ok: true,
+        redirected: false,
         status: 200,
         text,
         url: 'http://localhost/_m/auth/custom-sign-in',
@@ -255,10 +276,12 @@ describe('enhanced mutation fetch', () => {
           get(name: string) {
             const normalized = name.toLowerCase();
             if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+            if (normalized === 'kovo-build') return TEST_BUILD;
             return normalized === 'kovo-session-transition' ? 'reload' : null;
           },
         },
         ok: true,
+        redirected: false,
         status: 200,
         text,
         url: 'http://localhost/_m/auth/custom-sign-in',
@@ -279,7 +302,6 @@ describe('enhanced mutation fetch', () => {
     const formData = new FormData();
     const uploadProgress = vi.fn();
     const root = new FakeTargetRoot([
-      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product%3Ap1' }),
       new FakeTargetElement(undefined, {
         'kovo-deps': 'recommendations',
         'kovo-fragment-target': 'recommendations:p1',
@@ -287,7 +309,9 @@ describe('enhanced mutation fetch', () => {
         'kovo-live-token': 'tok_rec',
         'kovo-props': '{"productId":"p1"}',
       }),
-      new FakeTargetElement('cart-badge', { 'kovo-deps': 'cart product%3Ap1' }),
+      new FakeTargetElement('cart-badge', {
+        'kovo-deps': 'cart !product!product%3Ap1',
+      }),
     ]);
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders((name) => {
@@ -295,6 +319,7 @@ describe('enhanced mutation fetch', () => {
           ? '[{"domain":"cart","keys":["c1"],"input":{"unsafe":true}},{"domain":5}]'
           : null;
       }),
+      redirected: false,
       async text() {
         options.onUploadProgress?.({ loaded: 5, total: 10 });
         return '<kovo-query name="cart">{"count":1}</kovo-query>';
@@ -303,6 +328,7 @@ describe('enhanced mutation fetch', () => {
     }));
 
     const fetched = await fetchEnhancedMutation({
+      expectedBuildToken: 'build-test',
       fetch,
       form: typedMutationForm('cart/add'),
       formData,
@@ -317,25 +343,29 @@ describe('enhanced mutation fetch', () => {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': 'build-test',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000013',
         'Kovo-Live-Targets':
           'recommendations%3Ap1#components%2Frecommendations%2Frecommendations@tok_rec:{"productId":"p1"}',
-        'Kovo-Targets': 'cart-badge=cart product%3Ap1; recommendations%3Ap1=recommendations',
+        'Kovo-Targets':
+          'recommendations%3Ap1=recommendations; cart-badge=cart !product!product%3Ap1',
       },
       keepalive: true,
       method: 'POST',
-      onUploadProgress: expect.any(Function),
+      onUploadProgress: uploadProgress,
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
     expect(uploadProgress).toHaveBeenCalledWith({ loaded: 5, total: 10 });
     expect(fetched).toEqual({
       body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+      buildToken: TEST_BUILD,
       changes: [{ domain: 'cart', keys: ['c1'] }],
       idem: 'v1_1750000000000_00000000000000000000000000000013',
       response: expect.any(Object),
-      targets: ['cart-badge=cart product%3Ap1', 'recommendations%3Ap1=recommendations'],
+      targets: ['recommendations%3Ap1=recommendations', 'cart-badge=cart !product!product%3Ap1'],
     });
     expect(root.queries).toBe(1);
   });
@@ -344,6 +374,7 @@ describe('enhanced mutation fetch', () => {
     const originalLocation = globalThis.location;
     const fetch = vi.fn(async () => ({
       headers: fragmentHeaders(),
+      redirected: false,
       text: async () => '',
       url: 'https://kovo.test/_m/cart/add',
     }));
@@ -445,6 +476,7 @@ describe('enhanced mutation fetch', () => {
       const fetch = vi.fn(async () => ({
         headers: fragmentHeaders(),
         ok: true,
+        redirected: false,
         status: 204,
         text: async () => '',
         url: `${origin}/_m/chat`,
@@ -493,6 +525,7 @@ describe('enhanced mutation fetch', () => {
       fetchEnhancedMutation({
         fetch: async () => ({
           headers: fragmentHeaders(),
+          redirected: false,
           text: crossOriginText,
           url: 'https://evil.example/_m/cart/add',
         }),
@@ -500,14 +533,18 @@ describe('enhanced mutation fetch', () => {
         formData: new FormData(),
         root: new FakeTargetRoot([]),
       }),
-    ).rejects.toThrow(/same-origin URL proof/u);
+    ).rejects.toThrow(/exact request URL proof/u);
     expect(crossOriginText).not.toHaveBeenCalled();
 
     const wrongMediaText = vi.fn(async () => '<html>not mutation wire</html>');
     await expect(
       fetchEnhancedMutation({
         fetch: async () => ({
-          headers: { get: () => 'text/html; charset=utf-8' },
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'kovo-build' ? TEST_BUILD : 'text/html; charset=utf-8',
+          },
+          redirected: false,
           text: wrongMediaText,
           url: 'http://localhost/_m/cart/add',
         }),
@@ -526,6 +563,7 @@ describe('enhanced mutation fetch', () => {
     const root = new FakeTargetRoot([]);
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders(),
+      redirected: false,
       async text() {
         return '';
       },
@@ -579,10 +617,10 @@ describe('enhanced mutation fetch', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('percent-encodes framing characters and rejects noncanonical dependency tokens', async () => {
+  it('percent-encodes framing characters while preserving structured keyed dependencies', async () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement('target"bad\\id', {
-        'kovo-deps': 'cart product%3Ap1',
+        'kovo-deps': 'cart !product!product%3Ap1',
         'kovo-live-component': 'components/cart/cart-panel',
         'kovo-live-token': 'tok_cart',
       }),
@@ -590,11 +628,6 @@ describe('enhanced mutation fetch', () => {
         'kovo-deps': 'cart',
         'kovo-fragment-target': 'bad#target',
         'kovo-live-component': 'components/cart/bad',
-      }),
-      new FakeTargetElement(undefined, {
-        'kovo-c': 'bad-component',
-        'kovo-deps': 'bad;dep',
-        'kovo-fragment-target': 'bad-dep',
       }),
       new FakeTargetElement(undefined, {
         'kovo-c': 'bad#component',
@@ -609,6 +642,7 @@ describe('enhanced mutation fetch', () => {
     ]);
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders(),
+      redirected: false,
       async text() {
         return '';
       },
@@ -616,6 +650,7 @@ describe('enhanced mutation fetch', () => {
     }));
 
     const fetched = await fetchEnhancedMutation({
+      expectedBuildToken: 'build-test',
       fetch,
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
@@ -629,28 +664,47 @@ describe('enhanced mutation fetch', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': 'build-test',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000014',
         'Kovo-Live-Targets': 'target%22bad%5Cid#components%2Fcart%2Fcart-panel@tok_cart:{}',
         'Kovo-Targets':
-          'target%22bad%5Cid=cart product%3Ap1; bad%23target=cart; safe-target=cart; safe-target-with-bad-component=cart',
+          'target%22bad%5Cid=cart !product!product%3Ap1; bad%23target=cart; safe-target=cart; safe-target-with-bad-component=cart',
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
     expect(fetched.targets).toEqual([
-      'target%22bad%5Cid=cart product%3Ap1',
+      'target%22bad%5Cid=cart !product!product%3Ap1',
       'bad%23target=cart',
       'safe-target=cart',
       'safe-target-with-bad-component=cart',
     ]);
   });
 
+  it('rejects a mixed target snapshot atomically when one dependency token is noncanonical', async () => {
+    const fetch = vi.fn();
+    await expect(
+      fetchEnhancedMutation({
+        fetch,
+        form: typedMutationForm('cart/add'),
+        formData: new FormData(),
+        root: new FakeTargetRoot([
+          new FakeTargetElement('safe-target', { 'kovo-deps': 'cart' }),
+          new FakeTargetElement('bad-target', { 'kovo-deps': 'bad;dep' }),
+        ]),
+      }),
+    ).rejects.toThrow(/canonical query identity tokens/u);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('sends the submitted enhanced form target when the form carries runtime identity', async () => {
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders(),
+      redirected: false,
       async text() {
         return '<kovo-fragment target="product-form:p1"><form></form></kovo-fragment>';
       },
@@ -678,6 +732,7 @@ describe('enhanced mutation fetch', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': TEST_BUILD,
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Form-Target': 'product-form%3Ap1',
         'Kovo-Fragment': 'true',
@@ -685,6 +740,7 @@ describe('enhanced mutation fetch', () => {
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
   });
@@ -692,6 +748,7 @@ describe('enhanced mutation fetch', () => {
   it('reads submitted form targets from attributes before shadowable DOM properties', async () => {
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders(),
+      redirected: false,
       async text() {
         return '<kovo-fragment target="your-answer"><form></form></kovo-fragment>';
       },
@@ -720,6 +777,7 @@ describe('enhanced mutation fetch', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': TEST_BUILD,
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Form-Target': 'your-answer',
         'Kovo-Fragment': 'true',
@@ -727,6 +785,7 @@ describe('enhanced mutation fetch', () => {
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
   });
@@ -734,6 +793,7 @@ describe('enhanced mutation fetch', () => {
   it('defaults to POST and omits upload progress when no progress hook is configured', async () => {
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       headers: fragmentHeaders(),
+      redirected: false,
       async text() {
         return '';
       },
@@ -752,12 +812,14 @@ describe('enhanced mutation fetch', () => {
       body: 'body',
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': TEST_BUILD,
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000017',
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
     expect(fetched.changes).toEqual([]);
@@ -770,6 +832,7 @@ describe('enhanced mutation fetch', () => {
     const fetched = await fetchEnhancedMutation({
       fetch: async () => ({
         headers: fragmentHeaders((name) => (name === 'Kovo-Changes' ? '[' : null)),
+        redirected: false,
         async text() {
           return '<kovo-fragment target="cart-form"><form></form></kovo-fragment>';
         },
@@ -817,6 +880,7 @@ describe('enhanced mutation fetch', () => {
     const response = {
       headers: fragmentHeaders(),
       ok: false,
+      redirected: false,
       status: 500,
       text: async () => '',
       url: 'http://localhost/_m/cart/add',
@@ -855,8 +919,10 @@ describe('enhanced mutation fetch', () => {
     // SPEC §9.1.1: every mutation response carries Kovo-Build so the runtime
     // can validate deltas against the expected page build token.
     const fetched = await fetchEnhancedMutation({
+      expectedBuildToken: 'build-abc123',
       fetch: async () => ({
         headers: fragmentHeaders((name) => (name === 'Kovo-Build' ? 'build-abc123' : null)),
+        redirected: false,
         async text() {
           return '';
         },
@@ -871,21 +937,31 @@ describe('enhanced mutation fetch', () => {
     expect(fetched.buildToken).toBe('build-abc123');
   });
 
-  it('sets buildToken to undefined when Kovo-Build header is absent', async () => {
+  it('recovers before reading a response whose Kovo-Build header is absent', async () => {
+    const onBuildSkew = vi.fn();
+    const text = vi.fn(async () => '');
     const fetched = await fetchEnhancedMutation({
       fetch: async () => ({
-        headers: fragmentHeaders(),
-        async text() {
-          return '';
+        headers: {
+          get: (name: string) =>
+            name.toLowerCase() === 'content-type'
+              ? 'text/vnd.kovo.fragment+html; charset=utf-8'
+              : null,
         },
+        redirected: false,
+        text,
         url: 'http://localhost/_m/cart/add',
       }),
       form: typedMutationForm('cart/add'),
       formData: new FormData(),
       idem: 'v1_1750000000000_00000000000000000000000000000022',
+      onBuildSkew,
       root: new FakeTargetRoot([]),
     });
 
     expect(fetched.buildToken).toBeUndefined();
+    expect(fetched.sessionTransition).toBe(true);
+    expect(onBuildSkew).toHaveBeenCalledOnce();
+    expect(text).not.toHaveBeenCalled();
   });
 });

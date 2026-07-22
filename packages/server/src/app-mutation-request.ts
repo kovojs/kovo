@@ -75,6 +75,7 @@ export async function handleAppMutationRequest(
   url: URL,
   mutationKey: string,
   ingressMethod: string = requestMethod(request),
+  admittedBuildToken?: string,
 ): Promise<Response> {
   pinRequestIngressSurface(request);
   if (canonicalRequestMethod(ingressMethod) !== 'POST') {
@@ -155,6 +156,7 @@ export async function handleAppMutationRequest(
         sourceRequest,
         sourceUrl,
         ingressMethod,
+        admittedBuildToken,
       );
     }
 
@@ -200,7 +202,7 @@ export async function handleAppMutationRequest(
   >;
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
-  const buildToken = app.clientModules.buildToken();
+  const buildToken = admittedBuildToken ?? app.clientModules.buildToken();
   const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
   const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   const taskScheduler = appTaskScheduler(app);
@@ -268,6 +270,7 @@ async function renderPreBodyCsrfFailure(
   sourceRequest: Request,
   sourceUrl: URL,
   ingressMethod: string,
+  admittedBuildToken?: string,
 ): Promise<Response> {
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
@@ -284,7 +287,7 @@ async function renderPreBodyCsrfFailure(
     Record<string, Schema<unknown>>,
     Request
   >;
-  const buildToken = app.clientModules.buildToken();
+  const buildToken = admittedBuildToken ?? app.clientModules.buildToken();
   const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
   const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   const taskScheduler = appTaskScheduler(app);

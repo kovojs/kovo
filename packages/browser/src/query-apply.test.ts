@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { encodeFrameworkQueryDependencyToken } from '@kovojs/core/internal/wire-input-grammar';
+
 import * as queryApplyModule from './query-apply.js';
 import { applyQueryChunksToRuntime } from './query-apply.js';
 import { createQueryStore, queryStoreKey } from './query-store.js';
@@ -45,8 +47,16 @@ describe('decoded query runtime apply', () => {
   it('scopes keyed query chunks to matching kovo-deps consumers', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
-    const p1Stock = scopedBinding('product%3Ap1', 'product.stock', '2');
-    const p2Stock = scopedBinding('product%3Ap2', 'product.stock', '9');
+    const p1Stock = scopedBinding(
+      encodeFrameworkQueryDependencyToken('product', 'product:p1')!,
+      'product.stock',
+      '2',
+    );
+    const p2Stock = scopedBinding(
+      encodeFrameworkQueryDependencyToken('product', 'product:p2')!,
+      'product.stock',
+      '9',
+    );
     root.bindings.push(p1Stock, p2Stock);
 
     const applied = applyQueryChunksToRuntime(
@@ -89,6 +99,28 @@ describe('decoded query runtime apply', () => {
     expect(unrelatedSelect).not.toHaveBeenCalled();
   });
 
+  it('does not alias a keyed query identity with an unkeyed query name in DOM membership', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const keyedFoo = scopedBinding(
+      encodeFrameworkQueryDependencyToken('foo', 'bar')!,
+      'foo.value',
+      'KEYED-OLD',
+    );
+    const unkeyedBarWithOverlappingBinding = scopedBinding('bar', 'foo.value', 'UNKEYED-OLD');
+    root.bindings.push(keyedFoo, unkeyedBarWithOverlappingBinding);
+
+    applyQueryChunksToRuntime(store, [{ key: 'bar', name: 'foo', value: { value: 'KEYED-NEW' } }], {
+      queryPlans: {
+        [queryStoreKey('foo', 'bar')]: { bindings: true },
+      },
+      root,
+    });
+
+    expect(keyedFoo.textContent).toBe('KEYED-NEW');
+    expect(unkeyedBarWithOverlappingBinding.textContent).toBe('UNKEYED-OLD');
+  });
+
   it('applies query chunks through one canonical runtime batch with interposed values', () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();
@@ -117,10 +149,7 @@ describe('decoded query runtime apply', () => {
 
     // SPEC.md §9.1/§9.4: mutation, deferred, hydration, and typed-read paths
     // share canonical query instance keys while allowing runtime apply hooks.
-    expect(applied).toEqual([
-      { name: 'cart' },
-      { key: 'p1', name: 'product' },
-    ]);
+    expect(applied).toEqual([{ name: 'cart' }, { key: 'p1', name: 'product' }]);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('product', 'p1')).toEqual({ stock: 4 });
     expect(cartPlan).toHaveBeenCalledWith({ count: 2 });

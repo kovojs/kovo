@@ -5,11 +5,26 @@ import type {
   EnhancedMutationFetchOptions,
   EnhancedMutationResponseLike,
 } from './mutation-fetch.js';
-import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
+import {
+  submitOptimisticEnhancedMutation as submitOptimisticEnhancedMutationWithBuild,
+  type OptimisticEnhancedMutationSubmitOptions,
+} from './mutation-optimistic.js';
 import { MutationQueue } from './mutation-queue.js';
 import { OptimisticRebaser } from './optimism.js';
 import { createQueryStore } from './query-store.js';
+
 import { FakeMorphRoot, mutationTestResponse } from './runtime-test-fakes.js';
+
+function submitOptimisticEnhancedMutation<Input>(
+  options: Omit<OptimisticEnhancedMutationSubmitOptions<Input>, 'expectedBuildToken'> & {
+    expectedBuildToken?: string;
+  },
+) {
+  return submitOptimisticEnhancedMutationWithBuild({
+    expectedBuildToken: 'build-test',
+    ...options,
+  });
+}
 
 describe('optimistic enhanced mutation queueing', () => {
   afterEach(() => {

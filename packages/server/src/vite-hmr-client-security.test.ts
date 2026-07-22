@@ -61,7 +61,7 @@ describe('Vite HMR browser target producer security', () => {
     const buildMeta = new FakeElement({ content: 'build-before', name: 'kovo-build' });
     const targets: FakeElement[] = [
       new FakeElement({
-        'kovo-deps': 'public, inventory',
+        'kovo-deps': 'public inventory',
         'kovo-fragment-target': 'catalog-panel',
         'kovo-live-component': 'components/public/catalog',
         'kovo-live-token': 'tok_catalog',
@@ -73,7 +73,7 @@ describe('Vite HMR browser target producer security', () => {
         'kovo-fragment-target': 'unattested-panel',
       }),
     ];
-    for (let index = 0; index < 70; index += 1) {
+    for (let index = 0; index < 62; index += 1) {
       targets.push(
         new FakeElement({
           'kovo-deps': `query-${index}`,
@@ -87,7 +87,9 @@ describe('Vite HMR browser target producer security', () => {
     let applied = '';
     let poisonHits = 0;
     let reloads = 0;
-    let request: { options: { headers: Record<string, string> }; url: string } | undefined;
+    let request:
+      | { options: { headers: Record<string, string>; redirect?: string }; url: string }
+      | undefined;
     const context = {
       Document: FakeDocument,
       Element: FakeElement,
@@ -113,13 +115,19 @@ describe('Vite HMR browser target producer security', () => {
             get(name: string) {
               if (name === 'Kovo-Previous-Build') return 'build-before';
               if (name === 'Kovo-Build') return 'build-after';
+              if (name === 'Kovo-HMR-Refresh') return 'live-targets';
+              if (name === 'Content-Type') {
+                return 'text/vnd.kovo.fragment+html; charset=utf-8';
+              }
               return null;
             },
           },
           ok: true,
+          redirected: false,
           async text() {
             return '<kovo-fragment target="catalog-panel">updated</kovo-fragment>';
           },
+          url: String(url),
         };
       },
       location: {
@@ -216,7 +224,7 @@ globalThis.__restoreHmrControls = () => {
     );
 
     try {
-      hotHandlers['kovo:component-render']?.({ oldFactHash: 'old-fact' });
+      hotHandlers['kovo:component-render']?.({});
       await Promise.resolve();
       await Promise.resolve();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -229,11 +237,13 @@ globalThis.__restoreHmrControls = () => {
     expect(applied).toContain('catalog-panel');
     expect(buildMeta.getAttribute('content')).toBe('build-after');
     expect(request?.url).toContain('/@kovo/hmr/refresh/live-targets');
+    expect(request?.options.headers['Kovo-Build']).toBe('build-before');
+    expect(request?.options.redirect).toBe('error');
     const live = request?.options.headers['Kovo-Live-Targets'] ?? '';
     const dependencies = request?.options.headers['Kovo-Targets'] ?? '';
-    expect(live.split('; ')).toHaveLength(64);
+    expect(live.split('; ')).toHaveLength(63);
     expect(live.split('; ')[0]).toBe(
-      'catalog-panel#components/public/catalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
+      'catalog-panel#components%2Fpublic%2Fcatalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
     );
     expect(live).not.toContain('unattested-panel');
     expect(dependencies.split('; ')).toHaveLength(64);
@@ -241,5 +251,101 @@ globalThis.__restoreHmrControls = () => {
       'catalog-panel=public inventory',
       'unattested-panel=public',
     ]);
+  });
+
+  it.each([
+    {
+      contentDisposition: null,
+      contentType: 'text/html; charset=utf-8',
+      marker: 'live-targets',
+      label: 'non-fragment media',
+    },
+    {
+      contentDisposition: 'attachment',
+      contentType: 'text/vnd.kovo.fragment+html; charset=utf-8',
+      marker: 'live-targets',
+      label: 'attachment disposition',
+    },
+    {
+      contentDisposition: null,
+      contentType: 'text/vnd.kovo.fragment+html; charset=utf-8',
+      marker: null,
+      label: 'missing refresh marker',
+    },
+    {
+      contentDisposition: null,
+      contentType: 'text/vnd.kovo.fragment+html; charset=utf-8',
+      marker: 'route',
+      label: 'foreign refresh marker',
+    },
+  ])('reloads before applying an HMR response with $label', async (responseEnvelope) => {
+    const buildMeta = new FakeElement({ content: 'build-before', name: 'kovo-build' });
+    const document = new FakeDocument(buildMeta, [
+      new FakeElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'catalog-panel',
+        'kovo-live-token': 'tok_catalog',
+      }),
+    ]);
+    const hotHandlers = Object.create(null) as Record<string, (event: unknown) => void>;
+    let applied = '';
+    let reloads = 0;
+    const context = {
+      Document: FakeDocument,
+      Element: FakeElement,
+      NodeList: FakeNodeList,
+      URL,
+      __createHotContext: () => ({
+        on(name: string, handler: (event: unknown) => void) {
+          hotHandlers[name] = handler;
+        },
+      }),
+      __kovo_a(value: string) {
+        applied = value;
+      },
+      document,
+      async fetch(url: URL) {
+        return {
+          headers: {
+            get(name: string) {
+              if (name === 'Kovo-Previous-Build') return 'build-before';
+              if (name === 'Kovo-Build') return 'build-after';
+              if (name === 'Kovo-HMR-Refresh') return responseEnvelope.marker;
+              if (name === 'Content-Type') return responseEnvelope.contentType;
+              if (name === 'Content-Disposition') return responseEnvelope.contentDisposition;
+              return null;
+            },
+          },
+          ok: true,
+          redirected: false,
+          async text() {
+            return '<kovo-fragment target="catalog-panel">attacker</kovo-fragment>';
+          },
+          url: String(url),
+        };
+      },
+      location: {
+        origin: 'https://kovo.test',
+        pathname: '/catalog',
+        reload() {
+          reloads += 1;
+        },
+        search: '',
+      },
+    };
+    const source = kovoHmrClientSource().replace(
+      'import { createHotContext } from "/@vite/client";',
+      'const createHotContext = globalThis.__createHotContext;',
+    );
+    runInNewContext(source, context);
+
+    hotHandlers['kovo:component-render']?.({});
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(reloads).toBe(1);
+    expect(applied).toBe('');
+    expect(buildMeta.getAttribute('content')).toBe('build-before');
   });
 });

@@ -18,7 +18,7 @@ describe('HMR target snapshot browser security', () => {
 
     const elements: HTMLElement[] = [];
     const primary = document.createElement('section');
-    primary.setAttribute('kovo-deps', 'public, inventory');
+    primary.setAttribute('kovo-deps', 'public inventory');
     primary.setAttribute('kovo-fragment-target', 'catalog-panel');
     primary.setAttribute('kovo-live-component', 'components/public/catalog');
     primary.setAttribute('kovo-live-token', 'tok_catalog');
@@ -31,7 +31,7 @@ describe('HMR target snapshot browser security', () => {
     unattested.setAttribute('kovo-deps', 'public');
     unattested.setAttribute('kovo-fragment-target', 'unattested-panel');
     elements.push(unattested);
-    for (let index = 0; index < 70; index += 1) {
+    for (let index = 0; index < 62; index += 1) {
       const element = document.createElement('section');
       element.setAttribute('kovo-deps', `query-${index}`);
       element.setAttribute('kovo-fragment-target', `extra-panel-${index}`);
@@ -70,8 +70,8 @@ describe('HMR target snapshot browser security', () => {
       poisonHits += 1;
       throw new Error('late HMR target poison reached');
     };
-    let live: string[] | undefined;
-    let dependencies: string[] | undefined;
+    let live: ReturnType<typeof reader.liveTargets> | undefined;
+    let dependencies: ReturnType<typeof reader.dependencyTargets> | undefined;
     let build = '';
     try {
       Object.defineProperty(Document.prototype, 'querySelectorAll', {
@@ -120,16 +120,96 @@ describe('HMR target snapshot browser security', () => {
     expect(poisonHits).toBe(0);
     expect(build).toBe('build-before');
     expect(meta.getAttribute('content')).toBe('build-after');
-    expect(live).toHaveLength(64);
-    expect(live?.[0]).toBe(
-      'catalog-panel#components/public/catalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
+    expect(live).toHaveLength(63);
+    expect(live?.[0]?.wireEntry).toBe(
+      'catalog-panel#components%2Fpublic%2Fcatalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
     );
-    expect(() => new Headers({ 'Kovo-Live-Targets': live?.join('; ') ?? '' })).not.toThrow();
-    expect(live?.join('; ')).not.toContain('unattested-panel');
+    expect(
+      () =>
+        new Headers({
+          'Kovo-Live-Targets': live?.map(({ wireEntry }) => wireEntry).join('; ') ?? '',
+        }),
+    ).not.toThrow();
+    expect(live?.map(({ wireEntry }) => wireEntry).join('; ')).not.toContain('unattested-panel');
     expect(dependencies).toHaveLength(64);
-    expect(dependencies?.slice(0, 2)).toEqual([
+    expect(dependencies?.slice(0, 2).map(({ wireEntry }) => wireEntry)).toEqual([
       'catalog-panel=public inventory',
       'unattested-panel=public',
     ]);
+  });
+
+  it('fails a mixed live-target snapshot atomically when one descriptor exceeds its budget', () => {
+    const codec = createFrameworkWireTargetCodec(FRAMEWORK_WIRE_INPUT_GRAMMAR);
+    const reader = createHmrTargetSnapshotReader(FRAMEWORK_WIRE_INPUT_GRAMMAR, codec);
+    const valid = document.createElement('section');
+    valid.setAttribute('kovo-deps', 'public');
+    valid.setAttribute('kovo-fragment-target', 'valid-panel');
+    valid.setAttribute('kovo-live-token', 'tok_valid');
+    const malformed = document.createElement('section');
+    malformed.setAttribute('kovo-deps', 'public');
+    malformed.setAttribute('kovo-fragment-target', 'malformed-panel');
+    malformed.setAttribute('kovo-live-token', 'tok_malformed');
+    malformed.setAttribute('kovo-props', 'x'.repeat(4_097));
+    document.body.append(valid, malformed);
+
+    try {
+      expect(() => reader.liveTargets(document)).toThrow(/wire budget/u);
+    } finally {
+      valid.remove();
+      malformed.remove();
+    }
+  });
+
+  it('keeps keyed dependencies structured and rejects duplicate build or dependency identities', () => {
+    const codec = createFrameworkWireTargetCodec(FRAMEWORK_WIRE_INPUT_GRAMMAR);
+    const reader = createHmrTargetSnapshotReader(FRAMEWORK_WIRE_INPUT_GRAMMAR, codec);
+    const firstMeta = document.createElement('meta');
+    firstMeta.setAttribute('name', 'kovo-build');
+    firstMeta.setAttribute('content', 'build-before');
+    const target = document.createElement('section');
+    target.setAttribute('kovo-deps', '!inventory!tenant%3A1 public');
+    target.setAttribute('kovo-fragment-target', 'inventory-panel');
+    document.head.append(firstMeta);
+    document.body.append(target);
+
+    try {
+      expect(reader.dependencyTargets(document)).toEqual([
+        {
+          target: 'inventory-panel',
+          wireEntry: 'inventory-panel=!inventory!tenant%3A1 public',
+        },
+      ]);
+
+      target.setAttribute('kovo-deps', '!inventory!tenant%3A1 !inventory!tenant%3A1');
+      expect(() => reader.dependencyTargets(document)).toThrow(/unique/u);
+
+      const duplicateMeta = firstMeta.cloneNode(true);
+      document.head.append(duplicateMeta);
+      expect(() => reader.currentBuild(document)).toThrow(/exactly one/u);
+      expect(() => reader.writeBuild(document, 'build-after')).toThrow(/exact/u);
+      duplicateMeta.remove();
+    } finally {
+      firstMeta.remove();
+      target.remove();
+    }
+  });
+
+  it('accepts only the HMR fragment media type with an inline or absent disposition', () => {
+    const codec = createFrameworkWireTargetCodec(FRAMEWORK_WIRE_INPUT_GRAMMAR);
+    const reader = createHmrTargetSnapshotReader(FRAMEWORK_WIRE_INPUT_GRAMMAR, codec);
+
+    expect(
+      reader.responseEnvelopeIsFragment('text/vnd.kovo.fragment+html; charset=utf-8', null),
+    ).toBe(true);
+    expect(reader.responseEnvelopeIsFragment(' TEXT/VND.KOVO.FRAGMENT+HTML ', ' INLINE ')).toBe(
+      true,
+    );
+    expect(reader.responseEnvelopeIsFragment('text/html', null)).toBe(false);
+    expect(reader.responseEnvelopeIsFragment('text/vnd.kovo.fragment+html', 'attachment')).toBe(
+      false,
+    );
+    expect(
+      reader.responseEnvelopeIsFragment('text/vnd.kovo.fragment+html', 'inline, attachment'),
+    ).toBe(false);
   });
 });

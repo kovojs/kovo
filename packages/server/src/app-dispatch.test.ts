@@ -80,6 +80,29 @@ describe('server app matched dispatch boundary', () => {
     expect(sessionReads).toBe(1);
   });
 
+  it('classifies enhanced typed reads before rendering auth denial vocabulary', async () => {
+    const account = query('account', {
+      guard: () => ({ kind: 'unauthenticated' as const }),
+      load: () => ({ secret: true }),
+      reads: [],
+    });
+    const app = createApp({ queries: [account] });
+    const request = new Request('https://shop.example.test/_q/account', {
+      headers: {
+        'Kovo-Build': app.clientModules.buildToken(),
+        'Kovo-Fragment': 'true',
+      },
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('kovo-build')).toBe(app.clientModules.buildToken());
+    await expect(response.text()).resolves.toBe('');
+  });
+
   it('owns SPEC §9.5 raw endpoint dispatch without app session leakage', async () => {
     const status = endpoint('/status', {
       handler(request) {

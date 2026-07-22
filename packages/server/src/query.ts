@@ -14,6 +14,7 @@ import {
   type AccessDecision,
 } from './access.js';
 import {
+  guardFailureIsUnauthenticated,
   guardFailureToResult,
   renderHttpGuardFailureResponse,
   runAccessDecisionGuards,
@@ -129,6 +130,8 @@ export interface QueryEndpointRequest<
    * refetch into a stale tab is detectable by the client.
    */
   buildToken?: string;
+  /** @internal Framework-classified `Kovo-Fragment` typed-read delivery. */
+  enhanced?: true;
   /** @internal SPEC §9.5 API4 resource-consumption floor for query/list result sinks. */
   maxListItems?: number;
   request: Request;
@@ -145,7 +148,7 @@ export type QuerySearchInput =
 export interface QueryEndpointResponse extends ServerResponseBase<
   FrameworkWireBody,
   ResponseHeaders,
-  200 | 303 | 403 | 404 | 422 | 429 | 500
+  200 | 303 | 401 | 403 | 404 | 422 | 429 | 500
 > {}
 
 /** @internal */
@@ -741,6 +744,27 @@ export const renderQueryEndpointResponse = wireEmitter(
     }
 
     if (!result.ok) {
+      // SPEC §9.4: an enhanced typed read cannot redirect inside Fetch. Return an exact,
+      // non-redirecting denial so the browser can retire stale private query truth and recover by
+      // loading the native route, which then owns the ordinary login redirect. Native /_q/
+      // navigation retains the §6.5 303 contract.
+      if (
+        endpointRequest.enhanced === true &&
+        guardFailureIsUnauthenticated(result, lifecycleRequest)
+      ) {
+        return {
+          body: frameworkWireBody(''),
+          headers: mergeResponseHeaders(
+            {
+              'Cache-Control': 'private, no-store',
+              'Content-Type': 'text/html; charset=utf-8',
+              Vary: 'Cookie',
+            },
+            queryBuildHeaders(endpointRequest),
+          ),
+          status: 401,
+        };
+      }
       const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
         ...endpointRequest,
         currentUrl:
@@ -782,7 +806,12 @@ export const renderQueryEndpointResponse = wireEmitter(
     // those headers (which would let a shared cache replay one user's data to another).
     let body: string;
     try {
-      body = renderQueryEndpointChunk(definition, result.input, result.value);
+      body = renderQueryEndpointChunk(
+        definition,
+        result.input,
+        result.value,
+        queryEndpointCurrentUrl(definition.key, searchEntries),
+      );
     } catch (error) {
       reportServerError(endpointRequest.onError, error, {
         operation: 'query-endpoint',
@@ -1284,10 +1313,11 @@ const renderQueryEndpointChunk = wireEmitter('server.wire.query-endpoint-chunk',
   Value,
   Input,
   Request,
->(queryDefinition: QueryDefinition<Key, Value, Input, Request>, input: Input, value: Value): string {
+>(queryDefinition: QueryDefinition<Key, Value, Input, Request>, input: Input, value: Value, href: string): string {
   const key = readQueryInstanceKey(queryDefinition, input);
 
   return renderQueryWireHtml({
+    href,
     key,
     name: queryDefinition.key,
     value,

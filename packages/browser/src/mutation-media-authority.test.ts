@@ -5,14 +5,47 @@ import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 import { serverStampedMutationIdem } from './runtime-test-fakes.js';
 
 describe('enhanced mutation media authority', () => {
+  it('recovers missing build proof before malformed media or body can suppress recovery', async () => {
+    const text = vi.fn(async () => '<html>foreign build</html>');
+    const onBuildSkew = vi.fn();
+    const retire = vi.fn();
+    const fetched = await fetchEnhancedMutation({
+      expectedBuildToken: 'build-test',
+      fetch: async () => ({
+        headers: { get: () => null },
+        ok: true,
+        redirected: false,
+        status: 200,
+        text,
+        url: 'http://localhost/_m/account/update',
+      }),
+      form: {
+        action: '/_m/account/update',
+        getAttribute: (name) => (name === 'data-mutation' ? 'account/update' : null),
+        method: 'post',
+      },
+      formData: new FormData(),
+      onBuildSkew,
+      onSessionTransition: retire,
+      root: { querySelectorAll: () => [] },
+    });
+
+    expect(fetched.sessionTransition).toBe(true);
+    expect(onBuildSkew).toHaveBeenCalledOnce();
+    expect(retire).toHaveBeenCalledOnce();
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('rejects attachment fragment responses before reading or applying their body', async () => {
     const text = vi.fn(async () => '<kovo-fragment target="account">ATTACKER</kovo-fragment>');
     const pending = fetchEnhancedMutation({
+      expectedBuildToken: 'build-test',
       fetch: async () => ({
         headers: {
           get(name: string) {
             const normalized = name.toLowerCase();
             if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+            if (normalized === 'kovo-build') return 'build-test';
             if (normalized === 'content-disposition') {
               return 'attachment; filename="attacker.html"';
             }
@@ -20,6 +53,7 @@ describe('enhanced mutation media authority', () => {
           },
         },
         ok: true,
+        redirected: false,
         status: 200,
         text,
         url: 'http://localhost/_m/account/update',
@@ -45,16 +79,19 @@ describe('enhanced mutation media authority', () => {
     const retire = vi.fn();
     const reload = vi.fn();
     const pending = fetchEnhancedMutation({
+      expectedBuildToken: 'build-test',
       fetch: async () => ({
         headers: {
           get(name: string) {
             const normalized = name.toLowerCase();
             if (normalized === 'content-type') return 'text/html; charset=utf-8';
+            if (normalized === 'kovo-build') return 'build-test';
             if (normalized === 'kovo-session-transition') return 'reload';
             return null;
           },
         },
         ok: true,
+        redirected: false,
         status: 200,
         text: async () => '<html>ordinary document</html>',
         url: 'http://localhost/_m/account/update',
@@ -161,11 +198,13 @@ describe('enhanced mutation media authority', () => {
               const normalized = name.toLowerCase();
               if (normalized === 'content-type') return contentType;
               if (normalized === 'content-disposition') return contentDisposition ?? null;
+              if (normalized === 'kovo-build') return 'build-proof';
               if (normalized === 'kovo-session-transition') return sessionTransition ?? null;
               return null;
             },
           },
           ok: true,
+          redirected: false,
           status: 200,
           text,
           url: 'https://kovo.test/_m/account/update',

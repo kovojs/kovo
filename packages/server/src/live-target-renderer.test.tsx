@@ -101,6 +101,7 @@ describe('generated component live target renderers', () => {
       load(input: { id: string }, { request }: { request: { locale: string } }) {
         return { id: input.id, label: `${request.locale}:${input.id}` };
       },
+      instanceKey: (input: { id: string }) => `inventory:${input.id}`,
       reads: [product],
     });
     const ProductDetail = component({
@@ -142,7 +143,7 @@ describe('generated component live target renderers', () => {
     expect(html).toContain('data-prop="p1"');
     expect(html).toContain('>en-US:p1</section>');
     expect(html).toContain('kovo-c="product-detail"');
-    expect(html).toContain('kovo-deps="product"');
+    expect(html).toContain('kovo-deps="!product!inventory%3Ap1"');
     expect(html).toContain('kovo-fragment-target="product-detail:p1"');
     expect(html).toContain('kovo-live-component="components/product-detail/product-detail"');
     expect(html).toContain('kovo-live-token="');

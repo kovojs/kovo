@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+import { planFrameworkTargetRequestHeaders } from '@kovojs/core/internal/wire-input-grammar';
 
 import { applyBindProp } from './bind-prop.js';
 import { createDocumentLifecycleRecovery } from './document-lifecycle.js';
@@ -412,6 +413,7 @@ describe('browser-runtime security regressions', () => {
     vi.stubGlobal('fetch', async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       text: async () => targetHtml,
+      redirected: false,
       url: new URL('/orders?page=2', location.href).href,
     }));
     const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
@@ -437,7 +439,10 @@ describe('browser-runtime security regressions', () => {
       },
       replaceElementAttributes() {},
       retireIsland() {},
+      retireRuntime() {},
       runTriggers() {},
+      runtimeGeneration: () => 0,
+      runtimeIsRetired: () => false,
       sessionFingerprint: 'same-principal',
     });
 
@@ -457,6 +462,172 @@ describe('browser-runtime security regressions', () => {
     expect(pushState).toHaveBeenCalledWith({}, '', new URL('/orders?page=2', location.href).href);
     expect(document.querySelector('#privileged-old')).toBeNull();
     expect(document.querySelector('#revoked-next')?.textContent).toBe('ACCESS-REVOKED');
+  });
+
+  it('stops later navigation commits when a morph callback synchronously retires the runtime', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<meta name="kovo-session" content="same-principal">',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<section kovo-nav-segment="page:/orders" kovo-nav-kind="page" kovo-nav-name="old">Old</section>',
+      '</main>',
+    ].join('');
+    const targetHtml = [
+      '<!doctype html><html><head>',
+      '<meta name="kovo-build" content="build-a">',
+      '<meta name="kovo-session" content="same-principal">',
+      '<title>Must not apply</title>',
+      '</head><body>',
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<section kovo-nav-segment="page:/orders" kovo-nav-kind="page" kovo-nav-name="new">New</section>',
+      '</main>',
+      '</body></html>',
+    ].join('');
+    vi.stubGlobal('fetch', async (_input: string, init: { redirect?: string }) => {
+      expect(init.redirect).toBe('error');
+      return {
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        redirected: false,
+        text: async () => targetHtml,
+        url: new URL('/orders?page=2', location.href).href,
+      };
+    });
+    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    const applyDocumentElementAttributes = vi.fn();
+    const applyHead = vi.fn();
+    const applyStylePromotion = vi.fn();
+    const replayScripts = vi.fn();
+    const replaceBody = vi.fn((body: HTMLBodyElement) => body);
+    const replaceElementAttributes = vi.fn();
+    let generation = 0;
+    let retired = false;
+    const retireRuntime = vi.fn(() => {
+      retired = true;
+      generation += 1;
+    });
+    const morph = vi.fn((_current: Element, next: Element) => {
+      retireRuntime('/terminal-recovery');
+      return next;
+    });
+
+    const runtime = installEnhancedNavigationRuntime({
+      acceptHeader: 'text/html',
+      applyDocumentElementAttributes,
+      applyHead,
+      applyStylePromotion,
+      document,
+      morph,
+      queryAll(root, selector) {
+        return [...root.querySelectorAll(selector)];
+      },
+      replayScripts,
+      replaceBody,
+      replaceElementAttributes,
+      retireIsland() {},
+      retireRuntime,
+      runTriggers: vi.fn(),
+      runtimeGeneration: () => generation,
+      runtimeIsRetired: () => retired,
+      sessionFingerprint: 'same-principal',
+    });
+
+    await runtime.navigate('/orders?page=2');
+
+    expect(morph).toHaveBeenCalledOnce();
+    expect(retireRuntime).toHaveBeenCalledWith('/terminal-recovery');
+    expect(applyHead).not.toHaveBeenCalled();
+    expect(applyStylePromotion).not.toHaveBeenCalled();
+    expect(applyDocumentElementAttributes).not.toHaveBeenCalled();
+    expect(replaceElementAttributes).not.toHaveBeenCalled();
+    expect(replayScripts).not.toHaveBeenCalled();
+    expect(replaceBody).not.toHaveBeenCalled();
+    expect(pushState).not.toHaveBeenCalled();
+  });
+
+  it('stops scroll, trigger, and navigation-event commits when focus retires the runtime', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<meta name="kovo-session" content="same-principal">',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<section kovo-nav-segment="page:/orders" kovo-nav-kind="page" kovo-nav-name="old">Old</section>',
+      '</main>',
+    ].join('');
+    const targetHtml = [
+      '<!doctype html><html><head>',
+      '<meta name="kovo-build" content="build-a">',
+      '<meta name="kovo-session" content="same-principal">',
+      '</head><body>',
+      '<main kovo-nav-segment="layout:Account" kovo-nav-kind="layout" kovo-nav-name="Account">',
+      '<section kovo-nav-segment="page:/orders" kovo-nav-kind="page" kovo-nav-name="new">New</section>',
+      '</main>',
+      '</body></html>',
+    ].join('');
+    vi.stubGlobal('fetch', async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      redirected: false,
+      text: async () => targetHtml,
+      url: new URL('/orders?page=2', location.href).href,
+    }));
+    const pushState = vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    const runTriggers = vi.fn();
+    const navigated = vi.fn();
+    addEventListener('kovo:navigate', navigated);
+    let generation = 0;
+    let retired = false;
+    const retireRuntime = vi.fn(() => {
+      retired = true;
+      generation += 1;
+    });
+    const focusTarget = document.querySelector('main') as HTMLElement;
+    Object.defineProperty(focusTarget, 'focus', {
+      configurable: true,
+      value: () => retireRuntime('/focus-recovery'),
+    });
+
+    try {
+      const runtime = installEnhancedNavigationRuntime({
+        acceptHeader: 'text/html',
+        applyDocumentElementAttributes() {},
+        applyHead() {},
+        applyStylePromotion() {},
+        document,
+        morph(current, next) {
+          current.replaceWith(next);
+          return next;
+        },
+        queryAll(root, selector) {
+          return [...root.querySelectorAll(selector)];
+        },
+        replayScripts() {},
+        replaceBody(nextBody) {
+          document.body.replaceWith(nextBody);
+          return nextBody;
+        },
+        replaceElementAttributes() {},
+        retireIsland() {},
+        retireRuntime,
+        runTriggers,
+        runtimeGeneration: () => generation,
+        runtimeIsRetired: () => retired,
+        sessionFingerprint: 'same-principal',
+      });
+
+      await runtime.navigate('/orders?page=2');
+    } finally {
+      removeEventListener('kovo:navigate', navigated);
+    }
+
+    expect(pushState).toHaveBeenCalledOnce();
+    expect(retireRuntime).toHaveBeenCalledWith('/focus-recovery');
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(runTriggers).not.toHaveBeenCalled();
+    expect(navigated).not.toHaveBeenCalled();
   });
 
   it('uses the boot-pinned scrollRestoration setter after a late own-property poison', () => {
@@ -513,26 +684,30 @@ describe('browser-runtime security regressions', () => {
         );
       },
       buildHeader: () => 'build-test',
+      canonicalRequestUrl: (value) => value,
       currentBuild: () => 'build-test',
       currentHref: () => security.currentUrl()?.href,
       document,
       encodeAttribute: (value) => value,
-      encodeWireEntries: (values) => values.join('; '),
       fetchValue: (input, init) => security.fetchValue(input, init),
       findTarget(root, name) {
         return root.querySelector(`[kovo-fragment-target="${name}"]`) ?? undefined;
       },
-      liveTargets: () => ['account#account@tok_account:{}'],
+      liveTargets: () => [{ target: 'account', wireEntry: 'account#account@tok_account:{}' }],
       parseHtmlDocument: (value) => security.parseHtmlDocument(value),
+      planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
       queryOne: (root, selector) => security.queryOne(root, selector),
       queryAll: (root, selector) => [...root.querySelectorAll(selector)],
       queryUrl: () => '',
       readAttribute: () => null,
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: (element, name) => security.readAttribute(element, name),
+      rememberQueryHref: () => undefined,
       readPageTransitionPersisted: (event) => security.readPageTransitionPersisted(event),
       responseContentType: () => 'text/html; charset=utf-8',
       responseAllowsInlineBody: () => true,
+      responseIsBuildSkew: () => false,
+      responseUrlIsExact: () => true,
       readResponseStatus: (response) => {
         const status = security.readResponseField(response, 'status');
         return typeof status === 'number' ? status : undefined;
@@ -541,7 +716,7 @@ describe('browser-runtime security regressions', () => {
       reload: () => security.reload(),
       snapshotElementHtml: (element) => security.readElementOuterHtml(element),
       targetHeader: () => [],
-      wireKey: () => '',
+      wireKey: () => undefined,
     });
 
     const nativeOuterHtmlGet = originalOuterHtmlDescriptor.get;
@@ -593,31 +768,36 @@ describe('browser-runtime security regressions', () => {
         applied.push(build === undefined ? { body } : { body, build });
       },
       buildHeader: () => 'build-test',
+      canonicalRequestUrl: (value: string) => value,
       currentBuild: () => 'build-test',
       currentHref: () => undefined,
       document,
       encodeAttribute: (value: string) => value,
-      encodeWireEntries: (values: readonly string[]) => values.join('; '),
       fetchValue: safeFetch,
       findTarget: () => undefined,
       liveTargets: () => [],
       parseHtmlDocument: () => undefined,
+      planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
       queryOne: () => null,
       queryAll: () => [script],
-      queryUrl: (wireKey: string) => '/_q/' + wireKey,
+      queryUrl: ({ key, name }: { key?: string; name: string }) =>
+        '/_q/' + name + (key ? ':' + key : ''),
       readAttribute: () => null,
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: (element: Element, name: string) => security.readAttribute(element, name),
+      rememberQueryHref: () => undefined,
       readPageTransitionPersisted: () => false,
-      responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
+      responseContentType: () => 'text/html; charset=utf-8',
       responseAllowsInlineBody: () => true,
+      responseIsBuildSkew: () => false,
+      responseUrlIsExact: () => true,
       readResponseStatus: () => 200,
       readResponseText: async () => '<kovo-fragment target="cart">SAFE</kovo-fragment>',
       reload: () => false,
       snapshotElementHtml: () => undefined,
       targetHeader: () => [],
       wireKey: (name: string | null, key: string | null) =>
-        name ? name + (key ? ':' + key : '') : '',
+        name ? (key ? { key, name } : { name }) : undefined,
     };
     const recovery = createDocumentLifecycleRecovery(options);
 
@@ -675,30 +855,34 @@ describe('browser-runtime security regressions', () => {
       addLifecycleEventListener: () => true,
       applyBody: () => undefined,
       buildHeader: () => '',
+      canonicalRequestUrl: (value) => value,
       currentBuild: () => '',
       currentHref: () => undefined,
       document,
       encodeAttribute: (value) => value,
-      encodeWireEntries: (values) => values.join('; '),
       fetchValue: async () => ({}),
       findTarget: () => undefined,
       liveTargets: () => [],
       parseHtmlDocument: () => undefined,
+      planTargetRequestHeaders: planFrameworkTargetRequestHeaders,
       queryOne: () => null,
       queryAll: () => [],
       queryUrl: () => '',
       readAttribute: (_attrs, name) => (name === 'name' ? 'safe-query' : null),
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: () => null,
+      rememberQueryHref: () => undefined,
       readPageTransitionPersisted: () => false,
       responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
       responseAllowsInlineBody: () => true,
+      responseIsBuildSkew: () => false,
+      responseUrlIsExact: () => true,
       readResponseStatus: () => 200,
       readResponseText: async () => '',
       reload: () => false,
       snapshotElementHtml: () => undefined,
       targetHeader: () => [],
-      wireKey: (name) => name ?? '',
+      wireKey: (name) => (name ? { name } : undefined),
     });
     const defineDescriptor = Object.getOwnPropertyDescriptor(Object, 'defineProperty');
     const zeroDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, '0');
@@ -737,6 +921,7 @@ describe('browser-runtime security regressions', () => {
       addLifecycleEventListener: () => true,
       applyBody: () => undefined,
       buildHeader: () => '',
+      canonicalRequestUrl: (value: string) => value,
       currentBuild: () => '',
       currentHref: () => undefined,
       document,
@@ -752,9 +937,12 @@ describe('browser-runtime security regressions', () => {
       readAttribute: () => null,
       readElementAttribute: () => ({ present: false }),
       readDomAttribute: () => null,
+      rememberQueryHref: () => undefined,
       readPageTransitionPersisted: () => false,
       responseContentType: () => 'text/vnd.kovo.fragment+html; charset=utf-8',
       responseAllowsInlineBody: () => true,
+      responseIsBuildSkew: () => false,
+      responseUrlIsExact: () => true,
       readResponseStatus: () => 200,
       readResponseText: async () => '',
       reload: () => false,

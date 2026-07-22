@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  encodeFrameworkFormTargetHeader,
+  encodeFrameworkIdentityToken,
+  encodeFrameworkTargetHeader,
+} from '@kovojs/core/internal/wire-input-grammar';
 
 import { domain } from './domain.js';
 import {
@@ -61,7 +66,20 @@ function attestedLiveTargetHeader(
     { component, props, target },
     { buildToken: mutationEndpointTestAuthority.audience, request: {} },
   );
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+  const encodedTarget = encodeFrameworkIdentityToken(target);
+  const encodedComponent = encodeFrameworkIdentityToken(component);
+  if (!encodedTarget || !encodedComponent) {
+    throw new TypeError('Test live-target identity is invalid.');
+  }
+  return `${encodedTarget}#${encodedComponent}@${token}:${JSON.stringify(props)}`;
+}
+
+function keyedQueryTargetHeader(
+  ...entries: readonly (readonly [target: string, name: string, key: string])[]
+): string {
+  return encodeFrameworkTargetHeader(
+    entries.map(([target, name, key]) => ({ deps: [{ key, name }], target })),
+  );
 }
 
 describe('server mutation endpoint routing', () => {
@@ -599,7 +617,11 @@ describe('server mutation endpoint routing', () => {
             'product-card:p1',
             'components/product/card-plan',
           ),
-          'Kovo-Targets': 'product-card:p1=product:p1',
+          'Kovo-Targets': keyedQueryTargetHeader([
+            'product-card:p1',
+            'productDetail',
+            'product:p1',
+          ]),
         },
         liveTargetRenderers: [
           {
@@ -663,7 +685,11 @@ describe('server mutation endpoint routing', () => {
           'product-card:p1',
           'components/generated-product/card-plan',
         ),
-        'Kovo-Targets': 'product-card:p1=generated-direct-product:p1',
+        'Kovo-Targets': keyedQueryTargetHeader([
+          'product-card:p1',
+          'generatedProductDetail',
+          'generated-direct-product:p1',
+        ]),
       },
       liveTargetRenderers: [
         {
@@ -810,7 +836,7 @@ describe('server mutation endpoint routing', () => {
     await expect(
       renderMutationEndpointResponse(addToCart, {
         headers: {
-          'Kovo-Form-Target': 'add-to-cart:p1',
+          'Kovo-Form-Target': encodeFrameworkFormTargetHeader('add-to-cart:p1')!,
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('add-to-cart:p1', 'components/add-to-cart-form', { productId: 'p1' })}`,
         },

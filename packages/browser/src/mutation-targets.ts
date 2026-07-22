@@ -6,10 +6,11 @@ import {
   frameworkWireAttestationIsValid,
   frameworkWireComponentIsValid,
   frameworkWireIdentityIsValid,
+  type FrameworkQueryDependencyIdentity,
   type FrameworkWireEntrySnapshot,
 } from '@kovojs/core/internal/wire-input-grammar';
 
-import { readDeps } from './pending.js';
+import { readQueryDependencyIdentities } from './pending.js';
 import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js';
 import { queryRuntimeElements, readRuntimeElementAttribute } from './runtime-dom-security.js';
 import {
@@ -54,8 +55,8 @@ export function readLiveTargets(root: TargetCollectorRoot): string[] {
 export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSnapshot {
   const collected = collectLiveTargetSnapshot(root);
   return {
-    header: encodeFrameworkWireEntryList(wireEntryValues(collected.targetWireEntries)),
-    liveHeader: encodeFrameworkWireEntryList(wireEntryValues(collected.liveTargetWireEntries)),
+    header: encodeExactWireEntryList(collected.targetWireEntries),
+    liveHeader: encodeExactWireEntryList(collected.liveTargetWireEntries),
     liveTargetEntries: collected.liveTargetWireEntries,
     liveTargets: collected.liveTargets,
     targetEntries: collected.targetWireEntries,
@@ -72,10 +73,10 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
   const targetIdentities: string[] = [];
   const liveTargets: LiveTargetDescriptor[] = [];
   const liveTargetWireEntries: FrameworkWireEntrySnapshot[] = [];
-  const liveTargetIdentities: string[] = [];
-  let targetEntryCount = 0;
-  let liveTargetCount = 0;
   const elements = readTargetElements(root);
+  if (elements.length > FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries) {
+    throw new TypeError('Kovo target collection exceeds the framework entry budget.');
+  }
 
   for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
     const elementEntry = securityOwnArrayEntry(elements.value, elementIndex);
@@ -86,53 +87,49 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
     // SPEC.md §9.1: Kovo-Targets is read from the live DOM so patched-in
     // fragment targets participate in the stateless enhanced mutation request.
     const target = readTargetIdentity(element);
-    let deps: string[];
-    try {
-      deps = readDeps(readRuntimeElementAttribute(element, 'kovo-deps'));
-    } catch {
-      continue;
+    const deps = readQueryDependencyIdentities(readRuntimeElementAttribute(element, 'kovo-deps'));
+    if (!frameworkWireIdentityIsValid(target)) {
+      throw new TypeError('Kovo target collection contains an invalid target identity.');
     }
-    if (!target) continue;
-    if (!frameworkWireIdentityIsValid(target) || !dependenciesAreValid(deps)) continue;
-
     if (
-      targetEntryCount < FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries &&
-      !snapshotContains(targetIdentities, targetEntryCount, target, 'Kovo target identity snapshot')
-    ) {
-      const targetEntry = { deps, target };
-      const wireEntry = encodeFrameworkTargetHeader([targetEntry]);
-      if (wireEntry !== '') {
-        securityArrayAppend(targetIdentities, target, 'Kovo target identity snapshot');
-        securityArrayAppend(
-          targetWireEntries,
-          { target, wireEntry },
-          'Kovo target wire-entry snapshot',
-        );
-        targetEntryCount += 1;
-      }
-    }
-
-    if (
-      liveTargetCount >= FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries ||
       snapshotContains(
-        liveTargetIdentities,
-        liveTargetCount,
+        targetIdentities,
+        targetIdentities.length,
         target,
-        'Kovo live target identity snapshot',
+        'Kovo target identity snapshot',
       )
     ) {
-      continue;
+      throw new TypeError('Kovo target collection contains a duplicate target identity.');
     }
+    const targetEntry: { deps: readonly FrameworkQueryDependencyIdentity[]; target: string } = {
+      deps,
+      target,
+    };
+    const wireEntry = encodeFrameworkTargetHeader([targetEntry]);
+    if (wireEntry === '') {
+      throw new TypeError('Kovo target collection exceeds the target-header budget.');
+    }
+    securityArrayAppend(targetIdentities, target, 'Kovo target identity snapshot');
+    securityArrayAppend(
+      targetWireEntries,
+      { target, wireEntry },
+      'Kovo target wire-entry snapshot',
+    );
+
     const component =
       readRuntimeElementAttribute(element, 'kovo-live-component') ??
       readRuntimeElementAttribute(element, 'kovo-c') ??
       target;
-    if (!frameworkWireComponentIsValid(component)) continue;
-    const attestation = readLiveTargetAttestation(element);
+    if (!frameworkWireComponentIsValid(component)) {
+      throw new TypeError('Kovo target collection contains an invalid component identity.');
+    }
+    const rawAttestation = readRuntimeElementAttribute(element, 'kovo-live-token');
+    if (rawAttestation !== null && !frameworkWireAttestationIsValid(rawAttestation)) {
+      throw new TypeError('Kovo target collection contains an invalid live-target attestation.');
+    }
+    const attestation = rawAttestation ?? undefined;
     const propsSource = readRuntimeElementAttribute(element, 'kovo-props');
     const props = readLiveProps(propsSource);
-    if (props === undefined) continue;
-    securityArrayAppend(liveTargetIdentities, target, 'Kovo live target identity snapshot');
     if (attestation === undefined) {
       securityArrayAppend(
         liveTargets,
@@ -148,21 +145,14 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
       const wireEntry = encodeFrameworkLiveTargetHeader([
         { attestation, component, propsSource, target },
       ]);
-      if (wireEntry !== '') {
-        securityArrayAppend(
-          liveTargetWireEntries,
-          { target, wireEntry },
-          'Kovo live-target wire-entry snapshot',
-        );
+      if (wireEntry === '') {
+        throw new TypeError('Kovo target collection exceeds the live-target header budget.');
       }
-    }
-    liveTargetCount += 1;
-
-    if (
-      targetEntryCount === FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries &&
-      liveTargetCount === FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries
-    ) {
-      break;
+      securityArrayAppend(
+        liveTargetWireEntries,
+        { target, wireEntry },
+        'Kovo live-target wire-entry snapshot',
+      );
     }
   }
 
@@ -173,6 +163,21 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
   };
 }
 
+function encodeExactWireEntryList(entries: readonly FrameworkWireEntrySnapshot[]): string {
+  const values = wireEntryValues(entries);
+  const header = encodeFrameworkWireEntryList(values);
+  let expectedLength = values.length === 0 ? 0 : (values.length - 1) * 2;
+  for (let index = 0; index < values.length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) throw new TypeError('Kovo wire-entry values must be dense.');
+    expectedLength += entry.value.length;
+  }
+  if (header.length !== expectedLength) {
+    throw new TypeError('Kovo target collection exceeds the aggregate header budget.');
+  }
+  return header;
+}
+
 function wireEntryValues(entries: readonly FrameworkWireEntrySnapshot[]): string[] {
   const values: string[] = [];
   for (let index = 0; index < entries.length; index += 1) {
@@ -181,11 +186,6 @@ function wireEntryValues(entries: readonly FrameworkWireEntrySnapshot[]): string
     securityArrayAppend(values, entry.value.wireEntry, 'Kovo wire-entry value snapshot');
   }
   return values;
-}
-
-function readLiveTargetAttestation(element: TargetElementLike): string | undefined {
-  const value = readRuntimeElementAttribute(element, 'kovo-live-token');
-  return frameworkWireAttestationIsValid(value) ? value : undefined;
 }
 
 function readTargetElements(root: TargetCollectorRoot): {
@@ -222,25 +222,6 @@ function readTargetIdentity(element: TargetElementLike): string | null {
   return readRuntimeElementAttribute(element, 'kovo-c');
 }
 
-function dependenciesAreValid(deps: readonly string[]): boolean {
-  const length = securityGetOwnPropertyDescriptor(deps, 'length');
-  if (
-    length === undefined ||
-    !('value' in length) ||
-    typeof length.value !== 'number' ||
-    length.value < 0 ||
-    length.value > maxTargetCollectionElements ||
-    length.value % 1 !== 0
-  ) {
-    return false;
-  }
-  for (let index = 0; index < length.value; index += 1) {
-    const dep = securityOwnArrayEntry(deps, index);
-    if (!dep.ok || !frameworkWireIdentityIsValid(dep.value)) return false;
-  }
-  return true;
-}
-
 function snapshotContains(
   values: readonly string[],
   length: number,
@@ -255,16 +236,17 @@ function snapshotContains(
   return false;
 }
 
-function readLiveProps(value: string | null): Record<string, unknown> | undefined {
+function readLiveProps(value: string | null): Record<string, unknown> {
   if (!value) return {};
   if (value.length > FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters) {
-    return undefined;
+    throw new TypeError('Kovo target props exceed the framework header budget.');
   }
   try {
     const props = securityJsonParse(value);
-    return isRecord(props) ? props : {};
+    if (!isRecord(props)) throw new TypeError('Kovo target props must be a JSON object.');
+    return props;
   } catch {
-    return {};
+    throw new TypeError('Kovo target props must be a valid JSON object.');
   }
 }
 

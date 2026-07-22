@@ -24,6 +24,8 @@ export interface QueryWireRenderOptions {
    * (SPEC §9.1.1).
    */
   delta?: boolean | undefined;
+  /** Canonical typed-read href for this exact query instance. */
+  href?: string | undefined;
   key?: string | undefined;
   name: string;
   /**
@@ -41,6 +43,8 @@ export interface QueryWireRenderOptions {
  * @internal
  */
 export interface QueryScriptRenderOptions {
+  /** Canonical typed-read href snapshotted by the browser during hydration. */
+  href: string;
   key?: string | undefined;
   name: string;
   value: unknown;
@@ -85,6 +89,10 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
           'dom-identity',
           'kovo-query[version]',
         )}"`;
+  const hrefAttribute =
+    options.href === undefined
+      ? ''
+      : ` href="${escapeWireAttribute(options.href, 'dom-identity', 'kovo-query[href]')}"`;
   const settlesAttribute =
     options.settles === undefined || options.settles.length === 0
       ? ''
@@ -100,7 +108,7 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
     options.name,
     'dom-identity',
     'kovo-query[name]',
-  )}"${keyAttribute}${versionAttribute}${settlesAttribute}${deltaAttribute}>${escapeHtml(stringifyKovoWireValue(options.value))}</kovo-query>`;
+  )}"${keyAttribute}${hrefAttribute}${versionAttribute}${settlesAttribute}${deltaAttribute}>${escapeHtml(stringifyKovoWireValue(options.value))}</kovo-query>`;
 }
 
 /**
@@ -166,19 +174,28 @@ export function renderQueryPageWireHtml(options: QueryPageWireRenderOptions): st
  * @example
  * import { renderQueryScript } from '@kovojs/server/internal/html';
  *
- * const html: string = renderQueryScript({ name: 'cart', value: { count: 2 } });
+ * const html: string = renderQueryScript({
+ *   href: '/_q/cart',
+ *   name: 'cart',
+ *   value: { count: 2 },
+ * });
  */
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
   const keyAttribute =
     options.key === undefined
       ? ''
       : ` key="${escapeWireAttribute(options.key, 'dom-identity', 'script[kovo-query][key]')}"`;
+  const hrefAttribute = ` data-kovo-query-href="${escapeWireAttribute(
+    options.href,
+    'dom-identity',
+    'script[kovo-query][data-kovo-query-href]',
+  )}"`;
 
   return `<script type="application/json" kovo-query="${escapeWireAttribute(
     options.name,
     'dom-identity',
     'script[kovo-query]',
-  )}"${keyAttribute}>${escapeScriptJson(stringifyKovoWireValue(options.value))}</script>`;
+  )}"${keyAttribute}${hrefAttribute}>${escapeScriptJson(stringifyKovoWireValue(options.value))}</script>`;
 }
 
 export function renderFragmentWireHtml(options: FragmentWireRenderOptions): string {

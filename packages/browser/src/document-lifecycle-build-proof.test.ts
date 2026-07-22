@@ -16,6 +16,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     addLifecycleEventListener: () => true,
     applyBody: (body, build) => applied.push(build === undefined ? { body } : { body, build }),
     buildHeader: () => 'build-old',
+    canonicalRequestUrl: (value) => value,
     currentBuild: (root) => (root === nextDocument ? 'build-old' : 'build-old'),
     currentHref: () => 'https://kovo.test/account',
     document: {} as Document,
@@ -30,10 +31,13 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     queryUrl: () => '',
     readAttribute: () => null,
     readDomAttribute: () => null,
+    rememberQueryHref: () => undefined,
     readElementAttribute: () => ({ present: false }),
     readPageTransitionPersisted: () => false,
     responseContentType: () => 'text/html; charset=utf-8',
     responseAllowsInlineBody: () => true,
+    responseIsBuildSkew: () => false,
+    responseUrlIsExact: () => true,
     readResponseStatus: () => 200,
     readResponseText: async () => '<html><body>next</body></html>',
     reload,
@@ -65,7 +69,9 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
     lifecycle.rememberQueryChunk({ attrs: ' name="cart" key=""' });
 
     expect(queryUrl).not.toHaveBeenCalled();
-    expect(reload).toHaveBeenCalledTimes(3);
+    // The first malformed identity starts one terminal recovery. Later calls in the stale realm
+    // are inert even when navigation is delayed.
+    expect(reload).toHaveBeenCalledOnce();
   });
 
   it('reloads before reading an attachment live-target response', async () => {
@@ -100,6 +106,36 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
     await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(reload).toHaveBeenCalledOnce();
+    expect(readResponseText).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
+  it('stamps query refresh and reloads on a 409 build mismatch before reading the body', async () => {
+    const fetchValue = vi.fn(async () => ({ status: 409 }));
+    const readResponseText = vi.fn(async () => '<kovo-query name="cart">{}</kovo-query>');
+    const { applied, options, reload } = recoveryOptions({
+      buildHeader: () => 'build-new',
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseStatus: () => 409,
+      readResponseText,
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchValue).toHaveBeenCalledWith('/_q/cart', {
+      cache: 'no-store',
+      headers: {
+        Accept: 'text/html',
+        'Kovo-Build': 'build-old',
+        'Kovo-Fragment': 'true',
+      },
+      method: 'GET',
+      redirect: 'error',
+    });
     expect(reload).toHaveBeenCalledOnce();
     expect(readResponseText).not.toHaveBeenCalled();
     expect(applied).toEqual([]);
@@ -157,11 +193,141 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
     await refresh(options);
 
     expect(reload).not.toHaveBeenCalled();
+    expect(fetchValue).toHaveBeenCalledWith('https://kovo.test/account', {
+      cache: 'no-store',
+      headers: {
+        Accept: 'text/html',
+        'Kovo-Build': 'build-old',
+        'Kovo-Current-Url': 'https://kovo.test/account',
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': 'account#account@token:{}',
+      },
+      method: 'GET',
+      redirect: 'error',
+      referrerPolicy: 'origin',
+    });
     expect(applied).toEqual([
       {
         body: '<kovo-fragment target="account"><section kovo-fragment-target="account">next</section></kovo-fragment>',
         build: 'build-old',
       },
     ]);
+  });
+
+  it('batches visible-return queries and blocks a delayed live-target apply after auth denial', async () => {
+    let releaseLive: ((value: object) => void) | undefined;
+    const liveResponse = new Promise<object>((resolve) => {
+      releaseLive = resolve;
+    });
+    const fetchValue = vi.fn((url: string) => {
+      if (url === 'https://kovo.test/account') return liveResponse;
+      if (url.endsWith('/_q/cart')) {
+        return Promise.resolve({
+          build: 'build-old',
+          contentType: 'text/html',
+          redirected: false,
+          status: 200,
+          text: '<kovo-query name="cart">{"private":true}</kovo-query>',
+          url,
+        });
+      }
+      return Promise.resolve({
+        build: 'build-old',
+        contentType: 'text/html',
+        redirected: false,
+        status: 403,
+        text: '<main>signed out</main>',
+        url,
+      });
+    });
+    const { applied, options, reload } = recoveryOptions({
+      buildHeader: (response) => (response as { build?: string }).build ?? '',
+      fetchValue,
+      queryUrl: (identity) => `https://kovo.test/_q/${identity.name}`,
+      readAttribute: (attrs, name) => {
+        const match = new RegExp(`${name}="([^"]*)"`, 'u').exec(attrs);
+        return match?.[1] ?? null;
+      },
+      readResponseStatus: (response) => (response as { status: number }).status,
+      readResponseText: async (response) => (response as { text: string }).text,
+      responseContentType: (response) =>
+        (response as { contentType?: string }).contentType ?? 'text/vnd.kovo.fragment+html',
+      responseUrlIsExact: (response, expected) =>
+        (response as { redirected?: boolean; url?: string }).redirected === false &&
+        (response as { url?: string }).url === expected,
+      wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+    lifecycle.rememberQueryChunk({ attrs: ' name="cart" href="/_q/cart"' });
+    lifecycle.rememberQueryChunk({ attrs: ' name="private" href="/_q/private"' });
+
+    lifecycle.visibleReturnRefresh();
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    releaseLive?.({
+      build: 'build-old',
+      contentType: 'text/vnd.kovo.fragment+html',
+      redirected: false,
+      status: 200,
+      text: '<kovo-fragment target="account">STALE</kovo-fragment>',
+      url: 'https://kovo.test/account',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(applied).toEqual([]);
+    expect(fetchValue).toHaveBeenCalledTimes(3);
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('blocks a delayed query batch when the same visible pass rejects live-target media', async () => {
+    let releaseQuery: ((value: object) => void) | undefined;
+    const queryResponse = new Promise<object>((resolve) => {
+      releaseQuery = resolve;
+    });
+    const fetchValue = vi.fn((url: string) =>
+      url.endsWith('/_q/cart')
+        ? queryResponse
+        : Promise.resolve({
+            build: 'build-old',
+            contentType: 'text/plain',
+            redirected: false,
+            status: 200,
+            text: 'not wire',
+            url,
+          }),
+    );
+    const { applied, options, reload } = recoveryOptions({
+      buildHeader: (response) => (response as { build?: string }).build ?? '',
+      fetchValue,
+      queryUrl: (identity) => `https://kovo.test/_q/${identity.name}`,
+      readAttribute: (attrs, name) => {
+        const match = new RegExp(`${name}="([^"]*)"`, 'u').exec(attrs);
+        return match?.[1] ?? null;
+      },
+      readResponseStatus: (response) => (response as { status: number }).status,
+      readResponseText: async (response) => (response as { text: string }).text,
+      responseContentType: (response) => (response as { contentType: string }).contentType,
+      responseUrlIsExact: (response, expected) =>
+        (response as { redirected?: boolean; url?: string }).redirected === false &&
+        (response as { url?: string }).url === expected,
+      wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+    lifecycle.rememberQueryChunk({ attrs: ' name="cart" href="/_q/cart"' });
+
+    lifecycle.visibleReturnRefresh();
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    releaseQuery?.({
+      build: 'build-old',
+      contentType: 'text/html',
+      redirected: false,
+      status: 200,
+      text: '<kovo-query name="cart">{"private":true}</kovo-query>',
+      url: 'https://kovo.test/_q/cart',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(applied).toEqual([]);
+    expect(fetchValue).toHaveBeenCalledTimes(2);
+    expect(reload).toHaveBeenCalledOnce();
   });
 });

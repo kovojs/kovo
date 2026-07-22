@@ -13,6 +13,7 @@ import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 import { reportServerError } from './diagnostics.js';
 import { frameworkRevealUntrustedPolicy } from './declassification-policy.js';
 import {
+  encodeGeneratedDependencyIdentity,
   htmlAttributeValue,
   joinHtmlAttributeTokens,
   mergeHtmlAttributeTokens,
@@ -1267,7 +1268,14 @@ function stampLayoutAttributes(
   const deps = routeStampOwnStringArray(metadata, 'deps', 'Layout live-target metadata');
   const target = routeStampOwnString(metadata, 'target', 'Layout live-target metadata');
   if (deps.length === 0) return attrs;
-  const mergedDeps = mergeHtmlAttributeTokens(htmlAttributeValue(attrs, 'kovo-deps'), deps);
+  const dependencyTokens: string[] = [];
+  for (let index = 0; index < deps.length; index += 1) {
+    securityArrayPush(dependencyTokens, encodeGeneratedDependencyIdentity(deps[index]));
+  }
+  const mergedDeps = mergeHtmlAttributeTokens(
+    htmlAttributeValue(attrs, 'kovo-deps'),
+    dependencyTokens,
+  );
   let nextAttrs = setOrAppendHtmlAttribute(attrs, 'kovo-deps', joinHtmlAttributeTokens(mergedDeps));
 
   if (

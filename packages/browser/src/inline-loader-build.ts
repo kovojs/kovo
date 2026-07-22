@@ -1027,6 +1027,9 @@ function installInlineKovoLoader(im) {
   };
   const rd = (val) => {
     const source = val ?? '';
+    if (source.length > frameworkWireInputGrammar.maxHeaderCharacters) {
+      throw new TypeError('Kovo dependency input exceeds its bounded wire length.');
+    }
     const dependencies = [];
     let start = 0;
     for (let index = 0; index <= source.length; index += 1) {
@@ -1034,9 +1037,18 @@ function installInlineKovoLoader(im) {
       if (character !== ' ') continue;
       if (index > start) {
         const token = bns.slice(source, start, index);
-        const dependency = frameworkWireTargetCodec.decodeIdentityToken(token);
-        if (typeof dependency !== 'string') {
+        const dependency = frameworkWireTargetCodec.decodeQueryDependencyToken(token);
+        if (!dependency) {
           throw new TypeError('Kovo dependency input must contain canonical identity tokens.');
+        }
+        if (dependencies.length === frameworkWireInputGrammar.maxEntries) {
+          throw new TypeError('Kovo dependency input exceeds its bounded identity count.');
+        }
+        for (let dependencyIndex = 0; dependencyIndex < dependencies.length; dependencyIndex += 1) {
+          const existing = dependencies[dependencyIndex];
+          if (existing?.name === dependency.name && existing?.key === dependency.key) {
+            throw new TypeError('Kovo dependency identities must be unique.');
+          }
         }
         bns.appendDenseSecurityValue(
           dependencies,
@@ -1069,25 +1081,28 @@ function installInlineKovoLoader(im) {
     const seen = [];
     const targets = [];
     const elements = qa(doc, '[kovo-deps]');
+    if (elements.length > frameworkWireInputGrammar.maxEntries) {
+      throw new TypeError('Kovo target metadata exceeds the bounded target count.');
+    }
     for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
       const el = elements[elementIndex];
       if (!el) continue;
       const deps = rd(ras(el, 'kovo-deps'));
       const target = targetIdentity(el);
-      let safe = !!hsaf(target);
-      for (let depIndex = 0; safe && depIndex < deps.length; depIndex += 1) {
-        safe = !!hsaf(deps[depIndex]);
+      if (!hsaf(target) || !target) {
+        throw new TypeError('Kovo target metadata contains an invalid target identity.');
       }
-      if (!safe || !target || hasSnapshotValue(seen, target)) continue;
+      if (hasSnapshotValue(seen, target)) {
+        throw new TypeError('Kovo target identities must be unique.');
+      }
       bns.appendDenseSecurityValue(seen, target, 'Inline target identity snapshot');
       const wireEntry = frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }]);
-      if (!wireEntry) continue;
+      if (!wireEntry) throw new TypeError('Kovo target metadata encoded to an empty entry.');
       bns.appendDenseSecurityValue(
         targets,
         { target, wireEntry },
         'Inline target header snapshot',
       );
-      if (targets.length === frameworkWireInputGrammar.maxEntries) break;
     }
     return targets;
   };
@@ -1101,31 +1116,33 @@ function installInlineKovoLoader(im) {
       const target = targetIdentity(el);
       const component = liveTargetIdentity(el);
       const token = ras(el, 'kovo-live-token');
-      if (!hsaf(target) || !hsc(component) || !hsa(token)) continue;
-      if (!target || hasSnapshotValue(seen, target)) continue;
-      bns.appendDenseSecurityValue(seen, target, 'Inline live target identity snapshot');
-      let wireEntry = '';
-      try {
-        wireEntry = frameworkWireTargetCodec.encodeLiveTargetHeader(
-          [
-            {
-              attestation: token,
-              ['component']: component,
-              propsSource: ras(el, 'kovo-props'),
-              target,
-            },
-          ],
-        );
-      } catch {
-        continue;
+      if (token === null) continue;
+      if (!hsaf(target) || !hsc(component) || !hsa(token) || !target) {
+        throw new TypeError('Kovo live-target metadata contains an invalid identity.');
       }
-      if (!wireEntry) continue;
+      if (hasSnapshotValue(seen, target)) {
+        throw new TypeError('Kovo live-target identities must be unique.');
+      }
+      if (targets.length === frameworkWireInputGrammar.maxEntries) {
+        throw new TypeError('Kovo live-target metadata exceeds the bounded target count.');
+      }
+      bns.appendDenseSecurityValue(seen, target, 'Inline live target identity snapshot');
+      const wireEntry = frameworkWireTargetCodec.encodeLiveTargetHeader(
+        [
+          {
+            attestation: token,
+            ['component']: component,
+            propsSource: ras(el, 'kovo-props'),
+            target,
+          },
+        ],
+      );
+      if (!wireEntry) throw new TypeError('Kovo live-target metadata encoded to an empty entry.');
       bns.appendDenseSecurityValue(
         targets,
         { target, wireEntry },
         'Inline live target header snapshot',
       );
-      if (targets.length === frameworkWireInputGrammar.maxEntries) break;
     }
     return targets;
   };
@@ -1166,26 +1183,45 @@ function installInlineKovoLoader(im) {
     if (!hsaf(name) || (key !== null && !hsaf(key))) return;
     return freezeQueryIdentity(key === null ? { name } : { key, name });
   };
-  const eqp = (name) => {
-    let encoded = '';
-    let remaining = name;
-    for (;;) {
-      const separator = bns.indexOf(remaining, '/');
-      const segment = separator < 0 ? remaining : bns.slice(remaining, 0, separator);
-      encoded += (encoded ? '/' : '') + ec(segment);
-      if (separator < 0) return encoded;
-      remaining = bns.slice(remaining, separator + 1);
+  // SPEC §9.4: typed-read authority is the exact href emitted by the server for this query
+  // identity. Never reconstruct it from the public name/key grammar: route prefixes, encoding,
+  // and key transport are server-owned facts and mutable DOM is not an authority ledger.
+  const qhrefs = bns.createSecurityMap();
+  const qhrefKey = (identity) =>
+    frameworkWireTargetCodec.encodeQueryDependencyToken(identity?.name, identity?.key);
+  const rememberQueryHref = (identity, href) => {
+    if (href === null) return;
+    const identityKey = qhrefKey(identity);
+    if (!identityKey || !hsaf(href) || href.length > 65_536) {
+      throw new TypeError('Kovo query refetch metadata contains invalid identity or href facts.');
     }
+    const existing = bns.getSecurityMapValue(qhrefs, identityKey);
+    if (existing !== undefined && existing !== href) {
+      throw new TypeError('Kovo query refetch metadata conflicts for one exact query identity.');
+    }
+    bns.setSecurityMapValue(qhrefs, identityKey, href);
   };
   const qurl = (identity) => {
-    const n = identity?.name;
-    const k = identity?.key;
-    if (!n) return '';
-    if (k === undefined) return '/_q/' + eqp(n);
-    const prefix = n + ':';
-    const keyValue = bns.indexOf(k, prefix) === 0 ? bns.slice(k, prefix.length) : k;
-    return '/_q/' + eqp(n) + '?key=' + ec(keyValue);
+    const identityKey = qhrefKey(identity);
+    return identityKey ? bns.getSecurityMapValue(qhrefs, identityKey) ?? '' : '';
   };
+  // One terminal latch spans lifecycle query/live refresh, mutation/broadcast apply, and stream
+  // recovery. Navigation may be delayed or suppressed; the stale realm still loses apply authority
+  // synchronously when recovery begins (SPEC §14).
+  let responseRecoveryTerminal = false;
+  let responseRecoveryGeneration = 0;
+  const retireRuntime = (action) => {
+    if (responseRecoveryTerminal) return false;
+    responseRecoveryTerminal = true;
+    responseRecoveryGeneration += 1;
+    retireBroadcast();
+    if (action?.navigate) {
+      bns.setHistoryScrollRestoration('auto');
+      return bns.navigateSameOrigin(action.navigate);
+    }
+    return bns.reload();
+  };
+  const recoverDocument = () => retireRuntime({ reload: true });
   const rbd = (nextBody) => {
     const currentBody = bns.readDocumentField(doc, 'body');
     if (!currentBody) throw new TypeError('Kovo document body is unavailable.');
@@ -1363,22 +1399,21 @@ function installInlineKovoLoader(im) {
     applyStylePromotion: () => ps(),
     document: doc,
     morph: (current, next) => m(current, next, bns),
-    onSessionTransition: () => retireBroadcast(),
     queryAll: qa,
     replayScripts: rscr,
     replaceBody: rbd,
     replaceElementAttributes: xa,
     retireIsland: (island) => bns.retireIslandSignal(island),
+    retireRuntime: (href) => retireRuntime({ navigate: href }),
     runTriggers: () => tr(),
+    runtimeGeneration: () => responseRecoveryGeneration,
+    runtimeIsRetired: () => responseRecoveryTerminal,
     sessionFingerprint: sfp,
   });
   const an = nav.navigate;
   const inav = nav.handleClick;
   const sf = nav.saveScroll;
-  const ng = (href) => {
-    bns.setHistoryScrollRestoration('auto');
-    bns.navigateSameOrigin(href);
-  };
+  const ng = (href) => retireRuntime({ navigate: href });
   const indeterminateInputs = qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -1428,6 +1463,22 @@ function installInlineKovoLoader(im) {
       bns.addLifecycleEventListener(globalThis, type, listener),
     applyBody: fab,
     buildHeader: bh,
+    canonicalRequestUrl: (value, surface) => {
+      const current = bns.currentUrl();
+      const parsed = current ? bns.parseUrl(value, current.href) : undefined;
+      if (
+        !current ||
+        !parsed ||
+        current.origin === 'null' ||
+        parsed.origin !== current.origin ||
+        (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+        parsed.hash !== '' ||
+        (surface === 'query' && bns.indexOf(parsed.pathname, '/_q/') !== 0)
+      ) {
+        return undefined;
+      }
+      return parsed.href;
+    },
     currentBuild: (root) => root ? kb(root) : pbt,
     currentHref: () => {
       const current = bns.currentUrl();
@@ -1446,16 +1497,25 @@ function installInlineKovoLoader(im) {
     'readAttribute': (attrs, name) => readAttribute(attrs, name),
     readElementAttribute: readWireElementAttribute,
     readDomAttribute: (element, name) => bns.ra(element, name),
+    rememberQueryHref,
     readPageTransitionPersisted: (event) => bns.readPageTransitionPersisted(event),
     responseContentType: (response) => bns.lower(bns.readHeader(response, 'Content-Type') ?? ''),
     responseAllowsInlineBody: (response) =>
       bns.isInlineContentDisposition(bns.readHeader(response, 'Content-Disposition')),
+    responseIsBuildSkew: (response) =>
+      bns.isTrimmedAsciiEqual(bns.readHeader(response, 'Kovo-Build-Skew'), 'true'),
+    responseUrlIsExact: (response, expectedUrl) => {
+      const redirected = bns.readResponseField(response, 'redirected');
+      const value = bns.readResponseField(response, 'url');
+      const parsed = typeof value === 'string' && value ? bns.parseUrl(value) : undefined;
+      return redirected === false && parsed?.href === expectedUrl;
+    },
     readResponseStatus: (response) => {
       const status = bns.readResponseField(response, 'status');
       return typeof status === 'number' ? status : undefined;
     },
     readResponseText: (response) => bns.readResponseText(response),
-    reload: () => bns.reload(),
+    reload: recoverDocument,
     snapshotElementHtml: (element) => bns.readElementOuterHtml(element),
     targetHeader: rt,
     wireKey: qwk,
@@ -1528,18 +1588,13 @@ function installInlineKovoLoader(im) {
     );
   };
   const ab = (body, build = pbt) => {
+    if (responseRecoveryTerminal) return;
     const skew = pbt && (!build || build !== pbt);
     if (skew) {
       // SPEC §6.6/§14: skew rejects the whole response, including fragment/text-only bodies.
       // Gate before parsing too: malformed foreign-build bytes cannot suppress recovery. Retire
       // stale origin-wide authority before invoking the boot-pinned hard recovery sink.
-      retireBroadcast();
-      bns.reload();
-      const chunks = readInlineMutationResponseBodyChunks(body);
-      for (let index = 0; index < chunks.queries.length; index += 1) {
-        const q = chunks.queries[index];
-        if (q) qr(q);
-      }
+      recoverDocument();
       return;
     }
     const chunks = readInlineMutationResponseBodyChunks(body);
@@ -1638,9 +1693,12 @@ function installInlineKovoLoader(im) {
         : bns.cancelReadableStream(source);
       bns.observePromiseRejection(cancellation);
     } catch {}
-    bns.reload();
+    recoverDocument();
   };
   const cp = (body, state) => {
+    if (responseRecoveryTerminal) {
+      throw Error('Kovo refused streamed response bytes after terminal document recovery.');
+    }
     if (state.done) {
       if (bns.trim(body)) throw Error('Streaming mutation emitted bytes after <kovo-done>');
       return '';
@@ -1791,7 +1849,7 @@ function installInlineKovoLoader(im) {
     );
   }
   const pb = (body, changes, responseBuild) => {
-    if (broadcastRetired || !bc || !pbt) return;
+    if (responseRecoveryTerminal || broadcastRetired || !bc || !pbt) return;
     if (!responseBuild || responseBuild !== pbt) return;
     const envelope = bns.snapshotMutationBroadcastEnvelopeData({
       body,
@@ -1819,8 +1877,7 @@ function installInlineKovoLoader(im) {
     if (channel) bns.retireMutationBroadcastChannel(channel);
   }
   const retireSession = () => {
-    retireBroadcast();
-    bns.reload();
+    recoverDocument();
   };
   const ant = (form, body) => {
     const next = bns.safeSameOriginPath(bns.readFormDataValue(body, 'next'));
@@ -1892,6 +1949,9 @@ function installInlineKovoLoader(im) {
     return bns.lower(bns.trim(separator < 0 ? contentType : bns.slice(contentType, 0, separator)));
   };
   const sef = (event, form, submitter, transport) => {
+    // No immutable page-build proof means no enhanced decoder can be selected. Keep the rendered
+    // form's native submission path before FormData creation, idem minting, or preventDefault.
+    if (!pbt) return;
     const streaming = bns.readAttribute(form, 'data-mutation-stream') !== null;
     let body;
     let idem;
@@ -1916,6 +1976,7 @@ function installInlineKovoLoader(im) {
               ? undefined
               : componentTarget;
       requestPlan = frameworkWireTargetCodec.planTargetRequestHeaders({
+        build: pbt,
         currentUrl: transport.sourceUrl,
         ...(formTarget === undefined ? {} : { formTarget }),
         idem,
@@ -1941,39 +2002,55 @@ function installInlineKovoLoader(im) {
           },
           keepalive: !streaming,
           method: transport.method,
+          redirect: 'error',
           referrerPolicy: 'origin',
         });
+        if (responseRecoveryTerminal) return;
         const responseUrl = bns.readResponseField(response, 'url');
         const finalUrl = typeof responseUrl === 'string' && responseUrl
-          ? bns.parseUrl(responseUrl, transport.sourceUrl)
+          ? bns.parseUrl(responseUrl)
           : undefined;
+        const redirected = bns.readResponseField(response, 'redirected');
+        const expectedUrl = bns.parseUrl(transport.origin + transport.action);
         if (
+          redirected !== false ||
           !finalUrl ||
+          !expectedUrl ||
           finalUrl.origin === 'null' ||
           (finalUrl.protocol !== 'http:' && finalUrl.protocol !== 'https:') ||
-          finalUrl.origin !== transport.origin
+          finalUrl.origin !== transport.origin ||
+          finalUrl.href !== expectedUrl.href
         ) {
-          throw new TypeError('Kovo refused an enhanced mutation response without same-origin URL proof.');
+          recoverDocument();
+          return;
         }
         const status = rsp(response);
-        const redirected = bns.readResponseField(response, 'redirected') === true;
-        const redirect = status >= 300 && status < 400
-          ? bns.readHeader(response, 'Location')
-          : redirected && typeof responseUrl === 'string'
-            ? responseUrl
-            : '';
-        // SPEC §9.1: Kovo response directives carry authority only inside the exact mutation
-        // media envelope. A standard same-origin HTTP redirect needs no fragment body, but
-        // text/html cannot promote Kovo-* lookalike headers into session or DOM authority.
+        if (status >= 300 && status < 400) {
+          recoverDocument();
+          return;
+        }
+        // SPEC §5.2.1/§14: exact-URL missing/foreign build proof is terminal independently of
+        // media. Recovery wins before Content-Type, mutation directives, changes, or body reads.
+        const envelopeBuild = bh(response);
+        if (!envelopeBuild || envelopeBuild !== pbt) {
+          recoverDocument();
+          return;
+        }
+        // SPEC §9.1: only the exact inline fragment envelope grants mutation response directives
+        // or body bytes authority.
         if (
           mt(response) !== 'text/vnd.kovo.fragment+html' ||
           !bns.isInlineContentDisposition(bns.readHeader(response, 'Content-Disposition'))
         ) {
-          if (redirect) {
-            ng(redirect);
-            return;
-          }
           throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
+        }
+        if (
+          status === 409 &&
+          envelopeBuild === pbt &&
+          bns.isTrimmedAsciiEqual(bns.readHeader(response, 'Kovo-Build-Skew'), 'true')
+        ) {
+          recoverDocument();
+          return;
         }
         // SPEC §9.3: inside an authenticated mutation envelope, retirement wins over every
         // redirect/body channel so conflicting metadata cannot preserve the old principal.
@@ -1985,12 +2062,7 @@ function installInlineKovoLoader(im) {
         if (status === 401 && reauth) {
           // C180 / SPEC §6.5/§9.3: reauthentication is an expired-principal transition.
           // Retirement must precede a cancellable navigation to the sanitized login target.
-          retireBroadcast();
           ng(bns.safeSameOriginPath(reauth) || '/');
-          return;
-        }
-        if (redirect) {
-          ng(redirect);
           return;
         }
         const responseBody = bns.readResponseField(response, 'body');
@@ -2001,7 +2073,7 @@ function installInlineKovoLoader(im) {
         if (streaming && responseBody && !failed) {
           // bugz-26 H6 / SPEC §14: validate the response build before acquiring a reader. A
           // missing/mismatched token must cancel unread bytes and hard-reload with zero apply.
-          const responseBuild = bh(response);
+          const responseBuild = envelopeBuild;
           if (pbt && (!responseBuild || responseBuild !== pbt)) {
             await recoverStream(responseBody);
             return;
@@ -2010,19 +2082,18 @@ function installInlineKovoLoader(im) {
           return;
         }
         const text = await bns.readResponseText(response);
+        if (responseRecoveryTerminal) return;
         const changes = chg(response);
         if (eaf(response, changes, text)) {
           // C176 / SPEC §9.3: the accepted empty-auth fallback is a principal transition even
           // without the explicit header. Retirement must precede a cancellable navigation.
-          retireBroadcast();
           ng(ant(form, body));
           return;
         }
-        const responseBuild = bh(response);
-        ab(text, responseBuild);
+        ab(text, envelopeBuild);
         const completedStatus = rsp(response, 200);
         if (completedStatus >= 200 && completedStatus < 300 && bns.readResponseField(response, 'ok') !== false) {
-          pb(text, changes, responseBuild);
+          pb(text, changes, envelopeBuild);
         }
       } catch (error) {
         if (error !== streamRecoveryError) recoverMutation(form, transport);

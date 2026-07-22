@@ -22,13 +22,18 @@ import type {
   OptimisticPlan,
   OptimisticRebaser,
 } from './optimism.js';
-import { stampPendingQueries } from './pending.js';
+import {
+  familyPendingQuerySelector,
+  stampPendingQueries,
+  type PendingQuerySelector,
+} from './pending.js';
 import { rebaserApplyQueryInterposition } from './query-apply.js';
 import { queryStoreKey } from './query-store.js';
 import {
   captureSessionTransitionPrincipalRetirement,
   reloadSessionTransitionDocument,
 } from './session-transition.js';
+import { readPageBuildToken } from './build-token.js';
 import type { QueryChunk } from './wire-parser.js';
 import {
   securityArrayAppend,
@@ -63,9 +68,27 @@ export async function submitOptimisticEnhancedMutation<Input>(
   }
 > {
   options = definedProps(options) as OptimisticEnhancedMutationSubmitOptions<Input>;
+  const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
+  if (!expectedBuildToken) {
+    (options.onBuildSkew ?? reloadSessionTransitionDocument)();
+    throw new TypeError(
+      'Kovo refused an optimistic enhanced mutation without a document build proof.',
+    );
+  }
+  options = { ...options, expectedBuildToken };
   const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
   const idem = options.idem ?? createEnhancedMutationIdem(options.formData, false);
   const queryNames = securityObjectKeys(options.optimistic.transforms);
+  const pendingSelectors: PendingQuerySelector[] = [];
+  for (let index = 0; index < queryNames.length; index += 1) {
+    const queryName = securityOwnArrayEntry(queryNames, index);
+    if (!queryName.ok) throw new TypeError('Kovo optimistic query names must be dense.');
+    securityArrayAppend(
+      pendingSelectors,
+      familyPendingQuerySelector(queryName.value),
+      'Kovo optimistic pending-query selector snapshot',
+    );
+  }
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
   const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
   const queueName = options.optimistic.queue;
@@ -86,12 +109,13 @@ export async function submitOptimisticEnhancedMutation<Input>(
   // reconcile.
   options.rebaser.addChange(idem, optimisticChange, options.optimistic);
   if (options.pendingRoot) {
-    stampPendingQueries(options.pendingRoot, queryNames, true);
+    stampPendingQueries(options.pendingRoot, pendingSelectors, true);
   }
 
   const context: OptimisticSubmitContext = {
     idem,
     optimisticKeys,
+    pendingSelectors,
     queryNames,
     retirePrincipal,
   };
@@ -108,7 +132,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
           queueState.timedOut = true;
           discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
           if (options.pendingRoot) {
-            stampPendingQueries(options.pendingRoot, queryNames, false);
+            stampPendingQueries(options.pendingRoot, pendingSelectors, false);
           }
           reportRuntimeError(options.onError, error);
         },
@@ -122,6 +146,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
 interface OptimisticSubmitContext {
   idem: string;
   optimisticKeys: Readonly<Record<string, string | undefined>>;
+  pendingSelectors: PendingQuerySelector[];
   queryNames: string[];
   retirePrincipal: () => void;
 }
@@ -136,7 +161,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   signal?: AbortSignal,
   queueState?: OptimisticQueueState,
 ): Promise<EnhancedMutationAppliedResult> {
-  const { idem, optimisticKeys, queryNames, retirePrincipal } = context;
+  const { idem, optimisticKeys, pendingSelectors, queryNames, retirePrincipal } = context;
 
   try {
     const fetched = await fetchEnhancedMutation(
@@ -150,11 +175,10 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     );
     if (queueState?.timedOut) throw lateQueueSettlementAfterTimeoutError();
     if (fetched.sessionTransition) return retiredSessionTransitionResult(fetched);
-
     if (isFailedMutationResponse(fetched.response)) {
       discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
       if (options.pendingRoot) {
-        stampPendingQueries(options.pendingRoot, queryNames, false);
+        stampPendingQueries(options.pendingRoot, pendingSelectors, false);
       }
 
       return applyFetchedEnhancedMutationResponseToRuntime(options, fetched);
@@ -179,7 +203,17 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       }
     }
     if (options.pendingRoot && settledQueries.length > 0) {
-      stampPendingQueries(options.pendingRoot, settledQueries, false);
+      const settledSelectors: PendingQuerySelector[] = [];
+      for (let index = 0; index < settledQueries.length; index += 1) {
+        const queryName = securityOwnArrayEntry(settledQueries, index);
+        if (!queryName.ok) throw new TypeError('Kovo settled query names must be dense.');
+        securityArrayAppend(
+          settledSelectors,
+          familyPendingQuerySelector(queryName.value),
+          'Kovo settled pending-query selector snapshot',
+        );
+      }
+      stampPendingQueries(options.pendingRoot, settledSelectors, false);
     }
 
     return {
@@ -189,7 +223,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     if (queueState?.timedOut) throw error;
     discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
     if (options.pendingRoot) {
-      stampPendingQueries(options.pendingRoot, queryNames, false);
+      stampPendingQueries(options.pendingRoot, pendingSelectors, false);
     }
     if (!queueState?.timedOut) {
       reportRuntimeError(options.onError, error);

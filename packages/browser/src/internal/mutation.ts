@@ -17,7 +17,7 @@ export { OptimisticRebaser } from '../optimism.js';
 export type { MutationChangeRecord } from '../optimism.js';
 /** @internal bfcache-safe pagehide optimism cleanup (SPEC §10.4) — framework white-box, not public `./client`. */
 export { installPagehideOptimismCleanup } from '../optimism.js';
-export { stampPendingQueries } from '../pending.js';
+export { familyPendingQuerySelector, stampPendingQueries } from '../pending.js';
 export type { PendingElementLike, PendingRoot } from '../pending.js';
 export { installMutationBroadcast } from '../broadcast.js';
 export type { BroadcastLike, MutationBroadcast } from '../broadcast.js';

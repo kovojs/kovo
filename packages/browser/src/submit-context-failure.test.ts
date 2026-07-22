@@ -65,7 +65,7 @@ describe('submit context failure parsing', () => {
         },
       }),
     );
-    const ctx = createSubmitContext({ fetch, root, store });
+    const ctx = createSubmitContext({ expectedBuildToken: 'build-test', fetch, root, store });
 
     const result = await ctx.submit(addToCart, {
       input: { productId: 'p1', quantity: 1 },
@@ -101,7 +101,7 @@ describe('submit context failure parsing', () => {
         },
       }),
     );
-    const ctx = createSubmitContext({ fetch, root, store });
+    const ctx = createSubmitContext({ expectedBuildToken: 'build-test', fetch, root, store });
 
     await ctx.submit(addToCart, {
       input: { productId: 'p1', quantity: 1 },
@@ -131,7 +131,7 @@ describe('submit context failure parsing', () => {
         },
       }),
     );
-    const ctx = createSubmitContext({ fetch, root, store });
+    const ctx = createSubmitContext({ expectedBuildToken: 'build-test', fetch, root, store });
 
     await ctx.submit(addToCart, {
       input: { productId: 'p1', quantity: 1 },
@@ -161,7 +161,7 @@ describe('submit context failure parsing', () => {
         },
       }),
     );
-    const ctx = createSubmitContext({ fetch, root, store });
+    const ctx = createSubmitContext({ expectedBuildToken: 'build-test', fetch, root, store });
 
     await ctx.submit(addToCart, {
       input: { productId: 'p1', quantity: 0 },
@@ -191,7 +191,7 @@ describe('submit context failure parsing', () => {
         },
       }),
     );
-    const ctx = createSubmitContext({ fetch, root, store });
+    const ctx = createSubmitContext({ expectedBuildToken: 'build-test', fetch, root, store });
 
     await ctx.submit(addToCart, {
       input: { productId: 'p1', quantity: 0 },

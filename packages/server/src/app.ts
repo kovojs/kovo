@@ -9,6 +9,7 @@ import { snapshotAuditJustification } from './audit-justification.js';
 import {
   appRequestUrlLimitResponse,
   handleAppRequest,
+  registerAppEnhancedMutationBodyLimit,
   reportAppStartupError,
 } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
@@ -358,6 +359,7 @@ export function createApp<
     snapshotContext,
   );
   witnessWeakMapSet(appEgressPostures, app, egress);
+  registerAppEnhancedMutationBodyLimit(app);
   registerAppLiveTargetIdentity(app, appId);
   // Validate the registry token before the app can escape. A late empty token would otherwise let a
   // mutation commit and fail only while rendering its response, so retries could duplicate writes.
@@ -937,7 +939,11 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
     commitVersionedClientModuleStaging(app.clientModules);
   }
 
-  appLiveTargetAttestationAudience(app);
+  // Pin one direct app-build token when the handler closes over the fully assembled app. Request
+  // admission can then stamp and compare inert build identity without invoking an app-owned module
+  // registry on attacker-controlled traffic (SPEC §5.2.1/§9.5/§14).
+  const buildToken = app.clientModules.buildToken();
+  appLiveTargetAttestationAudience(app, buildToken);
 
   const taskRuntime = createAppTaskRuntime(app);
   registerAppTaskRuntime(app, taskRuntime);
@@ -947,8 +953,11 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
       const dispatchRequest = isolateNestedResponseDispatchRequest(request);
       const urlLimitResponse = appRequestUrlLimitResponse(dispatchRequest);
       if (urlLimitResponse) return urlLimitResponse;
-      if (taskRuntime === undefined) return handleAppRequest(app, dispatchRequest);
+      if (taskRuntime === undefined) {
+        return handleAppRequest(app, dispatchRequest, { buildToken });
+      }
       return handleAppRequest(app, dispatchRequest, {
+        buildToken,
         admitted() {
           void taskRuntime.ensureStarted().catch((error: unknown) => {
             reportAppStartupError(app, taskInternalRequest(), error);

@@ -1,7 +1,8 @@
 import type { Component } from '@kovojs/core';
 import {
-  decodeFrameworkIdentityToken,
-  encodeFrameworkIdentityToken,
+  decodeFrameworkQueryDependencyToken,
+  encodeFrameworkQueryDependencyToken,
+  type FrameworkQueryDependencyIdentity,
 } from '@kovojs/core/internal/wire-input-grammar';
 
 import { isKovoComponentDescriptor } from './component-authority.js';
@@ -49,10 +50,10 @@ const attributeNamePattern = securityCreateRegExp('^[A-Za-z][A-Za-z0-9:-]*$');
 const emptyStampProps = witnessFreeze(witnessCreateNullRecord<unknown>());
 
 /** @internal Compiler-generated ABI for canonical kovo-deps DOM tokens (SPEC §9.1/§13.2). */
-export function encodeGeneratedDependencyIdentity(value: unknown): string {
-  const encoded = encodeFrameworkIdentityToken(value);
+export function encodeGeneratedDependencyIdentity(name: unknown, key?: unknown): string {
+  const encoded = encodeFrameworkQueryDependencyToken(name, key);
   if (encoded === undefined) {
-    throw new TypeError('Generated kovo-deps identity must be a non-empty scalar string.');
+    throw new TypeError('Generated kovo-deps identity must contain valid non-empty query facts.');
   }
   return encoded;
 }
@@ -98,6 +99,8 @@ export interface ComponentRootStampOptions<Request = unknown> {
   html: string;
   jsxKey?: unknown;
   props: Record<string, unknown>;
+  /** @internal Exact validated query instances loaded for this render. */
+  queryIdentities?: readonly FrameworkQueryDependencyIdentity[];
   request: Request;
   target?: string;
 }
@@ -109,6 +112,7 @@ interface SnapshottedComponentRootStampOptions<Request> {
   readonly html: string;
   readonly jsxKey: unknown;
   readonly props: Readonly<Record<string, unknown>>;
+  readonly queryIdentities: readonly FrameworkQueryDependencyIdentity[] | undefined;
   readonly request: Request;
   readonly target: string | undefined;
 }
@@ -222,6 +226,9 @@ function snapshotComponentRootStampOptions<Request>(
     html,
     jsxKey: optionalOwnDataValue(options, 'jsxKey', 'Component root stamp options'),
     props: snapshotOwnRecord(props, 'Component root stamp props'),
+    queryIdentities: snapshotOptionalQueryIdentities(
+      optionalOwnDataValue(options, 'queryIdentities', 'Component root stamp options'),
+    ),
     request: ownDataValue(options, 'request', 'Component root stamp options') as Request,
     target,
   });
@@ -268,8 +275,25 @@ function componentRootStampMetadata<Request>(
     const binding = ownDataValue(queryBindings, name, 'Component query bindings');
     const queryKey = componentQueryKey(binding);
     if (queryKey === undefined) continue;
-    securityArrayPush(deps, queryKey);
-    if (queryKey !== name) securityArrayPush(staleDeps, name);
+    if (options.queryIdentities === undefined) {
+      securityArrayPush(deps, encodeGeneratedDependencyIdentity(queryKey));
+    }
+    if (queryKey !== name) {
+      securityArrayPush(staleDeps, encodeGeneratedDependencyIdentity(name));
+    }
+  }
+  if (options.queryIdentities !== undefined) {
+    for (let index = 0; index < options.queryIdentities.length; index += 1) {
+      const identity = denseArrayDataValue(
+        options.queryIdentities,
+        index,
+        'Component query dependency identities',
+      );
+      if (identity.key !== undefined) {
+        securityArrayPush(staleDeps, encodeGeneratedDependencyIdentity(identity.name));
+      }
+      securityArrayPush(deps, encodeGeneratedDependencyIdentity(identity.name, identity.key));
+    }
   }
   if (deps.length === 0) return null;
 
@@ -556,20 +580,19 @@ export function mergeHtmlAttributeTokens(
   for (let index = 0; index < existingTokens.length; index += 1) {
     const wireToken = denseArrayDataValue(existingTokens, index, 'Existing dependency tokens');
     if (wireToken.length === 0) continue;
-    const token = decodeFrameworkIdentityToken(wireToken);
-    if (token === undefined) {
-      throw new TypeError('Existing kovo-deps must contain canonical identity tokens.');
+    if (decodeFrameworkQueryDependencyToken(wireToken) === undefined) {
+      throw new TypeError('Existing kovo-deps must contain canonical query identity tokens.');
     }
-    if (witnessSetHas(stale, token) || witnessSetHas(seen, token)) continue;
-    witnessSetAdd(seen, token);
-    securityArrayPush(merged, token);
+    if (witnessSetHas(stale, wireToken) || witnessSetHas(seen, wireToken)) continue;
+    witnessSetAdd(seen, wireToken);
+    securityArrayPush(merged, wireToken);
   }
 
   const additionSnapshot = snapshotDenseStrings(additions, 'Dependency tokens');
   for (let index = 0; index < additionSnapshot.length; index += 1) {
     const token = denseArrayDataValue(additionSnapshot, index, 'Dependency tokens');
-    if (encodeFrameworkIdentityToken(token) === undefined) {
-      throw new TypeError('Kovo dependencies must contain non-empty scalar identities.');
+    if (decodeFrameworkQueryDependencyToken(token) === undefined) {
+      throw new TypeError('Kovo dependencies must contain canonical query identity tokens.');
     }
     if (witnessSetHas(seen, token)) continue;
     witnessSetAdd(seen, token);
@@ -583,14 +606,39 @@ export function joinHtmlAttributeTokens(tokens: readonly string[]): string {
   const snapshot = snapshotDenseStrings(tokens, 'HTML attribute tokens');
   let joined = '';
   for (let index = 0; index < snapshot.length; index += 1) {
-    const semantic = denseArrayDataValue(snapshot, index, 'HTML attribute tokens');
-    const token = encodeFrameworkIdentityToken(semantic);
-    if (token === undefined) {
-      throw new TypeError('Kovo dependencies must contain non-empty scalar identities.');
+    const token = denseArrayDataValue(snapshot, index, 'HTML attribute tokens');
+    if (decodeFrameworkQueryDependencyToken(token) === undefined) {
+      throw new TypeError('Kovo dependencies must contain canonical query identity tokens.');
     }
     joined += (joined === '' ? '' : ' ') + token;
   }
   return joined;
+}
+
+function snapshotOptionalQueryIdentities(
+  value: unknown,
+): readonly FrameworkQueryDependencyIdentity[] | undefined {
+  if (value === undefined) return undefined;
+  if (!securityArrayIsArray(value)) {
+    throw new TypeError('Component root query identities must be an array.');
+  }
+  const identities: FrameworkQueryDependencyIdentity[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const identity = denseArrayDataValue(value, index, 'Component root query identities');
+    if (!isRecord(identity)) {
+      throw new TypeError('Component root query identities must be stable objects.');
+    }
+    const name = ownDataValue(identity, 'name', 'Component root query identity');
+    const key = optionalOwnDataValue(identity, 'key', 'Component root query identity');
+    if (encodeFrameworkQueryDependencyToken(name, key) === undefined) {
+      throw new TypeError('Component root query identities must contain valid query facts.');
+    }
+    securityArrayPush(
+      identities,
+      witnessFreeze({ ...(key === undefined ? {} : { key }), name: name as string }),
+    );
+  }
+  return witnessFreeze(identities);
 }
 
 function attributePattern(name: string): RegExp {

@@ -9,10 +9,15 @@ export interface EnhancedNavigationRuntimeOptions {
   document: Document;
   morph: (current: Element, next: Element) => Element | undefined;
   /**
-   * Retire page-scoped authority (notably the mutation BroadcastChannel) before a fetched
-   * document with a different session fingerprint triggers hard navigation (SPEC §9.3).
+   * Monotonic page-runtime generation. Every terminal recovery increments this before invoking
+   * the browser navigation sink, so an inert or delayed sink cannot leave an older async
+   * navigation with apply authority (SPEC §9.3/§14).
    */
-  onSessionTransition?: () => void;
+  runtimeGeneration: () => number;
+  /** Whether this page runtime has already entered terminal recovery. */
+  runtimeIsRetired: () => boolean;
+  /** Retire all page-scoped authority and then invoke the boot-pinned hard-navigation sink. */
+  retireRuntime: (href: string) => void;
   queryAll: (root: ParentNode, selector: string) => Element[];
   replayScripts: (root: ParentNode) => void;
   replaceBody: (nextBody: HTMLBodyElement) => HTMLBodyElement;
@@ -43,13 +48,15 @@ export function installEnhancedNavigationRuntime(
   const applyHead = options.applyHead;
   const applyStylePromotion = options.applyStylePromotion;
   const morph = options.morph;
-  const onSessionTransition = options.onSessionTransition;
   const queryAll = options.queryAll;
   const replayScripts = options.replayScripts;
   const replaceBody = options.replaceBody;
   const replaceElementAttributes = options.replaceElementAttributes;
   const retireIsland = options.retireIsland;
+  const retireRuntime = options.retireRuntime;
   const runTriggers = options.runTriggers;
+  const runtimeGeneration = options.runtimeGeneration;
+  const runtimeIsRetired = options.runtimeIsRetired;
   const sessionFingerprint = options.sessionFingerprint;
   if (
     typeof acceptHeader !== 'string' ||
@@ -58,13 +65,15 @@ export function installEnhancedNavigationRuntime(
     typeof applyHead !== 'function' ||
     typeof applyStylePromotion !== 'function' ||
     typeof morph !== 'function' ||
-    (onSessionTransition !== undefined && typeof onSessionTransition !== 'function') ||
     typeof queryAll !== 'function' ||
     typeof replayScripts !== 'function' ||
     typeof replaceBody !== 'function' ||
     typeof replaceElementAttributes !== 'function' ||
     typeof retireIsland !== 'function' ||
+    typeof retireRuntime !== 'function' ||
     typeof runTriggers !== 'function' ||
+    typeof runtimeGeneration !== 'function' ||
+    typeof runtimeIsRetired !== 'function' ||
     (sessionFingerprint !== undefined && typeof sessionFingerprint !== 'string')
   ) {
     throw new TypeError('Kovo enhanced-navigation options are invalid.');
@@ -152,7 +161,15 @@ export function installEnhancedNavigationRuntime(
     // Best effort only. A poisoned optional scroll setter must never run before or suppress the
     // boot-pinned hard-navigation sink that retires stale server truth (SPEC §6.6/§8).
     security.setHistoryScrollRestoration('auto');
-    security.hardNavigate(href);
+    security.call(retireRuntime, undefined, [href]);
+  };
+  const runtimeState = () => ({
+    generation: security.call<number>(runtimeGeneration, undefined, []),
+    retired: security.call<boolean>(runtimeIsRetired, undefined, []),
+  });
+  const runtimeActive = (navId: number, generation: number) => {
+    const state = runtimeState();
+    return navId === ni && state.retired === false && state.generation === generation;
   };
   const sf = (href: string) => {
     const x = globalThis.scrollX || globalThis.pageXOffset || 0;
@@ -206,6 +223,16 @@ export function installEnhancedNavigationRuntime(
   const vt = async (apply: () => void) => security.commitViewTransition(doc, apply);
   const navigate = async (href: string, pop = false) => {
     const navId = (ni += 1);
+    const initialRuntime = runtimeState();
+    if (
+      initialRuntime.retired !== false ||
+      typeof initialRuntime.generation !== 'number' ||
+      initialRuntime.generation < 0 ||
+      initialRuntime.generation % 1 !== 0
+    ) {
+      return;
+    }
+    const generation = initialRuntime.generation;
     try {
       const currentUrl = security.currentUrl();
       const requestedUrl = currentUrl ? security.parseUrl(href, currentUrl.href) : undefined;
@@ -221,15 +248,27 @@ export function installEnhancedNavigationRuntime(
         throw Error();
       }
       const response = await security.fetchDocument(requestedUrl.href, acceptHeader);
-      if (navId !== ni) return;
+      if (!runtimeActive(navId, generation)) return;
       const responseUrl = security.readResponseField(response, 'url');
-      let finalUrl = security.parseUrl(
-        typeof responseUrl === 'string' && responseUrl ? responseUrl : requestedUrl.href,
-        currentUrl.href,
+      const redirected = security.readResponseField(response, 'redirected');
+      const responseTransportUrl =
+        typeof responseUrl === 'string' && responseUrl
+          ? security.parseUrl(responseUrl, currentUrl.href)
+          : undefined;
+      const requestedTransportUrl = security.parseUrl(
+        requestedUrl.origin + requestedUrl.pathname + requestedUrl.search,
       );
-      if (finalUrl && !finalUrl.hash && requestedUrl.hash) {
-        finalUrl = security.parseUrl(finalUrl.href + requestedUrl.hash);
+      if (
+        redirected !== false ||
+        !responseTransportUrl ||
+        !requestedTransportUrl ||
+        responseTransportUrl.href !== requestedTransportUrl.href
+      ) {
+        throw Error();
       }
+      const finalUrl = requestedUrl.hash
+        ? security.parseUrl(responseTransportUrl.href + requestedUrl.hash)
+        : responseTransportUrl;
       const contentType = security.readHeader(response, 'content-type');
       const contentDisposition = security.readHeader(response, 'content-disposition');
       if (
@@ -242,8 +281,10 @@ export function installEnhancedNavigationRuntime(
       ) {
         throw Error();
       }
-      const nextDoc = security.parseHtmlDocument(await security.readResponseText(response));
-      if (navId !== ni) return;
+      const responseText = await security.readResponseText(response);
+      if (!runtimeActive(navId, generation)) return;
+      const nextDoc = security.parseHtmlDocument(responseText);
+      if (!runtimeActive(navId, generation)) return;
       const nextBody = security.readDocumentField(nextDoc, 'body') as HTMLBodyElement | undefined;
       const nextHead = security.readDocumentField(nextDoc, 'head') as HTMLHeadElement | undefined;
       const nextDocumentElement = security.readDocumentField(nextDoc, 'documentElement') as
@@ -279,7 +320,6 @@ export function installEnhancedNavigationRuntime(
         ((pageSessionDependent || nextSessionDependent) &&
           (!sessionFingerprint || !nextSessionFingerprint))
       ) {
-        onSessionTransition?.();
         ng(finalUrl.href);
         return;
       }
@@ -287,7 +327,9 @@ export function installEnhancedNavigationRuntime(
       const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();
       let triggerRoot: Element | undefined;
+      if (!runtimeActive(navId, generation)) return;
       await vt(() => {
+        if (!runtimeActive(navId, generation)) return;
         if (
           security.queryOne(nextDoc, 'script[data-kovo-csp-hash]') ||
           !currentSegments.length ||
@@ -296,8 +338,10 @@ export function installEnhancedNavigationRuntime(
           const islands = qa(currentBody, '[kovo-c]');
           for (let index = 0; index < islands.length; index += 1) {
             if (islands[index]) security.call(retireIsland, undefined, [islands[index]]);
+            if (!runtimeActive(navId, generation)) return;
           }
           triggerRoot = replaceBody(nextBody as HTMLBodyElement);
+          if (!runtimeActive(navId, generation)) return;
         } else {
           const same: boolean[] = [];
           for (let index = 0; index < currentSegments.length; index += 1) {
@@ -313,8 +357,10 @@ export function installEnhancedNavigationRuntime(
             const islands = qa(currentBody, '[kovo-c]');
             for (let index = 0; index < islands.length; index += 1) {
               if (islands[index]) security.call(retireIsland, undefined, [islands[index]]);
+              if (!runtimeActive(navId, generation)) return;
             }
             triggerRoot = replaceBody(nextBody as HTMLBodyElement);
+            if (!runtimeActive(navId, generation)) return;
           } else {
             const preserved: Element[] = [];
             for (let index = 0; index < currentSegments.length; index += 1) {
@@ -327,6 +373,7 @@ export function installEnhancedNavigationRuntime(
                 );
             }
             const preservedIds = pi(preserved, preserved.length);
+            if (!runtimeActive(navId, generation)) return;
             const changed: boolean[] = [];
             for (let index = 1; index < currentSegments.length; index += 1) {
               if (same[index]) continue;
@@ -346,26 +393,35 @@ export function installEnhancedNavigationRuntime(
               }
               if (parentChanged) continue;
               if (dc(preservedIds, nextSegments[index]!)) throw Error();
+              if (!runtimeActive(navId, generation)) return;
               changed[index] = true;
               const islands = qa(currentSegments[index]!, '[kovo-c]');
               for (let islandIndex = 0; islandIndex < islands.length; islandIndex += 1) {
                 if (islands[islandIndex]) {
                   security.call(retireIsland, undefined, [islands[islandIndex]]);
                 }
+                if (!runtimeActive(navId, generation)) return;
               }
               triggerRoot = morph(currentSegments[index]!, nextSegments[index]!) || triggerRoot;
+              if (!runtimeActive(navId, generation)) return;
             }
           }
         }
+        if (!runtimeActive(navId, generation)) return;
         applyHead(nextHead);
+        if (!runtimeActive(navId, generation)) return;
         applyStylePromotion();
+        if (!runtimeActive(navId, generation)) return;
         applyDocumentElementAttributes(currentDocumentElement, nextDocumentElement);
+        if (!runtimeActive(navId, generation)) return;
         const body =
           (security.readDocumentField(doc, 'body') as HTMLBodyElement | undefined) || triggerRoot;
         if (!body) throw Error();
         replaceElementAttributes(body, nextBody);
+        if (!runtimeActive(navId, generation)) return;
         replayScripts(body);
       });
+      if (!runtimeActive(navId, generation)) return;
       const body =
         (security.readDocumentField(doc, 'body') as HTMLBodyElement | undefined) || triggerRoot;
       if (!body) throw Error();
@@ -374,26 +430,37 @@ export function installEnhancedNavigationRuntime(
       if (!pop && historyObject && typeof historyPushState === 'function') {
         security.call(historyPushState, historyObject, [{}, '', finalUrl.href]);
       }
+      if (!runtimeActive(navId, generation)) return;
       const focusTarget =
         security.queryOne(doc, 'main,h1') ?? security.queryOne(doc, '[kovo-nav-segment]');
-      focusTarget?.setAttribute?.('tabindex', '-1');
+      if (focusTarget) security.setElementAttribute(focusTarget, 'tabindex', '-1');
+      if (!runtimeActive(navId, generation)) return;
       (focusTarget as HTMLElement | null)?.focus?.({ preventScroll: true });
+      if (!runtimeActive(navId, generation)) return;
       const saved = sc[finalUrl.href];
       if (pop && saved) globalThis.scrollTo?.(saved[0], saved[1]);
       else if (finalUrl.hash) {
         hscl(finalUrl.hash);
+        if (!runtimeActive(navId, generation)) return;
         setTimeout(() => {
-          if (navId === ni) hscl(finalUrl.hash);
+          if (runtimeActive(navId, generation)) hscl(finalUrl.hash);
         });
       } else globalThis.scrollTo?.(0, 0);
-      if (triggerRoot) setTimeout(runTriggers);
+      if (!runtimeActive(navId, generation)) return;
+      if (triggerRoot) {
+        setTimeout(() => {
+          if (runtimeActive(navId, generation)) runTriggers();
+        });
+      }
+      if (!runtimeActive(navId, generation)) return;
       cu = finalUrl.href;
-      dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
+      security.dispatchCustomEvent(globalThis, 'kovo:navigate', { url: finalUrl.href });
     } catch {
-      if (navId === ni) ng(href);
+      if (runtimeActive(navId, generation)) ng(href);
     }
   };
   const handleClick = (event: MouseEvent) => {
+    if (runtimeState().retired !== false) return false;
     const eventFacts = security.snapshotDelegatedEvent(event);
     if (
       !eventFacts ||
@@ -468,6 +535,7 @@ export function installEnhancedNavigationRuntime(
   security.setHistoryScrollRestoration('manual');
 
   const handlePopState = () => {
+    if (runtimeState().retired !== false) return;
     sf(cu);
     const href = security.currentUrl()?.href;
     if (href) void navigate(href, true);

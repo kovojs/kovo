@@ -17,6 +17,8 @@ export interface DocumentLifecycleRecoveryOptions {
   addLifecycleEventListener: (type: string, listener: (event: unknown) => void) => boolean;
   applyBody: (body: string, build?: string) => void;
   buildHeader: (response: unknown) => string;
+  /** Canonicalize and admit one same-origin lifecycle request URL before fetch. */
+  canonicalRequestUrl: (value: string, surface: 'document' | 'query') => string | undefined;
   currentBuild: (root?: ParentNode) => string;
   currentHref: () => string | undefined;
   document: Document;
@@ -27,6 +29,7 @@ export interface DocumentLifecycleRecoveryOptions {
   parseHtmlDocument: (value: string) => Document | undefined;
   /** Core-owned exact target-bearing request planner (SPEC §9.1). */
   planTargetRequestHeaders: (input: {
+    build: string;
     currentUrl: string;
     liveTargets: readonly FrameworkWireEntrySnapshot[];
     targets: readonly FrameworkWireEntrySnapshot[];
@@ -44,9 +47,15 @@ export interface DocumentLifecycleRecoveryOptions {
   readPageTransitionPersisted: (event: unknown) => boolean;
   /** Boot-pinned DOM attribute read for server-authored query-script identity. */
   readDomAttribute: (element: Element, name: string) => string | null;
+  /** Retain the server-emitted canonical typed-read href for one exact query identity. */
+  rememberQueryHref: (identity: QueryIdentity, href: string | null) => void;
   /** Boot-pinned, ASCII-lowercased response Content-Type used to distinguish wire from document. */
   responseContentType: (response: unknown) => string;
   responseAllowsInlineBody: (response: unknown) => boolean;
+  /** Exact framework-owned build-skew outcome marker (SPEC §14). */
+  responseIsBuildSkew: (response: unknown) => boolean;
+  /** Require a native, unredirected response whose final URL exactly matches the request. */
+  responseUrlIsExact: (response: unknown, expectedUrl: string) => boolean;
   readResponseStatus: (response: unknown) => number | undefined;
   readResponseText: (response: unknown) => Promise<string>;
   reload: () => boolean;
@@ -84,6 +93,9 @@ export function createDocumentLifecycleRecovery(
     options,
     'buildHeader',
   );
+  const canonicalRequestUrl = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['canonicalRequestUrl']
+  >(options, 'canonicalRequestUrl');
   const currentBuild = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['currentBuild']>(
     options,
     'currentBuild',
@@ -139,12 +151,21 @@ export function createDocumentLifecycleRecovery(
   const readDomAttribute = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['readDomAttribute']
   >(options, 'readDomAttribute');
+  const rememberQueryHref = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['rememberQueryHref']
+  >(options, 'rememberQueryHref');
   const responseContentType = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['responseContentType']
   >(options, 'responseContentType');
   const responseAllowsInlineBody = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['responseAllowsInlineBody']
   >(options, 'responseAllowsInlineBody');
+  const responseIsBuildSkew = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['responseIsBuildSkew']
+  >(options, 'responseIsBuildSkew');
+  const responseUrlIsExact = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['responseUrlIsExact']
+  >(options, 'responseUrlIsExact');
   const readResponseStatus = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['readResponseStatus']
   >(options, 'readResponseStatus');
@@ -170,77 +191,172 @@ export function createDocumentLifecycleRecovery(
   // authored DOM changes cannot weaken later visibility/pageshow recovery checks.
   const pageBuild = currentBuild();
   const fqs: QueryIdentity[] = [];
+  let queryRecoveryGeneration = 0;
+  let queryRecoveryTerminal = false;
+  const queryGenerationIsCurrent = (generation: number) =>
+    queryRecoveryTerminal === false && queryRecoveryGeneration === generation;
+  const recoverQueryDocument = (generation = queryRecoveryGeneration) => {
+    if (!queryGenerationIsCurrent(generation)) return;
+    // Set the terminal latch before invoking navigation. An adapter may delay or throw; neither
+    // grants an older in-flight response permission to decode/apply private truth afterward.
+    queryRecoveryTerminal = true;
+    queryRecoveryGeneration += 1;
+    try {
+      reload();
+    } catch {}
+  };
   const isDeltaQuery = (query: { attrs: string; attributes?: readonly unknown[] }) =>
     readElementAttribute(query, 'delta').present;
-  const refreshQueryIdentity = (identity: QueryIdentity) => {
-    let snapshot: QueryIdentity;
-    let u: string;
+  const refreshQueryIdentities = (identities: readonly QueryIdentity[]) => {
+    let snapshots: QueryIdentity[];
     try {
-      snapshot = lifecycleSnapshotQueryIdentity(identity, 'Kovo lifecycle refresh query');
-      u = queryUrl(snapshot);
+      snapshots = lifecycleSnapshotQueryIdentities(identities, 'Kovo lifecycle refresh queries');
     } catch {
-      reload();
+      recoverQueryDocument();
       return;
     }
-    if (!u) return;
+    if (queryRecoveryTerminal || snapshots.length === 0) return;
+    if (!pageBuild) {
+      recoverQueryDocument();
+      return;
+    }
+    const generation = queryRecoveryGeneration;
     void (async () => {
-      try {
-        const res = await fetchValue(u, {
-          cache: 'no-store',
-          headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-          method: 'GET',
-        });
-        const status = readResponseStatus(res);
-        if (status === undefined || status >= 400) return;
-        if (!responseAllowsInlineBody(res)) {
-          reload();
+      let bodies = '';
+      for (let index = 0; index < snapshots.length; index += 1) {
+        if (!queryGenerationIsCurrent(generation)) return;
+        const identity = snapshots[index];
+        if (identity === undefined) continue;
+        let u = '';
+        try {
+          const candidate = queryUrl(identity);
+          u = candidate ? (canonicalRequestUrl(candidate, 'query') ?? '') : '';
+        } catch {
+          recoverQueryDocument(generation);
           return;
         }
-        const activeBuild = pageBuild;
-        const responseBuild = buildHeader(res);
-        if (!activeBuild || !responseBuild || responseBuild !== activeBuild) {
-          reload();
+        if (!u) {
+          recoverQueryDocument(generation);
           return;
         }
-        if (!lifecycleMediaTypeEquals(responseContentType(res), 'text/vnd.kovo.fragment+html')) {
-          reload();
-          return;
+        try {
+          const res = await fetchValue(u, {
+            cache: 'no-store',
+            headers: {
+              Accept: 'text/html',
+              'Kovo-Build': pageBuild,
+              'Kovo-Fragment': 'true',
+            },
+            method: 'GET',
+            redirect: 'error',
+          });
+          if (!queryGenerationIsCurrent(generation)) return;
+          if (!responseUrlIsExact(res, u)) {
+            recoverQueryDocument(generation);
+            return;
+          }
+          // SPEC §5.2.1/§14: exact-URL missing/foreign build proof is terminal even when
+          // Content-Type is malformed. Media grants body/auth-marker authority only afterward.
+          const responseBuild = buildHeader(res);
+          if (!responseBuild || responseBuild !== pageBuild) {
+            recoverQueryDocument(generation);
+            return;
+          }
+          const status = readResponseStatus(res);
+          const inlineBody = responseAllowsInlineBody(res);
+          const contentType = responseContentType(res);
+          if (status === 409 && responseIsBuildSkew(res)) {
+            if (
+              !inlineBody ||
+              !lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.fragment+html')
+            ) {
+              recoverQueryDocument(generation);
+              return;
+            }
+            recoverQueryDocument(generation);
+            return;
+          }
+          // SPEC §9.4: only the exact same-build HTML denial envelope proves revocation. Fetch
+          // rejection is caught below as an ordinary transport failure and never inferred.
+          if (status === 401 || status === 403) {
+            if (!inlineBody || !lifecycleMediaTypeEquals(contentType, 'text/html')) {
+              recoverQueryDocument(generation);
+              return;
+            }
+            recoverQueryDocument(generation);
+            return;
+          }
+          if (status === undefined || status >= 400) continue;
+          if (!inlineBody || !lifecycleMediaTypeEquals(contentType, 'text/html')) {
+            recoverQueryDocument(generation);
+            return;
+          }
+          const text = await readResponseText(res);
+          if (!queryGenerationIsCurrent(generation)) return;
+          bodies += text;
+        } catch {
+          // A network/redirect-error rejection is not an auth verdict. Continue the same batch so
+          // other independent query reads may still refresh.
         }
-        const text = await readResponseText(res);
-        applyBody(text, responseBuild);
-      } catch {}
+      }
+      if (bodies && queryGenerationIsCurrent(generation)) applyBody(bodies, pageBuild);
     })();
   };
+  const refreshQueryIdentity = (identity: QueryIdentity) => refreshQueryIdentities([identity]);
   const refreshQuery = (query: string | { attrs: string; attributes?: readonly unknown[] }) => {
     try {
       const identity =
         typeof query === 'string'
           ? createQueryIdentity(query)
           : wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
-      if (identity) refreshQueryIdentity(identity);
+      if (!identity) {
+        recoverQueryDocument();
+        return;
+      }
+      refreshQueryIdentity(identity);
     } catch {
-      reload();
+      recoverQueryDocument();
     }
   };
   const refreshLiveTargets = () => {
+    if (queryRecoveryTerminal) return;
+    const generation = queryRecoveryGeneration;
     let live: FrameworkWireEntrySnapshot[];
     let targets: FrameworkWireEntrySnapshot[];
     try {
       live = lifecycleSnapshotWireEntries(liveTargets(), 'Kovo lifecycle live targets');
       targets = lifecycleSnapshotWireEntries(targetHeader(), 'Kovo lifecycle target header');
     } catch {
-      reload();
+      recoverQueryDocument(generation);
       return;
     }
     if (!live.length) return;
-    const href = currentHref();
-    if (!href) {
-      reload();
+    let href: string | undefined;
+    try {
+      const rawHref = currentHref();
+      href = rawHref ? canonicalRequestUrl(rawHref, 'document') : undefined;
+    } catch {
+      recoverQueryDocument(generation);
       return;
     }
-    const requestPlan = planTargetRequestHeaders({ currentUrl: href, liveTargets: live, targets });
+    if (!href || !pageBuild) {
+      recoverQueryDocument(generation);
+      return;
+    }
+    let requestPlan: FrameworkTargetRequestHeaderPlan | undefined;
+    try {
+      requestPlan = planTargetRequestHeaders({
+        build: pageBuild,
+        currentUrl: href,
+        liveTargets: live,
+        targets,
+      });
+    } catch {
+      recoverQueryDocument(generation);
+      return;
+    }
     if (!requestPlan) {
-      reload();
+      recoverQueryDocument(generation);
       return;
     }
     void (async () => {
@@ -252,38 +368,46 @@ export function createDocumentLifecycleRecovery(
             ...requestPlan.headers,
           },
           method: 'GET',
+          redirect: 'error',
           referrerPolicy: 'origin',
         });
+        if (!queryGenerationIsCurrent(generation)) return;
+        if (!responseUrlIsExact(res, href)) {
+          recoverQueryDocument(generation);
+          return;
+        }
         const status = readResponseStatus(res);
         if (status === undefined || status >= 400) {
-          reload();
+          recoverQueryDocument(generation);
           return;
         }
         if (!responseAllowsInlineBody(res)) {
-          reload();
+          recoverQueryDocument(generation);
           return;
         }
         const activeBuild = pageBuild;
         const responseBuild = buildHeader(res);
         if (!activeBuild || !responseBuild || responseBuild !== activeBuild) {
-          reload();
+          recoverQueryDocument(generation);
           return;
         }
-        const text = await readResponseText(res);
         const contentType = responseContentType(res);
         if (lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.fragment+html')) {
           // The exact wire media type is transport grammar. Never infer it from protocol-looking
           // substrings that can also occur inside a full deferred HTML document.
-          applyBody(text, responseBuild);
+          const text = await readResponseText(res);
+          if (queryGenerationIsCurrent(generation)) applyBody(text, responseBuild);
           return;
         }
         if (
           lifecycleMediaTypeEquals(contentType, 'text/html') ||
           lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.document+html')
         ) {
+          const text = await readResponseText(res);
+          if (!queryGenerationIsCurrent(generation)) return;
           const nextDoc = parseHtmlDocument(text);
           if (!nextDoc) {
-            reload();
+            recoverQueryDocument(generation);
             return;
           }
           const documentBuild = currentBuild(nextDoc);
@@ -294,7 +418,7 @@ export function createDocumentLifecycleRecovery(
             responseBuild !== activeBuild ||
             documentBuild !== activeBuild
           ) {
-            reload();
+            recoverQueryDocument(generation);
             return;
           }
           let fragments = '';
@@ -317,21 +441,28 @@ export function createDocumentLifecycleRecovery(
                 '</kovo-fragment>';
             }
           }
-          if (fragments.length) applyBody(fragments, responseBuild);
+          if (fragments.length && queryGenerationIsCurrent(generation)) {
+            applyBody(fragments, responseBuild);
+          }
           return;
         }
-        reload();
+        recoverQueryDocument(generation);
       } catch {
-        reload();
+        recoverQueryDocument(generation);
       }
     })();
   };
   const rememberQueryChunk = (query: { attrs: string; attributes?: readonly unknown[] }) => {
     try {
       const w = wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
-      if (w) lifecycleRememberQueryIdentity(fqs, w);
+      if (!w) {
+        recoverQueryDocument();
+        return;
+      }
+      rememberQueryHref(w, readAttribute(query.attrs, 'href'));
+      lifecycleRememberQueryIdentity(fqs, w);
     } catch {
-      reload();
+      recoverQueryDocument();
     }
   };
   const rememberQueryScripts = () => {
@@ -344,9 +475,14 @@ export function createDocumentLifecycleRecovery(
       if (!script) continue;
       try {
         const w = wireKey(readDomAttribute(script, 'kovo-query'), readDomAttribute(script, 'key'));
-        if (w) lifecycleRememberQueryIdentity(fqs, w);
+        if (!w) {
+          recoverQueryDocument();
+          return;
+        }
+        rememberQueryHref(w, readDomAttribute(script, 'data-kovo-query-href'));
+        lifecycleRememberQueryIdentity(fqs, w);
       } catch {
-        reload();
+        recoverQueryDocument();
         return;
       }
     }
@@ -357,13 +493,10 @@ export function createDocumentLifecycleRecovery(
     try {
       remembered = lifecycleSnapshotQueryIdentities(fqs, 'Kovo lifecycle remembered queries');
     } catch {
-      reload();
+      recoverQueryDocument();
       return;
     }
-    for (let index = 0; index < remembered.length; index += 1) {
-      const query = remembered[index];
-      if (query !== undefined) refreshQueryIdentity(query);
-    }
+    refreshQueryIdentities(remembered);
     refreshLiveTargets();
   };
   const install = (navigation: { handlePopState(): void }) => {
@@ -386,7 +519,7 @@ export function createDocumentLifecycleRecovery(
     // with a full server GET rather than presenting a persisted authenticated DOM.
     if (queryOne(doc, 'meta[name="kovo-session-dependent"]')) {
       listen('pageshow', (event) => {
-        if (readPageTransitionPersisted(event)) reload();
+        if (readPageTransitionPersisted(event)) recoverQueryDocument();
       });
     }
   };

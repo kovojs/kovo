@@ -1,14 +1,72 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './query-store.js';
-import { rebaserApplyQueryInterposition } from './query-apply.js';
+import { applyQueryChunksToRuntime, rebaserApplyQueryInterposition } from './query-apply.js';
 import { OptimisticRebaser } from './optimism.js';
 import {
-  createDeltaMissRefetcher,
+  createDeltaMissRefetcher as createFrameworkDeltaMissRefetcher,
   deriveRefetchOnFocusOptOut,
-  refetchQueries,
+  refetchQueries as refetchFrameworkQueries,
 } from './query-refetch.js';
+import { hydrateQueryScripts } from './query-script-hydration.js';
 import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
+import { readQueryChunks } from './wire-parser.js';
+
+const TEST_SOURCE_URL = 'http://localhost/account';
+const TEST_REQUEST_HEADERS = {
+  Accept: 'text/html',
+  'Kovo-Build': 'test-build',
+  'Kovo-Fragment': 'true',
+};
+const queryResponseUrl = (value: string) => new URL(value, TEST_SOURCE_URL).href;
+const queryRequestPath = (value: string) => {
+  const parsed = new URL(value);
+  return parsed.pathname + parsed.search;
+};
+const fragmentHeaders = (
+  read: (name: string) => string | null = (name) => (name === 'Kovo-Build' ? 'test-build' : null),
+  mediaType = 'text/html; charset=utf-8',
+) => ({
+  get(name: string) {
+    return name.toLowerCase() === 'content-type' ? mediaType : read(name);
+  },
+});
+const refetchQueries = (options: Parameters<typeof refetchFrameworkQueries>[0]) =>
+  refetchFrameworkQueries({
+    expectedBuildToken: 'test-build',
+    sourceUrl: TEST_SOURCE_URL,
+    ...options,
+  });
+const createDeltaMissRefetcher = (
+  options: Parameters<typeof createFrameworkDeltaMissRefetcher>[0],
+) =>
+  createFrameworkDeltaMissRefetcher({
+    expectedBuildToken: 'test-build',
+    sourceUrl: TEST_SOURCE_URL,
+    ...options,
+  });
+
+beforeAll(() => {
+  // Seed canonical refetch hrefs through the real wire parser + hydration/apply path. The private
+  // ledger must be populated when server truth is applied, not by a test-only metadata backdoor.
+  const hydrationStore = createQueryStore();
+  applyQueryChunksToRuntime(
+    hydrationStore,
+    readQueryChunks(
+      [
+        '<kovo-query name="cart" href="/_q/cart">null</kovo-query>',
+        '<kovo-query name="reviews" href="/_q/reviews">null</kovo-query>',
+        '<kovo-query name="inventory" href="/_q/inventory">null</kovo-query>',
+        '<kovo-query name="product" key="product:p1" href="/_q/product?key=p1">null</kovo-query>',
+        '<kovo-query name="group:catalog" key="group:catalog:item" href="/_q/group%3Acatalog?key=item">null</kovo-query>',
+        '<kovo-query name="productDetail" key="product:p1" href="/_q/productDetail?key=product%3Ap1">null</kovo-query>',
+        '<kovo-query name="cart" key="cart:" href="/_q/cart?key=">null</kovo-query>',
+        '<kovo-query name="queries/product details" key="queries/product details:p 1" href="/_q/queries/product%20details?key=p%201">null</kovo-query>',
+        '<kovo-query name="recommendations" key="recommendations:user-1" href="/_q/recommendations?key=user-1">null</kovo-query>',
+      ].join(''),
+    ),
+  );
+});
 
 describe('refetch-on-focus opt-out derivation', () => {
   it('derives the opt-out name set from declared refetchOnFocus:false queries (SPEC §9.3/§9.4)', () => {
@@ -44,16 +102,22 @@ describe('query refetch', () => {
 
     await expect(
       refetchQueries({
-        fetch: () => ({
+        fetch: (url) => ({
           headers: {
             get(name: string) {
+              if (name.toLowerCase() === 'content-type') {
+                return 'text/html; charset=utf-8';
+              }
+              if (name === 'Kovo-Build') return 'test-build';
               return name.toLowerCase() === 'content-disposition'
                 ? 'attachment; filename="attacker.html"'
                 : null;
             },
           },
+          redirected: false,
           status: 200,
           text,
+          url: queryResponseUrl(url),
         }),
         onError,
         queries: ['cart'],
@@ -71,8 +135,11 @@ describe('query refetch', () => {
   it('preserves direct injected response carriers and synchronous text', async () => {
     const store = createQueryStore();
     const response = {
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: () => '<kovo-query name="cart">{"count":3}</kovo-query>',
+      url: queryResponseUrl('/_q/cart'),
     };
 
     await expect(
@@ -102,9 +169,12 @@ describe('query refetch', () => {
     const store = createQueryStore();
     const iterator = Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator);
     if (!iterator) throw new Error('Missing Array iterator security descriptor');
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
     Object.defineProperty(Array.prototype, Symbol.iterator, {
       ...iterator,
@@ -146,14 +216,17 @@ describe('query refetch', () => {
       },
     };
     const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () =>
-        url === '/_q/cart'
+        queryRequestPath(url) === '/_q/cart'
           ? [
               '<kovo-query name="cart">{"count":2}</kovo-query>',
               '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
             ].join('')
           : '<kovo-query name="reviews">{"total":5}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     store.subscribe('cart', cartPlan);
@@ -172,15 +245,17 @@ describe('query refetch', () => {
       { fragments: [], queries: [{ name: 'reviews' }] },
     ]);
 
-    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+    expect(fetch).toHaveBeenNthCalledWith(1, queryResponseUrl('/_q/cart'), {
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: TEST_REQUEST_HEADERS,
       method: 'GET',
+      redirect: 'error',
     });
-    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+    expect(fetch).toHaveBeenNthCalledWith(2, queryResponseUrl('/_q/reviews'), {
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: TEST_REQUEST_HEADERS,
       method: 'GET',
+      redirect: 'error',
     });
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('reviews')).toEqual({ total: 5 });
@@ -196,11 +271,14 @@ describe('query refetch', () => {
     const badge = new FakeQueryBindingElement({ 'data-bind:aria-label': 'cart.label' });
     const meter = new FakeQueryBindingElement({ 'data-bind:value': 'reviews.total' });
     const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () =>
-        url === '/_q/cart'
+        queryRequestPath(url) === '/_q/cart'
           ? '<kovo-query name="cart">{"label":"Cart has items"}</kovo-query>'
           : '<kovo-query name="reviews">{"total":8}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     root.bindings.push(badge, meter);
@@ -226,12 +304,15 @@ describe('query refetch', () => {
     expect(meter.getAttribute('value')).toBe('8');
   });
 
-  it('refetches a keyed query over /_q/<name> with the instance key as a search param (F5)', async () => {
+  it('uses the server-emitted canonical href for a keyed query refetch (F5)', async () => {
     const store = createQueryStore();
     const plan = vi.fn();
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () => '<kovo-query name="product" key="product:p1">{"stock":6}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     store.subscribe('product', plan, 'product:p1');
@@ -242,37 +323,114 @@ describe('query refetch', () => {
         queries: [{ key: 'product:p1', name: 'product' }],
         queryStore: store,
       }),
-    ).resolves.toEqual([
-      { fragments: [], queries: [{ key: 'product:p1', name: 'product' }] },
-    ]);
+    ).resolves.toEqual([{ fragments: [], queries: [{ key: 'product:p1', name: 'product' }] }]);
 
-    // SPEC.md §9.4/§10.2 (F5): the typed-read endpoint dispatches by query NAME and a keyed
-    // query's args arrive as search params. A refetch MUST hit `/_q/product?key=p1`, NOT the
-    // canonical instance key as a path (`/_q/product%3Ap1`), which the server registers no
-    // query for and answers 404 — leaving the stale base in place forever.
-    expect(fetch).toHaveBeenCalledWith('/_q/product?key=p1', {
+    // SPEC.md §9.4/§10.2 (F5): hydration retained this exact server-authored href. The browser
+    // does not attempt to invert the app's instance-key function.
+    expect(fetch).toHaveBeenCalledWith(queryResponseUrl('/_q/product?key=p1'), {
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: TEST_REQUEST_HEADERS,
       method: 'GET',
+      redirect: 'error',
     });
     expect(store.get('product', 'product:p1')).toEqual({ stock: 6 });
     expect(store.get('product')).toBeUndefined();
     expect(plan).toHaveBeenCalledWith({ stock: 6 });
   });
 
-  it('derives key values from structured facts without splitting colon-bearing query names', async () => {
+  it('carries document-script href authority through hydration into the keyed fetch', async () => {
+    const store = createQueryStore();
+    hydrateQueryScripts(store, [
+      {
+        getAttribute(name) {
+          if (name === 'kovo-query') return 'hydrated-product';
+          if (name === 'key') return 'hydrated-product:raw:p1';
+          if (name === 'data-kovo-query-href') {
+            return '/_q/hydrated-product?id=raw%3Ap1&view=card';
+          }
+          return null;
+        },
+        textContent: '{"stock":1}',
+      },
+    ]);
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () =>
+        '<kovo-query name="hydrated-product" key="hydrated-product:raw:p1">{"stock":2}</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+
+    await refetchQueries({
+      fetch,
+      queries: [{ key: 'hydrated-product:raw:p1', name: 'hydrated-product' }],
+      queryStore: store,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      queryResponseUrl('/_q/hydrated-product?id=raw%3Ap1&view=card'),
+      {
+        cache: 'no-store',
+        headers: TEST_REQUEST_HEADERS,
+        method: 'GET',
+        redirect: 'error',
+      },
+    );
+    expect(store.get('hydrated-product', 'hydrated-product:raw:p1')).toEqual({ stock: 2 });
+  });
+
+  it('never strips a name-shaped prefix from an opaque instance key to synthesize a URL', async () => {
+    const store = createQueryStore();
+    applyQueryChunksToRuntime(
+      store,
+      readQueryChunks(
+        '<kovo-query name="product" key="product:product:p1" href="/_q/product?id=product%3Ap1">{"stock":1}</kovo-query>',
+      ),
+    );
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () =>
+        '<kovo-query name="product" key="product:product:p1">{"stock":2}</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+
+    await refetchQueries({
+      fetch,
+      queries: [{ key: 'product:product:p1', name: 'product' }],
+      queryStore: store,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(queryResponseUrl('/_q/product?id=product%3Ap1'), {
+      cache: 'no-store',
+      headers: TEST_REQUEST_HEADERS,
+      method: 'GET',
+      redirect: 'error',
+    });
+    expect(store.get('product', 'product:product:p1')).toEqual({ stock: 2 });
+  });
+
+  it('keeps server-emitted keyed hrefs separate from colon-bearing query identities', async () => {
     const store = createQueryStore();
     const fetch = vi
       .fn()
       .mockResolvedValueOnce({
+        headers: fragmentHeaders(),
+        redirected: false,
         status: 200,
         text: async () =>
           '<kovo-query name="group:catalog" key="group:catalog:item">{"stock":3}</kovo-query>',
+        url: queryResponseUrl('/_q/group%3Acatalog?key=item'),
       })
       .mockResolvedValueOnce({
+        headers: fragmentHeaders(),
+        redirected: false,
         status: 200,
         text: async () =>
           '<kovo-query name="productDetail" key="product:p1">{"stock":4}</kovo-query>',
+        url: queryResponseUrl('/_q/productDetail?key=product%3Ap1'),
       });
 
     await refetchQueries({
@@ -284,28 +442,37 @@ describe('query refetch', () => {
       queryStore: store,
     });
 
-    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/group%3Acatalog?key=item', {
+    expect(fetch).toHaveBeenNthCalledWith(1, queryResponseUrl('/_q/group%3Acatalog?key=item'), {
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: TEST_REQUEST_HEADERS,
       method: 'GET',
+      redirect: 'error',
     });
     // A domain-owned canonical instance key may legitimately differ from the registry name.
-    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/productDetail?key=product%3Ap1', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      queryResponseUrl('/_q/productDetail?key=product%3Ap1'),
+      {
+        cache: 'no-store',
+        headers: TEST_REQUEST_HEADERS,
+        method: 'GET',
+        redirect: 'error',
+      },
+    );
   });
 
   it('passes frozen structured identities to custom URL hooks without colon ambiguity', async () => {
     const store = createQueryStore();
     const seen: unknown[] = [];
     const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () =>
-        url === '/unkeyed-colon-name'
+        queryRequestPath(url) === '/_q/unkeyed-colon-name'
           ? '<kovo-query name="foo:bar">{"kind":"unkeyed"}</kovo-query>'
           : '<kovo-query name="foo" key="foo:bar">{"kind":"keyed"}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     await refetchQueries({
@@ -315,14 +482,14 @@ describe('query refetch', () => {
       urlForQuery(identity) {
         expect(Object.isFrozen(identity)).toBe(true);
         seen.push(identity);
-        return identity.key === undefined ? '/unkeyed-colon-name' : '/keyed-colon-instance';
+        return identity.key === undefined ? '/_q/unkeyed-colon-name' : '/_q/keyed-colon-instance';
       },
     });
 
     expect(seen).toEqual([{ name: 'foo:bar' }, { key: 'foo:bar', name: 'foo' }]);
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      '/unkeyed-colon-name',
-      '/keyed-colon-instance',
+      queryResponseUrl('/_q/unkeyed-colon-name'),
+      queryResponseUrl('/_q/keyed-colon-instance'),
     ]);
     expect(store.get('foo:bar')).toEqual({ kind: 'unkeyed' });
     expect(store.get('foo', 'foo:bar')).toEqual({ kind: 'keyed' });
@@ -330,9 +497,12 @@ describe('query refetch', () => {
 
   it('rejects a raw empty structured key but permits the canonical empty-value identity', async () => {
     const store = createQueryStore();
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () => '<kovo-query name="cart" key="cart:">{"count":1}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     await expect(
@@ -345,19 +515,23 @@ describe('query refetch', () => {
       queries: [{ key: 'cart:', name: 'cart' }],
       queryStore: store,
     });
-    expect(fetch).toHaveBeenCalledWith('/_q/cart?key=', {
+    expect(fetch).toHaveBeenCalledWith(queryResponseUrl('/_q/cart?key='), {
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: TEST_REQUEST_HEADERS,
       method: 'GET',
+      redirect: 'error',
     });
   });
 
   it('preserves query-name path hierarchy while encoding each path segment', async () => {
     const store = createQueryStore();
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () =>
         '<kovo-query name="queries/product details" key="queries/product details:p 1">{"stock":4}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     await expect(
@@ -374,45 +548,74 @@ describe('query refetch', () => {
     ).resolves.toEqual([
       {
         fragments: [],
-        queries: [
-          { key: 'queries/product details:p 1', name: 'queries/product details' },
-        ],
+        queries: [{ key: 'queries/product details:p 1', name: 'queries/product details' }],
       },
     ]);
 
     // SPEC.md §9.4/§10.2: query names retain their registered slash hierarchy. Encoding
     // the complete name would produce `%2F`, which the request-ingress floor rejects as an
     // ambiguous encoded path separator; reserved characters inside a segment remain encoded.
-    expect(fetch).toHaveBeenCalledWith('/_q/queries/product%20details?key=p%201', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      queryResponseUrl('/_q/queries/product%20details?key=p%201'),
+      {
+        cache: 'no-store',
+        headers: TEST_REQUEST_HEADERS,
+        method: 'GET',
+        redirect: 'error',
+      },
+    );
     expect(store.get('queries/product details', 'queries/product details:p 1')).toEqual({
       stock: 4,
     });
   });
 
-  it('does not apply failed or disabled typed read responses', async () => {
+  it('does not apply failed typed read responses', async () => {
     const store = createQueryStore();
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
       ok: false,
+      redirected: false,
       status: 500,
       text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     await expect(
       refetchQueries({
         fetch,
-        queries: ['cart', 'inventory'],
+        queries: ['cart'],
         queryStore: store,
-        urlForQuery: (query) => (query.name === 'inventory' ? '' : `/_q/${query.name}`),
       }),
     ).resolves.toEqual([]);
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toBeUndefined();
+  });
+
+  it('terminally recovers when a requested query has no server-emitted href metadata', async () => {
+    const store = createQueryStore();
+    const onDocumentRecovery = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+
+    const applied = await refetchQueries({
+      fetch,
+      onDocumentRecovery,
+      queries: ['cart', 'query-without-href-authority', 'reviews'],
+      queryStore: store,
+    });
+
+    expect(applied).toEqual([]);
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('reviews')).toBeUndefined();
   });
 
   it('keeps failed native responses rejected after late Response prototype poisoning', async () => {
@@ -454,11 +657,14 @@ describe('query refetch', () => {
     const store = createQueryStore();
     const onError = vi.fn();
     const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () =>
-        url === '/_q/cart'
+        queryRequestPath(url) === '/_q/cart'
           ? '<kovo-query name="cart">{</kovo-query><kovo-query name="inventory">{"available":true}</kovo-query>'
           : '<kovo-query name="reviews">{"total":2}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     const applied = await refetchQueries({
@@ -468,20 +674,18 @@ describe('query refetch', () => {
       queryStore: store,
     });
 
-    // SPEC.md §4.4/§9.4: typed-read visible-return refetch applies server query
-    // chunks through the same decoded runtime apply primitive as mutation bodies
-    // without accepting a second fragment parser surface.
-    expect(applied).toEqual([
-      { fragments: [], queries: [{ name: 'inventory' }] },
-      { fragments: [], queries: [{ name: 'reviews' }] },
-    ]);
+    // SPEC.md §4.4/§9.4: typed-read visible-return refetch applies server query chunks
+    // through the same decoded runtime apply primitive as mutation bodies, but endpoint identity
+    // is exact: an `inventory` chunk cannot gain truth authority from the `cart` response.
+    expect(applied).toEqual([{ fragments: [], queries: [{ name: 'reviews' }] }]);
     expect(store.get('cart')).toBeUndefined();
-    expect(store.get('inventory')).toEqual({ available: true });
+    expect(store.get('inventory')).toBeUndefined();
     expect(store.get('reviews')).toEqual({ total: 2 });
-    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(2);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
       'Malformed JSON in kovo-query cart',
     );
+    expect(String(onError.mock.calls[1]?.[0].message)).toContain('different query identity');
   });
 
   it('reports typed read apply hook failures while continuing later chunks in the batch', async () => {
@@ -489,11 +693,14 @@ describe('query refetch', () => {
     const onError = vi.fn();
     const applyError = new Error('cart hook failed');
     const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () =>
-        url === '/_q/cart'
+        queryRequestPath(url) === '/_q/cart'
           ? '<kovo-query name="cart">{"count":2}</kovo-query>'
           : '<kovo-query name="reviews">{"total":4}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     const applied = await refetchQueries({
@@ -522,11 +729,14 @@ describe('query refetch', () => {
     const onError = vi.fn();
     const transportError = new Error('typed read failed');
     const fetch = vi.fn(async (url: string) => {
-      if (url === '/_q/cart') throw transportError;
+      if (queryRequestPath(url) === '/_q/cart') throw transportError;
 
       return {
+        headers: fragmentHeaders(),
+        redirected: false,
         status: 200,
         text: async () => '<kovo-query name="reviews">{"total":2}</kovo-query>',
+        url: queryResponseUrl(url),
       };
     });
 
@@ -545,14 +755,174 @@ describe('query refetch', () => {
     expect(store.get('reviews')).toEqual({ total: 2 });
   });
 
-  it('escalates to a reload (no apply) when a /_q refetch token still differs (D3, SPEC §14)', async () => {
+  it('recovers the native document when an admitted same-build typed read denies access', async () => {
+    const store = createQueryStore();
+    store.set('secret', { value: 'prior-private-truth' });
+    const onAuthDenied = vi.fn();
+    const onError = vi.fn();
+    const text = vi.fn(async () => '<kovo-query name="secret">{"value":"attacker"}</kovo-query>');
+    const fetch = vi.fn(async (url: string, init: { redirect: 'error' }) => {
+      expect(init.redirect).toBe('error');
+      return {
+        headers: fragmentHeaders(),
+        redirected: false,
+        status: 403,
+        text,
+        url: queryResponseUrl(url),
+      };
+    });
+
+    const applied = await refetchQueries({
+      fetch,
+      onAuthDenied,
+      onError,
+      queries: ['secret'],
+      queryStore: store,
+      urlForQuery: () => '/_q/secret',
+    });
+
+    expect(applied).toEqual([]);
+    expect(onAuthDenied).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(text).not.toHaveBeenCalled();
+    expect(store.get('secret')).toEqual({ value: 'prior-private-truth' });
+  });
+
+  it('does not infer auth revocation from redirect-error transport rejection', async () => {
+    const store = createQueryStore();
+    store.set('secret', { value: 'prior-private-truth' });
+    const redirectError = new TypeError('redirect mode rejected a response redirect');
+    const onAuthDenied = vi.fn();
+    const onError = vi.fn();
+    const fetch = vi.fn((_url: string, init: { redirect: 'error' }) => {
+      expect(init.redirect).toBe('error');
+      throw redirectError;
+    });
+
+    const applied = await refetchQueries({
+      fetch,
+      onAuthDenied,
+      onError,
+      queries: ['secret'],
+      queryStore: store,
+      urlForQuery: () => '/_q/secret',
+    });
+
+    expect(applied).toEqual([]);
+    expect(onAuthDenied).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(redirectError);
+    expect(store.get('secret')).toEqual({ value: 'prior-private-truth' });
+  });
+
+  it('keeps auth denial terminal when recovery throws after an earlier query response', async () => {
+    const store = createQueryStore();
+    const recoveryError = new Error('navigation adapter threw');
+    const onAuthDenied = vi.fn(() => {
+      throw recoveryError;
+    });
+    const onError = vi.fn();
+    const fetch = vi.fn(async (url: string) => {
+      const path = queryRequestPath(url);
+      if (path === '/_q/terminal-first') {
+        return {
+          headers: fragmentHeaders(),
+          redirected: false,
+          status: 200,
+          text: async () =>
+            '<kovo-query name="terminal-first">{"value":"must-not-apply"}</kovo-query>',
+          url: queryResponseUrl(url),
+        };
+      }
+      if (path !== '/_q/terminal-denied') throw new Error('fetched after terminal denial');
+      return {
+        headers: fragmentHeaders(),
+        redirected: false,
+        status: 403,
+        text: vi.fn(async () => ''),
+        url: queryResponseUrl(url),
+      };
+    });
+
+    const applied = await refetchQueries({
+      fetch,
+      onAuthDenied,
+      onError,
+      queries: ['terminal-first', 'terminal-denied', 'terminal-later'],
+      queryStore: store,
+      urlForQuery: (query) => `/_q/${query.name}`,
+    });
+
+    expect(applied).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onAuthDenied).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(recoveryError);
+    expect(store.get('terminal-first')).toBeUndefined();
+    expect(store.get('terminal-later')).toBeUndefined();
+  });
+
+  it('keeps build-skew recovery terminal when its callback throws after an earlier response', async () => {
+    const store = createQueryStore();
+    const recoveryError = new Error('reload adapter threw');
+    const onBuildSkew = vi.fn(() => {
+      throw recoveryError;
+    });
+    const onError = vi.fn();
+    const fetch = vi.fn(async (url: string) => {
+      const path = queryRequestPath(url);
+      if (path === '/_q/skew-first') {
+        return {
+          headers: fragmentHeaders(),
+          redirected: false,
+          status: 200,
+          text: async () => '<kovo-query name="skew-first">{"value":"must-not-apply"}</kovo-query>',
+          url: queryResponseUrl(url),
+        };
+      }
+      if (path !== '/_q/skew-denied') throw new Error('fetched after terminal build skew');
+      return {
+        headers: fragmentHeaders((name) => {
+          if (name === 'Kovo-Build') return 'other-build';
+          if (name === 'Kovo-Build-Skew') return 'true';
+          return null;
+        }, 'text/vnd.kovo.fragment+html; charset=utf-8'),
+        redirected: false,
+        status: 409,
+        text: vi.fn(async () => ''),
+        url: queryResponseUrl(url),
+      };
+    });
+
+    const applied = await refetchQueries({
+      fetch,
+      onBuildSkew,
+      onError,
+      queries: ['skew-first', 'skew-denied', 'skew-later'],
+      queryStore: store,
+      urlForQuery: (query) => `/_q/${query.name}`,
+    });
+
+    expect(applied).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onBuildSkew).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(recoveryError);
+    expect(store.get('skew-first')).toBeUndefined();
+    expect(store.get('skew-later')).toBeUndefined();
+  });
+
+  it('stamps /_q with the document build and reloads on a stamped 409 mismatch', async () => {
     const store = createQueryStore();
     store.set('cart', { count: 1 });
     const onBuildSkew = vi.fn();
-    const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
-      status: 200,
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders((name) => {
+        if (name === 'Kovo-Build') return 'build-B';
+        if (name === 'Kovo-Build-Skew') return 'true';
+        return null;
+      }, 'text/vnd.kovo.fragment+html; charset=utf-8'),
+      redirected: false,
+      status: 409,
       text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     const applied = await refetchQueries({
@@ -568,16 +938,28 @@ describe('query refetch', () => {
     expect(onBuildSkew).toHaveBeenCalledTimes(1);
     expect(applied).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 1 });
+    expect(fetch).toHaveBeenCalledWith(queryResponseUrl('/_q/cart'), {
+      cache: 'no-store',
+      headers: {
+        Accept: 'text/html',
+        'Kovo-Build': 'build-A',
+        'Kovo-Fragment': 'true',
+      },
+      method: 'GET',
+      redirect: 'error',
+    });
   });
 
   it('escalates to a reload (no apply) when a stamped /_q refetch omits Kovo-Build', async () => {
     const store = createQueryStore();
     store.set('cart', { count: 1 });
     const onBuildSkew = vi.fn();
-    const fetch = vi.fn(async () => ({
-      headers: { get: () => null },
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(() => null),
+      redirected: false,
       status: 200,
       text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     const applied = await refetchQueries({
@@ -593,14 +975,92 @@ describe('query refetch', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
+  it('keeps missing build terminal even when the exact response has malformed media', async () => {
+    const store = createQueryStore();
+    store.set('media-skew', { count: 1 });
+    const onBuildSkew = vi.fn();
+    const onError = vi.fn();
+    const text = vi.fn(async () => '<kovo-query name="media-skew">{"count":99}</kovo-query>');
+
+    const applied = await refetchQueries({
+      fetch: async (url) => ({
+        headers: fragmentHeaders(() => null, 'application/octet-stream'),
+        redirected: false,
+        status: 200,
+        text,
+        url: queryResponseUrl(url),
+      }),
+      onBuildSkew,
+      onError,
+      queries: ['media-skew'],
+      queryStore: store,
+      urlForQuery: () => '/_q/media-skew',
+    });
+
+    expect(applied).toEqual([]);
+    expect(onBuildSkew).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(text).not.toHaveBeenCalled();
+    expect(store.get('media-skew')).toEqual({ count: 1 });
+  });
+
+  it('prevents an older in-flight refetch from applying after another batch selects denial', async () => {
+    const store = createQueryStore();
+    let releaseOlder: ((response: unknown) => void) | undefined;
+    const olderResponse = new Promise<unknown>((resolve) => {
+      releaseOlder = resolve;
+    });
+    const onAuthDenied = vi.fn(() => {
+      throw new Error('delayed navigation adapter');
+    });
+    const onError = vi.fn();
+    const older = refetchQueries({
+      fetch: () => olderResponse as never,
+      onAuthDenied,
+      onError,
+      queries: ['race-older'],
+      queryStore: store,
+      urlForQuery: () => '/_q/race-older',
+    });
+
+    await refetchQueries({
+      fetch: async (url) => ({
+        headers: fragmentHeaders(),
+        redirected: false,
+        status: 403,
+        text: async () => '',
+        url: queryResponseUrl(url),
+      }),
+      onAuthDenied,
+      onError,
+      queries: ['race-denied'],
+      queryStore: store,
+      urlForQuery: () => '/_q/race-denied',
+    });
+
+    releaseOlder?.({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () => '<kovo-query name="race-older">{"secret":"must-not-apply"}</kovo-query>',
+      url: queryResponseUrl('/_q/race-older'),
+    });
+    await older;
+
+    expect(onAuthDenied).toHaveBeenCalledOnce();
+    expect(store.get('race-older')).toBeUndefined();
+  });
+
   it('applies normally when the /_q refetch token matches the document token (D2)', async () => {
     const store = createQueryStore();
     store.set('cart', { count: 1 });
     const onBuildSkew = vi.fn();
-    const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders((name) => (name === 'Kovo-Build' ? 'build-A' : null)),
+      redirected: false,
       status: 200,
       text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     await refetchQueries({
@@ -624,12 +1084,15 @@ describe('query refetch', () => {
     const done = new Promise<void>((resolve) => {
       resolveFetch = resolve;
     });
-    const fetch = vi.fn(async () => {
+    const fetch = vi.fn(async (url: string) => {
       resolveFetch?.();
       return {
+        headers: fragmentHeaders(),
+        redirected: false,
         status: 200,
         text: async () =>
           '<kovo-query name="recommendations" key="recommendations:user-1">{"items":["p9"]}</kovo-query>',
+        url: queryResponseUrl(url),
       };
     });
 
@@ -640,10 +1103,11 @@ describe('query refetch', () => {
       expect(store.get('recommendations', 'recommendations:user-1')).toEqual({ items: ['p9'] });
     });
 
-    expect(fetch).toHaveBeenCalledWith('/_q/recommendations?key=user-1', {
+    expect(fetch).toHaveBeenCalledWith(queryResponseUrl('/_q/recommendations?key=user-1'), {
       cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      headers: TEST_REQUEST_HEADERS,
       method: 'GET',
+      redirect: 'error',
     });
   });
 
@@ -667,9 +1131,12 @@ describe('query refetch', () => {
     );
     expect(store.get('cart')).toEqual({ count: 1 });
 
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
       status: 200,
       text: async () => '<kovo-query name="cart">{"count":100}</kovo-query>',
+      url: queryResponseUrl(url),
     }));
 
     await refetchQueries({

@@ -91,7 +91,9 @@ describe('query endpoints', () => {
     });
 
     expect(result.status).toBe(200);
-    expect(result.body).toBe('<kovo-query name="queries/cart/cart">{"count":2}</kovo-query>');
+    expect(result.body).toBe(
+      '<kovo-query name="queries/cart/cart" href="/_q/queries/cart/cart">{"count":2}</kovo-query>',
+    );
   });
 
   it('does not expose a public query.elevated GET-write escape', () => {
@@ -316,7 +318,7 @@ describe('query endpoints', () => {
         ]),
       }),
     ).resolves.toEqual({
-      body: '<kovo-query name="productDetail" key="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
+      body: '<kovo-query name="productDetail" key="product:p1" href="/_q/productDetail?id=p1&amp;max=3" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -435,7 +437,7 @@ describe('query endpoints', () => {
     await expect(
       renderQueryEndpointResponse(catalogQuery, { maxListItems: 2, request: {} }),
     ).resolves.toEqual({
-      body: '<kovo-query name="catalogList">{"rows":[{"id":0,"tags":["visible","capped"]},{"id":1,"tags":["visible","capped"]}]}</kovo-query>',
+      body: '<kovo-query name="catalogList" href="/_q/catalogList">{"rows":[{"id":0,"tags":["visible","capped"]},{"id":1,"tags":["visible","capped"]}]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -577,7 +579,7 @@ describe('query endpoints', () => {
     });
 
     await expect(renderQueryEndpointResponse(catalogQuery, { request: {} })).resolves.toEqual({
-      body: '<kovo-query name="catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
+      body: '<kovo-query name="catalogLimited" href="/_q/catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -602,7 +604,7 @@ describe('query endpoints', () => {
     });
 
     await expect(renderQueryEndpointResponse(publicQuery, { request: {} })).resolves.toEqual({
-      body: '<kovo-query name="publicCatalog">{"items":["p1"]}</kovo-query>',
+      body: '<kovo-query name="publicCatalog" href="/_q/publicCatalog">{"items":["p1"]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -611,7 +613,7 @@ describe('query endpoints', () => {
       status: 200,
     });
     await expect(renderQueryEndpointResponse(guardedQuery, { request: {} })).resolves.toEqual({
-      body: '<kovo-query name="privateCatalog">{"items":["p1"]}</kovo-query>',
+      body: '<kovo-query name="privateCatalog" href="/_q/privateCatalog">{"items":["p1"]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -637,7 +639,7 @@ describe('query endpoints', () => {
         request: { session: { user: { id: 'u1' } } },
       }),
     ).resolves.toEqual({
-      body: '<kovo-query name="leakyMine">{"userId":"u1"}</kovo-query>',
+      body: '<kovo-query name="leakyMine" href="/_q/leakyMine">{"userId":"u1"}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -795,7 +797,7 @@ describe('query endpoints', () => {
       value: { id: 'p1', stock: 3 },
     });
     await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
-      body: '<kovo-query name="product">{"id":"p1","stock":3}</kovo-query>',
+      body: '<kovo-query name="product" href="/_q/product">{"id":"p1","stock":3}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -828,7 +830,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams({ mode: 'absent' }),
       }),
     ).resolves.toMatchObject({
-      body: '<kovo-query name="product-optional-output">{"id":"p1"}</kovo-query>',
+      body: '<kovo-query name="product-optional-output" href="/_q/product-optional-output?mode=absent">{"id":"p1"}</kovo-query>',
       status: 200,
     });
     await expect(
@@ -838,7 +840,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams({ mode: 'present' }),
       }),
     ).resolves.toMatchObject({
-      body: '<kovo-query name="product-optional-output">{"id":"p1","note":"available"}</kovo-query>',
+      body: '<kovo-query name="product-optional-output" href="/_q/product-optional-output?mode=present">{"id":"p1","note":"available"}</kovo-query>',
       status: 200,
     });
     expect(onError).not.toHaveBeenCalled();
@@ -892,7 +894,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams([['id', 'p1']]),
       }),
     ).resolves.toEqual({
-      body: '<kovo-query name="product" key="product:p1">{"id":"p1","name":"Mug"}</kovo-query>',
+      body: '<kovo-query name="product" key="product:p1" href="/_q/product?id=p1">{"id":"p1","name":"Mug"}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -1010,6 +1012,36 @@ describe('query endpoints', () => {
     expect(result.headers['Vary']).toBe('Cookie');
   });
 
+  it('returns a non-redirecting 401 for enhanced unauthenticated typed reads', async () => {
+    const productQuery = query('product', {
+      guard: () => ({ kind: 'unauthenticated' as const }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+    const onUnauthenticated = vi.fn(() => ({ location: '/sign-in', status: 303 as const }));
+
+    const result = await renderQueryEndpointResponse(productQuery, {
+      buildToken: 'build-A',
+      currentUrl: '/_q/product',
+      enhanced: true,
+      onUnauthenticated,
+      request: {},
+    });
+
+    expect(result).toMatchObject({
+      body: '',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        'Kovo-Build': 'build-A',
+        Vary: 'Cookie',
+      },
+      status: 401,
+    });
+    expect(result.headers['Location']).toBeUndefined();
+    expect(onUnauthenticated).not.toHaveBeenCalled();
+  });
+
   // D2-server (high) — SPEC §5.2.1 rule 2(d): /_q/ 200 read responses must carry
   // a Kovo-Build header so a plain refetch into a stale tab is detectable.
 
@@ -1108,7 +1140,7 @@ describe('query endpoints', () => {
 
     expect(result.status).toBe(200);
     expect(result.body).toBe(
-      '<kovo-query name="totals">{"count":{"$kovo":"bigint","value":"10"}}</kovo-query>',
+      '<kovo-query name="totals" href="/_q/totals">{"count":{"$kovo":"bigint","value":"10"}}</kovo-query>',
     );
     expect(result.headers['Cache-Control']).toBe('private, no-store');
     expect(result.headers.Vary).toBe('Cookie');

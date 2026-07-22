@@ -4,6 +4,37 @@ import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js
 import { submitEnhancedMutation } from './mutation-submit.js';
 import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test-utils.js';
 
+const buildBoundInlineSourceInstallCases = inlineSourceInstallCases.map(
+  ([name, installSource]) =>
+    [
+      name,
+      (
+        importModule: Parameters<typeof installSource>[0],
+        globalRecord: Record<string, unknown>,
+      ) => {
+        const document = globalRecord.document as
+          | {
+              querySelector?(selector: string): unknown;
+            }
+          | undefined;
+        if (document) {
+          const querySelector = document.querySelector;
+          document.querySelector = function querySelectorWithBuild(selector: string) {
+            const existing =
+              typeof querySelector === 'function' ? querySelector.call(this, selector) : null;
+            if (existing !== null && existing !== undefined) return existing;
+            return selector === 'meta[name="kovo-build"]'
+              ? {
+                  getAttribute: (attribute: string) => (attribute === 'content' ? 'build-A' : null),
+                }
+              : existing;
+          };
+        }
+        return installSource(importModule, globalRecord);
+      },
+    ] as const,
+);
+
 class InertBroadcastChannel {
   static instances: InertBroadcastChannel[] = [];
   closed = false;
@@ -25,6 +56,7 @@ class InertBroadcastChannel {
 
 interface InlineMutationResponse {
   headers?: { get(name: string): string | null };
+  redirected?: boolean;
   url?: string;
   [key: string]: unknown;
 }
@@ -34,6 +66,16 @@ const RENDERED_IDEM = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
 function mutationResponse(path: string, response: InlineMutationResponse): InlineMutationResponse {
   const responseHeaders = response.headers;
   const location = (globalThis as unknown as { location?: { origin?: unknown } }).location;
+  const document = (
+    globalThis as unknown as {
+      document?: {
+        querySelector?(selector: string): { getAttribute?(name: string): unknown } | null;
+      };
+    }
+  ).document;
+  const currentBuild = document
+    ?.querySelector?.('meta[name="kovo-build"]')
+    ?.getAttribute?.('content');
   const origin = typeof location?.origin === 'string' ? location.origin : 'http://localhost';
   return {
     ...response,
@@ -43,9 +85,15 @@ function mutationResponse(path: string, response: InlineMutationResponse): Inlin
         if (name.toLowerCase() === 'content-type') {
           return 'text/vnd.kovo.fragment+html';
         }
-        return responseHeaders?.get(name) ?? null;
+        const supplied = responseHeaders?.get(name);
+        if (supplied !== undefined && supplied !== null) return supplied;
+        if (name.toLowerCase() === 'kovo-build' && typeof currentBuild === 'string') {
+          return currentBuild;
+        }
+        return null;
       },
     },
+    redirected: response.redirected ?? false,
     url: response.url ?? `${origin}${path}`,
   };
 }
@@ -105,7 +153,7 @@ describe('inline loader enhanced submit source', () => {
     globalRecord.BroadcastChannel = InertBroadcastChannel;
   });
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'retires the inline channel before applying a no-navigation session transition through %s',
     async (_name, installSource) => {
       const originals = {
@@ -221,14 +269,14 @@ describe('inline loader enhanced submit source', () => {
     }
   });
 
-  it.each(inlineSourceInstallCases)(
-    'navigates after successful inline enhanced auth redirects through %s',
+  it.each(buildBoundInlineSourceInstallCases)(
+    'hard-recovers when an enhanced mutation exposes a redirect response through %s',
     async (_name, installSource) => {
-      // SPEC §6.3/§9.1: auth mutations may succeed by PRG redirect instead of
-      // returning mutation fragments; inline interception must preserve that.
+      // SPEC §9.1/§14: enhanced fetches use redirect:error. A mocked redirect-shaped response is
+      // therefore not a mutation envelope and must retire the document before recovering to the
+      // exact source URL; neither Location nor response.url is promoted into navigation authority.
       const cases = [
         {
-          expected: '/',
           response: {
             headers: {
               get(name: string) {
@@ -239,7 +287,6 @@ describe('inline loader enhanced submit source', () => {
           },
         },
         {
-          expected: 'https://kovo.test/login',
           response: {
             headers: {
               get() {
@@ -262,11 +309,16 @@ describe('inline loader enhanced submit source', () => {
         location: globalRecord.location,
       };
 
-      for (const { expected, response } of cases) {
+      for (const { response } of cases) {
         const listeners = new Map<string, (event: unknown) => void>();
         const channelIndex = InertBroadcastChannel.instances.length;
         const navigationRetirementStates: boolean[] = [];
         const assign = vi.fn(() => {
+          navigationRetirementStates.push(
+            InertBroadcastChannel.instances[channelIndex]?.closed === true,
+          );
+        });
+        const reload = vi.fn(() => {
           navigationRetirementStates.push(
             InertBroadcastChannel.instances[channelIndex]?.closed === true,
           );
@@ -308,6 +360,7 @@ describe('inline loader enhanced submit source', () => {
             assign,
             href: 'https://kovo.test/login?next=%2F',
             origin: 'https://kovo.test',
+            reload,
           };
 
           installSource(
@@ -332,11 +385,12 @@ describe('inline loader enhanced submit source', () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
 
           expect(preventDefault).toHaveBeenCalledTimes(1);
-          expect(assign).toHaveBeenCalledWith(expected);
+          expect(assign).not.toHaveBeenCalled();
+          expect(reload).toHaveBeenCalledOnce();
           expect(text).not.toHaveBeenCalled();
-          expect(navigationRetirementStates).toEqual([false]);
-          expect(runtimeChannel.closed).toBe(false);
-          expect(runtimeChannel.onmessage).not.toBeNull();
+          expect(navigationRetirementStates).toEqual([true]);
+          expect(runtimeChannel.closed).toBe(true);
+          expect(runtimeChannel.onmessage).toBeNull();
         } finally {
           Object.assign(globalRecord, {
             FormData: originals.FormData,
@@ -355,7 +409,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'navigates after successful inline enhanced auth empty-fragment responses through %s',
     async (_name, installSource) => {
       // SPEC §6.3/§9.1/§9.3: when auth commits through the enhanced mutation
@@ -482,7 +536,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'sanitizes inline 401 Kovo-Reauth before navigation through %s',
     async (_name, installSource) => {
       // SPEC §6.5: the inline enhanced-submit path treats Kovo-Reauth as an
@@ -600,7 +654,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'keeps inline mutation authority for non-401 stray reauth headers through %s',
     async (_name, installSource) => {
       const originals = {
@@ -706,7 +760,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'keeps inline reauth and auth-success redirects same-origin after late control poisoning through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -819,7 +873,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'stamps inline enhanced forms when fetch fails without native submit through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: inline enhanced-form failure handling must not fall back to native submit.
@@ -904,7 +958,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'ignores non-enhanced submit candidates through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: the inline bootstrap follows the modular enhanced-form gate.
@@ -970,7 +1024,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'requires compiler-owned same-origin POST mutation transport through %s',
     async (_name, installSource) => {
       const originals = {
@@ -1120,7 +1174,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'rejects unproven inline mutation responses before apply through %s',
     async (_name, installSource) => {
       const originals = {
@@ -1192,12 +1246,7 @@ describe('inline loader enhanced submit source', () => {
 
           expect(text).not.toHaveBeenCalled();
           expect(requestSubmit).not.toHaveBeenCalled();
-          expect(attributes).toEqual(
-            new Map([
-              ['data-error-code', 'NETWORK_ERROR'],
-              ['kovo-error', ''],
-            ]),
-          );
+          expect(attributes).toEqual(new Map());
         }
       } finally {
         Object.assign(globalRecord, {
@@ -1216,7 +1265,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'keeps enhanced form request targets in parity with modular submit through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: enhanced form headers are part of the always-loaded loader contract.
@@ -1232,7 +1281,6 @@ describe('inline loader enhanced submit source', () => {
       };
       const targetDeps = [
         { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
-        { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
         {
           component: 'components/inventory/inventory',
           deps: 'inventory stock',
@@ -1241,7 +1289,6 @@ describe('inline loader enhanced submit source', () => {
           target: 'inventory',
           token: 'tok_inventory',
         },
-        { deps: 'debug', id: 'empty-fragment-target-fallback', target: '' },
         { deps: '', id: 'standalone-target', token: 'tok_standalone' },
         {
           component: 'cart-summary',
@@ -1257,8 +1304,8 @@ describe('inline loader enhanced submit source', () => {
       const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) =>
         mutationResponse('/_m/cart/add', {
           headers: {
-            get() {
-              return null;
+            get(name: string) {
+              return name === 'Kovo-Build' ? 'build-parity' : null;
             },
           },
           async text() {
@@ -1274,6 +1321,7 @@ describe('inline loader enhanced submit source', () => {
         form,
         formData,
         idem: parityIdem,
+        expectedBuildToken: 'build-parity',
         root: modularRoot,
         store: createQueryStore(),
       });
@@ -1292,6 +1340,11 @@ describe('inline loader enhanced submit source', () => {
       const preventDefault = vi.fn();
       const inlineFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) =>
         mutationResponse('/_m/cart/add', {
+          headers: {
+            get(name: string) {
+              return name === 'Kovo-Build' ? 'build-parity' : null;
+            },
+          },
           async text() {
             return '';
           },
@@ -1325,8 +1378,10 @@ describe('inline loader enhanced submit source', () => {
           getElementById() {
             return null;
           },
-          querySelector() {
-            return null;
+          querySelector(selector: string) {
+            return selector === 'meta[name="kovo-build"]'
+              ? { getAttribute: (name: string) => (name === 'content' ? 'build-parity' : null) }
+              : null;
           },
           querySelectorAll(selector: string) {
             if (selector !== '[kovo-deps]') return [];
@@ -1408,7 +1463,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'keeps post-bootstrap prototype facts and JSON callbacks out of inline live headers through %s',
     async (_name, installSource) => {
       const formData = Object.assign(createStructuralFormData(), { kind: 'form-data' });
@@ -1435,7 +1490,7 @@ describe('inline loader enhanced submit source', () => {
             '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first","del":"\u007f","label":"😀 漢字","line":"\u2028\u2029"}',
         },
       ];
-      for (let index = 0; index < 70; index += 1) {
+      for (let index = 0; index < 62; index += 1) {
         elementAttributes.push({
           'kovo-deps': `query-${index}`,
           'kovo-fragment-target': `extra-panel-${index}`,
@@ -1458,6 +1513,11 @@ describe('inline loader enhanced submit source', () => {
       const listeners = new Map<string, (event: unknown) => void>();
       const inlineFetch = vi.fn(async () =>
         mutationResponse('/_m/catalog/select', {
+          headers: {
+            get(name: string) {
+              return name === 'Kovo-Build' ? 'build-parity' : null;
+            },
+          },
           async text() {
             return '';
           },
@@ -1481,8 +1541,10 @@ describe('inline loader enhanced submit source', () => {
           getElementById() {
             return null;
           },
-          querySelector() {
-            return null;
+          querySelector(selector: string) {
+            return selector === 'meta[name="kovo-build"]'
+              ? { getAttribute: (name: string) => (name === 'content' ? 'build-parity' : null) }
+              : null;
           },
           querySelectorAll(selector: string) {
             return selector === '[kovo-deps]' ? elements : [];
@@ -1559,7 +1621,7 @@ describe('inline loader enhanced submit source', () => {
       const targetEntries = requestHeaders['Kovo-Targets'].split('; ');
       const liveEntries = requestHeaders['Kovo-Live-Targets'].split('; ');
       expect(targetEntries).toHaveLength(64);
-      expect(liveEntries).toHaveLength(64);
+      expect(liveEntries).toHaveLength(63);
       expect(targetEntries.slice(0, 2)).toEqual([
         'unattested-panel=public',
         'catalog-panel=catalog',
@@ -1572,8 +1634,8 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
-    'drops dependency attributes above the shared wire-input bound through %s',
+  it.each(buildBoundInlineSourceInstallCases)(
+    'fails closed before interception for dependency attributes above the wire bound through %s',
     async (_name, installSource) => {
       const originals = {
         CustomEvent: globalRecord.CustomEvent,
@@ -1667,11 +1729,8 @@ describe('inline loader enhanced submit source', () => {
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(preventDefault).toHaveBeenCalledTimes(1);
-        expect(inlineFetch).toHaveBeenCalledTimes(1);
-        const requestHeaders = inlineFetch.mock.calls[0]?.[1].headers;
-        expect(requestHeaders['Kovo-Targets']).toBeUndefined();
-        expect(requestHeaders['Kovo-Live-Targets']).toBeUndefined();
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(inlineFetch).not.toHaveBeenCalled();
         expect(attributes).toEqual(new Map());
       } finally {
         Object.assign(globalRecord, {
@@ -1692,7 +1751,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'includes the clicked submitter in inline enhanced form data through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -1786,7 +1845,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'streams inline enhanced mutation text through a boot-pinned decoder in %s',
     async (_name, installSource) => {
       // SPEC.md §4.4/§9.1: the always-loaded submit path must request and
@@ -1801,6 +1860,7 @@ describe('inline loader enhanced submit source', () => {
         dispatchEvent: globalRecord.dispatchEvent,
         fetch: globalRecord.fetch,
         importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const nativeTextDecoderDecode = TextDecoder.prototype.decode;
@@ -1954,7 +2014,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'applies coalesced streaming fragments before their text chunks through %s',
     async (_name, installSource) => {
       // SPEC.md §9.1: streaming assistant shells are ordinary append fragments,
@@ -2136,7 +2196,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'marks streaming submissions failed when text targets are missing through %s',
     async (_name, installSource) => {
       // SPEC.md §9.1: missing stream text targets must fail or recover; they
@@ -2252,7 +2312,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'refetches inline delta chunks instead of dispatching them through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -2264,6 +2324,7 @@ describe('inline loader enhanced submit source', () => {
         dispatchEvent: globalRecord.dispatchEvent,
         fetch: globalRecord.fetch,
         importModule: globalRecord.__kovoInlineImport,
+        location: globalRecord.location,
       };
       const listeners = new Map<string, (event: unknown) => void>();
       const dispatched: unknown[] = [];
@@ -2302,19 +2363,21 @@ describe('inline loader enhanced submit source', () => {
           },
         };
         const fetch = vi.fn(async (url: string) =>
-          url === '/_q/cart'
+          url === 'https://kovo.test/_q/cart'
             ? {
                 headers: {
                   get(name: string) {
                     if (name === 'Kovo-Build') return 'build-A';
-                    if (name === 'content-type') return 'text/vnd.kovo.fragment+html';
+                    if (name === 'content-type') return 'text/html';
                     return null;
                   },
                 },
+                redirected: false,
                 status: 200,
                 async text() {
-                  return '<kovo-query name="cart">{"count":3}</kovo-query>';
+                  return '<kovo-query name="cart" href="/_q/cart">{"count":3}</kovo-query>';
                 },
+                url: 'https://kovo.test/_q/cart',
               }
             : mutationResponse('/_m/cart/add', {
                 headers: {
@@ -2326,11 +2389,18 @@ describe('inline loader enhanced submit source', () => {
                 },
                 status: 200,
                 async text() {
-                  return '<kovo-query name="cart" delta>{"set":{"count":3}}</kovo-query>';
+                  return '<kovo-query name="cart" href="/_q/cart" delta>{"set":{"count":3}}</kovo-query>';
                 },
               }),
         );
         globalRecord.fetch = fetch;
+        globalRecord.location = {
+          hash: '',
+          href: 'https://kovo.test/cart',
+          origin: 'https://kovo.test',
+          pathname: '/cart',
+          search: '',
+        };
 
         installSource(
           vi.fn(async () => ({})),
@@ -2360,21 +2430,29 @@ describe('inline loader enhanced submit source', () => {
         // SPEC.md §9.1.1/§14: inline loader has no direct query-store base,
         // so delta chunks recover through full /_q reads instead of being
         // dispatched as confirmed server truth.
-        expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
+        expect(fetch).toHaveBeenNthCalledWith(2, 'https://kovo.test/_q/cart', {
           cache: 'no-store',
-          headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+          headers: {
+            Accept: 'text/html',
+            'Kovo-Build': 'build-A',
+            'Kovo-Fragment': 'true',
+          },
           method: 'GET',
+          redirect: 'error',
         });
         expect(dispatched).toHaveLength(2);
-        const firstQueries = (dispatched[0] as { detail?: { queries?: unknown[]; qs?: unknown[] } })
-          .detail;
-        const secondQueries = (
+        const initialQueries = (
+          dispatched[0] as { detail?: { queries?: unknown[]; qs?: unknown[] } }
+        ).detail;
+        const confirmedQueries = (
           dispatched[1] as {
             detail?: { queries?: Array<{ attrs: string }>; qs?: Array<{ attrs: string }> };
           }
         ).detail;
-        expect(firstQueries?.queries ?? firstQueries?.qs).toEqual([]);
-        expect((secondQueries?.queries ?? secondQueries?.qs)?.[0]?.attrs).toContain('name="cart"');
+        expect(initialQueries?.queries ?? initialQueries?.qs).toEqual([]);
+        expect((confirmedQueries?.queries ?? confirmedQueries?.qs)?.[0]?.attrs).toContain(
+          'name="cart"',
+        );
       } finally {
         Object.assign(globalRecord, {
           CustomEvent: originals.CustomEvent,
@@ -2383,6 +2461,7 @@ describe('inline loader enhanced submit source', () => {
           document: originals.document,
           dispatchEvent: originals.dispatchEvent,
           fetch: originals.fetch,
+          location: originals.location,
         });
         if (originals.importModule === undefined) {
           delete globalRecord.__kovoInlineImport;
@@ -2393,7 +2472,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'dispatches full inline query chunks whose key contains delta through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -2503,7 +2582,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'hard-recovers fragment-only inline mutation build skew through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
@@ -2615,7 +2694,7 @@ describe('inline loader enhanced submit source', () => {
     },
   );
 
-  it.each(inlineSourceInstallCases)(
+  it.each(buildBoundInlineSourceInstallCases)(
     'does not dispatch partial inline stream query truth on failure through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

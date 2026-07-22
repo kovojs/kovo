@@ -19,6 +19,7 @@ import {
   readEligibleEnhancedMutationTransport,
   type EnhancedMutationTransport,
 } from './mutation-form.js';
+import { reloadSessionTransitionDocument } from './session-transition.js';
 import {
   securityGetOwnPropertyDescriptor,
   securityArrayAppend,
@@ -41,6 +42,10 @@ const bootMutationFetchSecurity =
 // property. Consumers classify after body reads and optimistic work, so retaining the carrier and
 // rereading mutable `ok`/`status` would let same-realm code turn a witnessed failure into success.
 const mutationResponseFailures = securityWeakMap<object, boolean>();
+// SPEC §14: an equal-token 409 is deploy skew only when the admitted response carried the
+// framework-reserved marker. Keep that fact module-private so a structural fetched object cannot
+// mint recovery authority by adding a public boolean property.
+const mutationBuildSkewResponses = securityWeakSet<object>();
 const preparedMutationPlans = securityWeakSet<FrameworkTargetRequestHeaderPlan>();
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -58,6 +63,7 @@ export interface EnhancedMutationFetchOptions {
   keepalive: boolean;
   method: string;
   onUploadProgress?: (progress: UploadProgress) => void;
+  redirect: 'error';
   referrerPolicy: 'origin';
   signal?: AbortSignal;
 }
@@ -91,8 +97,16 @@ export interface FetchEnhancedMutationOptions {
   fetch: EnhancedMutationFetch;
   form: EnhancedFormLike;
   formData: unknown;
+  /** Page-load build proof sent before the server chooses a target-wire decoder. */
+  expectedBuildToken: string;
   idem?: string;
+  /** Mandatory full-document recovery when response build proof is absent or foreign. */
+  onBuildSkew?: () => void;
   onError?: RuntimeErrorReporter;
+  /** @internal Framework-owned observation of already-membraned response facts. */
+  onResponseSnapshot?:
+    | ((snapshot: { body: string; ok: boolean | undefined; status: number }) => void)
+    | undefined;
   /** @internal Retire the page-load principal before any transition navigation is attempted. */
   onSessionTransition?: () => void;
   /** @internal Full-reload sink used only after header-time principal retirement. */
@@ -136,6 +150,8 @@ export async function fetchEnhancedMutation(
     security.setFormDataValue(formData, 'Kovo-Idem', idem);
   }
   const onError = options.onError;
+  const onBuildSkew = options.onBuildSkew ?? reloadSessionTransitionDocument;
+  const onResponseSnapshot = options.onResponseSnapshot;
   const onSessionTransition = options.onSessionTransition;
   const onSessionTransitionReload = options.onSessionTransitionReload;
   const onUploadProgress = options.onUploadProgress;
@@ -153,6 +169,7 @@ export async function fetchEnhancedMutation(
     options.requestPlan && securityWeakSetHas(preparedMutationPlans, options.requestPlan)
       ? options.requestPlan
       : prepareEnhancedMutationRequest({
+          buildToken: options.expectedBuildToken,
           form,
           idem,
           root: options.root,
@@ -183,28 +200,38 @@ export async function fetchEnhancedMutation(
     headers,
     keepalive: !streaming,
     method: transport.method,
+    redirect: 'error',
     referrerPolicy: 'origin',
     ...definedProps({ onUploadProgress, signal }),
   })) as EnhancedMutationResponseLike;
-  assertSameOriginMutationResponse(response, transport, security);
+  assertExactMutationResponse(response, transport, security);
   const failed = isFailedBoundMutationResponse(response, security);
   securityWeakMapSet(mutationResponseFailures, response, failed);
   const status = responseStatus(response, security, 0);
-  const redirectLocation = readSuccessfulRedirectLocation(response, security);
+  if (status >= 300 && status < 400) {
+    throw new TypeError('Kovo refused an enhanced mutation redirect response.');
+  }
+  // SPEC §5.2.1/§14: after exact final-URL admission, missing/foreign build proof is terminal
+  // independently of response media. Do not let a malformed Content-Type suppress mandatory
+  // recovery or grant any later header/body observer authority.
+  const buildToken = security.readHeader(response, 'Kovo-Build') ?? undefined;
+  if (buildToken !== options.expectedBuildToken) {
+    onSessionTransition?.();
+    onBuildSkew();
+    return {
+      body: '',
+      buildToken,
+      changes: [],
+      idem,
+      response,
+      sessionTransition: true,
+      targets: responseTargets,
+    };
+  }
   // SPEC §9.1: Kovo response directives carry authority only inside the exact mutation media
-  // envelope. Ordinary same-origin HTTP redirects remain usable without a fragment body, but a
-  // text/html response cannot promote Kovo-* lookalike headers into session or DOM authority.
+  // envelope. A text/html response cannot promote Kovo-* lookalike headers into session or DOM
+  // authority.
   if (!isMutationFragmentContentType(response, security)) {
-    if (redirectLocation) {
-      followSuccessfulMutationRedirect(redirectLocation, security);
-      return {
-        body: '',
-        changes: [],
-        idem,
-        response,
-        targets: responseTargets,
-      };
-    }
     throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
   }
   const sessionTransition = readSessionTransition(response, security);
@@ -239,13 +266,23 @@ export async function fetchEnhancedMutation(
       targets: responseTargets,
     };
   }
-  if (redirectLocation) {
-    followSuccessfulMutationRedirect(redirectLocation, security);
+  // SPEC §14: an exact same-build, framework-marked 409 is the explicit rolling-deploy recovery
+  // outcome. The fragment envelope was admitted above before this response-only marker is trusted.
+  const markedBuildSkew =
+    status === 409 &&
+    buildToken === options.expectedBuildToken &&
+    security.isTrimmedAsciiEqual(security.readHeader(response, 'Kovo-Build-Skew'), 'true');
+  if (markedBuildSkew) {
+    securityWeakSetAdd(mutationBuildSkewResponses, response);
+    onSessionTransition?.();
+    onBuildSkew();
     return {
       body: '',
+      buildToken,
       changes: [],
       idem,
       response,
+      sessionTransition: true,
       targets: responseTargets,
     };
   }
@@ -254,8 +291,6 @@ export async function fetchEnhancedMutation(
     { headers: { get: (name) => (name === 'Kovo-Changes' ? (changesHeader ?? null) : null) } },
     onError,
   );
-  // SPEC §9.1.1: read build token from response header for delta validation.
-  const buildToken = security.readHeader(response, 'Kovo-Build') ?? undefined;
   const responseBody = security.readResponseField(response, 'body') as
     | ReadableStream<Uint8Array>
     | null
@@ -265,13 +300,21 @@ export async function fetchEnhancedMutation(
   // parser; failure bodies retain the ordinary fragment vocabulary and must be buffered/applied.
   const usesStreamBody = streaming && responseBody && !failed;
   const body = usesStreamBody ? '' : await security.readResponseText(response);
+  if (!usesStreamBody) {
+    const responseOk = security.readResponseField(response, 'ok');
+    onResponseSnapshot?.({
+      body,
+      ok: typeof responseOk === 'boolean' ? responseOk : undefined,
+      status,
+    });
+  }
   if (!usesStreamBody && isSuccessfulEmptyAuthFragmentResponse(response, changes, body, security)) {
     const navigationTarget = resolveAuthMutationNavigationTarget(form, formData, security);
     // C176 / SPEC §9.3: this accepted fallback is itself an auth/session transition even when a
     // custom endpoint omitted the explicit transition header. Cut the old principal's broadcast
     // authority synchronously before the navigation sink, which may be delayed or cancelled.
     onSessionTransition?.();
-    followSuccessfulMutationRedirect(navigationTarget, security);
+    security.navigateSameOrigin(navigationTarget);
     return {
       body: '',
       buildToken,
@@ -295,6 +338,7 @@ export async function fetchEnhancedMutation(
 
 /** @internal Build and mint the exact request plan before delegated submit suppression. */
 export function prepareEnhancedMutationRequest(options: {
+  buildToken: string;
   form: EnhancedFormLike;
   idem: string;
   root: TargetCollectorRoot;
@@ -306,7 +350,10 @@ export function prepareEnhancedMutationRequest(options: {
   if (transport === undefined) return undefined;
   const snapshot = readLiveTargetSnapshot(options.root);
   const formTarget = readSubmittedFormTarget(options.form);
+  const build = options.buildToken;
+  if (!build) return undefined;
   const plan = planFrameworkTargetRequestHeaders({
+    build,
     currentUrl: transport.sourceUrl,
     idem: options.idem,
     liveTargets: snapshot.liveTargetEntries,
@@ -415,24 +462,26 @@ function snapshotEnhancedMutationTransport(
   return { action: action.pathname, method: 'POST', origin, sourceUrl };
 }
 
-function assertSameOriginMutationResponse(
+function assertExactMutationResponse(
   response: EnhancedMutationResponseLike,
   transport: EnhancedMutationTransport,
   security: BrowserNavigationSecurityControls,
 ): void {
   const finalUrl = security.readResponseField(response, 'url');
   const parsed =
-    typeof finalUrl === 'string' && finalUrl !== ''
-      ? security.parseUrl(finalUrl, transport.sourceUrl)
-      : undefined;
+    typeof finalUrl === 'string' && finalUrl !== '' ? security.parseUrl(finalUrl) : undefined;
+  const expected = security.parseUrl(transport.origin + transport.action);
   if (
+    security.readResponseField(response, 'redirected') !== false ||
     !parsed ||
+    !expected ||
     parsed.origin === 'null' ||
     (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-    parsed.origin !== transport.origin
+    parsed.origin !== transport.origin ||
+    parsed.href !== expected.href
   ) {
     throw new TypeError(
-      'Kovo refused an enhanced mutation response without same-origin URL proof.',
+      'Kovo refused an enhanced mutation response without exact request URL proof.',
     );
   }
 }
@@ -473,28 +522,6 @@ function followReauthDirective(
   // SPEC §6.5: the server's 401 Kovo-Reauth directive is the enhanced
   // mutation equivalent of the no-JS 303 login redirect.
   security.navigateSameOrigin(sanitizeReauthDirective(location));
-}
-
-function followSuccessfulMutationRedirect(
-  location: string,
-  security: BrowserNavigationSecurityControls,
-): void {
-  // SPEC §6.3/§9.1: a successful enhanced mutation may complete with a PRG
-  // redirect instead of a fragment body, such as auth sign-in/sign-out.
-  security.navigateSameOrigin(location);
-}
-
-function readSuccessfulRedirectLocation(
-  response: EnhancedMutationResponseLike,
-  security: BrowserNavigationSecurityControls,
-): string | undefined {
-  const status = responseStatus(response, security, 0);
-  const headerLocation = security.readHeader(response, 'Location');
-  if (status >= 300 && status < 400 && headerLocation) return headerLocation;
-  const redirected = security.readResponseField(response, 'redirected');
-  const url = security.readResponseField(response, 'url');
-  if (redirected === true && typeof url === 'string' && url) return url;
-  return undefined;
 }
 
 function responseStatus(
@@ -581,6 +608,15 @@ export function isFailedMutationResponse(response: EnhancedMutationResponseLike)
   const ok = ownResponseData(response, 'ok');
   const status = ownResponseData(response, 'status');
   return ok === false || (typeof status === 'number' && status >= 400);
+}
+
+/** @internal Exact module-witnessed build-skew response outcome (SPEC §14). */
+export function isBuildSkewMutationResponse(response: EnhancedMutationResponseLike): boolean {
+  return (
+    response !== null &&
+    typeof response === 'object' &&
+    securityWeakSetHas(mutationBuildSkewResponses, response)
+  );
 }
 
 function isFailedBoundMutationResponse(

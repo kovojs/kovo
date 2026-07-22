@@ -213,7 +213,7 @@ describe('enhanced mutation response apply orchestration', () => {
     expect(onDeltaMiss).not.toHaveBeenCalled();
   });
 
-  it('routes a delta to onDeltaMiss and leaves the base untouched on build-token skew', () => {
+  it('does not parse or refetch a delta from a foreign build', () => {
     const store = createQueryStore();
     store.set('cart', { count: 2, items: [{ id: 'p1', qty: 1 }] });
     const onDeltaMiss = vi.fn();
@@ -223,8 +223,7 @@ describe('enhanced mutation response apply orchestration', () => {
       fetchedMutation(DELTA_BODY, { buildToken: 'build_B' }),
     );
 
-    // Stale base across a deploy: never patched silently — refetch is delegated.
-    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+    expect(onDeltaMiss).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 2, items: [{ id: 'p1', qty: 1 }] });
   });
 

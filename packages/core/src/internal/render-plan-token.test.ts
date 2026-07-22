@@ -4,10 +4,23 @@ import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 
 import { computeRenderPlanFingerprint, encodeRenderPlanFrame } from './render-plan-token.js';
+import { renderPlanSha256Hex } from './render-plan-token-intrinsics.js';
+import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from './wire-input-grammar.js';
 
 const renderPlanIntrinsicsUrl = new URL('./render-plan-token-intrinsics.ts', import.meta.url).href;
 
 describe('render-plan fingerprint security controls', () => {
+  it('mechanically binds the wire-input grammar schema into every fingerprint', () => {
+    expect(computeRenderPlanFingerprint({})).toBe(
+      renderPlanSha256Hex([
+        encodeRenderPlanFrame('grammar', 'kovo-render-plan/2'),
+        encodeRenderPlanFrame('wire-input-grammar', FRAMEWORK_WIRE_INPUT_GRAMMAR.schema),
+        encodeRenderPlanFrame('queries', ''),
+      ]),
+    );
+    expect(FRAMEWORK_WIRE_INPUT_GRAMMAR.schema).toBe('kovo.wire-input-grammar/v4');
+  });
+
   it('keeps exact framing and fingerprints after late collection, string, Buffer, and hash poisoning', () => {
     const expectedFrame = encodeRenderPlanFrame('名', '🙂');
     const expected = computeRenderPlanFingerprint({ a: 'field:id', z: 'field:role' });

@@ -34,6 +34,8 @@ import { readWireElementAttribute, type WireAttribute } from './wire-tokenizer.j
 export interface QueryChunk {
   /** When true, `value` is a QueryDelta envelope (SPEC §9.1.1), not a full value. */
   delta?: boolean;
+  /** Canonical framework-emitted typed-read href retained outside mutable DOM. */
+  href?: string;
   key?: string;
   name: string;
   /**
@@ -164,6 +166,7 @@ export function readQueryElementChunk(
       content: chunk.content,
       decodeHtmlEntities: true,
       delta: readWireElementAttribute(chunk, 'delta').present,
+      href: readAttribute(chunk.attrs, 'href'),
       key: readAttribute(chunk.attrs, 'key'),
       name: readAttribute(chunk.attrs, 'name'),
       settles: readAttribute(chunk.attrs, 'settles'),
@@ -200,6 +203,7 @@ export function readQueryScriptChunk(
     {
       content: readRuntimeNodeTextContent(script) ?? 'null',
       decodeHtmlEntities: false,
+      href: readRuntimeElementAttribute(script, 'data-kovo-query-href'),
       key: readRuntimeElementAttribute(script, 'key'),
       name,
       settles: readRuntimeElementAttribute(script, 'settles'),
@@ -248,6 +252,7 @@ interface QueryChunkPayload {
   content: string;
   decodeHtmlEntities: boolean;
   delta?: boolean;
+  href?: string | null;
   key?: string | null;
   name: string | null;
   settles?: string | null;
@@ -278,6 +283,7 @@ function readQueryChunkPayload(
   const settles = parseSettlementSet(payload.settles);
   return {
     ...(payload.delta ? { delta: true } : {}),
+    ...(payload.href === null || payload.href === undefined ? {} : { href: payload.href }),
     ...(identity.key === undefined ? {} : { key: identity.key }),
     name: identity.name,
     ...(settles.length > 0 ? { settles } : {}),

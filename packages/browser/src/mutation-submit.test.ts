@@ -6,7 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
 import { installMutationBroadcast } from './broadcast.js';
-import { submitEnhancedMutation } from './mutation-submit.js';
+import { familyPendingQuerySelector } from './pending.js';
+import {
+  submitEnhancedMutation as submitEnhancedMutationWithBuild,
+  type EnhancedMutationSubmitOptions,
+} from './mutation-submit.js';
 import {
   FakeBroadcastChannel,
   FakeMorphRoot,
@@ -18,6 +22,14 @@ import {
 } from './runtime-test-fakes.js';
 
 const TEST_BUILD = 'build-test';
+
+function submitEnhancedMutation(
+  options: Omit<EnhancedMutationSubmitOptions, 'expectedBuildToken'> & {
+    expectedBuildToken?: string;
+  },
+) {
+  return submitEnhancedMutationWithBuild({ expectedBuildToken: TEST_BUILD, ...options });
+}
 
 type FragmentSnapshot = {
   html: string;
@@ -50,6 +62,7 @@ function mutationSubmitSnapshot<
 function mutationResponse<
   Response extends {
     headers?: { get(name: string): string | null };
+    redirected?: boolean;
     url?: string;
   },
 >(path: string, response: Response, origin = 'http://localhost'): Response & { url: string } {
@@ -61,9 +74,12 @@ function mutationResponse<
         if (name.toLowerCase() === 'content-type') {
           return 'text/vnd.kovo.fragment+html; charset=utf-8';
         }
-        return headers?.get(name) ?? null;
+        const value = headers?.get(name) ?? null;
+        if (value !== null) return value;
+        return name.toLowerCase() === 'kovo-build' ? TEST_BUILD : null;
       },
     },
+    redirected: response.redirected ?? false,
     url: response.url ?? `${origin}${path}`,
   };
 }
@@ -229,8 +245,8 @@ describe('enhanced mutation submit', () => {
       title: 'sign-out-like followed redirect to /login',
     },
   ])(
-    'navigates after a successful enhanced auth redirect: $title',
-    async ({ expected, response }) => {
+    'rejects an enhanced auth redirect response without promoting it to navigation: $title',
+    async ({ response }) => {
       const store = createQueryStore();
       const channel = new FakeBroadcastChannel();
       const broadcast = installMutationBroadcast({ channel, store });
@@ -254,22 +270,16 @@ describe('enhanced mutation submit', () => {
       );
 
       try {
-        const result = await submitEnhancedMutation({
-          broadcast,
-          fetch,
-          form: { action: '/_m/auth/sign-in', method: 'post' },
-          formData: new FormData(),
-          root,
-          store,
-        });
-        expect(result).toEqual({
-          appliedFragments: [],
-          changes: [],
-          fragments: [],
-          idem: expect.any(String),
-          queries: [],
-          targets: [],
-        });
+        await expect(
+          submitEnhancedMutation({
+            broadcast,
+            fetch,
+            form: { action: '/_m/auth/sign-in', method: 'post' },
+            formData: new FormData(),
+            root,
+            store,
+          }),
+        ).rejects.toThrow(/redirect|exact request URL proof/u);
       } finally {
         Object.defineProperty(globalThis, 'location', {
           configurable: true,
@@ -277,7 +287,7 @@ describe('enhanced mutation submit', () => {
         });
       }
 
-      expect(assign).toHaveBeenCalledWith(expected);
+      expect(assign).not.toHaveBeenCalled();
       expect(text).not.toHaveBeenCalled();
       expect(channel.closed).toBe(false);
       expect(channel.onmessage).not.toBeNull();
@@ -584,12 +594,11 @@ describe('enhanced mutation submit', () => {
       },
       {
         component: 'components/recommendations/recommendations',
-        deps: 'product%3Ap1',
+        deps: '!product!product%3Ap1',
         props: '{"productId":"p1"}',
         token: 'tok_recommendations',
         target: 'recommendations',
       },
-      { deps: 'cart', id: 'cart-badge', token: 'tok_cart' },
     ];
     root.targets.set('cart-badge', new FakeMorphTarget());
     root.targets.set('recommendations', new FakeMorphTarget());
@@ -655,15 +664,17 @@ describe('enhanced mutation submit', () => {
       body: formData,
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': TEST_BUILD,
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000003',
         'Kovo-Live-Targets':
           'cart-badge#components%2Fcart%2Fcart-badge%2Fcart-badge@tok_cart:{}; recommendations#components%2Frecommendations%2Frecommendations@tok_recommendations:{"productId":"p1"}',
-        'Kovo-Targets': 'cart-badge=cart; recommendations=product%3Ap1',
+        'Kovo-Targets': 'cart-badge=cart; recommendations=!product!product%3Ap1',
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
     expect(mutationSubmitSnapshot(result)).toEqual({
@@ -675,7 +686,7 @@ describe('enhanced mutation submit', () => {
       changes: [{ domain: 'cart' }],
       idem: 'v1_1750000000000_00000000000000000000000000000003',
       queries: [{ name: 'cart' }],
-      targets: ['cart-badge=cart', 'recommendations=product%3Ap1'],
+      targets: ['cart-badge=cart', 'recommendations=!product!product%3Ap1'],
     });
     expect(channel.messages).toEqual([
       {
@@ -756,6 +767,7 @@ describe('enhanced mutation submit', () => {
       mutationResponse('/_m/cart/add', {
         headers: {
           get(name: string) {
+            if (name === 'Kovo-Build') return TEST_BUILD;
             return name === 'Kovo-Changes' ? '[' : null;
           },
         },
@@ -769,6 +781,7 @@ describe('enhanced mutation submit', () => {
     );
 
     const result = await submitEnhancedMutation({
+      expectedBuildToken: TEST_BUILD,
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
@@ -806,7 +819,7 @@ describe('enhanced mutation submit', () => {
         form: { action: '/_m/cart/add', method: 'post' },
         formData: new FormData(),
         onError,
-        pendingQueries: ['cart'],
+        pendingQueries: [familyPendingQuerySelector('cart')],
         pendingRoot,
         root,
         store,
@@ -829,8 +842,8 @@ describe('enhanced mutation submit', () => {
     const fetch = vi.fn(async () =>
       mutationResponse('/_m/cart/add', {
         headers: {
-          get() {
-            return null;
+          get(name: string) {
+            return name === 'Kovo-Build' ? TEST_BUILD : null;
           },
         },
         ok: false,
@@ -842,6 +855,7 @@ describe('enhanced mutation submit', () => {
     );
 
     const result = await submitEnhancedMutation({
+      expectedBuildToken: TEST_BUILD,
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
@@ -953,6 +967,7 @@ describe('enhanced mutation submit', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html; stream=1',
+        'Kovo-Build': TEST_BUILD,
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000004',
@@ -960,6 +975,7 @@ describe('enhanced mutation submit', () => {
       },
       keepalive: false,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
     expect(text).not.toHaveBeenCalled();

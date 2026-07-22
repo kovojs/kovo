@@ -62,7 +62,13 @@ describe('server wire html emitters', () => {
     ],
     [
       'query key lone surrogate',
-      () => renderQueryScript({ key: 'record\ud8001', name: 'record', value: null }),
+      () =>
+        renderQueryScript({
+          href: '/_q/record',
+          key: 'record\ud8001',
+          name: 'record',
+          value: null,
+        }),
       /script\[kovo-query\]\[key\].*\(unpaired-surrogate\)/u,
     ],
     [
@@ -102,6 +108,7 @@ describe('server wire html emitters', () => {
   it('renders initial query scripts for document-load hydration', () => {
     expect(
       renderQueryScript({
+        href: '/_q/cart?id=c1',
         key: 'cart:c1',
         name: 'cart',
         value: {
@@ -110,7 +117,7 @@ describe('server wire html emitters', () => {
         },
       }),
     ).toBe(
-      '<script type="application/json" kovo-query="cart" key="cart:c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
+      '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-query-href="/_q/cart?id=c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
     );
   });
 
@@ -219,8 +226,10 @@ describe('wire codec — unserializable value normalization (bugs-part4 L3/L4/L5
   });
 
   it('renderQueryScript also normalizes bigint at the script encode seam', () => {
-    expect(() => renderQueryScript({ name: 'cart', value: { n: 5n } })).not.toThrow();
-    expect(renderQueryScript({ name: 'cart', value: { n: 5n } })).toContain(
+    expect(() =>
+      renderQueryScript({ href: '/_q/cart', name: 'cart', value: { n: 5n } }),
+    ).not.toThrow();
+    expect(renderQueryScript({ href: '/_q/cart', name: 'cart', value: { n: 5n } })).toContain(
       '{"n":{"$kovo":"bigint","value":"5"}}',
     );
   });

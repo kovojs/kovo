@@ -4,6 +4,7 @@ import { component } from '@kovojs/core';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
@@ -72,7 +73,7 @@ function attestedLiveTargetHeader(
       ...(sourceUrl === undefined ? {} : { sourceUrl }),
     },
   );
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+  return `${encodeFrameworkIdentityToken(target)!}#${encodeFrameworkIdentityToken(component)!}@${token}:${JSON.stringify(props)}`;
 }
 
 const rawTextResponse = {
@@ -2281,21 +2282,27 @@ describe('server createApp request shell', () => {
         avatar: s.file().maxBytes(8),
       }),
     });
-    const handler = createRequestHandler(
-      createApp({
-        mutations: [upload],
-        requestLimits: {
-          maxBodyBytes: 1,
-          mutations: {},
-          queries: {},
-        },
-      }),
-    );
-    const request = (body: string) => {
+    const app = createApp({
+      mutations: [upload],
+      requestLimits: {
+        maxBodyBytes: 1,
+        mutations: {},
+        queries: {},
+      },
+    });
+    const handler = createRequestHandler(app);
+    const request = (body: string, enhanced = false) => {
       const form = new FormData();
       form.set('avatar', new File([body], 'avatar.txt', { type: 'text/plain' }));
       return new Request('https://example.test/_m/upload/avatar', {
         body: form,
+        headers: enhanced
+          ? {
+              'Kovo-Build': app.clientModules.buildToken(),
+              'Kovo-Form-Target': 'upload-form',
+              'Kovo-Fragment': 'true',
+            }
+          : undefined,
         method: 'POST',
       });
     };
@@ -2309,6 +2316,78 @@ describe('server createApp request shell', () => {
     expect(rejected.status).toBe(422);
     await expect(rejected.text()).resolves.toContain('Expected file &lt;= 8 bytes');
     expect(mutationHandler).toHaveBeenCalledTimes(1);
+
+    const enhancedAccepted = await handler(request('12345', true));
+    expect(enhancedAccepted.status).toBe(200);
+    expect(mutationHandler).toHaveBeenCalledTimes(2);
+
+    const enhancedRejected = await handler(request('123456789', true));
+    expect(enhancedRejected.status).toBe(422);
+    await expect(enhancedRejected.text()).resolves.toContain('Expected file &lt;= 8 bytes');
+    expect(mutationHandler).toHaveBeenCalledTimes(2);
+  });
+
+  it('reapplies the selected mutation body cap after broad enhanced pre-key admission', async () => {
+    const plainHandler = vi.fn(() => ({ ok: true }));
+    const app = createApp({
+      mutations: [
+        mutation('upload/large', {
+          csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
+          handler: vi.fn(() => ({ ok: true })),
+          input: s.object({ avatar: s.file().maxBytes(8) }),
+        }),
+        mutation('plain/small', {
+          csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
+          handler: plainHandler,
+          input: s.object({}),
+        }),
+      ],
+      requestLimits: { maxBodyBytes: 1, mutations: {}, queries: {} },
+    });
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/_m/plain/small', {
+        body: '12345',
+        headers: {
+          'Content-Type': 'text/plain',
+          'Kovo-Build': app.clientModules.buildToken(),
+          'Kovo-Form-Target': 'plain-form',
+        },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(plainHandler).not.toHaveBeenCalled();
+  });
+
+  it('does not widen enhanced query admission to the app upload ceiling', async () => {
+    const load = vi.fn(() => ({ ok: true }));
+    const app = createApp({
+      mutations: [
+        mutation('upload/huge', {
+          csrf: false,
+          csrfJustification: 'test fixture uses a non-browser caller',
+          handler: vi.fn(() => ({})),
+          input: s.object({ file: s.file().maxBytes(8 * 1024 * 1024) }),
+        }),
+      ],
+      queries: [query('catalog', { load, reads: [] })],
+      requestLimits: { maxBodyBytes: 4, mutations: {}, queries: {} },
+    });
+    const response = await createRequestHandler(app)(
+      new Request('https://example.test/_q/catalog', {
+        headers: {
+          'Content-Length': '5',
+          'Kovo-Build': 'stale-build',
+          'Kovo-Fragment': 'true',
+        },
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(load).not.toHaveBeenCalled();
   });
 
   it('keeps the file-aware mutation body cap finite after Math.max poisoning', async () => {
@@ -3326,7 +3405,7 @@ describe('server createApp request shell', () => {
     const queryResponse = await handler(new Request('https://example.test/_q/cart'));
     expect(queryResponse.status).toBe(200);
     await expect(queryResponse.text()).resolves.toContain(
-      '<kovo-query name="cart">{"count":1}</kovo-query>',
+      '<kovo-query name="cart" href="/_q/cart">{"count":1}</kovo-query>',
     );
 
     const form = new FormData();
@@ -3352,9 +3431,10 @@ describe('server createApp request shell', () => {
         body: form,
         headers: {
           'Kovo-Current-Url': 'https://example.test/cart',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Fragment': 'true',
           'Kovo-Idem': idem,
-          'Kovo-Live-Targets': `cart#components/cart/badge@${cartAttestation}:{}`,
+          'Kovo-Live-Targets': `cart#components%2Fcart%2Fbadge@${cartAttestation}:{}`,
           'Kovo-Targets': 'cart=cart',
           origin: 'https://example.test',
         },
@@ -3430,9 +3510,11 @@ describe('server createApp request shell', () => {
     const layoutTarget = /kovo-fragment-target="([^"]+)"/.exec(layoutOpening)?.[1];
     const layoutComponent = /kovo-live-component="([^"]+)"/.exec(layoutOpening)?.[1];
     const layoutToken = /kovo-live-token="([^"]+)"/.exec(layoutOpening)?.[1];
+    const routeBuild = routeResponse.headers.get('Kovo-Build');
     expect(layoutTarget).toMatch(/^kovo-layout-/);
     expect(layoutComponent).toBe(`kovo-layout-plan/${layoutTarget}`);
     expect(layoutToken).toBeTruthy();
+    expect(routeBuild).toBeTruthy();
     expect(routeHtml).toContain('kovo-deps="cart"');
 
     const forgedMutationResponse = await handler(
@@ -3440,8 +3522,9 @@ describe('server createApp request shell', () => {
         body: new FormData(),
         headers: {
           'Kovo-Current-Url': 'https://example.test/cart',
+          'Kovo-Build': routeBuild!,
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${layoutTarget}#${layoutComponent}@forged:{}`,
+          'Kovo-Live-Targets': `${encodeFrameworkIdentityToken(layoutTarget)!}#${encodeFrameworkIdentityToken(layoutComponent)!}@forged:{}`,
           'Kovo-Targets': `${layoutTarget}=cart`,
         },
         method: 'POST',
@@ -3455,8 +3538,9 @@ describe('server createApp request shell', () => {
         body: new FormData(),
         headers: {
           'Kovo-Current-Url': 'https://example.test/cart',
+          'Kovo-Build': routeBuild!,
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${layoutTarget}#${layoutComponent}@${layoutToken}:{}`,
+          'Kovo-Live-Targets': `${encodeFrameworkIdentityToken(layoutTarget)!}#${encodeFrameworkIdentityToken(layoutComponent)!}@${layoutToken}:{}`,
           'Kovo-Targets': `${layoutTarget}=cart`,
         },
         method: 'POST',
@@ -3495,7 +3579,7 @@ describe('server createApp request shell', () => {
     const queryResponse = await handler(new Request('https://example.test/_q/cart?id=c1'));
     expect(queryResponse.status).toBe(200);
     await expect(queryResponse.text()).resolves.toContain(
-      '<kovo-query name="cart">{"id":"c1","total":42}</kovo-query>',
+      '<kovo-query name="cart" href="/_q/cart?id=c1">{"id":"c1","total":42}</kovo-query>',
     );
 
     const moduleResponse = await handler(new Request(`https://example.test${href}`));
@@ -3553,6 +3637,7 @@ describe('server createApp request shell', () => {
         headers: {
           Cookie: 'sid=victim',
           'Kovo-Current-Url': 'https://example.test/',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart', 'components/cart/badge', appLiveTargetAttestationAudience(app), {}, undefined, 'https://example.test/')}`,
           'Kovo-Targets': 'cart=cart',
@@ -3584,6 +3669,162 @@ describe('server createApp request shell', () => {
     expect(clientIpCookies.length).toBeGreaterThan(0);
     expect(clientIpCookies.every((cookie) => cookie === null)).toBe(true);
   });
+
+  it.each([undefined, 'stale-build'])(
+    'rejects a target-bearing mutation with document build %s before wire decoding',
+    async (requestBuild) => {
+      const mutationHandler = vi.fn(() => ({}));
+      const app = createApp({
+        mutations: [
+          mutation('build/guard', {
+            csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
+            handler: mutationHandler,
+            input: s.object({}),
+          }),
+        ],
+      });
+      const handler = createRequestHandler(app);
+      const response = await handler(
+        new Request('https://example.test/_m/build/guard', {
+          body: new FormData(),
+          headers: {
+            'Kovo-Current-Url': 'https://example.test/',
+            'Kovo-Fragment': 'true',
+            'Kovo-Targets': 'panel=public',
+            ...(requestBuild === undefined ? {} : { 'Kovo-Build': requestBuild }),
+          },
+          method: 'POST',
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get('Kovo-Build')).toBe(app.clientModules.buildToken());
+      await expect(response.text()).resolves.toBe('');
+      expect(mutationHandler).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['Kovo-Build', 'stale-build'],
+    ['Kovo-Current-Url', 'https://example.test/source'],
+    ['Kovo-Fragment', 'true'],
+    ['Kovo-Targets', 'panel=public'],
+    ['Kovo-Live-Targets', 'panel#component@token:{}'],
+    ['Kovo-Form-Target', 'panel'],
+    ['Kovo-Idem', 'v1_1750000000000_00000000000000000000000000000000'],
+    ['Kovo-Stream', 'true'],
+  ] as const)(
+    'classifies a mutation retaining only %s as enhanced and build-bound',
+    async (name, value) => {
+      const mutationHandler = vi.fn(() => ({}));
+      const app = createApp({
+        mutations: [
+          mutation('build/single-carrier', {
+            csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
+            handler: mutationHandler,
+            input: s.object({}),
+          }),
+        ],
+      });
+      const response = await createRequestHandler(app)(
+        new Request('https://example.test/_m/build/single-carrier', {
+          body: new FormData(),
+          headers: { [name]: value },
+          method: 'POST',
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get('Kovo-Build')).toBe(app.clientModules.buildToken());
+      expect(mutationHandler).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, 'stale-build'])(
+    'rejects a form-only enhanced mutation with document build %s before handler work',
+    async (requestBuild) => {
+      const mutationHandler = vi.fn(() => ({}));
+      const app = createApp({
+        mutations: [
+          mutation('build/form-guard', {
+            csrf: false,
+            csrfJustification: 'test fixture uses a non-browser caller',
+            handler: mutationHandler,
+            input: s.object({}),
+          }),
+        ],
+      });
+      const handler = createRequestHandler(app);
+      const response = await handler(
+        new Request('https://example.test/_m/build/form-guard', {
+          body: new FormData(),
+          headers: {
+            'Kovo-Form-Target': 'form-panel',
+            ...(requestBuild === undefined ? {} : { 'Kovo-Build': requestBuild }),
+          },
+          method: 'POST',
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get('Kovo-Build')).toBe(app.clientModules.buildToken());
+      await expect(response.text()).resolves.toBe('');
+      expect(mutationHandler).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { build: undefined, path: '/_q/%E0%A4%A' },
+    { build: 'stale-build', path: '/_q/build/read' },
+  ])(
+    'rejects an enhanced query with document build $build before key decoding or load',
+    async ({ build, path }) => {
+      const load = vi.fn(() => ({ ok: true }));
+      const app = createApp({ queries: [query('build/read', { load, reads: [] })] });
+      const handler = createRequestHandler(app);
+      const response = await handler(
+        new Request(`https://example.test${path}`, {
+          headers: {
+            'Kovo-Fragment': 'true',
+            ...(build === undefined ? {} : { 'Kovo-Build': build }),
+          },
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get('Kovo-Build')).toBe(app.clientModules.buildToken());
+      await expect(response.text()).resolves.toBe('');
+      expect(load).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['Kovo-Build', 'stale-build'],
+    ['Kovo-Current-Url', 'https://example.test/source'],
+    ['Kovo-Fragment', 'true'],
+    ['Kovo-Targets', 'panel=public'],
+    ['Kovo-Live-Targets', 'panel#component@token:{}'],
+    ['Kovo-Form-Target', 'panel'],
+    ['Kovo-Idem', 'v1_1750000000000_00000000000000000000000000000000'],
+    ['Kovo-Stream', 'true'],
+  ] as const)(
+    'classifies a query retaining only %s as enhanced and build-bound',
+    async (name, value) => {
+      const load = vi.fn(() => ({ ok: true }));
+      const app = createApp({ queries: [query('build/single-carrier', { load, reads: [] })] });
+      const response = await createRequestHandler(app)(
+        new Request('https://example.test/_q/build/single-carrier', {
+          headers: { [name]: value },
+        }),
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.headers.get('Kovo-Build')).toBe(app.clientModules.buildToken());
+      expect(load).not.toHaveBeenCalled();
+    },
+  );
 
   it('dispatches enhanced mutation fragments through app live target renderers', async () => {
     const cart = domain('cart');
@@ -3628,6 +3869,7 @@ describe('server createApp request shell', () => {
         body: form,
         headers: {
           'Kovo-Current-Url': 'https://example.test/',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-panel', 'components/cart/panel', appLiveTargetAttestationAudience(app), { cartId: 'c1' }, undefined, 'https://example.test/')}`,
           'Kovo-Targets': 'cart-panel=cart',
@@ -3724,7 +3966,7 @@ describe('server createApp request shell', () => {
     const queryResponse = await handler(new Request('https://example.test/_q/runtimeRegistryCart'));
     expect(queryResponse.status).toBe(200);
     await expect(queryResponse.text()).resolves.toContain(
-      '<kovo-query name="runtimeRegistryCart">{"count":1}</kovo-query>',
+      '<kovo-query name="runtimeRegistryCart" href="/_q/runtimeRegistryCart">{"count":1}</kovo-query>',
     );
 
     const enhanced = await handler(
@@ -3732,6 +3974,7 @@ describe('server createApp request shell', () => {
         body: new FormData(),
         headers: {
           'Kovo-Current-Url': 'https://example.test/cart',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': attestedLiveTargetHeader(
             'cart-panel',

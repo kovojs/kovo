@@ -71,8 +71,7 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
     expect(result.queries).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 1 }); // unchanged
     expect(store.get('inventory')).toBeUndefined();
-    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
-    expect(onDeltaMiss).toHaveBeenCalledWith('inventory', undefined);
+    expect(onDeltaMiss).not.toHaveBeenCalled();
   });
 
   it('treats a missing response token as a whole-response miss when the page is stamped', () => {
@@ -94,7 +93,7 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
 
     expect(result.queries).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 1 });
-    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+    expect(onDeltaMiss).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -134,7 +133,35 @@ describe('apply-mutation-response delta / build-token (SPEC §9.1.1)', () => {
     });
 
     expect(result).toEqual({ fragments: [], queries: [] });
-    expect(order).toEqual(['recover', 'parse-error']);
+    expect(order).toEqual(['recover']);
+  });
+
+  it('latches an inert recovery before its callback and rejects later same-build bytes', () => {
+    const store = createQueryStore();
+    const onBuildSkew = vi.fn();
+    const onError = vi.fn();
+
+    applyMutationResponseBodyToRuntime({
+      body: '<kovo-query name="private">not-json</kovo-query>',
+      expectedBuildToken: 'build-1',
+      onBuildSkew,
+      onError,
+      responseBuildToken: 'build-2',
+      store,
+    });
+    const later = applyMutationResponseBodyToRuntime({
+      body: '<kovo-query name="private">{"secret":true}</kovo-query>',
+      expectedBuildToken: 'build-1',
+      onBuildSkew,
+      onError,
+      responseBuildToken: 'build-1',
+      store,
+    });
+
+    expect(later).toEqual({ fragments: [], queries: [] });
+    expect(onBuildSkew).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(store.get('private')).toBeUndefined();
   });
 
   it('cancels and hard-recovers a streaming whole-response build mismatch', async () => {

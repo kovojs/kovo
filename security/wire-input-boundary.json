@@ -94,21 +94,21 @@
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
       "file": "packages/browser/src/query-refetch.ts",
-      "id": "packages/browser/src/query-refetch.ts#refetchQueries.call",
-      "inputName": "content-disposition",
-      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
-      "reason": "Typed query refetch materializes response bytes only when the registered disposition grammar is absent or an unambiguous inline value.",
-      "registryId": "response-header.content-disposition"
-    },
-    {
-      "allowedCarriers": ["response-header"],
-      "api": "browserReadHeader",
-      "file": "packages/browser/src/query-refetch.ts",
       "id": "packages/browser/src/query-refetch.ts#responseBuildToken",
       "inputName": "kovo-build",
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
       "reason": "Query refetch compares the registered deployment build token.",
       "registryId": "response-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/query-refetch.ts",
+      "id": "packages/browser/src/query-refetch.ts#refetchQueries.call",
+      "inputName": "content-disposition",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Typed query refetch materializes response bytes only when the registered disposition grammar is absent or an unambiguous inline value.",
+      "registryId": "response-header.content-disposition"
     },
     {
       "allowedCarriers": ["stdio-line"],
@@ -119,6 +119,86 @@
       "symbol": "packages/core/src/internal/mcp-stdio.ts#parseFiniteMcpJsonLine",
       "reason": "The finite MCP transport parses only one bounded UTF-8 NDJSON request line before its closed JSON-RPC envelope and lifecycle validation.",
       "registryId": "stdio-line.json-rpc"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced",
+      "inputName": "kovo-fragment",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Query dispatch recognizes the registered enhanced-fragment carrier before selecting a build-bound decoder.",
+      "registryId": "request-header.kovo-fragment"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced~2",
+      "inputName": "kovo-fragment",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation dispatch recognizes the registered enhanced-fragment carrier before selecting a build-bound decoder.",
+      "registryId": "request-header.kovo-fragment"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced~3",
+      "inputName": "kovo-targets",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation dispatch detects the registered target-list carrier before decoder or handler work so build skew fails closed.",
+      "registryId": "request-header.kovo-targets"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced~4",
+      "inputName": "kovo-live-targets",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation dispatch detects the registered live-target carrier before decoder or handler work so build skew fails closed.",
+      "registryId": "request-header.kovo-live-targets"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced~5",
+      "inputName": "kovo-form-target",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation dispatch recognizes the registered submitted-form target as build-bound enhanced traffic before handler work.",
+      "registryId": "request-header.kovo-form-target"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced~6",
+      "inputName": "kovo-idem",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation dispatch recognizes the registered enhanced idempotency carrier before selecting a build-bound decoder.",
+      "registryId": "request-header.kovo-idem"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhanced~7",
+      "inputName": "kovo-stream",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Mutation dispatch recognizes the registered streaming marker before selecting a build-bound decoder.",
+      "registryId": "request-header.kovo-stream"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#enhancedRequestBuildSkewResponse.call",
+      "inputName": "kovo-build",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Enhanced dispatch compares the registered document build identity before query-key decoding, wire parsing, or handler execution.",
+      "registryId": "request-header.kovo-build"
     },
     {
       "allowedCarriers": ["request-header"],
@@ -564,7 +644,7 @@
       "allowedCarriers": ["header", "request-header", "response-header"],
       "api": "serverReadHeader",
       "file": "packages/server/src/vite-dev.ts",
-      "id": "packages/server/src/vite-dev.ts#source",
+      "id": "packages/server/src/vite-dev.ts#firstMutationDiagnosticTarget.return",
       "inputName": "kovo-targets",
       "symbol": "packages/server/src/response.ts#readHeader",
       "reason": "Dev target parsing uses the shared finite target-list grammar.",
@@ -573,8 +653,8 @@
   ],
   "schema": "kovo-wire-input-boundary/v1",
   "summary": {
-    "classified": 57,
+    "classified": 65,
     "dynamicNames": 5,
-    "sites": 57
+    "sites": 65
   }
 }

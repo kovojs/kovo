@@ -4,6 +4,7 @@ import {
   renderPlanUtf8ByteLength,
 } from './render-plan-token-intrinsics.ts';
 import { securityOwnArrayEntry } from './security-witness-intrinsics.js';
+import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from './wire-input-grammar.js';
 
 /**
  * The render-plan grammar version folded into every render-plan fingerprint. A grammar-only
@@ -66,6 +67,10 @@ export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput):
   }
   return renderPlanSha256Hex([
     encodeRenderPlanFrame('grammar', RENDER_PLAN_GRAMMAR_VERSION),
+    // Target-bearing requests carry the resulting build token before any target decoder runs.
+    // Binding the shared schema makes a framing change select a different retained build instead
+    // of asking the current build to guess how stale bytes were encoded (SPEC §5.2.1 / §14).
+    encodeRenderPlanFrame('wire-input-grammar', FRAMEWORK_WIRE_INPUT_GRAMMAR.schema),
     encodeRenderPlanFrame('queries', entries),
   ]);
 }

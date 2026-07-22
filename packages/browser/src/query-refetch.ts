@@ -10,9 +10,12 @@ import {
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryIdentity, QueryStore } from './query-store.js';
 import { createQueryIdentity, queryStoreKey } from './query-store.js';
+import { queryRefetchHref } from './query-refetch-metadata.js';
 import { readQueryChunks } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
+import { readPageBuildToken } from './build-token.js';
+import { reloadSessionTransitionDocument } from './session-transition.js';
 import {
   freezeSecurityValue,
   securityArrayAppend,
@@ -25,6 +28,9 @@ import {
   securitySet,
   securitySetAdd,
   securitySetHas,
+  securityWeakMap,
+  securityWeakMapGet,
+  securityWeakMapSet,
 } from './security-witness-intrinsics.js';
 
 // SPEC §6.6/§9.4: typed-read refetch is a credential-bearing browser transport and a
@@ -46,10 +52,6 @@ function queryRefetchSecurityControls(): QueryRefetchSecurity {
   queryRefetchSecurityAtBoot = security;
   return security;
 }
-const queryRefetchEncodeURIComponent = encodeURIComponent;
-const queryRefetchEncodingSound =
-  queryRefetchEncodeURIComponent('kovo/query?key=value') === 'kovo%2Fquery%3Fkey%3Dvalue' &&
-  queryRefetchEncodeURIComponent('../_m/auth/sign-out') === '..%2F_m%2Fauth%2Fsign-out';
 
 /**
  * @internal A declared query whose refetch-on-focus opt-out drives the runtime exclusion set
@@ -110,6 +112,16 @@ export interface QueryRefetchOptions {
    * single full navigation reload of the current route (SPEC §14). No chunks are applied.
    */
   onBuildSkew?: () => void;
+  /**
+   * Invoked when an admitted, same-build typed read reports that the current principal may no
+   * longer read the query. The old private store/DOM must not remain authoritative after a 401 or
+   * 403, so the default performs a full-document recovery of the current route (SPEC §9.4).
+   */
+  onAuthDenied?: () => void;
+  /** Full-document recovery when the server did not issue canonical refetch authority. */
+  onDocumentRecovery?: () => void;
+  /** Explicit trusted document URL for browser-free adapters; browsers use their pinned location. */
+  sourceUrl?: string;
   /** Receives the exact frozen query identity; names and keys are never collapsed into one string. */
   urlForQuery?: (query: QueryIdentity) => string | undefined;
 }
@@ -122,6 +134,7 @@ export interface QueryRefetchFetch {
       cache: 'no-store';
       headers: Record<string, string>;
       method: 'GET';
+      redirect: 'error';
     },
   ): Promise<QueryRefetchResponse> | QueryRefetchResponse;
 }
@@ -130,8 +143,10 @@ export interface QueryRefetchFetch {
 export interface QueryRefetchResponse {
   headers?: { get(name: string): string | null };
   ok?: boolean;
+  redirected?: boolean;
   status?: number;
   text(): Promise<string> | string;
+  url?: string;
 }
 
 /** @internal Options for refetching named queries over the typed-read endpoint (SPEC §9.4). */
@@ -153,6 +168,16 @@ interface RefetchedQueryBody {
   queries: QueryChunk[];
 }
 
+interface QueryRecoveryState {
+  generation: number;
+  terminal: boolean;
+}
+
+// One private recovery generation per runtime store. Visible-return, delta-miss, and direct
+// refetch callers share the store; a denial observed by any one of them invalidates every
+// in-flight batch before body decode/apply, even when navigation is delayed or throws.
+const queryRecoveryStates = securityWeakMap<QueryStore, QueryRecoveryState>();
+
 /**
  * @internal Refetch named queries over the typed-read endpoint and apply the results to
  * the query store and bindings. A background "visible return" layer: individual
@@ -168,13 +193,31 @@ export async function refetchQueries(
   const queryRefetchSecurity = queryRefetchSecurityControls();
   const bodies: RefetchedQueryBody[] = [];
   const fetchControl = options.fetch;
-  const expectedBuildToken = options.expectedBuildToken;
-  const onBuildSkew = options.onBuildSkew;
+  const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
+  const onBuildSkew = options.onBuildSkew ?? reloadSessionTransitionDocument;
+  const onAuthDenied = options.onAuthDenied ?? reloadSessionTransitionDocument;
+  const onDocumentRecovery = options.onDocumentRecovery ?? reloadSessionTransitionDocument;
   const onError = options.onError;
   const urlForQuery = options.urlForQuery;
+  const sourceUrl = options.sourceUrl ?? queryRefetchSecurity.currentUrl()?.href;
+  const recoveryState = queryRecoveryState(options.queryStore);
+  if (recoveryState.terminal) return [];
+  const recoveryGeneration = recoveryState.generation;
+  if (!expectedBuildToken) {
+    if (latchQueryRecovery(options.queryStore, recoveryGeneration)) {
+      try {
+        onBuildSkew();
+      } catch (error) {
+        reportRuntimeError(onError, error);
+      }
+    }
+    return [];
+  }
   const queryNames = snapshotQueryIdentities(options.queries);
+  let terminalRecovery: 'auth-denied' | 'build-skew' | 'missing-href' | undefined;
 
-  for (let index = 0; index < queryNames.length; index += 1) {
+  for (let index = 0; terminalRecovery === undefined && index < queryNames.length; index += 1) {
+    if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
     const queryEntry = securityOwnArrayEntry(queryNames, index);
     if (!queryEntry.ok) continue;
     const query = queryEntry.value;
@@ -187,64 +230,112 @@ export async function refetchQueries(
     // via `urlForQuery`. The hook receives name/key as separate frozen facts, because an unkeyed
     // name containing `:` can have the same display string as a keyed query instance.
     const customUrl = urlForQuery?.(query);
-    const url = customUrl ?? defaultQueryRefetchUrl(query);
-    if (!url) continue;
+    const candidateUrl = customUrl ?? defaultQueryRefetchUrl(query);
+    if (!candidateUrl) {
+      terminalRecovery = 'missing-href';
+      break;
+    }
 
     try {
-      const response = await queryRefetchSecurity.fetchWithOptionalSyncResult(
+      const request = admittedQueryRequest(candidateUrl, sourceUrl, queryRefetchSecurity);
+      if (!request) throw new TypeError('Kovo refused an invalid typed-read request URL.');
+      const response = (await queryRefetchSecurity.fetchWithOptionalSyncResult(
         fetchControl,
         undefined,
-        url,
+        request.fetchUrl,
         {
           cache: 'no-store',
           headers: {
             Accept: 'text/html',
+            'Kovo-Build': expectedBuildToken,
             'Kovo-Fragment': 'true',
           },
           method: 'GET',
+          redirect: 'error',
         },
-      );
+      )) as QueryRefetchResponse;
+      if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
+
+      // SPEC §9.4/§14: response headers gain recovery authority only at the exact typed-read URL.
+      // A readable redirect must not forge a build-skew reload or become query truth.
+      if (!queryResponseUrlIsAdmitted(response, request.expectedUrl, queryRefetchSecurity)) {
+        throw new TypeError('Kovo refused a redirected or malformed typed-read response.');
+      }
 
       const ok = queryRefetchSecurity.readResponseField(response, 'ok');
       const status = queryRefetchSecurity.readResponseField(response, 'status');
-      if (ok === false || (typeof status === 'number' && status >= 400)) {
+      // SPEC §5.2.1/§14: after exact final-URL admission, a missing/foreign build is itself
+      // terminal recovery authority. Content-Type cannot downgrade it into a background error.
+      const responseBuildToken = queryRefetchSecurity.readHeader(response, 'Kovo-Build');
+      if (responseBuildToken === undefined || responseBuildToken !== expectedBuildToken) {
+        terminalRecovery = 'build-skew';
         continue;
       }
-
-      if (
-        !queryRefetchSecurity.isInlineContentDisposition(
-          queryRefetchSecurity.readHeader(response, 'Content-Disposition'),
-        )
-      ) {
+      const markedBuildSkew =
+        status === 409 &&
+        queryRefetchSecurity.isTrimmedAsciiEqual(
+          queryRefetchSecurity.readHeader(response, 'Kovo-Build-Skew'),
+          'true',
+        );
+      const expectedMediaType = markedBuildSkew ? 'text/vnd.kovo.fragment+html' : 'text/html';
+      if (!queryResponseEnvelopeHasMediaType(response, expectedMediaType, queryRefetchSecurity)) {
         throw new TypeError('Kovo refused an attachment or malformed typed-read response.');
       }
 
-      // SPEC §5.2.1 rule 2d / §14: a /_q/ refetch whose build token still differs from the
-      // document token means the document is fundamentally skewed — do NOT merge fresh-build data
-      // into the stale-build store; escalate to a full navigation reload (once) instead.
-      const responseBuildToken = queryRefetchSecurity.readHeader(response, 'Kovo-Build');
       if (
-        expectedBuildToken !== undefined &&
-        (responseBuildToken === undefined || responseBuildToken !== expectedBuildToken)
+        // A stripped request header can make the current app reject with its own (therefore equal)
+        // build token. Only the framework-reserved typed marker, exact 409 status, and admitted
+        // fragment envelope distinguish that response from an ordinary query conflict (SPEC §14).
+        responseBuildToken === expectedBuildToken &&
+        markedBuildSkew
       ) {
-        onBuildSkew?.();
-        return [];
+        terminalRecovery = 'build-skew';
+      } else if (status === 401 || status === 403) {
+        // SPEC §9.4: an admitted auth denial revokes the old private query truth. The native
+        // route reached by this recovery owns the eventual login redirect/forbidden document.
+        // Fetch rejection remains an ordinary transport failure; never infer revocation from it.
+        terminalRecovery = 'auth-denied';
+      } else if (ok !== false && (typeof status !== 'number' || status < 400)) {
+        const responseQueries = readQueryChunks(
+          await queryRefetchSecurity.readResponseTextOptionalSync(response),
+          onError,
+        );
+        if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
+        const responseQuery = securityOwnArrayEntry(responseQueries, 0);
+        if (
+          responseQueries.length !== 1 ||
+          !responseQuery.ok ||
+          responseQuery.value.name !== query.name ||
+          responseQuery.value.key !== query.key
+        ) {
+          throw new TypeError('Kovo refused typed-read truth for a different query identity.');
+        }
+        securityArrayAppend(
+          bodies,
+          { queries: responseQueries },
+          'Browser typed-read response bodies',
+        );
       }
-
-      securityArrayAppend(
-        bodies,
-        {
-          queries: readQueryChunks(
-            await queryRefetchSecurity.readResponseTextOptionalSync(response),
-            onError,
-          ),
-        },
-        'Browser typed-read response bodies',
-      );
     } catch (error) {
       reportRuntimeError(onError, error);
     }
+    if (terminalRecovery !== undefined) break;
   }
+
+  if (terminalRecovery !== undefined) {
+    if (latchQueryRecovery(options.queryStore, recoveryGeneration)) {
+      try {
+        if (terminalRecovery === 'build-skew') onBuildSkew();
+        else if (terminalRecovery === 'auth-denied') onAuthDenied();
+        else onDocumentRecovery();
+      } catch (error) {
+        reportRuntimeError(onError, error);
+      }
+    }
+    return [];
+  }
+
+  if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
 
   const queries: QueryChunk[] = [];
   for (let bodyIndex = 0; bodyIndex < bodies.length; bodyIndex += 1) {
@@ -258,6 +349,7 @@ export async function refetchQueries(
   // refetch pass decodes successful response bodies first, then enters the same
   // batched runtime query apply primitive as script hydration, mutation bodies,
   // deferred streams, and inline query events.
+  if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
   applyQueryChunksToRuntime(options.queryStore, queries, {
     afterApplyQuery(query) {
       securitySetAdd(appliedQueries, query);
@@ -296,39 +388,101 @@ export async function refetchQueries(
   return appliedBodies;
 }
 
-/**
- * @internal Build the default `/_q/` refetch URL for a query wireKey (SPEC §9.4/§10.2, F5).
- * Splits `name:keyValue` and uses the NAME as the path segment so dispatch matches the
- * registered query, never `/_q/<name:keyValue>` (a guaranteed 404). The instance key value
- * rides as the reserved `key` search param so a keyed query whose `args` schema reads it can
- * scope the read; an unkeyed query gets `/_q/<name>` with no params.
- */
-function defaultQueryRefetchUrl(identity: QueryIdentity): string {
-  if (!queryRefetchEncodingSound) {
-    throw new TypeError('Kovo query URL encoding controls are unavailable.');
-  }
-  const path = `/_q/${encodeQueryPath(identity.name)}`;
-  if (identity.key === undefined) return path;
-  const security = queryRefetchSecurityControls();
-  const prefix = `${identity.name}:`;
-  const keyValue =
-    security.indexOf(identity.key, prefix) === 0
-      ? security.slice(identity.key, prefix.length)
-      : identity.key;
-  return `${path}?key=${queryRefetchEncodeURIComponent(keyValue)}`;
+function queryRecoveryState(store: QueryStore): QueryRecoveryState {
+  const existing = securityWeakMapGet(queryRecoveryStates, store);
+  if (existing !== undefined) return existing;
+  const created = freezeSecurityValue({ generation: 0, terminal: false });
+  securityWeakMapSet(queryRecoveryStates, store, created);
+  return created;
 }
 
-function encodeQueryPath(name: string): string {
-  const security = queryRefetchSecurityControls();
-  let encoded = '';
-  let remaining = name;
-  for (;;) {
-    const separator = security.indexOf(remaining, '/');
-    const segment = separator < 0 ? remaining : security.slice(remaining, 0, separator);
-    encoded += `${encoded === '' ? '' : '/'}${queryRefetchEncodeURIComponent(segment)}`;
-    if (separator < 0) return encoded;
-    remaining = security.slice(remaining, separator + 1);
+function queryRecoveryGenerationIsCurrent(store: QueryStore, generation: number): boolean {
+  const state = securityWeakMapGet(queryRecoveryStates, store);
+  return state !== undefined && state.terminal === false && state.generation === generation;
+}
+
+function latchQueryRecovery(store: QueryStore, generation: number): boolean {
+  if (!queryRecoveryGenerationIsCurrent(store, generation)) return false;
+  securityWeakMapSet(
+    queryRecoveryStates,
+    store,
+    freezeSecurityValue({ generation: generation + 1, terminal: true }),
+  );
+  return true;
+}
+
+function queryResponseUrlIsAdmitted(
+  response: QueryRefetchResponse,
+  expectedUrl: string,
+  security: QueryRefetchSecurity,
+): boolean {
+  const rawFinalUrl = security.readResponseField(response, 'url');
+  const redirected = security.readResponseField(response, 'redirected');
+  if (redirected !== false || typeof rawFinalUrl !== 'string' || rawFinalUrl === '') return false;
+  const expected = security.parseUrl(expectedUrl);
+  const final = security.parseUrl(rawFinalUrl);
+  return (
+    expected !== undefined &&
+    final !== undefined &&
+    expected.origin !== 'null' &&
+    final.origin === expected.origin &&
+    (final.protocol === 'http:' || final.protocol === 'https:') &&
+    final.href === expected.href
+  );
+}
+
+function admittedQueryRequest(
+  candidate: string,
+  sourceUrl: string | undefined,
+  security: QueryRefetchSecurity,
+): { readonly expectedUrl: string; readonly fetchUrl: string } | undefined {
+  const current = security.currentUrl();
+  if (sourceUrl === undefined) return undefined;
+  const source = security.parseUrl(sourceUrl);
+  const parsed = source ? security.parseUrl(candidate, source.href) : undefined;
+  if (
+    source === undefined ||
+    parsed === undefined ||
+    source.origin === 'null' ||
+    (source.protocol !== 'http:' && source.protocol !== 'https:') ||
+    (current !== undefined && (current.origin === 'null' || source.origin !== current.origin)) ||
+    parsed.origin !== source.origin ||
+    (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+    parsed.hash !== '' ||
+    security.indexOf(parsed.pathname, '/_q/') !== 0
+  ) {
+    return undefined;
   }
+  return { expectedUrl: parsed.href, fetchUrl: parsed.href };
+}
+
+function queryResponseEnvelopeHasMediaType(
+  response: QueryRefetchResponse,
+  expectedMediaType: 'text/html' | 'text/vnd.kovo.fragment+html',
+  security: QueryRefetchSecurity,
+): boolean {
+  const contentType = security.readHeader(response, 'Content-Type');
+  const separator = typeof contentType === 'string' ? security.indexOf(contentType, ';') : -1;
+  const mediaType =
+    typeof contentType === 'string'
+      ? security.lower(
+          security.trim(separator < 0 ? contentType : security.slice(contentType, 0, separator)),
+        )
+      : '';
+  return (
+    mediaType === expectedMediaType &&
+    security.isInlineContentDisposition(security.readHeader(response, 'Content-Disposition'))
+  );
+}
+
+/**
+ * @internal Build the default `/_q/` refetch URL for a query wireKey (SPEC §9.4/§10.2, F5).
+ * Returns only the framework-emitted canonical href snapshotted when this exact query identity was
+ * hydrated/applied. Kovo cannot invert an app-authored `instanceKey` function: stripping a
+ * name-shaped prefix aliases valid raw keys that begin with that prefix.
+ */
+function defaultQueryRefetchUrl(identity: QueryIdentity): string {
+  return queryRefetchHref(identity.name, identity.key) ?? '';
 }
 
 /** @internal Options for building the default delta-miss refetch callback (SPEC §9.1.1). */

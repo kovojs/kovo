@@ -5,18 +5,26 @@ import { canonicalJsonStringify } from '../json-clone.js';
 import {
   decodeFrameworkFormTargetHeader,
   decodeFrameworkIdentityToken,
+  decodeFrameworkQueryDependencyToken,
   decodeFrameworkLiveTargetHeader,
   decodeFrameworkTargetHeader,
   encodeFrameworkFormTargetHeader,
   encodeFrameworkIdentityToken,
+  encodeFrameworkQueryDependencyToken,
   encodeFrameworkLiveTargetHeader,
   encodeFrameworkTargetHeader,
+  encodeFrameworkWireEntryList,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
   FRAMEWORK_WIRE_INPUT_REGISTRY,
   frameworkDomIdentityIsValid,
   planFrameworkTargetRequestHeaders,
   snapshotFrameworkLiveTargetProps,
+  type FrameworkQueryDependencyIdentity,
 } from './wire-input-grammar.js';
+
+function dep(name: string, key?: string): FrameworkQueryDependencyIdentity {
+  return key === undefined ? { name } : { key, name };
+}
 
 function seededIdentity(seed: number): string {
   let state = seed >>> 0;
@@ -69,13 +77,13 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       maxCurrentUrlCharacters: 1536,
       maxHeaderCharacters: 4 * 1024,
       maxTargetRequestHeaderBytes: 9 * 1024,
-      schema: 'kovo.wire-input-grammar/v2',
+      schema: 'kovo.wire-input-grammar/v4',
     });
 
     for (let seed = 1; seed <= 256; seed += 1) {
       const target = seededIdentity(seed);
       const entries = [
-        { deps: [`query:${seed}`, `query/${seed + 1}`], target },
+        { deps: [dep(`query:${seed}`), dep(`query/${seed + 1}`)], target },
         { deps: [], target: `${target}-empty` },
       ];
       const props = {
@@ -122,27 +130,92 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
   });
 
   it('fails closed on delimiter injection, malformed JSON, oversized input, and excess entries', () => {
-    expect(decodeFrameworkTargetHeader('safe=one; injected target=two')).toEqual([
-      { deps: ['one'], target: 'safe' },
-    ]);
+    expect(decodeFrameworkTargetHeader('safe=one; injected target=two')).toEqual([]);
     expect(decodeFrameworkLiveTargetHeader('safe#component@token:{bad', JSON.parse)).toEqual([]);
     expect(decodeFrameworkTargetHeader('x'.repeat(4 * 1024 + 1))).toEqual([]);
     expect(
       decodeFrameworkTargetHeader(
         Array.from({ length: 65 }, (_, index) => `target-${index}`).join(';'),
       ),
-    ).toHaveLength(64);
+    ).toHaveLength(0);
 
     expect(
       decodeFrameworkTargetHeader(
-        encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }]),
+        encodeFrameworkTargetHeader([{ deps: [dep('query;admin')], target: 'safe' }]),
       ),
-    ).toEqual([{ deps: ['query;admin'], target: 'safe' }]);
+    ).toEqual([{ deps: [dep('query;admin')], target: 'safe' }]);
     expect(() =>
       encodeFrameworkLiveTargetHeader([
         { attestation: 'bad:token', component: 'component', propsSource: '{}', target: 'safe' },
       ]),
     ).toThrow(/attestation/iu);
+
+    const max = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
+    expect(encodeFrameworkWireEntryList(['x'.repeat(max)])).toBe('x'.repeat(max));
+    expect(encodeFrameworkWireEntryList(['safe', 'x'.repeat(max)])).toBe('');
+    expect(
+      encodeFrameworkTargetHeader([
+        { deps: [], target: 'safe' },
+        { deps: [], target: 'x'.repeat(max) },
+      ]),
+    ).toBe('');
+  });
+
+  it('keeps target and dependency encoder/decoder domains finite, unique, and atomic', () => {
+    const excessiveDependencies = Array.from(
+      { length: FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries + 1 },
+      (_, index) => dep(`q${index}`),
+    );
+    const excessiveDependencyWire = `safe=${excessiveDependencies
+      .map(({ name }) => name)
+      .join(' ')}`;
+
+    expect(() =>
+      encodeFrameworkTargetHeader([{ deps: excessiveDependencies, target: 'safe' }]),
+    ).toThrow(/dependency list exceeds/iu);
+    expect(decodeFrameworkTargetHeader(excessiveDependencyWire)).toEqual([]);
+
+    expect(() =>
+      encodeFrameworkTargetHeader([{ deps: [dep('catalog'), dep('catalog')], target: 'safe' }]),
+    ).toThrow(/duplicate dependency/iu);
+    expect(decodeFrameworkTargetHeader('safe=catalog catalog')).toEqual([]);
+
+    expect(() =>
+      encodeFrameworkTargetHeader([
+        { deps: [dep('catalog', 'featured'), dep('catalog', 'featured')], target: 'safe' },
+      ]),
+    ).toThrow(/duplicate dependency/iu);
+    expect(decodeFrameworkTargetHeader('safe=!catalog!featured !catalog!featured')).toEqual([]);
+
+    const keyedAndUnkeyed = [
+      { deps: [dep('catalog'), dep('catalog', 'featured')], target: 'safe' },
+    ];
+    expect(encodeFrameworkTargetHeader(keyedAndUnkeyed)).toBe('safe=catalog !catalog!featured');
+    expect(decodeFrameworkTargetHeader('safe=catalog !catalog!featured')).toEqual(keyedAndUnkeyed);
+
+    expect(() =>
+      encodeFrameworkTargetHeader([
+        { deps: [], target: 'safe' },
+        { deps: [dep('catalog')], target: 'safe' },
+      ]),
+    ).toThrow(/duplicate target/iu);
+    expect(decodeFrameworkTargetHeader('safe; safe=catalog')).toEqual([]);
+
+    const liveTarget = {
+      attestation: 'token',
+      component: 'components/card',
+      propsSource: '{}',
+      target: 'safe',
+    };
+    expect(() => encodeFrameworkLiveTargetHeader([liveTarget, liveTarget])).toThrow(
+      /duplicate target/iu,
+    );
+    expect(
+      decodeFrameworkLiveTargetHeader(
+        'safe#components%2Fcard@token:{}; safe#components%2Fcard@token:{}',
+        JSON.parse,
+      ),
+    ).toEqual([]);
   });
 
   it('canonically tokenizes every wire-stable semantic identity and rejects malformed tokens', () => {
@@ -170,7 +243,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       );
       expect(() => new Headers({ 'Kovo-Form-Target': token! })).not.toThrow();
 
-      const targets = [{ deps: [identity], target: identity }];
+      const targets = [{ deps: [dep(identity)], target: identity }];
       expect(decodeFrameworkTargetHeader(encodeFrameworkTargetHeader(targets))).toEqual(targets);
       expect(
         decodeFrameworkLiveTargetHeader(
@@ -217,7 +290,22 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     expect(longToken.length).toBeGreaterThan(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters);
     expect(decodeFrameworkIdentityToken(longToken)).toBe(longIdentity);
     expect(encodeFrameworkFormTargetHeader(longIdentity)).toBeUndefined();
-    expect(encodeFrameworkTargetHeader([{ deps: [longIdentity], target: 'card' }])).toBe('');
+    expect(encodeFrameworkTargetHeader([{ deps: [dep(longIdentity)], target: 'card' }])).toBe('');
+  });
+
+  it('frames keyed DOM dependencies without aliasing unkeyed query names', () => {
+    expect(encodeFrameworkQueryDependencyToken('bar')).toBe('bar');
+    expect(encodeFrameworkQueryDependencyToken('foo', 'bar')).toBe('!foo!bar');
+    expect(encodeFrameworkQueryDependencyToken('!foo!bar')).toBe('%21foo%21bar');
+    expect(decodeFrameworkQueryDependencyToken('bar')).toEqual({ name: 'bar' });
+    expect(decodeFrameworkQueryDependencyToken('!foo!bar')).toEqual({ key: 'bar', name: 'foo' });
+    expect(decodeFrameworkQueryDependencyToken('%21foo%21bar')).toEqual({ name: '!foo!bar' });
+    expect(encodeFrameworkQueryDependencyToken('product', 'product:p1')).toBe(
+      '!product!product%3Ap1',
+    );
+    for (const malformed of ['!', '!!bar', '!foo!', '!foo!bar!tail', '!foo!bar%3atail']) {
+      expect(decodeFrameworkQueryDependencyToken(malformed)).toBeUndefined();
+    }
   });
 
   it('keeps live-target props semantically canonical and transport-header-safe', () => {
@@ -266,6 +354,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       for (const name of Object.keys(headers)) total += lineBytes(name, headers[name]!);
       return total;
     };
+    const build = '0123456789abcdef';
     const idem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
     const currentPrefix = 'https://kovo.test/';
     const currentUrl =
@@ -276,13 +365,16 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     const targetPrefix = 'card=';
     const targetWireEntry = encodeFrameworkTargetHeader([
       {
-        deps: ['x'.repeat(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters - targetPrefix.length)],
+        deps: [
+          dep('x'.repeat(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters - targetPrefix.length)),
+        ],
         target: 'card',
       },
     ]);
     expect(targetWireEntry).toHaveLength(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters);
     const fixedBytes =
       lineBytes('Kovo-Fragment', 'true') +
+      lineBytes('Kovo-Build', build) +
       lineBytes('Kovo-Idem', idem) +
       lineBytes('Kovo-Current-Url', currentUrl) +
       lineBytes('Kovo-Form-Target', encodedFormTarget) +
@@ -312,6 +404,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     const targetSnapshot = { target: 'card', wireEntry: targetWireEntry };
     const liveSnapshot = { target: 'card', wireEntry: liveWireEntry };
     const plan = planFrameworkTargetRequestHeaders({
+      build,
       currentUrl,
       formTarget,
       idem,
@@ -331,12 +424,14 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     expect(plan!.targets[0]).toEqual({ target: 'card', wireEntry: targetWireEntry });
 
     const empty = planFrameworkTargetRequestHeaders({
+      build,
       currentUrl: 'https://kovo.test/',
       idem,
       liveTargets: [],
       targets: [],
     });
     expect(empty?.headers).toEqual({
+      'Kovo-Build': build,
       'Kovo-Current-Url': 'https://kovo.test/',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': idem,
@@ -344,8 +439,30 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     expect(Object.hasOwn(empty!.headers, 'Kovo-Targets')).toBe(false);
     expect(Object.hasOwn(empty!.headers, 'Kovo-Live-Targets')).toBe(false);
 
+    const exactTarget = encodeFrameworkTargetHeader([
+      { deps: [dep('x'.repeat(4_091))], target: 'card' },
+    ]);
+    expect(exactTarget).toHaveLength(FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters);
+    const exactCurrentUrl = `https://kovo.test/${'x'.repeat(
+      FRAMEWORK_WIRE_INPUT_GRAMMAR.maxCurrentUrlCharacters - 'https://kovo.test/'.length,
+    )}`;
+    const exactFormTarget = 'f'.repeat(3_477);
+    const exactPlan = planFrameworkTargetRequestHeaders({
+      build,
+      currentUrl: exactCurrentUrl,
+      formTarget: exactFormTarget,
+      liveTargets: [],
+      targets: [{ target: 'card', wireEntry: exactTarget }],
+    });
+    expect(exactPlan).toBeDefined();
+    expect(totalLineBytes(exactPlan!.headers)).toBe(
+      FRAMEWORK_WIRE_INPUT_GRAMMAR.maxTargetRequestHeaderBytes,
+    );
+    expect(exactPlan!.headers).not.toHaveProperty('Kovo-Live-Targets');
+
     expect(
       planFrameworkTargetRequestHeaders({
+        build,
         currentUrl: `https://kovo.test/${'x'.repeat(1536)}`,
         idem,
         liveTargets: [],
@@ -354,6 +471,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     ).toBeUndefined();
     expect(
       planFrameworkTargetRequestHeaders({
+        build,
         currentUrl: 'https://kovo.test/',
         formTarget: 'x'.repeat(4097),
         idem,
@@ -363,12 +481,13 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     ).toBeUndefined();
     expect(
       planFrameworkTargetRequestHeaders({
+        build,
         currentUrl: 'https://kovo.test/',
         idem,
         liveTargets: [],
         targets: [{ target: 'safe', wireEntry: 'safe=public;admin=secret' }],
-      })?.headers,
-    ).not.toHaveProperty('Kovo-Targets');
+      }),
+    ).toBeUndefined();
   });
 
   it('keeps both maximum framework headers and a maximum cookie inside Node transport', async () => {
@@ -385,7 +504,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     expect(delHeader).toBe('card#components%2Fcard@token:{"del":"\\u007f"}');
     expect(
       encodeFrameworkTargetHeader([
-        { deps: ['x'.repeat(maximum - targetPrefix.length + 1)], target: 'card' },
+        { deps: [dep('x'.repeat(maximum - targetPrefix.length + 1))], target: 'card' },
       ]),
     ).toBe('');
 
@@ -412,14 +531,16 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       const cookie = csrfCookiePrefix + 'x'.repeat(4_096 - csrfCookiePrefix.length);
       expect(cookie).toHaveLength(4_096);
       const formTarget = 'catalog-panel';
+      const build = '0123456789abcdef';
       const idem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
       const targetWireEntry = encodeFrameworkTargetHeader([
-        { deps: ['x'.repeat(maximum - targetPrefix.length)], target: 'card' },
+        { deps: [dep('x'.repeat(maximum - targetPrefix.length))], target: 'card' },
       ]);
       const encodedFormTarget = encodeFrameworkFormTargetHeader(formTarget)!;
       const lineBytes = (name: string, value: string): number => name.length + 2 + value.length + 2;
       const fixedBytes =
         lineBytes('Kovo-Fragment', 'true') +
+        lineBytes('Kovo-Build', build) +
         lineBytes('Kovo-Idem', idem) +
         lineBytes('Kovo-Current-Url', currentUrl) +
         lineBytes('Kovo-Form-Target', encodedFormTarget) +
@@ -445,6 +566,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         },
       ]);
       const plan = planFrameworkTargetRequestHeaders({
+        build,
         currentUrl,
         formTarget,
         idem,
@@ -632,7 +754,9 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         },
       });
       props = snapshotFrameworkLiveTargetProps('{"3":683,"del":"\u007f","label":"😀 漢字"}');
-      targets = encodeFrameworkTargetHeader([{ deps: ['product:p1'], target: 'card:primary' }]);
+      targets = encodeFrameworkTargetHeader([
+        { deps: [dep('product:p1')], target: 'card:primary' },
+      ]);
     } finally {
       Object.defineProperty(globalThis, 'Array', arrayDescriptor);
     }
@@ -643,7 +767,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
   });
 
   it('keeps codec acceptance and rejection exact after late intrinsic replacement', () => {
-    const targetEntries = [{ deps: ['public', 'catalog'], target: 'public-panel' }];
+    const targetEntries = [{ deps: [dep('public'), dep('catalog')], target: 'public-panel' }];
     const descriptors = [
       {
         attestation: 'token_1',
@@ -660,8 +784,8 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         target: 'public-panel',
       },
     ];
-    const targetHeader = ' public-panel=public catalog ';
-    const descriptorHeader = ' public-panel#components%2Fpublic%2Fcard@token_1:{"id":"safe"} ';
+    const targetHeader = 'public-panel=public catalog';
+    const descriptorHeader = 'public-panel#components%2Fpublic%2Fcard@token_1:{"id":"safe"}';
     const parseJson = JSON.parse;
     const originalApply = Reflect.apply;
     const originalArrayIsArray = Array.isArray;
@@ -710,7 +834,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         parseJson,
       );
       try {
-        encodeFrameworkTargetHeader([{ deps: ['query\0admin'], target: 'safe' }]);
+        encodeFrameworkTargetHeader([{ deps: [dep('query\0admin')], target: 'safe' }]);
       } catch {
         invalidTargetRejected = true;
       }

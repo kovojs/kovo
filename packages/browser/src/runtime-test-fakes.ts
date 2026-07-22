@@ -9,6 +9,7 @@ export function mutationTestResponse<ResponseShape extends object>(
   origin = 'http://localhost',
 ): ResponseShape & {
   headers: { get(name: string): string | null };
+  redirected: false;
   url: string;
 } {
   const responseRecord = response as ResponseShape & {
@@ -23,9 +24,12 @@ export function mutationTestResponse<ResponseShape extends object>(
         if (name.toLowerCase() === 'content-type') {
           return 'text/vnd.kovo.fragment+html';
         }
-        return responseHeaders?.get?.(name) ?? null;
+        const value = responseHeaders?.get?.(name) ?? null;
+        if (value !== null) return value;
+        return name.toLowerCase() === 'kovo-build' ? 'build-test' : null;
       },
     },
+    redirected: false,
     url: responseRecord.url || `${origin}${path}`,
   };
 }

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { encodeFrameworkQueryDependencyToken } from '@kovojs/core/internal/wire-input-grammar';
+
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { applyCompiledQueryUpdatePlan } from './query-bindings.js';
 import { kovoCreateHTML } from './trusted-types.js';
@@ -11,6 +13,27 @@ afterEach(() => {
 });
 
 describe('browser query template stamps', () => {
+  it('partitions keyed and unkeyed query identities on real DOM hosts', () => {
+    const keyed = document.createElement('section');
+    keyed.setAttribute('kovo-deps', encodeFrameworkQueryDependencyToken('foo', 'bar')!);
+    keyed.innerHTML = '<output data-bind="foo.value">KEYED-OLD</output>';
+    const unkeyed = document.createElement('section');
+    unkeyed.setAttribute('kovo-deps', encodeFrameworkQueryDependencyToken('bar')!);
+    unkeyed.innerHTML = '<output data-bind="foo.value">UNKEYED-OLD</output>';
+    document.body.append(keyed, unkeyed);
+
+    applyCompiledQueryUpdatePlan(
+      document,
+      'foo',
+      { value: 'KEYED-NEW' },
+      { bindings: true },
+      { queryIdentity: { key: 'bar', name: 'foo' } },
+    );
+
+    expect(keyed.textContent).toBe('KEYED-NEW');
+    expect(unkeyed.textContent).toBe('UNKEYED-OLD');
+  });
+
   it('keeps server-rendered escaped text and client text updates equivalent for HTML payloads', () => {
     const payload = `<img src=x onerror=alert(1)> & "quoted" 'single'`;
     const root = document.createElement('section');

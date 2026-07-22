@@ -539,7 +539,7 @@ describe('server app shell Vite dev seam', () => {
       request('/_m/cart/add', {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Targets': 'cart-errors;cart-summary',
+          'Kovo-Targets': 'cart-errors; cart-summary',
         },
         method: 'POST',
       }),
@@ -697,7 +697,11 @@ describe('server app shell Vite dev seam', () => {
 
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       const queryResponse = await fetch(`${origin}/_q/directory-stats`, {
-        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+        headers: {
+          Accept: 'text/html',
+          'Kovo-Build': app.clientModules.buildToken(),
+          'Kovo-Fragment': 'true',
+        },
       });
       const queryBody = await queryResponse.text();
       const documentResponse = await fetch(`${origin}/directory`, {
@@ -707,7 +711,9 @@ describe('server app shell Vite dev seam', () => {
 
       expect(queryResponse.status).toBe(200);
       expect(queryResponse.headers.get('content-type')).toContain('text/html');
-      expect(queryBody).toBe('<kovo-query name="directory-stats">{"contacts":2}</kovo-query>');
+      expect(queryBody).toBe(
+        '<kovo-query name="directory-stats" href="/_q/directory-stats">{"contacts":2}</kovo-query>',
+      );
       expect(queryBody).not.toContain('<script type="module" src="/@kovo/hmr-client"></script>');
       expect(documentResponse.status).toBe(200);
       expect(documentBody).toContain('<script type="module" src="/@kovo/hmr-client"></script>');
@@ -1068,6 +1074,7 @@ describe('server app shell Vite dev seam', () => {
       endpoint.searchParams.set('oldBuild', 'old-build');
       const response = await fetch(endpoint, {
         headers: {
+          'Kovo-Build': 'old-build',
           'Kovo-Current-Url': `${origin}/cart?tab=summary#private-browser-state`,
           'X-App-Context': 'retained',
         },
@@ -1151,9 +1158,14 @@ describe('server app shell Vite dev seam', () => {
         });
       });
 
-      const response = await fetch(
-        `http://127.0.0.1:${(server.address() as AddressInfo).port}/@kovo/hmr/refresh/route?url=/cart`,
+      const build = app.clientModules.buildToken();
+      const endpoint = new URL(
+        '/@kovo/hmr/refresh/route',
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
       );
+      endpoint.searchParams.set('url', '/cart');
+      endpoint.searchParams.set('oldBuild', build);
+      const response = await fetch(endpoint, { headers: { 'Kovo-Build': build } });
       const body = await response.text();
 
       expect(response.status).toBe(500);
@@ -1248,9 +1260,10 @@ describe('server app shell Vite dev seam', () => {
           authorization: 'Bearer retained',
           cookie: 'session=retained',
           'Content-Type': 'application/json',
+          'Kovo-Build': 'old-build',
           'Kovo-Current-Url': '/cart?tab=summary#private-browser-state',
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app), { count: 3 }, `${origin}/cart?tab=summary`)}`,
+          'Kovo-Live-Targets': `${attestedLiveTargetHeader('cart-badge', 'src/components/CartBadge', appLiveTargetAttestationAudience(app, 'old-build'), { count: 3 }, `${origin}/cart?tab=summary`)}`,
           origin: 'https://attacker.invalid',
           referer: `${origin}/forged-source`,
           'Sec-Fetch-Site': 'cross-site',
@@ -1385,22 +1398,28 @@ describe('server app shell Vite dev seam', () => {
         {},
         `${origin}/public`,
       );
-      const publicRefresh = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?url=/public`, {
-        headers: {
-          'Kovo-Current-Url': '/public',
-          'Kovo-Live-Targets': liveTarget,
+      const buildToken = app.clientModules.buildToken();
+      const publicRefresh = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?url=/public&oldBuild=${encodeURIComponent(buildToken)}`,
+        {
+          headers: {
+            'Kovo-Build': buildToken,
+            'Kovo-Current-Url': '/public',
+            'Kovo-Live-Targets': liveTarget,
+          },
+          method: 'POST',
         },
-        method: 'POST',
-      });
+      );
       const publicBody = await publicRefresh.text();
       expect(publicRefresh.status, publicBody).toBe(200);
       expect(publicBody).toContain('<secret-panel>PUBLIC_VALUE</secret-panel>');
       expect(secretQueryLoads).toBe(1);
 
       const missingRouteRefresh = await fetch(
-        `${origin}/@kovo/hmr/refresh/live-targets?url=/missing`,
+        `${origin}/@kovo/hmr/refresh/live-targets?url=/missing&oldBuild=${encodeURIComponent(buildToken)}`,
         {
           headers: {
+            'Kovo-Build': buildToken,
             'Kovo-Current-Url': '/public',
             'Kovo-Live-Targets': liveTarget,
           },
@@ -1415,13 +1434,17 @@ describe('server app shell Vite dev seam', () => {
       const layoutRunsBeforeAttack = layoutGuardRuns;
       const routeRunsBeforeAttack = routeGuardRuns;
       const queryLoadsBeforeAttack = secretQueryLoads;
-      const crossRouteAttack = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?url=/admin`, {
-        headers: {
-          'Kovo-Current-Url': '/public',
-          'Kovo-Live-Targets': liveTarget,
+      const crossRouteAttack = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?url=/admin&oldBuild=${encodeURIComponent(buildToken)}`,
+        {
+          headers: {
+            'Kovo-Build': buildToken,
+            'Kovo-Current-Url': '/public',
+            'Kovo-Live-Targets': liveTarget,
+          },
+          method: 'POST',
         },
-        method: 'POST',
-      });
+      );
       const attackBody = await crossRouteAttack.text();
 
       expect(crossRouteAttack.status, attackBody).toBe(403);
@@ -1508,13 +1531,18 @@ describe('server app shell Vite dev seam', () => {
         sourceUrl,
       });
 
-      const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets?url=/account`, {
-        headers: {
-          cookie: 'session=attacker',
-          'Kovo-Live-Targets': `account-secret#${renderer.component}@${victimToken}:{"accountId":"victim"}`,
+      const buildToken = app.clientModules.buildToken();
+      const response = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?url=/account&oldBuild=${encodeURIComponent(buildToken)}`,
+        {
+          headers: {
+            cookie: 'session=attacker',
+            'Kovo-Build': buildToken,
+            'Kovo-Live-Targets': `account-secret#${renderer.component}@${victimToken}:{"accountId":"victim"}`,
+          },
+          method: 'POST',
         },
-        method: 'POST',
-      });
+      );
       const body = await response.text();
 
       expect(response.status, body).toBe(400);
@@ -1588,19 +1616,24 @@ describe('server app shell Vite dev seam', () => {
         });
       });
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-      const response = await fetch(`${origin}/@kovo/hmr/refresh/live-targets`, {
-        headers: {
-          'Kovo-Current-Url': '/cart',
-          'Kovo-Live-Targets': attestedLiveTargetHeader(
-            'cart-badge',
-            'src/components/CartBadge',
-            appLiveTargetAttestationAudience(app),
-            {},
-            `${origin}/cart`,
-          ),
+      const buildToken = app.clientModules.buildToken();
+      const response = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?oldBuild=${encodeURIComponent(buildToken)}`,
+        {
+          headers: {
+            'Kovo-Build': buildToken,
+            'Kovo-Current-Url': '/cart',
+            'Kovo-Live-Targets': attestedLiveTargetHeader(
+              'cart-badge',
+              'src/components/CartBadge',
+              appLiveTargetAttestationAudience(app),
+              {},
+              `${origin}/cart`,
+            ),
+          },
+          method: 'POST',
         },
-        method: 'POST',
-      });
+      );
       const body = await response.text();
 
       expect(response.status).toBe(200);

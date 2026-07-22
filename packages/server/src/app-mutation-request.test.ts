@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
@@ -34,6 +35,12 @@ function withCompilerLiveTargetRenderers<Result>(
   });
 }
 
+function testWireIdentity(value: string): string {
+  const encoded = encodeFrameworkIdentityToken(value);
+  if (!encoded) throw new TypeError('Test wire identity is invalid.');
+  return encoded;
+}
+
 function attestedLiveTargetHeader(
   target: string,
   component: string,
@@ -45,7 +52,7 @@ function attestedLiveTargetHeader(
     { component, props, target },
     { buildToken, request: {}, ...(sourceUrl === undefined ? {} : { sourceUrl }) },
   );
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+  return `${testWireIdentity(target)}#${testWireIdentity(component)}@${token}:${JSON.stringify(props)}`;
 }
 
 describe('server app mutation request boundary', () => {
@@ -502,6 +509,7 @@ describe('server app mutation request boundary', () => {
       body: form,
       headers: {
         Cookie: 'sid=victim',
+        'Kovo-Build': app.clientModules.buildToken(),
         'Kovo-Fragment': 'true',
         'X-Machine-Signature': 'kept',
       },
@@ -929,7 +937,7 @@ describe('server app mutation request boundary', () => {
         cookie: `__Host-kovo_csrf=${anonymousSecret}`,
         'Kovo-Current-Url': sourceUrl,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${attestation}:{}`,
+        'Kovo-Live-Targets': `${testWireIdentity(descriptor.target)}#${testWireIdentity(descriptor.component)}@${attestation}:{}`,
         'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
       },
       method: 'POST',
@@ -960,7 +968,7 @@ describe('server app mutation request boundary', () => {
         cookie: '__Host-kovo_csrf=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB',
         'Kovo-Current-Url': sourceUrl,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${attestation}:{}`,
+        'Kovo-Live-Targets': `${testWireIdentity(descriptor.target)}#${testWireIdentity(descriptor.component)}@${attestation}:{}`,
         'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
       },
       method: 'POST',
@@ -992,7 +1000,7 @@ describe('server app mutation request boundary', () => {
         cookie: `__Host-kovo_csrf=${anonymousSecret}; sid=session-principal`,
         'Kovo-Current-Url': sourceUrl,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${sessionAttestation}:{}`,
+        'Kovo-Live-Targets': `${testWireIdentity(descriptor.target)}#${testWireIdentity(descriptor.component)}@${sessionAttestation}:{}`,
         'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
       },
       method: 'POST',
@@ -1012,7 +1020,7 @@ describe('server app mutation request boundary', () => {
         cookie: 'sid=session-principal',
         'Kovo-Current-Url': sourceUrl,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': `${descriptor.target}#${descriptor.component}@${sessionAttestation}:{}`,
+        'Kovo-Live-Targets': `${testWireIdentity(descriptor.target)}#${testWireIdentity(descriptor.component)}@${sessionAttestation}:{}`,
         'Kovo-Targets': `${descriptor.target}=anonymousCatalogItems`,
       },
       method: 'POST',
@@ -1349,10 +1357,11 @@ describe('server app mutation request boundary', () => {
         headers: {
           ...sourceHeaders,
           Origin: 'https://app.test',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Current-Url': 'https://app.test/public',
           'Kovo-Form-Target': target!,
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+          'Kovo-Live-Targets': `${testWireIdentity(target!)}#${testWireIdentity('components/mutation/source-panel')}@${token}:{}`,
         },
         method: 'POST',
       }),
@@ -1374,10 +1383,11 @@ describe('server app mutation request boundary', () => {
         headers: {
           ...sourceHeaders,
           Origin: 'https://app.test',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Current-Url': 'https://app.test/public',
           'Kovo-Form-Target': target!,
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+          'Kovo-Live-Targets': `${testWireIdentity(target!)}#${testWireIdentity('components/mutation/source-panel')}@${token}:{}`,
         },
         method: 'POST',
       }),
@@ -1396,7 +1406,7 @@ describe('server app mutation request boundary', () => {
         headers: {
           ...sourceHeaders,
           Origin: 'https://app.test',
-          'Kovo-Current-Url': 'https://app.test/public',
+          Referer: 'https://app.test/public',
         },
         method: 'POST',
       }),
@@ -1417,10 +1427,11 @@ describe('server app mutation request boundary', () => {
         headers: {
           Cookie: 'sid=public-user',
           Origin: 'https://app.test',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Current-Url': 'https://app.test/public',
           'Kovo-Form-Target': target!,
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+          'Kovo-Live-Targets': `${testWireIdentity(target!)}#${testWireIdentity('components/mutation/source-panel')}@${token}:{}`,
         },
         method: 'POST',
       }),
@@ -1442,10 +1453,11 @@ describe('server app mutation request boundary', () => {
         headers: {
           ...sourceHeaders,
           Origin: 'https://app.test',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Current-Url': 'https://app.test/public',
           'Kovo-Form-Target': target!,
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': `${target}#components/mutation/source-panel@${token}:{}`,
+          'Kovo-Live-Targets': `${testWireIdentity(target!)}#${testWireIdentity('components/mutation/source-panel')}@${token}:{}`,
         },
         method: 'POST',
       }),
@@ -1623,7 +1635,7 @@ describe('server app mutation request boundary', () => {
         headers: {
           Authorization: 'Bearer victim',
           Cookie: 'sid=victim',
-          'Kovo-Current-Url': 'https://app.test/public',
+          Referer: 'https://app.test/public',
         },
         method: 'POST',
       }),

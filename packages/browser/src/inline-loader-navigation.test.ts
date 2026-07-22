@@ -155,6 +155,7 @@ function createTestShell({
     body,
     documentElement: attrs(documentAttributes),
     head: createTestHead(head),
+    visibilityState: 'visible',
     querySelector(selector: string) {
       if (selector === 'meta[name="kovo-build"]') {
         return build === null ? null : { getAttribute: () => build };
@@ -185,9 +186,11 @@ async function withEnhancedNavigationHarness(
       dispatchEvent: ReturnType<typeof vi.fn>;
       preventDefault: ReturnType<typeof vi.fn>;
       pushState: ReturnType<typeof vi.fn>;
+      reload: ReturnType<typeof vi.fn>;
       scrollTo: ReturnType<typeof vi.fn>;
     }): Promise<void> | void;
     act?(args: {
+      assign: ReturnType<typeof vi.fn>;
       listeners: Map<string, (event: unknown) => Promise<void> | void>;
       location: {
         href: string;
@@ -196,6 +199,7 @@ async function withEnhancedNavigationHarness(
         search: string;
       };
       preventDefault: ReturnType<typeof vi.fn>;
+      reload: ReturnType<typeof vi.fn>;
     }): Promise<void> | void;
     currentDocument: ReturnType<typeof createTestShell>;
     documents: Array<ReturnType<typeof createTestShell>>;
@@ -234,6 +238,7 @@ async function withEnhancedNavigationHarness(
   const dispatchEvent = vi.fn();
   const preventDefault = vi.fn();
   const pushState = vi.fn();
+  const reload = vi.fn();
   const scrollTo = vi.fn();
   const url = new URL(locationHref);
   const locationRecord = {
@@ -241,6 +246,7 @@ async function withEnhancedNavigationHarness(
     href: locationHref,
     origin: url.origin,
     pathname: url.pathname,
+    reload,
     search: url.search,
   };
 
@@ -249,10 +255,14 @@ async function withEnhancedNavigationHarness(
       listeners.set(type, listener);
     };
     globalRecord.CustomEvent = class TestCustomEvent {
+      readonly detail: unknown;
+
       constructor(
         readonly type: string,
-        readonly init?: unknown,
-      ) {}
+        readonly init?: { detail?: unknown },
+      ) {
+        this.detail = init?.detail;
+      }
     };
     globalRecord.dispatchEvent = dispatchEvent;
     globalRecord.document = currentDocument;
@@ -269,7 +279,7 @@ async function withEnhancedNavigationHarness(
 
     installSource(async () => ({}), globalRecord);
     if (options.act) {
-      await options.act({ listeners, location: locationRecord, preventDefault });
+      await options.act({ assign, listeners, location: locationRecord, preventDefault, reload });
     } else {
       for (const clickHref of hrefs ?? [href]) {
         await listeners.get('click')?.({
@@ -289,7 +299,7 @@ async function withEnhancedNavigationHarness(
       }
     }
 
-    await options.assert({ assign, dispatchEvent, preventDefault, pushState, scrollTo });
+    await options.assert({ assign, dispatchEvent, preventDefault, pushState, reload, scrollTo });
   } finally {
     Object.assign(globalRecord, {
       addEventListener: originals.addEventListener,
@@ -378,6 +388,7 @@ describe('inline loader enhanced navigation fallback', () => {
                 get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
               },
               text: async () => '<!doctype html><html></html>',
+              redirected: false,
               url: 'http://app.test/account',
             })),
             href: 'http://app.test/account',
@@ -400,6 +411,175 @@ describe('inline loader enhanced navigation fallback', () => {
         if (originalBroadcastChannel === undefined) delete globalRecord.BroadcastChannel;
         else globalRecord.BroadcastChannel = originalBroadcastChannel;
       }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'blocks a delayed same-build navigation after a sibling response retires the runtime through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      let resolveNavigation!: (response: unknown) => void;
+      const navigationResponse = new Promise<unknown>((resolve) => {
+        resolveNavigation = resolve;
+      });
+      const navigationText = vi.fn(async () => '<!doctype html><html></html>');
+      const replaceWith = vi.fn();
+      const navigationHref = 'http://app.test/account';
+      const currentSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'current',
+          'kovo-nav-segment': 'layout:current',
+        },
+        '<main>current</main>',
+      );
+      const nextSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'next',
+          'kovo-nav-segment': 'layout:next',
+        },
+        '<main>next</main>',
+      );
+      const fetch = vi.fn(() => navigationResponse);
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument: createTestShell({
+          replaceWith,
+          segments: [currentSegment],
+        }),
+        documents: [createTestShell({ segments: [nextSegment] })],
+        fetch,
+        async act({ listeners, preventDefault, reload }) {
+          expect(reload).not.toHaveBeenCalled();
+          await listeners.get('click')?.({
+            button: 0,
+            defaultPrevented: false,
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                return selector === 'a[href]'
+                  ? { hasAttribute: () => false, href: navigationHref, target: '' }
+                  : null;
+              },
+            },
+            type: 'click',
+          });
+          await vi.waitFor(() =>
+            expect(fetch).toHaveBeenCalledWith(navigationHref, expect.anything()),
+          );
+          const applyResponse = globalRecord.__kovo_a;
+          expect(applyResponse).toBeTypeOf('function');
+          (applyResponse as (body: string, build: string) => void)(
+            '<kovo-query name="private">malformed',
+            'foreign-build',
+          );
+          expect(reload).toHaveBeenCalledOnce();
+          resolveNavigation({
+            headers: {
+              get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+            },
+            text: navigationText,
+            redirected: false,
+            url: navigationHref,
+          });
+          await Promise.resolve();
+          await Promise.resolve();
+        },
+        async assert({ dispatchEvent, pushState, reload }) {
+          expect(reload).toHaveBeenCalledOnce();
+          expect(navigationText).not.toHaveBeenCalled();
+          expect(replaceWith).not.toHaveBeenCalled();
+          expect(pushState).not.toHaveBeenCalled();
+          expect(dispatchEvent).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'kovo:navigate' }),
+          );
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'blocks a delayed old-principal response after navigation retires the runtime through %s',
+    async (_name, installSource) => {
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const replaceWith = vi.fn();
+      const navigationHref = 'http://app.test/account';
+      const currentSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'current',
+          'kovo-nav-segment': 'layout:current',
+        },
+        '<main>current</main>',
+      );
+      const nextSegment = new TestNavSegment(
+        {
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'next',
+          'kovo-nav-segment': 'layout:next',
+        },
+        '<main>next</main>',
+      );
+      const fetch = vi.fn(() =>
+        Promise.resolve({
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+          },
+          text: async () => '<!doctype html><html></html>',
+          redirected: false,
+          url: navigationHref,
+        }),
+      );
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument: createTestShell({
+          replaceWith,
+          session: 'session-a',
+          segments: [currentSegment],
+        }),
+        documents: [createTestShell({ session: 'session-b', segments: [nextSegment] })],
+        fetch,
+        async act({ assign, listeners, preventDefault, reload }) {
+          expect(reload).not.toHaveBeenCalled();
+          let releaseResponse!: () => void;
+          const responseGate = new Promise<void>((resolve) => {
+            releaseResponse = resolve;
+          });
+          const delayedApply = responseGate.then(() => {
+            const applyResponse = globalRecord.__kovo_a;
+            expect(applyResponse).toBeTypeOf('function');
+            (applyResponse as (body: string, build: string) => void)(
+              '<kovo-query name="cart">{"owner":"old"}</kovo-query>',
+              'build-a',
+            );
+          });
+          await listeners.get('click')?.({
+            button: 0,
+            defaultPrevented: false,
+            preventDefault,
+            target: {
+              closest(selector: string) {
+                return selector === 'a[href]'
+                  ? { hasAttribute: () => false, href: navigationHref, target: '' }
+                  : null;
+              },
+            },
+            type: 'click',
+          });
+          await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(navigationHref));
+          releaseResponse();
+          await delayedApply;
+        },
+        async assert({ assign, dispatchEvent, pushState }) {
+          expect(assign).toHaveBeenCalledWith(navigationHref);
+          expect(replaceWith).not.toHaveBeenCalled();
+          expect(pushState).not.toHaveBeenCalled();
+          expect(dispatchEvent).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'kovo:query' }),
+          );
+        },
+      });
     },
   );
 
@@ -454,6 +634,7 @@ describe('inline loader enhanced navigation fallback', () => {
               get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
             },
             text: async () => '<!doctype html><html></html>',
+            redirected: false,
             url: 'http://app.test/account',
           })),
           href: 'http://app.test/account',
@@ -508,6 +689,7 @@ describe('inline loader enhanced navigation fallback', () => {
             },
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: 'http://app.test/uploads/attacker.html',
         })),
         href: 'http://app.test/uploads/attacker.html',
@@ -570,6 +752,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: 'http://app.test/account',
         })),
         href: 'http://app.test/account',
@@ -647,6 +830,7 @@ describe('inline loader enhanced navigation fallback', () => {
                 get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
               },
               text: async () => '<!doctype html><html></html>',
+              redirected: false,
               url: 'http://app.test/account',
             })),
             href: 'http://app.test/account',
@@ -703,6 +887,7 @@ describe('inline loader enhanced navigation fallback', () => {
                 name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null,
             },
             text: async () => '<!doctype html><html><body>attacker</body></html>',
+            redirected: false,
             url: 'https://evil.example/phish',
           })),
           href: 'http://app.test/account',
@@ -775,6 +960,7 @@ describe('inline loader enhanced navigation fallback', () => {
               name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null,
           },
           text: async () => '<!doctype html><html><body>attacker</body></html>',
+          redirected: false,
           url: 'blob:http://app.test/attacker-document',
         })),
         href: 'http://app.test/account',
@@ -961,6 +1147,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: 'http://app.test/cart',
         }));
         globalRecord.history = { pushState: vi.fn() };
@@ -1051,6 +1238,7 @@ describe('inline loader enhanced navigation fallback', () => {
               name.toLowerCase() === 'content-type' ? 'application/pdf' : null,
           },
           text: async () => '%PDF-1.7\n',
+          redirected: false,
           url: 'http://app.test/download.pdf',
         }));
         globalRecord.history = {};
@@ -1118,6 +1306,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: 'http://app.test/cart',
         })),
         async assert({ assign, preventDefault, pushState }) {
@@ -1132,59 +1321,50 @@ describe('inline loader enhanced navigation fallback', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'uses final same-origin HTML redirect documents through %s',
+    'rejects followed, wrong-URL, and URL-less navigation responses before body reads through %s',
     async (_name, installSource) => {
-      const replaceWith = vi.fn();
-      const currentLayout = new TestNavSegment(
-        {
-          'kovo-nav-components': '',
-          'kovo-nav-kind': 'layout',
-          'kovo-nav-name': 'Admin',
-          'kovo-nav-queries': '',
-          'kovo-nav-segment': 'layout:Admin',
-        },
-        '<main><section>Admin</section></main>',
-      );
-      const targetLayout = new TestNavSegment(
-        {
-          'kovo-nav-components': '',
-          'kovo-nav-kind': 'layout',
-          'kovo-nav-name': 'Auth',
-          'kovo-nav-queries': '',
-          'kovo-nav-segment': 'layout:Auth',
-        },
-        '<main><section>Login required</section></main>',
-      );
-      const targetDocument = createTestShell({ segments: [targetLayout] });
-      let currentDocument: ReturnType<typeof createTestShell>;
-      currentDocument = createTestShell({
-        replaceWith: (nextBody) => {
-          replaceWith(nextBody);
-          currentDocument.body = nextBody as typeof currentDocument.body;
-        },
-        segments: [currentLayout],
-      });
-
-      await withEnhancedNavigationHarness(installSource, {
-        currentDocument,
-        documents: [targetDocument],
-        fetch: vi.fn(async () => ({
-          headers: {
-            get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+      for (const responseFacts of [
+        { redirected: true, url: 'http://app.test/login?next=%2Fadmin' },
+        { redirected: false, url: 'http://app.test/login?next=%2Fadmin' },
+        { redirected: false, url: '' },
+      ]) {
+        const replaceWith = vi.fn();
+        const responseText = vi.fn(async () => '<!doctype html><html></html>');
+        const currentLayout = new TestNavSegment(
+          {
+            'kovo-nav-components': '',
+            'kovo-nav-kind': 'layout',
+            'kovo-nav-name': 'Admin',
+            'kovo-nav-queries': '',
+            'kovo-nav-segment': 'layout:Admin',
           },
-          text: async () => '<!doctype html><html></html>',
-          url: 'http://app.test/login?next=%2Fadmin',
-        })),
-        href: 'http://app.test/admin',
-        locationHref: 'http://app.test/products',
-        async assert({ preventDefault, pushState }) {
-          await vi.waitFor(() => {
-            expect(replaceWith).toHaveBeenCalledWith(targetDocument.body);
-          });
-          expect(preventDefault).toHaveBeenCalledTimes(1);
-          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/login?next=%2Fadmin');
-        },
-      });
+          '<main><section>Admin</section></main>',
+        );
+
+        await withEnhancedNavigationHarness(installSource, {
+          currentDocument: createTestShell({ replaceWith, segments: [currentLayout] }),
+          documents: [],
+          fetch: vi.fn(async (_input: string, init: { redirect?: string }) => {
+            expect(init.redirect).toBe('error');
+            return {
+              headers: {
+                get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+              },
+              text: responseText,
+              ...responseFacts,
+            };
+          }),
+          href: 'http://app.test/admin',
+          locationHref: 'http://app.test/products',
+          async assert({ assign, preventDefault, pushState }) {
+            await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('http://app.test/admin'));
+            expect(preventDefault).toHaveBeenCalledTimes(1);
+            expect(responseText).not.toHaveBeenCalled();
+            expect(replaceWith).not.toHaveBeenCalled();
+            expect(pushState).not.toHaveBeenCalled();
+          },
+        });
+      }
     },
   );
 
@@ -1233,6 +1413,7 @@ describe('inline loader enhanced navigation fallback', () => {
         },
         status,
         text: async () => '<!doctype html><html></html>',
+        redirected: false,
         url: 'http://app.test/admin',
       })),
       href: 'http://app.test/admin',
@@ -1297,6 +1478,7 @@ describe('inline loader enhanced navigation fallback', () => {
         headers: {
           get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
         },
+        redirected: false,
         text: async () => '<!doctype html><html></html>',
         url,
       });
@@ -1419,6 +1601,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: href,
         })),
         href: 'http://app.test/guides/install',
@@ -1486,6 +1669,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: href,
         })),
         locationHref: 'http://app.test/products',
@@ -1577,6 +1761,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: href,
         })),
         locationHref: 'http://app.test/products',
@@ -1716,6 +1901,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: 'http://app.test/cart',
         }));
         globalRecord.history = { pushState };
@@ -1831,6 +2017,7 @@ describe('inline loader enhanced navigation fallback', () => {
             get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
           },
           text: async () => '<!doctype html><html></html>',
+          redirected: false,
           url: 'http://app.test/cart',
         })),
         async assert({ assign: harnessAssign, preventDefault, pushState }) {

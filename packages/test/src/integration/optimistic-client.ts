@@ -12,6 +12,7 @@ import {
 } from '@kovojs/browser/generated';
 import { keyedDomMorph } from '@kovojs/browser/internal/morph';
 import {
+  familyPendingQuerySelector,
   OptimisticRebaser,
   stampPendingQueries,
   submitOptimisticEnhancedMutation,
@@ -59,6 +60,8 @@ export function installOptimisticFixtureClient(
   const store = createQueryStore();
   const rebaser = new OptimisticRebaser(store);
   const root = optimisticFixtureRuntimeRoot();
+  const expectedBuildToken =
+    document.querySelector('meta[name="kovo-build"]')?.getAttribute('content') ?? '';
 
   if (options.installLoader !== false) {
     installKovoLoader({
@@ -66,7 +69,11 @@ export function installOptimisticFixtureClient(
         ? {
             discardPendingOptimism() {
               const discarded = rebaser.discardPendingOptimism();
-              stampPendingQueries(document, discarded, false);
+              stampPendingQueries(
+                document,
+                discarded.map((name) => familyPendingQuerySelector(name)),
+                false,
+              );
               return discarded;
             },
           }
@@ -92,6 +99,7 @@ export function installOptimisticFixtureClient(
     store,
     submitForm<Input>(form: HTMLFormElement, submitOptions: OptimisticFixtureSubmitOptions<Input>) {
       return submitOptimisticEnhancedMutation({
+        expectedBuildToken,
         fetch: defaultEnhancedFetch as EnhancedMutationFetch,
         form,
         formData: submitOptions.formData ?? new FormData(form),

@@ -1,9 +1,24 @@
 import { afterEach, expect, it } from 'vitest';
 
-import { submitOptimisticEnhancedMutation } from './mutation-optimistic.js';
+import {
+  submitOptimisticEnhancedMutation as submitOptimisticEnhancedMutationWithBuild,
+  type OptimisticEnhancedMutationSubmitOptions,
+} from './mutation-optimistic.js';
 import { OptimisticRebaser } from './optimism.js';
 import { createQueryStore } from './query-store.js';
+
 import { FakeMorphRoot } from './runtime-test-fakes.js';
+
+function submitOptimisticEnhancedMutation<Input>(
+  options: Omit<OptimisticEnhancedMutationSubmitOptions<Input>, 'expectedBuildToken'> & {
+    expectedBuildToken?: string;
+  },
+) {
+  return submitOptimisticEnhancedMutationWithBuild({
+    expectedBuildToken: 'build-test',
+    ...options,
+  });
+}
 
 const nativeArrayFilter = Array.prototype.filter;
 const nativeMapGet = Map.prototype.get;

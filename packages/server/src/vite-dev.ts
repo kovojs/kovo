@@ -629,6 +629,21 @@ function viteDevUrlSearchParam(url: RequestUrlSnapshot, name: string): string | 
   return null;
 }
 
+function singleNonEmptyViteDevUrlSearchParam(
+  url: RequestUrlSnapshot,
+  name: string,
+): { readonly valid: boolean; readonly value?: string } {
+  const entries = requestUrlSearchParamsEntries(url.searchParams);
+  let value: string | undefined;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    if (entry[0] !== name) continue;
+    if (value !== undefined || entry[1] === '') return { valid: false };
+    value = entry[1];
+  }
+  return value === undefined ? { valid: true } : { valid: true, value };
+}
+
 async function writeKovoAppShellViteDevRouteResponse(
   routeResponse: RoutePageResponse,
   request: IncomingMessage,
@@ -684,6 +699,16 @@ async function renderKovoHmrRouteRefreshResponse(
     });
   }
 
+  const previousBuildToken = exactHmrPreviousBuildToken(endpointUrl, request);
+  if (previousBuildToken === undefined) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR route refresh requires one exact document build proof.',
+      409,
+      app,
+      { fallback: 'full-reload', refreshKind: 'route' },
+    );
+  }
+
   const webRequest = nodeRequestToWebRequest(request);
   const targetUrl = hmrRefreshTargetUrl(endpointUrl, webRequest, request);
   if (securityIsResponse(targetUrl)) return targetUrl;
@@ -700,7 +725,7 @@ async function renderKovoHmrRouteRefreshResponse(
       }),
       app,
       'route',
-      previousHmrBuildToken(endpointUrl, request),
+      previousBuildToken,
     );
   }
 
@@ -710,7 +735,7 @@ async function renderKovoHmrRouteRefreshResponse(
     await injectKovoHmrScriptIntoWebResponse(routeResponse),
     app,
     'route',
-    previousHmrBuildToken(endpointUrl, request),
+    previousBuildToken,
   );
 }
 
@@ -723,6 +748,19 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     return hmrRefreshTextResponse('Kovo HMR live-target refresh only accepts POST.', 405, app, {
       refreshKind: 'live-targets',
     });
+  }
+
+  const requestBuildToken = exactHmrPreviousBuildToken(endpointUrl, request);
+  if (requestBuildToken === undefined) {
+    return hmrRefreshTextResponse(
+      'Kovo HMR live-target refresh requires one exact document build proof.',
+      409,
+      app,
+      {
+        fallback: 'full-reload',
+        refreshKind: 'live-targets',
+      },
+    );
   }
 
   const webRequest = nodeRequestToWebRequest(request);
@@ -779,14 +817,13 @@ async function renderKovoHmrLiveTargetRefreshResponse(
     );
   }
 
-  const buildToken = app.clientModules.buildToken();
-  const liveTargetAudience = appLiveTargetAttestationAudience(app, buildToken);
-  const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
+  const liveTargetAudience = appLiveTargetAttestationAudience(app, requestBuildToken);
+  const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, requestBuildToken);
   // Dev HMR is still an HTTP authority boundary. Verify the browser descriptor against the exact
   // app/build, source route, and authorized principal before any generated renderer can run a
   // query (SPEC §§6.6, 8, 9.3, 9.5.1).
   const wireRequest = mutationWireRequestFromHeaders({
-    buildToken,
+    buildToken: requestBuildToken,
     liveTargetAttestationAuthority,
     liveTargetAudience,
     liveTargetSourceUrl: targetUrl.href,
@@ -839,7 +876,7 @@ async function renderKovoHmrLiveTargetRefreshResponse(
       {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
       },
-      previousHmrBuildToken(endpointUrl, request),
+      requestBuildToken,
     ),
     status: 200,
   });
@@ -1014,15 +1051,15 @@ function appendHmrVaryToken(headers: Headers, token: string): void {
   securityHeadersSet(headers, 'Vary', `${existing}, ${token}`);
 }
 
-function previousHmrBuildToken(
+function exactHmrPreviousBuildToken(
   endpointUrl: RequestUrlSnapshot,
   request: IncomingMessage,
 ): string | undefined {
-  return (
-    viteDevUrlSearchParam(endpointUrl, 'oldBuild') ??
-    viteDevUrlSearchParam(endpointUrl, 'build') ??
-    readHeader(request.headers, 'Kovo-Build')
-  );
+  const requestBuildToken = readHeader(request.headers, 'Kovo-Build');
+  const oldBuild = singleNonEmptyViteDevUrlSearchParam(endpointUrl, 'oldBuild');
+  return oldBuild.valid && oldBuild.value !== undefined && requestBuildToken === oldBuild.value
+    ? oldBuild.value
+    : undefined;
 }
 
 function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): RoutePageResponse {
@@ -1234,6 +1271,7 @@ import { createHotContext } from "/@vite/client";
 
 const hot = createHotContext("${kovoHmrClientPath}");
 const reload = () => location.reload();
+const hmrFetch = globalThis.fetch;
 const frameworkWireInputGrammar = ${kovoHmrWireInputGrammarSource};
 const createFrameworkWireTargetCodec = ${kovoHmrWireTargetCodecSource};
 const frameworkWireTargetCodec = createFrameworkWireTargetCodec(frameworkWireInputGrammar);
@@ -1246,7 +1284,7 @@ const currentBuild = () => hmrTargetSnapshotReader.currentBuild(document);
 const liveTargets = () => hmrTargetSnapshotReader.liveTargets(document);
 const dependencyTargets = () => hmrTargetSnapshotReader.dependencyTargets(document);
 
-async function refreshLiveTargets(event) {
+async function refreshLiveTargets() {
   const apply = globalThis.__kovo_a;
   let live;
   let targets;
@@ -1259,7 +1297,10 @@ async function refreshLiveTargets(event) {
   if (typeof apply !== "function" || live.length === 0) return reload();
 
   const currentUrl = location.origin + location.pathname + location.search;
+  const build = currentBuild();
+  if (!build) return reload();
   const requestPlan = frameworkWireTargetCodec.planTargetRequestHeaders({
+    build,
     currentUrl,
     liveTargets: live,
     targets,
@@ -1267,28 +1308,39 @@ async function refreshLiveTargets(event) {
   if (!requestPlan) return reload();
   const url = new URL("${kovoHmrLiveTargetRefreshPath}", currentUrl);
   url.searchParams.set("url", currentUrl);
-  const build = currentBuild();
-  if (build) url.searchParams.set("oldBuild", build);
-  if (event?.oldFactHash) url.searchParams.set("oldFactHash", event.oldFactHash);
+  url.searchParams.set("oldBuild", build);
 
-  const response = await fetch(url, {
+  const response = await hmrFetch(url, {
     headers: requestPlan.headers,
     method: "POST",
+    redirect: "error",
     referrerPolicy: "origin",
   });
 
   const previousBuild = response.headers.get("Kovo-Previous-Build") || "";
   const nextBuild = response.headers.get("Kovo-Build") || "";
-  if (!response.ok || (previousBuild && currentBuild() && previousBuild !== currentBuild())) {
+  if (
+    !response.ok ||
+    response.redirected !== false ||
+    response.url !== url.href ||
+    response.headers.get("Kovo-HMR-Refresh") !== "live-targets" ||
+    !hmrTargetSnapshotReader.responseEnvelopeIsFragment(
+      response.headers.get("Content-Type"),
+      response.headers.get("Content-Disposition"),
+    ) ||
+    previousBuild !== build ||
+    !nextBuild ||
+    currentBuild() !== build
+  ) {
     return reload();
   }
 
   apply(await response.text());
-  if (nextBuild) hmrTargetSnapshotReader.writeBuild(document, nextBuild);
+  hmrTargetSnapshotReader.writeBuild(document, nextBuild);
 }
 
-hot.on("kovo:component-render", (event) => {
-  refreshLiveTargets(event).catch(reload);
+hot.on("kovo:component-render", () => {
+  refreshLiveTargets().catch(reload);
 });
 // SPEC §5.2 rule 10: a whole-document refresh must re-enter the canonical server document sink.
 // Do not introduce a second raw HTML parser through document.write in the dev-only client.

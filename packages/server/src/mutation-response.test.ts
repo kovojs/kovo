@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
+import {
+  encodeFrameworkFormTargetHeader,
+  encodeFrameworkIdentityToken,
+  encodeFrameworkTargetHeader,
+} from '@kovojs/core/internal/wire-input-grammar';
 
 import {
   coalesceMutationStreamChunks,
@@ -75,7 +80,20 @@ function attestedLiveTargetHeader(
     { component, props, target },
     { buildToken: mutationResponseTestAuthority.audience, request: {} },
   );
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+  const encodedTarget = encodeFrameworkIdentityToken(target);
+  const encodedComponent = encodeFrameworkIdentityToken(component);
+  if (!encodedTarget || !encodedComponent) {
+    throw new TypeError('Test live-target identity is invalid.');
+  }
+  return `${encodedTarget}#${encodedComponent}@${token}:${JSON.stringify(props)}`;
+}
+
+function keyedQueryTargetHeader(
+  ...entries: readonly (readonly [target: string, name: string, key: string])[]
+): string {
+  return encodeFrameworkTargetHeader(
+    entries.map(([target, name, key]) => ({ deps: [{ key, name }], target })),
+  );
 }
 
 describe('server mutation primitives', () => {
@@ -521,7 +539,10 @@ describe('server mutation primitives', () => {
             `${attestedLiveTargetHeader('product-card:p1', 'components/product/card', { productId: 'p1' })}`,
             `${attestedLiveTargetHeader('product-card:p2', 'components/product/card', { productId: 'p2' })}`,
           ].join('; '),
-          'Kovo-Targets': 'product-card:p1=product:p1; product-card:p2=product:p2',
+          'Kovo-Targets': keyedQueryTargetHeader(
+            ['product-card:p1', 'product', 'product:p1'],
+            ['product-card:p2', 'product', 'product:p2'],
+          ),
         },
         liveTargetRenderers: [
           componentLiveTargetRenderer({
@@ -629,7 +650,11 @@ describe('server mutation primitives', () => {
         headers: {
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': `${attestedLiveTargetHeader('question-detail-region', 'components/question/detail', { questionId: 'q1' })}`,
-          'Kovo-Targets': 'question-detail-region=question:q1',
+          'Kovo-Targets': keyedQueryTargetHeader([
+            'question-detail-region',
+            'questionDetail',
+            'question:q1',
+          ]),
         },
         liveTargetRenderers: [
           componentLiveTargetRenderer({
@@ -703,7 +728,10 @@ describe('server mutation primitives', () => {
             productId: 'p2',
           }),
         ].join('; '),
-        'Kovo-Targets': 'product-panel:p1=coarseProduct; product-panel:p2=coarseProduct',
+        'Kovo-Targets': keyedQueryTargetHeader(
+          ['product-panel:p1', 'coarseProduct', 'coarseProduct:p1'],
+          ['product-panel:p2', 'coarseProduct', 'coarseProduct:p2'],
+        ),
       },
       liveTargetRenderers: [
         componentLiveTargetRenderer({
@@ -885,7 +913,7 @@ describe('server mutation primitives', () => {
     expect(sensitiveRenderer).not.toHaveBeenCalled();
   });
 
-  it('does not let unattested Kovo-Targets entries select private query reruns', async () => {
+  it('rejects the whole live-target set when any descriptor is unattested', async () => {
     const publicDomain = domain('public');
     const privateDomain = domain('private');
     const publicLoad = vi.fn(() => ({ value: 'PUBLIC_VALUE' }));
@@ -936,9 +964,9 @@ describe('server mutation primitives', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body).toContain('PUBLIC_VALUE');
+    expect(response.body).not.toContain('PUBLIC_VALUE');
     expect(response.body).not.toContain('SERVER_DATABASE_SECRET');
-    expect(publicLoad).toHaveBeenCalled();
+    expect(publicLoad).not.toHaveBeenCalled();
     expect(privateLoad).not.toHaveBeenCalled();
   });
 
@@ -1058,7 +1086,7 @@ describe('server mutation primitives', () => {
           },
         ],
         headers: {
-          'Kovo-Form-Target': 'product-form:p1',
+          'Kovo-Form-Target': encodeFrameworkFormTargetHeader('product-form:p1')!,
           'Kovo-Fragment': 'true',
           'Kovo-Targets': 'cart-badge=cart; product-form:p1=product:p1',
         },
@@ -1117,7 +1145,7 @@ describe('server mutation primitives', () => {
     await expect(
       renderMutationEndpointResponse(addToCart, {
         headers: {
-          'Kovo-Form-Target': 'product-form:p1',
+          'Kovo-Form-Target': encodeFrameworkFormTargetHeader('product-form:p1')!,
           'Kovo-Fragment': 'true',
           'Kovo-Targets': 'cart-badge=cart',
         },

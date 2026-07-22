@@ -47,12 +47,15 @@ import { securityEvent } from './security-event.js';
 import { canonicalRequestMethod, isSafeEndpointMethod } from './request-method.js';
 import {
   requestDecodeURIComponent,
+  requestHeader,
   requestMethod,
   requestUrlSearchParams,
 } from './request-body-intrinsics.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
+  /** Build token snapshotted by the admitted request shell. */
+  buildToken?: string;
   match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>;
   method?: string;
   request: Request;
@@ -60,8 +63,84 @@ export interface MatchedAppDispatchOptions {
   url: URL;
 }
 
+/**
+ * Snapshot whether a request uses Kovo's build-bound enhanced transport without consulting any
+ * app-owned registry or decoding target/query carriers. The request shell may run this classifier
+ * before coarse admission; the actual build comparison stays behind that boundary (SPEC §9.5).
+ *
+ * @internal
+ */
+export function isEnhancedBuildBoundRequest(
+  request: Request,
+  kind: ShellDispatchMatch['kind'],
+  method: string,
+): boolean {
+  const canonicalMethod = canonicalRequestMethod(method);
+  if (
+    (kind === 'query' && canonicalMethod !== 'GET' && canonicalMethod !== 'HEAD') ||
+    (kind === 'mutation' && canonicalMethod !== 'POST')
+  ) {
+    return false;
+  }
+  if (kind !== 'query' && kind !== 'mutation') return false;
+  // Native forms and native query navigation never emit a Kovo-* request carrier. Treat every
+  // reserved enhanced carrier as sufficient classification evidence so stripping all but one
+  // cannot downgrade a stale page request into the native decoder/handler path.
+  return (
+    requestHeader(request, 'kovo-build') !== null ||
+    requestHeader(request, 'kovo-current-url') !== null ||
+    requestHeader(request, 'kovo-fragment') !== null ||
+    requestHeader(request, 'kovo-targets') !== null ||
+    requestHeader(request, 'kovo-live-targets') !== null ||
+    requestHeader(request, 'kovo-form-target') !== null ||
+    requestHeader(request, 'kovo-idem') !== null ||
+    requestHeader(request, 'kovo-stream') !== null
+  );
+}
+
+/**
+ * Reject an enhanced request whose immutable document build cannot select this app's decoder.
+ * The app request shell calls this before reserved query-key decoding; dispatch repeats the check
+ * as a fail-closed boundary for direct internal callers (SPEC §5.2.1/§14).
+ *
+ * @internal
+ */
+export function enhancedRequestBuildSkewResponse(
+  app: KovoApp,
+  request: Request,
+  kind: ShellDispatchMatch['kind'],
+  method: string,
+): Response | undefined {
+  if (!isEnhancedBuildBoundRequest(request, kind, method)) return undefined;
+  return enhancedRequestBuildSkewResponseForToken(request, method, app.clientModules.buildToken());
+}
+
+/** @internal Compare a preclassified enhanced request with an already-admitted build snapshot. */
+export function enhancedRequestBuildSkewResponseForToken(
+  request: Request,
+  method: string,
+  buildToken: string,
+): Response | undefined {
+  if (requestHeader(request, 'kovo-build') === buildToken) return undefined;
+  return serverResponseToWebResponse(
+    {
+      body: '',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Build': buildToken,
+        'Kovo-Build-Skew': 'true',
+        Vary: 'Cookie',
+      },
+      status: 409,
+    },
+    { method },
+  );
+}
+
 export async function dispatchMatchedAppRequest({
   app,
+  buildToken: admittedBuildToken,
   match,
   method,
   request,
@@ -87,14 +166,20 @@ export async function dispatchMatchedAppRequest({
     if (canonicalMethod !== 'GET' && canonicalMethod !== 'HEAD') {
       return methodNotAllowedWebResponse({ method: exactMethod }, ['GET', 'HEAD']);
     }
+    const buildToken = admittedBuildToken ?? app.clientModules.buildToken();
+    const enhanced = isEnhancedBuildBoundRequest(request, match.kind, exactMethod);
+    const buildSkew = enhanced
+      ? enhancedRequestBuildSkewResponseForToken(request, exactMethod, buildToken)
+      : undefined;
+    if (buildSkew !== undefined) return buildSkew;
 
     // SPEC §5.2.1 rule 2(d): include the build token so `renderQueryEndpointResponse`
     // can stamp it as `Kovo-Build` on the 200 read response.
-    const buildToken = app.clientModules.buildToken();
     const queryRequest: QueryEndpointRequest<Request> = {
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       buildToken,
+      ...(enhanced ? { enhanced: true as const } : {}),
       maxListItems: app.requestLimits.maxQueryListItems,
       request,
       search: requestUrlSearchParams(url),
@@ -114,12 +199,23 @@ export async function dispatchMatchedAppRequest({
   }
 
   if (match.kind === 'mutation') {
+    const canonicalMethod = canonicalRequestMethod(exactMethod);
+    const buildToken =
+      canonicalMethod === 'POST'
+        ? (admittedBuildToken ?? app.clientModules.buildToken())
+        : undefined;
+    const buildSkew =
+      buildToken !== undefined && isEnhancedBuildBoundRequest(request, match.kind, exactMethod)
+        ? enhancedRequestBuildSkewResponseForToken(request, exactMethod, buildToken)
+        : undefined;
+    if (buildSkew !== undefined) return buildSkew;
     return handleAppMutationRequest(
       app,
       request,
       url,
       reservedKey ?? requestDecodeURIComponent(match.key),
       exactMethod,
+      buildToken,
     );
   }
 

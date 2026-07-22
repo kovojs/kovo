@@ -511,6 +511,7 @@ export function createBrowserNavigationSecurityControls(
     ['content-type', 'content-type'],
     ['content-disposition', 'Content-Disposition'],
     ['kovo-build', 'Kovo-Build'],
+    ['kovo-build-skew', 'Kovo-Build-Skew'],
     ['kovo-changes', 'Kovo-Changes'],
     ['kovo-session-transition', 'Kovo-Session-Transition'],
     ['kovo-reauth', 'Kovo-Reauth'],
@@ -2819,7 +2820,10 @@ export function createBrowserNavigationSecurityControls(
   }
 
   async function fetchDocument(href: string, accept: string): Promise<unknown> {
-    return fetchWith(browserFetch, scope, href, { headers: { Accept: accept } });
+    return fetchWith(browserFetch, scope, href, {
+      headers: { Accept: accept },
+      redirect: 'error',
+    });
   }
 
   async function fetchValue(input: string, init: object): Promise<unknown> {

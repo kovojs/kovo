@@ -6,6 +6,7 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
+import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
 import {
   componentMutationFailureSlots,
   renderComponent,
@@ -16,7 +17,12 @@ import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { renderServerRenderable } from './renderable.js';
-import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './query.js';
+import {
+  readQueryInstanceKey,
+  recordQueryRuntimeWarnings,
+  runQuery,
+  type QueryDefinition,
+} from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 import type { ErrorBoundaryRenderer } from './mutation-wire.js';
 import { revealUntrustedRequestValue } from './untrusted-request-body.js';
@@ -141,7 +147,7 @@ export function componentLiveTargetRenderer<
     queryBindings,
     queryDefinitions: witnessFreeze(queryDefinitions),
     async render(context) {
-      const queries = await loadLiveTargetQueries(queryBindings, context);
+      const loadedQueries = await loadLiveTargetQueries(queryBindings, context);
       const resolvedRenderOptions = await componentLiveTargetRenderOptions(
         mutationBindings,
         renderOptions as ComponentLiveTargetRendererOptions<
@@ -169,7 +175,12 @@ export function componentLiveTargetRenderer<
                 },
               }),
         },
-        () => renderComponent(component, { ...context.props, ...queries }, resolvedRenderOptions),
+        () =>
+          renderComponent(
+            component,
+            { ...context.props, ...loadedQueries.values },
+            resolvedRenderOptions,
+          ),
       );
       return stampKovoComponentRoot({
         attestationAuthority: context.attestationAuthority,
@@ -177,6 +188,7 @@ export function componentLiveTargetRenderer<
         componentName: componentId,
         html,
         props: context.props,
+        queryIdentities: loadedQueries.identities,
         request: context.request,
         target: context.target,
       });
@@ -320,8 +332,12 @@ function isQueryDefinition<Request>(
 async function loadLiveTargetQueries<Request>(
   bindings: readonly ComponentLiveTargetQueryBinding<Request>[],
   context: LiveTargetRenderContext<Request>,
-): Promise<Record<string, unknown>> {
+): Promise<{
+  identities: readonly FrameworkQueryDependencyIdentity[];
+  values: Record<string, unknown>;
+}> {
   const values = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
+  const identities: FrameworkQueryDependencyIdentity[] = [];
 
   for (let index = 0; index < bindings.length; index += 1) {
     const binding = bindings[index]!;
@@ -336,9 +352,15 @@ async function loadLiveTargetQueries<Request>(
     }
     recordQueryRuntimeWarnings(context.request, result.warnings);
     values[binding.name] = result.value;
+    const key = readQueryInstanceKey(binding.query, result.input);
+    witnessArrayAppend(
+      identities,
+      key === undefined ? { name: binding.query.key } : { key, name: binding.query.key },
+      'Live-target query identities',
+    );
   }
 
-  return values;
+  return { identities, values };
 }
 
 function revealLiveTargetValue(value: unknown): unknown {

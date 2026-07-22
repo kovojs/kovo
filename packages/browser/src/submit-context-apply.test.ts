@@ -51,6 +51,7 @@ describe('submit context apply', () => {
       });
     });
     const ctx = createSubmitContext({
+      expectedBuildToken: 'build-test',
       fetch,
       morph(target, html) {
         observed.push(`morph:${count.textContent}:${summary.textContent}`);
@@ -79,6 +80,7 @@ describe('submit context apply', () => {
       body: expect.any(FormData),
       headers: {
         Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Build': 'build-test',
         'Kovo-Current-Url': 'http://localhost/',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000001',
@@ -87,6 +89,7 @@ describe('submit context apply', () => {
       },
       keepalive: true,
       method: 'POST',
+      redirect: 'error',
       referrerPolicy: 'origin',
     });
     expect(result.appliedFragments).toEqual(['cart-badge']);
@@ -99,6 +102,7 @@ describe('submit context apply', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const ctx = createSubmitContext({
+      expectedBuildToken: 'build-test',
       async fetch() {
         return {
           async text() {

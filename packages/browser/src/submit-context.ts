@@ -32,6 +32,8 @@ export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure>
 export interface SubmitContextOptions {
   actionFor?: (form: SubmitFormDefinition) => string;
   broadcast?: MutationBroadcast;
+  /** Construction-time page build proof required by the enhanced request planner. */
+  expectedBuildToken: string;
   fetch: EnhancedMutationFetch;
   method?: string;
   morph?: MorphFragment;
@@ -60,19 +62,8 @@ export function createSubmitContext(options: SubmitContextOptions): SubmitContex
       let ok: boolean | undefined;
       let status: number | undefined;
       const response = await submitEnhancedMutation({
-        fetch: async (url, fetchOptions) => {
-          const result = await options.fetch(url, fetchOptions);
-          ok = result.ok;
-          status = result.status;
-
-          return {
-            ...result,
-            async text() {
-              body = await result.text();
-              return body;
-            },
-          };
-        },
+        expectedBuildToken: options.expectedBuildToken,
+        fetch: options.fetch,
         form: createEnhancedFormLike(
           submitOptions.action ?? options.actionFor?.(form) ?? `/_m/${form.key}`,
           submitOptions.method ?? options.method,
@@ -84,6 +75,11 @@ export function createSubmitContext(options: SubmitContextOptions): SubmitContex
           morph: options.morph,
           queryPlans: options.queryPlans,
         }),
+        onResponseSnapshot(snapshot) {
+          body = snapshot.body;
+          ok = snapshot.ok;
+          status = snapshot.status;
+        },
         root: options.root,
         store: options.store,
       } satisfies EnhancedMutationSubmitOptions);

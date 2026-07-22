@@ -16,7 +16,8 @@ import type {
   QueryBindingRoot,
 } from './query-bindings.js';
 import type { QueryIdentity, QueryStore } from './query-store.js';
-import { createQueryIdentity, queryIdentityDisplay, queryStoreKey } from './query-store.js';
+import { createQueryIdentity, queryStoreKey } from './query-store.js';
+import { rememberQueryRefetchHref } from './query-refetch-metadata.js';
 import type { QueryChunk } from './wire-parser.js';
 import {
   freezeSecurityValue,
@@ -150,6 +151,7 @@ function applyQueryChunks(
     }
     const query = queryEntry.value;
     try {
+      rememberQueryRefetchHref(query.name, query.key, query.href);
       const value = applyQueryChunk(store, query, options.applyQuery, options.onDeltaMiss);
       options.afterApplyQuery?.(query, value);
       securityArrayAppend(
@@ -183,7 +185,6 @@ export function applyQueryChunksToRuntime(
   return applyQueryChunks(store, queries, {
     afterApplyQuery(query, value) {
       const identity = createQueryIdentity(query.name, query.key);
-      const queryKey = queryIdentityDisplay(identity);
       const planKey = queryStoreKey(query.name, query.key);
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
@@ -191,7 +192,7 @@ export function applyQueryChunksToRuntime(
         value,
         options.queryPlans?.[planKey] ?? options.queryPlans?.[query.name],
         readBindingIndex,
-        query.key === undefined ? undefined : queryKey,
+        identity,
         store,
       );
       options.afterApplyQuery?.(query, value);
@@ -216,7 +217,7 @@ function applyCompiledQueryUpdatePlanIfSupported(
   value: unknown,
   plan: CompiledQueryUpdatePlan = {},
   readBindingIndex?: (root: QueryBindingRoot) => QueryBindingIndex,
-  queryKey?: string,
+  queryIdentity?: QueryIdentity,
   queryStore?: QueryStore,
 ): void {
   if (!root || !supportsQueryBindings(root)) return;
@@ -228,7 +229,7 @@ function applyCompiledQueryUpdatePlanIfSupported(
         : {}
       : {
           bindingIndex: readBindingIndex(root),
-          ...(queryKey === undefined ? {} : { queryKey }),
+          ...(queryIdentity === undefined ? {} : { queryIdentity }),
           ...(queryStore ? { queryStore } : {}),
         };
   applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
