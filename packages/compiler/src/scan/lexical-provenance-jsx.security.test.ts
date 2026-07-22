@@ -154,6 +154,36 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
     expect(hasCandidate(fact, (candidate) => isImport(candidate, 'route'))).toBe(true);
   });
 
+  it('closes raw process authority reached from a route root assigned inside JSX', () => {
+    const result = analyzeCapabilityClosure({
+      files: [
+        {
+          fileName: 'app.tsx',
+          source: `
+            import { route } from '@kovojs/server';
+            function localFactory() { return null; }
+            let make = localFactory;
+            const view = <div>{(make = route, null)}</div>;
+            export const page = make('/hidden-process-root', {
+              render() { return process.env.SECRET; },
+            });
+            void view;
+          `,
+        },
+      ],
+    });
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        capability: 'process',
+        kind: 'closed',
+        name: '/hidden-process-root',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+  });
+
   it('evaluates JSX props before the component invocation can write root provenance', () => {
     const { call } = analyzeSource(`
       import { route } from '@kovojs/server';
