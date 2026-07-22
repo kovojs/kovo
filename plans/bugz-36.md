@@ -3,7 +3,7 @@
 <!-- kovo-security-ledger: transient -->
 
 **Date:** 2026-07-21
-**Status:** OPEN — seven compiler/browser/deploy roots remain under remediation
+**Status:** OPEN — eight compiler/browser/deploy roots remain under remediation
 **Baseline:** `11ba9ce4fbb0da08a458ce25ba575851efbc9082`
 **Lifecycle:** `active`; archive after the verified closing tip is published and required CI is
 green.
@@ -21,7 +21,7 @@ trusted the expected identity supplied by the same subject.
 | -------- | ---: | -----: |
 | Critical |    0 |      3 |
 | High     |    0 |     10 |
-| Medium   |    5 |     10 |
+| Medium   |    6 |     10 |
 | Low      |    2 |      2 |
 
 ## Critical
@@ -332,6 +332,21 @@ trusted the expected identity supplied by the same subject.
     successful typed read; require the reserved fragment envelope plus exact marker for the
     framework's skew 409. Cover foreign/cross-origin redirects and forged public tokens in modular,
     lifecycle, HMR, and generated-inline paths.
+
+- [ ] **M16 — Enhanced mutation responses trusted the wrong same-origin endpoint.**
+  - The modular and inline mutation paths admitted any final same-origin response before reading
+    framework build, session-transition, reauthentication, change, and fragment truth. An
+    unredirected response whose final URL named another same-origin endpoint could therefore apply
+    that endpoint's fragment body or trigger framework recovery/navigation authority.
+  - **Dedup:** distinct from M15's credential-bearing typed-read redirect and M14's request-side
+    decoder selection. Mutation transport already rejected cross-origin results; it failed to bind
+    an unredirected response to the exact mutation action URL.
+  - **Open work:** snapshot the absolute action URL before transport. Before reading any `Kovo-*`
+    header or body, require either (a) `redirected === false` plus an exact final action URL, which is
+    the only branch eligible for fragment authority, or (b) `redirected === true` plus a canonical
+    same-origin final URL, treated solely as navigation. Keep an exact manual 303 plus sanitized
+    `Location` navigation-only, fail closed on absent/ambiguous redirect facts, and prove modular
+    and generated-inline wrong-endpoint, followed-redirect, PRG, session, and fragment cases.
 
 ## Low
 

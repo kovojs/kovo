@@ -85,7 +85,7 @@
       "openedOn": "2026-07-21",
       "archiveBy": "2026-08-18",
       "archivePath": "plans/history/bugz-36.md",
-      "summary": "Follow-up review reopened the ledger while compiler capture, browser identity, typed-read origin, and deploy-skew findings are remediated."
+      "summary": "Follow-up review reopened the ledger while compiler capture, browser identity, response-origin, and deploy-skew findings are remediated."
     }
   ],
   "history": {
