@@ -244,6 +244,32 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     ).resolves.toMatchObject({ ok: true });
   });
 
+  it('never downgrades no-substitution template imports into an opaque premise', async () => {
+    const reason =
+      'contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage';
+    for (const specifier of [
+      'node:child_process',
+      'node:crypto',
+      './worker.mjs',
+      'data:text/javascript,export default true',
+      '/absolute.mjs',
+    ]) {
+      const artifacts = artifactSource({
+        [rootModule]: `export const loaded = import(\`${specifier}\`);`,
+        ...(specifier === './worker.mjs' ? { [workerModule]: 'export const worker = true;' } : {}),
+      });
+      const certificate = certificateFor(artifacts, {
+        opaque: [{ module: rootModule, reason }],
+      });
+      const result = await verifyBound(certificate, artifacts);
+      expect(result.findings, specifier).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'unsupported-template-import', obligation: 'coverage' }),
+        ]),
+      );
+    }
+  });
+
   it('independently classifies every member of the frozen capability domain', async () => {
     const specimens = new Map<string, (typeof KOVO_CERTIFICATE_CAPABILITY_DOMAIN)[number]>([
       ['pg', 'database-driver'],

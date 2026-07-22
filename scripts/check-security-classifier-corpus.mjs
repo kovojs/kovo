@@ -4379,6 +4379,73 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
       },
     ],
   },
+  {
+    id: 'certificate-verifier',
+    marker: '@kovo-security-classifier-corpus certificate-verifier',
+    testFiles: [
+      'packages/verify/src/directory.test.ts',
+      'packages/verify/src/file-snapshot-open.test.ts',
+      'packages/verify/src/index.test.ts',
+      'scripts/kovo-certificate.test.mjs',
+    ],
+    verdictAnchors: [
+      {
+        id: 'certificate-evidence-fifo-open',
+        file: 'packages/verify/src/file-snapshot-open.test.ts',
+        snippets: [
+          'uses nonblocking no-follow open before descriptor identity validation',
+          'actual.constants.O_NONBLOCK',
+          'race-safe open flags',
+        ],
+      },
+      {
+        id: 'certificate-url-artifact-identity',
+        file: 'packages/verify/src/directory.test.ts',
+        snippets: [
+          'rejects URL-encoded artifact aliases that Node resolves to different bytes',
+          "import './%2e%2e/evil.mjs'",
+          "code: 'policy-artifact'",
+        ],
+      },
+      {
+        id: 'certificate-root-manifest-scope',
+        file: 'packages/verify/src/directory.test.ts',
+        snippets: [
+          'rejects nested scopes that shadow package imports and self-references',
+          "import '#target'; import '@kovojs/server/target';",
+          "code: 'unsupported-executable-artifact'",
+        ],
+      },
+      {
+        id: 'certificate-declaration-condition-closure',
+        file: 'packages/verify/src/directory.test.ts',
+        snippets: [
+          'rejects executable targets hidden behind type-oriented export conditions',
+          'rejects executable targets hidden behind versioned type import conditions',
+          "types: './dist/types-evil.mjs'",
+          "'types@>=5.0': './dist/types-evil.mjs'",
+        ],
+      },
+      {
+        id: 'certificate-directory-entry-budget',
+        file: 'packages/verify/src/directory.test.ts',
+        snippets: [
+          'bounds directory-only trees and rejects nested node_modules scopes',
+          'index < 4_094',
+          "code: 'artifact-list'",
+        ],
+      },
+      {
+        id: 'certificate-template-import-no-downgrade',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'never downgrades no-substitution template imports into an opaque premise',
+          'node:child_process',
+          "code: 'unsupported-template-import'",
+        ],
+      },
+    ],
+  },
 ];
 
 export function evaluateSecurityClassifierCorpus(options = {}) {

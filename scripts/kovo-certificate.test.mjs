@@ -82,6 +82,17 @@ describe('kovo.certificate/v1 search-side generator', () => {
         Buffer.from(stableKovoCertificatePolicyJson(encodedPolicy)),
       ),
     ).toThrow(/package import target.*not canonical/iu);
+
+    const executableTypesPolicy = JSON.parse(policyBytes.toString('utf8'));
+    executableTypesPolicy.packages[0].manifest.exports = {
+      '.': { types: './dist/types-evil.mjs', default: './dist/index.mjs' },
+    };
+    expect(() =>
+      generateKovoCertificateFromAnalysis(
+        analysis,
+        Buffer.from(stableKovoCertificatePolicyJson(executableTypesPolicy)),
+      ),
+    ).toThrow(/types.*declaration targets/iu);
   });
 
   it('preserves crypto import bindings through production analysis and generation', () => {

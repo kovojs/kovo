@@ -149,6 +149,8 @@ const trustedHtmlProvenancePath = path.join(
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
 const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
+const verifyIndexPath = path.join(repoRoot, 'packages/verify/src/index.ts');
+const verifyFileSnapshotPath = path.join(repoRoot, 'packages/verify/src/file-snapshot.ts');
 const serverAppPath = path.join(repoRoot, 'packages/server/src/app.ts');
 const appRequestPath = path.join(repoRoot, 'packages/server/src/app-request.ts');
 const serverNodePath = path.join(repoRoot, 'packages/server/src/node.ts');
@@ -2173,6 +2175,40 @@ const removedFrameworkOwnedConnectCarrierSnapshot = [
   '      options = snapshotConnectOptions(options);',
   '      void options;',
 ].join('\n');
+const verifyPercentArtifactPathBranch =
+  '    /^@kovojs\\/[a-z0-9]+(?:-[a-z0-9]+)*\\/dist\\/[A-Za-z0-9_./-]+\\.mjs$/u.test(value) &&';
+const removedVerifyPercentArtifactPathBranch = '    true &&';
+const verifyRootPackageManifestBranch = '    if (relativePath === `${packageName}/package.json`) {';
+const weakenedVerifyRootPackageManifestBranch = "    if (relativePath.endsWith('/package.json')) {";
+const verifyDeclarationOnlyConditionBranch = [
+  "    if (key === 'types' || key.startsWith('types@')) {",
+  '      assertDeclarationOnlyManifestTargets(value[key], `condition ${JSON.stringify(key)}`);',
+  '      continue;',
+  '    }',
+].join('\n');
+const removedVerifyDeclarationOnlyConditionBranch = [
+  "    if (key === 'types' || key.startsWith('types@')) {",
+  '      continue;',
+  '    }',
+].join('\n');
+const verifyNoSubstitutionTemplateImportBranch =
+  '      if (isNoSubstitutionTemplateDynamicImport(source, imported)) {';
+const removedVerifyNoSubstitutionTemplateImportBranch =
+  '      if (false && isNoSubstitutionTemplateDynamicImport(source, imported)) {';
+const verifyDirectoryEntryBoundBranch = [
+  '      if (entries.length >= maxEntries) {',
+  '        throw new TypeError(`${label} exceeds its ${maxEntries}-entry remaining limit`);',
+  '      }',
+].join('\n');
+const removedVerifyDirectoryEntryBoundBranch = [
+  '      if (false && entries.length >= maxEntries) {',
+  '        throw new TypeError(`${label} exceeds its ${maxEntries}-entry remaining limit`);',
+  '      }',
+].join('\n');
+const verifyNonblockingFileOpenBranch =
+  '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),';
+const removedVerifyNonblockingFileOpenBranch =
+  '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),';
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
@@ -7606,6 +7642,72 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description: 'Admits percent-encoded artifact identities with different Node URL semantics.',
+    expectedKiller:
+      'the standalone certificate grammar must reject URL-ambiguous artifact identities',
+    name: 'certificate-verifier/allow-percent-encoded-artifact-path',
+    replacement: removedVerifyPercentArtifactPathBranch,
+    search: verifyPercentArtifactPathBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsPercentArtifactBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Treats every nested package.json as the reviewer-owned installed manifest.',
+    expectedKiller:
+      'nested Node package scopes must not shadow the reviewer-owned manifest resolver',
+    name: 'certificate-verifier/allow-nested-package-manifest',
+    replacement: weakenedVerifyRootPackageManifestBranch,
+    search: verifyRootPackageManifestBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsNestedManifestBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Skips executable targets selected by custom types conditions.',
+    expectedKiller:
+      'ignored type-oriented conditions must terminate only in inert declaration artifacts',
+    name: 'certificate-verifier/allow-executable-types-condition',
+    replacement: removedVerifyDeclarationOnlyConditionBranch,
+    search: verifyDeclarationOnlyConditionBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsExecutableTypesConditionBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Downgrades an exact template-literal Node import into a computed opaque premise.',
+    expectedKiller:
+      'no-substitution template imports must never hide raw capability acquisition as opacity',
+    name: 'certificate-verifier/downgrade-template-import-to-opaque',
+    replacement: removedVerifyNoSubstitutionTemplateImportBranch,
+    search: verifyNoSubstitutionTemplateImportBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsTemplateImportDowngradeBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Removes the streamed package-tree entry ceiling from directory verification.',
+    expectedKiller: 'empty directories and files must share one finite package-tree census budget',
+    name: 'certificate-verifier/drop-directory-entry-bound',
+    replacement: removedVerifyDirectoryEntryBoundBranch,
+    search: verifyDirectoryEntryBoundBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierDirectoryEntryBoundBehavior,
+  },
+  {
+    baseModule: {},
+    description: 'Lets a regular evidence path race into a blocking FIFO open.',
+    expectedKiller:
+      'certificate evidence descriptors must open no-follow and nonblocking before fstat',
+    name: 'certificate-verifier/drop-nonblocking-evidence-open',
+    replacement: removedVerifyNonblockingFileOpenBranch,
+    search: verifyNonblockingFileOpenBranch,
+    sourceFile: verifyFileSnapshotPath,
+    sourceOnly: true,
+    test: assertVerifierNonblockingSnapshotOpenBehavior,
+  },
+  {
+    behavioralTypeScript: true,
     description:
       'Lets a tools request execute after initialize but before the required initialized notification.',
     expectedKiller:
@@ -7617,6 +7719,193 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertFiniteMcpReadyLifecycleBehavior,
   },
 ];
+
+async function assertVerifierRejectsPercentArtifactBehavior(moduleUnderTest) {
+  const encodedModule = '@kovojs/server/dist/s%61fe.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [encodedModule]: 'export const safe = true;' },
+  });
+  if (!result.findings.some((entry) => entry.code === 'policy-artifact')) {
+    throw new Error('certificate verifier admitted a URL-ambiguous artifact identity');
+  }
+}
+
+async function assertVerifierRejectsExecutableTypesConditionBehavior(moduleUnderTest) {
+  const safeModule = '@kovojs/server/dist/safe.mjs';
+  const evilModule = '@kovojs/server/dist/types-evil.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    capabilities: { [evilModule]: ['process'] },
+    manifest: {
+      exports: { '.': { types: './dist/types-evil.mjs', default: './dist/safe.mjs' } },
+      name: '@kovojs/server',
+    },
+    sources: {
+      [evilModule]: "import 'node:child_process';",
+      [safeModule]: 'export const safe = true;',
+    },
+  });
+  if (!result.findings.some((entry) => entry.code === 'policy-manifest-entrypoint')) {
+    throw new Error('certificate verifier ignored an executable types-condition target');
+  }
+}
+
+async function assertVerifierRejectsTemplateImportDowngradeBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/root.mjs';
+  const reason =
+    'contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    opaque: [{ module: rootModule, reason }],
+    sources: { [rootModule]: 'export const loaded = import(`node:child_process`);' },
+  });
+  if (!result.findings.some((entry) => entry.code === 'unsupported-template-import')) {
+    throw new Error('certificate verifier downgraded exact template authority into opacity');
+  }
+}
+
+async function assertVerifierRejectsNestedManifestBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/a/index.mjs';
+  const safeModule = '@kovojs/server/dist/a/safe.mjs';
+  const evilModule = '@kovojs/server/dist/a/evil.mjs';
+  const fixture = writeCertificateMutationDirectory(moduleUnderTest, {
+    capabilities: { [evilModule]: ['process'] },
+    edges: [[rootModule, safeModule]],
+    manifest: {
+      exports: { '.': './dist/a/index.mjs' },
+      imports: { '#target': './dist/a/safe.mjs' },
+      name: '@kovojs/server',
+    },
+    sources: {
+      [evilModule]: "import 'node:child_process';",
+      [rootModule]: "import '#target';",
+      [safeModule]: 'export const safe = true;',
+    },
+  });
+  try {
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/dist/a/package.json'),
+      JSON.stringify({ imports: { '#target': './evil.mjs' }, name: '@kovojs/server' }),
+    );
+    const result = await moduleUnderTest.verifyCertificateDirectory(
+      fixture.certificate,
+      fixture.policyBytes,
+      fixture.root,
+    );
+    if (!result.findings.some((entry) => entry.code === 'unsupported-executable-artifact')) {
+      throw new Error('certificate verifier admitted a nested Node package scope');
+    }
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+}
+
+async function assertVerifierDirectoryEntryBoundBehavior(moduleUnderTest) {
+  const fixture = writeCertificateMutationDirectory(moduleUnderTest, {
+    manifest: { exports: { '.': './dist/index.mjs' }, name: '@kovojs/server' },
+    sources: { '@kovojs/server/dist/index.mjs': 'export const safe = true;' },
+  });
+  try {
+    const emptyRoot = path.join(fixture.root, '@kovojs/server/dist/empty');
+    mkdirSync(emptyRoot);
+    for (let index = 0; index < 4_094; index += 1) {
+      mkdirSync(path.join(emptyRoot, String(index)));
+    }
+    const result = await moduleUnderTest.verifyCertificateDirectory(
+      fixture.certificate,
+      fixture.policyBytes,
+      fixture.root,
+    );
+    if (!result.findings.some((entry) => entry.code === 'artifact-list')) {
+      throw new Error('certificate verifier admitted an over-budget directory-only tree');
+    }
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+}
+
+function assertVerifierNonblockingSnapshotOpenBehavior(_moduleUnderTest, { sourceText }) {
+  if (!sourceText.includes(verifyNonblockingFileOpenBranch)) {
+    throw new Error('certificate evidence open lost O_NONBLOCK before descriptor identity checks');
+  }
+}
+
+async function verifyCertificateMutationFixture(moduleUnderTest, options) {
+  const fixture = certificateMutationFixture(moduleUnderTest, options);
+  const sources = new Map(
+    Object.entries(options.sources).map(([module, source]) => [module, Buffer.from(source)]),
+  );
+  return moduleUnderTest.verifyCertificate(fixture.certificate, fixture.policyBytes, {
+    listArtifactPaths: () => [...sources.keys()].sort(),
+    readArtifact: (module) => sources.get(module),
+  });
+}
+
+function writeCertificateMutationDirectory(moduleUnderTest, options) {
+  const fixture = certificateMutationFixture(moduleUnderTest, options);
+  const root = mkdtempSync(path.join(tmpdir(), 'kovo-certificate-mutant-'));
+  for (const [module, source] of Object.entries(options.sources)) {
+    const target = path.join(root, module);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, source, 'utf8');
+  }
+  const manifestPath = path.join(root, '@kovojs/server/package.json');
+  mkdirSync(path.dirname(manifestPath), { recursive: true });
+  writeFileSync(manifestPath, JSON.stringify(options.manifest), 'utf8');
+  return { ...fixture, root };
+}
+
+function certificateMutationFixture(moduleUnderTest, options) {
+  const modules = Object.keys(options.sources).sort();
+  const artifacts = modules.map((module) => ({
+    path: module,
+    sha512: securityMutationSha512(Buffer.from(options.sources[module])),
+  }));
+  const policy = {
+    artifacts,
+    doors: [],
+    opaque: options.opaque ?? [],
+    packages: [{ manifest: options.manifest, name: '@kovojs/server' }],
+    roots: [],
+    schema: 'kovo.certificate-policy/v1',
+  };
+  const policyBytes = Buffer.from(
+    `${JSON.stringify(sortSecurityMutationJsonValue(policy), null, 2)}\n`,
+  );
+  const capabilities = Object.fromEntries(
+    modules.map((module) => [module, options.capabilities?.[module] ?? []]),
+  );
+  return {
+    certificate: {
+      artifacts: modules,
+      cap: capabilities,
+      domain: moduleUnderTest.KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
+      doors: [],
+      edges: options.edges ?? [],
+      opaque: options.opaque ?? [],
+      policySha512: securityMutationSha512(policyBytes),
+      roots: [],
+      schema: 'kovo.certificate/v1',
+    },
+    policyBytes,
+  };
+}
+
+function sortSecurityMutationJsonValue(value) {
+  if (Array.isArray(value)) return value.map((entry) => sortSecurityMutationJsonValue(entry));
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, sortSecurityMutationJsonValue(value[key])]),
+    );
+  }
+  return value;
+}
+
+function securityMutationSha512(bytes) {
+  return `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+}
 
 async function assertFiniteMcpReadyLifecycleBehavior(moduleUnderTest) {
   let toolCalls = 0;

@@ -457,10 +457,34 @@ function collectRuntimeTargets(value) {
   }
   const targets = new Set();
   for (const key of Object.keys(value)) {
-    if (key === 'types' || key.startsWith('types@')) continue;
+    if (key === 'types' || key.startsWith('types@')) {
+      assertDeclarationOnlyTargets(value[key], `condition ${JSON.stringify(key)}`);
+      continue;
+    }
     for (const target of collectRuntimeTargets(value[key])) targets.add(target);
   }
   return targets;
+}
+
+function assertDeclarationOnlyTargets(value, label) {
+  if (typeof value === 'string') {
+    if (
+      !/^\.\/dist\/[A-Za-z0-9_./-]+\.d\.(?:cts|mts|ts)$/u.test(value) ||
+      path.posix.normalize(value) !== value.slice(2)
+    ) {
+      throw policyError(`${label} must end only in canonical ./dist/*.d.ts declaration targets`);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) throw policyError(`${label} must not be empty`);
+    for (const entry of value) assertDeclarationOnlyTargets(entry, label);
+    return;
+  }
+  if (!isPlainRecord(value) || Object.keys(value).length === 0) {
+    throw policyError(`${label} must contain only declaration targets`);
+  }
+  for (const entry of Object.values(value)) assertDeclarationOnlyTargets(entry, label);
 }
 
 function packageManifestTarget(value, packageName) {

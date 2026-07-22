@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(444);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(450);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -825,6 +825,11 @@ describe('security-gate-mutations', () => {
   it('executes runtime-boundary mutants instead of source-text assertions', () => {
     const behavioralNames = [
       'better-auth-credential-gate/drop-result-consumer-identity',
+      'certificate-verifier/allow-executable-types-condition',
+      'certificate-verifier/allow-nested-package-manifest',
+      'certificate-verifier/allow-percent-encoded-artifact-path',
+      'certificate-verifier/drop-directory-entry-bound',
+      'certificate-verifier/downgrade-template-import-to-opaque',
       'generated-client/drop-security-operation-own-data-boundary',
       'better-auth-credential-gate/drop-source-identity',
       'drizzle-egress/allow-inexact-context-fetch-call',

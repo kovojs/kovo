@@ -18,6 +18,7 @@ afterEach(() => {
 });
 
 describe('filesystem certificate artifacts', () => {
+  // @kovo-security-classifier-corpus certificate-verifier
   it('verifies an exact unpacked package dist tree', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': "export { value } from './value.mjs';",
@@ -189,6 +190,35 @@ describe('filesystem certificate artifacts', () => {
     );
   });
 
+  it('bounds directory-only trees and rejects nested node_modules scopes', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+    });
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const manifest = certificate(fixture.sources, policy);
+    const nestedModules = path.join(fixture.root, '@kovojs/server/dist/node_modules');
+    mkdirSync(nestedModules);
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+        ok: false,
+      },
+    );
+    rmSync(nestedModules, { recursive: true });
+
+    const emptyRoot = path.join(fixture.root, '@kovojs/server/dist/empty');
+    mkdirSync(emptyRoot);
+    for (let index = 0; index < 4_094; index += 1) {
+      mkdirSync(path.join(emptyRoot, String(index)));
+    }
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+        ok: false,
+      },
+    );
+  });
+
   it('rejects insertion-ordered conditional exports that can select another listed module', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',
@@ -223,6 +253,73 @@ describe('filesystem certificate artifacts', () => {
     await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
       {
         findings: expect.arrayContaining([expect.objectContaining({ code: 'manifest-invalid' })]),
+        ok: false,
+      },
+    );
+  });
+
+  it('rejects executable targets hidden behind type-oriented export conditions', async () => {
+    const safeModule = '@kovojs/server/dist/safe.mjs';
+    const runtimeModule = '@kovojs/server/dist/types-evil.mjs';
+    const fixture = createDirectoryFixture({
+      [safeModule]: 'export const safe = true;',
+      [runtimeModule]: "import 'node:child_process';",
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': { types: './dist/types-evil.mjs', default: './dist/safe.mjs' } },
+        name: '@kovojs/server',
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, policy);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { ...base.cap, [runtimeModule]: ['process'] },
+    };
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'policy-manifest-entrypoint' }),
+        ]),
+        ok: false,
+      },
+    );
+  });
+
+  it('rejects executable targets hidden behind versioned type import conditions', async () => {
+    const rootModule = '@kovojs/server/dist/index.mjs';
+    const safeModule = '@kovojs/server/dist/safe.mjs';
+    const runtimeModule = '@kovojs/server/dist/types-evil.mjs';
+    const fixture = createDirectoryFixture({
+      [rootModule]: "import '#target';",
+      [safeModule]: 'export const safe = true;',
+      [runtimeModule]: "import 'node:child_process';",
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/index.mjs' },
+        imports: {
+          '#target': { 'types@>=5.0': './dist/types-evil.mjs', default: './dist/safe.mjs' },
+        },
+        name: '@kovojs/server',
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, policy, [[rootModule, safeModule]]);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { ...base.cap, [runtimeModule]: ['process'] },
+    };
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'policy-manifest-entrypoint' }),
+        ]),
         ok: false,
       },
     );

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type BigIntStats, lstatSync, readdirSync, realpathSync } from 'node:fs';
+import { type BigIntStats, type Dirent, lstatSync, opendirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { parse } from 'es-module-lexer/js';
@@ -11,7 +11,7 @@ const MAX_CERTIFICATE_ROWS = 131_072;
 const MAX_JSON_DEPTH = 64;
 const MAX_JSON_NODES = 262_144;
 const MAX_DIRECTORY_PACKAGES = 32;
-const MAX_PACKAGE_FILES = 4096;
+const MAX_PACKAGE_ENTRIES = 4096;
 const MAX_PACKAGE_DEPTH = 16;
 const MAX_ARTIFACT_BYTES = 4 * 1024 * 1024;
 const MAX_TOTAL_ARTIFACT_BYTES = 32 * 1024 * 1024;
@@ -1070,7 +1070,7 @@ function directoryArtifactSource(
   const modulePaths: string[] = [];
   const moduleBytes = new Map<string, Uint8Array>();
   const census = {
-    files: 0,
+    entries: 0,
     identityByPath: new Map<string, string>(),
     totalArtifactBytes: 0,
   };
@@ -1243,10 +1243,34 @@ function collectManifestRuntimeTargets(value: unknown): Set<string> {
   }
   const targets = new Set<string>();
   for (const key of Object.keys(value)) {
-    if (key === 'types' || key.startsWith('types@')) continue;
+    if (key === 'types' || key.startsWith('types@')) {
+      assertDeclarationOnlyManifestTargets(value[key], `condition ${JSON.stringify(key)}`);
+      continue;
+    }
     for (const target of collectManifestRuntimeTargets(value[key])) targets.add(target);
   }
   return targets;
+}
+
+function assertDeclarationOnlyManifestTargets(value: unknown, label: string): void {
+  if (typeof value === 'string') {
+    if (
+      !/^\.\/dist\/[A-Za-z0-9_./-]+\.d\.(?:cts|mts|ts)$/u.test(value) ||
+      path.posix.normalize(value) !== value.slice(2)
+    ) {
+      throw new TypeError(`${label} must end only in canonical ./dist/*.d.ts declaration targets`);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) throw new TypeError(`${label} must not be empty`);
+    for (const entry of value) assertDeclarationOnlyManifestTargets(entry, label);
+    return;
+  }
+  if (!isPlainJsonRecord(value) || Object.keys(value).length === 0) {
+    throw new TypeError(`${label} must contain only declaration targets`);
+  }
+  for (const entry of Object.values(value)) assertDeclarationOnlyManifestTargets(entry, label);
 }
 
 function singleManifestRuntimeTarget(value: unknown, label: string): string {
@@ -1359,8 +1383,10 @@ function executableDistPath(value: string): boolean {
 function listKovoPackageNames(root: string): string[] {
   const scope = checkedPath(root, '@kovojs', 'directory');
   const packages: string[] = [];
-  for (const entry of readdirSync(scope, { withFileTypes: true }).sort((left, right) =>
-    compareStrings(left.name, right.name),
+  for (const entry of readBoundedDirectoryEntries(
+    scope,
+    MAX_DIRECTORY_PACKAGES,
+    'artifact package scope',
   )) {
     const relativePath = `@kovojs/${entry.name}`;
     const absolutePath = path.join(scope, entry.name);
@@ -1430,7 +1456,7 @@ function collectPackageFiles(
   output: string[],
   findings: KovoCertificateFinding[],
   census: {
-    files: number;
+    entries: number;
     identityByPath: Map<string, string>;
     totalArtifactBytes: number;
   },
@@ -1445,9 +1471,15 @@ function collectPackageFiles(
     throw new TypeError(`artifact path is not a directory: ${relativeDirectory}`);
   }
   recordCensusIdentity(census.identityByPath, relativeDirectory, directoryStat);
-  for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
-    compareStrings(left.name, right.name),
-  )) {
+  const entries = readBoundedDirectoryEntries(
+    directory,
+    Math.max(0, MAX_PACKAGE_ENTRIES - census.entries),
+    'artifact package tree',
+  );
+  // Reserve every sibling before descending so recursive directories cannot consume the budget
+  // that the already-open parent enumeration still owns.
+  census.entries += entries.length;
+  for (const entry of entries) {
     const relativePath = `${relativeDirectory}/${entry.name}`;
     const absolutePath = path.join(directory, entry.name);
     const stat = lstatSync(absolutePath, { bigint: true });
@@ -1455,16 +1487,15 @@ function collectPackageFiles(
       throw new TypeError(`artifact path contains a symlink: ${relativePath}`);
     }
     if (stat.isDirectory()) {
+      if (entry.name === 'node_modules') {
+        throw new TypeError(`artifact package contains nested node_modules: ${relativePath}`);
+      }
       ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
       collectPackageFiles(root, absolutePath, relativePath, output, findings, census, depth + 1);
       continue;
     }
     if (!stat.isFile()) {
       throw new TypeError(`artifact package contains an unsupported entry: ${relativePath}`);
-    }
-    census.files += 1;
-    if (census.files > MAX_PACKAGE_FILES) {
-      throw new TypeError(`artifact tree contains more than ${MAX_PACKAGE_FILES} files`);
     }
     recordCensusIdentity(census.identityByPath, relativePath, stat);
     ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
@@ -1501,6 +1532,31 @@ function collectPackageFiles(
       );
     }
   }
+}
+
+function readBoundedDirectoryEntries(
+  directory: string,
+  maxEntries: number,
+  label: string,
+): Dirent[] {
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 0) {
+    throw new TypeError(`${label} exceeds the ${MAX_PACKAGE_ENTRIES}-entry limit`);
+  }
+  const handle = opendirSync(directory);
+  const entries: Dirent[] = [];
+  try {
+    while (true) {
+      const entry = handle.readSync();
+      if (entry === null) break;
+      if (entries.length >= maxEntries) {
+        throw new TypeError(`${label} exceeds its ${maxEntries}-entry remaining limit`);
+      }
+      entries.push(entry);
+    }
+  } finally {
+    handle.closeSync();
+  }
+  return entries.sort((left, right) => compareStrings(left.name, right.name));
 }
 
 function recordCensusIdentity(
@@ -1742,6 +1798,16 @@ function parseArtifact(
     if (imported.d === -2 || imported.t === 3) continue;
     const specifier = imported.n;
     if (specifier === undefined) {
+      if (isNoSubstitutionTemplateDynamicImport(source, imported)) {
+        findings.push(
+          finding(
+            'coverage',
+            'unsupported-template-import',
+            `${module} uses a no-substitution template dynamic import outside the finite certificate grammar`,
+          ),
+        );
+        continue;
+      }
       const entry = {
         module,
         reason:
@@ -1829,6 +1895,29 @@ function parseArtifact(
       compareStrings(`${left.module}\0${left.reason}`, `${right.module}\0${right.reason}`),
     ),
   };
+}
+
+function isNoSubstitutionTemplateDynamicImport(
+  source: string,
+  imported: ReturnType<typeof parse>[0][number],
+): boolean {
+  if (imported.d < 0) return false;
+  const raw = source.slice(imported.s, imported.e);
+  if (raw.length < 2 || raw[0] !== '`' || raw.at(-1) !== '`') return false;
+  let escaped = false;
+  for (let index = 1; index < raw.length - 1; index += 1) {
+    const character = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === '$' && raw[index + 1] === '{') return false;
+  }
+  return true;
 }
 
 function resolveArtifactSpecifier(

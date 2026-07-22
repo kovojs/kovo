@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 332,
+    "historicalWitnesses": 338,
     "productions": 12
   },
   "productions": [
@@ -2048,6 +2048,42 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "Browser executable-carrier evaluation is bound to client artifacts while server artifacts retain literal module-edge closure."
+    },
+    {
+      "anchor": "certificate-evidence-fifo-open",
+      "corpus": "certificate-verifier",
+      "production": "runtime-floor",
+      "reason": "The verifier opens evidence nonblocking and no-follow before it accepts descriptor identity, so a path-to-FIFO race cannot hang the proof boundary."
+    },
+    {
+      "anchor": "certificate-url-artifact-identity",
+      "corpus": "certificate-verifier",
+      "production": "encoding-variant",
+      "reason": "Percent-encoded URL path spellings cannot make Node execute different artifact bytes than the certificate checker analyzed."
+    },
+    {
+      "anchor": "certificate-root-manifest-scope",
+      "corpus": "certificate-verifier",
+      "production": "module-boundary",
+      "reason": "Only the exact installed root manifest may influence package imports and self-reference resolution; nested package scopes fail closed."
+    },
+    {
+      "anchor": "certificate-declaration-condition-closure",
+      "corpus": "certificate-verifier",
+      "production": "structural-closure",
+      "reason": "Every ignored types or versioned-types condition terminates only in a canonical inert declaration target, while executable arms remain in the closed runtime target set."
+    },
+    {
+      "anchor": "certificate-directory-entry-budget",
+      "corpus": "certificate-verifier",
+      "production": "budget-edge",
+      "reason": "Files and empty directories share one streamed finite census budget before package-tree verification can allocate or recurse without bound."
+    },
+    {
+      "anchor": "certificate-template-import-no-downgrade",
+      "corpus": "certificate-verifier",
+      "production": "module-boundary",
+      "reason": "No-substitution template imports cannot downgrade exact runtime module authority into a reviewer-approved computed-import opacity row."
     }
   ]
 }
