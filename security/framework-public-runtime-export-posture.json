@@ -1,70 +1,17 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-21.1",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-22.1",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
-      "packageVersion": "0.2.0",
-      "sourceTreeSha256": "e390e96bdeeb387f30baabd62fa4cb7bfeca25747885125aaed18c801306d58d",
-      "manifestVariants": [
-        {
-          "exports": {
-            ".": "./src/index.ts",
-            "./graph": "./src/graph.ts",
-            "./internal": "./src/internal.ts",
-            "./internal/graph": "./src/internal/graph.ts",
-            "./internal/security-bootstrap": "./src/security-bootstrap.ts",
-            "./internal/source-filesystem": "./src/source-filesystem.ts",
-            "./package-styles": "./src/package-styles.ts",
-            "./vite": "./src/vite-config.ts"
-          },
-          "fingerprint": "sha256:57e6b16c23a43e00842639913c49daf248aea547dffc0e3ae7f49d134dea74a9"
-        },
-        {
-          "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./graph": {
-              "types": "./dist/graph.d.mts",
-              "default": "./dist/graph.mjs"
-            },
-            "./internal": {
-              "types": "./dist/internal.d.mts",
-              "default": "./dist/internal.mjs"
-            },
-            "./internal/graph": {
-              "types": "./dist/internal/graph.d.mts",
-              "default": "./dist/internal/graph.mjs"
-            },
-            "./internal/security-bootstrap": {
-              "types": "./dist/security-bootstrap.d.mts",
-              "default": "./dist/security-bootstrap.mjs"
-            },
-            "./internal/source-filesystem": {
-              "types": "./dist/source-filesystem.d.mts",
-              "default": "./dist/source-filesystem.mjs"
-            },
-            "./package-styles": {
-              "types": "./dist/package-styles.d.mts",
-              "default": "./dist/package-styles.mjs"
-            },
-            "./vite": {
-              "types": "./dist/vite-config.d.mts",
-              "default": "./dist/vite-config.mjs"
-            }
-          },
-          "fingerprint": "sha256:be9f4067f9133083e695debfb999665dc96ec5b7bb9251e4b112fb59bcf0c5a2"
-        }
-      ],
-      "reason": "public-packages.json declares no app-facing public subpaths"
+      "disposition": "request-closed",
+      "reason": "The analyzer has no app-facing public runtime subpaths; exact package-name imports close before installed identity, while release/npm integrity authenticates the analyzer executable externally."
     },
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "0354de49f7827d3bed821fd263557355d2673038ae7db3c434966b8e320b5d61",
+      "sourceTreeSha256": "ff04c21afbb33dea36fe1e9bf4aa21fa22a9bd4f8d043534f6e5728e231ce7a6",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -822,7 +769,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "2520a52ebc24a6db375f4a6e8da1706673c1fbee6bec96a58fe2b5b3612a5615"
+      "sourceTreeSha256": "c974673edceda6f2c4f6a98d2f99f992f55b31e8fa76ad6a62c770514e1aeca9"
     },
     {
       "manifestVariants": [
@@ -1663,7 +1610,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "d66d71e064707fd1e9837ff336081d08fdcfb580fb24f058e56bece98b52e5e0"
+      "sourceTreeSha256": "00a6886c144d47d5a237ed1a01f1a93a60d885fdf739fa62b31c83532211eca0"
     },
     {
       "manifestVariants": [
@@ -9816,7 +9763,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "0db08966c95b22dbe23ce8fe46c3e15c6604b994b5d4ff8c36eafbc67b9408fa"
+      "sourceTreeSha256": "2df2703b479bf616a71fa9dced01dd4773687f9ff06849002fc5835f54ca8f9b"
     },
     {
       "manifestVariants": [
@@ -10706,14 +10653,14 @@
               "default": "./dist/translation.mjs"
             }
           },
-          "fingerprint": "sha256:ae14eb64b5cddd44092a3e5a3979999376a6ab974d16e6c91fd6b1b325795e5e"
+          "fingerprint": "sha256:5e8b5c0e6f1f05b5400e7201a57100ce3ab816a69a8d7628fda525f6e9d95b03"
         },
         {
           "exports": {
             ".": "./src/index.ts",
             "./internal/translation": "./src/translation.ts"
           },
-          "fingerprint": "sha256:3b64527426be1ec7befd33aa1777a8e785a502462a12325d47c0e55e270b0d2e"
+          "fingerprint": "sha256:4cfef6fff31ab5f4811bc23702d6573f64b6edbff2d5042455a67b7ffa64f35c"
         }
       ],
       "packageName": "@kovojs/verify",
@@ -10751,7 +10698,7 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "e730059f5fffb9fe9c5f1745187e17cd75c877e7beafd8a54634278f405994ca"
+      "sourceTreeSha256": "4f7d64e749ccfa69ac814f60ae1a1b0629f4ee575af671cf73ca532477969c9f"
     }
   ]
 }

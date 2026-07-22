@@ -601,11 +601,12 @@ posture ledger with an explicit raw-authority disposition, root kind or `none`, 
 implementation binding, manifest-target/condition fingerprint, and threat-matrix posture. A
 posture that can produce an authority-free or framework-door verdict MUST bind the exact installed
 implementation digest. A package whose complete public runtime surface is explicitly
-`request-closed` MAY instead use the `unconditional-request-closure` binding: the compiler rejects
-that package by exact package name before version, manifest, or implementation identity can
-influence a request-root verdict. Such a binding is invalid if any public initializer or export is
-missing or has a disposition other than `request-closed`; widening the package therefore restores
-the exact-implementation requirement rather than inheriting an identity-free allow path. A new,
+`request-closed` MAY instead use the `unconditional-request-closure` binding: after the exact
+installed package name, requested specifier/export status, reviewed version, and security-relevant
+manifest fingerprint match, the compiler rejects that package without consulting implementation
+identity. Such a binding is invalid if any public initializer or export is missing or has a
+disposition other than `request-closed`; widening the package therefore restores the
+exact-implementation requirement rather than inheriting a digest-free allow path. A new,
 missing, duplicate, stale, or unclassified first-party export fails closed; absence from a shorter
 door list is never an authority-free verdict. Compiler-emitted private ABI edges may bypass public
 subpath membership only through one compiler-owned exact table that classifies the initializer and
@@ -624,6 +625,19 @@ package-summary versions/fingerprints, and every closed fact with the same prove
 diagnostic. This is a conservative proof about accidental authority in Kovo's supported static
 authoring subset; consistent with the trusted application-code boundary above, it is not a
 same-realm JavaScript sandbox or a claim about deliberately hostile dependencies.
+
+`@kovojs/compiler` is a deliberate zero-public-surface instance of unconditional request closure.
+It has no app-facing public runtime subpath, so an authored or request-reachable import of its exact
+package name or any subpath is rejected before installed resolution, version, manifest fingerprint,
+or implementation digest is consulted. The analyzer executable that makes this decision is a
+trusted release/install subject: its bytes are authenticated externally by verified release-tarball
+provenance, package-manager integrity, a certificate, or equivalent host provenance. The analyzer
+does not and cannot self-authenticate by comparing its running bytes with a digest embedded in
+those same bytes.
+Accordingly, this app-level proof does not detect arbitrary post-install mutation of the analyzer;
+such mutation is release/install or privileged-host compromise, outside the application-level
+claim. If the compiler ever gains an app-public runtime subpath, the zero-public closure is invalid
+and the posture gate fails until that surface receives an explicit non-circular classification.
 
 For every authored or compiler-derived package edge, including an initializer in a malformed or
 currently rootless module, the compiler MUST also derive one

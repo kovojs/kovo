@@ -2964,6 +2964,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           '2 contradictory summaries',
           'requires package summaries to classify side-effect module initialization explicitly',
           'only the compiler-owned Kovo registry',
+          'requires reviewed installed identity before applying %s digest-free request closure',
+          'closes the exact zero-public compiler package before missing or mismatched identity facts',
         ],
       },
       {
@@ -2981,7 +2983,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'binds every manifest-public runtime value and module initializer to reviewed posture',
           'kills omission, duplicate, and newly exported-member mutants',
-          'digests every regular production source asset and normalizes only exact compiler self fields',
+          'digests every regular non-compiler production source asset',
           'keeps security-bearing roles and root factories explicit',
           "['@kovojs/server', '.', 'createApp', 'application']",
         ],
@@ -2991,6 +2993,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/cli/src/capability-closure-packages.test.ts',
         snippets: [
           'pins package version, manifest fingerprint, and every conditional export arm',
+          'resolves zero-public compiler metadata without walking or hashing its installed %s tree',
           'marks absent conditional subpaths unresolved instead of inheriting a root verdict',
           'loads an exact summary ledger and fails closed on unknown or malformed authority fields',
         ],

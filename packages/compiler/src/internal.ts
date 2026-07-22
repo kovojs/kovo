@@ -30,6 +30,7 @@ export {
   collectCapabilityPackageRequests,
   compilerGeneratedCapabilityDependencies,
   isCompilerOwnedCapabilityPackage,
+  isZeroPublicRequestClosedCapabilityPackage,
   packageCapabilitySummarySchema,
 } from './security/capability-closure.js';
 export type {

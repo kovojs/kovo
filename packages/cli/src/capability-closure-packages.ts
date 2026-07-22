@@ -19,6 +19,7 @@ import { fileURLToPath as builtinFileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   isCompilerOwnedCapabilityPackage,
+  isZeroPublicRequestClosedCapabilityPackage,
   packageCapabilitySummarySchema,
   type CapabilityPackageRequest,
   type PackageCapabilitySummary,
@@ -33,12 +34,6 @@ const nativeImportMetaResolve = (specifier: string, parent: string): string =>
   import.meta.resolve(specifier, parent);
 const frameworkSourceImplementationPrefix = 'kovo-source-tree-sha256:';
 const frameworkPackedImplementationPrefix = 'kovo-packed-tree-sha256:';
-const frameworkCompilerSelfSourceImplementationPrefix = 'kovo-compiler-self-source-tree-sha256:';
-const frameworkCompilerSelfPackedImplementationPrefix = 'kovo-compiler-self-packed-tree-sha256:';
-const frameworkCompilerPackage = '@kovojs/compiler';
-const frameworkCompilerSourceCatalogFile =
-  'src/security/framework-public-runtime-export-posture.generated.ts';
-const frameworkCompilerPackedCatalogFiles = new Set(['dist/internal.mjs', 'dist/internal.mjs.map']);
 
 const capabilityKinds = new Set<RawCapabilityKind>([
   'crypto-acquisition',
@@ -250,10 +245,10 @@ function resolveCapabilityPackage(
   const implementationDigest =
     exportResolution.resolved &&
     observedName === packageName &&
-    isCompilerOwnedCapabilityPackage(observedName)
+    isCompilerOwnedCapabilityPackage(observedName) &&
+    !isZeroPublicRequestClosedCapabilityPackage(observedName)
       ? installedFrameworkImplementationDigest(
           builtinDirname(manifestPath),
-          observedName,
           exportResolution.targets,
           implementationDigestCache,
           options,
@@ -458,7 +453,6 @@ function collectExportConditions(
 
 function installedFrameworkImplementationDigest(
   packageRoot: string,
-  packageName: string,
   targets: readonly string[],
   cache: Map<string, string | undefined>,
   options: CapabilityPackageResolutionOptions,
@@ -471,9 +465,7 @@ function installedFrameworkImplementationDigest(
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     options.onImplementationTreeWalk?.(realPackageRoot, layout);
     const digest =
-      layout === 'source'
-        ? sourceTreeSha256(realPackageRoot, packageName)
-        : packedTreeSha256(realPackageRoot, packageName);
+      layout === 'source' ? sourceTreeSha256(realPackageRoot) : packedTreeSha256(realPackageRoot);
     const implementationDigest = `${layout === 'source' ? frameworkSourceImplementationPrefix : frameworkPackedImplementationPrefix}${digest}`;
     cache.set(cacheKey, implementationDigest);
     return implementationDigest;
@@ -520,7 +512,7 @@ function implementationLayout(
   return layout;
 }
 
-function sourceTreeSha256(packageRoot: string, packageName: string): string {
+function sourceTreeSha256(packageRoot: string): string {
   const sourceRoot = builtinJoin(packageRoot, 'src');
   if (!builtinExistsSync(sourceRoot)) throw new Error('source implementation is missing');
   if (!builtinLstatSync(sourceRoot).isDirectory()) {
@@ -528,31 +520,16 @@ function sourceTreeSha256(packageRoot: string, packageName: string): string {
   }
   const files: string[] = [];
   visitImplementationTree(sourceRoot, (fileName) => files.push(fileName));
-  let normalizedCompilerCatalog = false;
-  const digest = digestFiles(packageRoot, files, (fileName) => {
-    const relativeFileName = slashPath(builtinRelative(packageRoot, fileName));
+  return digestFiles(packageRoot, files, (fileName) => {
     const bytes = Buffer.from(builtinReadFileSync(fileName));
-    if (
-      packageName === frameworkCompilerPackage &&
-      relativeFileName === frameworkCompilerSourceCatalogFile
-    ) {
-      const normalized = normalizeCompilerCatalogSelfDigests(bytes);
-      requireExactCompilerSelfDigests(normalized);
-      normalizedCompilerCatalog = true;
-      return normalized.bytes;
-    }
     if (countFrameworkDigestMarkers(bytes) > 0) {
-      throw new Error('framework digest escaped the compiler catalog artifact');
+      throw new Error('framework digest is embedded in production source');
     }
     return bytes;
   });
-  if (packageName === frameworkCompilerPackage && !normalizedCompilerCatalog) {
-    throw new Error('compiler source catalog artifact is missing');
-  }
-  return digest;
 }
 
-function packedTreeSha256(packageRoot: string, packageName: string): string {
+function packedTreeSha256(packageRoot: string): string {
   const distRoot = builtinJoin(packageRoot, 'dist');
   if (!builtinExistsSync(distRoot)) throw new Error('packed implementation is missing');
   if (!builtinLstatSync(distRoot).isDirectory()) {
@@ -560,31 +537,13 @@ function packedTreeSha256(packageRoot: string, packageName: string): string {
   }
   const files: string[] = [];
   visitImplementationTree(distRoot, (fileName) => files.push(fileName));
-  const normalizedCatalogs = new Set<string>();
-  const digest = digestFiles(packageRoot, files, (fileName) => {
-    const relativeFileName = slashPath(builtinRelative(packageRoot, fileName));
+  return digestFiles(packageRoot, files, (fileName) => {
     const bytes = Buffer.from(builtinReadFileSync(fileName));
-    const isCompilerCatalog =
-      packageName === frameworkCompilerPackage &&
-      frameworkCompilerPackedCatalogFiles.has(relativeFileName);
-    if (isCompilerCatalog) {
-      const normalized = normalizeCompilerCatalogSelfDigests(bytes);
-      requireExactCompilerSelfDigests(normalized);
-      normalizedCatalogs.add(relativeFileName);
-      return normalized.bytes;
-    }
     if (countFrameworkDigestMarkers(bytes) > 0) {
-      throw new Error('framework digest escaped the compiler catalog artifact');
+      throw new Error('framework digest is embedded in packed implementation');
     }
     return bytes;
   });
-  if (
-    packageName === frameworkCompilerPackage &&
-    normalizedCatalogs.size !== frameworkCompilerPackedCatalogFiles.size
-  ) {
-    throw new Error('compiler catalog artifact is missing');
-  }
-  return digest;
 }
 
 function visitImplementationTree(
@@ -618,59 +577,11 @@ function digestFiles(
   return hash.digest('hex');
 }
 
-function normalizeCompilerCatalogSelfDigests(input: Buffer): {
-  bytes: Buffer;
-  packedMatches: number;
-  sourceMatches: number;
-} {
-  const bytes = Buffer.from(input);
-  const sourceMatches = normalizeDigestPayloads(
-    bytes,
-    frameworkCompilerSelfSourceImplementationPrefix,
-  );
-  const packedMatches = normalizeDigestPayloads(
-    bytes,
-    frameworkCompilerSelfPackedImplementationPrefix,
-  );
-  return { bytes, packedMatches, sourceMatches };
-}
-
-function requireExactCompilerSelfDigests(normalized: {
-  packedMatches: number;
-  sourceMatches: number;
-}): void {
-  if (normalized.sourceMatches !== 1 || normalized.packedMatches !== 1) {
-    throw new Error('compiler catalog self-digests are ambiguous');
-  }
-}
-
-function normalizeDigestPayloads(bytes: Buffer, prefixText: string): number {
-  const prefix = Buffer.from(prefixText);
-  let matches = 0;
-  let offset = 0;
-  while (offset < bytes.length) {
-    const found = bytes.indexOf(prefix, offset);
-    if (found < 0) break;
-    const start = found + prefix.length;
-    const end = start + 64;
-    const candidate = bytes.subarray(start, end).toString('ascii');
-    const next = bytes[end];
-    if (/^[a-f0-9]{64}$/u.test(candidate) && (next === undefined || !isLowerHexByte(next))) {
-      bytes.fill(0x30, start, end);
-      matches += 1;
-    }
-    offset = Math.max(end, found + 1);
-  }
-  return matches;
-}
-
 function countFrameworkDigestMarkers(input: Buffer): number {
-  return [
-    frameworkSourceImplementationPrefix,
-    frameworkPackedImplementationPrefix,
-    frameworkCompilerSelfSourceImplementationPrefix,
-    frameworkCompilerSelfPackedImplementationPrefix,
-  ].reduce((count, prefix) => count + countDigestPayloads(input, prefix), 0);
+  return [frameworkSourceImplementationPrefix, frameworkPackedImplementationPrefix].reduce(
+    (count, prefix) => count + countDigestPayloads(input, prefix),
+    0,
+  );
 }
 
 function countDigestPayloads(input: Buffer, prefixText: string): number {

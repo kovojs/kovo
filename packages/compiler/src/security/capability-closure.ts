@@ -33,6 +33,7 @@ import {
   frameworkExportPosturePackages,
   frameworkExportPostureGroups,
   frameworkExportPostureSummaryVersion,
+  frameworkZeroPublicRequestClosedPackages,
   type FrameworkExportPostureDisposition,
 } from './framework-public-runtime-export-posture.generated.js';
 import {
@@ -258,6 +259,7 @@ interface FrameworkPostureRegistry {
   readonly packages: ReadonlyMap<string, FrameworkPackagePosture>;
   readonly permissions: ReadonlyMap<string, FrameworkPermission>;
   readonly rootFactories: ReadonlyMap<string, CapabilityRootKind>;
+  readonly zeroPublicRequestClosedPackages: ReadonlySet<string>;
 }
 
 const frameworkDispositions = new Set<FrameworkExportPostureDisposition>([
@@ -313,7 +315,15 @@ const frameworkPostureRegistry = createFrameworkPostureRegistry();
 
 /** Compiler-registry membership used by the pre-evaluation installed-package resolver. @internal */
 export function isCompilerOwnedCapabilityPackage(packageName: string): boolean {
-  return frameworkPostureRegistry.packages.has(packageName);
+  return (
+    frameworkPostureRegistry.packages.has(packageName) ||
+    frameworkPostureRegistry.zeroPublicRequestClosedPackages.has(packageName)
+  );
+}
+
+/** Packages closed by exact name before installed identity must never be implementation-hashed. */
+export function isZeroPublicRequestClosedCapabilityPackage(packageName: string): boolean {
+  return frameworkPostureRegistry.zeroPublicRequestClosedPackages.has(packageName);
 }
 
 function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
@@ -321,6 +331,19 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   const packages = new Map<string, FrameworkPackagePosture>();
   const permissions = new Map<string, FrameworkPermission>();
   const rootFactories = new Map<string, CapabilityRootKind>();
+  const zeroPublicRequestClosedPackages = new Set<string>();
+
+  for (const packageName of frameworkZeroPublicRequestClosedPackages) {
+    if (packageName.trim() === '') {
+      invalidReasons.push('zero-public request-closed package name is blank');
+      continue;
+    }
+    if (zeroPublicRequestClosedPackages.has(packageName)) {
+      invalidReasons.push(`duplicate zero-public request-closed package ${packageName}`);
+      continue;
+    }
+    zeroPublicRequestClosedPackages.add(packageName);
+  }
 
   for (const [
     packageName,
@@ -355,7 +378,7 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
         conditionsBySubpath.set(subpath, conditions);
       }
       const canonicalImplementationDigests = implementationDigests.flatMap((digest) => {
-        const canonical = canonicalFrameworkImplementationDigest(packageName, digest);
+        const canonical = canonicalFrameworkImplementationDigest(digest);
         if (canonical === undefined) {
           invalidReasons.push(
             `${packageName}/${fingerprint} has invalid implementation digest ${digest}`,
@@ -463,6 +486,11 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
   }
 
   for (const [packageName, pkg] of packages) {
+    if (zeroPublicRequestClosedPackages.has(packageName)) {
+      invalidReasons.push(
+        `${packageName} cannot have both a reviewed runtime surface and zero-public request closure`,
+      );
+    }
     const packagePermissions = [...permissions.entries()].filter(([id]) =>
       id.startsWith(`${packageName}\0`),
     );
@@ -491,7 +519,13 @@ function createFrameworkPostureRegistry(): FrameworkPostureRegistry {
       `root factory count ${rootFactories.size} exceeds lexical overflow candidate budget ${lexicalOverflowRootCandidateBudget}`,
     );
   }
-  return { invalidReasons, packages, permissions, rootFactories };
+  return {
+    invalidReasons,
+    packages,
+    permissions,
+    rootFactories,
+    zeroPublicRequestClosedPackages,
+  };
 }
 
 /**
@@ -1243,6 +1277,30 @@ function packageVerdict(
   summariesByPackage: ReadonlyMap<string, readonly PackageCapabilitySummary[]>,
 ): PackageVerdict {
   const specifier = use.importFact.specifier!;
+  const packageName = packageNameForSpecifier(specifier);
+  const frameworkPosture = frameworkPostureRegistry.packages.get(packageName);
+  const zeroPublicRequestClosure =
+    frameworkPostureRegistry.zeroPublicRequestClosedPackages.has(packageName);
+  if (zeroPublicRequestClosure) {
+    if (frameworkPostureRegistry.invalidReasons.length > 0) {
+      return closedPackageVerdict(
+        use,
+        'contradictory',
+        `compiler-owned framework posture registry is invalid: ${frameworkPostureRegistry.invalidReasons.join('; ')}`,
+        undefined,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    // SPEC §6.6/C13: exact package-name closure precedes package resolution and every installed
+    // identity field. In particular, the running analyzer cannot authenticate its own bytes.
+    return closedPackageVerdict(
+      use,
+      'contradictory',
+      `compiler-owned ${packageName} is unconditionally request-closed because it exposes no app-public runtime subpaths`,
+      undefined,
+      frameworkExportPostureSummaryVersion,
+    );
+  }
   const metadataCandidates =
     metadataBySpecifier.get(packageMetadataKey(use.module, specifier)) ??
     metadataBySpecifier.get(packageMetadataKey(undefined, specifier)) ??
@@ -1258,7 +1316,6 @@ function packageVerdict(
     );
   }
   const metadata = metadataCandidates[0]!;
-  const packageName = packageNameForSpecifier(specifier);
   if (metadata.packageName !== packageName || metadata.specifier !== specifier) {
     return closedPackageVerdict(
       use,
@@ -1276,22 +1333,12 @@ function packageVerdict(
     );
   }
 
-  const frameworkPosture = frameworkPostureRegistry.packages.get(packageName);
   if (frameworkPosture !== undefined) {
     if (frameworkPostureRegistry.invalidReasons.length > 0) {
       return closedPackageVerdict(
         use,
         'contradictory',
         `compiler-owned framework posture registry is invalid: ${frameworkPostureRegistry.invalidReasons.join('; ')}`,
-        metadata,
-        frameworkExportPostureSummaryVersion,
-      );
-    }
-    if (frameworkPosture.implementationBinding === 'unconditional-request-closure') {
-      return closedPackageVerdict(
-        use,
-        'contradictory',
-        `compiler-owned ${packageName} is unconditionally request-closed; its reviewed public runtime surface cannot contribute request-handler authority`,
         metadata,
         frameworkExportPostureSummaryVersion,
       );
@@ -1313,6 +1360,15 @@ function packageVerdict(
         use,
         'stale',
         `compiler-owned ${packageName} posture does not cover installed manifest fingerprint ${metadata.manifestFingerprint}`,
+        metadata,
+        frameworkExportPostureSummaryVersion,
+      );
+    }
+    if (frameworkPosture.implementationBinding === 'unconditional-request-closure') {
+      return closedPackageVerdict(
+        use,
+        'contradictory',
+        `compiler-owned ${packageName} is unconditionally request-closed; its reviewed public runtime surface cannot contribute request-handler authority`,
         metadata,
         frameworkExportPostureSummaryVersion,
       );

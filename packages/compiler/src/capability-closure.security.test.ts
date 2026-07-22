@@ -43,7 +43,7 @@ function resolved(
       : (options.implementationDigest ??
         (frameworkIdentityVariant?.[2][0] === undefined
           ? undefined
-          : canonicalFrameworkImplementationDigest(packageName, frameworkIdentityVariant[2][0])));
+          : canonicalFrameworkImplementationDigest(frameworkIdentityVariant[2][0])));
   return {
     conditions: options.conditions ?? frameworkConditions ?? ['default', 'import'],
     exportStatus: 'resolved',
@@ -2139,9 +2139,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         packages: [
           resolved('@kovojs/server'),
           resolved('@kovojs/cli', {
-            fingerprint: 'sha256:unreviewed-cli-manifest',
             implementationDigest: null,
-            packageVersion: '999.0.0',
           }),
         ],
       },
@@ -2153,6 +2151,47 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     );
     expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
   });
+
+  // @kovo-security-certifies C13 request-closed-package-identity-before-digest-omission
+  it.each([
+    ['@kovojs/cli', 'kovoCheck'],
+    ['@kovojs/verify', 'verifyCertificate'],
+  ] as const)(
+    'requires reviewed installed identity before applying %s digest-free request closure',
+    (packageName, importedName) => {
+      const files = [
+        {
+          fileName: 'app.ts',
+          source: `
+            import { ${importedName} } from '${packageName}';
+            import { route } from '@kovojs/server';
+            export const page = route('/tool-identity', { render() { return ${importedName}; } });
+          `,
+        },
+      ];
+      const reviewed = resolved(packageName, { implementationDigest: null });
+      const cases: readonly [ResolvedCapabilityPackage | undefined, string][] = [
+        [undefined, 'could not be resolved to one exact installed manifest'],
+        [{ ...reviewed, packageName: 'shadow-package' }, 'package resolution'],
+        [{ ...reviewed, packageVersion: '999.0.0-unreviewed' }, 'posture covers'],
+        [
+          { ...reviewed, manifestFingerprint: 'sha256:unreviewed-manifest' },
+          'does not cover installed manifest fingerprint',
+        ],
+      ];
+
+      for (const [fact, expectedReason] of cases) {
+        const result = analyze(files, {
+          packages: [resolved('@kovojs/server'), ...(fact === undefined ? [] : [fact])],
+        });
+        expect(result.diagnostics).toHaveLength(1);
+        expect(result.diagnostics[0]!.message).toContain(expectedReason);
+        expect(result.diagnostics[0]!.message).not.toContain(
+          `${packageName} is unconditionally request-closed`,
+        );
+      }
+    },
+  );
 
   it('requires package summaries to classify side-effect module initialization explicitly', () => {
     const files = [
@@ -2730,18 +2769,17 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     );
   });
 
-  it('keeps zero-public first-party packages compiler-owned instead of accepting project summaries', () => {
-    const compilerPackage = frameworkExportPosturePackages.find(
-      ([packageName]) => packageName === '@kovojs/compiler',
-    )!;
-    const packageFact = resolved('@kovojs/compiler/internal', {
-      conditions: ['default'],
-      fingerprint: compilerPackage[2][0]![0],
-      implementationDigest: canonicalFrameworkImplementationDigest(
-        '@kovojs/compiler',
-        compilerPackage[2][0]![2][0]!,
-      )!,
-    });
+  // @kovo-security-certifies C13 zero-public-analyzer-name-closure
+  it('closes the exact zero-public compiler package before missing or mismatched identity facts', () => {
+    const packageFact: ResolvedCapabilityPackage = {
+      conditions: [],
+      exportStatus: 'unresolved',
+      implementationDigest: `kovo-source-tree-sha256:${'0'.repeat(64)}`,
+      manifestFingerprint: 'sha256:unreviewed-compiler-manifest',
+      packageName: '@kovojs/compiler',
+      packageVersion: '999.0.0-unreviewed',
+      specifier: '@kovojs/compiler/internal',
+    };
     const summary: PackageCapabilitySummary = {
       entries: [
         {
@@ -2757,25 +2795,54 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       source: 'kovo.capabilities.json',
       summaryVersion: 'forged-first-party/1',
     };
-    const result = analyze(
+    const files = [
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          import { compile } from '@kovojs/compiler/internal';
+          export const page = route('/compiler', { render() { return compile; } });
+        `,
+      },
+    ];
+    for (const compilerFacts of [[], [packageFact]] as const) {
+      const result = analyze(files, {
+        packages: [resolved('@kovojs/server'), ...compilerFacts],
+        packageSummaries: [summary],
+      });
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]!.code).toBe('KV448');
+      expect(result.diagnostics[0]!.message).toContain(
+        'compiler-owned @kovojs/compiler is unconditionally request-closed because it exposes no app-public runtime subpaths',
+      );
+      expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
+      expect(result.diagnostics[0]!.message).not.toContain('manifest fingerprint');
+    }
+
+    const nearName = analyze(
       [
         {
           fileName: 'app.ts',
           source: `
             import { route } from '@kovojs/server';
-            import { compile } from '@kovojs/compiler/internal';
-            export const page = route('/compiler', { render() { return compile; } });
+            import { compile } from '@kovojs/compiler-evil/internal';
+            export const page = route('/compiler-near-name', { render() { return compile; } });
           `,
         },
       ],
       {
-        packages: [resolved('@kovojs/server'), packageFact],
-        packageSummaries: [summary],
+        packages: [
+          resolved('@kovojs/server'),
+          {
+            ...packageFact,
+            packageName: '@kovojs/compiler-evil',
+            specifier: '@kovojs/compiler-evil/internal',
+          },
+        ],
       },
     );
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]!.message).toContain(
-      'compiler-owned @kovojs/compiler posture does not classify public subpath ./internal',
+    expect(nearName.diagnostics[0]!.message).not.toContain(
+      '@kovojs/compiler-evil is unconditionally request-closed',
     );
   });
 

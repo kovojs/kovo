@@ -163,39 +163,41 @@ function resolveFirstPartyFixture(importer: string) {
   );
 }
 
-function firstPartyCompilerCatalogFixture(): {
-  catalogFile: string;
+function zeroPublicCompilerFixture(layout: 'packed' | 'source'): {
+  aliasFile: string;
   importer: string;
-  source: string;
 } {
-  const root = mkdtempSync(join(tmpdir(), 'kovo-first-party-compiler-catalog-'));
+  const root = mkdtempSync(join(tmpdir(), 'kovo-zero-public-compiler-'));
   roots.push(root);
   const scopeRoot = join(root, 'node_modules/@kovojs');
   const installedCompilerRoot = join(scopeRoot, 'compiler');
-  mkdirSync(installedCompilerRoot, { recursive: true });
+  const implementationDirectory = layout === 'source' ? 'src' : 'dist';
+  const implementationFile = layout === 'source' ? 'internal.ts' : 'internal.mjs';
+  const implementationRoot = join(installedCompilerRoot, implementationDirectory);
+  mkdirSync(implementationRoot, { recursive: true });
   writeFileSync(join(root, 'package.json'), '{"type":"module"}\n');
-  cpSync(join(repoRoot, 'packages/compiler/src'), join(installedCompilerRoot, 'src'), {
-    recursive: true,
-  });
-  cpSync(
-    join(repoRoot, 'packages/compiler/package.json'),
+  writeFileSync(
     join(installedCompilerRoot, 'package.json'),
+    `${JSON.stringify(
+      {
+        exports: { './internal': `./${implementationDirectory}/${implementationFile}` },
+        name: '@kovojs/compiler',
+        type: 'module',
+        version: '999.0.0-unreviewed',
+      },
+      null,
+      2,
+    )}\n`,
   );
-  symlinkSync(join(repoRoot, 'packages/server'), join(scopeRoot, 'server'), 'dir');
+  const entryFile = join(implementationRoot, implementationFile);
+  const aliasFile = join(implementationRoot, `alias.${layout === 'source' ? 'ts' : 'mjs'}`);
+  writeFileSync(entryFile, 'export const compile = true;\n');
+  symlinkSync(entryFile, aliasFile);
   const importer = join(root, 'app.mjs');
-  const source = `
-    import { route } from '@kovojs/server';
-    import { analyzeCapabilityClosure as compilerInternal } from '@kovojs/compiler/internal';
-    export const page = route('/compiler', { render() { return compilerInternal; } });
-  `;
-  writeFileSync(importer, source);
+  writeFileSync(importer, 'export {};\n');
   return {
-    catalogFile: join(
-      installedCompilerRoot,
-      'src/security/framework-public-runtime-export-posture.generated.ts',
-    ),
+    aliasFile,
     importer,
-    source,
   };
 }
 
@@ -331,46 +333,35 @@ describe('capability package resolution', () => {
     expect(thirdPartyWalks).toEqual([]);
   });
 
-  it('closes source compiler catalog permission and non-self digest drift', () => {
-    const fixture = firstPartyCompilerCatalogFixture();
-    const requests = [
-      { importedNames: ['route'], specifier: '@kovojs/server' },
-      {
-        importedNames: ['analyzeCapabilityClosure'],
-        specifier: '@kovojs/compiler/internal',
-      },
-    ];
-    const analyzeFixture = () =>
-      analyzeCapabilityClosure({
-        files: [{ fileName: 'app.ts', source: fixture.source }],
-        packages: resolveCapabilityPackages(requests, fixture.importer),
-      });
-    const baseline = analyzeFixture();
-    expect(baseline.diagnostics).toHaveLength(1);
-    expect(baseline.diagnostics[0]?.message).toContain(
-      'does not classify public subpath ./internal',
-    );
-
-    const catalog = readFileSync(fixture.catalogFile, 'utf8');
-    const mutations = [
-      catalog.replace('"authority-free"', '"request-closed"'),
-      catalog.replace(
-        /kovo-source-tree-sha256:[a-f0-9]{64}/u,
-        `kovo-source-tree-sha256:${'0'.repeat(64)}`,
-      ),
-    ];
-    for (const mutation of mutations) {
-      expect(mutation).not.toBe(catalog);
-      writeFileSync(fixture.catalogFile, mutation);
-      const drifted = analyzeFixture();
-      expect(drifted.diagnostics).toHaveLength(1);
-      expect(drifted.diagnostics[0]?.code).toBe('KV448');
-      expect(drifted.diagnostics[0]?.message).toContain(
-        'installed implementation digest does not match',
+  it.each(['source', 'packed'] as const)(
+    'resolves zero-public compiler metadata without walking or hashing its installed %s tree',
+    (layout) => {
+      const fixture = zeroPublicCompilerFixture(layout);
+      const walks: string[] = [];
+      const [fact] = resolveCapabilityPackages(
+        [{ importedNames: ['compile'], specifier: '@kovojs/compiler/internal' }],
+        fixture.importer,
+        {
+          onImplementationTreeWalk(packageRoot, layout) {
+            walks.push(`${packageRoot}:${layout}`);
+          },
+        },
       );
-      writeFileSync(fixture.catalogFile, catalog);
-    }
-  });
+
+      expect(fact).toMatchObject({
+        exportStatus: 'resolved',
+        packageName: '@kovojs/compiler',
+        packageVersion: '999.0.0-unreviewed',
+        specifier: '@kovojs/compiler/internal',
+      });
+      expect(fact).not.toHaveProperty('implementationDigest');
+      expect(walks).toEqual([]);
+
+      // A tree walker would reject this symlink. Resolution succeeds because SPEC §6.6 closes the
+      // exact zero-public analyzer package before installed implementation identity is relevant.
+      expect(readFileSync(fixture.aliasFile, 'utf8')).toContain('compile');
+    },
+  );
 
   it('keeps Node built-ins out of filesystem package-metadata resolution', () => {
     const { importer } = fixtureRoot();

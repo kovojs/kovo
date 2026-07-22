@@ -27,17 +27,7 @@ export const FRAMEWORK_EXPORT_POSTURE_GENERATED = path.join(
 
 const FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX = 'kovo-source-tree-sha256:';
 const FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX = 'kovo-packed-tree-sha256:';
-const FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX =
-  'kovo-compiler-self-source-tree-sha256:';
-const FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX =
-  'kovo-compiler-self-packed-tree-sha256:';
 const FRAMEWORK_COMPILER_PACKAGE = '@kovojs/compiler';
-const FRAMEWORK_COMPILER_SOURCE_CATALOG_FILE =
-  'src/security/framework-public-runtime-export-posture.generated.ts';
-const FRAMEWORK_COMPILER_PACKED_CATALOG_FILES = new Set([
-  'dist/internal.mjs',
-  'dist/internal.mjs.map',
-]);
 
 const rawCapabilities = new Set([
   'crypto-acquisition',
@@ -78,10 +68,7 @@ export function readFrameworkExportPostureLedger(fileName = FRAMEWORK_EXPORT_POS
  * Runtime membership comes from TypeScript symbol value flags, not text or naming conventions.
  * Every public subpath also gets an explicit `<module>` member for evaluation/side-effect posture.
  */
-export function computeFrameworkRuntimeSurface({
-  compilerPackedTreeSha256,
-  includePackedImplementation = false,
-} = {}) {
+export function computeFrameworkRuntimeSurface({ includePackedImplementation = false } = {}) {
   const reportByPackage = new Map(exportedSymbolsReport().packages.map((pkg) => [pkg.name, pkg]));
   const packages = [];
   const emptyPackages = [];
@@ -99,17 +86,30 @@ export function computeFrameworkRuntimeSurface({
         `${declared.name}: public-packages.json public boundary differs from manifest-declared public exports`,
       );
     }
-    const sourceTreeSha256 = productionSourceTreeSha256(
-      path.join(repoRoot, 'packages', declared.dir),
-      declared.name,
-    );
+    if (declared.name === FRAMEWORK_COMPILER_PACKAGE) {
+      if (publicSubpaths.length !== 0) {
+        findings.push(
+          `${FRAMEWORK_COMPILER_PACKAGE}: analyzer package unexpectedly declares app-public runtime subpaths`,
+        );
+      } else {
+        // SPEC §6.6: the analyzer has no app-public runtime surface. Its exact package name is
+        // request-closed without creating a circular claim that its running bytes authenticate
+        // themselves, so neither its source nor packed tree participates in this catalog.
+        emptyPackages.push({
+          packageName: FRAMEWORK_COMPILER_PACKAGE,
+          unconditionalRequestClosure: true,
+        });
+      }
+      continue;
+    }
+    const packageRoot = path.join(repoRoot, 'packages', declared.dir);
+    const sourceTreeSha256 = productionSourceTreeSha256(packageRoot);
     const identity = {
       implementationVariants: frameworkImplementationVariants(
         manifest,
-        path.join(repoRoot, 'packages', declared.dir),
+        packageRoot,
         sourceTreeSha256,
         includePackedImplementation,
-        compilerPackedTreeSha256,
       ),
       packageName: declared.name,
       packageVersion: manifest.version,
@@ -294,9 +294,15 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
       pkg,
     ]),
   );
+  const zeroPublicRequestClosedPackages = arrayOrEmpty(ledger.emptyPublicPackages)
+    .filter((pkg) => pkg?.disposition === 'request-closed')
+    .map((pkg) => pkg.packageName)
+    .sort(compareStrings);
   const packages = [
     ...arrayOrEmpty(ledger.packages).map((pkg) => ({ ...pkg, empty: false })),
-    ...arrayOrEmpty(ledger.emptyPublicPackages).map((pkg) => ({ ...pkg, empty: true })),
+    ...arrayOrEmpty(ledger.emptyPublicPackages)
+      .filter((pkg) => pkg?.disposition !== 'request-closed')
+      .map((pkg) => ({ ...pkg, empty: true })),
   ]
     .map((pkg) => {
       const implementationBinding = frameworkPackageImplementationBinding(pkg);
@@ -366,6 +372,11 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
     'export const frameworkExportPostureSummaryVersion =',
     `  ${quoteTypeScriptString(ledger.summaryVersion)} as const;`,
     '',
+    '// Exact package-name closures for first-party packages with no app-public runtime surface.',
+    '// The analyzer executable is authenticated by the release/install channel, not by itself.',
+    'export const frameworkZeroPublicRequestClosedPackages: readonly string[] =',
+    `  ${JSON.stringify(zeroPublicRequestClosedPackages)};`,
+    '',
     '// Compact generated closed membership; expanded formatting triples parse input.',
     '// prettier-ignore',
     `export const frameworkExportPosturePackages: readonly FrameworkExportPosturePackage[] = ${renderGeneratedPackages(packages)};`,
@@ -434,6 +445,28 @@ function validateEmptyPackages(rows, expectedRows, findings) {
     if (expected === undefined) {
       findings.push(`stale empty public package posture: ${row.packageName}`);
       continue;
+    }
+    if (row.packageName === FRAMEWORK_COMPILER_PACKAGE) {
+      const expectedKeys = ['disposition', 'packageName', 'reason'];
+      if (canonicalJson(Object.keys(row).sort(compareStrings)) !== canonicalJson(expectedKeys)) {
+        findings.push(
+          `${FRAMEWORK_COMPILER_PACKAGE}: zero-public analyzer posture keys must be exactly ${expectedKeys.join(', ')}`,
+        );
+      }
+      if (expected.unconditionalRequestClosure !== true || row.disposition !== 'request-closed') {
+        findings.push(
+          `${FRAMEWORK_COMPILER_PACKAGE}: zero-public analyzer must be unconditionally request-closed`,
+        );
+      }
+      if (!isNonBlank(row.reason)) {
+        findings.push(`${FRAMEWORK_COMPILER_PACKAGE}: zero-public analyzer posture needs a reason`);
+      }
+      continue;
+    }
+    if (row.disposition !== undefined) {
+      findings.push(
+        `${row.packageName}: unconditional empty-package closure is reserved for ${FRAMEWORK_COMPILER_PACKAGE}`,
+      );
     }
     if (row.packageVersion !== expected.packageVersion) {
       findings.push(`${row.packageName}: empty-package version is stale`);
@@ -565,23 +598,20 @@ function frameworkImplementationVariants(
   packageRoot,
   sourceTreeSha256,
   includePackedImplementation,
-  compilerPackedTreeSha256,
 ) {
   const candidates = manifestVariantCandidates(manifest);
   const packedTreeSha256 = includePackedImplementation
-    ? manifest.name === FRAMEWORK_COMPILER_PACKAGE && compilerPackedTreeSha256 !== undefined
-      ? compilerPackedTreeSha256
-      : productionPackedTreeSha256(packageRoot, manifest.name)
+    ? productionPackedTreeSha256(packageRoot)
     : undefined;
   const byFingerprint = new Map();
   for (const [index, candidate] of candidates.entries()) {
     const fingerprint = capabilityManifestFingerprint(candidate);
     const digest =
       index === 0
-        ? `${manifest.name === FRAMEWORK_COMPILER_PACKAGE ? FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX : FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX}${sourceTreeSha256}`
+        ? `${FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX}${sourceTreeSha256}`
         : packedTreeSha256 === undefined
           ? undefined
-          : `${manifest.name === FRAMEWORK_COMPILER_PACKAGE ? FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX : FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX}${packedTreeSha256}`;
+          : `${FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX}${packedTreeSha256}`;
     if (digest === undefined) continue;
     const digests = byFingerprint.get(fingerprint) ?? new Set();
     digests.add(digest);
@@ -633,11 +663,7 @@ function orderPreservingManifestValue(value) {
   };
 }
 
-export function productionSourceTreeSha256(
-  packageRoot,
-  packageName,
-  readSourceFile = readFileSync,
-) {
+export function productionSourceTreeSha256(packageRoot, readSourceFile = readFileSync) {
   const sourceRoot = path.join(packageRoot, 'src');
   if (!existsSync(sourceRoot)) {
     throw new Error(`framework source implementation is missing ${sourceRoot}`);
@@ -662,22 +688,13 @@ export function productionSourceTreeSha256(
   visit(sourceRoot);
   files.sort(compareStrings);
   const hash = createHash('sha256');
-  let normalizedCompilerCatalog = false;
   for (const fileName of files) {
     const relativeFileName = path.relative(packageRoot, fileName).split(path.sep).join('/');
     const input = readSourceFile(fileName);
-    let sourceBytes = Buffer.isBuffer(input) ? Buffer.from(input) : Buffer.from(input);
-    if (
-      packageName === FRAMEWORK_COMPILER_PACKAGE &&
-      relativeFileName === FRAMEWORK_COMPILER_SOURCE_CATALOG_FILE
-    ) {
-      const normalized = normalizeCompilerCatalogSelfDigestBytes(sourceBytes);
-      requireExactCompilerSelfDigestMarkers(normalized, relativeFileName);
-      sourceBytes = normalized.bytes;
-      normalizedCompilerCatalog = true;
-    } else if (countFrameworkImplementationDigestMarkers(sourceBytes) > 0) {
+    const sourceBytes = Buffer.isBuffer(input) ? Buffer.from(input) : Buffer.from(input);
+    if (countFrameworkImplementationDigestMarkers(sourceBytes) > 0) {
       throw new Error(
-        `framework implementation digest marker escaped the compiler's exact generated catalog artifact: ${relativeFileName}`,
+        `framework implementation digest marker is embedded in production source: ${relativeFileName}`,
       );
     }
     hash.update(relativeFileName);
@@ -685,24 +702,11 @@ export function productionSourceTreeSha256(
     hash.update(sourceBytes);
     hash.update('\0');
   }
-  if (packageName === FRAMEWORK_COMPILER_PACKAGE && !normalizedCompilerCatalog) {
-    throw new Error(
-      'compiler source implementation is missing its exact generated catalog artifact',
-    );
-  }
   return hash.digest('hex');
 }
 
-/**
- * Exact packed-package implementation identity. Every shipped dist byte participates. Only the
- * reviewed compiler catalog artifact census receives the two self-payload normalizations; the
- * whole-package marker scan rejects those payloads anywhere else.
- */
-export function productionPackedTreeSha256(
-  packageRoot,
-  packageName,
-  readImplementationFile = readFileSync,
-) {
+/** Exact packed-package implementation identity. Every shipped dist byte participates. */
+export function productionPackedTreeSha256(packageRoot, readImplementationFile = readFileSync) {
   const distRoot = path.join(packageRoot, 'dist');
   if (!existsSync(distRoot)) {
     throw new Error(`packed framework implementation is missing ${distRoot}`);
@@ -727,22 +731,13 @@ export function productionPackedTreeSha256(
   visit(distRoot);
   files.sort(compareStrings);
   const hash = createHash('sha256');
-  const normalizedCompilerCatalogs = new Set();
   for (const fileName of files) {
     const relativeFileName = path.relative(packageRoot, fileName).split(path.sep).join('/');
     const input = readImplementationFile(fileName);
-    let implementationBytes = Buffer.isBuffer(input) ? Buffer.from(input) : Buffer.from(input);
-    const isCompilerCatalog =
-      packageName === FRAMEWORK_COMPILER_PACKAGE &&
-      FRAMEWORK_COMPILER_PACKED_CATALOG_FILES.has(relativeFileName);
-    if (isCompilerCatalog) {
-      const normalized = normalizeCompilerCatalogSelfDigestBytes(implementationBytes);
-      requireExactCompilerSelfDigestMarkers(normalized, relativeFileName);
-      implementationBytes = normalized.bytes;
-      normalizedCompilerCatalogs.add(relativeFileName);
-    } else if (countFrameworkImplementationDigestMarkers(implementationBytes) > 0) {
+    const implementationBytes = Buffer.isBuffer(input) ? Buffer.from(input) : Buffer.from(input);
+    if (countFrameworkImplementationDigestMarkers(implementationBytes) > 0) {
       throw new Error(
-        `framework implementation digest marker escaped the compiler's exact generated catalog artifact: ${relativeFileName}`,
+        `framework implementation digest marker is embedded in packed implementation: ${relativeFileName}`,
       );
     }
     hash.update(relativeFileName);
@@ -750,65 +745,14 @@ export function productionPackedTreeSha256(
     hash.update(implementationBytes);
     hash.update('\0');
   }
-  if (
-    packageName === FRAMEWORK_COMPILER_PACKAGE &&
-    normalizedCompilerCatalogs.size !== FRAMEWORK_COMPILER_PACKED_CATALOG_FILES.size
-  ) {
-    throw new Error(
-      'compiler packed implementation is missing a reviewed generated catalog artifact',
-    );
-  }
   return hash.digest('hex');
 }
 
-function normalizeCompilerCatalogSelfDigestBytes(input) {
-  const bytes = Buffer.from(input);
-  const sourceMatches = normalizeDigestPayloads(
-    bytes,
-    FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX,
-  );
-  const packedMatches = normalizeDigestPayloads(
-    bytes,
-    FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX,
-  );
-  return { bytes, packedMatches, sourceMatches };
-}
-
-function requireExactCompilerSelfDigestMarkers(normalized, relativeFileName) {
-  if (normalized.sourceMatches !== 1 || normalized.packedMatches !== 1) {
-    throw new Error(
-      `compiler catalog ${relativeFileName} contains source=${normalized.sourceMatches} packed=${normalized.packedMatches} self-digest payloads; expected exactly one each`,
-    );
-  }
-}
-
-function normalizeDigestPayloads(bytes, prefix) {
-  const prefixBytes = Buffer.from(prefix);
-  let matches = 0;
-  let offset = 0;
-  while (offset < bytes.length) {
-    const found = bytes.indexOf(prefixBytes, offset);
-    if (found < 0) break;
-    const start = found + prefixBytes.length;
-    const end = start + 64;
-    const candidate = bytes.subarray(start, end).toString('ascii');
-    const next = bytes[end];
-    if (/^[a-f0-9]{64}$/u.test(candidate) && (next === undefined || !isLowerHexByte(next))) {
-      bytes.fill(0x30, start, end);
-      matches += 1;
-    }
-    offset = Math.max(end, found + 1);
-  }
-  return matches;
-}
-
 function countFrameworkImplementationDigestMarkers(input) {
-  return [
-    FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX,
-    FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX,
-    FRAMEWORK_COMPILER_SELF_SOURCE_IMPLEMENTATION_PREFIX,
-    FRAMEWORK_COMPILER_SELF_PACKED_IMPLEMENTATION_PREFIX,
-  ].reduce((count, prefix) => count + countDigestPayloads(input, prefix), 0);
+  return [FRAMEWORK_SOURCE_IMPLEMENTATION_PREFIX, FRAMEWORK_PACKED_IMPLEMENTATION_PREFIX].reduce(
+    (count, prefix) => count + countDigestPayloads(input, prefix),
+    0,
+  );
 }
 
 function countDigestPayloads(input, prefix) {
@@ -1013,39 +957,19 @@ export function run(args = process.argv.slice(2)) {
         buildFrameworkPackedArtifacts(
           packageNames.filter((packageName) => packageName !== FRAMEWORK_COMPILER_PACKAGE),
         );
-        const bootstrapActual = computeFrameworkRuntimeSurface({
-          compilerPackedTreeSha256: '0'.repeat(64),
-          includePackedImplementation: true,
-        });
-        writeFileSync(
-          FRAMEWORK_EXPORT_POSTURE_GENERATED,
-          renderFrameworkExportPostureGenerated(ledger, bootstrapActual),
-        );
-        buildFrameworkPackedArtifacts([FRAMEWORK_COMPILER_PACKAGE]);
         state = generatedPostureState(ledger);
         findings.push(...state.findings);
+        if (findings.length === 0) {
+          writeFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, state.generated);
+          // Keep the packed analyzer aligned with the newly generated source. Its bytes are a
+          // release/install trust subject and deliberately do not feed back into this catalog.
+          buildFrameworkPackedArtifacts([FRAMEWORK_COMPILER_PACKAGE]);
+        }
       } catch (error) {
         findings.push(error instanceof Error ? error.message : String(error));
       }
     }
     if (state === undefined) state = { actual: sourceActual, findings, generated: '' };
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      if (findings.length > 0) break;
-      const current = existsSync(FRAMEWORK_EXPORT_POSTURE_GENERATED)
-        ? readFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, 'utf8')
-        : '';
-      if (current === state.generated) break;
-      writeFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, state.generated);
-      buildFrameworkPackedArtifacts(['@kovojs/compiler']);
-      state = generatedPostureState(ledger);
-      findings.push(...state.findings);
-    }
-    if (
-      findings.length === 0 &&
-      readFileSync(FRAMEWORK_EXPORT_POSTURE_GENERATED, 'utf8') !== state.generated
-    ) {
-      findings.push('generated compiler posture implementation digest did not reach a fixed point');
-    }
   } else {
     try {
       buildFrameworkPackedArtifacts(packageNames);

@@ -175,75 +175,17 @@ describe('framework public runtime export posture gate', () => {
     );
   });
 
-  it('digests every regular production source asset and normalizes only exact compiler self fields', () => {
+  it('digests every regular non-compiler production source asset', () => {
     const serverRoot = fileURLToPath(new URL('../packages/server', import.meta.url));
     const fixtureSource = path.join(serverRoot, 'src/test-fixtures.ts');
-    const baseline = productionSourceTreeSha256(serverRoot, '@kovojs/server');
-    const fixtureMutation = productionSourceTreeSha256(serverRoot, '@kovojs/server', (fileName) => {
+    const baseline = productionSourceTreeSha256(serverRoot);
+    const fixtureMutation = productionSourceTreeSha256(serverRoot, (fileName) => {
       const source = readFileSync(fileName);
       return fileName === fixtureSource
         ? Buffer.concat([source, Buffer.from('\n// mutant')])
         : source;
     });
     expect(fixtureMutation).not.toBe(baseline);
-
-    const compilerRoot = fileURLToPath(new URL('../packages/compiler', import.meta.url));
-    const selfGenerated = path.join(
-      compilerRoot,
-      'src/security/framework-public-runtime-export-posture.generated.ts',
-    );
-    const compilerBaseline = productionSourceTreeSha256(compilerRoot, '@kovojs/compiler');
-    for (const prefix of [
-      'kovo-compiler-self-source-tree-sha256:',
-      'kovo-compiler-self-packed-tree-sha256:',
-    ]) {
-      const selfMutation = productionSourceTreeSha256(
-        compilerRoot,
-        '@kovojs/compiler',
-        (fileName) => {
-          const source = readFileSync(fileName);
-          return fileName === selfGenerated
-            ? Buffer.from(
-                source
-                  .toString('utf8')
-                  .replace(new RegExp(`${prefix}[a-f0-9]{64}`, 'u'), `${prefix}${'f'.repeat(64)}`),
-              )
-            : source;
-        },
-      );
-      expect(selfMutation, prefix).toBe(compilerBaseline);
-    }
-
-    const permissionMutation = productionSourceTreeSha256(
-      compilerRoot,
-      '@kovojs/compiler',
-      (fileName) => {
-        const source = readFileSync(fileName);
-        return fileName === selfGenerated
-          ? Buffer.concat([source, Buffer.from('\n// changed permission/disposition')])
-          : source;
-      },
-    );
-    expect(permissionMutation).not.toBe(compilerBaseline);
-
-    const nonSelfDigestMutation = productionSourceTreeSha256(
-      compilerRoot,
-      '@kovojs/compiler',
-      (fileName) => {
-        const source = readFileSync(fileName);
-        return fileName === selfGenerated
-          ? Buffer.from(
-              source
-                .toString('utf8')
-                .replace(
-                  /kovo-source-tree-sha256:[a-f0-9]{64}/u,
-                  `kovo-source-tree-sha256:${'e'.repeat(64)}`,
-                ),
-            )
-          : source;
-      },
-    );
-    expect(nonSelfDigestMutation).not.toBe(compilerBaseline);
 
     const generatedRoot = mkdtempSync(path.join(tmpdir(), 'kovo-posture-source-digest-'));
     try {
@@ -255,25 +197,17 @@ describe('framework public runtime export posture gate', () => {
       writeFileSync(generatedSource, 'export const generated = 1;\n');
       writeFileSync(testSource, 'export const testOnly = 1;\n');
       writeFileSync(runtimeAsset, '{"template":1}\n');
-      const generatedBaseline = productionSourceTreeSha256(generatedRoot, '@kovojs/style');
+      const generatedBaseline = productionSourceTreeSha256(generatedRoot);
       writeFileSync(generatedSource, 'export const generated = 2;\n');
-      expect(productionSourceTreeSha256(generatedRoot, '@kovojs/style')).not.toBe(
-        generatedBaseline,
-      );
-      const afterGeneratedMutation = productionSourceTreeSha256(generatedRoot, '@kovojs/style');
+      expect(productionSourceTreeSha256(generatedRoot)).not.toBe(generatedBaseline);
+      const afterGeneratedMutation = productionSourceTreeSha256(generatedRoot);
       writeFileSync(runtimeAsset, '{"template":2}\n');
-      expect(productionSourceTreeSha256(generatedRoot, '@kovojs/style')).not.toBe(
-        afterGeneratedMutation,
-      );
-      const afterAssetMutation = productionSourceTreeSha256(generatedRoot, '@kovojs/style');
+      expect(productionSourceTreeSha256(generatedRoot)).not.toBe(afterGeneratedMutation);
+      const afterAssetMutation = productionSourceTreeSha256(generatedRoot);
       writeFileSync(testSource, 'export const testOnly = 2;\n');
-      expect(productionSourceTreeSha256(generatedRoot, '@kovojs/style')).not.toBe(
-        afterAssetMutation,
-      );
+      expect(productionSourceTreeSha256(generatedRoot)).not.toBe(afterAssetMutation);
       symlinkSync(generatedSource, path.join(sourceRoot, 'runtime-link.ts'));
-      expect(() => productionSourceTreeSha256(generatedRoot, '@kovojs/style')).toThrow(
-        'contains non-file entry',
-      );
+      expect(() => productionSourceTreeSha256(generatedRoot)).toThrow('contains non-file entry');
     } finally {
       rmSync(generatedRoot, { force: true, recursive: true });
     }
@@ -284,16 +218,14 @@ describe('framework public runtime export posture gate', () => {
       mkdirSync(path.join(linkedTarget, 'src'));
       writeFileSync(path.join(linkedTarget, 'src/index.ts'), 'export const value = 1;\n');
       symlinkSync(path.join(linkedTarget, 'src'), path.join(linkedRoot, 'src'), 'dir');
-      expect(() => productionSourceTreeSha256(linkedRoot, '@kovojs/style')).toThrow(
-        'root is not a directory',
-      );
+      expect(() => productionSourceTreeSha256(linkedRoot)).toThrow('root is not a directory');
     } finally {
       rmSync(linkedRoot, { force: true, recursive: true });
       rmSync(linkedTarget, { force: true, recursive: true });
     }
   });
 
-  it('digests every packed byte and scopes self-cycle normalization to the compiler catalog', () => {
+  it('digests every non-compiler packed byte and rejects embedded digest identities', () => {
     const packageRoot = mkdtempSync(path.join(tmpdir(), 'kovo-posture-packed-digest-'));
     try {
       const distRoot = path.join(packageRoot, 'dist');
@@ -306,24 +238,17 @@ describe('framework public runtime export posture gate', () => {
       ];
       for (const [fileName, source] of files) writeFileSync(path.join(distRoot, fileName), source);
 
-      const baseline = productionPackedTreeSha256(packageRoot, '@kovojs/style');
+      const baseline = productionPackedTreeSha256(packageRoot);
       for (const [fileName, source] of files) {
         writeFileSync(path.join(distRoot, fileName), `${source}// mutant\n`);
-        expect(productionPackedTreeSha256(packageRoot, '@kovojs/style'), fileName).not.toBe(
-          baseline,
-        );
+        expect(productionPackedTreeSha256(packageRoot), fileName).not.toBe(baseline);
         writeFileSync(path.join(distRoot, fileName), source);
       }
 
-      for (const prefix of [
-        'kovo-source-tree-sha256:',
-        'kovo-packed-tree-sha256:',
-        'kovo-compiler-self-source-tree-sha256:',
-        'kovo-compiler-self-packed-tree-sha256:',
-      ]) {
+      for (const prefix of ['kovo-source-tree-sha256:', 'kovo-packed-tree-sha256:']) {
         writeFileSync(path.join(distRoot, 'chunk-A.mjs'), `${prefix}${'a'.repeat(64)}`);
-        expect(() => productionPackedTreeSha256(packageRoot, '@kovojs/style')).toThrow(
-          "framework implementation digest marker escaped the compiler's exact generated catalog artifact",
+        expect(() => productionPackedTreeSha256(packageRoot)).toThrow(
+          'framework implementation digest marker is embedded in packed implementation',
         );
       }
     } finally {
@@ -336,58 +261,10 @@ describe('framework public runtime export posture gate', () => {
       mkdirSync(path.join(linkedTarget, 'dist'));
       writeFileSync(path.join(linkedTarget, 'dist/index.mjs'), 'export const value = 1;\n');
       symlinkSync(path.join(linkedTarget, 'dist'), path.join(linkedRoot, 'dist'), 'dir');
-      expect(() => productionPackedTreeSha256(linkedRoot, '@kovojs/style')).toThrow(
-        'root is not a directory',
-      );
+      expect(() => productionPackedTreeSha256(linkedRoot)).toThrow('root is not a directory');
     } finally {
       rmSync(linkedRoot, { force: true, recursive: true });
       rmSync(linkedTarget, { force: true, recursive: true });
-    }
-
-    const compilerRoot = mkdtempSync(path.join(tmpdir(), 'kovo-compiler-packed-digest-'));
-    try {
-      const distRoot = path.join(compilerRoot, 'dist');
-      mkdirSync(distRoot);
-      const selfSourceDigest = (hex) => `kovo-compiler-self-source-tree-sha256:${hex.repeat(64)}`;
-      const selfDigest = (hex) => `kovo-compiler-self-packed-tree-sha256:${hex.repeat(64)}`;
-      const reviewedDigest = (hex) => `kovo-packed-tree-sha256:${hex.repeat(64)}`;
-      const catalogRuntime = path.join(distRoot, 'internal.mjs');
-      const catalogMap = path.join(distRoot, 'internal.mjs.map');
-      writeFileSync(
-        catalogRuntime,
-        `source=${selfSourceDigest('a')} catalog=${selfDigest('a')} reviewed=${reviewedDigest('b')}\n`,
-      );
-      writeFileSync(catalogMap, `source=${selfSourceDigest('a')} sources=${selfDigest('a')}\n`);
-      writeFileSync(path.join(distRoot, 'index.mjs'), 'export const ordinary = true;\n');
-      const baseline = productionPackedTreeSha256(compilerRoot, '@kovojs/compiler');
-
-      writeFileSync(
-        catalogRuntime,
-        `source=${selfSourceDigest('c')} catalog=${selfDigest('c')} reviewed=${reviewedDigest('b')}\n`,
-      );
-      expect(productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).toBe(baseline);
-
-      writeFileSync(
-        catalogRuntime,
-        `source=${selfSourceDigest('c')} changed=${selfDigest('c')} reviewed=${reviewedDigest('b')}\n`,
-      );
-      expect(productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).not.toBe(baseline);
-
-      writeFileSync(
-        catalogRuntime,
-        `source=${selfSourceDigest('a')} catalog=${selfDigest('a')} reviewed=${reviewedDigest('d')}\n`,
-      );
-      expect(productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).not.toBe(baseline);
-
-      writeFileSync(
-        path.join(distRoot, 'extra.mjs'),
-        `owner=kovo-framework-public-runtime-export-posture/fixture source=${selfSourceDigest('e')} catalog=${selfDigest('e')}\n`,
-      );
-      expect(() => productionPackedTreeSha256(compilerRoot, '@kovojs/compiler')).toThrow(
-        "framework implementation digest marker escaped the compiler's exact generated catalog artifact",
-      );
-    } finally {
-      rmSync(compilerRoot, { force: true, recursive: true });
     }
   });
 
@@ -412,11 +289,22 @@ describe('framework public runtime export posture gate', () => {
     }
   });
 
-  it('keeps zero-public first-party identities and security-bearing roles explicit', () => {
+  it('keeps zero-public first-party posture and security-bearing roles explicit', () => {
     expect(ledger.emptyPublicPackages.map((row) => row.packageName).sort()).toEqual([
       '@kovojs/compiler',
       'create-kovo',
     ]);
+    expect(
+      ledger.emptyPublicPackages.find((row) => row.packageName === '@kovojs/compiler'),
+    ).toEqual({
+      disposition: 'request-closed',
+      packageName: '@kovojs/compiler',
+      reason: expect.stringContaining('no app-facing public runtime subpaths'),
+    });
+    expect(actual.emptyPackages.find((row) => row.packageName === '@kovojs/compiler')).toEqual({
+      packageName: '@kovojs/compiler',
+      unconditionalRequestClosure: true,
+    });
     expect(
       groupWithMember(ledger, '@kovojs/browser', './client', 'defaultEnhancedFetch'),
     ).toMatchObject({
@@ -485,6 +373,11 @@ describe('framework public runtime export posture gate', () => {
     expect(cli).toContain('"unconditional-request-closure"');
     expect(cli).not.toContain('kovo-source-tree-sha256:');
     expect(cli).not.toContain('kovo-packed-tree-sha256:');
+
+    expect(generated).toContain(
+      'frameworkZeroPublicRequestClosedPackages: readonly string[] =\n  ["@kovojs/compiler"]',
+    );
+    expect(generated).not.toContain('["@kovojs/compiler", "0.2.0"');
 
     const server = packageBlock('@kovojs/server');
     expect(server).toContain('"exact-implementation"');
