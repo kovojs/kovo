@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { readBoundedRegularFileSnapshot } from './file-snapshot.js';
 import { formatCertificateVerification, verifyCertificateDirectory } from './index.js';
+
+const MAX_CERTIFICATE_BYTES = 2 * 1024 * 1024;
+const MAX_POLICY_BYTES = 1024 * 1024;
 
 /** Injectable text sinks for the stable `kovo-verify` command contract. */
 export interface KovoVerifyIo {
@@ -12,7 +15,7 @@ export interface KovoVerifyIo {
   stdout(text: string): void;
 }
 
-/** Run `kovo-verify <certificate.json> --artifacts <root>` and return its process exit code. */
+/** Run `kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>`. */
 export async function runKovoVerify(
   args: readonly string[],
   io: KovoVerifyIo = {
@@ -22,12 +25,20 @@ export async function runKovoVerify(
 ): Promise<number> {
   const parsed = parseArgs(args);
   if (parsed === undefined) {
-    io.stderr('usage: kovo-verify <certificate.json> --artifacts <root>\n');
+    io.stderr('usage: kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>\n');
     return 2;
   }
   try {
-    const certificate = JSON.parse(readFileSync(parsed.certificatePath, 'utf8')) as unknown;
-    const result = await verifyCertificateDirectory(certificate, parsed.artifactRoot);
+    const certificateBytes = readBoundedEvidenceFile(
+      parsed.certificatePath,
+      MAX_CERTIFICATE_BYTES,
+      'certificate',
+    );
+    const certificate = JSON.parse(
+      new TextDecoder('utf-8', { fatal: true }).decode(certificateBytes),
+    ) as unknown;
+    const policyBytes = readBoundedEvidenceFile(parsed.policyPath, MAX_POLICY_BYTES, 'policy');
+    const result = await verifyCertificateDirectory(certificate, policyBytes, parsed.artifactRoot);
     io.stdout(formatCertificateVerification(result));
     return result.ok ? 0 : 1;
   } catch (error) {
@@ -38,11 +49,28 @@ export async function runKovoVerify(
   }
 }
 
+function readBoundedEvidenceFile(filePath: string, maxBytes: number, label: string): Uint8Array {
+  return readBoundedRegularFileSnapshot(filePath, maxBytes, label).bytes;
+}
+
 function parseArgs(
   args: readonly string[],
-): { artifactRoot: string; certificatePath: string } | undefined {
-  if (args.length !== 3 || args[1] !== '--artifacts' || !args[0] || !args[2]) return undefined;
-  return { artifactRoot: resolve(args[2]), certificatePath: resolve(args[0]) };
+): { artifactRoot: string; certificatePath: string; policyPath: string } | undefined {
+  if (
+    args.length !== 5 ||
+    args[1] !== '--policy' ||
+    args[3] !== '--artifacts' ||
+    !args[0] ||
+    !args[2] ||
+    !args[4]
+  ) {
+    return undefined;
+  }
+  return {
+    artifactRoot: resolve(args[4]),
+    certificatePath: resolve(args[0]),
+    policyPath: resolve(args[2]),
+  };
 }
 
 const invokedPath = process.argv[1];

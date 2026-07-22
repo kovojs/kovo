@@ -32,15 +32,16 @@ if (stage === 'analyze') {
     }),
   );
 } else if (stage === 'generate') {
-  const [analysisPath, outputPath, forbiddenKeyPath, forbiddenAppPath] = args;
+  const [analysisPath, policyPath, outputPath, forbiddenKeyPath, forbiddenAppPath] = args;
   assertForbiddenRead(forbiddenKeyPath, 'signing material');
   assertForbiddenRead(forbiddenAppPath, 'app dependency closure');
   const { generateKovoCertificateFromAnalysis, stableKovoCertificateJson } =
     await import('./kovo-certificate-format.mjs');
   const analysis = JSON.parse(readFileSync(analysisPath, 'utf8'));
+  const policyBytes = readFileSync(policyPath);
   writeFileSync(
     outputPath,
-    stableKovoCertificateJson(generateKovoCertificateFromAnalysis(analysis)),
+    stableKovoCertificateJson(generateKovoCertificateFromAnalysis(analysis, policyBytes)),
     'utf8',
   );
 } else if (stage === 'sign') {

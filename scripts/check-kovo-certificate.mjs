@@ -6,35 +6,54 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
+import { publicPackages } from './public-packages.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const certificatePath = path.join(repoRoot, 'security', 'kovo-certificate-v1.json');
+const policyPath = path.join(repoRoot, 'security', 'kovo-certificate-policy-v1.json');
 
-export function verifyCommittedKovoCertificate({ exec = execFileSync } = {}) {
-  const certificate = JSON.parse(readFileSync(certificatePath, 'utf8'));
-  const packages = [
-    ...new Set(certificate.artifacts.map((entry) => entry.path.split('/').slice(0, 2).join('/'))),
-  ].sort(compareStrings);
+export function verifyCommittedKovoCertificate({
+  certificateFile = certificatePath,
+  cwd = repoRoot,
+  exec = execFileSync,
+  packageDirectory = defaultPackageDirectory,
+  pack = packWithoutLifecycleScripts,
+  policyFile = policyPath,
+} = {}) {
+  const policy = JSON.parse(readFileSync(policyFile, 'utf8'));
+  const packages = policy.packages.map((entry) => entry.name);
   const artifactRoot = mkdtempSync(path.join(tmpdir(), 'kovo-certificate-artifacts-'));
   try {
     for (const packageName of packages) {
-      const directory = packageName.split('/')[1];
-      const source = path.join(repoRoot, 'packages', directory);
-      const target = path.join(artifactRoot, packageName);
-      mkdirSync(target, { recursive: true });
-      cpSync(path.join(source, 'package.json'), path.join(target, 'package.json'));
-      cpSync(path.join(source, 'dist'), path.join(target, 'dist'), { recursive: true });
+      const packRoot = mkdtempSync(path.join(tmpdir(), 'kovo-certificate-pack-'));
+      const extractRoot = mkdtempSync(path.join(tmpdir(), 'kovo-certificate-extract-'));
+      try {
+        const tarballPath = pack(
+          { dirPath: packageDirectory(packageName, cwd), name: packageName },
+          packRoot,
+        );
+        execFileSync('tar', ['-xzf', tarballPath, '-C', extractRoot], { stdio: 'ignore' });
+        const target = path.join(artifactRoot, packageName);
+        mkdirSync(target, { recursive: true });
+        cpSync(path.join(extractRoot, 'package'), target, { recursive: true });
+      } finally {
+        rmSync(packRoot, { force: true, recursive: true });
+        rmSync(extractRoot, { force: true, recursive: true });
+      }
     }
     try {
       return exec(
         process.execPath,
         [
-          path.join(repoRoot, 'packages', 'verify', 'dist', 'bin.mjs'),
-          certificatePath,
+          path.join(cwd, 'packages', 'verify', 'dist', 'bin.mjs'),
+          certificateFile,
+          '--policy',
+          policyFile,
           '--artifacts',
           artifactRoot,
         ],
-        { cwd: repoRoot, encoding: 'utf8' },
+        { cwd, encoding: 'utf8' },
       );
     } catch (error) {
       const stdout = typeof error?.stdout === 'string' ? error.stdout : '';
@@ -46,8 +65,10 @@ export function verifyCommittedKovoCertificate({ exec = execFileSync } = {}) {
   }
 }
 
-function compareStrings(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
+function defaultPackageDirectory(packageName, cwd) {
+  const entry = publicPackages().find((candidate) => candidate.name === packageName);
+  if (entry === undefined) throw new Error(`${packageName}: package directory is not declared`);
+  return path.join(cwd, 'packages', entry.dir);
 }
 
 function main() {

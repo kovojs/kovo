@@ -133,7 +133,7 @@ import {
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
-import { kovoCertificateV1Json } from '../certificate.js';
+import { kovoCertificatePolicyV1Json, kovoCertificateV1Json } from '../certificate.js';
 import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
 import {
   readCapabilityPackageSummaries,
@@ -1472,6 +1472,7 @@ function writeKovoBuildGraphArtifact(
   // Plan 3 §2.1: the release-bound framework certificate is an independently-checkable sibling,
   // not an app-authored graph field. Its committed canonical bytes are embedded in the CLI build.
   writeFileSync(join(neutralBuild.outDir, 'certificate.json'), kovoCertificateV1Json);
+  writeFileSync(join(neutralBuild.outDir, 'certificate-policy.json'), kovoCertificatePolicyV1Json);
   // Plan 3 §4.2: this is deliberately unsigned build output. A second-party reviewer signs each
   // subject outside the build/coding-agent environment with the already-pinned deployment
   // attestation key; `kovo explain --attest --escape-reviews` verifies the detached envelopes.

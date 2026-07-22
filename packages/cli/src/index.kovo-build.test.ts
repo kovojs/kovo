@@ -218,11 +218,21 @@ describe('kovo build', () => {
 
       const first = await build();
       const firstCertificate = readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8');
+      const firstCertificatePolicy = readFileSync(
+        join(outDir, '.kovo/certificate-policy.json'),
+        'utf8',
+      );
       expect(JSON.parse(firstCertificate)).toMatchObject({
         schema: 'kovo.certificate/v1',
       });
       expect(firstCertificate).toBe(
         readFileSync(join(repoRoot, 'security/kovo-certificate-v1.json'), 'utf8'),
+      );
+      expect(JSON.parse(firstCertificatePolicy)).toMatchObject({
+        schema: 'kovo.certificate-policy/v1',
+      });
+      expect(firstCertificatePolicy).toBe(
+        readFileSync(join(repoRoot, 'security/kovo-certificate-policy-v1.json'), 'utf8'),
       );
       const graph = JSON.parse(first) as {
         analysisInputs?: {
@@ -309,6 +319,9 @@ describe('kovo build', () => {
       );
       expect(await build()).toBe(first);
       expect(readFileSync(join(outDir, '.kovo/certificate.json'), 'utf8')).toBe(firstCertificate);
+      expect(readFileSync(join(outDir, '.kovo/certificate-policy.json'), 'utf8')).toBe(
+        firstCertificatePolicy,
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

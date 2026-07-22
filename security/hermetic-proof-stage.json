@@ -5,16 +5,16 @@
   "tooling": {
     "analysis": {
       "implementation": "scripts/kovo-certificate.mjs#analyzeKovoCertificate",
-      "sourceTreeSha256": "f03ba0981edded343f4649e257f9b05545f3920a206d7b02389d6f26d19ef2ae"
+      "sourceTreeSha256": "06e1b263de41101b845994d2dbbf1e14e8fa115e88eba111c4951f47cdf0021e"
     },
     "certificateGeneration": {
       "implementation": "scripts/kovo-certificate-format.mjs#generateKovoCertificateFromAnalysis",
-      "sourceTreeSha256": "9c5dadb88ba2665b194dd504a963e83b4c3d9bec5a75b7e1b12b0faec29513f2"
+      "sourceTreeSha256": "89d7cb0755d8960b497203eb874e4a071fa0d218af9048c71dc707d53c78ad4d"
     },
-    "orchestratorSha256": "82da8516edb1d2f7921ef9ebcd96ff539277c347dad81049e61e10b25a13b1ad",
+    "orchestratorSha256": "5077652b51df217bc96b4570a3fadec3bd41032628ccf41b7c264916321305a3",
     "signing": {
       "implementation": "scripts/kovo-certificate-signature.mjs#signKovoCertificate",
-      "sourceTreeSha256": "5eac523dc3b85eefbfba22572852cd316e70343043abbee2177ae2ae4f496a39"
+      "sourceTreeSha256": "0285a5e7c56150ae1b3ca702109ca66ccb2347442c86cb6f8a40ddaeb24c0107"
     }
   },
   "linuxRunner": {
@@ -39,7 +39,11 @@
     {
       "childProcess": "denied",
       "name": "certificate-generation",
-      "reads": ["sealed production certificate generator", "certificate analysis record"],
+      "reads": [
+        "sealed production certificate generator",
+        "certificate analysis record",
+        "reviewer-owned canonical certificate policy"
+      ],
       "secrets": [],
       "writes": ["unsigned kovo.certificate/v1"]
     },

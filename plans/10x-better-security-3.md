@@ -428,33 +428,48 @@ pass**. Requires §0.4 and §0.6 to mean anything.
 
 ### 2.1 `kovo.certificate/v1` and a standalone checker
 
-- [x] Freeze the schema over the published `@kovojs/*` dist trees:
-      `{artifacts:[{path,sha512}], domain:<the 9 capability kinds>, cap:{module→kinds[]}, edges:[[m,n]],
-roots:[{module,rootKind}], doors:[{module,site,escapeId}], opaque:[{module,reason}]}`, reusing
-      verbatim the 9-member capability union frozen at `packages/core/src/graph.ts` and
-      the frozen `rootKind` union.
-  - Evidence: the committed certificate currently contains 193 sha512-bound packed modules; the final
-    `pnpm run check:certificate` result and exact subject counts belong to the reconciliation below.
-    It retains the frozen 9-kind domain, including binding-sensitive `crypto-acquisition` versus
-    `digest`, and the frozen root vocabulary.
-- [x] Emit it alongside `dist/.kovo/graph.json`, with per-artifact sha512 computed exactly as
-      `scripts/publish-packed-packages.mjs` computes tarball integrity.
-  - Evidence: the focused `index.kovo-build.test.ts` node-preset build passes and proves the emitted
-    `.kovo/certificate.json` is byte-stable and exactly equals the reviewed packed certificate.
+- [x] Freeze two non-interchangeable schemas over published `@kovojs/*` dist trees. The independently
+      obtained `kovo.certificate-policy/v1` owns exact `{path,sha512}` artifacts, complete installed
+      manifests/package census, roots, doors, and opaque premises. `kovo.certificate/v1` carries the
+      corresponding artifact paths, fixed 9-kind domain, capability summaries, edges, exact posture
+      copies, and `policySha512`; the certificate cannot mint its own scope or allow decisions.
+  - Evidence: `security/kovo-certificate-policy-v1.json` owns 195 modules across 8 packages plus
+    11 roots, 108 doors, and 81 opaque rows; `node scripts/check-kovo-certificate.mjs` verifies the
+    certificate's 883 edges and 366 capability facts against those independent bytes.
+- [x] Keep policy proposal separate from checking and generation: proposal packs with lifecycle
+      scripts disabled and requires an explicit reviewable `--write`; generation refuses any
+      analyzer/policy disagreement. Emit exact certificate and policy copies beside
+      `dist/.kovo/graph.json`, documenting the policy copy as audit convenience rather than a trust
+      anchor.
+  - Evidence: the focused artifact-provenance build test pins both emitted copies to the committed
+    evidence across no-op builds; `packages/cli/src/certificate.ts` canonicalizes only the committed
+    JSON and `build-export.ts` writes those exact strings. The policy test proves proposal/check
+    separation and lifecycle-disabled packing.
 - [x] `@kovojs/verify` as a standalone checker: three linear obligations (coverage, post-fixpoint
       stability `cap[n] ⊆ cap[m]` per edge and `local(m) ⊆ cap[m]`, closure `cap[r] ⊆ doors(r)`) — no
       iteration, widening, budget, or recursion logic on the checker side. One pinned parser
       dependency, **zero Kovo imports**, mechanically enforced by extending `scripts/import-boundary.mjs`.
       Publish checker LOC and dependency closure as the honesty numbers.
-  - Evidence: `pnpm run check:certificate` reports three checker runtime files, 2,893 runtime LOC,
-    one exact parser dependency (`es-module-lexer@2.1.0`), and zero Kovo imports.
+  - Evidence: `pnpm run check:certificate` publishes the current runtime-file/LOC count, reports one
+    exact parser dependency (`es-module-lexer@2.1.0`), enforces zero Kovo imports, and verifies the
+    actual lifecycle-disabled packed tarballs with the standalone CLI.
+- [x] Make the directory subject complete and race-resistant. Require the exact `@kovojs/*` package
+      census and full installed manifests; reject resolver remaps, automatic lifecycle hooks,
+      ambiguous conditional targets, unsupported package aliases, unlisted executable siblings,
+      symlinks/special files, and unexpected packed files. Read through no-follow descriptors bound
+      to an initial whole-tree identity census and require an equal final census. Bound evidence by
+      byte, JSON-node/depth, package/file/depth, per-module, and aggregate-module limits.
+  - Evidence: `directory.test.ts`, `directory-race.test.ts`, and `bin.test.ts` cover additions,
+    manifest/module ABA replacement, same-descriptor mutation, symlink/FIFO inputs, manifest
+    ambiguity, full-tree coverage, and calibrated limit+1 failures; `file-snapshot.test.ts` proves
+    the fixed cap+1 reader rejects deterministic concurrent growth.
 - [x] **Three negative controls that must fail on three distinct obligations**, checker importing zero
       Kovo code: (i) drop a capability from `cap[m]` that the module imports → _stability_ failure;
       (ii) inject `require('node:child_process')` into a shipped chunk without regenerating →
       _coverage_ failure; (iii) omit a real import edge → _coverage_ failure. If they do not fail
       cleanly, stop.
-  - Evidence: `pnpm run check:certificate` passes 26/26 focused tests, including the three exact
-    controls plus an independent root-door closure failure.
+  - Evidence: `pnpm run check:certificate` includes all three exact controls plus an independent
+    root-door closure failure and policy-substitution failures.
 - [x] Adequacy audit of the lexical authority table (the checker's true TCB): enumerate known-unmodeled
       authority routes (re-exported bindings, computed dynamic import, `eval`/`new Function`, host
       globals, native addons, WASM) and require each to be modeled or listed in §4.6.

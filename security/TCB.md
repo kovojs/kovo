@@ -63,6 +63,43 @@ the operating system, and the checkout transport remain bootstrap/host inputs ou
 subject closure; CI pins or records them in the attestation instead of claiming they were derived by
 that closure.
 
+### Certificate policy and checker trust boundary
+
+`security/kovo-certificate-policy-v1.json` is the reviewer decision for the independently checkable
+framework certificate. It owns the exact SHA-512 of every packed runtime module, the complete
+installed manifest and package census, and the roots, capability doors, and opaque premises. The
+search-side analyzer may propose a policy diff, but certificate generation and checking never
+silently update it. `security/kovo-certificate-v1.json` instead carries the module paths, capability
+summaries and import edges, exact copies of the reviewed posture rows, and one SHA-512 over the exact
+canonical policy bytes. This removes duplicate artifact hashes from the certificate: each hash is an
+immutable join, not an additional source of authority.
+
+The standalone `@kovojs/verify` checker imports no Kovo implementation and has one exact parser
+dependency, `es-module-lexer@2.1.0`. It compares the actual packed `@kovojs/*` package census and
+complete manifests to policy, rejects resolver remaps and automatic lifecycle hooks, requires every
+runtime entry condition to collapse to one listed target, and scans the complete package trees. It
+reads evidence and module bytes through no-follow descriptors, pins reads to the initial file and
+directory identities, uses a fixed cap+1 descriptor buffer so concurrent growth cannot trigger an
+unbounded allocation, and repeats the census after verification. Explicit byte, JSON-node/depth,
+module, package, file-count, and tree-depth limits bound hostile evidence. Packing for policy proposal
+and verification runs through the repository's lifecycle-disabled helper.
+
+The application-emitted `.kovo/certificate-policy.json` copy is only an audit convenience. A
+consumer must obtain the reviewer policy independently; fetching policy, certificate, and code from
+the same mutable location would let one substitution preserve every internal hash. For non-dry
+releases, the release workflow separately attests the committed policy and certificate at the
+authorized `main` SHA in an OIDC-only job that installs no dependencies and runs no repository code.
+A consumer may verify those GitHub artifact attestations against that workflow and commit, or use a
+different independently authenticated policy channel. A detached certificate signature likewise
+authenticates certificate bytes only and never substitutes for policy review.
+
+The certificate proves only its three stated structural obligations over the modeled lexical
+authority domain. A door is a coarse module-plus-capability approval; `site` is a reviewer label,
+not proof of an exact source location. The checker does not prove the semantics of host globals,
+`eval`, `new Function`, computed runtime loading, or every native/WASM path beyond explicit rejection
+and the reviewed opaque ledger. Its parser dependency, Node/filesystem behavior, platform host, and
+reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 and §4.6.
+
 ```json tcb-manifest
 {
   "schema": "kovo.security.tcb/v1",

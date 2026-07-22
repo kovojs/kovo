@@ -207,8 +207,12 @@
             "vitest",
             "--run",
             "scripts/kovo-certificate.test.mjs",
+            "scripts/kovo-certificate-capability-domain.test.mjs",
+            "scripts/kovo-certificate-policy.test.mjs",
             "packages/verify/src/index.test.ts",
             "packages/verify/src/directory.test.ts",
+            "packages/verify/src/directory-race.test.ts",
+            "packages/verify/src/file-snapshot.test.ts",
             "packages/verify/src/bin.test.ts",
             "packages/verify/src/translation.test.ts",
             "--reporter=dot"

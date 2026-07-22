@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { packWithoutLifecycleScripts } from './pack-without-lifecycle.mjs';
 
 describe('lifecycle-free package packing', () => {
-  it('packs the reviewed files without executing a package prepack program', () => {
+  it('packs the reviewed files without executing prepack, prepare, or postpack programs', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'kovo-pack-no-lifecycle-'));
     const destination = path.join(root, 'tarballs');
     const marker = path.join(root, 'prepack-ran');
@@ -24,7 +24,11 @@ describe('lifecycle-free package packing', () => {
         JSON.stringify({
           files: ['index.mjs'],
           name: 'kovo-pack-no-lifecycle-fixture',
-          scripts: { prepack: 'node prepack.mjs' },
+          scripts: {
+            postpack: 'node prepack.mjs',
+            prepack: 'node prepack.mjs',
+            prepare: 'node prepack.mjs',
+          },
           type: 'module',
           version: '1.0.0',
         }),

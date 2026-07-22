@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   generateKovoCertificateFromAnalysis,
+  kovoCertificatePolicyFactsFromAnalysis,
   kovoCertificateCapabilityDomain,
+  stableKovoCertificatePolicyJson,
 } from './kovo-certificate-format.mjs';
 
 const sha512 = `sha512-${Buffer.alloc(64).toString('base64')}`;
@@ -23,7 +25,7 @@ describe('kovo.certificate/v1 cryptographic authority domain', () => {
       'worker',
     ]);
 
-    const certificate = generateKovoCertificateFromAnalysis({
+    const analysis = {
       artifacts: [
         { path: acquire, sha512 },
         { path: digest, sha512 },
@@ -37,7 +39,11 @@ describe('kovo.certificate/v1 cryptographic authority domain', () => {
       opaque: [],
       roots: [],
       schema: 'kovo.certificate-analysis/v1',
-    });
+    };
+    const certificate = generateKovoCertificateFromAnalysis(
+      analysis,
+      policyBytesForAnalysis(analysis),
+    );
 
     expect(certificate.cap).toEqual({
       [acquire]: ['crypto-acquisition'],
@@ -45,3 +51,17 @@ describe('kovo.certificate/v1 cryptographic authority domain', () => {
     });
   });
 });
+
+function policyBytesForAnalysis(analysis) {
+  const facts = kovoCertificatePolicyFactsFromAnalysis(analysis);
+  const names = [
+    ...new Set(facts.artifacts.map((entry) => entry.path.split('/').slice(0, 2).join('/'))),
+  ].sort((left, right) => left.localeCompare(right));
+  return Buffer.from(
+    stableKovoCertificatePolicyJson({
+      ...facts,
+      packages: names.map((name) => ({ manifest: { name }, name })),
+      schema: 'kovo.certificate-policy/v1',
+    }),
+  );
+}
