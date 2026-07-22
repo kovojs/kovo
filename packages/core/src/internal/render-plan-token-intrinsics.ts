@@ -94,7 +94,7 @@ export function renderPlanOwnStringEntries(input: object): readonly (readonly [s
   return entries;
 }
 
-export function renderPlanHash16(parts: readonly string[]): string {
+export function renderPlanSha256Hex(parts: readonly string[]): string {
   assertControls();
   const hash = nativeCreateHash('sha256');
   for (let index = 0; index < parts.length; index += 1) {
@@ -106,9 +106,7 @@ export function renderPlanHash16(parts: readonly string[]): string {
   }
   const digest = securityApply<string>(nativeHashDigest, hash, ['hex']);
   if (digest.length !== 64) throw new TypeError('Kovo render-plan digest has an invalid shape.');
-  let token = '';
-  for (let index = 0; index < 16; index += 1) token += digest[index];
-  return token;
+  return digest;
 }
 
 function sortStrings(values: string[]): string[] {

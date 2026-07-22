@@ -1,5 +1,5 @@
 import {
-  renderPlanHash16,
+  renderPlanSha256Hex,
   renderPlanOwnStringEntries,
   renderPlanUtf8ByteLength,
 } from './render-plan-token-intrinsics.ts';
@@ -65,7 +65,7 @@ export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput):
       encodeRenderPlanFrame('name', name.value) + encodeRenderPlanFrame('shape', shape.value),
     );
   }
-  return renderPlanHash16([
+  return renderPlanSha256Hex([
     encodeRenderPlanFrame('grammar', RENDER_PLAN_GRAMMAR_VERSION),
     encodeRenderPlanFrame('queries', entries),
   ]);

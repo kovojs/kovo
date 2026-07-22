@@ -135,7 +135,7 @@ describe('render-plan token security controls', () => {
       input[`query-${String(index).padStart(6, '0')}`] = 'field:id';
     }
     const start = performance.now();
-    expect(computeRenderPlanFingerprint(input)).toMatch(/^[0-9a-f]{16}$/u);
+    expect(computeRenderPlanFingerprint(input)).toMatch(/^[0-9a-f]{64}$/u);
     expect(performance.now() - start).toBeLessThan(2_000);
   });
 
@@ -165,7 +165,7 @@ describe('render-plan token security controls', () => {
         import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`),
       ).resolves.toBeDefined();
       const controls = await import(`${renderPlanIntrinsicsUrl}?preimport-hash-poison`);
-      expect(() => controls.renderPlanHash16(['safe'])).toThrow(
+      expect(() => controls.renderPlanSha256Hex(['safe'])).toThrow(
         /render-plan controls are unavailable/,
       );
     } finally {
