@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -114,6 +115,40 @@ describe('kovo-verify CLI', () => {
     expect(stderr).toBe(
       'usage: kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>\n',
     );
+  });
+
+  it('rejects symlink, FIFO, and max+1 evidence inputs before reading them', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-verify-cli-inputs-'));
+    roots.push(root);
+    const artifactRoot = path.join(root, 'artifacts');
+    const regular = path.join(root, 'regular.json');
+    writeFileSync(regular, '{}\n');
+    const symlink = path.join(root, 'symlink.json');
+    symlinkSync(regular, symlink);
+    const fifo = path.join(root, 'evidence.fifo');
+    execFileSync('mkfifo', [fifo]);
+    const oversizedCertificate = path.join(root, 'oversized-certificate.json');
+    writeFileSync(oversizedCertificate, Buffer.alloc(2 * 1024 * 1024 + 1));
+    const oversizedPolicy = path.join(root, 'oversized-policy.json');
+    writeFileSync(oversizedPolicy, Buffer.alloc(1024 * 1024 + 1));
+
+    for (const [certificatePath, policyPath] of [
+      [symlink, regular],
+      [fifo, regular],
+      [oversizedCertificate, regular],
+      [regular, symlink],
+      [regular, fifo],
+      [regular, oversizedPolicy],
+    ]) {
+      let stderr = '';
+      await expect(
+        runKovoVerify([certificatePath, '--policy', policyPath, '--artifacts', artifactRoot], {
+          stderr: (text) => (stderr += text),
+          stdout: () => {},
+        }),
+      ).resolves.toBe(2);
+      expect(stderr).toMatch(/regular non-symlink file|no larger|byte limit/u);
+    }
   });
 });
 

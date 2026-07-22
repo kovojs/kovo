@@ -7,6 +7,7 @@ import {
   deterministicPackEnvironment,
 } from './deterministic-tarball.mjs';
 
+/** Pack one package with lifecycle execution denied by the reviewed pnpm invocation. */
 export function packWithoutLifecycleScripts(
   pkg,
   destination,
@@ -15,7 +16,11 @@ export function packWithoutLifecycleScripts(
   const before = new Set(readdirSync(destination).filter((file) => file.endsWith('.tgz')));
   exec('pnpm', ['--config.ignore-scripts=true', 'pack', '--pack-destination', destination], {
     cwd: pkg.dirPath,
-    env: deterministicPackEnvironment(env),
+    env: deterministicPackEnvironment({
+      ...env,
+      npm_config_ignore_scripts: 'true',
+      pnpm_config_ignore_scripts: 'true',
+    }),
     stdio: 'inherit',
   });
   const after = readdirSync(destination).filter((file) => file.endsWith('.tgz'));

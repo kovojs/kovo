@@ -102,6 +102,7 @@
     "generate:security-coverage": "node scripts/security-coverage-gate.mjs --write",
     "generate:capability-surface-census": "node scripts/capability-surface-census-gate.mjs --write",
     "generate:certificate": "node --experimental-strip-types scripts/kovo-certificate.mjs --write",
+    "propose:certificate-policy": "node --experimental-strip-types scripts/kovo-certificate-policy.mjs --write",
     "generate:wire-input-boundary": "node scripts/wire-input-boundary-gate.mjs --write",
     "perf:fcp": "node scripts/fcp-harness.mjs",
     "test": "vitest --run",

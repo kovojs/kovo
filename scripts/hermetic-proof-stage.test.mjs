@@ -165,6 +165,7 @@ describe('hermetic proof stage', () => {
     };
     const image = readHermeticProofManifest().linuxRunner.image;
     const analysisName = hermeticDockerStageContainerName(root, 'analysis');
+    const generationName = hermeticDockerStageContainerName(root, 'certificate-generation');
     const signingName = hermeticDockerStageContainerName(root, 'signing');
     const common = [
       `KOVO_HERMETIC_STAGE_ROOT=${root}`,
@@ -229,7 +230,35 @@ describe('hermetic proof stage', () => {
       '/app/node_modules/untrusted-app/canary',
     ];
 
+    const generation = [
+      ...common,
+      `--cidfile=${root}/certificate-generation.cid`,
+      `--name=${generationName}`,
+      `--mount=type=bind,src=${root}/sealed-generation,dst=/sealed,readonly`,
+      `--mount=type=bind,src=${root}/analysis,dst=/analysis,readonly`,
+      `--mount=type=bind,src=${root}/subject,dst=/subject,readonly`,
+      `--mount=type=bind,src=${root}/unsigned,dst=/unsigned`,
+      image,
+      '--preserve-symlinks',
+      '--preserve-symlinks-main',
+      '--permission',
+      '--allow-fs-read=/sealed',
+      '--allow-fs-read=/analysis',
+      '--allow-fs-read=/subject',
+      '--allow-fs-write=/unsigned',
+      '/sealed/scripts/hermetic-proof-stage-worker.mjs',
+      'generate',
+      '/analysis/analysis.json',
+      '/subject/kovo-certificate-policy-v1.json',
+      '/unsigned/certificate.json',
+      '/key/key.pkcs8',
+      '/app/node_modules/untrusted-app/canary',
+    ];
+
     expect(() => assertHermeticDockerArgs(analysis, 'analysis', context)).not.toThrow();
+    expect(() =>
+      assertHermeticDockerArgs(generation, 'certificate-generation', context),
+    ).not.toThrow();
     expect(() => assertHermeticDockerArgs(signing, 'signing', context)).not.toThrow();
     expect(() =>
       assertHermeticDockerArgs(
@@ -241,6 +270,13 @@ describe('hermetic proof stage', () => {
     expect(() =>
       assertHermeticDockerArgs([...analysis, '--allow-child-process'], 'analysis', context),
     ).toThrow(/lifecycle/u);
+    expect(() =>
+      assertHermeticDockerArgs(
+        generation.filter((arg) => arg !== '--allow-fs-read=/subject'),
+        'certificate-generation',
+        context,
+      ),
+    ).toThrow(/vector/u);
     expect(() =>
       assertHermeticDockerArgs(
         analysis.map((arg) => arg.replace(`${root}/subject`, '/host/app/node_modules')),

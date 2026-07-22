@@ -18,17 +18,28 @@ import { collectFiles } from './lib/source-files.mjs';
 import { repoRoot } from './public-packages.mjs';
 import {
   generateKovoCertificateFromAnalysis,
+  kovoCertificatePolicyFactsFromAnalysis,
   kovoCertificateCapabilityDomain,
+  parseKovoCertificatePolicyBytes,
   stableKovoCertificateJson,
+  stableKovoCertificatePolicyJson,
 } from './kovo-certificate-format.mjs';
 
 export {
   generateKovoCertificateFromAnalysis,
+  kovoCertificatePolicyFactsFromAnalysis,
   kovoCertificateCapabilityDomain,
+  parseKovoCertificatePolicyBytes,
   stableKovoCertificateJson,
+  stableKovoCertificatePolicyJson,
 };
 
 export const kovoCertificatePath = path.join(repoRoot, 'security', 'kovo-certificate-v1.json');
+export const kovoCertificatePolicyPath = path.join(
+  repoRoot,
+  'security',
+  'kovo-certificate-policy-v1.json',
+);
 export const kovoCertificateLexicalAuthorityPath = path.join(
   repoRoot,
   'security',
@@ -171,8 +182,11 @@ export function analyzeKovoCertificate({
   };
 }
 
-export function generateKovoCertificate(options = {}) {
-  return generateKovoCertificateFromAnalysis(analyzeKovoCertificate(options));
+export function generateKovoCertificate({
+  policyBytes = readFileSync(kovoCertificatePolicyPath),
+  ...analysisOptions
+} = {}) {
+  return generateKovoCertificateFromAnalysis(analyzeKovoCertificate(analysisOptions), policyBytes);
 }
 
 export function validateCertificateLexicalAuthorityLedger(input) {
@@ -477,6 +491,7 @@ function compareStrings(left, right) {
 }
 
 async function main() {
+  parseKovoCertificatePolicyBytes(readFileSync(kovoCertificatePolicyPath));
   const lexical = JSON.parse(readFileSync(kovoCertificateLexicalAuthorityPath, 'utf8'));
   const lexicalFindings = validateCertificateLexicalAuthorityLedger(lexical);
   if (lexicalFindings.length > 0) {

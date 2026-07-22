@@ -360,6 +360,34 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     }
   });
 
+  it('bounds recursive certificate and policy JSON before canonicalization', async () => {
+    const artifacts = artifactSource({ [rootModule]: 'export {};' });
+    const valid = certificateFor(artifacts);
+    const cap: Record<string, readonly []> = {};
+    for (let index = 0; index < 131_072; index += 1) {
+      cap[`@kovojs/server/dist/budget-${index}.mjs`] = [];
+    }
+    await expect(verifyBound({ ...valid, cap }, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'json-nodes' })]),
+      ok: false,
+    });
+
+    let nested: unknown = 'leaf';
+    for (let depth = 0; depth < 66; depth += 1) nested = { a: nested };
+    const policy = policyBytesFor(valid, artifacts, {
+      packages: [
+        {
+          manifest: { a: nested, name: '@kovojs/server' },
+          name: '@kovojs/server',
+        },
+      ],
+    });
+    await expect(verifyCertificate(valid, policy, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'json-depth' })]),
+      ok: false,
+    });
+  });
+
   it('renders one byte-stable report with obligation-tagged failures', async () => {
     const artifacts = artifactSource({ [rootModule]: "import 'node:process';" });
     const result = await verifyBound(

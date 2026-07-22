@@ -9,7 +9,9 @@ import {
   analyzeKovoCertificate,
   generateKovoCertificate,
   generateKovoCertificateFromAnalysis,
+  kovoCertificatePolicyFactsFromAnalysis,
   stableKovoCertificateJson,
+  stableKovoCertificatePolicyJson,
   validateCertificateDoorPosture,
   validateCertificateLexicalAuthorityLedger,
 } from './kovo-certificate.mjs';
@@ -57,15 +59,20 @@ describe('kovo.certificate/v1 search-side generator', () => {
     };
 
     const analysis = analyzeKovoCertificate(options);
+    const policyBytes = policyBytesForAnalysis(analysis);
     expect(analysis.schema).toBe('kovo.certificate-analysis/v1');
-    expect(generateKovoCertificateFromAnalysis(analysis)).toEqual(generateKovoCertificate(options));
+    expect(generateKovoCertificateFromAnalysis(analysis, policyBytes)).toEqual(
+      generateKovoCertificate({ ...options, policyBytes }),
+    );
 
     const widened = structuredClone(analysis);
     widened.localCapabilities['@kovojs/server/dist/index.mjs'] = [
       'filesystem',
       'unknown-capability',
     ];
-    expect(() => generateKovoCertificateFromAnalysis(widened)).toThrow(/analysis.*capability/iu);
+    expect(() => generateKovoCertificateFromAnalysis(widened, policyBytes)).toThrow(
+      /analysis.*capability/iu,
+    );
   });
 
   it('preserves crypto import bindings through production analysis and generation', () => {
@@ -91,7 +98,9 @@ describe('kovo.certificate/v1 search-side generator', () => {
       '@kovojs/server/dist/acquire.mjs': ['crypto-acquisition'],
       '@kovojs/server/dist/digest.mjs': ['digest'],
     });
-    expect(generateKovoCertificateFromAnalysis(analysis).cap).toEqual({
+    expect(
+      generateKovoCertificateFromAnalysis(analysis, policyBytesForAnalysis(analysis)).cap,
+    ).toEqual({
       '@kovojs/server/dist/acquire.mjs': ['crypto-acquisition'],
       '@kovojs/server/dist/digest.mjs': ['digest'],
       '@kovojs/server/dist/index.mjs': ['crypto-acquisition', 'digest'],
@@ -164,13 +173,13 @@ describe('kovo.certificate/v1 search-side generator', () => {
       ],
     };
 
-    const first = generateKovoCertificate({
+    const first = generateWithPolicy({
       ...fixture,
       internalDoorPosture: emptyInternalDoorPosture(),
       posture,
       seedPackageNames: ['@kovojs/better-auth', '@kovojs/server'],
     });
-    const second = generateKovoCertificate({
+    const second = generateWithPolicy({
       ...fixture,
       internalDoorPosture: emptyInternalDoorPosture(),
       posture,
@@ -207,7 +216,7 @@ describe('kovo.certificate/v1 search-side generator', () => {
           'imports external module "third-party-auth" outside the nine-kind lexical capability domain',
       },
     ]);
-    expect(first.artifacts.map((entry) => entry.path)).toEqual([
+    expect(first.artifacts).toEqual([
       '@kovojs/better-auth/dist/index.mjs',
       '@kovojs/core/dist/index.mjs',
       '@kovojs/server/dist/index.mjs',
@@ -219,9 +228,7 @@ describe('kovo.certificate/v1 search-side generator', () => {
       '@kovojs/server/dist/index.mjs': ['filesystem'],
       '@kovojs/server/dist/unused.mjs': [],
     });
-    expect(first.artifacts[0].sha512).toBe(
-      `sha512-${createHash('sha512').update("import 'third-party-auth'; export const auth = true;").digest('base64')}`,
-    );
+    expect(first.policySha512).toMatch(/^sha512-/u);
   });
 
   it('lifts exact reviewed internal doors into each reachable root summary', () => {
@@ -267,7 +274,7 @@ describe('kovo.certificate/v1 search-side generator', () => {
     };
 
     expect(
-      generateKovoCertificate({
+      generateWithPolicy({
         ...fixture,
         internalDoorPosture,
         posture,
@@ -355,6 +362,25 @@ function createFixture(definitions) {
     snapshot.packages[name] = [...Object.keys(definition.files).sort(), 'package.json'];
   }
   return { packageConfigs, snapshot };
+}
+
+function generateWithPolicy(options) {
+  const analysis = analyzeKovoCertificate(options);
+  return generateKovoCertificateFromAnalysis(analysis, policyBytesForAnalysis(analysis));
+}
+
+function policyBytesForAnalysis(analysis) {
+  const facts = kovoCertificatePolicyFactsFromAnalysis(analysis);
+  const names = [
+    ...new Set(facts.artifacts.map((entry) => entry.path.split('/').slice(0, 2).join('/'))),
+  ].sort((left, right) => left.localeCompare(right));
+  return Buffer.from(
+    stableKovoCertificatePolicyJson({
+      ...facts,
+      packages: names.map((name) => ({ manifest: { name }, name })),
+      schema: 'kovo.certificate-policy/v1',
+    }),
+  );
 }
 
 function emptyInternalDoorPosture() {

@@ -1,8 +1,41 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import {
+  type BigIntStats,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+} from 'node:fs';
 import path from 'node:path';
 
 import { parse } from 'es-module-lexer/js';
+
+const MAX_POLICY_BYTES = 1024 * 1024;
+const MAX_CERTIFICATE_ROWS = 131_072;
+const MAX_JSON_DEPTH = 64;
+const MAX_JSON_NODES = 262_144;
+const MAX_DIRECTORY_PACKAGES = 32;
+const MAX_PACKAGE_FILES = 4096;
+const MAX_PACKAGE_DEPTH = 16;
+const MAX_ARTIFACT_BYTES = 4 * 1024 * 1024;
+const MAX_TOTAL_ARTIFACT_BYTES = 32 * 1024 * 1024;
+const AUTOMATIC_PACKAGE_LIFECYCLE_SCRIPTS = new Set([
+  'dependencies',
+  'install',
+  'postinstall',
+  'postpack',
+  'postprepare',
+  'preinstall',
+  'prepack',
+  'prepare',
+  'preprepare',
+  'prepublish',
+  'prepublishOnly',
+]);
 
 /** The nine raw authority kinds certified by `kovo.certificate/v1` (SPEC §6.6). */
 export const KOVO_CERTIFICATE_CAPABILITY_DOMAIN = [
@@ -99,6 +132,11 @@ export async function verifyCertificate(
   policyBytes: Uint8Array,
   artifacts: KovoCertificateArtifactSource,
 ): Promise<KovoCertificateVerificationResult> {
+  if (!(policyBytes instanceof Uint8Array) || policyBytes.byteLength > MAX_POLICY_BYTES) {
+    return verificationResult([
+      finding('schema', 'policy-size', 'policy must be exact bytes no larger than 1 MiB'),
+    ]);
+  }
   const policySnapshot = Uint8Array.from(policyBytes);
   return await verifyCertificateSnapshot(certificateInput, policySnapshot, artifacts);
 }
@@ -109,8 +147,16 @@ async function verifyCertificateSnapshot(
   artifacts: KovoCertificateArtifactSource,
 ): Promise<KovoCertificateVerificationResult> {
   const schemaFindings: KovoCertificateFinding[] = [];
-  const certificate = validateCertificate(certificateInput, schemaFindings);
-  const policy = validatePolicyBytes(policyBytes, schemaFindings);
+  const budget = jsonValidationBudget();
+  const certificateSnapshot = snapshotJsonValue(
+    certificateInput,
+    'certificate',
+    schemaFindings,
+    0,
+    budget,
+  );
+  const certificate = validateCertificate(certificateSnapshot, schemaFindings);
+  const policy = validatePolicyBytes(policyBytes, schemaFindings, budget);
   if (certificate === undefined || policy === undefined) {
     return verificationResult(schemaFindings, certificate);
   }
@@ -191,10 +237,23 @@ export async function verifyCertificateDirectory(
   policyBytes: Uint8Array,
   artifactRoot: string,
 ): Promise<KovoCertificateVerificationResult> {
+  if (!(policyBytes instanceof Uint8Array) || policyBytes.byteLength > MAX_POLICY_BYTES) {
+    return verificationResult([
+      finding('schema', 'policy-size', 'policy must be exact bytes no larger than 1 MiB'),
+    ]);
+  }
   const policySnapshot = Uint8Array.from(policyBytes);
   const findings: KovoCertificateFinding[] = [];
-  const certificate = validateCertificate(certificateInput, findings);
-  const policy = validatePolicyBytes(policySnapshot, findings);
+  const budget = jsonValidationBudget();
+  const certificateSnapshot = snapshotJsonValue(
+    certificateInput,
+    'certificate',
+    findings,
+    0,
+    budget,
+  );
+  const certificate = validateCertificate(certificateSnapshot, findings);
+  const policy = validatePolicyBytes(policySnapshot, findings, budget);
   if (certificate === undefined || policy === undefined) {
     return verificationResult(findings, certificate);
   }
@@ -202,7 +261,23 @@ export async function verifyCertificateDirectory(
   if (directory.findings.length > 0) {
     return verificationResult(directory.findings, certificate);
   }
-  return await verifyCertificateSnapshot(certificate, policySnapshot, directory.source);
+  const result = await verifyCertificateSnapshot(certificate, policySnapshot, directory.source);
+  const finalCensus = directoryArtifactSource(artifactRoot, policy, false);
+  const mutationFindings = [...finalCensus.findings];
+  if (!sameValues(directory.identity, finalCensus.identity)) {
+    mutationFindings.push(
+      finding(
+        'coverage',
+        'artifact-tree-mutated',
+        'artifact package tree changed between its initial snapshot and final census',
+      ),
+    );
+  }
+  if (mutationFindings.length === 0) return result;
+  return verificationResult(
+    [...result.findings, ...mutationFindings].sort(compareFindings),
+    certificate,
+  );
 }
 
 /** Render a byte-stable human report for the standalone verifier CLI. */
@@ -328,6 +403,7 @@ function validateCertificate(
 function validatePolicyBytes(
   input: Uint8Array,
   findings: KovoCertificateFinding[],
+  budget: JsonValidationBudget,
 ): KovoCertificatePolicyV1 | undefined {
   if (!(input instanceof Uint8Array)) {
     findings.push(finding('schema', 'policy-bytes', 'policy must be supplied as exact bytes'));
@@ -347,7 +423,8 @@ function validatePolicyBytes(
     findings.push(finding('schema', 'policy-json', 'policy bytes must contain valid JSON'));
     return undefined;
   }
-  const policy = validatePolicy(parsed, findings);
+  const snapshot = snapshotJsonValue(parsed, 'policy', findings, 0, budget);
+  const policy = validatePolicy(snapshot, findings);
   if (policy === undefined) return undefined;
   if (text !== stablePolicyJson(policy)) {
     findings.push(
@@ -461,6 +538,16 @@ function validatePolicyPackages(
 ): KovoCertificatePolicyV1['packages'] | undefined {
   const values = denseArray(value, 'policy.packages', findings);
   if (values === undefined) return undefined;
+  if (values.length > MAX_DIRECTORY_PACKAGES) {
+    findings.push(
+      finding(
+        'schema',
+        'policy-packages',
+        `policy.packages may contain at most ${MAX_DIRECTORY_PACKAGES} entries`,
+      ),
+    );
+    return undefined;
+  }
   const packages: KovoCertificatePolicyV1['packages'][number][] = [];
   for (const [index, item] of values.entries()) {
     const label = `policy.packages[${index}]`;
@@ -470,8 +557,13 @@ function validatePolicyPackages(
       findings.push(finding('schema', 'policy-package', `${label}.name is invalid`));
       continue;
     }
-    const manifest = snapshotJsonRecord(row.manifest, `${label}.manifest`, findings);
-    if (manifest === undefined) continue;
+    const manifest = isPlainJsonRecord(row.manifest) ? row.manifest : undefined;
+    if (manifest === undefined) {
+      findings.push(
+        finding('schema', 'policy-manifest', `${label}.manifest must contain only JSON data`),
+      );
+      continue;
+    }
     if (manifest.name !== row.name || Object.hasOwn(manifest, 'publishConfig')) {
       findings.push(
         finding(
@@ -483,6 +575,7 @@ function validatePolicyPackages(
       continue;
     }
     try {
+      assertInstalledManifestSecurity(manifest, row.name);
       for (const target of packageManifestRuntimeTargets(manifest, row.name)) {
         if (!artifactSet.has(target)) {
           findings.push(
@@ -569,7 +662,7 @@ function compareCertificatePolicy(
 }
 
 function stablePolicyJson(policy: KovoCertificatePolicyV1): string {
-  return `${JSON.stringify(policy, null, 2)}\n`;
+  return `${JSON.stringify(sortJsonValue(policy), null, 2)}\n`;
 }
 
 function validateDomain(value: unknown, findings: KovoCertificateFinding[]): void {
@@ -798,6 +891,10 @@ function dataRecord(
     }
     const descriptors = Object.getOwnPropertyDescriptors(value);
     const keys = Reflect.ownKeys(descriptors);
+    if (keys.length > MAX_CERTIFICATE_ROWS) {
+      findings.push(finding('schema', 'record-size', `${label} has too many properties`));
+      return undefined;
+    }
     if (keys.some((key) => typeof key !== 'string')) {
       findings.push(finding('schema', 'record-symbol', `${label} must not have symbol keys`));
       return undefined;
@@ -841,8 +938,19 @@ function denseArray(
       return undefined;
     }
     const length = lengthDescriptor.value;
-    if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) {
-      findings.push(finding('schema', 'array-length', `${label}.length must be a safe integer`));
+    if (
+      typeof length !== 'number' ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      length > MAX_CERTIFICATE_ROWS
+    ) {
+      findings.push(
+        finding(
+          'schema',
+          'array-length',
+          `${label}.length must be a safe integer no larger than ${MAX_CERTIFICATE_ROWS}`,
+        ),
+      );
       return undefined;
     }
     const output: unknown[] = [];
@@ -866,13 +974,37 @@ function denseArray(
   }
 }
 
-function snapshotJsonRecord(
-  value: unknown,
+interface JsonValidationBudget {
+  exhausted: boolean;
+  remaining: number;
+}
+
+function jsonValidationBudget(): JsonValidationBudget {
+  return { exhausted: false, remaining: MAX_JSON_NODES };
+}
+
+function consumeJsonNodes(
+  count: number,
   label: string,
   findings: KovoCertificateFinding[],
-): Record<string, unknown> | undefined {
-  const snapshotted = snapshotJsonValue(value, label, findings, 0);
-  return isPlainJsonRecord(snapshotted) ? snapshotted : undefined;
+  budget: JsonValidationBudget,
+): boolean {
+  if (count <= budget.remaining) {
+    budget.remaining -= count;
+    return true;
+  }
+  budget.remaining = 0;
+  if (!budget.exhausted) {
+    budget.exhausted = true;
+    findings.push(
+      finding(
+        'schema',
+        'json-nodes',
+        `${label} exceeds the global ${MAX_JSON_NODES}-node certificate and policy budget`,
+      ),
+    );
+  }
+  return false;
 }
 
 function snapshotJsonValue(
@@ -880,11 +1012,13 @@ function snapshotJsonValue(
   label: string,
   findings: KovoCertificateFinding[],
   depth: number,
+  budget: JsonValidationBudget,
 ): unknown {
-  if (depth > 64) {
+  if (depth > MAX_JSON_DEPTH) {
     findings.push(finding('schema', 'json-depth', `${label} exceeds the JSON depth limit`));
     return undefined;
   }
+  if (!consumeJsonNodes(1, label, findings, budget)) return undefined;
   if (
     value === null ||
     typeof value === 'string' ||
@@ -895,21 +1029,27 @@ function snapshotJsonValue(
   }
   if (Array.isArray(value)) {
     const values = denseArray(value, label, findings);
-    return values?.map((entry, index) =>
-      snapshotJsonValue(entry, `${label}[${index}]`, findings, depth + 1),
-    );
+    if (values === undefined) return undefined;
+    const output: unknown[] = [];
+    for (const [index, entry] of values.entries()) {
+      if (budget.exhausted) return undefined;
+      output.push(snapshotJsonValue(entry, `${label}[${index}]`, findings, depth + 1, budget));
+    }
+    return output;
   }
   const record = dataRecord(value, label, findings);
   if (record === undefined) {
     findings.push(finding('schema', 'json-value', `${label} must contain only JSON data`));
     return undefined;
   }
-  return Object.fromEntries(
-    Object.keys(record).map((key) => [
-      key,
-      snapshotJsonValue(record[key], `${label}.${key}`, findings, depth + 1),
-    ]),
-  );
+  const keys = Object.keys(record);
+  if (!consumeJsonNodes(keys.length, label, findings, budget)) return undefined;
+  const output: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (budget.exhausted) return undefined;
+    output[key] = snapshotJsonValue(record[key], `${label}.${key}`, findings, depth + 1, budget);
+  }
+  return output;
 }
 
 function validateSortedUnique<T>(
@@ -927,11 +1067,21 @@ function validateSortedUnique<T>(
 function directoryArtifactSource(
   artifactRoot: string,
   policy: KovoCertificatePolicyV1,
-): { findings: KovoCertificateFinding[]; source: KovoCertificateArtifactSource } {
+  snapshotModules = true,
+): {
+  findings: KovoCertificateFinding[];
+  identity: readonly string[];
+  source: KovoCertificateArtifactSource;
+} {
   const findings: KovoCertificateFinding[] = [];
   let root = path.resolve(artifactRoot);
   const modulePaths: string[] = [];
   const moduleBytes = new Map<string, Uint8Array>();
+  const census = {
+    files: 0,
+    identityByPath: new Map<string, string>(),
+    totalArtifactBytes: 0,
+  };
   try {
     root = realpathSync(root);
     const actualPackages = listKovoPackageNames(root);
@@ -940,9 +1090,20 @@ function directoryArtifactSource(
     const packageByName = new Map(policy.packages.map((entry) => [entry.name, entry]));
     for (const packageName of policyPackages) {
       const packagePolicy = packageByName.get(packageName)!;
-      const manifestPath = checkedPath(root, `${packageName}/package.json`, 'file');
+      const packageDirectory = checkedPath(root, packageName, 'directory');
+      collectPackageFiles(root, packageDirectory, packageName, modulePaths, findings, census, 0);
       try {
-        const manifest = parsePackageManifest(readFileSync(manifestPath, 'utf8'), packageName);
+        const manifestPath = `${packageName}/package.json`;
+        const manifestSnapshot = readRegularFileSnapshotDetails(
+          root,
+          manifestPath,
+          MAX_POLICY_BYTES,
+        );
+        assertCensusIdentity(census.identityByPath, manifestPath, manifestSnapshot.identity);
+        const manifest = parsePackageManifest(
+          new TextDecoder('utf-8', { fatal: true }).decode(manifestSnapshot.bytes),
+          packageName,
+        );
         comparePackagePolicy(packagePolicy, manifest, findings);
       } catch (error) {
         findings.push(
@@ -953,14 +1114,18 @@ function directoryArtifactSource(
           ),
         );
       }
-      const dist = checkedPath(root, `${packageName}/dist`, 'directory');
-      collectModuleFiles(root, dist, `${packageName}/dist`, modulePaths, findings);
     }
-    for (const modulePath of modulePaths) {
-      moduleBytes.set(
-        modulePath,
-        Uint8Array.from(readFileSync(checkedPath(root, modulePath, 'file'))),
-      );
+    if (snapshotModules) {
+      for (const modulePath of modulePaths) {
+        const snapshot = readRegularFileSnapshotDetails(root, modulePath, MAX_ARTIFACT_BYTES);
+        assertCensusIdentity(census.identityByPath, modulePath, snapshot.identity);
+        const bytes = snapshot.bytes;
+        census.totalArtifactBytes += bytes.byteLength;
+        if (census.totalArtifactBytes > MAX_TOTAL_ARTIFACT_BYTES) {
+          throw new TypeError('artifact tree exceeds the 32 MiB total module-byte limit');
+        }
+        moduleBytes.set(modulePath, bytes);
+      }
     }
   } catch (error) {
     findings.push(
@@ -974,14 +1139,15 @@ function directoryArtifactSource(
   const paths = modulePaths.sort(compareStrings);
   return {
     findings: findings.sort(compareFindings),
+    identity: [...census.identityByPath.values()].sort(compareStrings),
     source: {
       listArtifactPaths: () => paths,
       readArtifact(artifactPath) {
         const bytes = moduleBytes.get(artifactPath);
         return bytes === undefined ? undefined : Uint8Array.from(bytes);
       },
-      resolveArtifactSpecifier(_from, specifier) {
-        return resolvePolicyPackageSpecifier(policy, specifier);
+      resolveArtifactSpecifier(from, specifier) {
+        return resolvePolicyPackageSpecifier(policy, from, specifier);
       },
     },
   };
@@ -1001,6 +1167,7 @@ function parsePackageManifest(text: string, packageName: string): Record<string,
     throw new TypeError('installed manifest must not contain publishConfig resolver overrides');
   }
   assertJsonValue(manifest, `${packageName} package manifest`);
+  assertInstalledManifestSecurity(manifest, packageName);
   packageManifestRuntimeTargets(manifest, packageName);
   return manifest;
 }
@@ -1035,6 +1202,41 @@ function packageManifestRuntimeTargets(
   return targets;
 }
 
+function assertInstalledManifestSecurity(
+  manifest: Readonly<Record<string, unknown>>,
+  packageName: string,
+): void {
+  if (Object.hasOwn(manifest, 'browser')) {
+    throw new TypeError(`${packageName} browser remaps are unsupported`);
+  }
+  if (manifest.scripts !== undefined) {
+    if (!isPlainJsonRecord(manifest.scripts)) {
+      throw new TypeError(`${packageName} scripts must be a plain object`);
+    }
+    for (const [name, command] of Object.entries(manifest.scripts)) {
+      if (typeof command !== 'string') {
+        throw new TypeError(`${packageName} script ${name} must be a string`);
+      }
+      if (AUTOMATIC_PACKAGE_LIFECYCLE_SCRIPTS.has(name) && command.trim() !== '') {
+        throw new TypeError(`${packageName} automatic lifecycle script ${name} is forbidden`);
+      }
+    }
+  }
+  if (manifest.imports === undefined) return;
+  if (!isPlainJsonRecord(manifest.imports)) {
+    throw new TypeError(`${packageName} imports must be a plain object`);
+  }
+  for (const [specifier, value] of Object.entries(manifest.imports)) {
+    if (!/^#[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(specifier)) {
+      throw new TypeError(`${packageName} imports key ${JSON.stringify(specifier)} is unsupported`);
+    }
+    packageManifestRelativeTarget(
+      singleManifestRuntimeTarget(value, `${packageName} import ${JSON.stringify(specifier)}`),
+      packageName,
+    );
+  }
+}
+
 function collectManifestRuntimeTargets(value: unknown): Set<string> {
   if (typeof value === 'string') return new Set([value]);
   if (Array.isArray(value)) {
@@ -1044,7 +1246,9 @@ function collectManifestRuntimeTargets(value: unknown): Set<string> {
     }
     return targets;
   }
-  if (!isPlainJsonRecord(value)) return new Set();
+  if (!isPlainJsonRecord(value)) {
+    throw new TypeError('runtime export conditions and fallbacks must end in string targets');
+  }
   const targets = new Set<string>();
   for (const key of Object.keys(value)) {
     if (key === 'types' || key.startsWith('types@')) continue;
@@ -1096,6 +1300,19 @@ function packageManifestTarget(value: string, packageName: string): string {
   return `${packageName}/${value.slice(2)}`;
 }
 
+function packageManifestRelativeTarget(value: string, packageName: string): string {
+  if (
+    !value.startsWith('./') ||
+    value.includes('\\') ||
+    value.includes('?') ||
+    value.includes('#') ||
+    path.posix.normalize(value) !== value.slice(2)
+  ) {
+    throw new TypeError(`${packageName} package import target ${value} is not canonical`);
+  }
+  return value;
+}
+
 function assertJsonValue(value: unknown, label: string): void {
   if (
     value === null ||
@@ -1116,8 +1333,28 @@ function assertJsonValue(value: unknown, label: string): void {
   throw new TypeError(`${label} must contain only JSON data`);
 }
 
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry) => sortJsonValue(entry));
+  if (isPlainJsonRecord(value)) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort(compareStrings)
+        .map((key) => [key, sortJsonValue(value[key])]),
+    );
+  }
+  return value;
+}
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value));
+}
+
 function isReviewedNonRuntimeDistPath(value: string): boolean {
   return /(?:\.d\.(?:cts|mts|ts)|\.(?:d\.(?:cts|mts|ts)|mjs)\.map)$/u.test(value);
+}
+
+function isReviewedPackageDocumentationPath(value: string): boolean {
+  return /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*\/README\.md$/u.test(value);
 }
 
 function executableDistPath(value: string): boolean {
@@ -1142,6 +1379,9 @@ function listKovoPackageNames(root: string): string[] {
     }
     ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
     packages.push(relativePath);
+    if (packages.length > MAX_DIRECTORY_PACKAGES) {
+      throw new TypeError(`artifact root contains more than ${MAX_DIRECTORY_PACKAGES} packages`);
+    }
   }
   return packages;
 }
@@ -1178,7 +1418,7 @@ function comparePackagePolicy(
   actualManifest: Readonly<Record<string, unknown>>,
   findings: KovoCertificateFinding[],
 ): void {
-  if (JSON.stringify(expected.manifest) !== JSON.stringify(actualManifest)) {
+  if (canonicalJson(expected.manifest) !== canonicalJson(actualManifest)) {
     findings.push(
       finding(
         'coverage',
@@ -1189,43 +1429,145 @@ function comparePackagePolicy(
   }
 }
 
-function collectModuleFiles(
+function collectPackageFiles(
   root: string,
   directory: string,
   relativeDirectory: string,
   output: string[],
   findings: KovoCertificateFinding[],
+  census: {
+    files: number;
+    identityByPath: Map<string, string>;
+    totalArtifactBytes: number;
+  },
+  depth: number,
 ): void {
+  if (depth > MAX_PACKAGE_DEPTH) {
+    throw new TypeError(`artifact package exceeds the depth limit at ${relativeDirectory}`);
+  }
+  const directoryStat = lstatSync(directory, { bigint: true });
+  if (!directoryStat.isDirectory()) {
+    throw new TypeError(`artifact path is not a directory: ${relativeDirectory}`);
+  }
+  recordCensusIdentity(census.identityByPath, relativeDirectory, directoryStat);
   for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
     compareStrings(left.name, right.name),
   )) {
     const relativePath = `${relativeDirectory}/${entry.name}`;
     const absolutePath = path.join(directory, entry.name);
-    const stat = lstatSync(absolutePath);
+    const stat = lstatSync(absolutePath, { bigint: true });
     if (stat.isSymbolicLink()) {
       throw new TypeError(`artifact path contains a symlink: ${relativePath}`);
     }
     if (stat.isDirectory()) {
-      collectModuleFiles(root, absolutePath, relativePath, output, findings);
-    } else if (stat.isFile() && relativePath.endsWith('.mjs')) {
+      ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
+      collectPackageFiles(root, absolutePath, relativePath, output, findings, census, depth + 1);
+      continue;
+    }
+    if (!stat.isFile()) {
+      throw new TypeError(`artifact package contains an unsupported entry: ${relativePath}`);
+    }
+    census.files += 1;
+    if (census.files > MAX_PACKAGE_FILES) {
+      throw new TypeError(`artifact tree contains more than ${MAX_PACKAGE_FILES} files`);
+    }
+    recordCensusIdentity(census.identityByPath, relativePath, stat);
+    ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
+    if (relativePath.endsWith('/package.json')) {
+      continue;
+    }
+    if (relativePath.endsWith('.mjs') && isCanonicalArtifactPath(relativePath)) {
       ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
       output.push(relativePath);
-    } else if (stat.isFile() && isReviewedNonRuntimeDistPath(relativePath)) {
-      ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
-    } else if (stat.isFile()) {
-      ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
+    } else if (
+      (relativePath.includes('/dist/') && isReviewedNonRuntimeDistPath(relativePath)) ||
+      isReviewedPackageDocumentationPath(relativePath)
+    ) {
+      continue;
+    } else {
       findings.push(
         finding(
           'coverage',
           executableDistPath(relativePath)
             ? 'unsupported-executable-artifact'
             : 'unsupported-dist-artifact',
-          `${relativePath} is not a reviewed non-runtime declaration or source-map artifact`,
+          `${relativePath} is not a reviewed non-runtime declaration, source map, or package README`,
         ),
       );
-    } else {
-      throw new TypeError(`artifact dist contains an unsupported entry: ${relativePath}`);
     }
+  }
+}
+
+function recordCensusIdentity(
+  identityByPath: Map<string, string>,
+  relativePath: string,
+  stat: BigIntStats,
+): void {
+  if (identityByPath.has(relativePath)) {
+    throw new TypeError(`artifact census contains duplicate path ${relativePath}`);
+  }
+  identityByPath.set(relativePath, filesystemIdentity(relativePath, stat));
+}
+
+function assertCensusIdentity(
+  identityByPath: ReadonlyMap<string, string>,
+  relativePath: string,
+  observedIdentity: string,
+): void {
+  if (identityByPath.get(relativePath) !== observedIdentity) {
+    throw new TypeError(`${relativePath} differs from its initial package-tree census identity`);
+  }
+}
+
+function filesystemIdentity(relativePath: string, stat: BigIntStats): string {
+  return [
+    relativePath,
+    stat.dev,
+    stat.ino,
+    stat.mode,
+    stat.nlink,
+    stat.uid,
+    stat.gid,
+    stat.size,
+    stat.mtimeNs,
+    stat.ctimeNs,
+  ].join('\0');
+}
+
+function readRegularFileSnapshotDetails(
+  root: string,
+  relativePath: string,
+  maxBytes: number,
+): { bytes: Uint8Array; identity: string } {
+  const absolutePath = checkedPath(root, relativePath, 'file');
+  const beforePath = lstatSync(absolutePath, { bigint: true });
+  const noFollow = fsConstants.O_NOFOLLOW ?? 0;
+  const descriptor = openSync(absolutePath, fsConstants.O_RDONLY | noFollow);
+  try {
+    const beforeRead = fstatSync(descriptor, { bigint: true });
+    if (
+      !beforeRead.isFile() ||
+      beforePath.dev !== beforeRead.dev ||
+      beforePath.ino !== beforeRead.ino ||
+      beforeRead.size > BigInt(maxBytes)
+    ) {
+      throw new TypeError(`${relativePath} changed identity or exceeds its byte limit`);
+    }
+    const bytes = Uint8Array.from(readFileSync(descriptor));
+    const afterRead = fstatSync(descriptor, { bigint: true });
+    if (
+      beforeRead.dev !== afterRead.dev ||
+      beforeRead.ino !== afterRead.ino ||
+      beforeRead.size !== afterRead.size ||
+      beforeRead.mtimeNs !== afterRead.mtimeNs ||
+      beforeRead.ctimeNs !== afterRead.ctimeNs ||
+      BigInt(bytes.byteLength) !== afterRead.size
+    ) {
+      throw new TypeError(`${relativePath} changed while its bytes were snapshotted`);
+    }
+    return { bytes, identity: filesystemIdentity(relativePath, afterRead) };
+  } finally {
+    closeSync(descriptor);
   }
 }
 
@@ -1475,12 +1817,12 @@ function parseArtifact(
     }
     const target = resolveArtifactSpecifier(module, specifier, artifactSource);
     if (target === undefined) {
-      if (specifier.startsWith('@kovojs/')) {
+      if (specifier.startsWith('@kovojs/') || specifier.startsWith('#')) {
         findings.push(
           finding(
             'coverage',
             'edge-unresolved',
-            `${module} first-party import ${JSON.stringify(specifier)} is unresolved`,
+            `${module} first-party or package import ${JSON.stringify(specifier)} is unresolved`,
           ),
         );
       } else {
@@ -1535,6 +1877,10 @@ function resolveArtifactSpecifier(
       ? `${packageName}/dist/index.mjs`
       : `${packageName}/dist/${subpath.join('/')}.mjs`;
   }
+  if (specifier.startsWith('#') && artifacts.resolveArtifactSpecifier !== undefined) {
+    const resolved = artifacts.resolveArtifactSpecifier(module, specifier);
+    return resolved !== undefined && isCanonicalArtifactPath(resolved) ? resolved : undefined;
+  }
   return undefined;
 }
 
@@ -1543,7 +1889,7 @@ function unsupportedModuleSpecifier(specifier: string): boolean {
     specifier === '' ||
     specifier.includes('\\') ||
     specifier.includes('?') ||
-    specifier.includes('#') ||
+    (specifier.includes('#') && !specifier.startsWith('#')) ||
     specifier.startsWith('/') ||
     (/^[a-z][a-z+.-]*:/iu.test(specifier) && !specifier.startsWith('node:'))
   );
@@ -1555,8 +1901,25 @@ function externalOpaqueReason(specifier: string): string {
 
 function resolvePolicyPackageSpecifier(
   policy: KovoCertificatePolicyV1,
+  from: string,
   specifier: string,
 ): string | undefined {
+  if (specifier.startsWith('#')) {
+    const packageName = from.split('/').slice(0, 2).join('/');
+    const manifest = policy.packages.find((entry) => entry.name === packageName)?.manifest;
+    if (manifest === undefined || !isPlainJsonRecord(manifest.imports)) return undefined;
+    try {
+      return packageManifestTarget(
+        singleManifestRuntimeTarget(
+          manifest.imports[specifier],
+          `${packageName} import ${JSON.stringify(specifier)}`,
+        ),
+        packageName,
+      );
+    } catch {
+      return undefined;
+    }
+  }
   if (!specifier.startsWith('@kovojs/')) return undefined;
   const parts = specifier.split('/');
   if (parts.length < 2) return undefined;

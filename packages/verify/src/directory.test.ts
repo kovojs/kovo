@@ -24,6 +24,7 @@ describe('filesystem certificate artifacts', () => {
       '@kovojs/server/dist/value.mjs': 'export const value = 1;',
     });
     const policy = policyBytes(fixture.sources, fixture.root);
+    writeFileSync(path.join(fixture.root, '@kovojs/server/README.md'), '# Server\n');
     await expect(
       verifyCertificateDirectory(
         certificate(fixture.sources, policy, [
@@ -57,6 +58,30 @@ describe('filesystem certificate artifacts', () => {
     await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
       {
         findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+        ok: false,
+      },
+    );
+  });
+
+  it('rejects an executable added after the initial package-tree census', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': 'export {};',
+    });
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const manifest = certificate(fixture.sources, policy);
+    queueMicrotask(() => {
+      writeFileSync(
+        path.join(fixture.root, '@kovojs/server/postinstall.js'),
+        "require('node:child_process');",
+      );
+    });
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'artifact-tree-mutated' }),
+          expect.objectContaining({ code: 'unsupported-executable-artifact' }),
+        ]),
         ok: false,
       },
     );
@@ -117,6 +142,20 @@ describe('filesystem certificate artifacts', () => {
     const policy = policyBytes(fixture.sources, fixture.root);
     const manifest = certificate(fixture.sources, policy);
     writeFileSync(
+      path.join(fixture.root, '@kovojs/server/postinstall.js'),
+      "require('node:child_process');",
+    );
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'unsupported-executable-artifact' }),
+        ]),
+        ok: false,
+      },
+    );
+    rmSync(path.join(fixture.root, '@kovojs/server/postinstall.js'));
+
+    writeFileSync(
       path.join(fixture.root, '@kovojs/server/dist/backdoor.cjs'),
       'module.exports = 1;',
     );
@@ -173,6 +212,20 @@ describe('filesystem certificate artifacts', () => {
         ok: false,
       },
     );
+
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': { import: './dist/index.mjs', default: null } },
+        name: '@kovojs/server',
+      }),
+    );
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'manifest-invalid' })]),
+        ok: false,
+      },
+    );
   });
 
   it('rejects publishConfig resolver shadowing in an installed manifest', async () => {
@@ -188,6 +241,100 @@ describe('filesystem certificate artifacts', () => {
         exports: { '.': './dist/worker.mjs' },
         name: '@kovojs/server',
         publishConfig: { exports: { '.': './dist/index.mjs' } },
+      }),
+    );
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'manifest-invalid' })]),
+        ok: false,
+      },
+    );
+  });
+
+  it('models exact package imports while rejecting browser remaps', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': "export { worker } from '#worker';",
+      '@kovojs/server/dist/worker.mjs': 'export const worker = true;',
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/index.mjs' },
+        imports: { '#worker': './dist/worker.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    await expect(
+      verifyCertificateDirectory(
+        certificate(fixture.sources, policy, [
+          ['@kovojs/server/dist/index.mjs', '@kovojs/server/dist/worker.mjs'],
+        ]),
+        policy,
+        fixture.root,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        browser: { './dist/index.mjs': './dist/worker.mjs' },
+        exports: { '.': './dist/index.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    const browserPolicy = policyBytes(fixture.sources, fixture.root);
+    await expect(
+      verifyCertificateDirectory(
+        certificate(fixture.sources, browserPolicy),
+        browserPolicy,
+        fixture.root,
+      ),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'policy-manifest-entrypoint' }),
+      ]),
+      ok: false,
+    });
+  });
+
+  it('rejects automatic package lifecycle scripts even when reviewer policy repeats them', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/index.mjs' },
+        name: '@kovojs/server',
+        scripts: { postinstall: 'node ./dist/index.mjs' },
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    await expect(
+      verifyCertificateDirectory(certificate(fixture.sources, policy), policy, fixture.root),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'policy-manifest-entrypoint' }),
+      ]),
+      ok: false,
+    });
+  });
+
+  it('binds the complete installed dependency and lifecycle manifest surface', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+    });
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const manifest = certificate(fixture.sources, policy);
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        dependencies: { attacker: '1.0.0' },
+        exports: { '.': './dist/index.mjs' },
+        name: '@kovojs/server',
+        scripts: { postinstall: 'node ./dist/index.mjs' },
       }),
     );
 
@@ -260,7 +407,7 @@ function policyBytes(sources: Record<string, string>, root: string): Buffer {
   }));
   return Buffer.from(
     `${JSON.stringify(
-      {
+      sortJsonValue({
         artifacts: artifactPaths.map((artifactPath) => ({
           path: artifactPath,
           sha512: integrity(Buffer.from(sources[artifactPath]!)),
@@ -270,11 +417,24 @@ function policyBytes(sources: Record<string, string>, root: string): Buffer {
         packages,
         roots: [],
         schema: 'kovo.certificate-policy/v1',
-      },
+      }),
       null,
       2,
     )}\n`,
   );
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry) => sortJsonValue(entry));
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .map((key) => [key, sortJsonValue(record[key])]),
+    );
+  }
+  return value;
 }
 
 function integrity(bytes: Uint8Array): string {

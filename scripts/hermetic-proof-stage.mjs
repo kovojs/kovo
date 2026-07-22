@@ -26,6 +26,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const manifestPath = path.join(repoRoot, 'security/hermetic-proof-stage.json');
 const costManifestPath = path.join(repoRoot, 'security/plan3-security-gate-budgets.json');
 const certificatePath = path.join(repoRoot, 'security/kovo-certificate-v1.json');
+const certificatePolicyPath = path.join(repoRoot, 'security/kovo-certificate-policy-v1.json');
 const workflowPath = path.join(repoRoot, '.github/workflows/ci.yml');
 const packagePath = path.join(repoRoot, 'package.json');
 const publicPackagesPath = path.join(repoRoot, 'public-packages.json');
@@ -67,7 +68,11 @@ const expectedStageContracts = {
   'certificate-generation': {
     childProcess: 'denied',
     name: 'certificate-generation',
-    reads: ['sealed production certificate generator', 'certificate analysis record'],
+    reads: [
+      'sealed production certificate generator',
+      'certificate analysis record',
+      'reviewer-owned canonical certificate policy',
+    ],
     secrets: [],
     writes: ['unsigned kovo.certificate/v1'],
   },
@@ -297,6 +302,7 @@ function prepareStagePaths(root) {
     sealedSigning: path.join(root, 'sealed-signing'),
     signature: path.join(root, 'signature/signature.json'),
     subject: path.join(root, 'subject/subject.json'),
+    policy: path.join(root, 'subject/kovo-certificate-policy-v1.json'),
     unsigned: path.join(root, 'unsigned/certificate.json'),
   };
   mkdirSync(path.dirname(paths.appCanary), { recursive: true });
@@ -305,6 +311,8 @@ function prepareStagePaths(root) {
   copyToolClosure(paths.sealedGeneration, generationToolFiles);
   copyToolClosure(paths.sealedSigning, signingToolFiles);
   prepareHermeticCertificateSubject(path.dirname(paths.subject));
+  copyFileSync(certificatePolicyPath, paths.policy);
+  chmodSync(paths.policy, 0o400);
   const { privateKey } = generateKeyPairSync('ed25519');
   const privateKeyBytes = privateKey.export({ format: 'der', type: 'pkcs8' });
   writeFileSync(paths.key, privateKeyBytes, { mode: 0o600 });
@@ -320,7 +328,7 @@ export function prepareHermeticCertificateSubject(subjectRoot) {
   const publicPackages = JSON.parse(readFileSync(publicPackagesPath, 'utf8')).packages;
   const committedCertificate = JSON.parse(readFileSync(certificatePath, 'utf8'));
   const packageNames = new Set(
-    committedCertificate.artifacts.map((entry) => entry.path.split('/').slice(0, 2).join('/')),
+    committedCertificate.artifacts.map((entry) => entry.split('/').slice(0, 2).join('/')),
   );
   const packagesByName = new Map(publicPackages.map((entry) => [entry.name, entry]));
   const packageConfigs = publicPackages
@@ -484,17 +492,19 @@ async function runDockerStages(paths, linuxRunner, port, dockerPath) {
     [
       mount(paths.sealedGeneration, '/sealed', true),
       mount(path.join(paths.root, 'analysis'), '/analysis', true),
+      mount(path.join(paths.root, 'subject'), '/subject', true),
       mount(path.join(paths.root, 'unsigned'), '/unsigned', false),
     ],
     [
       '/sealed/scripts/hermetic-proof-stage-worker.mjs',
       'generate',
       '/analysis/analysis.json',
+      '/subject/kovo-certificate-policy-v1.json',
       '/unsigned/certificate.json',
       '/key/key.pkcs8',
       '/app/node_modules/untrusted-app/canary',
     ],
-    ['/sealed', '/analysis'],
+    ['/sealed', '/analysis', '/subject'],
     ['/unsigned'],
     context,
   );
@@ -743,11 +753,12 @@ function runMacStages(paths, port, sandboxExecPath) {
       path.join(paths.sealedGeneration, workerPath),
       'generate',
       paths.analysis,
+      paths.policy,
       paths.unsigned,
       paths.key,
       paths.appCanary,
     ],
-    [paths.sealedGeneration, path.dirname(paths.analysis)],
+    [paths.sealedGeneration, path.dirname(paths.analysis), path.dirname(paths.policy)],
     [path.dirname(paths.unsigned)],
     networkCanary,
     sandboxExecPath,
@@ -821,6 +832,7 @@ function dockerStageMounts(root, stage) {
     'certificate-generation': [
       mount(path.join(root, 'sealed-generation'), '/sealed', true),
       mount(path.join(root, 'analysis'), '/analysis', true),
+      mount(path.join(root, 'subject'), '/subject', true),
       mount(path.join(root, 'unsigned'), '/unsigned', false),
     ],
     signing: [
@@ -898,11 +910,12 @@ function dockerStageNodeArgs(stage) {
       writes: ['/analysis'],
     },
     'certificate-generation': {
-      reads: ['/sealed', '/analysis'],
+      reads: ['/sealed', '/analysis', '/subject'],
       workerArgs: [
         '/sealed/scripts/hermetic-proof-stage-worker.mjs',
         'generate',
         '/analysis/analysis.json',
+        '/subject/kovo-certificate-policy-v1.json',
         '/unsigned/certificate.json',
         '/key/key.pkcs8',
         '/app/node_modules/untrusted-app/canary',
