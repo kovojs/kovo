@@ -26,15 +26,21 @@ function withInstalledInlineLoader(
     location: globalRecord.location,
     importModule: globalRecord.__kovoInlineImport,
   };
-  const listeners = new Map<string, Listener>();
+  const listeners = new Map<string, Listener[]>();
   const reload = vi.fn();
 
   try {
     globalRecord.addEventListener = (type: string, listener: Listener) => {
-      listeners.set(type, listener);
+      const enrolled = listeners.get(type) ?? [];
+      enrolled.push(listener);
+      listeners.set(type, enrolled);
     };
     globalRecord.removeEventListener = (type: string, listener: Listener) => {
-      if (listeners.get(type) === listener) listeners.delete(type);
+      const enrolled = listeners.get(type);
+      if (!enrolled) return;
+      const retained = enrolled.filter((candidate) => candidate !== listener);
+      if (retained.length > 0) listeners.set(type, retained);
+      else listeners.delete(type);
     };
     globalRecord.document = {
       querySelector(selector: string) {
@@ -59,7 +65,16 @@ function withInstalledInlineLoader(
 
     // Fire and assert inside the stubbed scope: the inline handler reads the global `location`,
     // which is restored in `finally`.
-    run({ pageShow: listeners.get('pageshow'), reload });
+    const pageShowListeners = listeners.get('pageshow');
+    run({
+      pageShow:
+        pageShowListeners === undefined
+          ? undefined
+          : (event) => {
+              for (const listener of pageShowListeners) listener(event);
+            },
+      reload,
+    });
   } finally {
     globalRecord.addEventListener = originals.addEventListener;
     globalRecord.removeEventListener = originals.removeEventListener;
@@ -78,16 +93,22 @@ describe.each(inlineSourceInstallCases)(
         // The posture meta is present, so the inline bootstrap registers the pageshow handler.
         expect(pageShow).toBeTypeOf('function');
 
-        pageShow?.({ persisted: true, type: 'pageshow' });
-        // SPEC §780: a persisted restore revalidates from the server.
-        expect(reload).toHaveBeenCalledTimes(1);
-
-        reload.mockClear();
         // A non-persisted pageshow already ran the loader/sessionProvider — no reload.
         pageShow?.({ persisted: false, type: 'pageshow' });
         expect(reload).not.toHaveBeenCalled();
 
-        // A malformed carrier cannot prove the non-persisted posture, so the
+        pageShow?.({ persisted: true, type: 'pageshow' });
+        // SPEC §780: a persisted restore revalidates from the server.
+        expect(reload).toHaveBeenCalledTimes(1);
+
+        // Recovery is terminal for this realm; late lifecycle events cannot schedule a
+        // second navigation while the first full-document transition is outstanding.
+        pageShow?.({ type: 'pageshow' });
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+
+      withInstalledInlineLoader({ sessionDependent: true, install }, ({ pageShow, reload }) => {
+        // A malformed carrier cannot prove the non-persisted posture, so a fresh realm's
         // session defense fails closed toward a server reload.
         pageShow?.({ type: 'pageshow' });
         expect(reload).toHaveBeenCalledTimes(1);

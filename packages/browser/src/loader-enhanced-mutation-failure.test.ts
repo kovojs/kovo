@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, installKovoLoader } from './client.js';
 import {
@@ -7,9 +7,12 @@ import {
   FakePendingElement,
   FakePendingRoot,
   FakeRoot,
+  installTestBuildDocument,
 } from './runtime-test-fakes.js';
 
 const RENDERED_IDEM = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
+const restoreBuildDocument = installTestBuildDocument();
+afterAll(restoreBuildDocument);
 
 function renderedFormData(): FormData {
   const formData = new FormData();

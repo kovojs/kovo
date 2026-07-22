@@ -65,15 +65,27 @@ it.each(inlineSourceInstallCases)(
           },
         },
       });
-      globalRecord.document = { querySelector: () => null, querySelectorAll: () => [] };
+      globalRecord.document = {
+        querySelector(selector: string) {
+          return selector === 'meta[name="kovo-build"]'
+            ? { getAttribute: (name: string) => (name === 'content' ? 'build-test' : null) }
+            : null;
+        },
+        querySelectorAll: () => [],
+      };
       globalRecord.fetch = vi.fn(
         async (_url: string, options: { body: TestFormData; headers: Record<string, string> }) => {
           requests.push(options);
           return {
             headers: {
               get: (name: string) =>
-                name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null,
+                name.toLowerCase() === 'content-type'
+                  ? 'text/vnd.kovo.fragment+html'
+                  : name.toLowerCase() === 'kovo-build'
+                    ? 'build-test'
+                    : null,
             },
+            redirected: false,
             status: 204,
             text: async () => '',
             url: 'https://kovo.test/_m/cart/add',

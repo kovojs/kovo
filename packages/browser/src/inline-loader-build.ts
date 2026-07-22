@@ -2033,7 +2033,15 @@ function installInlineKovoLoader(im) {
         // media. Recovery wins before Content-Type, mutation directives, changes, or body reads.
         const envelopeBuild = bh(response);
         if (!envelopeBuild || envelopeBuild !== pbt) {
-          recoverDocument();
+          // A streaming response is still an active network capability even when its envelope
+          // proof is unusable. Cancel it without acquiring a reader, then retire the document;
+          // no response byte receives parse/apply authority (SPEC §5.2.1/§9.1/§14).
+          const rejectedBody = streaming ? bns.readResponseField(response, 'body') : undefined;
+          if (rejectedBody && typeof rejectedBody === 'object') {
+            await recoverStream(rejectedBody);
+          } else {
+            recoverDocument();
+          }
           return;
         }
         // SPEC §9.1: only the exact inline fragment envelope grants mutation response directives

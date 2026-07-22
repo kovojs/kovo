@@ -117,6 +117,7 @@ async function installStreamHarness(
         [key: string]: unknown;
       };
       return {
+        redirected: false,
         ...responseRecord,
         headers: {
           get(name: string) {

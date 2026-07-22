@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, installKovoLoader } from './generated.js';
 import {
@@ -8,8 +8,15 @@ import {
   FakeMorphTarget,
   FakeQueryBindingElement,
   FakeRoot,
+  browserTransportTestBuild,
+  browserTransportTestSourceUrl,
+  installTestBuildDocument,
   mutationTestResponse,
+  queryTestResponse,
 } from './runtime-test-fakes.js';
+
+const restoreBuildDocument = installTestBuildDocument();
+afterAll(restoreBuildDocument);
 
 describe('loader query apply interposition', () => {
   it('hydrates initial query scripts through the configured apply hook', () => {
@@ -46,10 +53,25 @@ describe('loader query apply interposition', () => {
       store.set(query.name, { ...query.value, viaHook: true }, query.key);
       return { value: store.get(query.name, query.key) };
     });
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="reviews">{"total":3}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () =>
+          new URL(url).pathname === '/_q/cart'
+            ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+            : '<kovo-query name="reviews">{"total":3}</kovo-query>',
+      }),
+    );
+
+    root.scripts = [
+      {
+        getAttribute(name: string) {
+          if (name === 'kovo-query') return 'reviews';
+          return name === 'data-kovo-query-href' ? '/_q/reviews' : null;
+        },
+        textContent: '{"total":1}',
+      },
+    ];
 
     store.subscribe('cart', cartPlan);
     store.subscribe('reviews', reviewsPlan);
@@ -57,7 +79,11 @@ describe('loader query apply interposition', () => {
     installKovoLoader({
       applyQuery,
       importModule: vi.fn(),
-      queryRefetch: { fetch },
+      queryRefetch: {
+        expectedBuildToken: browserTransportTestBuild,
+        fetch,
+        sourceUrl: browserTransportTestSourceUrl,
+      },
       queryStore: store,
       refetchOnFocus: vi.fn(),
       root,
@@ -68,7 +94,7 @@ describe('loader query apply interposition', () => {
       | undefined;
     queryEventListener?.({
       detail: {
-        queries: [{ attrs: ' name="cart"', content: '{"count":2}' }],
+        queries: [{ attrs: ' name="cart" href="/_q/cart"', content: '{"count":2}' }],
       },
     });
     root.visibilityState = 'visible';

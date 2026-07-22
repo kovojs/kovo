@@ -2,9 +2,44 @@ import { queryRef } from '@kovojs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DelegatedEvent } from './events.js';
+import type { QueryRefetchFetch } from './query-refetch.js';
 import { createQueryStore } from './query-store.js';
-import { FakeQueryBindingElement, FakeRoot } from './runtime-test-fakes.js';
+import {
+  FakeQueryBindingElement,
+  FakeRoot,
+  browserTransportTestBuild,
+  browserTransportTestSourceUrl,
+  queryTestResponse,
+} from './runtime-test-fakes.js';
 import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
+
+const typedReadRequest = {
+  cache: 'no-store',
+  headers: {
+    Accept: 'text/html',
+    'Kovo-Build': browserTransportTestBuild,
+    'Kovo-Fragment': 'true',
+  },
+  method: 'GET',
+  redirect: 'error',
+} as const;
+
+const typedReadUrl = (path: string): string => new URL(path, browserTransportTestSourceUrl).href;
+
+const testQueryRefetch = (fetch: QueryRefetchFetch) => ({
+  expectedBuildToken: browserTransportTestBuild,
+  fetch,
+  sourceUrl: browserTransportTestSourceUrl,
+});
+
+const testQueryScript = (name: string, href: string, textContent: string, key?: string) => ({
+  getAttribute(attribute: string) {
+    if (attribute === 'kovo-query') return name;
+    if (attribute === 'data-kovo-query-href') return href;
+    return attribute === 'key' ? (key ?? null) : null;
+  },
+  textContent,
+});
 
 function visibleReturnEvent(): DelegatedEvent {
   return { target: null, type: 'visibilitychange' };
@@ -23,12 +58,7 @@ describe('queryRef visible-return refetch', () => {
     const plan = vi.fn();
     const binding = new FakeQueryBindingElement('cart.count', '');
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
     root.bindings = [binding];
     store.subscribe('cart', plan);
 
@@ -64,31 +94,25 @@ describe('queryRef visible-return refetch', () => {
     const fetchText = new Promise<string>((resolve) => {
       resolveFetchText = resolve;
     });
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: () => fetchText,
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: () => fetchText,
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
     root.bindings = [cartBinding, reviewsBinding];
 
     const refetch = installQueryVisibleReturnRefetch({
       queryPlans: { cart: { bindings: true }, reviews: { bindings: true } },
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
     });
 
-    root.scripts.push({
-      getAttribute: (name) => (name === 'kovo-query' ? 'reviews' : null),
-      textContent: '{"total":3}',
-    });
+    root.scripts.push(testQueryScript('reviews', '/_q/reviews', '{"total":3}'));
 
     const first = root.listeners.get('visibilitychange')?.(visibleReturnEvent());
     const second = root.listeners.get('visibilitychange')?.(visibleReturnEvent());
@@ -116,22 +140,19 @@ describe('queryRef visible-return refetch', () => {
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
     const binding = new FakeQueryBindingElement('cart.count', '');
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
     root.bindings = [binding];
 
     installQueryVisibleReturnRefetch({
       queryPlans: { cart: { bindings: true } },
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -148,11 +169,7 @@ describe('queryRef visible-return refetch', () => {
     // SPEC.md §8/§9.3: a bfcache pageshow resumes from server truth through
     // the same typed-read recovery path as visible-return refetch.
     expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
-    expect(fetch).toHaveBeenCalledWith('/_q/cart', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenCalledWith(typedReadUrl('/_q/cart'), typedReadRequest);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(binding.textContent).toBe('2');
   });
@@ -163,18 +180,18 @@ describe('queryRef visible-return refetch', () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const onBuildSkew = vi.fn();
-    const fetch = vi.fn(async () => ({
-      headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(
+        url,
+        {
+          status: 200,
+          text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+        },
+        { buildToken: 'build-B', sourceUrl: browserTransportTestSourceUrl },
+      ),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     try {
       globalRecord.document = {
@@ -186,7 +203,11 @@ describe('queryRef visible-return refetch', () => {
       };
 
       installQueryVisibleReturnRefetch({
-        queryRefetch: { fetch, onBuildSkew },
+        queryRefetch: {
+          fetch,
+          onBuildSkew,
+          sourceUrl: browserTransportTestSourceUrl,
+        },
         queryStore: store,
         root,
       });
@@ -210,17 +231,14 @@ describe('queryRef visible-return refetch', () => {
     const globalListeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
     const root = new FakeRoot();
     const store = createQueryStore();
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     try {
       globalRecord.addEventListener = (
@@ -237,7 +255,7 @@ describe('queryRef visible-return refetch', () => {
       };
 
       const refetch = installQueryVisibleReturnRefetch({
-        queryRefetch: { fetch },
+        queryRefetch: testQueryRefetch(fetch),
         queryStore: store,
         root,
       });
@@ -246,11 +264,7 @@ describe('queryRef visible-return refetch', () => {
       expect(globalListeners.has('pageshow')).toBe(true);
 
       await globalListeners.get('pageshow')?.({ target: null, type: 'pageshow' });
-      expect(fetch).toHaveBeenCalledWith('/_q/cart', {
-        cache: 'no-store',
-        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-        method: 'GET',
-      });
+      expect(fetch).toHaveBeenCalledWith(typedReadUrl('/_q/cart'), typedReadRequest);
       expect(store.get('cart')).toEqual({ count: 2 });
 
       refetch.dispose();
@@ -264,30 +278,24 @@ describe('queryRef visible-return refetch', () => {
     }
   });
 
-  it('makes queryRef chunks returned by typed reads eligible for the next visible-return refetch', async () => {
+  it('makes newly hydrated keyed queryRefs eligible after an earlier typed-read pass', async () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
-    const fetch = vi.fn(async (url: string) => ({
-      status: 200,
-      text: async () =>
-        url === '/_q/cart'
-          ? [
-              '<kovo-query name="cart">{"count":2}</kovo-query>',
-              '<kovo-query name="group:catalog" key="group:catalog:item">{"items":["p1"]}</kovo-query>',
-            ].join('')
-          : '<kovo-query name="group:catalog" key="group:catalog:item">{"items":["p2"]}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () =>
+          new URL(url).pathname === '/_q/cart'
+            ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+            : '<kovo-query name="group:catalog" key="group:catalog:item">{"items":["p2"]}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     installQueryVisibleReturnRefetch({
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -296,35 +304,33 @@ describe('queryRef visible-return refetch', () => {
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
     expect(refetchOnFocus).toHaveBeenNthCalledWith(1, [{ name: 'cart' }]);
-    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenNthCalledWith(1, typedReadUrl('/_q/cart'), typedReadRequest);
     expect(store.get('cart')).toEqual({ count: 2 });
-    expect(store.get('group:catalog', 'group:catalog:item')).toEqual({ items: ['p1'] });
+    expect(store.get('group:catalog', 'group:catalog:item')).toBeUndefined();
+
+    root.scripts.push(
+      testQueryScript(
+        'group:catalog',
+        '/_q/group%3Acatalog?key=item',
+        '{"items":["p1"]}',
+        'group:catalog:item',
+      ),
+    );
 
     await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
 
-    // SPEC.md §4.4: typed-read queryRef chunks join the same visible-return
-    // ledger as server-rendered hydration and later mutation/deferred chunks,
-    // including canonical instance keys from SPEC.md §10.2.
+    // SPEC.md §4.4/§9.4: later server-rendered queryRefs join the same visible-return
+    // ledger after the first typed-read pass, including their exact retained href and key.
     expect(refetchOnFocus).toHaveBeenNthCalledWith(2, [
       { name: 'cart' },
       { key: 'group:catalog:item', name: 'group:catalog' },
     ]);
-    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
-    // SPEC.md §9.4/§10.2: even when the query name itself contains `:`, the retained structured
-    // facts dispatch by exact NAME and derive the args value from the matching canonical key.
-    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/group%3Acatalog?key=item', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenNthCalledWith(2, typedReadUrl('/_q/cart'), typedReadRequest);
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      typedReadUrl('/_q/group%3Acatalog?key=item'),
+      typedReadRequest,
+    );
     expect(store.get('group:catalog', 'group:catalog:item')).toEqual({ items: ['p2'] });
   });
 
@@ -332,21 +338,18 @@ describe('queryRef visible-return refetch', () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const onError = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     installQueryVisibleReturnRefetch({
       onError,
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       root,
     });
@@ -355,10 +358,11 @@ describe('queryRef visible-return refetch', () => {
 
     // SPEC.md §4.4: visible-return refetch follows hydrated queries; malformed typed-read
     // chunks still report through the same runtime apply path instead of drifting silently.
-    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(2);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
       'Malformed JSON in kovo-query cart',
     );
+    expect(String(onError.mock.calls[1]?.[0].message)).toContain('different query identity');
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
@@ -367,21 +371,18 @@ describe('queryRef visible-return refetch', () => {
     const store = createQueryStore();
     const callbackError = new Error('focus callback failed');
     const onError = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     installQueryVisibleReturnRefetch({
       onError,
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus: async () => {
         throw callbackError;
@@ -402,20 +403,17 @@ describe('queryRef visible-return refetch', () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     const refetch = installQueryVisibleReturnRefetch({
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -443,20 +441,17 @@ describe('queryRef visible-return refetch', () => {
       resolveFocus = resolve;
     });
     const refetchOnFocus = vi.fn(() => focusDone);
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
 
     const refetch = installQueryVisibleReturnRefetch({
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -479,20 +474,16 @@ describe('queryRef visible-return refetch', () => {
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
     const cartBinding = new FakeQueryBindingElement('cart.count', '');
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+      }),
+    );
 
     root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'productGrid' : null),
-        textContent: '{"products":[]}',
-      },
+      testQueryScript('cart', '/_q/cart', '{"count":1}'),
+      testQueryScript('productGrid', '/_q/productGrid', '{"products":[]}'),
     ];
     root.bindings = [cartBinding];
 
@@ -502,7 +493,7 @@ describe('queryRef visible-return refetch', () => {
     installQueryVisibleReturnRefetch({
       declaredQueries: [queryRef('productGrid', { refetchOnFocus: false }), queryRef('cart')],
       queryPlans: { cart: { bindings: true } },
-      queryRefetch: { fetch },
+      queryRefetch: testQueryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -513,11 +504,7 @@ describe('queryRef visible-return refetch', () => {
     // `productGrid` was declared `refetchOnFocus: false`, so it is excluded; `cart` still refetches.
     expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith('/_q/cart', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenCalledWith(typedReadUrl('/_q/cart'), typedReadRequest);
     expect(store.get('cart')).toEqual({ count: 2 });
     // The opted-out queryRef keeps its hydrated value and is never re-read on focus.
     expect(store.get('productGrid')).toEqual({ products: [] });

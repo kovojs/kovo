@@ -175,7 +175,7 @@ describe('mutation broadcast replay', () => {
   describe('cross-build delta validation (D3 / SPEC §9.1.1)', () => {
     const deltaBody = '<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>';
 
-    it('converts a cross-build delta chunk to a miss and leaves the store base untouched', () => {
+    it('retires a cross-build delta envelope and leaves the store base untouched', () => {
       const store = createQueryStore();
       const channel = new FakeBroadcastChannel();
       const onDeltaMiss = vi.fn();
@@ -194,9 +194,12 @@ describe('mutation broadcast replay', () => {
         },
       });
 
-      // The cross-build delta is a miss → refetch; the N base is never merged with N+1.
-      expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+      // SPEC §14: a foreign response token retires the whole stale runtime before any
+      // query-level delta decision. It is not safe to keep receiving sibling chunks.
+      expect(onDeltaMiss).not.toHaveBeenCalled();
       expect(store.get('cart')).toEqual({ count: 1 });
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
     });
 
     it('applies a same-build delta chunk against the held base', () => {
@@ -221,7 +224,7 @@ describe('mutation broadcast replay', () => {
       expect(store.get('cart')).toEqual({ count: 99 });
     });
 
-    it('treats a cross-build full chunk as a whole-response miss', () => {
+    it('retires a cross-build full envelope before applying its query truth', () => {
       const store = createQueryStore();
       const channel = new FakeBroadcastChannel();
       const onDeltaMiss = vi.fn();
@@ -238,8 +241,10 @@ describe('mutation broadcast replay', () => {
         },
       });
 
-      expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+      expect(onDeltaMiss).not.toHaveBeenCalled();
       expect(store.get('cart')).toEqual({ count: 1 });
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
     });
 
     it('retires the channel and rejects a cross-build fragment-only envelope', () => {
@@ -263,7 +268,7 @@ describe('mutation broadcast replay', () => {
       expect(channel.onmessage).toBeNull();
     });
 
-    it('treats a missing broadcast token as a whole-response miss when the receiver is stamped', () => {
+    it('retires on a broadcast envelope whose build proof is missing', () => {
       const store = createQueryStore();
       const channel = new FakeBroadcastChannel();
       const onDeltaMiss = vi.fn();
@@ -279,8 +284,11 @@ describe('mutation broadcast replay', () => {
         },
       });
 
-      expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+      // A missing proof cannot apply bytes; the stamped receiver retires its replay channel.
+      expect(onDeltaMiss).not.toHaveBeenCalled();
       expect(store.get('cart')).toEqual({ count: 1 });
+      expect(channel.closed).toBe(true);
+      expect(channel.onmessage).toBeNull();
     });
   });
 
@@ -312,8 +320,10 @@ describe('mutation broadcast replay', () => {
     });
     receiverChannel.onmessage?.({ data: envelope });
 
-    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+    expect(onDeltaMiss).not.toHaveBeenCalled();
     expect(receiverStore.get('cart')).toEqual({ count: 1 });
+    expect(receiverChannel.closed).toBe(true);
+    expect(receiverChannel.onmessage).toBeNull();
   });
 
   it('morphs rebroadcast mutation fragments when a root is configured', () => {

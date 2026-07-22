@@ -1,5 +1,77 @@
 import type { DelegatedEvent, EventElementLike } from './events.js';
 
+export const browserTransportTestBuild = 'build-test';
+export const browserTransportTestSourceUrl = 'http://localhost/';
+
+/** Install the server-stamped SPEC §5.2.1 app-build proof for browser-free loader tests. */
+export function installTestBuildDocument(buildToken = browserTransportTestBuild): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const previous = (
+    globalThis as {
+      document?: {
+        querySelector?: (selector: string) => unknown;
+        querySelectorAll?: (selector: string) => unknown;
+      };
+    }
+  ).document;
+  const buildMeta = {
+    getAttribute(name: string) {
+      return name === 'content' ? buildToken : null;
+    },
+  };
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      querySelector(selector: string) {
+        return selector === 'meta[name="kovo-build"]'
+          ? buildMeta
+          : (previous?.querySelector?.(selector) ?? null);
+      },
+      querySelectorAll(selector: string) {
+        return previous?.querySelectorAll?.(selector) ?? [];
+      },
+    },
+    writable: true,
+  });
+  return () => {
+    if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
+    else delete (globalThis as { document?: unknown }).document;
+  };
+}
+
+/** Exact admitted SPEC §9.4 typed-read response used by browser-free transport tests. */
+export function queryTestResponse<ResponseShape extends object>(
+  requestUrl: string,
+  response: ResponseShape,
+  options: { buildToken?: string; sourceUrl?: string } = {},
+): ResponseShape & {
+  headers: { get(name: string): string | null };
+  redirected: false;
+  url: string;
+} {
+  const responseRecord = response as ResponseShape & {
+    headers?: { get?(name: string): string | null };
+    url?: string;
+  };
+  const responseHeaders = responseRecord.headers;
+  const buildToken = options.buildToken ?? browserTransportTestBuild;
+  const sourceUrl = options.sourceUrl ?? browserTransportTestSourceUrl;
+  return {
+    ...response,
+    headers: {
+      get(name: string) {
+        const normalized = name.toLowerCase();
+        if (normalized === 'content-type') return 'text/html; charset=utf-8';
+        const value = responseHeaders?.get?.(name) ?? null;
+        if (value !== null) return value;
+        return normalized === 'kovo-build' ? buildToken : null;
+      },
+    },
+    redirected: false,
+    url: responseRecord.url || new URL(requestUrl, sourceUrl).href,
+  };
+}
+
 /** Canonical server-rendered SPEC §10.3 seed used by browser-free enhanced-form fixtures. */
 export const serverStampedMutationIdem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';
 
@@ -26,7 +98,7 @@ export function mutationTestResponse<ResponseShape extends object>(
         }
         const value = responseHeaders?.get?.(name) ?? null;
         if (value !== null) return value;
-        return name.toLowerCase() === 'kovo-build' ? 'build-test' : null;
+        return name.toLowerCase() === 'kovo-build' ? browserTransportTestBuild : null;
       },
     },
     redirected: false,

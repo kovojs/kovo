@@ -55,7 +55,7 @@ describe('inline loader minified artifact', () => {
     );
     expect(inlineKovoLoaderInstallerSource).toContain('liveTargets:rlt()');
     expect(inlineKovoLoaderInstallerSource).toContain('targets:rt()');
-    expect(inlineKovoLoaderInstallerSource).toContain('kovo.wire-input-grammar/v2');
+    expect(inlineKovoLoaderInstallerSource).toContain('kovo.wire-input-grammar/v4');
     expect(inlineKovoLoaderInstallerSource).not.toContain(".join('; ')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('[...new Set(');
     expect(inlineKovoLoaderInstallerSource).toContain('function ri(');
@@ -98,7 +98,7 @@ describe('inline loader minified artifact', () => {
       'if(readPageTransitionPersisted(event))visibleReturnRefresh()',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'if(readPageTransitionPersisted(event))reload()',
+      'if(readPageTransitionPersisted(event))recoverQueryDocument()',
     );
     expect(inlineKovoLoaderInstallerSource).not.toContain('if(event.persisted)');
   });
@@ -173,25 +173,28 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain('bc.close?.()');
   });
 
-  it('retires the mutation principal before empty-auth fallback navigation', () => {
+  it('retires the runtime before empty-auth fallback navigation', () => {
     // C176 / SPEC §9.3: navigation can be delayed or cancelled, so the accepted
     // Kovo-Changes auth fallback must cut the old channel before consulting it.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      'if(eaf(res,changes,text)){retireBroadcast();ng(ant(form,body));return;}',
+      'const ng=(href)=>retireRuntime({navigate:href});',
     );
-    expect(inlineKovoLoaderInstallerSource).not.toContain(
+    expect(inlineKovoLoaderInstallerSource).toContain(
       'if(eaf(res,changes,text)){ng(ant(form,body));return;}',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'responseRecoveryTerminal=true;responseRecoveryGeneration+=1;retireBroadcast();',
     );
   });
 
-  it('retires the expired mutation principal before reauth navigation', () => {
+  it('retires the expired mutation runtime before reauth navigation', () => {
     // C180 / SPEC §6.5/§9.3: a 401 Kovo-Reauth is an expired-session
     // transition, and the sanitized login navigation cannot own retirement.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "if(status===401&&reauth){retireBroadcast();ng(bns.safeSameOriginPath(reauth)||'/');return;}",
-    );
-    expect(inlineKovoLoaderInstallerSource).not.toContain(
       "if(status===401&&reauth){ng(bns.safeSameOriginPath(reauth)||'/');return;}",
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      'const ng=(href)=>retireRuntime({navigate:href});',
     );
   });
 

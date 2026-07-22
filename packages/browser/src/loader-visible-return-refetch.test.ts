@@ -1,14 +1,50 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, installKovoLoader } from './generated.js';
+import type { QueryRefetchFetch } from './query-refetch.js';
 import {
   FakeBroadcastChannel,
   FakeFormElement,
   FakeMorphRoot,
   FakeQueryBindingElement,
   FakeRoot,
+  browserTransportTestBuild,
+  browserTransportTestSourceUrl,
+  installTestBuildDocument,
   mutationTestResponse,
+  queryTestResponse,
 } from './runtime-test-fakes.js';
+
+const restoreBuildDocument = installTestBuildDocument();
+afterAll(restoreBuildDocument);
+
+const typedReadRequest = {
+  cache: 'no-store',
+  headers: {
+    Accept: 'text/html',
+    'Kovo-Build': browserTransportTestBuild,
+    'Kovo-Fragment': 'true',
+  },
+  method: 'GET',
+  redirect: 'error',
+} as const;
+
+const typedReadUrl = (path: string): string => new URL(path, browserTransportTestSourceUrl).href;
+
+const queryRefetch = (fetch: QueryRefetchFetch) => ({
+  expectedBuildToken: browserTransportTestBuild,
+  fetch,
+  sourceUrl: browserTransportTestSourceUrl,
+});
+
+const queryScript = (name: string, href: string, textContent: string, key?: string) => ({
+  getAttribute(attribute: string) {
+    if (attribute === 'kovo-query') return name;
+    if (attribute === 'data-kovo-query-href') return href;
+    return attribute === 'key' ? (key ?? null) : null;
+  },
+  textContent,
+});
 
 describe('loader visible-return refetch', () => {
   it('makes queries introduced by enhanced mutations eligible for visible-return refetch', async () => {
@@ -28,12 +64,7 @@ describe('loader visible-return refetch', () => {
         method: 'post',
       },
     );
-    loaderRoot.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    loaderRoot.scripts = [queryScript('cart', '/_q/cart', '{"count":1}')];
     const mutationFetch = vi.fn(async () =>
       mutationTestResponse('/_m/recommendations/refresh', {
         headers: {
@@ -42,17 +73,19 @@ describe('loader visible-return refetch', () => {
           },
         },
         async text() {
-          return '<kovo-query name="recommendations">{"items":["p1"]}</kovo-query>';
+          return '<kovo-query name="recommendations" href="/_q/recommendations">{"items":["p1"]}</kovo-query>';
         },
       }),
     );
-    const refetchFetch = vi.fn(async (url: string) => ({
-      status: 200,
-      text: async () =>
-        url === '/_q/cart'
-          ? '<kovo-query name="cart">{"count":2}</kovo-query>'
-          : '<kovo-query name="recommendations">{"items":["p2"]}</kovo-query>',
-    }));
+    const refetchFetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () =>
+          new URL(url).pathname === '/_q/cart'
+            ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+            : '<kovo-query name="recommendations">{"items":["p2"]}</kovo-query>',
+      }),
+    );
 
     installKovoLoader({
       enhancedMutations: {
@@ -62,7 +95,7 @@ describe('loader visible-return refetch', () => {
         store,
       },
       importModule: vi.fn(),
-      queryRefetch: { fetch: refetchFetch },
+      queryRefetch: queryRefetch(refetchFetch),
       queryStore: store,
       refetchOnFocus,
       root: loaderRoot,
@@ -86,16 +119,12 @@ describe('loader visible-return refetch', () => {
     // SPEC.md §4.4: visible-return refetch follows query data introduced by
     // later mutation query chunks, not just server-rendered hydration scripts.
     expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'recommendations' }]);
-    expect(refetchFetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
-    expect(refetchFetch).toHaveBeenNthCalledWith(2, '/_q/recommendations', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(refetchFetch).toHaveBeenNthCalledWith(1, typedReadUrl('/_q/cart'), typedReadRequest);
+    expect(refetchFetch).toHaveBeenNthCalledWith(
+      2,
+      typedReadUrl('/_q/recommendations'),
+      typedReadRequest,
+    );
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('recommendations')).toEqual({ items: ['p2'] });
   });
@@ -117,19 +146,16 @@ describe('loader visible-return refetch', () => {
       const mutationRoot = new FakeMorphRoot();
       const store = createQueryStore();
       const refetchOnFocus = vi.fn();
-      const fetch = vi.fn(async (url: string) => ({
-        status: 200,
-        text: async () =>
-          url === '/_q/cart'
-            ? '<kovo-query name="cart">{"count":2}</kovo-query>'
-            : '<kovo-query name="reviews">{"items":["r2"]}</kovo-query>',
-      }));
-      loaderRoot.scripts = [
-        {
-          getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-          textContent: '{"count":1}',
-        },
-      ];
+      const fetch = vi.fn(async (url: string) =>
+        queryTestResponse(url, {
+          status: 200,
+          text: async () =>
+            new URL(url).pathname === '/_q/cart'
+              ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+              : '<kovo-query name="reviews">{"items":["r2"]}</kovo-query>',
+        }),
+      );
+      loaderRoot.scripts = [queryScript('cart', '/_q/cart', '{"count":1}')];
 
       installKovoLoader({
         enhancedMutations: {
@@ -139,7 +165,7 @@ describe('loader visible-return refetch', () => {
           store,
         },
         importModule: vi.fn(),
-        queryRefetch: { fetch },
+        queryRefetch: queryRefetch(fetch),
         queryStore: store,
         refetchOnFocus,
         root: loaderRoot,
@@ -147,7 +173,7 @@ describe('loader visible-return refetch', () => {
 
       channels[0]?.onmessage?.({
         data: {
-          body: '<kovo-query name="reviews">{"items":["r1"]}</kovo-query>',
+          body: '<kovo-query name="reviews" href="/_q/reviews">{"items":["r1"]}</kovo-query>',
           buildToken: 'build-test',
           changes: [],
           type: 'kovo:mutation-response',
@@ -162,16 +188,8 @@ describe('loader visible-return refetch', () => {
       // SPEC.md §9.2: same-user tab sync consumes mutation wire bodies through
       // the same query-store path as the submitting tab.
       expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
-      expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
-        cache: 'no-store',
-        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-        method: 'GET',
-      });
-      expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
-        cache: 'no-store',
-        headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-        method: 'GET',
-      });
+      expect(fetch).toHaveBeenNthCalledWith(1, typedReadUrl('/_q/cart'), typedReadRequest);
+      expect(fetch).toHaveBeenNthCalledWith(2, typedReadUrl('/_q/reviews'), typedReadRequest);
       expect(store.get('cart')).toEqual({ count: 2 });
       expect(store.get('reviews')).toEqual({ items: ['r2'] });
     } finally {
@@ -185,32 +203,26 @@ describe('loader visible-return refetch', () => {
     const p1Plan = vi.fn();
     const p2Plan = vi.fn();
     const refetchOnFocus = vi.fn();
-    const fetch = vi.fn(async (url: string) => ({
-      status: 200,
-      text: async () =>
-        url === '/_q/product?key=p1'
-          ? '<kovo-query name="product" key="product:p1">{"stock":5}</kovo-query>'
-          : '<kovo-query name="product" key="product:p2">{"stock":10}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () =>
+          new URL(url).searchParams.get('key') === 'p1'
+            ? '<kovo-query name="product" key="product:p1">{"stock":5}</kovo-query>'
+            : '<kovo-query name="product" key="product:p2">{"stock":10}</kovo-query>',
+      }),
+    );
 
     root.scripts = [
-      {
-        getAttribute: (name) =>
-          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p1' : null,
-        textContent: '{"stock":4}',
-      },
-      {
-        getAttribute: (name) =>
-          name === 'kovo-query' ? 'product' : name === 'key' ? 'product:p2' : null,
-        textContent: '{"stock":9}',
-      },
+      queryScript('product', '/_q/product?key=p1', '{"stock":4}', 'product:p1'),
+      queryScript('product', '/_q/product?key=p2', '{"stock":9}', 'product:p2'),
     ];
     store.subscribe('product', p1Plan, 'product:p1');
     store.subscribe('product', p2Plan, 'product:p2');
 
     installKovoLoader({
       importModule: vi.fn(),
-      queryRefetch: { fetch },
+      queryRefetch: queryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -225,16 +237,8 @@ describe('loader visible-return refetch', () => {
       { key: 'product:p1', name: 'product' },
       { key: 'product:p2', name: 'product' },
     ]);
-    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/product?key=p1', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
-    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/product?key=p2', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenNthCalledWith(1, typedReadUrl('/_q/product?key=p1'), typedReadRequest);
+    expect(fetch).toHaveBeenNthCalledWith(2, typedReadUrl('/_q/product?key=p2'), typedReadRequest);
     expect(store.get('product', 'product:p1')).toEqual({ stock: 5 });
     expect(store.get('product', 'product:p2')).toEqual({ stock: 10 });
     expect(p1Plan).toHaveBeenLastCalledWith({ stock: 5 });
@@ -249,20 +253,17 @@ describe('loader visible-return refetch', () => {
     const refetchOnFocus = vi.fn();
     const cartBinding = new FakeQueryBindingElement('cart.count', { textContent: '' });
     const reviewsBinding = new FakeQueryBindingElement('reviews.total', { textContent: '' });
-    const fetch = vi.fn(async (url: string) => ({
-      status: 200,
-      text: async () =>
-        url === '/_q/cart'
-          ? '<kovo-query name="cart">{"count":2}</kovo-query>'
-          : '<kovo-query name="reviews">{"total":7}</kovo-query>',
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: async () =>
+          new URL(url).pathname === '/_q/cart'
+            ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+            : '<kovo-query name="reviews">{"total":7}</kovo-query>',
+      }),
+    );
 
-    root.scripts = [
-      {
-        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
-        textContent: '{"count":1}',
-      },
-    ];
+    root.scripts = [queryScript('cart', '/_q/cart', '{"count":1}')];
     root.bindings = [cartBinding, reviewsBinding];
     store.subscribe('cart', cartPlan);
     store.subscribe('reviews', reviewsPlan);
@@ -270,7 +271,7 @@ describe('loader visible-return refetch', () => {
     installKovoLoader({
       importModule: vi.fn(),
       queryPlans: { cart: { bindings: true }, reviews: { bindings: true } },
-      queryRefetch: { fetch },
+      queryRefetch: queryRefetch(fetch),
       queryStore: store,
       refetchOnFocus,
       root,
@@ -281,26 +282,15 @@ describe('loader visible-return refetch', () => {
     expect(cartBinding.textContent).toBe('1');
     expect(reviewsBinding.textContent).toBe('');
 
-    root.scripts.push({
-      getAttribute: (name) => (name === 'kovo-query' ? 'reviews' : null),
-      textContent: '{"total":5}',
-    });
+    root.scripts.push(queryScript('reviews', '/_q/reviews', '{"total":5}'));
 
     root.visibilityState = 'visible';
     await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
 
     // SPEC.md §4.4: visible-return refetch tracks hydrated query data discovered after install.
     expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
-    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
-    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    });
+    expect(fetch).toHaveBeenNthCalledWith(1, typedReadUrl('/_q/cart'), typedReadRequest);
+    expect(fetch).toHaveBeenNthCalledWith(2, typedReadUrl('/_q/reviews'), typedReadRequest);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('reviews')).toEqual({ total: 7 });
     expect(cartBinding.textContent).toBe('2');

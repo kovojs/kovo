@@ -12,6 +12,7 @@ import {
   FakeElement,
   FakeFormElement,
   FakeRoot,
+  browserTransportTestBuild,
   installTestClientModuleManifest,
   serverStampedMutationIdem,
 } from './runtime-test-fakes.js';
@@ -153,6 +154,7 @@ describe('loader lifecycle', () => {
 
     installDelegatedEventLifecycle({
       enhancedMutations: {
+        expectedBuildToken: browserTransportTestBuild,
         fetch,
         formData: () =>
           new URLSearchParams([

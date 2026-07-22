@@ -18,6 +18,7 @@ import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle
 interface InlineResponseApplyAssertions {
   expect: (actual: unknown) => {
     toBe(expected: unknown): unknown;
+    toHaveBeenCalledTimes(expected: number): unknown;
     toContainEqual(expected: unknown): unknown;
     toEqual(expected: unknown): unknown;
   };
@@ -190,7 +191,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [],
       textContent: '',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('cart%3Ac1') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('!cart!cart%3Ac1') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? 'cart.count' : null;
@@ -203,7 +204,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [{ name: 'data-bind:aria-label', value: 'product.stock' }],
       textContent: '',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('product%3Ep1') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('!product!product%3Ep1') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? null : null;
@@ -216,7 +217,7 @@ export async function expectInlineResponseApplyParity(
       attributes: [],
       textContent: 'unchanged',
       closest(selector: string) {
-        return selector === '[kovo-deps]' ? scopedDeps('product%3Ep2') : null;
+        return selector === '[kovo-deps]' ? scopedDeps('!product!product%3Ep2') : null;
       },
       getAttribute(name: string) {
         return name === 'data-bind' ? 'product.stock' : null;
@@ -286,6 +287,9 @@ export async function expectInlineResponseApplyParity(
         return inlineTargets.get(id) ?? null;
       },
       querySelector(selector: string) {
+        if (selector === 'meta[name="kovo-build"]') {
+          return { getAttribute: (name: string) => (name === 'content' ? 'build-test' : null) };
+        }
         if (selector === '[kovo-c="cart-summary"]') {
           return inlineTargets.get('cart-summary') ?? null;
         }
@@ -305,9 +309,13 @@ export async function expectInlineResponseApplyParity(
         get(name: string) {
           const normalized = name.toLowerCase();
           if (normalized === 'content-type') return 'text/vnd.kovo.fragment+html';
+          if (normalized === 'kovo-build') return 'build-test';
           return normalized === 'content-disposition' ? 'inline' : null;
         },
       },
+      ok: true,
+      redirected: false,
+      status: 200,
       text: responseText,
       url: 'https://kovo.test/_m/cart/add',
     }));
@@ -352,6 +360,9 @@ export async function expectInlineResponseApplyParity(
     await Promise.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(inlineFetch).toHaveBeenCalledTimes(1);
+    expect(responseText).toHaveBeenCalledTimes(1);
     expect(inlineBindings[0]?.textContent).toBe('1');
     expect(inlineBindings[1]?.attributes).toContainEqual({ name: 'aria-label', value: '7' });
     expect(inlineBindings[2]?.textContent).toBe('unchanged');
