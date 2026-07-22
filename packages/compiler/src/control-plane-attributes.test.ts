@@ -199,12 +199,12 @@ export const NestedAuthoredControlPlane = component({
       },
       {
         anchors: [
-          "root.querySelectorAll('[kovo-deps]')",
-          "element.getAttribute('kovo-fragment-target')",
-          "element.getAttribute('kovo-c')",
-          "element.getAttribute('kovo-live-component')",
-          "element.getAttribute('kovo-props')",
-          "element.getAttribute('kovo-live-token')",
+          "queryRuntimeElements<TargetElementLike>(root, '[kovo-deps]')",
+          "readRuntimeElementAttribute(element, 'kovo-fragment-target')",
+          "readRuntimeElementAttribute(element, 'kovo-c')",
+          "readRuntimeElementAttribute(element, 'kovo-live-component')",
+          "readRuntimeElementAttribute(element, 'kovo-props')",
+          "readRuntimeElementAttribute(element, 'kovo-live-token')",
         ],
         file: 'packages/browser/src/mutation-targets.ts',
         names: [

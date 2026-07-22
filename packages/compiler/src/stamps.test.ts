@@ -1161,7 +1161,7 @@ export const PreferenceForm = component({
         }),
         expect.objectContaining({
           message: expect.stringContaining(
-            'formAction cannot override a typed enhanced mutation transport',
+            'formAction cannot override compiler-owned typed mutation transport',
           ),
         }),
       ]),
@@ -1254,12 +1254,12 @@ export const AddToCartForm = component({
       expect.arrayContaining([
         expect.objectContaining({
           message: expect.stringContaining(
-            'formaction cannot override a typed enhanced mutation transport',
+            'formaction cannot override compiler-owned typed mutation transport',
           ),
         }),
         expect.objectContaining({
           message: expect.stringContaining(
-            'formMethod cannot override a typed enhanced mutation transport',
+            'formMethod cannot override compiler-owned typed mutation transport',
           ),
         }),
       ]),
