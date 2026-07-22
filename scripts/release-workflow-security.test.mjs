@@ -18,7 +18,14 @@ const RELEASE_ARCHIVE_NAME = `${RELEASE_ARTIFACT_NAME}.tgz`;
 const RELEASE_ARTIFACT_ID = '${{ needs.prepare.outputs.release-artifact-id }}';
 const ATTESTATION_DOWNLOAD_DIRECTORY = '${{ runner.temp }}/kovo-release-attestation';
 const ATTESTATION_ARCHIVE_PATH = `${ATTESTATION_DOWNLOAD_DIRECTORY}/${RELEASE_ARTIFACT_NAME}/${RELEASE_ARCHIVE_NAME}`;
-const PUBLISH_ARCHIVE_PATH = `\${{ runner.temp }}/kovo-release-artifact/${RELEASE_ARTIFACT_NAME}/${RELEASE_ARCHIVE_NAME}`;
+const PUBLISH_RELEASE_DOWNLOAD_DIRECTORY = '${{ runner.temp }}/kovo-release-artifact';
+const PUBLISH_ARCHIVE_PATH = `${PUBLISH_RELEASE_DOWNLOAD_DIRECTORY}/${RELEASE_ARTIFACT_NAME}/${RELEASE_ARCHIVE_NAME}`;
+const REPRODUCIBLE_PACK_ARTIFACT_NAME = 'kovo-reproducible-pack-attestation';
+const REPRODUCIBLE_PACK_DOWNLOAD_DIRECTORY = '${{ runner.temp }}/kovo-reproducible-pack';
+const REPRODUCIBLE_PACK_ATTESTATION_PATH = `${REPRODUCIBLE_PACK_DOWNLOAD_DIRECTORY}/reproducible-pack-attestation.json`;
+const AUTHORIZED_CI_RUN_ID = '${{ needs.authorize.outputs.ci-run-id }}';
+const GITHUB_TOKEN = '${{ github.token }}';
+const GITHUB_REPOSITORY = '${{ github.repository }}';
 const ATTESTATION_JOB_ACTIONS = Object.freeze([DOWNLOAD_ARTIFACT_ACTION, ATTEST_ACTION]);
 const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
   'artifact-metadata: write',
@@ -28,6 +35,8 @@ const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
 ]);
 const ATTESTATION_DOWNLOAD_INPUTS = `artifact-ids=${RELEASE_ARTIFACT_ID}\0path=${ATTESTATION_DOWNLOAD_DIRECTORY}`;
 const ATTESTATION_SUBJECT_INPUTS = `subject-name=${RELEASE_ARCHIVE_NAME}\0subject-path=${ATTESTATION_ARCHIVE_PATH}`;
+const PUBLISH_RELEASE_DOWNLOAD_INPUTS = `artifact-ids=${RELEASE_ARTIFACT_ID}\0path=${PUBLISH_RELEASE_DOWNLOAD_DIRECTORY}`;
+const REPRODUCIBLE_PACK_DOWNLOAD_INPUTS = `name=${REPRODUCIBLE_PACK_ARTIFACT_NAME}\0path=${REPRODUCIBLE_PACK_DOWNLOAD_DIRECTORY}\0github-token=${GITHUB_TOKEN}\0repository=${GITHUB_REPOSITORY}\0run-id=${AUTHORIZED_CI_RUN_ID}`;
 const COMMITTED_EVIDENCE_CHECKOUT_INPUTS =
   'fetch-depth=1\0persist-credentials=false\0ref=${{ github.sha }}';
 const COMMITTED_EVIDENCE_SUBJECT_INPUTS = Object.freeze([
@@ -46,6 +55,11 @@ function committedEvidenceAttestationJob(source) {
   const start = source.indexOf('  attest-committed-evidence:');
   const end = source.indexOf('  publish:', start);
   return start < 0 || end < 0 ? '' : source.slice(start, end);
+}
+
+function publishJob(source) {
+  const start = source.indexOf('  publish:');
+  return start < 0 ? '' : source.slice(start);
 }
 
 function jobActions(job) {
@@ -112,6 +126,15 @@ function actionInputSignatures(job, action) {
     });
 }
 
+function publishDownloadsMatchTrustBoundary(source) {
+  const downloads = actionInputSignatures(publishJob(source), DOWNLOAD_ARTIFACT_ACTION);
+  return (
+    downloads.length === 2 &&
+    downloads[0] === PUBLISH_RELEASE_DOWNLOAD_INPUTS &&
+    downloads[1] === REPRODUCIBLE_PACK_DOWNLOAD_INPUTS
+  );
+}
+
 function releaseMetadataDriftScript(source = releaseWorkflow) {
   const driftStep = source.slice(
     source.indexOf('name: Verify release metadata did not drift'),
@@ -157,6 +180,16 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow).toContain('.head_branch == "main"');
     expect(releaseWorkflow).toContain('.path == ".github/workflows/ci.yml"');
     expect(releaseWorkflow).toContain('.check_suite_id == $suite');
+    expect(releaseWorkflow).toContain(
+      'ci-run-id: ${{ steps.authorize-release.outputs.ci-run-id }}',
+    );
+    expect(releaseWorkflow).toContain('id: authorize-release');
+    expect(releaseWorkflow).toContain(
+      'if length == 1 then .[0] else error("expected one trusted aggregate workflow run") end',
+    );
+    expect(releaseWorkflow).toContain(
+      'printf \'ci-run-id=%s\\n\' "$(jq -er \'.id\' <<<"$workflow_run")" >> "$GITHUB_OUTPUT"',
+    );
     expect(releaseWorkflow).not.toContain('skip_verify_release_input');
     expect(releaseWorkflow).not.toContain('SKIP_RELEASE_CHECKS');
   });
@@ -257,6 +290,7 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow.match(/^\s+attestations: write$/gmu)).toHaveLength(2);
 
     expect(publish).toContain('if: ${{ !inputs.dry_run }}');
+    expect(publish).toContain('- authorize');
     expect(publish).toContain('- prepare');
     expect(publish).toContain('- attest-release-archive');
     expect(publish).toContain('- attest-committed-evidence');
@@ -268,6 +302,12 @@ describe('release workflow authority', () => {
     expect(publish).toContain('ref: ${{ github.sha }}');
     expect(publish).toContain(`uses: ${DOWNLOAD_ARTIFACT_ACTION}`);
     expect(publish).toContain(`artifact-ids: ${RELEASE_ARTIFACT_ID}`);
+    expect(publish).toContain(`name: ${REPRODUCIBLE_PACK_ARTIFACT_NAME}`);
+    expect(publish).toContain(`path: ${REPRODUCIBLE_PACK_DOWNLOAD_DIRECTORY}`);
+    expect(publish).toContain(`github-token: ${GITHUB_TOKEN}`);
+    expect(publish).toContain(`repository: ${GITHUB_REPOSITORY}`);
+    expect(publish).toContain(`run-id: ${AUTHORIZED_CI_RUN_ID}`);
+    expect(publishDownloadsMatchTrustBoundary(releaseWorkflow)).toBe(true);
     expect(publish).toContain(`RELEASE_ARCHIVE: ${PUBLISH_ARCHIVE_PATH}`);
     expect(publish).toContain('name: Restore exact verified release payload');
     expect(publish).toContain('npm_version="$(vp exec npm --version)"');
@@ -276,6 +316,12 @@ describe('release workflow authority', () => {
     expect(publish).toContain('index(member, "\\\\") != 0');
     expect(publish).toContain('segment[index_] == ".."');
     expect(publish).toContain('substr($1, 1, 1) != "-"');
+    expect(publish).toContain(
+      `REPRODUCIBLE_PACK_ATTESTATION: ${REPRODUCIBLE_PACK_ATTESTATION_PATH}`,
+    );
+    expect(publish).toContain('vp exec node scripts/verify-reproducible-release-subjects.mjs');
+    expect(publish).toContain('--attestation "$REPRODUCIBLE_PACK_ATTESTATION"');
+    expect(publish).toContain('--source "$GITHUB_SHA"');
     expect(publish).toContain(
       'run: vp exec node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"',
     );
@@ -337,6 +383,21 @@ describe('release workflow authority', () => {
     expect(wrongSubject).not.toBe(releaseWorkflow);
     expect(committedEvidenceJobMatchesStepAllowlist(extraAction)).toBe(false);
     expect(committedEvidenceJobMatchesStepAllowlist(wrongSubject)).toBe(false);
+  });
+
+  it('rejects a substituted CI run or subject artifact at the publish boundary', () => {
+    const wrongRun = releaseWorkflow.replace(
+      `          run-id: ${AUTHORIZED_CI_RUN_ID}`,
+      '          run-id: 42',
+    );
+    const wrongArtifact = releaseWorkflow.replace(
+      `          name: ${REPRODUCIBLE_PACK_ARTIFACT_NAME}`,
+      '          name: attacker-selected-subjects',
+    );
+    expect(wrongRun).not.toBe(releaseWorkflow);
+    expect(wrongArtifact).not.toBe(releaseWorkflow);
+    expect(publishDownloadsMatchTrustBoundary(wrongRun)).toBe(false);
+    expect(publishDownloadsMatchTrustBoundary(wrongArtifact)).toBe(false);
   });
 
   it('rejects build-time drift anywhere in the tracked release tree', () => {

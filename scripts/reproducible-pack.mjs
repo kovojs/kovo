@@ -5,6 +5,12 @@ import path from 'node:path';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 
 export const reproduciblePackAttestationSchema = 'kovo.reproducible-pack-attestation/v1';
+export const reproduciblePackAttestationClaim =
+  'Identical source and declared deterministic inputs produced byte-identical public package tarballs in two clean checkouts.';
+export const reproduciblePackAttestationExclusions = Object.freeze([
+  'Runtime-host integrity after publication or deployment.',
+  'Behavioral correctness of enrolled build tools beyond the separately reviewed TCB contract.',
+]);
 
 export function comparePackedPackageManifests({ first, second, source }) {
   const findings = [];
@@ -31,7 +37,9 @@ export function comparePackedPackageManifests({ first, second, source }) {
 
   const firstPackages = packageSubjects(first.packages, 'first', findings);
   const secondPackages = packageSubjects(second.packages, 'second', findings);
-  for (const name of [...new Set([...firstPackages.keys(), ...secondPackages.keys()])].sort()) {
+  for (const name of [...new Set([...firstPackages.keys(), ...secondPackages.keys()])].sort(
+    (left, right) => left.localeCompare(right, 'en'),
+  )) {
     const firstSubject = firstPackages.get(name);
     const secondSubject = secondPackages.get(name);
     if (!firstSubject) {
@@ -49,13 +57,9 @@ export function comparePackedPackageManifests({ first, second, source }) {
   return {
     attestation: {
       buildEnvironments: [first.buildEnvironment, second.buildEnvironment],
-      claim:
-        'Identical source and declared deterministic inputs produced byte-identical public package tarballs in two clean checkouts.',
+      claim: reproduciblePackAttestationClaim,
       deterministicInputs: first.deterministicInputs,
-      excludes: [
-        'Runtime-host integrity after publication or deployment.',
-        'Behavioral correctness of enrolled build tools beyond the separately reviewed TCB contract.',
-      ],
+      excludes: reproduciblePackAttestationExclusions,
       schema: reproduciblePackAttestationSchema,
       source,
       subjects,
