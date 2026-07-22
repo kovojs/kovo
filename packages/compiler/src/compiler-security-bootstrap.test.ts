@@ -11,6 +11,86 @@ import {
 } from './compiler-security-intrinsics.js';
 
 describe('compiler supported-runner security bootstrap', () => {
+  it('transitions an already imported verifier to one exact locked parser baseline', () => {
+    const parserUrl = new URL('../../verify/src/javascript-ast.ts', import.meta.url).href;
+    const translationUrl = new URL('../../verify/src/translation.ts', import.meta.url).href;
+    const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+    const source = `
+      const { parseJavaScriptModule } = await import(${JSON.stringify(parserUrl)});
+      const { lockCompilerSecurityRealm } = await import(${JSON.stringify(bootstrapUrl)});
+      lockCompilerSecurityRealm();
+      lockCompilerSecurityRealm();
+      const first = parseJavaScriptModule('import { safe } from "./safe.js";');
+      const second = parseJavaScriptModule('export const reviewed = true;');
+      if (
+        first.type !== 'Program' ||
+        first.body?.[0]?.type !== 'ImportDeclaration' ||
+        second.body?.[0]?.type !== 'ExportNamedDeclaration'
+      ) {
+        throw new Error('post-lock translation parser did not accept the reviewed modules');
+      }
+
+      const { translationClaimCompilerLockTransition } =
+        await import(${JSON.stringify(translationUrl)});
+      let secondClaim = '';
+      try {
+        translationClaimCompilerLockTransition(() => {});
+      } catch (error) {
+        secondClaim = String(error?.message ?? error);
+      }
+      if (!secondClaim.includes('already claimed')) {
+        throw new Error('a second parser-lock transition claimant was admitted: ' + secondClaim);
+      }
+      parseJavaScriptModule('export default "still-locked";');
+      process.stdout.write('import-lock-parse-ok');
+    `;
+    const result = runTypedChild(source);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('import-lock-parse-ok');
+  });
+
+  it('rejects parser mutation before the compiler-lock transition and stays failed closed', () => {
+    const parserUrl = new URL('../../verify/src/javascript-ast.ts', import.meta.url).href;
+    const acornUrl = new URL('../../verify/node_modules/acorn/dist/acorn.mjs', import.meta.url)
+      .href;
+    const bootstrapUrl = new URL('./security-bootstrap.ts', import.meta.url).href;
+    const source = `
+      const { parseJavaScriptModule } = await import(${JSON.stringify(parserUrl)});
+      const { Parser } = await import(${JSON.stringify(acornUrl)});
+      const original = Object.getOwnPropertyDescriptor(Parser.prototype, 'parse');
+      Object.defineProperty(Parser.prototype, 'parse', {
+        ...original,
+        value() { return { body: [], sourceType: 'module', type: 'Program' }; },
+      });
+      const { lockCompilerSecurityRealm } = await import(${JSON.stringify(bootstrapUrl)});
+      let lockRejection = '';
+      try {
+        lockCompilerSecurityRealm();
+      } catch (error) {
+        lockRejection = String(error?.message ?? error);
+      } finally {
+        Object.defineProperty(Parser.prototype, 'parse', original);
+      }
+      if (!lockRejection.includes('changed before compiler realm lockdown')) {
+        throw new Error('pre-transition parser mutation was admitted: ' + lockRejection);
+      }
+
+      let parseRejection = '';
+      try {
+        parseJavaScriptModule('export const mustNotParse = true;');
+      } catch (error) {
+        parseRejection = String(error?.message ?? error);
+      }
+      if (!parseRejection.includes('controls are unavailable')) {
+        throw new Error('failed transition did not close later parsing: ' + parseRejection);
+      }
+      process.stdout.write('pre-lock-mutation-rejected');
+    `;
+    const result = runTypedChild(source);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe('pre-lock-mutation-rejected');
+  });
+
   it('allows only its module-private record to authorize an idempotent global relock', () => {
     const inventoryUrl = new URL(
       '../../core/src/internal/request-safe-runtime-inventory.ts',
@@ -193,17 +273,7 @@ describe('compiler supported-runner security bootstrap', () => {
       const value = await Promise.resolve('promise-lockdown-ok');
       process.stdout.write(value);
     `;
-    const result = spawnSync(
-      process.execPath,
-      [
-        '--disable-warning=ExperimentalWarning',
-        '--experimental-transform-types',
-        '--input-type=module',
-        '--eval',
-        source,
-      ],
-      { encoding: 'utf8' },
-    );
+    const result = runTypedChild(source);
 
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe('promise-lockdown-ok');
@@ -354,17 +424,7 @@ describe('compiler supported-runner security bootstrap', () => {
       if (await response.text() !== 'locked') throw new Error('Response stopped working');
       process.stdout.write('reviewed-globals-locked');
     `;
-    const result = spawnSync(
-      process.execPath,
-      [
-        '--disable-warning=ExperimentalWarning',
-        '--experimental-transform-types',
-        '--input-type=module',
-        '--eval',
-        source,
-      ],
-      { encoding: 'utf8' },
-    );
+    const result = runTypedChild(source);
 
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe('reviewed-globals-locked');
@@ -436,11 +496,26 @@ describe('compiler supported-runner security bootstrap', () => {
 });
 
 function runTypedChild(source: string) {
+  const sourceLoader = `
+    import { existsSync } from 'node:fs';
+    import { registerHooks } from 'node:module';
+    registerHooks({
+      resolve(specifier, context, nextResolve) {
+        if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+          const tsUrl = new URL(specifier.replace(/\\.js$/u, '.ts'), context.parentURL);
+          if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+        }
+        return nextResolve(specifier, context);
+      },
+    });
+  `;
   return spawnSync(
     process.execPath,
     [
       '--disable-warning=ExperimentalWarning',
       '--experimental-transform-types',
+      '--import',
+      `data:text/javascript,${encodeURIComponent(sourceLoader)}`,
       '--input-type=module',
       '--eval',
       source,

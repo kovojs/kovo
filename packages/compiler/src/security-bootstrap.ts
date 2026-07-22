@@ -5,7 +5,9 @@
  * Keep this entry source-loader-safe: Vite+ loads workspace configuration with Node's native
  * TypeScript loader while constructing a task graph, before ordinary Vite resolution can translate
  * framework `.js` source specifiers. This entry therefore uses a source-real `.ts` edge plus only
- * Node builtins and the compiler's declared TypeScript runtime; it never evaluates authored code.
+ * declared package entrypoints, Node builtins, and the compiler's TypeScript runtime; it never
+ * evaluates authored code. Supported source runners install Kovo's `.js`-to-`.ts` package hook
+ * before reaching this entry; packed runners resolve every package entry to emitted `.mjs`.
  */
 import { Buffer as BuiltinBuffer } from 'node:buffer';
 import builtinCrypto from 'node:crypto';
@@ -17,6 +19,7 @@ import builtinUrl from 'node:url';
 import typescript from 'typescript';
 
 import { lockRequestSafeRuntimeRealm } from '@kovojs/core/internal/classifier-verdict';
+import { translationClaimCompilerLockTransition } from '@kovojs/verify/internal/translation';
 
 import { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.ts';
 
@@ -57,6 +60,12 @@ const nativeReflectOwnKeys = NativeReflect.ownKeys;
 const nativeSeal = NativeObject.seal;
 
 let compilerRealmLocked = false;
+// Claimed during trusted module initialization, before the exported lock can be reached. The
+// verifier retains the one-shot state and accepts a locked parser baseline only around this exact
+// synchronous framework callback (SPEC §5.2/§6.6 rule 6).
+const transitionTranslationParserBaseline = translationClaimCompilerLockTransition(
+  lockCompilerSecurityRealmControls,
+);
 
 /**
  * @internal Irreversibly lock mutable ECMAScript controls before authored config/plugin/app code.
@@ -70,6 +79,11 @@ export function lockCompilerSecurityRealm(): void {
   assertCompilerSecurityIntrinsics();
   if (compilerRealmLocked) return;
 
+  transitionTranslationParserBaseline();
+  compilerRealmLocked = true;
+}
+
+function lockCompilerSecurityRealmControls(): void {
   // Vite decorates each package-cache Map instance with an own `set` method. Install the exact
   // audited Map guard before the shared immutable lock so instance decoration remains possible
   // without leaving Map.prototype mutable. No authored module has evaluated at this boundary.
@@ -196,7 +210,6 @@ export function lockCompilerSecurityRealm(): void {
   // broader than the compiler's own implementation intrinsics. Pin that shared inventory too so
   // app/config/package code cannot replace a classifier-trusted callable or constructor.
   lockRequestSafeRuntimeRealm();
-  compilerRealmLocked = true;
 }
 
 function freezeTarget(value: object): void {

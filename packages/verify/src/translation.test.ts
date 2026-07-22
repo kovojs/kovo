@@ -494,6 +494,105 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     expect(second.keywords).toBe(warm.keywords);
   });
 
+  it('makes the compiler-lock parser transition claim and use one-shot without harming its baseline', () => {
+    const moduleUrl = new URL('./translation-intrinsics.ts', import.meta.url).href;
+    const result = spawnIsolatedParserControlProbe(`
+      const {
+        translationClaimCompilerLockTransition,
+        translationParseJavaScriptSource,
+      } = await import(${JSON.stringify(moduleUrl)});
+      const transition = translationClaimCompilerLockTransition(() => {});
+      let secondClaim = '';
+      try {
+        translationClaimCompilerLockTransition(() => {});
+      } catch (error) {
+        secondClaim = String(error?.message ?? error);
+      }
+      transition();
+      let secondUse = '';
+      try {
+        transition();
+      } catch (error) {
+        secondUse = String(error?.message ?? error);
+      }
+      const program = translationParseJavaScriptSource('export const stillSafe = true;');
+      if (
+        !secondClaim.includes('already claimed') ||
+        !secondUse.includes('one-shot') ||
+        program?.type !== 'Program' ||
+        program.body?.[0]?.type !== 'ExportNamedDeclaration'
+      ) {
+        throw new Error(JSON.stringify({ secondClaim, secondUse, type: program?.type }));
+      }
+    `);
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it('keeps thrown and asynchronous compiler-lock transitions permanently failed closed', () => {
+    const moduleUrl = new URL('./translation-intrinsics.ts', import.meta.url).href;
+    const thrown = spawnIsolatedParserControlProbe(`
+      const {
+        translationClaimCompilerLockTransition,
+        translationParseJavaScriptSource,
+      } = await import(${JSON.stringify(moduleUrl)});
+      const transition = translationClaimCompilerLockTransition(() => {
+        throw new Error('lockdown-sentinel');
+      });
+      let transitionRejection = '';
+      try {
+        transition();
+      } catch (error) {
+        transitionRejection = String(error?.message ?? error);
+      }
+      let parseRejection = '';
+      try {
+        translationParseJavaScriptSource('export const mustNotParse = true;');
+      } catch (error) {
+        parseRejection = String(error?.message ?? error);
+      }
+      if (
+        !transitionRejection.includes('lockdown-sentinel') ||
+        !parseRejection.includes('controls are unavailable')
+      ) {
+        throw new Error(JSON.stringify({ parseRejection, transitionRejection }));
+      }
+    `);
+    expect(thrown.status, thrown.stderr).toBe(0);
+
+    const asynchronous = spawnIsolatedParserControlProbe(`
+      const {
+        translationClaimCompilerLockTransition,
+        translationParseJavaScriptSource,
+      } = await import(${JSON.stringify(moduleUrl)});
+      let callbackSettled = false;
+      const transition = translationClaimCompilerLockTransition(async () => {
+        await Promise.resolve();
+        callbackSettled = true;
+      });
+      let transitionRejection = '';
+      try {
+        transition();
+      } catch (error) {
+        transitionRejection = String(error?.message ?? error);
+      }
+      await Promise.resolve();
+      let parseRejection = '';
+      try {
+        translationParseJavaScriptSource('export const mustNotParse = true;');
+      } catch (error) {
+        parseRejection = String(error?.message ?? error);
+      }
+      if (
+        !callbackSettled ||
+        !transitionRejection.includes('must be synchronous') ||
+        !parseRejection.includes('controls are unavailable')
+      ) {
+        throw new Error(JSON.stringify({ callbackSettled, parseRejection, transitionRejection }));
+      }
+    `);
+    expect(asynchronous.status, asynchronous.stderr).toBe(0);
+  });
+
   it('fails closed on non-restorable parser drift and continues cleanup after a restore failure', () => {
     const moduleUrl = new URL('./translation-intrinsics.ts', import.meta.url).href;
     const entryDrift = spawnIsolatedParserControlProbe(`

@@ -52,6 +52,8 @@ import {
   translationTypeError,
 } from './translation-intrinsics.js';
 
+export { translationClaimCompilerLockTransition } from './translation-intrinsics.js';
+
 /** @internal One compiler-emitted artifact checked by the Plan 3 §2.2 translation validator. */
 export interface KovoEmittedTranslationArtifact {
   fileName: string;

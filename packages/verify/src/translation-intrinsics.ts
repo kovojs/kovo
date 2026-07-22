@@ -57,6 +57,7 @@ const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetOwnPropertyDescriptors = NativeObject.getOwnPropertyDescriptors;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
@@ -451,7 +452,70 @@ const parserExactRoots: readonly object[] = [
 ];
 
 const translationParserSurfaceDefinitions = parserSurfaceDefinitions();
-const translationParserBootState = captureParserState(translationParserSurfaceDefinitions);
+let translationParserBaseline = captureParserState(translationParserSurfaceDefinitions);
+let translationParserBaselinePhase: 'failed' | 'fresh' | 'locked' | 'transitioning' = 'fresh';
+let translationCompilerLockTransitionClaimed = false;
+
+/**
+ * Claim the verifier's sole compiler-lock transition capability (SPEC §5.2/§6.6 rule 6).
+ *
+ * The compiler security-bootstrap module claims this closure during its own trusted module
+ * initialization and retains it privately. The closure first requires the original parser census,
+ * runs the synchronous irreversible realm lock, and only then captures the resulting descriptor
+ * census. Because no callback or promise boundary exists between those steps, the accepted changes
+ * are exactly those made by that framework-owned lock invocation. A premature claimant can only
+ * consume the one-shot capability and make the supported compiler bootstrap fail closed.
+ *
+ * Standalone verification never claims or invokes this capability, so its independently spawned
+ * process continues to use the fresh-process parser baseline required by SPEC §6.6.
+ *
+ * @internal
+ */
+export function translationClaimCompilerLockTransition(lockdown: () => void): () => void {
+  if (translationCompilerLockTransitionClaimed) {
+    throw new NativeTypeError('Translation parser compiler-lock transition was already claimed.');
+  }
+  if (typeof lockdown !== 'function') {
+    throw new NativeTypeError('Translation parser compiler lockdown must be callable.');
+  }
+  translationCompilerLockTransitionClaimed = true;
+
+  let used = false;
+  const transition = (): void => {
+    if (used) {
+      throw new NativeTypeError('Translation parser compiler-lock transition is one-shot.');
+    }
+    used = true;
+    if (translationParserBaselinePhase !== 'fresh') {
+      translationParserBaselinePhase = 'failed';
+      throw new NativeTypeError('Translation parser compiler-lock transition is unavailable.');
+    }
+    if (!parserStateMatches(translationParserBaseline)) {
+      translationParserBaselinePhase = 'failed';
+      throw new NativeTypeError(
+        'Translation parser controls changed before compiler realm lockdown.',
+      );
+    }
+
+    translationParserBaselinePhase = 'transitioning';
+    try {
+      const result = lockdown();
+      if (result !== undefined) {
+        throw new NativeTypeError('Translation parser compiler lockdown must be synchronous.');
+      }
+      const lockedBaseline = captureParserState(translationParserSurfaceDefinitions);
+      if (!parserStateMatches(lockedBaseline)) {
+        throw new NativeTypeError('Translation parser locked baseline could not be captured.');
+      }
+      translationParserBaseline = lockedBaseline;
+      translationParserBaselinePhase = 'locked';
+    } catch (error) {
+      translationParserBaselinePhase = 'failed';
+      throw error;
+    }
+  };
+  return apply<() => void>(nativeObjectFreeze, NativeObject, [transition]);
+}
 
 /**
  * Run the pinned parser without letting post-bootstrap plugin mutations alter its AST.
@@ -459,14 +523,21 @@ const translationParserBootState = captureParserState(translationParserSurfaceDe
  * Acorn performs inherited enumeration while normalizing options, so restoring a named method is
  * insufficient: an arbitrary enumerable getter on Object.prototype can execute and re-poison a
  * method after installation. Before parsing, this scope therefore reconciles every reachable
- * object to its exact boot descriptor/prototype census. It snapshots and restores that selected
- * state afterward, continuing best-effort cleanup after any individual restoration error.
- * A non-restorable entry drift closes without invoking the parser.
+ * object to its exact authorized descriptor/prototype census: fresh-process state for standalone
+ * verification, or the one compiler-lock baseline established above. It snapshots and restores
+ * that selected state afterward, continuing best-effort cleanup after any individual restoration
+ * error. A non-restorable entry drift closes without invoking the parser.
  */
 export function translationWithParserControls<Value>(parse: () => Value): Value {
+  if (
+    translationParserBaselinePhase === 'failed' ||
+    translationParserBaselinePhase === 'transitioning'
+  ) {
+    throw new NativeTypeError('Translation parser controls are unavailable.');
+  }
   const callerState = captureParserState(translationParserSurfaceDefinitions);
   try {
-    if (!reconcileParserState(translationParserBootState)) {
+    if (!reconcileParserState(translationParserBaseline)) {
       throw new NativeTypeError('Translation parser controls could not be installed.');
     }
     return parse();
@@ -602,6 +673,13 @@ function reconcileParserState(
     if (!reconcileParserSurface(targets[index]!)) complete = false;
   }
   return complete;
+}
+
+function parserStateMatches(targets: readonly TranslationParserSurfaceState[]): boolean {
+  for (let index = 0; index < translationArrayLength(targets); index += 1) {
+    if (!parserSurfaceMatches(targets[index]!)) return false;
+  }
+  return true;
 }
 
 function reconcileParserSurface(target: TranslationParserSurfaceState): boolean {

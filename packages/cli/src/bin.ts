@@ -57,7 +57,9 @@ const commandSecurityDisposition = Object.freeze({
 const { mainAsync } = await import('./index.js');
 
 // SPEC §5.2 / §6.6 rule 6: supported commands that evaluate authored modules lock the shared
-// compiler realm at the last trusted boundary, before invoking the dispatcher. Direct imports of
+// compiler realm at the last trusted boundary, before invoking the dispatcher. The lock also
+// completes the verifier-owned one-shot transition from its fresh import-time parser census to the
+// exact post-lock census; no authored module is evaluated between those states. Direct imports of
 // `@kovojs/cli/internal` are tooling APIs, not the supported security runner.
 if (
   process.argv[2] === 'build' ||
