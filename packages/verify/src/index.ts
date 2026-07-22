@@ -650,6 +650,11 @@ function validatePolicyArtifacts(
     );
   }
   validateSortedUnique(artifacts, (entry) => entry.path, 'policy.artifacts', findings);
+  validatePortableArtifactPaths(
+    artifacts.map((entry) => entry.path),
+    'policy.artifacts',
+    findings,
+  );
   return artifacts;
 }
 
@@ -825,6 +830,7 @@ function validateArtifacts(
     artifacts.push(item);
   }
   validateSortedUnique(artifacts, (entry) => entry, 'artifacts', findings);
+  validatePortableArtifactPaths(artifacts, 'artifacts', findings);
   return artifacts;
 }
 
@@ -1202,6 +1208,7 @@ function directoryArtifactSource(
   const census = {
     entries: 0,
     identityByPath: new Map<string, string>(),
+    pathByPortableIdentity: new Map<string, string>(),
     totalArtifactBytes: 0,
   };
   try {
@@ -1585,6 +1592,7 @@ function collectPackageFiles(
   census: {
     entries: number;
     identityByPath: Map<string, string>;
+    pathByPortableIdentity: Map<string, string>;
     totalArtifactBytes: number;
   },
   depth: number,
@@ -1597,7 +1605,7 @@ function collectPackageFiles(
   if (!directoryStat.isDirectory()) {
     throw new TypeError(`artifact path is not a directory: ${relativeDirectory}`);
   }
-  recordCensusIdentity(census.identityByPath, relativeDirectory, directoryStat);
+  recordCensusIdentity(census, relativeDirectory, directoryStat);
   const entries = readBoundedDirectoryEntries(
     directory,
     Math.max(0, MAX_PACKAGE_ENTRIES - census.entries),
@@ -1624,7 +1632,7 @@ function collectPackageFiles(
     if (!stat.isFile()) {
       throw new TypeError(`artifact package contains an unsupported entry: ${relativePath}`);
     }
-    recordCensusIdentity(census.identityByPath, relativePath, stat);
+    recordCensusIdentity(census, relativePath, stat);
     ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
     if (relativePath === `${packageName}/package.json`) {
       continue;
@@ -1699,14 +1707,25 @@ function portableFilesystemName(value: string): string {
 }
 
 function recordCensusIdentity(
-  identityByPath: Map<string, string>,
+  census: {
+    identityByPath: Map<string, string>;
+    pathByPortableIdentity: Map<string, string>;
+  },
   relativePath: string,
   stat: BigIntStats,
 ): void {
-  if (identityByPath.has(relativePath)) {
+  if (census.identityByPath.has(relativePath)) {
     throw new TypeError(`artifact census contains duplicate path ${relativePath}`);
   }
-  identityByPath.set(relativePath, filesystemIdentity(relativePath, stat));
+  const portableIdentity = portableArtifactPathIdentity(relativePath);
+  const previousPath = census.pathByPortableIdentity.get(portableIdentity);
+  if (previousPath !== undefined && previousPath !== relativePath) {
+    throw new TypeError(
+      `artifact census paths ${previousPath} and ${relativePath} alias on a supported filesystem`,
+    );
+  }
+  census.identityByPath.set(relativePath, filesystemIdentity(relativePath, stat));
+  census.pathByPortableIdentity.set(portableIdentity, relativePath);
 }
 
 function assertCensusIdentity(
@@ -1833,6 +1852,7 @@ function snapshotArtifactPaths(
         finding('coverage', 'artifact-list-duplicate', 'artifact source returned duplicate paths'),
       );
     }
+    validatePortableArtifactPaths(output, 'artifact source', findings, 'coverage');
     return output.sort(compareStrings);
   } catch {
     findings.push(finding('coverage', 'artifact-list', 'artifact source list could not be read'));
@@ -2485,6 +2505,7 @@ function isCanonicalArtifactPath(value: unknown): value is string {
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(parts[1] ?? '') &&
     parts[2] === 'dist' &&
     parts.slice(3).every((segment) => segment !== '' && segment !== '.' && segment !== '..') &&
+    parts.slice(3).every(isPortableArtifactSegment) &&
     parts.at(-1) !== '.mjs' &&
     value.endsWith('.mjs') &&
     !value.includes('\\') &&
@@ -2495,6 +2516,44 @@ function isCanonicalArtifactPath(value: unknown): value is string {
     path.posix.normalize(value) === value &&
     !value.split('/').includes('..')
   );
+}
+
+function isPortableArtifactSegment(value: string): boolean {
+  const identity = portableFilesystemName(value);
+  if (identity.replace(/[ .]+$/u, '') !== identity) return false;
+  const stem = identity.split('.')[0] ?? identity;
+  return !/^(?:aux|con|nul|prn|com[1-9]|lpt[1-9])$/u.test(stem);
+}
+
+function portableArtifactPathIdentity(value: string): string {
+  return value
+    .split('/')
+    .map((segment) => portableFilesystemName(segment).replace(/[ .]+$/u, ''))
+    .join('/');
+}
+
+function validatePortableArtifactPaths(
+  paths: readonly string[],
+  label: string,
+  findings: KovoCertificateFinding[],
+  obligation: KovoCertificateFinding['obligation'] = 'schema',
+): void {
+  const pathByIdentity = new Map<string, string>();
+  for (const artifactPath of paths) {
+    const identity = portableArtifactPathIdentity(artifactPath);
+    const previousPath = pathByIdentity.get(identity);
+    if (previousPath !== undefined && previousPath !== artifactPath) {
+      findings.push(
+        finding(
+          obligation,
+          'artifact-path-collision',
+          `${label} paths ${previousPath} and ${artifactPath} alias on a supported filesystem`,
+        ),
+      );
+      return;
+    }
+    pathByIdentity.set(identity, artifactPath);
+  }
 }
 
 function packageNameFromArtifact(value: string): string {

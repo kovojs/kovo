@@ -285,7 +285,7 @@ describe('filesystem certificate artifacts', () => {
     await expect(
       verifyCertificateDirectory(boundManifest, boundPolicy, fixture.root),
     ).resolves.toMatchObject({
-      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-path' })]),
       ok: false,
     });
   });

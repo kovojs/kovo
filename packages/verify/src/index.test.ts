@@ -736,6 +736,40 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     }
   });
 
+  it('rejects portable artifact aliases before they can overwrite a reviewed root', async () => {
+    const collidingModule = '@kovojs/server/dist/ROOT.mjs';
+    const artifacts = artifactSource({
+      [collidingModule]: "import 'node:child_process';",
+      [rootModule]: 'export const safe = true;',
+    });
+    const certificate = certificateFor(artifacts, {
+      cap: { [collidingModule]: ['process'], [rootModule]: [] },
+      roots: [{ module: rootModule, rootKind: 'application' }],
+    });
+
+    await expect(verifyBound(certificate, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'artifact-path-collision', obligation: 'schema' }),
+      ]),
+      ok: false,
+    });
+
+    for (const unsafePath of [
+      '@kovojs/server/dist/scope./root.mjs',
+      '@kovojs/server/dist/CON.mjs',
+    ]) {
+      const unsafeArtifacts = artifactSource({ [unsafePath]: 'export {};' });
+      await expect(
+        verifyBound(certificateFor(unsafeArtifacts), unsafeArtifacts),
+      ).resolves.toMatchObject({
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'artifact-path', obligation: 'schema' }),
+        ]),
+        ok: false,
+      });
+    }
+  });
+
   it('bounds recursive certificate and policy JSON before canonicalization', async () => {
     const artifacts = artifactSource({ [rootModule]: 'export {};' });
     const valid = certificateFor(artifacts);
