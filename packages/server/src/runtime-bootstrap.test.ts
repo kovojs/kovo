@@ -61,6 +61,23 @@ describe('custom runtime bootstrap entries', () => {
       0,
     );
     const betterAuthDistRoot = fileURLToPath(new URL('../../better-auth/dist', import.meta.url));
+    const betterAuthRootSource = readFileSync(join(betterAuthDistRoot, 'index.mjs'), 'utf8');
+    const betterAuthInternalSource = readFileSync(join(betterAuthDistRoot, 'internal.mjs'), 'utf8');
+    const betterAuthRuntimeLockSource = readFileSync(
+      join(betterAuthDistRoot, 'internal/runtime-lock.mjs'),
+      'utf8',
+    );
+    // SPEC §6.6 rule 6: the refusal is its own entry and is the first dependency of both
+    // executable Better Auth surfaces. It must not share a chunk with any environment reader.
+    expect(betterAuthRootSource).toMatch(/^import\b[^\n]*from "\.\/internal\/runtime-lock\.mjs";/u);
+    expect(betterAuthInternalSource).toMatch(/^import "\.\/internal\/runtime-lock\.mjs";/u);
+    expect(betterAuthRuntimeLockSource.match(/^import\b/gmu) ?? []).toHaveLength(1);
+    expect(betterAuthRuntimeLockSource).toMatch(
+      /^import \{ assertRequestSafeRuntimeRealmLocked \} from "@kovojs\/core\/internal\/classifier-verdict";/u,
+    );
+    expect(betterAuthRuntimeLockSource).not.toMatch(
+      /runtime-environment|BETTER_AUTH_SECRET|process\.env/u,
+    );
 
     const distRoot = join(serverRoot, 'dist');
     const omission = runPackedServerChild(distRoot, false);
@@ -829,11 +846,24 @@ registerHooks({
 });
 const secret = ${JSON.stringify(secret)};
 const captures = [];
+const nativeReflectApply = Reflect.apply;
+const nativeStringIncludes = String.prototype.includes;
 ${poisonInstall}
 let preloadRefusal = '';
 try { await import(${JSON.stringify(preloadEntry)}); }
 catch (error) { preloadRefusal = String(error?.message ?? error); }
 ${poisonRestore}
+let secretCaptured = false;
+for (let index = 0; index < captures.length; index += 1) {
+  const value = captures[index];
+  if (
+    typeof value === 'string' &&
+    nativeReflectApply(nativeStringIncludes, value, [secret]) === true
+  ) {
+    secretCaptured = true;
+    break;
+  }
+}
 let bootstrapRefusal = '';
 try { await import(${JSON.stringify(bootstrapEntry)}); }
 catch (error) { bootstrapRefusal = String(error?.message ?? error); }
@@ -851,7 +881,7 @@ process.stdout.write(JSON.stringify({
   csrfCreated,
   lateRefusal,
   preloadRefusal,
-  secretCaptured: captures.some((value) => value.includes(secret)),
+  secretCaptured,
 }));
 `;
   return spawnSync(
