@@ -1,9 +1,6 @@
 import ts from 'typescript';
 
-import type {
-  ScannedBindingCandidate,
-  ScannedImportBindingFact,
-} from '../security/capability-closure-model.js';
+import type { ScannedBindingCandidate, ScannedImportBindingFact } from '../security/capability-closure-model.js';
 
 export interface ScannedCallProvenance { readonly callee: ScannedUseProvenance; readonly firstArgument?: ScannedUseProvenance }
 export interface ScannedUseProvenance { readonly candidates: readonly ScannedBindingCandidate[]; readonly uncertain: boolean }
@@ -12,19 +9,14 @@ export interface ScannedLexicalProvenance { readonly calls: ReadonlyMap<number, 
 interface Binding { readonly id: string; mutable: boolean; readonly name: string; readonly owner: string }
 interface Scope { readonly bindings: Map<string, Binding>; readonly id: string; readonly owner: string; readonly parent?: Scope }
 
-interface Value extends ScannedUseProvenance {
-  readonly captured: readonly string[];
-}
+interface Value extends ScannedUseProvenance { readonly captured: readonly string[] }
 
 type Environment = Map<string, Value>;
 
 interface AnalysisState { readonly calls: Map<number, { callee: Value; firstArgument?: Value }>; readonly history: Map<string, Value>; readonly sourceFile: ts.SourceFile }
 
 /** Syntax-only lexical + flow abstraction for exact per-use capability provenance (SPEC §6.6). */
-export function scanLexicalProvenance(
-  sourceFile: ts.SourceFile,
-  imports: readonly ScannedImportBindingFact[],
-): ScannedLexicalProvenance {
+export function scanLexicalProvenance(sourceFile: ts.SourceFile, imports: readonly ScannedImportBindingFact[]): ScannedLexicalProvenance {
   const root = createScope(sourceFile);
   const state: AnalysisState = { calls: new Map(), history: new Map(), sourceFile };
   let environment: Environment = new Map();
@@ -181,7 +173,7 @@ function runStatement(node: ts.Statement, env: Environment, scope: Scope, state:
   }
   if (ts.isWhileStatement(node) || ts.isDoStatement(node)) {
     const base = runExpression(node.expression, env, scope, state);
-    return joinEnvironments(base, runStatement(node.statement, new Map(base), scope, state));
+    return loopEnvironment(base, (current) => runStatement(node.statement, current, scope, state));
   }
   if (ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node)) {
     const loop = createScope(node, scope);
@@ -192,14 +184,16 @@ function runStatement(node: ts.Statement, env: Environment, scope: Scope, state:
         : runExpression(node.initializer, base, loop, state);
     }
     if (ts.isForStatement(node) && node.condition) base = runExpression(node.condition, base, loop, state);
-    let body = runStatement(node.statement, new Map(base), loop, state);
-    if (ts.isForStatement(node) && node.incrementor) body = runExpression(node.incrementor, body, loop, state);
-    return joinEnvironments(base, body);
+    return loopEnvironment(base, (current) => {
+      let body = runStatement(node.statement, current, loop, state);
+      if (ts.isForStatement(node) && node.incrementor) body = runExpression(node.incrementor, body, loop, state);
+      return body;
+    });
   }
   if (ts.isTryStatement(node)) {
     const attempted = runStatement(node.tryBlock, new Map(env), scope, state);
     const caught = node.catchClause
-      ? runStatements(node.catchClause.block.statements, new Map(env), createScope(node.catchClause, scope), state)
+      ? runStatements(node.catchClause.block.statements, joinEnvironments(env, attempted), createScope(node.catchClause, scope), state)
       : env;
     const joined = joinEnvironments(attempted, caught);
     return node.finallyBlock ? runStatement(node.finallyBlock, joined, scope, state) : joined;
@@ -484,6 +478,14 @@ function joinEnvironments(left: Environment, right: Environment): Environment {
   const result = new Map(left);
   for (const [key, value] of right) result.set(key, result.has(key) ? joinValues(result.get(key)!, value) : value);
   return result;
+}
+
+function loopEnvironment(base: Environment, transfer: (current: Environment) => Environment): Environment {
+  for (let result = base;;) {
+    const next = joinEnvironments(result, transfer(new Map(result)));
+    if (JSON.stringify([...next]) === JSON.stringify([...result])) return next;
+    result = next;
+  }
 }
 
 function finalizeValue(value: Value, history: ReadonlyMap<string, Value>): ScannedUseProvenance {

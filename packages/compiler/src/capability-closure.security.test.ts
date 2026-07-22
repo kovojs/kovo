@@ -1149,6 +1149,48 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ]);
   });
 
+  it('joins exceptional catch entry and reaches a finite loop provenance fixpoint', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let caughtFactory = localFactory;
+          try {
+            caughtFactory = route;
+            throw new Error('transfer');
+          } catch {
+            caughtFactory('/caught-transfer', { render() { return null; } });
+          }
+
+          let first = localFactory;
+          let second = localFactory;
+          while (globalThis.choice) {
+            first = second;
+            second = route;
+          }
+          first('/loop-fixpoint', { render() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/caught-transfer', '/loop-fixpoint']);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/caught-transfer', '/loop-fixpoint']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {
