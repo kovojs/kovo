@@ -890,11 +890,13 @@ records an explicit normalization, and each round records its SHA, date, report 
 - [ ] Freeze the intended code-subject commit and rerun the certificate/pack identity, provenance and
       Δ decision procedures, dependency-source closure, Metric E baseline, answerability/advisory,
       hermetic proof, real-Postgres, API, and release-analysis gates; then generate retained evidence
-      in one evidence-only descendant commit. Replace stale checkpoint counts with one compact block
-      recording `codeSubjectSha`, the evidence/release SHA, their ancestry and evidence-only diff, and
-      the terminal results at the applicable commit.
-  - Final evidence placeholder: both SHAs, the evidence-only diff, and terminal results are
-    intentionally absent while implementation is still moving.
+      in one evidence-only descendant commit under Plan 1's canonical identity protocol. Replace
+      stale checkpoint counts with one compact block recording `codeSubjectSha`, the externally
+      observed Git/CI evidence/release SHA, their ancestry and evidence-only diff, and the terminal
+      results at the applicable commit. Do not create a self-stamping or ledger-only descendant.
+  - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the
+    evidence-only diff, and terminal results are intentionally absent while implementation is still
+    moving.
 
 ## Exit
 

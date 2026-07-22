@@ -434,15 +434,17 @@ Measurements are versioned and reproducible:
 ## Phase 6 — Scoped v1 security signoff
 
 - [ ] Freeze the intended code-subject commit, then generate the retained evidence in one
-      evidence-only descendant commit. Record both `codeSubjectSha` and the evidence/release SHA,
-      prove the latter descends from the former with only reviewed evidence drift, and perform one
-      exact-tip reconciliation of this ledger: refresh the framework-export posture, convergence row,
-      C9/C13/mutation denominators, survivor register, and an independent architecture/security
-      re-review that explicitly accepts or rejects the Phase 3C deletions after the historical REJECT
-      above.
-  - Final evidence placeholder: both SHAs, the evidence-only diff, review artifact, and proving
-    commands are intentionally absent until implementation stops moving; no earlier checkpoint is
-    final-tip evidence.
+      evidence-only descendant commit. Generated evidence records only `codeSubjectSha`; it must not
+      attempt to embed the descendant commit's own SHA. Git/CI identifies that descendant as the
+      evidence/release SHA and the release attestation binds its exact archive bytes. Prove the
+      descendant's ancestry and evidence-only diff, then perform one exact-tip reconciliation of this
+      ledger: refresh the framework-export posture, convergence row, C9/C13/mutation denominators,
+      survivor register, and an independent architecture/security re-review that explicitly accepts
+      or rejects the Phase 3C deletions after the historical REJECT above.
+  - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the
+    evidence-only diff, review artifact, and proving commands are intentionally absent until
+    implementation stops moving; no earlier checkpoint is final-tip evidence. This protocol uses no
+    self-referential or ledger-only SHA-stamping commit.
 - [x] The threat matrix has no OPEN cell: each cell has a control+test, audited escape, or
       specifically owned and signed-off out-of-scope disposition.
   - Evidence: `pnpm run check:framework-export-posture` closes 12 packages / 1,839 subpaths / 2,344

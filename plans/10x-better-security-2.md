@@ -127,11 +127,14 @@ or served artifact.
     37 evidence files / 108 witnesses / six mandatory executions.
 - [ ] At the frozen intended code-subject commit, rerun the complete Plan-2 premise audit and every
       digest/manifest-backed forcing gate, then generate the retained evidence in one evidence-only
-      descendant commit. Replace stale checkpoint counts instead of appending a transcript; record
-      both `codeSubjectSha` and the evidence/release SHA, prove their ancestry and evidence-only diff,
-      and record terminal command results at the applicable commit.
-  - Final evidence placeholder: both SHAs, the evidence-only diff, and commands are intentionally
-    absent while implementation is still moving; `b18aae90f` must not be presented as final-tip proof.
+      descendant commit under Plan 1's canonical identity protocol. Replace stale checkpoint counts
+      instead of appending a transcript; generated artifacts record `codeSubjectSha`, while Git/CI
+      supplies the descendant evidence/release SHA externally. Prove their ancestry and evidence-only
+      diff, and record terminal command results at the applicable commit without a self-stamping
+      follow-up commit.
+  - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the
+    evidence-only diff, and commands are intentionally absent while implementation is still moving;
+    `b18aae90f` must not be presented as final-tip proof.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
       storage adapter; record attacker prerequisites, severity, threat-matrix cell, and exact red test.
   - Evidence: red commit `b9c5a4daf` captures same-app-key cross-owner overwrite/read; the focused
