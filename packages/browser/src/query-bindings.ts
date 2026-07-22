@@ -806,7 +806,7 @@ function snapshotStateBindingTargets(
         'Browser state derive binding snapshot',
       );
     } else if (
-      elementBelongsToQueryKey(element, options.queryKey) &&
+      elementBelongsToQueryIdentity(element, options.queryIdentity) &&
       securityStringStartsWith(refValue, bindingPrefix)
     ) {
       securityArrayAppend(
@@ -828,7 +828,7 @@ function snapshotStateBindingTargets(
   for (let elementIndex = 0; elementIndex < attributeElements.length; elementIndex += 1) {
     const element = attributeElements[elementIndex];
     if (!element || !elementBelongsToScope(element, root)) continue;
-    const belongsToQueryKey = elementBelongsToQueryKey(element, options.queryKey);
+    const belongsToQueryIdentity = elementBelongsToQueryIdentity(element, options.queryIdentity);
     const attributes = bindingAttributes(element);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
@@ -841,7 +841,10 @@ function snapshotStateBindingTargets(
           { element, kind: 'attribute', name, ref, refValue: attribute.value },
           'Browser state derive attribute snapshot',
         );
-      } else if (belongsToQueryKey && securityStringStartsWith(attribute.value, bindingPrefix)) {
+      } else if (
+        belongsToQueryIdentity &&
+        securityStringStartsWith(attribute.value, bindingPrefix)
+      ) {
         securityArrayAppend(
           directOperations,
           {
@@ -868,7 +871,10 @@ function snapshotStateBindingTargets(
           { element, kind: 'property', name, ref, refValue: attribute.value },
           'Browser state derive property snapshot',
         );
-      } else if (belongsToQueryKey && securityStringStartsWith(attribute.value, bindingPrefix)) {
+      } else if (
+        belongsToQueryIdentity &&
+        securityStringStartsWith(attribute.value, bindingPrefix)
+      ) {
         securityArrayAppend(
           directOperations,
           {
