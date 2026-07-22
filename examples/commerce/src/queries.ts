@@ -66,19 +66,35 @@ export const productGridQuery = query({
     const db = requireCommerceQueryDb(context);
     const { after, limit } = (input ?? {}) as ProductGridInput;
     const pageSize = limit ?? 2;
-    const items = await db
-      .select({
-        id: products.id,
-        name: products.name,
-        category: products.category,
-        emoji: products.emoji,
-        stock: products.stock,
-        unitPrice: products.unitPrice,
-      })
-      .from(products)
-      .where(after ? gt(products.id, after) : undefined)
-      .orderBy(products.id)
-      .limit(pageSize);
+    // SPEC §6.6: keep the optional predicate as two explicit finite query shapes. The SQL
+    // expression remains the direct argument of `where(...)`, so the build can prove that the
+    // pristine Drizzle helper never escapes into an opaque carrier.
+    const items = after
+      ? await db
+          .select({
+            id: products.id,
+            name: products.name,
+            category: products.category,
+            emoji: products.emoji,
+            stock: products.stock,
+            unitPrice: products.unitPrice,
+          })
+          .from(products)
+          .where(gt(products.id, after))
+          .orderBy(products.id)
+          .limit(pageSize)
+      : await db
+          .select({
+            id: products.id,
+            name: products.name,
+            category: products.category,
+            emoji: products.emoji,
+            stock: products.stock,
+            unitPrice: products.unitPrice,
+          })
+          .from(products)
+          .orderBy(products.id)
+          .limit(pageSize);
     const last = items.at(-1);
     const more = last
       ? await db.select({ id: products.id }).from(products).where(gt(products.id, last.id)).limit(1)

@@ -12983,6 +12983,90 @@ export const report = query('report', {
     expect(dynamicRuntimeImport.length).toBeGreaterThan(0);
   });
 
+  // @kovo-security-certifies C13 drizzle-declarative-runtime-import-precision
+  it('keeps exact aggregate and PGlite facade imports from invalidating declarative tables', () => {
+    const safe = sinksFor(`
+      import { sum } from 'drizzle-orm';
+      import { pgTable, text } from 'drizzle-orm/pg-core';
+      import { drizzle } from 'drizzle-orm/pglite';
+      import { query } from '@kovojs/server';
+      void drizzle;
+      const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+      export const total = query({ load(_input, context) {
+        return context.db.select({ total: sum(cartItems.qty) }).from(cartItems);
+      } });
+    `);
+    expect(safe).toEqual([]);
+
+    const adjacentClosed = [
+      `
+        import { sum as aggregate } from 'drizzle-orm';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import { query } from '@kovojs/server';
+        const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+        export const total = query({ load(_input, context) {
+          return context.db.select({ total: aggregate(cartItems.qty) }).from(cartItems);
+        } });
+      `,
+      `
+        import { sum } from 'drizzle-orm';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import { query } from '@kovojs/server';
+        const aggregate = sum;
+        const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+        export const total = query({ load(_input, context) {
+          return context.db.select({ total: aggregate(cartItems.qty) }).from(cartItems);
+        } });
+      `,
+      `
+        import { sum } from 'drizzle-orm';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import * as pgliteDriver from 'drizzle-orm/pglite';
+        import { query } from '@kovojs/server';
+        void pgliteDriver;
+        const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+        export const total = query({ load(_input, context) {
+          return context.db.select({ total: sum(cartItems.qty) }).from(cartItems);
+        } });
+      `,
+      `
+        import { sum } from 'drizzle-orm';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import { PgliteDatabase } from 'drizzle-orm/pglite';
+        import { query } from '@kovojs/server';
+        void PgliteDatabase;
+        const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+        export const total = query({ load(_input, context) {
+          return context.db.select({ total: sum(cartItems.qty) }).from(cartItems);
+        } });
+      `,
+      `
+        import { sum } from 'drizzle-orm';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import { drizzle } from 'drizzle-orm/pglite';
+        import { query } from '@kovojs/server';
+        const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+        export const total = query({ load(input) {
+          return drizzle(input);
+        } });
+      `,
+      `
+        import { sum } from 'drizzle-orm';
+        import { pgTable, text } from 'drizzle-orm/pg-core';
+        import { query } from '@kovojs/server';
+        const cartItems = pgTable('cart_items', { qty: text('qty').notNull() });
+        const prototype = Object.getPrototypeOf(sum(cartItems.qty));
+        prototype.toQuery = () => ({});
+        export const total = query({ load(_input, context) {
+          return context.db.select({ total: sum(cartItems.qty) }).from(cartItems);
+        } });
+      `,
+    ];
+    for (const source of adjacentClosed) {
+      expect(sinksFor(source).length, source).toBeGreaterThan(0);
+    }
+  });
+
   it('keeps the stock rate-limit authorization declaration on exact table provenance', () => {
     const schema = (policy: string, prelude = '') => `
       import { kovo } from '@kovojs/drizzle';

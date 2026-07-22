@@ -1423,6 +1423,7 @@ const REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS = new Set([
   'notInArray',
   'notLike',
   'or',
+  'sum',
 ]);
 
 const REQUEST_REVIEWED_PG_COLUMN_BUILDERS = new Set([
@@ -32066,6 +32067,13 @@ function requestDrizzleRuntimeModuleSpecifier(module: string): boolean {
 function requestDrizzleRuntimeExportIsReviewed(module: string, exportName: string): boolean {
   if (module === 'drizzle-orm') {
     return exportName === 'sql' || REQUEST_REVIEWED_DRIZZLE_EXPRESSIONS.has(exportName);
+  }
+  if (module === 'drizzle-orm/pglite') {
+    // SPEC §6.6: this is only the direct Drizzle facade used to wrap a PGlite client. Admitting
+    // its exact named import keeps the independently reviewed column/expression protocol census
+    // intact; calls through the facade and the raw client remain subject to their ordinary
+    // capability-closure verdicts.
+    return exportName === 'drizzle';
   }
   if (module === 'drizzle-orm/pg-core') {
     return (

@@ -1647,6 +1647,13 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'drizzle-authz-policy-and-generated-auth-schema-provenance',
         file: 'packages/drizzle/src/trust-escapes-static.test.ts',
         snippets: [
+          '@kovo-security-certifies C13 drizzle-declarative-runtime-import-precision',
+          'keeps exact aggregate and PGlite facade imports from invalidating declarative tables',
+          "import { sum as aggregate } from 'drizzle-orm'",
+          "import * as pgliteDriver from 'drizzle-orm/pglite'",
+          "import { PgliteDatabase } from 'drizzle-orm/pglite'",
+          'const prototype = Object.getPrototypeOf(sum(cartItems.qty))',
+          'return drizzle(input)',
           'keeps the stock rate-limit authorization declaration on exact table provenance',
           'authzPolicy: sql`false`',
           'authzPolicy: copiedSql`false`',

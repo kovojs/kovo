@@ -11,5 +11,3 @@ export const commerceTheme = defineTheme({
     cornerSmall: '4px',
   },
 });
-
-export const commerceThemeCss = commerceTheme.css;
