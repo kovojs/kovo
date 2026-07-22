@@ -4,7 +4,6 @@ import {
   type PathnameNormalization,
   type RouteLike,
 } from './match.js';
-import { canonicalRequestMethod } from './request-method.js';
 import { denseOwnArrayFind } from './registry-lookup.js';
 import { witnessStringStartsWith } from './security-witness-intrinsics.js';
 
@@ -153,7 +152,10 @@ export function matchShellDispatch<
   Endpoint extends EndpointLike = EndpointLike,
 >(input: ShellDispatchInput<Route, Endpoint>): ShellDispatchMatch<Route, Endpoint> {
   const normalization = normalizePathname(input.pathname);
-  const method = input.method === undefined ? undefined : canonicalRequestMethod(input.method);
+  // SPEC §9.5: the adapter has already proved the exact case-sensitive HTTP method survived the
+  // Fetch boundary. Do not re-canonicalize extension methods here: `purge` and `PURGE` are distinct
+  // RFC method identities, and only the exact declaration may reach endpoint policy/handler code.
+  const method = input.method;
   let endpointMethodMismatch:
     | Extract<ShellDispatchMatch<Route, Endpoint>, { kind: 'endpoint' }>
     | undefined;
@@ -188,7 +190,7 @@ export function matchShellDispatch<
             if (typeof candidate !== 'string') {
               throw new TypeError('Endpoint allowed methods must contain only strings.');
             }
-            return canonicalRequestMethod(candidate) === method;
+            return candidate === method;
           },
           'Endpoint allowed methods',
         ) !== undefined;
@@ -239,7 +241,7 @@ export function matchShellDispatch<
 
 function endpointAllowedMethods(endpoint: EndpointLike): readonly string[] {
   if (endpoint.method === undefined) return [];
-  const method = canonicalRequestMethod(endpoint.method);
+  const method = endpoint.method;
   return method === 'GET' ? ['GET', 'HEAD'] : [method];
 }
 

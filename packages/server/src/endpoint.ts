@@ -1089,8 +1089,8 @@ export function endpointMatches(
   input: { method?: string; pathname: string },
 ): boolean {
   if (input.method !== undefined) {
-    const declaredMethod = canonicalRequestMethod(definition.method);
-    const requestMethod = canonicalRequestMethod(input.method);
+    const declaredMethod = definition.method;
+    const requestMethod = input.method;
     if (
       requestMethod !== declaredMethod &&
       !(declaredMethod === 'GET' && requestMethod === 'HEAD')

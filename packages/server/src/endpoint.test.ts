@@ -10,8 +10,9 @@ import {
   pinEndpointBrowserCredentialDelegation,
   runEndpoint,
   runEndpointAuth,
-  type EndpointResponsePosture,
+  type EndpointCachePosture,
   type EndpointRequest,
+  type EndpointResponsePosture,
 } from './endpoint.js';
 import {
   assertEndpointResponsePosture,
@@ -888,6 +889,104 @@ describe('server endpoints', () => {
     ).resolves.toMatchObject({ status: 200 });
   });
 
+  it.each([
+    { cacheControl: 'public, x-no-store', posture: 'no-store' },
+    { cacheControl: 'public, max-age=300, x-private', posture: 'private' },
+    { cacheControl: 'public, private="Set-Cookie"', posture: 'private' },
+    { cacheControl: 'private, x-public', posture: 'public' },
+    { cacheControl: 'public, x-no-cache', posture: 'revalidated' },
+    { cacheControl: 'extension="one, private", public', posture: 'private' },
+  ] as const satisfies readonly {
+    cacheControl: string;
+    posture: Exclude<EndpointCachePosture, 'custom'>;
+  }[])(
+    'rejects Cache-Control lookalike $cacheControl for declared $posture posture',
+    ({ cacheControl, posture }) => {
+      const declaration = endpoint(`/machine/cache-lookalike-${posture}`, {
+        handler: () => new Response('ok'),
+        method: 'GET',
+        reason: 'cache directive parser regression',
+        response: { appOwnedSafety: true, body: 'text', cache: posture },
+      });
+      expect(() =>
+        assertEndpointResponsePosture(
+          declaration,
+          new Response('ok', {
+            headers: {
+              'Cache-Control': cacheControl,
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+          }),
+        ),
+      ).toThrow(/response posture mismatch/u);
+    },
+  );
+
+  it.each([
+    'text/html; profile=json',
+    'application/jsonp',
+    'application/x-json',
+    'text/plain; note="json"',
+  ] as const)(
+    'rejects non-JSON Content-Type lookalike %s for declared JSON posture',
+    (contentType) => {
+      const declaration = endpoint('/machine/json-media-type-lookalike', {
+        handler: () => new Response('ok'),
+        method: 'GET',
+        reason: 'JSON media type parser regression',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+      expect(() =>
+        assertEndpointResponsePosture(
+          declaration,
+          new Response('{}', {
+            headers: { 'Cache-Control': 'no-store', 'Content-Type': contentType },
+          }),
+        ),
+      ).toThrow(/response posture mismatch/u);
+    },
+  );
+
+  it.each(['text/plain; profile=html', 'text/x-html', 'application/html'] as const)(
+    'rejects non-HTML Content-Type lookalike %s for declared HTML posture',
+    (contentType) => {
+      const declaration = endpoint('/machine/html-media-type-lookalike', {
+        handler: () => new Response('ok'),
+        method: 'GET',
+        reason: 'HTML media type parser regression',
+        response: { appOwnedSafety: true, body: 'html', cache: 'no-store' },
+      });
+      expect(() =>
+        assertEndpointResponsePosture(
+          declaration,
+          new Response('<p>ok</p>', {
+            headers: { 'Cache-Control': 'no-store', 'Content-Type': contentType },
+          }),
+        ),
+      ).toThrow(/response posture mismatch/u);
+    },
+  );
+
+  it('accepts exact bare cache directives and structured JSON media types', () => {
+    const declaration = endpoint('/machine/exact-response-grammar', {
+      handler: () => new Response('ok'),
+      method: 'GET',
+      reason: 'exact response grammar control',
+      response: { appOwnedSafety: true, body: 'json', cache: 'private' },
+    });
+    expect(() =>
+      assertEndpointResponsePosture(
+        declaration,
+        new Response('{}', {
+          headers: {
+            'Cache-Control': 'extension="one, private", PrIvAtE',
+            'Content-Type': 'Application/Problem+Json; charset=utf-8',
+          },
+        }),
+      ),
+    ).not.toThrow();
+  });
+
   it('keeps endpoint response posture fail-closed after an app handler poisons Array.push', async () => {
     const nativePush = Array.prototype.push;
     let poisonHits = 0;
@@ -1205,5 +1304,19 @@ describe('server endpoints', () => {
     expect(endpointMatches(mounted, { method: 'POST', pathname: '/auth/callback/github' })).toBe(
       false,
     );
+  });
+
+  it('keeps extension-method identity case-sensitive when matching an endpoint', () => {
+    const purge = endpoint('/machine/purge', {
+      csrf: false,
+      csrfJustification: 'machine extension-method identity fixture',
+      handler: () => new Response('purged'),
+      method: 'PURGE',
+      reason: 'extension-method identity fixture',
+      response: rawTextResponse,
+    });
+
+    expect(endpointMatches(purge, { method: 'purge', pathname: '/machine/purge' })).toBe(false);
+    expect(endpointMatches(purge, { method: 'PURGE', pathname: '/machine/purge' })).toBe(true);
   });
 });

@@ -35,6 +35,7 @@ import {
 } from './endpoint-auth-proof.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import type {
+  EndpointCachePosture,
   EndpointDeclaration,
   EndpointMethod,
   EndpointMount,
@@ -638,23 +639,38 @@ export function assertEndpointResponsePosture(
   const cacheControl = nativeHeaderGet(headers, 'cache-control') ?? '';
   if (
     definition.response.cache === 'no-store' &&
-    !witnessRegExpTest(/\bno-store\b/i, cacheControl)
+    !endpointCacheControlMatchesPosture(cacheControl, definition.response.cache)
   ) {
     appendResponsePostureValue(
       failures,
       'declared cache=no-store but response lacks Cache-Control: no-store',
     );
   }
-  if (definition.response.cache === 'private' && !witnessRegExpTest(/\bprivate\b/i, cacheControl)) {
+  if (
+    definition.response.cache === 'private' &&
+    !endpointCacheControlMatchesPosture(cacheControl, definition.response.cache)
+  ) {
     appendResponsePostureValue(
       failures,
       'declared cache=private but response lacks Cache-Control: private',
     );
   }
-  if (definition.response.cache === 'public' && !witnessRegExpTest(/\bpublic\b/i, cacheControl)) {
+  if (
+    definition.response.cache === 'public' &&
+    !endpointCacheControlMatchesPosture(cacheControl, definition.response.cache)
+  ) {
     appendResponsePostureValue(
       failures,
       'declared cache=public but response lacks Cache-Control: public',
+    );
+  }
+  if (
+    definition.response.cache === 'revalidated' &&
+    !endpointCacheControlMatchesPosture(cacheControl, definition.response.cache)
+  ) {
+    appendResponsePostureValue(
+      failures,
+      'declared cache=revalidated but response lacks Cache-Control: no-cache',
     );
   }
   const bodyPosture = endpointResponseBodyPostures(definition.response.body);
@@ -1261,12 +1277,165 @@ function endpointResponseBodyMatchesContentType(
   const inspectJson = postureIncludes(bodyPosture, 'json');
   const inspectHtml = postureIncludes(bodyPosture, 'html');
   if (!inspectJson && !inspectHtml) return true;
-  if (inspectJson && witnessRegExpTest(/\bjson\b/i, contentType)) return true;
-  if (inspectHtml && witnessRegExpTest(/\bhtml\b/i, contentType)) return true;
-  if (postureIncludes(bodyPosture, 'text') && witnessRegExpTest(/\btext\//i, contentType)) {
+  const mediaType = endpointMediaType(contentType);
+  if (mediaType === undefined) return false;
+  if (
+    inspectJson &&
+    (asciiRangeEquals(contentType, mediaType.subtypeStart, mediaType.end, 'json') ||
+      asciiRangeEndsWith(contentType, mediaType.subtypeStart, mediaType.end, '+json'))
+  ) {
+    return true;
+  }
+  if (
+    inspectHtml &&
+    asciiRangeEquals(contentType, mediaType.typeStart, mediaType.slash, 'text') &&
+    asciiRangeEquals(contentType, mediaType.subtypeStart, mediaType.end, 'html')
+  ) {
+    return true;
+  }
+  if (
+    postureIncludes(bodyPosture, 'text') &&
+    asciiRangeEquals(contentType, mediaType.typeStart, mediaType.slash, 'text')
+  ) {
     return true;
   }
   return false;
+}
+
+function endpointCacheControlMatchesPosture(
+  cacheControl: string,
+  posture: Exclude<EndpointCachePosture, 'custom'>,
+): boolean {
+  const directive = posture === 'revalidated' ? 'no-cache' : posture;
+  let segmentStart = 0;
+  let inQuotes = false;
+  let escaped = false;
+  let found = false;
+
+  for (let index = 0; index <= cacheControl.length; index += 1) {
+    if (index === cacheControl.length) {
+      if (inQuotes || escaped) return false;
+      return (
+        found || cacheControlSegmentIsBareDirective(cacheControl, segmentStart, index, directive)
+      );
+    }
+
+    const code = securityStringCharCodeAt(cacheControl, index);
+    if (inQuotes) {
+      if (escaped) {
+        escaped = false;
+      } else if (code === 0x5c) {
+        escaped = true;
+      } else if (code === 0x22) {
+        inQuotes = false;
+      }
+      continue;
+    }
+    if (code === 0x22) {
+      inQuotes = true;
+      continue;
+    }
+    if (code !== 0x2c) continue;
+    if (cacheControlSegmentIsBareDirective(cacheControl, segmentStart, index, directive)) {
+      found = true;
+    }
+    segmentStart = index + 1;
+  }
+  return false;
+}
+
+function cacheControlSegmentIsBareDirective(
+  value: string,
+  initialStart: number,
+  initialEnd: number,
+  directive: string,
+): boolean {
+  let start = initialStart;
+  let end = initialEnd;
+  while (start < end && isOptionalWhitespace(securityStringCharCodeAt(value, start))) start += 1;
+  while (end > start && isOptionalWhitespace(securityStringCharCodeAt(value, end - 1))) end -= 1;
+  return asciiRangeEquals(value, start, end, directive);
+}
+
+interface EndpointMediaTypeRange {
+  readonly end: number;
+  readonly slash: number;
+  readonly subtypeStart: number;
+  readonly typeStart: number;
+}
+
+function endpointMediaType(value: string): EndpointMediaTypeRange | undefined {
+  let start = 0;
+  let end = value.length;
+  for (let index = 0; index < value.length; index += 1) {
+    if (securityStringCharCodeAt(value, index) === 0x3b) {
+      end = index;
+      break;
+    }
+  }
+  while (start < end && isOptionalWhitespace(securityStringCharCodeAt(value, start))) start += 1;
+  while (end > start && isOptionalWhitespace(securityStringCharCodeAt(value, end - 1))) end -= 1;
+
+  let slash = -1;
+  for (let index = start; index < end; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (code === 0x2f) {
+      if (slash !== -1) return undefined;
+      slash = index;
+      continue;
+    }
+    if (!isHttpTokenCode(code)) return undefined;
+  }
+  if (slash <= start || slash + 1 >= end) return undefined;
+  return { end, slash, subtypeStart: slash + 1, typeStart: start };
+}
+
+function isOptionalWhitespace(code: number): boolean {
+  return code === 0x20 || code === 0x09;
+}
+
+function isHttpTokenCode(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    (code >= 0x61 && code <= 0x7a) ||
+    code === 0x21 ||
+    (code >= 0x23 && code <= 0x27) ||
+    code === 0x2a ||
+    code === 0x2b ||
+    code === 0x2d ||
+    code === 0x2e ||
+    code === 0x5e ||
+    code === 0x5f ||
+    code === 0x60 ||
+    code === 0x7c ||
+    code === 0x7e
+  );
+}
+
+function asciiRangeEquals(
+  value: string,
+  start: number,
+  end: number,
+  expectedLowercase: string,
+): boolean {
+  if (end - start !== expectedLowercase.length) return false;
+  for (let index = 0; index < expectedLowercase.length; index += 1) {
+    let code = securityStringCharCodeAt(value, start + index);
+    if (code >= 0x41 && code <= 0x5a) code += 0x20;
+    if (code !== securityStringCharCodeAt(expectedLowercase, index)) return false;
+  }
+  return true;
+}
+
+function asciiRangeEndsWith(
+  value: string,
+  start: number,
+  end: number,
+  expectedLowercase: string,
+): boolean {
+  const suffixStart = end - expectedLowercase.length;
+  return suffixStart >= start && asciiRangeEquals(value, suffixStart, end, expectedLowercase);
 }
 
 function assertEndpointReservedHeaders(

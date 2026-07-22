@@ -236,6 +236,24 @@ describe('server app shell dispatch table', () => {
     ).toMatchObject({ endpoint: structural, kind: 'endpoint', methodAllowed: true });
   });
 
+  it('does not canonicalize extension methods into an endpoint policy match', () => {
+    const purge = endpoint('/machine/purge', {
+      csrf: false,
+      csrfJustification: 'machine extension-method identity fixture',
+      handler: () => new Response('purged'),
+      method: 'PURGE',
+      reason: 'extension-method identity fixture',
+      response: rawTextResponse,
+    });
+
+    expect(
+      matchShellDispatch({ endpoints: [purge], method: 'purge', pathname: '/machine/purge' }),
+    ).toMatchObject({ endpoint: purge, kind: 'endpoint', methodAllowed: false });
+    expect(
+      matchShellDispatch({ endpoints: [purge], method: 'PURGE', pathname: '/machine/purge' }),
+    ).toMatchObject({ endpoint: purge, kind: 'endpoint', methodAllowed: true });
+  });
+
   it('cannot cross-bind endpoint posture or authorize a method through Array.find/some poisoning', () => {
     const publicMachineEndpoint = endpoint('/machine', {
       csrf: false,
