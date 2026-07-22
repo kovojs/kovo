@@ -30,11 +30,13 @@ describe('semantic attribute manifest', () => {
     expect(isGeneratedOnlySemanticAttribute('data-bind-list')).toBe(true);
   });
 
-  it('keeps intended app-visible snapshot attributes out of generated-only drift checks', () => {
+  it('keeps compiler-owned query stamps distinct from authored semantic attributes', () => {
     expect(KOVO_SEMANTIC_SNAPSHOT_ATTRIBUTES).toContain('kovo-query');
     expect(ACCESSIBLE_SEMANTIC_ATTRIBUTES).toContain('aria-label');
     expect(BEHAVIORAL_SEMANTIC_ATTRIBUTES).toContain('href');
-    expect(isGeneratedOnlySemanticAttribute('kovo-query')).toBe(false);
+    // SPEC §4.8: query scripts are app-visible DOM snapshots, but the framework owns their
+    // executable query identity. Visibility does not make the stamp app-authorable.
+    expect(isGeneratedOnlySemanticAttribute('kovo-query')).toBe(true);
     expect(isGeneratedOnlySemanticAttribute('aria-label')).toBe(false);
     expect(isGeneratedOnlySemanticAttribute('href')).toBe(false);
   });
