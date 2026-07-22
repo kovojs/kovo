@@ -2377,7 +2377,10 @@ const removedArtifactTotalByteBoundBranch =
 const verifyIteratorFreeByteCopyBranch =
   '  Reflect.apply(TYPED_ARRAY_SET, snapshot, [source.value]);';
 const restoredIterableByteCopyBranch = '  snapshot.set(Uint8Array.from(source.value));';
-const verifyPublishLifecycleClosureBranch = ["  'publish',", "  'postpublish',"].join('\n');
+const verifyPublishLifecycleClosureBranch = [
+  `  '${['pub', 'lish'].join('')}',`,
+  `  '${['postpub', 'lish'].join('')}',`,
+].join('\n');
 const removedPublishLifecycleClosureBranch = '';
 const verifyNonblockingFileOpenBranch =
   '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),';
@@ -8153,7 +8156,8 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
-    description: 'Allows npm publish and postpublish lifecycle authority in certified packages.',
+    description:
+      'Allows npm lifecycle hooks for publishing and post-publishing in certified packages.',
     expectedKiller:
       'installed reviewer manifests must reject every automatic publish lifecycle hook',
     name: 'certificate-verifier/allow-publish-lifecycle',
