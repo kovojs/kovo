@@ -300,7 +300,6 @@ export const PayloadCard = component({
       import { derive } from '@kovojs/browser/internal/output';
       import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
-
       export const PayloadCard$article_title_derive = derive(["product"], (product) => product.name);
       export const PayloadCard$article_aria_label_derive = derive(["product"], (product) => product.label);
       export const PayloadCard$article_aria_description_derive = derive(["product"], (product) => product.summary);

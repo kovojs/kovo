@@ -620,11 +620,56 @@ function generatedImportInsertionOffset(sourceFile: ts.SourceFile, source: strin
       insertionOffset = range.end;
     }
   }
+
+  // SPEC §5.2 rule 10: the scanner owns the complete generated-import boundary. Later emitters
+  // must not reparse their progressively rewritten source to find the last import. Advance past
+  // every parsed import declaration here so all generated imports append to the same stable block
+  // while JSX pragmas and a shebang remain ahead of that block.
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Generated import source statements',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (ts.isImportDeclaration(statement) || ts.isImportEqualsDeclaration(statement)) {
+      insertionOffset = generatedImportStatementEnd(source, statement.end);
+    }
+  }
+
   if (insertionOffset === 0) return 0;
 
-  // Include the trivia through the first line ending after the shebang/last JSX pragma. Emitters
-  // can then splice an import at this one parser-owned boundary without duplicating comment or
-  // shebang parsing and without leaving the original line ending behind as an extra blank line.
+  return generatedImportLineEnd(source, insertionOffset);
+}
+
+function generatedImportStatementEnd(source: string, statementEnd: number): number {
+  let insertionOffset = statementEnd;
+  const ranges = ts.getTrailingCommentRanges(source, statementEnd) ?? [];
+  const rangeLength = compilerArrayLength(ranges, 'Generated import trailing comment ranges');
+  for (let index = 0; index < rangeLength; index += 1) {
+    const range = compilerOwnDataValue(
+      ranges,
+      index,
+      'Generated import trailing comment ranges',
+    ) as ts.CommentRange | undefined;
+    if (!range) throw new TypeError(`Generated import trailing comment ranges[${index}] missing.`);
+    if (!isHorizontalTrivia(source, insertionOffset, range.pos)) break;
+    insertionOffset = range.end;
+  }
+  return insertionOffset;
+}
+
+function isHorizontalTrivia(source: string, start: number, end: number): boolean {
+  for (let offset = start; offset < end; offset += 1) {
+    const code = compilerStringCharCodeAt(source, offset);
+    if (code !== 0x20 && code !== 0x09) return false;
+  }
+  return true;
+}
+
+function generatedImportLineEnd(source: string, insertionOffset: number): number {
+  // Include horizontal trivia and one line ending after the shebang, last JSX pragma, or last
+  // parsed import. Emitters can splice at this parser-owned boundary without stealing a blank line
+  // or separating a same-line trailing comment from its import.
   let lineEnd = insertionOffset;
   while (lineEnd < source.length) {
     const code = compilerStringCharCodeAt(source, lineEnd);

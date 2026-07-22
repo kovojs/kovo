@@ -1404,9 +1404,14 @@ export const QuestionDetail = component({
     const escapeImport = serverSource.indexOf(
       "import { escapeText } from '@kovojs/server/internal/escape';",
     );
+    const liveTargetImport = serverSource.indexOf(
+      "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    );
     expect(serverSource).toContain(' * compiler-owned transform posture\n */');
     expect(dependencyImport).toBeGreaterThan(pragmaEnd);
     expect(escapeImport).toBeGreaterThan(pragmaEnd);
+    expect(dependencyImport).toBeGreaterThan(escapeImport);
+    expect(liveTargetImport).toBeGreaterThan(dependencyImport);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

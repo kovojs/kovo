@@ -135,16 +135,30 @@ export const StatusCard = component({
 `,
     });
 
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
-    expect(result.loweredSource).toContain(
+    const loweredSource = result.loweredSource ?? '';
+    const authorQueryImport = loweredSource.indexOf("import { query } from '@kovojs/server';");
+    const escapeImport = loweredSource.indexOf(
+      "import { escapeText } from '@kovojs/server/internal/escape';",
+    );
+    const derivedKeyImport = loweredSource.indexOf(
       "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
     );
-    expect(result.loweredSource).toContain(
+    const liveTargetImport = loweredSource.indexOf(
       "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
     );
-    expect(result.loweredSource).toContain(
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(loweredSource).toContain(
+      "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
+    );
+    expect(loweredSource).toContain(
+      "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    );
+    expect(loweredSource).toContain(
       'export const StatusCard$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({',
     );
+    expect(escapeImport).toBeGreaterThan(authorQueryImport);
+    expect(derivedKeyImport).toBeGreaterThan(escapeImport);
+    expect(liveTargetImport).toBeGreaterThan(derivedKeyImport);
   });
 
   it('selects collision-free live-target helper aliases from parser-owned identifiers', () => {

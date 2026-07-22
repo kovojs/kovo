@@ -253,12 +253,17 @@ export const JsxPragmas = component({
     const deriveImportOffset = serverSource.indexOf(
       "import { derive, kovoStyleProperty } from '@kovojs/browser/internal/output';",
     );
+    const liveTargetImportOffset = serverSource.indexOf(
+      "import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';",
+    );
 
     expect(result.diagnostics).toEqual([]);
     expect(importSourceOffset).toBeGreaterThanOrEqual(0);
     expect(runtimeOffset).toBeGreaterThan(importSourceOffset);
     expect(escapeImportOffset).toBeGreaterThan(runtimeOffset);
     expect(deriveImportOffset).toBeGreaterThan(runtimeOffset);
+    expect(deriveImportOffset).toBeGreaterThan(escapeImportOffset);
+    expect(liveTargetImportOffset).toBeGreaterThan(deriveImportOffset);
     expect(serverSource).not.toContain("from '@kovojs/browser/generated'");
     expect(serverSource.slice(importSourceOffset, escapeImportOffset)).not.toContain('import {');
     expect(() => assertFixpoint(result)).not.toThrow();

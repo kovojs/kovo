@@ -803,6 +803,15 @@ function emitServerPhase(
       writer: 'compileComponentModule',
     },
   );
+  const terminalImportInsertionOffset = generatedImportOffsetAfterPatches(
+    lowered.model.moduleImportInsertionOffset,
+    serverRenderReplacements,
+  );
+  const derivedWireKeySource = insertDerivedWireKeyImports(
+    patchedServerSource,
+    lowered.model,
+    terminalImportInsertionOffset,
+  );
   const serverRenderedSource = removeUnreferencedNamedImports(
     appendLiveTargetRendererExports({
       componentExpression: parsed.componentName,
@@ -813,9 +822,9 @@ function emitServerPhase(
           (componentFact) => componentFact.names.registryKey === fact.component,
         )?.component?.localName ?? parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
-      moduleImportInsertionOffset: lowered.model.moduleImportInsertionOffset,
+      moduleImportInsertionOffset: derivedWireKeySource.nextImportInsertionOffset,
       namedImports: lowered.model.namedImports,
-      source: insertDerivedWireKeyImports(patchedServerSource, lowered.model),
+      source: derivedWireKeySource.source,
       sourceIdentifierNames: lowered.model.sourceIdentifierNames,
     }),
   );
@@ -1699,7 +1708,16 @@ function derivedQueryKeyAssignments(
   );
 }
 
-function insertDerivedWireKeyImports(source: string, model: ComponentModuleModel): string {
+interface GeneratedImportInsertion {
+  nextImportInsertionOffset: number;
+  source: string;
+}
+
+function insertDerivedWireKeyImports(
+  source: string,
+  model: ComponentModuleModel,
+  importInsertionOffset: number,
+): GeneratedImportInsertion {
   const imports: string[] = [];
   if (
     compilerSomeDense(model.calls, 'Derived mutation-key calls', (call) =>
@@ -1723,11 +1741,37 @@ function insertDerivedWireKeyImports(source: string, model: ComponentModuleModel
       'Derived wire-key imports',
     );
   }
-  if (imports.length === 0) return source;
+  if (imports.length === 0) {
+    return { nextImportInsertionOffset: importInsertionOffset, source };
+  }
 
   const importLine = `import { ${compilerArrayJoin(imports, ', ')} } from '${derivedWireKeyModule}';\n`;
-  const start = model.moduleImportInsertionOffset;
-  return `${compilerStringSlice(source, 0, start)}${importLine}${compilerStringSlice(source, start)}`;
+  return {
+    nextImportInsertionOffset: importInsertionOffset + importLine.length,
+    source: `${compilerStringSlice(source, 0, importInsertionOffset)}${importLine}${compilerStringSlice(source, importInsertionOffset)}`,
+  };
+}
+
+/** Carry the parser-owned import boundary through typed terminal patches (SPEC §5.2 rule 10). */
+function generatedImportOffsetAfterPatches(
+  originalOffset: number,
+  replacements: readonly SourceReplacement[],
+): number {
+  let generatedOffset = originalOffset;
+  const snapshot = compilerSnapshotDenseArray(
+    replacements,
+    'Generated import terminal replacements',
+  );
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const replacement = snapshot[index]!;
+    if (replacement.start < originalOffset && replacement.end > originalOffset) {
+      throw new TypeError('A terminal source patch may not cross the generated-import boundary.');
+    }
+    if (replacement.end <= originalOffset) {
+      generatedOffset += replacement.replacement.length - (replacement.end - replacement.start);
+    }
+  }
+  return generatedOffset;
 }
 
 function hasDerivedWireImport(model: ComponentModuleModel, localName: string): boolean {

@@ -557,7 +557,7 @@ export interface ComponentModuleModel {
   /** @internal Non-enumerable parser facts; security consumers must not rescan source comments. */
   readonly jsxPragmas: readonly JsxPragmaModel[];
   moduleScopeBindings: readonly ModuleScopeBindingModel[];
-  /** Parser-owned byte offset where generated value imports may be inserted. */
+  /** Parser-owned byte offset after the preamble and parsed imports for generated value imports. */
   moduleImportInsertionOffset: number;
   moduleSpecifiers: readonly ModuleSpecifierModel[];
   mutationHandlers: readonly MutationHandlerModel[];
