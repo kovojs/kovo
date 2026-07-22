@@ -390,15 +390,18 @@ const parserGlobalKeys: readonly PropertyKey[] = [
 ];
 
 /**
- * Mutable objects reachable by the pinned Acorn 8.17.0 parser.
+ * Reviewed mutable objects reachable from Acorn's public and fixed-mode warm roots.
  *
  * The public `Parser`/`Parser.acorn` graph covers parser statics, token/context tables, exported
  * constructors, identifier/newline helpers, and eager RegExps. The retained fixed-mode warm parser
  * additionally covers Acorn's private lazy cache, state instances, and hidden prototypes. Following
  * every own data/accessor descriptor captures symbol controls and RegExp `lastIndex` without running
- * getters. Explicit intrinsic roots cover the late host lookups made by Acorn 8.17.0. `globalThis`
- * is limited to the reviewed names above because unrelated application globals are not parser
- * controls.
+ * getters. Explicit intrinsic roots cover the reviewed late host lookups made by Acorn 8.17.0.
+ * This reconciliation is defense-in-depth, not a same-realm sandbox: deliberately instrumenting a
+ * parser intrinsic to discover and mutate a previously unreachable module-private object is outside
+ * the app-level claim in SPEC §6.6. Independent certificate verification runs in the standalone
+ * lifecycle-disabled checker process, which does not evaluate the app graph. `globalThis` is limited
+ * to the reviewed names above because unrelated application globals are not parser controls.
  */
 const parserExactRoots: readonly object[] = [
   NativeObjectPrototype,
@@ -456,8 +459,8 @@ const translationParserBootState = captureParserState(translationParserSurfaceDe
  * Acorn performs inherited enumeration while normalizing options, so restoring a named method is
  * insufficient: an arbitrary enumerable getter on Object.prototype can execute and re-poison a
  * method after installation. Before parsing, this scope therefore reconciles every reachable
- * object to its exact boot descriptor/prototype census. It snapshots and restores the caller's
- * complete state afterward, continuing best-effort cleanup after any individual restoration error.
+ * object to its exact boot descriptor/prototype census. It snapshots and restores that selected
+ * state afterward, continuing best-effort cleanup after any individual restoration error.
  * A non-restorable entry drift closes without invoking the parser.
  */
 export function translationWithParserControls<Value>(parse: () => Value): Value {
@@ -475,7 +478,7 @@ export function translationWithParserControls<Value>(parse: () => Value): Value 
   }
 }
 
-/** Parse only in the fixed Acorn mode whose complete lazy control graph was warmed at bootstrap. */
+/** Parse in the fixed Acorn mode after reconciling the reviewed boot-reachable control graph. */
 export function translationParseJavaScriptSource(source: string): unknown {
   return translationWithParserControls(() =>
     apply(acornParserParse, AcornParser, [source, translationParserOptions]),

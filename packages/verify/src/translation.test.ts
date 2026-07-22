@@ -420,7 +420,7 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     );
   });
 
-  it('pins the exact Acorn version and fixed-mode lazy control census', () => {
+  it('pins the exact Acorn version and reviewed fixed-mode private instance census', () => {
     expect(acornVersion).toBe('8.17.0');
     const options = { allowHashBang: true, ecmaVersion: 'latest', sourceType: 'module' } as const;
     const originalCheckExpressionErrors = Object.getOwnPropertyDescriptor(

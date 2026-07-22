@@ -45,7 +45,7 @@ describe('security-gate-mutations', () => {
       ),
     ).toMatchObject({
       expectedKiller:
-        'translation parsing must census DestructuringErrors, Scope, RegExpValidationState, and BranchID',
+        'translation parser defense-in-depth must retain DestructuringErrors, Scope, RegExpValidationState, and BranchID',
     });
   });
 

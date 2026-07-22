@@ -452,6 +452,10 @@ pass**. Requires §0.4 and §0.6 to mean anything.
       semantic convergence heuristics. One pinned parser dependency, **zero Kovo imports**,
       mechanically enforced by extending `scripts/import-boundary.mjs`. Publish checker LOC and
       dependency closure as the honesty numbers.
+  - The independent claim applies to the lifecycle-disabled standalone CLI in a fresh process that
+    does not import or evaluate the app graph. Compiler-process reuse of the translation checker and
+    its parser-control reconciliation are consistency checks and defense-in-depth, not resistance to
+    deliberately hostile same-realm code discovering and mutating Acorn module-private objects.
   - Evidence: `pnpm run check:certificate` publishes the current runtime-file/LOC count, reports one
     exact parser dependency (`acorn@8.17.0`), enforces zero Kovo imports, and verifies the actual
     lifecycle-disabled packed tarballs with the standalone CLI. `index.test.ts` proves complete parsing

@@ -8645,9 +8645,9 @@ export const SECURITY_GATE_MUTANTS = [
     behavioralInstrumentation: translationParserWarmGraphBehavioralInstrumentation,
     behavioralTypeScript: true,
     description:
-      'Drops the explicit fixed-mode roots for all four Acorn private instance families.',
+      'Drops the reviewed fixed-mode roots for four observed Acorn private instance families.',
     expectedKiller:
-      'translation parsing must census DestructuringErrors, Scope, RegExpValidationState, and BranchID',
+      'translation parser defense-in-depth must retain DestructuringErrors, Scope, RegExpValidationState, and BranchID',
     name: 'translation-verifier/drop-warm-parser-control-graph',
     replacement: removedVerifyTranslationPrivateParserCensusRootsBranch,
     search: verifyTranslationPrivateParserCensusRootsBranch,
