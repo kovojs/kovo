@@ -163,6 +163,7 @@ jobs:
           compression-level: 0
 
   attest-advisory-feed:
+    if: ${{ !inputs.dry_run }}
     needs: prepare
     runs-on: ubuntu-latest
     permissions:

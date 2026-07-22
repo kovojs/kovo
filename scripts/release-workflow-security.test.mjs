@@ -98,6 +98,7 @@ describe('release workflow authority', () => {
     expect(prepare).toContain('${{ runner.temp }}/kovo-release-${{ github.sha }}.tgz');
 
     expect(attest).toContain('needs: prepare');
+    expect(attest).toContain('if: ${{ !inputs.dry_run }}');
     expect(attest).toContain('attestations: write');
     expect(attest).toContain('contents: read');
     expect(attest).toContain('id-token: write');
