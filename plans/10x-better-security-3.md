@@ -650,18 +650,22 @@ bar on the first attempt. Nothing in plan-1 or plan-2 counts, trends, or ratchet
       `kovoAnalyzerSummary` / `allowControlChars`.
   - Evidence: `pnpm run check:escape-census` passes 9/9 structural/CLI/producer tests; the focused
     `index.kovo-build.test.ts` build emits the closed six-door coverage witness and exact roots.
-- [x] Per-package escape budgets with a monotone ratchet, so escape growth is structurally impossible
-      rather than merely graphed.
+- [x] Per-package escape budgets with a predecessor-bound monotone review ratchet, so unreviewed
+      escape growth fails closed rather than being merely graphed. This local digest is a change
+      detector and review boundary, not a cryptographic proof against a reviewer changing both the
+      implementation and its accepted predecessor.
   - Evidence: `escape-census-gate.test.mjs` rejects budget increases, missing package budgets, and
     exact-root counts above a ceiling; it binds the predecessor path, reviewed commit, and digest so
-    same-tip edits cannot raise both ceilings. `pnpm run check:escape-census` is in the root check.
+    an ordinary same-tip implementation edit cannot silently raise both ceilings.
+    `pnpm run check:escape-census` is in the root check.
 
 ### 4.2 Structured obligations replacing free-text justifications
 
 - [x] At the `audit-justification.ts` chokepoint, replace prose with fields the analyzer can partially
       check — _which invariant, why it holds, what evidence_ — killing the prose-laundering path.
   - Evidence: the six-file obligation/review integration suite passes 31/31; runtime and static
-    validation require the exact invariant, guard-or-policy reason, and digest-bound evidence record.
+      validation require the exact invariant, guard-or-policy reason, and digest-identified evidence
+      record. That digest identifies the reviewed text/artifact; it does not prove the justification.
 - [x] Escape signatures over `(site identity, obligation text, artifact/emission hash)` from a key
       **not** present in the build environment or reachable by a coding agent, composing with plan-2
       §4.3's attestation anchor (**do not establish a second trust anchor** — if §4.3 has not landed,
