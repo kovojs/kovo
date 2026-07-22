@@ -20,7 +20,7 @@
   },
   "mutationHarness": {
     "command": ["node", "scripts/security-gate-mutations.mjs"],
-    "expectedMutants": 457,
+    "expectedMutants": 466,
     "requiredScorePercent": 100
   },
   "profiles": {
@@ -313,7 +313,7 @@
         "value": "security-gate-mutants/v1",
         "version": 1
       },
-      "coverage": { "unit": "mutant", "denominator": 457 },
+      "coverage": { "unit": "mutant", "denominator": 466 },
       "cases": [
         {
           "id": "security-gate-mutations",

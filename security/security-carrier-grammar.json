@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 339,
+    "historicalWitnesses": 340,
     "productions": 12
   },
   "productions": [
@@ -2084,6 +2084,12 @@
       "corpus": "certificate-verifier",
       "production": "budget-edge",
       "reason": "Files and empty directories share one streamed finite census budget before package-tree verification can allocate or recurse without bound."
+    },
+    {
+      "anchor": "certificate-case-folded-node-modules",
+      "corpus": "certificate-verifier",
+      "production": "platform-differential",
+      "reason": "Every ASCII case spelling of node_modules is rejected so a package accepted on a case-sensitive host cannot gain a nearer resolver scope on case-insensitive macOS or Windows filesystems."
     },
     {
       "anchor": "certificate-template-import-no-downgrade",

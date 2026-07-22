@@ -219,6 +219,41 @@ describe('filesystem certificate artifacts', () => {
     );
   });
 
+  it('rejects case-folded node_modules scopes before cross-platform package resolution', async () => {
+    const rootModule = '@kovojs/server/dist/root.mjs';
+    const hiddenModule = '@kovojs/server/dist/NODE_MODULES/evil/index.mjs';
+    const fixture = createDirectoryFixture({
+      [hiddenModule]: "import 'node:child_process';",
+      [rootModule]: "import 'evil/index.mjs';",
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({ exports: { '.': './dist/root.mjs' }, name: '@kovojs/server' }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, policy);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { ...base.cap, [hiddenModule]: ['process'] },
+      opaque: [
+        {
+          module: rootModule,
+          reason:
+            'imports external module "evil/index.mjs" outside the nine-kind lexical capability domain',
+        },
+      ],
+    };
+    const boundPolicy = policyBytesForCertificate(fixture.sources, fixture.root, manifest);
+    const boundManifest = { ...manifest, policySha512: integrity(boundPolicy) };
+
+    await expect(
+      verifyCertificateDirectory(boundManifest, boundPolicy, fixture.root),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+      ok: false,
+    });
+  });
+
   it('rejects insertion-ordered conditional exports that can select another listed module', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',
@@ -588,6 +623,18 @@ function certificate(
 }
 
 function policyBytes(sources: Record<string, string>, root: string): Buffer {
+  return policyBytesForCertificate(sources, root, {
+    doors: [],
+    opaque: [],
+    roots: [],
+  });
+}
+
+function policyBytesForCertificate(
+  sources: Record<string, string>,
+  root: string,
+  certificate: Pick<KovoCertificateV1, 'doors' | 'opaque' | 'roots'>,
+): Buffer {
   const artifactPaths = Object.keys(sources).sort();
   const packageNames = [
     ...new Set(artifactPaths.map((entry) => entry.split('/').slice(0, 2).join('/'))),
@@ -606,10 +653,10 @@ function policyBytes(sources: Record<string, string>, root: string): Buffer {
           path: artifactPath,
           sha512: integrity(Buffer.from(sources[artifactPath]!)),
         })),
-        doors: [],
-        opaque: [],
+        doors: certificate.doors,
+        opaque: certificate.opaque,
         packages,
-        roots: [],
+        roots: certificate.roots,
         schema: 'kovo.certificate-policy/v1',
       }),
       null,

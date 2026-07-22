@@ -2331,6 +2331,10 @@ const removedVerifyDirectoryEntryBoundBranch = [
   '        throw new TypeError(`${label} exceeds its ${maxEntries}-entry remaining limit`);',
   '      }',
 ].join('\n');
+const verifyCaseFoldedNodeModulesBranch =
+  '      if (isNodeModulesDirectoryName(entry.name)) {';
+const weakenedVerifyCaseFoldedNodeModulesBranch =
+  "      if (entry.name === 'node_modules') {";
 const verifyNonblockingFileOpenBranch =
   '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),';
 const removedVerifyNonblockingFileOpenBranch =
@@ -7991,6 +7995,18 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertVerifierDirectoryEntryBoundBehavior,
   },
   {
+    behavioralTypeScript: true,
+    description:
+      'Admits a case-folded nested node_modules scope that becomes live on case-insensitive hosts.',
+    expectedKiller:
+      'certificate package censuses must reject every ASCII case spelling of node_modules',
+    name: 'certificate-verifier/allow-case-folded-node-modules',
+    replacement: weakenedVerifyCaseFoldedNodeModulesBranch,
+    search: verifyCaseFoldedNodeModulesBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsCaseFoldedNodeModulesBehavior,
+  },
+  {
     baseModule: {},
     description: 'Lets a regular evidence path race into a blocking FIFO open.',
     expectedKiller:
@@ -8114,6 +8130,38 @@ async function assertVerifierDirectoryEntryBoundBehavior(moduleUnderTest) {
     );
     if (!result.findings.some((entry) => entry.code === 'artifact-list')) {
       throw new Error('certificate verifier admitted an over-budget directory-only tree');
+    }
+  } finally {
+    rmSync(fixture.root, { force: true, recursive: true });
+  }
+}
+
+async function assertVerifierRejectsCaseFoldedNodeModulesBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/root.mjs';
+  const hiddenModule = '@kovojs/server/dist/NODE_MODULES/evil/index.mjs';
+  const fixture = writeCertificateMutationDirectory(moduleUnderTest, {
+    capabilities: { [hiddenModule]: ['process'] },
+    manifest: { exports: { '.': './dist/root.mjs' }, name: '@kovojs/server' },
+    opaque: [
+      {
+        module: rootModule,
+        reason:
+          'imports external module "evil/index.mjs" outside the nine-kind lexical capability domain',
+      },
+    ],
+    sources: {
+      [hiddenModule]: "import 'node:child_process';",
+      [rootModule]: "import 'evil/index.mjs';",
+    },
+  });
+  try {
+    const result = await moduleUnderTest.verifyCertificateDirectory(
+      fixture.certificate,
+      fixture.policyBytes,
+      fixture.root,
+    );
+    if (!result.findings.some((entry) => entry.code === 'artifact-list')) {
+      throw new Error('certificate verifier admitted a case-folded nested node_modules scope');
     }
   } finally {
     rmSync(fixture.root, { force: true, recursive: true });

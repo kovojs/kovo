@@ -4453,6 +4453,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'certificate-case-folded-node-modules',
+        file: 'packages/verify/src/directory.test.ts',
+        snippets: [
+          'rejects case-folded node_modules scopes before cross-platform package resolution',
+          '@kovojs/server/dist/NODE_MODULES/evil/index.mjs',
+          "code: 'artifact-list'",
+        ],
+      },
+      {
         id: 'certificate-template-import-no-downgrade',
         file: 'packages/verify/src/index.test.ts',
         snippets: [

@@ -1487,7 +1487,7 @@ function collectPackageFiles(
       throw new TypeError(`artifact path contains a symlink: ${relativePath}`);
     }
     if (stat.isDirectory()) {
-      if (entry.name === 'node_modules') {
+      if (isNodeModulesDirectoryName(entry.name)) {
         throw new TypeError(`artifact package contains nested node_modules: ${relativePath}`);
       }
       ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
@@ -1557,6 +1557,13 @@ function readBoundedDirectoryEntries(
     handle.closeSync();
   }
   return entries.sort((left, right) => compareStrings(left.name, right.name));
+}
+
+function isNodeModulesDirectoryName(value: string): boolean {
+  // Node's package resolver reaches ASCII case variants on the default case-insensitive macOS and
+  // Windows filesystems. Reject the complete finite spelling class on every host so a certificate
+  // accepted on Linux cannot gain a nearer package resolver scope after installation.
+  return /^[Nn][Oo][Dd][Ee]_[Mm][Oo][Dd][Uu][Ll][Ee][Ss]$/u.test(value);
 }
 
 function recordCensusIdentity(
