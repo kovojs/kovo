@@ -2067,12 +2067,7 @@ function browserStateDerivedBindingNames(
       if (
         ts.isVariableDeclaration(node) &&
         node.initializer !== undefined &&
-        browserExpressionMayCarryStateOrDerived(
-          node.initializer,
-          derived,
-          aliases,
-          boundary,
-        )
+        browserExpressionMayCarryStateOrDerived(node.initializer, derived, aliases, boundary)
       ) {
         const names = compilerCreateSet<string>();
         collectBindingNames(node.name, names);
@@ -2111,6 +2106,46 @@ function browserStateDerivedBindingNames(
             }
           }
         }
+        const globalRoot = member ? rootIdentifierNode(member.receiver) : undefined;
+        if (
+          member !== undefined &&
+          member.name === 'assign' &&
+          globalRoot?.text === 'Object' &&
+          !identifierIsShadowedWithinBoundary(globalRoot, boundary)
+        ) {
+          const argumentsSnapshot = compilerSnapshotDenseArray(
+            node.arguments,
+            'Deferred Object.assign carrier arguments',
+          );
+          let carriesState = false;
+          for (let index = 1; index < argumentsSnapshot.length; index += 1) {
+            if (
+              browserExpressionMayCarryStateOrDerived(
+                argumentsSnapshot[index]!,
+                derived,
+                aliases,
+                boundary,
+              )
+            ) {
+              carriesState = true;
+              break;
+            }
+          }
+          if (carriesState && argumentsSnapshot[0] !== undefined) {
+            const destination = browserObjectAssignDestination(
+              boundary.getSourceFile(),
+              argumentsSnapshot[0]!,
+            );
+            // SPEC §4.3/§5.2: Object.assign may copy state-derived data only into an exact fresh
+            // local carrier. The classifier independently closes ambiguous targets; preserve the
+            // exact local identity here so a later timer cannot retain the retired state snapshot.
+            if (destination?.bindingName !== undefined) {
+              const names = compilerCreateSet<string>();
+              compilerSetAdd(names, destination.bindingName);
+              mark(names);
+            }
+          }
+        }
       }
       ts.forEachChild(node, visit);
     };
@@ -2118,6 +2153,31 @@ function browserStateDerivedBindingNames(
   }
   compilerWeakMapSet(browserStateDerivedBindingNamesCache, boundary, derived);
   return derived;
+}
+
+interface BrowserObjectAssignDestination {
+  readonly bindingName?: string;
+}
+
+function browserObjectAssignDestination(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): BrowserObjectAssignDestination | undefined {
+  const current = unwrapExpression(expression);
+  if (ts.isObjectLiteralExpression(current) || ts.isArrayLiteralExpression(current)) {
+    return {};
+  }
+  if (
+    !ts.isIdentifier(current) ||
+    securityIrIdentifierBindingScope(sourceFile, current) !== 'local'
+  )
+    return undefined;
+  const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+  if (initializer === undefined) return undefined;
+  const value = unwrapExpression(initializer);
+  return ts.isObjectLiteralExpression(value) || ts.isArrayLiteralExpression(value)
+    ? { bindingName: current.text }
+    : undefined;
 }
 
 function browserExpressionMayCarryStateOrDerived(
@@ -3591,6 +3651,58 @@ function classifyBrowserCall(
       'Object.assign cannot mutate state outside an exact compiler-owned state-write operation',
     );
     return;
+  }
+  if (provenance === 'unknown' && globalMember === 'Object.assign') {
+    const stateDerivedBindings = browserStateDerivedBindingNames(body, aliases);
+    const argumentsSnapshot = compilerSnapshotDenseArray(
+      call.arguments,
+      'Finite browser Object.assign arguments',
+    );
+    for (let index = 1; index < argumentsSnapshot.length; index += 1) {
+      const source = argumentsSnapshot[index]!;
+      if (
+        browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          body,
+          source,
+          aliases,
+          compilerCreateSet<string>(),
+        ) !== undefined
+      ) {
+        appendViolation(
+          source,
+          'computed-security-operation',
+          'Object.assign sources must have exact closed own-data/scalar provenance',
+        );
+        return;
+      }
+    }
+    let carriesState = false;
+    for (let index = 1; index < argumentsSnapshot.length; index += 1) {
+      if (
+        browserExpressionMayCarryStateOrDerived(
+          argumentsSnapshot[index]!,
+          stateDerivedBindings,
+          aliases,
+          body,
+        )
+      ) {
+        carriesState = true;
+        break;
+      }
+    }
+    if (
+      carriesState &&
+      (argumentsSnapshot[0] === undefined ||
+        browserObjectAssignDestination(sourceFile, argumentsSnapshot[0]!) === undefined)
+    ) {
+      appendViolation(
+        argumentsSnapshot[0] ?? call,
+        'computed-security-operation',
+        'state-derived Object.assign requires one exact fresh handler-local destination',
+      );
+      return;
+    }
   }
   if (
     provenance === 'unknown' &&

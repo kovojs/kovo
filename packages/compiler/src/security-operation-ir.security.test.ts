@@ -22,6 +22,17 @@ function kv235(source: string) {
   return compile(source).diagnostics.filter((diagnostic) => diagnostic.code === 'KV235');
 }
 
+function browserHandlerBoundaryDiagnostics(body: string, renderInput = '') {
+  return compile(`
+export const Probe = component({
+  state: () => ({ count: 0, saved: null, value: 'initial' }),
+  render: (${renderInput}) => <button onClick={() => {
+    ${body}
+  }}>Run</button>,
+});
+`).diagnostics.filter((diagnostic) => diagnostic.code === 'KV201' || diagnostic.code === 'KV449');
+}
+
 function kv449Project(
   source: string,
   extraFiles: readonly { readonly fileName: string; readonly source: string }[],
@@ -1460,6 +1471,93 @@ export const Demo = component({
     expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
       'without a queued state transaction',
     );
+  });
+
+  it.each([
+    `const box = {}; Object.assign(box, { value: String(state.value) });
+     setTimeout(() => { void box.value; }, 0);`,
+    `const box = {}; Object.assign(box, { nested: { value: String(state.value) } });
+     setTimeout(() => { void box.nested.value; }, 0);`,
+    `const box = ['safe']; Object.assign(box, { 0: String(state.value) });
+     setTimeout(() => { void box[0]; }, 0);`,
+    `const box = {}; Object.assign(box, state);
+     setTimeout(() => { void box.value; }, 0);`,
+    `const box = {}; const other = {};
+     Object.assign(true ? box : other, { value: String(state.value) });
+     setTimeout(() => { void box.value; }, 0);`,
+    `const box = {}; Object.assign((0, box), { value: String(state.value) });
+     setTimeout(() => { void box.value; }, 0);`,
+    `const box = {}; Object.assign(({ box }).box, { value: String(state.value) });
+     setTimeout(() => { void box.value; }, 0);`,
+  ])('closes Object.assign state-derived timer carriers: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toMatch(
+      /Object\.assign|without a queued state transaction/u,
+    );
+  });
+
+  it.each([
+    [`const box = {}; Object.assign(box, item.fn);`, '{ item }'],
+    [`const box = {}; function source() { return {}; } Object.assign(box, source());`, ''],
+    [`let box = {}; Object.assign(box, state);`, ''],
+    [`const box = {}; const alias = box; Object.assign(alias, state);`, ''],
+    [`Object.assign(box, state); const box = {};`, ''],
+  ])('requires exact Object.assign source and destination facts: %s', (operation, renderInput) => {
+    expect(browserHandlerBoundaryDiagnostics(operation, renderInput)).not.toEqual([]);
+  });
+
+  it('retains exact synchronous Object.assign over closed local data', () => {
+    expect(
+      browserHandlerBoundaryDiagnostics(
+        `const box = {};
+         Object.assign(box, { value: String(state.value) });
+         void box.value;`,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    `const box = [() => { state.count += 1; }]; box[0]();`,
+    `const box = [() => { state.count += 1; }]; const key = 0; box[key]();`,
+    `([() => { state.count += 1; }][0])();`,
+    `const box = { run: () => { state.count += 1; } }; box['run']();`,
+  ])('keeps local callable containers closed: %s', (operation) => {
+    expect(browserHandlerBoundaryDiagnostics(operation)).not.toEqual([]);
+  });
+
+  it.each([
+    `const box = {}; Object.assign(box, { run: item.fn }); box.run();`,
+    `const box = [item.fn]; box[0]();`,
+    `const box = { run: item.fn }; Reflect.get(box, 'run')();`,
+  ])('keeps captured callable containers closed: %s', (operation) => {
+    expect(browserHandlerBoundaryDiagnostics(operation, '{ item }')).not.toEqual([]);
+  });
+
+  it.each([
+    `const box = {}; Object.assign(box, { run: event.detail }); box.run();`,
+    `const box = {}; Object.assign(box, { value: String(event.detail) }); void box.value;`,
+    `const box = { value: event.detail }; Object.values(box)[0]();`,
+  ])('keeps event-detail laundering closed: %s', (operation) => {
+    expect(browserHandlerBoundaryDiagnostics(operation)).not.toEqual([]);
+  });
+
+  it.each([
+    `const outcome = Object.assign({}, { then() { state.count += 1; } }); return outcome;`,
+    `const outcome = { then: () => { state.count += 1; } }; return true ? outcome : null;`,
+    `const outcome = [null, { then() { state.count += 1; } }]; return outcome[1];`,
+  ])('keeps thenable return laundering closed: %s', (operation) => {
+    expect(browserHandlerBoundaryDiagnostics(operation)).not.toEqual([]);
+  });
+
+  it.each([
+    `{ const event = { detail() { state.count += 1; } }; event.detail(); }`,
+    `{ const state = { saved() {} }; state.saved(); }`,
+    `{ const String = (value) => value; state.saved = String(event.detail); }`,
+    `{ const Object = { assign(_target, source) { return source; } };
+       Object.assign({}, event.detail); }`,
+  ])('keeps finite handler identities lexical: %s', (operation) => {
+    expect(browserHandlerBoundaryDiagnostics(operation)).not.toEqual([]);
   });
 
   it.each([
