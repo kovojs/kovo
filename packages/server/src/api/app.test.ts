@@ -301,6 +301,9 @@ type RootCreateMemoryVersionedClientModuleRegistry =
 type RootMemoryVersionedClientModuleRegistryOptions =
   import('@kovojs/server').MemoryVersionedClientModuleRegistryOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootVersionedClientModuleActiveSnapshot =
+  import('@kovojs/server').VersionedClientModuleActiveSnapshot;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootVersionedClientModuleRegistry = import('@kovojs/server').VersionedClientModuleRegistry;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootVersionedClientModuleStore = import('@kovojs/server').VersionedClientModuleStore;
@@ -1094,8 +1097,10 @@ describe('server app-shell public API barrels', () => {
       // D1/DEPLOY-3: the render-plan fingerprint folds in grammar + query-shape facts and remains
       // separate from the app-build token derived by the registry facade.
       'RENDER_PLAN_GRAMMAR_VERSION',
+      'commitVersionedClientModuleStaging',
       'computeRenderPlanFingerprint',
       'createMemoryVersionedClientModuleRegistry',
+      'createMemoryVersionedClientModuleStore',
       'finalizeVersionedClientModuleBuild',
       'isVersionedClientModuleBuildSealed',
       'renderVersionedClientModuleResponse',

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { createAppDeclarationSnapshotContext, snapshotAppEndpoint } from './app-snapshot.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { createMemoryVersionedClientModuleStore } from './client-modules.js';
 import { csrfToken, type CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
 import { endpoint } from './endpoint.js';
@@ -339,11 +339,13 @@ describe('closed app declaration semantics', () => {
   });
 
   it('pins injected client-module registry methods before immutable JavaScript dispatch', async () => {
-    const backing = createMemoryVersionedClientModuleRegistry();
+    const backing = createMemoryVersionedClientModuleStore();
     const registry = {
       buildToken: () => 'attacker-controlled-token',
-      entries: () => backing.entries(),
-      put: (module: Parameters<typeof backing.put>[0]) => backing.put(module),
+      readActiveSnapshot: () => backing.readActiveSnapshot(),
+      replaceActiveSnapshot: (snapshot: Parameters<typeof backing.replaceActiveSnapshot>[0]) =>
+        backing.replaceActiveSnapshot(snapshot),
+      retain: (module: Parameters<typeof backing.retain>[0]) => backing.retain(module),
       resolve: (href: string) => backing.resolve(href),
       setRenderPlanFingerprint: (_fingerprint: string) => undefined,
     };

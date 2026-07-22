@@ -251,7 +251,6 @@ export async function writeKovoNeutralBuild(
     manifestFilePath === undefined
       ? undefined
       : neutralPathDirname(neutralPathDirname(manifestFilePath));
-  const registeredClientModules = registeredClientModuleBuildArtifacts(app.clientModules.entries());
   const appShellBuild =
     manifestFilePath === undefined
       ? createKovoAppShellViteBuild({
@@ -267,10 +266,12 @@ export async function writeKovoNeutralBuild(
           manifestFile: manifestFilePath,
           ...(routeEntryMap === undefined ? {} : { routeEntryMap }),
         });
-  const buildClientModules = concatenateNeutralBuildArrays(
+  const activeClientModules = registeredClientModuleBuildArtifacts(
+    appShellBuild.app.clientModules.entries(),
+  );
+  const buildClientModules = mergeNeutralBuildClientModules(
     appShellBuild.clientModules,
-    registeredClientModules,
-    'neutral build client modules',
+    activeClientModules,
   );
   const buildWithRegisteredClientModules = {
     app: appShellBuild.app,
@@ -381,6 +382,28 @@ function registeredClientModuleBuildArtifacts(
     commitBuildArrayValue(builtModules, built, 'registered client module build artifact');
   }
   return builtModules;
+}
+
+function mergeNeutralBuildClientModules(
+  compiled: readonly KovoAppShellBuiltClientModule[],
+  active: readonly KovoAppShellBuiltClientModule[],
+): readonly KovoAppShellBuiltClientModule[] {
+  const pinnedCompiled = snapshotBuildArray(compiled, 'compiled neutral build client modules');
+  const pinnedActive = snapshotBuildArray(active, 'active neutral build client modules');
+  const hrefs = createSecurityMap<string, true>();
+  const merged: KovoAppShellBuiltClientModule[] = [];
+  for (let index = 0; index < pinnedCompiled.length; index += 1) {
+    const module = pinnedCompiled[index]!;
+    commitBuildArrayValue(merged, module, 'neutral build client modules');
+    securityMapSet(hrefs, module.href, true);
+  }
+  for (let index = 0; index < pinnedActive.length; index += 1) {
+    const module = pinnedActive[index]!;
+    if (securityMapHas(hrefs, module.href)) continue;
+    commitBuildArrayValue(merged, module, 'neutral build client modules');
+    securityMapSet(hrefs, module.href, true);
+  }
+  return snapshotBuildArray(merged, 'neutral build client modules');
 }
 
 function snapshotRegisteredClientModule(

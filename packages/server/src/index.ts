@@ -301,6 +301,7 @@ export type {
 // rules/api-surface.md). They also remain on `@kovojs/server/internal/client-modules`.
 export type {
   MemoryVersionedClientModuleRegistryOptions,
+  VersionedClientModuleActiveSnapshot,
   VersionedClientModuleInput,
   VersionedClientModuleRegistry,
   VersionedClientModuleStore,

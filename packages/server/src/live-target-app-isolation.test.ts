@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { createMemoryVersionedClientModuleStore } from './client-modules.js';
 import { domain } from './domain.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
 import { createLiveTargetAttestation as createAppLiveTargetAttestation } from './internal/wire.js';
@@ -241,7 +241,7 @@ describe('live-target app authority isolation', () => {
   });
 
   it('ignores custom store build tokens and derives a non-empty framework token', () => {
-    const backing = createMemoryVersionedClientModuleRegistry();
+    const backing = createMemoryVersionedClientModuleStore();
     const customStore = {
       ...backing,
       buildToken: () => '',

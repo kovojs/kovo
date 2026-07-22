@@ -1,7 +1,9 @@
 import {
   canonicalClientModuleRepresentation,
   clientModulePath,
+  clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
+  versionedClientModuleHref,
 } from '@kovojs/core/internal/client-module-url';
 
 import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
@@ -12,6 +14,7 @@ import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intri
 import {
   computeRenderPlanFingerprint,
   finalizeVersionedClientModuleBuild,
+  replaceVersionedClientModuleBuildSnapshot,
   type VersionedClientModuleInput,
 } from './client-modules.js';
 import type { PageHintOptions } from './hints.js';
@@ -441,13 +444,23 @@ function registerCompiledClientModules(
   const renderPlanFingerprint = compiledClientModulesRenderPlanFingerprint(pinnedModules);
 
   const builtModules: KovoAppShellBuiltClientModule[] = [];
+  const stagedModules: VersionedClientModuleInput[] = [];
   for (let index = 0; index < pinnedModules.length; index += 1) {
     const module = pinnedModules[index]!;
     const source = canonicalClientModuleRepresentation(module.source);
-    const href = app.clientModules.put({
+    const stagedModule = {
       path: module.path,
       source,
-    });
+    };
+    const href = versionedClientModuleHref(
+      stagedModule.path,
+      clientModuleRepresentationDigest(stagedModule.source),
+    );
+    witnessArrayAppend(
+      stagedModules,
+      stagedModule,
+      'Server packages/server/src/vite-build.ts client-module snapshot',
+    );
     const pathname = clientModulePath(href);
     const target = parseVersionedClientModuleTarget(href);
     if (target === undefined) {
@@ -461,17 +474,17 @@ function registerCompiledClientModules(
       path: pathname,
       source,
     };
-    witnessArrayAppend(
-      builtModules,
-      built,
-      'Server packages/server/src/vite-build.ts collection',
-    );
+    witnessArrayAppend(builtModules, built, 'Server packages/server/src/vite-build.ts collection');
   }
 
-  finalizeVersionedClientModuleBuild(
-    app.clientModules,
-    renderPlanFingerprint ?? computeRenderPlanFingerprint({}),
-  );
+  const fingerprint = renderPlanFingerprint ?? computeRenderPlanFingerprint({});
+  // Publish one complete compiler + mandatory-loader + stable/manual snapshot. Retention happens
+  // before the store's single atomic active-snapshot replacement (SPEC §5.2.1/§14).
+  replaceVersionedClientModuleBuildSnapshot(app.clientModules, {
+    modules: stagedModules,
+    renderPlanFingerprint: fingerprint,
+  });
+  finalizeVersionedClientModuleBuild(app.clientModules, fingerprint);
 
   return builtModules;
 }

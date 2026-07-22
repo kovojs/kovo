@@ -1,5 +1,7 @@
 export {
+  commitVersionedClientModuleStaging,
   computeRenderPlanFingerprint,
+  createMemoryVersionedClientModuleStore,
   createMemoryVersionedClientModuleRegistry,
   finalizeVersionedClientModuleBuild,
   isVersionedClientModuleBuildSealed,
@@ -12,6 +14,7 @@ export {
 export type {
   MemoryVersionedClientModuleRegistryOptions,
   RenderPlanFingerprintInput,
+  VersionedClientModuleActiveSnapshot,
   VersionedClientModuleInput,
   VersionedClientModuleRegistry,
   VersionedClientModuleRequest,

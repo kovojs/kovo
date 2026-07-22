@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
 import {
   computeRenderPlanFingerprint,
+  createMemoryVersionedClientModuleStore,
   createMemoryVersionedClientModuleRegistry,
   finalizeVersionedClientModuleBuild,
   RENDER_PLAN_GRAMMAR_VERSION,
@@ -19,6 +20,7 @@ import {
   snapshotVersionedClientModuleRegistry,
   versionedClientModuleHref,
   type VersionedClientModuleInput,
+  type VersionedClientModuleActiveSnapshot,
   type VersionedClientModuleRegistry,
   type VersionedClientModuleStore,
 } from './client-modules.js';
@@ -33,7 +35,11 @@ const clientModuleRegistryIntrinsicsUrl = new URL(
   import.meta.url,
 ).href;
 
-function createRegistry(store = createMemoryVersionedClientModuleRegistry()): VersionedClientModuleRegistry {
+function createRegistry(
+  store:
+    | VersionedClientModuleStore
+    | VersionedClientModuleRegistry = createMemoryVersionedClientModuleRegistry(),
+): VersionedClientModuleRegistry {
   return snapshotVersionedClientModuleRegistry(store);
 }
 
@@ -68,9 +74,7 @@ describe('render-plan and app-build identities', () => {
     expect(clientModuleBuildTokenHash(fingerprint, ['a', 'b\nc'])).not.toBe(
       clientModuleBuildTokenHash(fingerprint, ['a\nb', 'c']),
     );
-    expect(clientModuleBuildTokenHash(fingerprint, ['名🙂', '\0:x'])).toMatch(
-      /^[0-9a-f]{64}$/u,
-    );
+    expect(clientModuleBuildTokenHash(fingerprint, ['名🙂', '\0:x'])).toMatch(/^[0-9a-f]{64}$/u);
   });
 
   it('is invariant to registration order and retained resolver history', () => {
@@ -81,7 +85,10 @@ describe('render-plan and app-build identities', () => {
 
     const storeA = createMemoryVersionedClientModuleRegistry();
     const registryA = createRegistry(storeA);
-    registryA.put(history);
+    replaceVersionedClientModuleBuildSnapshot(registryA, {
+      modules: [history],
+      renderPlanFingerprint: fingerprint,
+    });
     replaceVersionedClientModuleBuildSnapshot(registryA, {
       modules: [two, one],
       renderPlanFingerprint: fingerprint,
@@ -94,7 +101,10 @@ describe('render-plan and app-build identities', () => {
     });
 
     expect(registryA.buildToken()).toBe(registryB.buildToken());
-    expect(storeA.resolve(clientHref(history))).toMatchObject({ body: history.source, status: 200 });
+    expect(storeA.resolve(clientHref(history))).toMatchObject({
+      body: history.source,
+      status: 200,
+    });
     expect(registryA.entries()).toEqual(registryB.entries());
   });
 
@@ -122,12 +132,13 @@ describe('render-plan and app-build identities', () => {
   });
 
   it('ignores custom identity methods and seals one frozen production scalar', () => {
-    const backing = createMemoryVersionedClientModuleRegistry();
+    const backing = createMemoryVersionedClientModuleStore();
     const attackerToken = vi.fn(() => 'attacker-token');
     const attackerSetter = vi.fn();
     const registry = snapshotVersionedClientModuleRegistry({
-      entries: () => backing.entries(),
-      put: (module) => backing.put(module),
+      readActiveSnapshot: () => backing.readActiveSnapshot(),
+      replaceActiveSnapshot: (snapshot) => backing.replaceActiveSnapshot(snapshot),
+      retain: (module) => backing.retain(module),
       resolve: (href) => backing.resolve(href),
       buildToken: attackerToken,
       setRenderPlanFingerprint: attackerSetter,
@@ -148,6 +159,158 @@ describe('render-plan and app-build identities', () => {
     expect(() => registry.put({ path: '/c/b.client.js', source: 'export {}' })).toThrow(/KV417/);
     expect(registry.buildToken()).toBe(token);
   });
+
+  it('reconstructs the exact durable active snapshot after restart without promoting history', () => {
+    const store = createMemoryVersionedClientModuleStore();
+    const first = snapshotVersionedClientModuleRegistry(store);
+    const oldModule = { path: '/c/cart.client.js', source: 'export const revision = 1;' };
+    const activeModule = { path: '/c/cart.client.js', source: 'export const revision = 2;' };
+    const fingerprint = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+
+    replaceVersionedClientModuleBuildSnapshot(first, {
+      modules: [oldModule],
+      renderPlanFingerprint: fingerprint,
+    });
+    replaceVersionedClientModuleBuildSnapshot(first, {
+      modules: [activeModule],
+      renderPlanFingerprint: fingerprint,
+    });
+
+    const restarted = snapshotVersionedClientModuleRegistry(store);
+    expect(restarted.entries()).toEqual([activeModule]);
+    expect(restarted.buildToken()).toBe(first.buildToken());
+    expect(restarted.resolve(clientHref(oldModule))).toMatchObject({
+      body: oldModule.source,
+      status: 200,
+    });
+  });
+
+  it('unions framework-mandatory and stable/manual modules into a complete replacement', () => {
+    const registry = createRegistry();
+    const tokenBeforeStaging = registry.buildToken();
+    const loaderHref = ensureKovoLoaderRuntimeClientModule(registry);
+    const manual = { path: '/c/manual.client.js', source: 'export const manual = true;' };
+    const compiled = { path: '/c/compiled.client.js', source: 'export const compiled = true;' };
+    registry.put(manual);
+
+    expect(registry.entries()).toEqual([]);
+    expect(registry.buildToken()).toBe(tokenBeforeStaging);
+
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [compiled],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ compiled: 'field:id' }),
+    });
+
+    expect(new Set(registry.entries().map(clientHref))).toEqual(
+      new Set([loaderHref, clientHref(manual), clientHref(compiled)]),
+    );
+  });
+
+  it('does not publish an active snapshot or token when a late retain fails', () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    let rejectSource: string | undefined;
+    const store: VersionedClientModuleStore = {
+      readActiveSnapshot: () => backing.readActiveSnapshot(),
+      replaceActiveSnapshot: (snapshot) => backing.replaceActiveSnapshot(snapshot),
+      retain(module) {
+        if (module.source === rejectSource) throw new Error('late retain failed');
+        backing.retain(module);
+      },
+      resolve: (href) => backing.resolve(href),
+    };
+    const registry = snapshotVersionedClientModuleRegistry(store);
+    const current = { path: '/c/current.client.js', source: 'export const current = true;' };
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [current],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ current: 'field:id' }),
+    });
+    const tokenBefore = registry.buildToken();
+    const snapshotBefore = backing.readActiveSnapshot();
+    rejectSource = 'export const rejected = true;';
+
+    expect(() =>
+      replaceVersionedClientModuleBuildSnapshot(registry, {
+        modules: [
+          { path: '/c/retained.client.js', source: 'export const retained = true;' },
+          { path: '/c/rejected.client.js', source: rejectSource! },
+        ],
+        renderPlanFingerprint: computeRenderPlanFingerprint({ next: 'field:id' }),
+      }),
+    ).toThrow('late retain failed');
+    expect(registry.buildToken()).toBe(tokenBefore);
+    expect(registry.entries()).toEqual([current]);
+    expect(backing.readActiveSnapshot()).toEqual(snapshotBefore);
+  });
+
+  it('freezes committed module records and poisons a facade after unverifiable readback', () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    let corruptReadback = false;
+    let committedRecordFrozen = false;
+    const store: VersionedClientModuleStore = {
+      readActiveSnapshot() {
+        const snapshot = backing.readActiveSnapshot();
+        if (!corruptReadback) return snapshot;
+        return {
+          modules: [],
+          renderPlanFingerprint: snapshot.renderPlanFingerprint,
+        };
+      },
+      replaceActiveSnapshot(snapshot) {
+        committedRecordFrozen = snapshot.modules.length > 0 && Object.isFrozen(snapshot.modules[0]);
+        backing.replaceActiveSnapshot(snapshot);
+        corruptReadback = true;
+      },
+      retain: (module) => backing.retain(module),
+      resolve: (href) => backing.resolve(href),
+    };
+    const registry = snapshotVersionedClientModuleRegistry(store);
+
+    expect(() =>
+      replaceVersionedClientModuleBuildSnapshot(registry, {
+        modules: [{ path: '/c/app.client.js', source: 'export const app = true;' }],
+        renderPlanFingerprint: computeRenderPlanFingerprint({ app: 'field:id' }),
+      }),
+    ).toThrow(/KV417.*permanently closed/);
+    expect(committedRecordFrozen).toBe(true);
+    expect(() => registry.buildToken()).toThrow(/KV417.*permanently closed/);
+    expect(() => registry.entries()).toThrow(/KV417.*permanently closed/);
+  });
+
+  it('rejects accessor and Proxy active snapshots without observing authored getters', () => {
+    let getterCalls = 0;
+    const methods = {
+      replaceActiveSnapshot: () => {},
+      retain: () => {},
+      resolve: () => ({ body: 'Not Found', headers: {}, status: 404 as const }),
+    };
+    expect(() =>
+      snapshotVersionedClientModuleRegistry({
+        ...methods,
+        readActiveSnapshot: () => ({
+          get modules() {
+            getterCalls += 1;
+            return [];
+          },
+          renderPlanFingerprint: computeRenderPlanFingerprint({}),
+        }),
+      }),
+    ).toThrow(/modules must be stable own data/);
+    expect(getterCalls).toBe(0);
+
+    const proxied = new Proxy<VersionedClientModuleActiveSnapshot>(
+      {
+        modules: [],
+        renderPlanFingerprint: computeRenderPlanFingerprint({}),
+      },
+      {},
+    );
+    expect(() =>
+      snapshotVersionedClientModuleRegistry({
+        ...methods,
+        readActiveSnapshot: () => proxied,
+      }),
+    ).toThrow(/non-Proxy object/);
+  });
 });
 
 describe('immutable client-module representations', () => {
@@ -163,9 +326,15 @@ describe('immutable client-module representations', () => {
       digest,
       path: '/c/components/cart.client.js',
     });
-    expect(versionedClientModuleRequestKey(href)).toBe(new URL(href, 'https://kovo.local').pathname);
-    expect(versionedClientModuleRequestKey(`/c/components/cart.client.js?v=${digest}`)).toBeUndefined();
-    expect(parseVersionedClientModuleTarget('/c/__v/cart-v1/components/cart.client.js')).toBeUndefined();
+    expect(versionedClientModuleRequestKey(href)).toBe(
+      new URL(href, 'https://kovo.local').pathname,
+    );
+    expect(
+      versionedClientModuleRequestKey(`/c/components/cart.client.js?v=${digest}`),
+    ).toBeUndefined();
+    expect(
+      parseVersionedClientModuleTarget('/c/__v/cart-v1/components/cart.client.js'),
+    ).toBeUndefined();
   });
 
   it('retains old bytes while the facade active manifest can exclude them', () => {
@@ -173,7 +342,11 @@ describe('immutable client-module representations', () => {
     const registry = createRegistry(store);
     const oldModule = { path: '/c/cart.client.js', source: 'export const version = "old";' };
     const newModule = { path: '/c/cart.client.js', source: 'export const version = "new";' };
-    const oldHref = registry.put(oldModule);
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [oldModule],
+      renderPlanFingerprint: computeRenderPlanFingerprint({}),
+    });
+    const oldHref = clientHref(oldModule);
     replaceVersionedClientModuleBuildSnapshot(registry, {
       modules: [newModule],
       renderPlanFingerprint: computeRenderPlanFingerprint({}),
@@ -203,17 +376,26 @@ describe('immutable client-module representations', () => {
     });
   });
 
-  it('rejects a custom store href, body, or content-type mismatch', () => {
+  it('ignores store-supplied identity and rejects conflicting body or content-type overwrite', () => {
     const source = 'export const safe = true;';
     const expectedHref = clientHref({ path: '/c/safe.client.js', source });
-    const wrongHrefStore: VersionedClientModuleStore = {
-      entries: () => [],
-      put: () => '/c/__v/' + '0'.repeat(64) + '/safe.client.js',
+    const retained: VersionedClientModuleInput[] = [];
+    const noIdentityStore: VersionedClientModuleStore = {
+      readActiveSnapshot: () => ({
+        modules: [],
+        renderPlanFingerprint: computeRenderPlanFingerprint({}),
+      }),
+      replaceActiveSnapshot: () => {},
+      retain: (module) => {
+        retained.push(module);
+        return ('/c/__v/' + '0'.repeat(64) + '/forged.client.js') as unknown as void;
+      },
       resolve: () => ({ body: source, headers: {}, status: 200 }),
     };
-    expect(() => createRegistry(wrongHrefStore).put({ path: '/c/safe.client.js', source })).toThrow(
-      /framework-derived href/,
+    expect(createRegistry(noIdentityStore).put({ path: '/c/safe.client.js', source })).toBe(
+      expectedHref,
     );
+    expect(retained).toEqual([{ path: '/c/safe.client.js', source }]);
 
     for (const response of [
       {
@@ -228,12 +410,57 @@ describe('immutable client-module representations', () => {
       },
     ]) {
       const store: VersionedClientModuleStore = {
-        entries: () => [{ path: '/c/safe.client.js', source }],
-        put: () => expectedHref,
+        readActiveSnapshot: () => ({
+          modules: [{ path: '/c/safe.client.js', source }],
+          renderPlanFingerprint: computeRenderPlanFingerprint({}),
+        }),
+        replaceActiveSnapshot: () => {},
+        retain: () => {},
         resolve: () => response,
       };
       expect(() => createRegistry(store).resolve(expectedHref)).toThrow(/bytes|metadata/);
     }
+  });
+
+  it('rejects accessor and Proxy response envelopes without invoking getters', () => {
+    const source = 'export const safe = true;';
+    const module = { path: '/c/safe.client.js', source };
+    const href = clientHref(module);
+    let getterCalls = 0;
+    const storeFor = (response: unknown): VersionedClientModuleStore => ({
+      readActiveSnapshot: () => ({
+        modules: [module],
+        renderPlanFingerprint: computeRenderPlanFingerprint({}),
+      }),
+      replaceActiveSnapshot: () => {},
+      retain: () => {},
+      resolve: () => response as ReturnType<VersionedClientModuleStore['resolve']>,
+    });
+
+    const accessorResponse = {
+      get body() {
+        getterCalls += 1;
+        return source;
+      },
+      headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+      status: 200 as const,
+    };
+    expect(() => createRegistry(storeFor(accessorResponse)).resolve(href)).toThrow(
+      /body must be stable own data/,
+    );
+    expect(getterCalls).toBe(0);
+
+    const proxiedResponse = new Proxy(
+      {
+        body: source,
+        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+        status: 200 as const,
+      },
+      {},
+    );
+    expect(() => createRegistry(storeFor(proxiedResponse)).resolve(href)).toThrow(
+      /non-Proxy object/,
+    );
   });
 
   it('keeps exact ownership after late Map and hash prototype poisoning', () => {
@@ -278,9 +505,9 @@ describe('immutable client-module representations', () => {
       body: 'export const version = "build-1";',
       status: 200,
     });
-    expect(renderVersionedClientModuleResponse(registry, { url: '/c/cart.client.js' })).toMatchObject(
-      { status: 404 },
-    );
+    expect(
+      renderVersionedClientModuleResponse(registry, { url: '/c/cart.client.js' }),
+    ).toMatchObject({ status: 404 });
     const onError = vi.fn();
     expect(
       renderVersionedClientModuleResponse(registry, {
@@ -333,9 +560,9 @@ describe('immutable client-module representations', () => {
       return this;
     };
     try {
-      await expect(import(`${clientModuleRegistryIntrinsicsUrl}?preimport-hash-poison`)).rejects.toThrow(
-        /hash controls failed their semantic check/,
-      );
+      await expect(
+        import(`${clientModuleRegistryIntrinsicsUrl}?preimport-hash-poison`),
+      ).rejects.toThrow(/hash controls failed their semantic check/);
     } finally {
       prototype.update = originalUpdate;
     }
@@ -349,8 +576,5 @@ describe('immutable client-module representations', () => {
 });
 
 function clientHref(module: VersionedClientModuleInput): string {
-  return versionedClientModuleHref(
-    module.path,
-    clientModuleRepresentationDigest(module.source),
-  );
+  return versionedClientModuleHref(module.path, clientModuleRepresentationDigest(module.source));
 }

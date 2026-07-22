@@ -109,12 +109,12 @@ describe('server static export', () => {
 
       const cartResponse = await handler(new Request(`https://kovo.local${cartHref}`));
       const menuResponse = await handler(new Request(`https://kovo.local${menuHref}`));
-      await expect(
-        readFile(path.join(outDir, cartHref.slice(1)), 'utf8'),
-      ).resolves.toBe(await cartResponse.text());
-      await expect(
-        readFile(path.join(outDir, menuHref.slice(1)), 'utf8'),
-      ).resolves.toBe(await menuResponse.text());
+      await expect(readFile(path.join(outDir, cartHref.slice(1)), 'utf8')).resolves.toBe(
+        await cartResponse.text(),
+      );
+      await expect(readFile(path.join(outDir, menuHref.slice(1)), 'utf8')).resolves.toBe(
+        await menuResponse.text(),
+      );
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
@@ -168,9 +168,7 @@ describe('server static export', () => {
       expect(result.clientModules.map((artifact) => artifact.body)).not.toContain(
         'export const serverOnlyAdminToken = "internal-build-token";',
       );
-      await expect(
-        readFile(path.join(outDir, privateHref.slice(1)), 'utf8'),
-      ).rejects.toThrow();
+      await expect(readFile(path.join(outDir, privateHref.slice(1)), 'utf8')).rejects.toThrow();
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
@@ -213,12 +211,12 @@ describe('server static export', () => {
         ...referencedHrefs,
         runtimeClientModuleHref,
       ]);
-      await expect(
-        readFile(path.join(outDir, cartHref.slice(1)), 'utf8'),
-      ).resolves.toBe('export const cart = "absolute-build";');
-      await expect(
-        readFile(path.join(outDir, menuHref.slice(1)), 'utf8'),
-      ).resolves.toBe('export const menu = "absolute-build";');
+      await expect(readFile(path.join(outDir, cartHref.slice(1)), 'utf8')).resolves.toBe(
+        'export const cart = "absolute-build";',
+      );
+      await expect(readFile(path.join(outDir, menuHref.slice(1)), 'utf8')).resolves.toBe(
+        'export const menu = "absolute-build";',
+      );
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
@@ -232,17 +230,18 @@ describe('server static export', () => {
         source: 'export const cart = "wrong-content-type";',
       };
       const cartHref = clientModuleHref(cartModule);
-      const retained = new Map<string, VersionedClientModuleInput>([
-        [cartHref, cartModule],
-      ]);
+      const retained = new Map<string, VersionedClientModuleInput>([[cartHref, cartModule]]);
+      let active = [cartModule];
       const clientModules: VersionedClientModuleStore = {
-        entries() {
-          return [cartModule];
+        readActiveSnapshot() {
+          return { modules: active, renderPlanFingerprint: '0'.repeat(64) };
         },
-        put(module) {
+        replaceActiveSnapshot(snapshot) {
+          active = [...snapshot.modules];
+        },
+        retain(module) {
           const href = clientModuleHref(module);
           retained.set(href, { path: module.path, source: module.source });
-          return href;
         },
         resolve(href) {
           const module = retained.get(href);
@@ -257,9 +256,7 @@ describe('server static export', () => {
             body: module.source,
             headers: {
               'Content-Type':
-                href === cartHref
-                  ? 'text/html; charset=utf-8'
-                  : 'text/javascript; charset=utf-8',
+                href === cartHref ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8',
             },
             status: 200,
           };
@@ -306,17 +303,18 @@ describe('server static export', () => {
         source: 'export const unsafe = true;',
       };
       const badHref = clientModuleHref(unsafeModule);
-      const retained = new Map<string, VersionedClientModuleInput>([
-        [badHref, unsafeModule],
-      ]);
+      const retained = new Map<string, VersionedClientModuleInput>([[badHref, unsafeModule]]);
+      let active = [unsafeModule];
       const clientModules: VersionedClientModuleStore = {
-        entries() {
-          return [unsafeModule];
+        readActiveSnapshot() {
+          return { modules: active, renderPlanFingerprint: '0'.repeat(64) };
         },
-        put(module) {
+        replaceActiveSnapshot(snapshot) {
+          active = [...snapshot.modules];
+        },
+        retain(module) {
           const href = clientModuleHref(module);
           retained.set(href, { path: module.path, source: module.source });
-          return href;
         },
         resolve(href) {
           const module = retained.get(href);

@@ -1248,11 +1248,14 @@ class BaseReplay implements WebhookReplayStore, MutationReplayStore {
 class InheritedReplay extends BaseReplay {}
 
 class BaseRegistry implements VersionedClientModuleStore {
-  entries(): readonly VersionedClientModuleInput[] {
-    return [];
+  readActiveSnapshot() {
+    return { modules: [] as readonly VersionedClientModuleInput[], renderPlanFingerprint: '0'.repeat(64) };
   }
-  put(_module: VersionedClientModuleInput): string {
-    return '/c/strict-inherited.js';
+  replaceActiveSnapshot(_snapshot: { modules: readonly VersionedClientModuleInput[]; renderPlanFingerprint: string }): void {
+    execFileSync('registry-replace-active');
+  }
+  retain(_module: VersionedClientModuleInput): void {
+    execFileSync('registry-retain');
   }
   resolve(_href: string) {
     execFileSync('registry-resolve');

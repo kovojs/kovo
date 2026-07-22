@@ -10,6 +10,7 @@ import {
   type RenderPlanFingerprintInput,
   RENDER_PLAN_GRAMMAR_VERSION,
 } from '@kovojs/core/internal/render-plan-token';
+import { types as nodeUtilTypes } from 'node:util';
 
 import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
@@ -27,7 +28,6 @@ import {
   witnessGetPrototypeOf,
   witnessMapForEach,
   witnessMapGet,
-  witnessMapHas,
   witnessMapSet,
   witnessObjectIs,
   witnessReflectApply,
@@ -46,6 +46,7 @@ export {
 const CLIENT_MODULE_CONTENT_TYPE = 'text/javascript; charset=utf-8';
 const DEFAULT_RENDER_PLAN_FINGERPRINT = computeRenderPlanFingerprint({});
 const nativeArrayIsArray = Array.isArray;
+const nativeIsProxy = nodeUtilTypes.isProxy;
 
 /** Source representation accepted by framework-owned client-module storage (SPEC §5.2.1/§14). */
 export interface VersionedClientModuleInput {
@@ -54,20 +55,37 @@ export interface VersionedClientModuleInput {
 }
 
 /**
- * App/deployment storage contract. It stores representations and resolves retained history, but it
- * never supplies compatibility identity. `entries()` is the exact current active set, not resolver
- * history (SPEC §14).
+ * Durable exact active deployment snapshot stored by a client-module store (SPEC §5.2.1/§14).
+ * The framework derives every href and the app-build token from these raw inputs.
+ */
+export interface VersionedClientModuleActiveSnapshot {
+  modules: readonly VersionedClientModuleInput[];
+  renderPlanFingerprint: string;
+}
+
+/**
+ * App/deployment storage contract. Immutable representation retention and active-snapshot
+ * publication are deliberately separate: `replaceActiveSnapshot()` MUST atomically replace the
+ * durable exact active set, while `resolve()` continues to serve retained history for the §14 skew
+ * window. The store never supplies an href, digest, or app-build token (SPEC §5.2.1/§14).
  */
 export interface VersionedClientModuleStore {
-  entries(): readonly VersionedClientModuleInput[];
-  put(module: VersionedClientModuleInput): string;
+  readActiveSnapshot(): VersionedClientModuleActiveSnapshot;
+  replaceActiveSnapshot(snapshot: VersionedClientModuleActiveSnapshot): void;
+  retain(module: VersionedClientModuleInput): void;
   resolve(href: string): ServerResponseBase<string, Record<string, string>, 200 | 404>;
 }
 
 /** Framework facade used by the request shell after closing an injected store. */
-export interface VersionedClientModuleRegistry extends VersionedClientModuleStore {
+export interface VersionedClientModuleRegistry {
   /** Frozen, eagerly derived app-build token. This call never hashes or mutates storage. */
   buildToken(): string;
+  /** Exact current active set; retained resolver history is excluded. */
+  entries(): readonly VersionedClientModuleInput[];
+  /** Stage a stable/manual module using a framework-derived immutable href. */
+  put(module: VersionedClientModuleInput): string;
+  /** Resolve and re-verify one immutable representation through the closed store. */
+  resolve(href: string): ServerResponseBase<string, Record<string, string>, 200 | 404>;
 }
 
 /** @internal Response envelope produced by the server-owned client-module request path. */
@@ -92,15 +110,20 @@ export interface MemoryVersionedClientModuleRegistryOptions {
 interface RegistryControl {
   activeByHref: Map<string, Readonly<VersionedClientModuleInput>>;
   buildToken: string;
+  dirty: boolean;
+  mandatoryByHref: Map<string, Readonly<VersionedClientModuleInput>>;
+  poisoned: Error | undefined;
   renderPlanFingerprint: string;
   sealed: boolean;
+  stableByHref: Map<string, Readonly<VersionedClientModuleInput>>;
   store: ClosedClientModuleStore;
 }
 
 interface ClosedClientModuleStore {
-  entries: Function;
-  put: Function;
+  readActiveSnapshot: Function;
   receiver: object;
+  replaceActiveSnapshot: Function;
+  retain: Function;
   resolve: Function;
 }
 
@@ -112,49 +135,58 @@ const registryControls = createWitnessWeakMap<VersionedClientModuleRegistry, Reg
  * reflected onto the facade.
  */
 export function snapshotVersionedClientModuleRegistry(
-  source: VersionedClientModuleStore,
+  source: VersionedClientModuleStore | VersionedClientModuleRegistry,
 ): VersionedClientModuleRegistry {
   if ((typeof source !== 'object' && typeof source !== 'function') || source === null) {
     throw new TypeError('createApp clientModules must be a stable client-module store object.');
   }
 
-  const existing = witnessWeakMapGet(
-    registryControls,
-    source as VersionedClientModuleRegistry,
-  );
+  const existing = witnessWeakMapGet(registryControls, source as VersionedClientModuleRegistry);
   if (existing !== undefined) return source as VersionedClientModuleRegistry;
 
   const store: ClosedClientModuleStore = {
-    entries: stableClientModuleStoreMethod(source, 'entries'),
-    put: stableClientModuleStoreMethod(source, 'put'),
+    readActiveSnapshot: stableClientModuleStoreMethod(source, 'readActiveSnapshot'),
     receiver: source,
+    replaceActiveSnapshot: stableClientModuleStoreMethod(source, 'replaceActiveSnapshot'),
+    retain: stableClientModuleStoreMethod(source, 'retain'),
     resolve: stableClientModuleStoreMethod(source, 'resolve'),
   };
   const activeByHref = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
-  const initialEntries = witnessReflectApply<readonly VersionedClientModuleInput[]>(
-    store.entries,
+  const initialSnapshot = witnessReflectApply<VersionedClientModuleActiveSnapshot>(
+    store.readActiveSnapshot,
     store.receiver,
     [],
   );
-  snapshotActiveEntries(initialEntries, activeByHref, 'clientModules.entries()');
+  const reconstructed = snapshotActiveSnapshot(
+    initialSnapshot,
+    'clientModules.readActiveSnapshot()',
+  );
+  snapshotActiveEntries(reconstructed.modules, activeByHref, 'clientModules active snapshot');
 
   const control: RegistryControl = {
     activeByHref,
     buildToken: '',
-    renderPlanFingerprint: DEFAULT_RENDER_PLAN_FINGERPRINT,
+    dirty: false,
+    mandatoryByHref: createWitnessMap<string, Readonly<VersionedClientModuleInput>>(),
+    poisoned: undefined,
+    renderPlanFingerprint: reconstructed.renderPlanFingerprint,
     sealed: false,
+    stableByHref: createWitnessMap<string, Readonly<VersionedClientModuleInput>>(),
     store,
   };
 
   let facade!: VersionedClientModuleRegistry;
   facade = witnessFreeze({
     buildToken() {
+      assertRegistryControlUsable(control);
       return control.buildToken;
     },
     entries() {
+      assertRegistryControlUsable(control);
       return activeEntries(control);
     },
     put(module: VersionedClientModuleInput) {
+      assertRegistryControlUsable(control);
       if (control.sealed) {
         throw new Error(
           'KV417: immutable client-module build snapshot is sealed; post-finalization mutation is forbidden.',
@@ -162,19 +194,13 @@ export function snapshotVersionedClientModuleRegistry(
       }
       const snapshot = snapshotClientModuleInput(module);
       const href = moduleHref(snapshot);
-      const returnedHref = witnessReflectApply<string>(control.store.put, control.store.receiver, [
-        snapshot,
-      ]);
-      if (returnedHref !== href) {
-        throw new TypeError(
-          `Client-module store returned ${String(returnedHref)} for framework-derived href ${href}.`,
-        );
-      }
-      rememberActive(control.activeByHref, href, snapshot);
-      refreshBuildToken(control);
+      witnessReflectApply<void>(control.store.retain, control.store.receiver, [snapshot]);
+      rememberActive(control.stableByHref, href, snapshot);
+      control.dirty = true;
       return href;
     },
     resolve(href: string) {
+      assertRegistryControlUsable(control);
       return resolveVerifiedClientModule(control, href);
     },
   });
@@ -205,21 +231,11 @@ export function replaceVersionedClientModuleBuildSnapshot(
   for (let index = 0; index < modules.length; index += 1) {
     const module = snapshotClientModuleInput(modules[index]!);
     const href = moduleHref(module);
-    const returnedHref = witnessReflectApply<string>(control.store.put, control.store.receiver, [
-      module,
-    ]);
-    if (returnedHref !== href) {
-      throw new TypeError(
-        `Client-module store returned ${String(returnedHref)} for framework-derived href ${href}.`,
-      );
-    }
     rememberActive(next, href, module);
   }
-  // Commit only after every entry was validated and stored. Resolver history may have grown on a
-  // failed custom store, but the visible active snapshot and token remain unchanged.
-  control.activeByHref = next;
-  control.renderPlanFingerprint = fingerprint;
-  refreshBuildToken(control);
+  copyModuleMap(control.stableByHref, next);
+  copyModuleMap(control.mandatoryByHref, next);
+  publishActiveSnapshot(control, next, fingerprint);
   return control.buildToken;
 }
 
@@ -232,12 +248,18 @@ export function finalizeVersionedClientModuleBuild(
   const fingerprint = renderPlanFingerprint(renderPlanFingerprintValue);
   if (control.sealed) {
     if (control.renderPlanFingerprint !== fingerprint) {
-      throw new Error('KV417: immutable client-module build snapshot was finalized twice differently.');
+      throw new Error(
+        'KV417: immutable client-module build snapshot was finalized twice differently.',
+      );
     }
     return control.buildToken;
   }
-  control.renderPlanFingerprint = fingerprint;
-  refreshBuildToken(control);
+  if (control.dirty || control.renderPlanFingerprint !== fingerprint) {
+    const next = cloneModuleMap(control.activeByHref);
+    copyModuleMap(control.stableByHref, next);
+    copyModuleMap(control.mandatoryByHref, next);
+    publishActiveSnapshot(control, next, fingerprint);
+  }
   control.sealed = true;
   return control.buildToken;
 }
@@ -247,6 +269,39 @@ export function isVersionedClientModuleBuildSealed(
   registry: VersionedClientModuleRegistry,
 ): boolean {
   return registryControl(registry).sealed;
+}
+
+/**
+ * @internal Stage one framework-mandatory module without publishing a partial compiler snapshot.
+ * The next complete build replacement or production finalization includes it exactly once.
+ */
+export function registerMandatoryVersionedClientModule(
+  registry: VersionedClientModuleRegistry,
+  input: VersionedClientModuleInput,
+): string {
+  const control = registryControl(registry);
+  if (control.sealed) {
+    throw new Error('KV417: immutable client-module build snapshot is sealed.');
+  }
+  const module = snapshotClientModuleInput(input);
+  const href = moduleHref(module);
+  witnessReflectApply<void>(control.store.retain, control.store.receiver, [module]);
+  rememberActive(control.mandatoryByHref, href, module);
+  control.dirty = true;
+  return href;
+}
+
+/** @internal Atomically publish staged stable/mandatory modules without sealing development. */
+export function commitVersionedClientModuleStaging(
+  registry: VersionedClientModuleRegistry,
+): string {
+  const control = registryControl(registry);
+  if (!control.dirty) return control.buildToken;
+  const next = cloneModuleMap(control.activeByHref);
+  copyModuleMap(control.stableByHref, next);
+  copyModuleMap(control.mandatoryByHref, next);
+  publishActiveSnapshot(control, next, control.renderPlanFingerprint);
+  return control.buildToken;
 }
 
 /** @internal Construct an immutable client-module href from its full representation digest. */
@@ -260,27 +315,47 @@ export function versionedClientModuleHref(href: string, digest: string): string 
  */
 export function createMemoryVersionedClientModuleRegistry(
   options: MemoryVersionedClientModuleRegistryOptions = {},
+): VersionedClientModuleRegistry {
+  return snapshotVersionedClientModuleRegistry(createMemoryVersionedClientModuleStore(options));
+}
+
+/** @internal Construct the raw in-memory store for restart/adapter contract tests. */
+export function createMemoryVersionedClientModuleStore(
+  options: MemoryVersionedClientModuleRegistryOptions = {},
 ): VersionedClientModuleStore {
   assertDeploySkewRetentionOptions(options);
   const retained = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
-  const active = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
+  let active = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
+  let activeRenderPlanFingerprint = DEFAULT_RENDER_PLAN_FINGERPRINT;
 
   return witnessFreeze({
-    entries() {
-      return sortedEntries(active);
+    readActiveSnapshot() {
+      return witnessFreeze({
+        modules: sortedEntries(active),
+        renderPlanFingerprint: activeRenderPlanFingerprint,
+      });
     },
-    put(module: VersionedClientModuleInput) {
+    replaceActiveSnapshot(value: VersionedClientModuleActiveSnapshot) {
+      const snapshot = snapshotActiveSnapshot(value, 'memory client-module active snapshot');
+      const next = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
+      snapshotActiveEntries(snapshot.modules, next, 'memory client-module active modules');
+      // One pointer swap publishes the exact set; retained resolver history remains separate.
+      active = next;
+      activeRenderPlanFingerprint = snapshot.renderPlanFingerprint;
+    },
+    retain(module: VersionedClientModuleInput) {
       const snapshot = snapshotClientModuleInput(module);
       const href = moduleHref(snapshot);
       const existing = witnessMapGet(retained, href);
-      if (existing !== undefined && (existing.path !== snapshot.path || existing.source !== snapshot.source)) {
+      if (
+        existing !== undefined &&
+        (existing.path !== snapshot.path || existing.source !== snapshot.source)
+      ) {
         throw new TypeError(
           'Kovo client-module store refused a conflicting overwrite of an immutable href.',
         );
       }
       witnessMapSet(retained, href, snapshot);
-      witnessMapSet(active, href, snapshot);
-      return href;
     },
     resolve(href: string) {
       const target = parseVersionedClientModuleTarget(href);
@@ -317,7 +392,12 @@ function registryControl(registry: VersionedClientModuleRegistry): RegistryContr
   if (control === undefined) {
     throw new TypeError('Client-module registry is not a framework-closed facade.');
   }
+  assertRegistryControlUsable(control);
   return control;
+}
+
+function assertRegistryControlUsable(control: RegistryControl): void {
+  if (control.poisoned !== undefined) throw control.poisoned;
 }
 
 function stableClientModuleStoreMethod(
@@ -337,12 +417,16 @@ function stableClientModuleStoreMethod(
         throw new TypeError(`createApp clientModules.${property} must be a stable data method.`);
       }
       if (!witnessObjectIs(witnessReflectGet(source, property, source), before.value)) {
-        throw new TypeError(`createApp clientModules.${property} must resolve to its stable method.`);
+        throw new TypeError(
+          `createApp clientModules.${property} must resolve to its stable method.`,
+        );
       }
       return before.value;
     }
     if (witnessGetPrototypeOf(owner) !== prototype) {
-      throw new TypeError(`createApp clientModules.${property} prototype changed while it was closed.`);
+      throw new TypeError(
+        `createApp clientModules.${property} prototype changed while it was closed.`,
+      );
     }
     owner = prototype;
   }
@@ -376,11 +460,56 @@ function snapshotActiveEntries(
   }
 }
 
+function snapshotActiveSnapshot(
+  value: VersionedClientModuleActiveSnapshot,
+  label: string,
+): Readonly<VersionedClientModuleActiveSnapshot> {
+  assertStableRecord(value, label);
+  const modules = ownDataValue(value, 'modules', label);
+  const fingerprint = ownDataValue(value, 'renderPlanFingerprint', label);
+  if (!nativeArrayIsArray(modules)) {
+    throw new TypeError(`${label}.modules must be a bounded dense array.`);
+  }
+  if (typeof fingerprint !== 'string') {
+    throw new TypeError(`${label}.renderPlanFingerprint must be a string.`);
+  }
+  const sourceModules = snapshotInputArray(
+    modules as readonly VersionedClientModuleInput[],
+    `${label}.modules`,
+  );
+  const pinnedModules: Readonly<VersionedClientModuleInput>[] = [];
+  for (let index = 0; index < sourceModules.length; index += 1) {
+    witnessArrayAppend(
+      pinnedModules,
+      snapshotClientModuleInput(sourceModules[index]!),
+      `${label}.modules`,
+    );
+  }
+  return witnessFreeze({
+    modules: witnessFreeze(pinnedModules),
+    renderPlanFingerprint: renderPlanFingerprint(fingerprint),
+  });
+}
+
+function assertStableRecord(value: unknown, label: string): asserts value is object {
+  if (typeof value !== 'object' || value === null || nativeIsProxy(value)) {
+    throw new TypeError(`${label} must be a non-Proxy object with stable own data.`);
+  }
+}
+
+function ownDataValue(value: object, property: string, label: string): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, property);
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`${label}.${property} must be stable own data.`);
+  }
+  return descriptor.value;
+}
+
 function snapshotInputArray(
   value: readonly VersionedClientModuleInput[],
   label: string,
 ): readonly VersionedClientModuleInput[] {
-  if (!nativeArrayIsArray(value) || value.length > 100_000) {
+  if (!nativeArrayIsArray(value) || nativeIsProxy(value) || value.length > 100_000) {
     throw new TypeError(`${label} must be a bounded dense array.`);
   }
   const result: VersionedClientModuleInput[] = [];
@@ -394,10 +523,10 @@ function snapshotInputArray(
   return result;
 }
 
-function snapshotClientModuleInput(module: VersionedClientModuleInput): Readonly<VersionedClientModuleInput> {
-  if (typeof module !== 'object' || module === null) {
-    throw new TypeError('Client module input must be an object.');
-  }
+function snapshotClientModuleInput(
+  module: VersionedClientModuleInput,
+): Readonly<VersionedClientModuleInput> {
+  assertStableRecord(module, 'Client module input');
   const path = ownString(module, 'path');
   const source = canonicalClientModuleRepresentation(ownString(module, 'source'));
   const normalizedPath = clientModulePath(path);
@@ -409,7 +538,11 @@ function snapshotClientModuleInput(module: VersionedClientModuleInput): Readonly
 
 function ownString(value: object, property: 'path' | 'source'): string {
   const descriptor = witnessGetOwnPropertyDescriptor(value, property);
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw new TypeError(`Client module ${property} must be a stable own string.`);
   }
   return descriptor.value;
@@ -428,10 +561,106 @@ function rememberActive(
   module: Readonly<VersionedClientModuleInput>,
 ): void {
   const existing = witnessMapGet(target, href);
-  if (existing !== undefined && (existing.path !== module.path || existing.source !== module.source)) {
-    throw new TypeError('Kovo client-module active manifest contains a conflicting immutable href.');
+  if (
+    existing !== undefined &&
+    (existing.path !== module.path || existing.source !== module.source)
+  ) {
+    throw new TypeError(
+      'Kovo client-module active manifest contains a conflicting immutable href.',
+    );
   }
   witnessMapSet(target, href, module);
+}
+
+function copyModuleMap(
+  source: Map<string, Readonly<VersionedClientModuleInput>>,
+  target: Map<string, Readonly<VersionedClientModuleInput>>,
+): void {
+  witnessMapForEach(source, (module, href) => {
+    rememberActive(target, href, module);
+  });
+}
+
+function cloneModuleMap(
+  source: Map<string, Readonly<VersionedClientModuleInput>>,
+): Map<string, Readonly<VersionedClientModuleInput>> {
+  const clone = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
+  copyModuleMap(source, clone);
+  return clone;
+}
+
+function publishActiveSnapshot(
+  control: RegistryControl,
+  next: Map<string, Readonly<VersionedClientModuleInput>>,
+  fingerprint: string,
+): void {
+  const modules = sortedEntries(next);
+  // Retention can grow before publication, but no active set/token changes unless every retain and
+  // the store's one atomic replacement succeed (SPEC §5.2.1/§14).
+  for (let index = 0; index < modules.length; index += 1) {
+    witnessReflectApply<void>(control.store.retain, control.store.receiver, [modules[index]!]);
+  }
+  const durableSnapshot = witnessFreeze({
+    modules,
+    renderPlanFingerprint: fingerprint,
+  });
+  try {
+    witnessReflectApply<void>(control.store.replaceActiveSnapshot, control.store.receiver, [
+      durableSnapshot,
+    ]);
+    const observed = snapshotActiveSnapshot(
+      witnessReflectApply<VersionedClientModuleActiveSnapshot>(
+        control.store.readActiveSnapshot,
+        control.store.receiver,
+        [],
+      ),
+      'clientModules.readActiveSnapshot() after commit',
+    );
+    const observedByHref = createWitnessMap<string, Readonly<VersionedClientModuleInput>>();
+    snapshotActiveEntries(
+      observed.modules,
+      observedByHref,
+      'committed client-module active snapshot',
+    );
+    if (observed.renderPlanFingerprint !== fingerprint || !sameModuleMap(next, observedByHref)) {
+      throw new TypeError('store readback differed from the committed exact snapshot');
+    }
+  } catch (cause) {
+    const failure = new Error(
+      'KV417: client-module active-snapshot publication became unverifiable; this registry is permanently closed.',
+      { cause },
+    );
+    control.poisoned = failure;
+    throw failure;
+  }
+  control.activeByHref = next;
+  control.renderPlanFingerprint = fingerprint;
+  control.dirty = false;
+  refreshBuildToken(control);
+}
+
+function sameModuleMap(
+  left: Map<string, Readonly<VersionedClientModuleInput>>,
+  right: Map<string, Readonly<VersionedClientModuleInput>>,
+): boolean {
+  let leftCount = 0;
+  let matches = true;
+  witnessMapForEach(left, (module, href) => {
+    leftCount += 1;
+    const candidate = witnessMapGet(right, href);
+    if (
+      candidate === undefined ||
+      candidate.path !== module.path ||
+      candidate.source !== module.source
+    ) {
+      matches = false;
+    }
+  });
+  let rightCount = 0;
+  witnessMapForEach(right, () => {
+    rightCount += 1;
+  });
+  return matches && leftCount === rightCount;
 }
 
 function refreshBuildToken(control: RegistryControl): void {
@@ -461,7 +690,11 @@ function sortedEntries(
   for (let index = 0; index < hrefs.length; index += 1) {
     const module = witnessMapGet(byHref, hrefs[index]!);
     if (module === undefined) throw new TypeError('Client-module entry snapshot changed.');
-    witnessArrayAppend(entries, { path: module.path, source: module.source }, 'client-module entries');
+    witnessArrayAppend(
+      entries,
+      witnessFreeze({ path: module.path, source: module.source }),
+      'client-module entries',
+    );
   }
   return witnessFreeze(entries);
 }
@@ -478,23 +711,27 @@ function resolveVerifiedClientModule(
     control.store.receiver,
     [canonicalHref],
   );
-  if (response.status === 404) return missingClientModuleResponse();
-  if (response.status !== 200 || typeof response.body !== 'string') {
+  assertStableRecord(response, 'Client-module store response');
+  const status = ownDataValue(response, 'status', 'Client-module store response');
+  const body = ownDataValue(response, 'body', 'Client-module store response');
+  const headers = ownDataValue(response, 'headers', 'Client-module store response');
+  if (status === 404) return missingClientModuleResponse();
+  if (status !== 200 || typeof body !== 'string') {
     throw new TypeError('Client-module store returned an invalid response envelope.');
   }
-  const contentType = responseHeader(response.headers, 'Content-Type');
+  const contentType = responseHeader(headers, 'Content-Type');
   if (contentType !== CLIENT_MODULE_CONTENT_TYPE) {
     throw new TypeError('Client-module store returned non-canonical representation metadata.');
   }
-  const canonicalBody = canonicalClientModuleRepresentation(response.body);
-  if (canonicalBody !== response.body || clientModuleRepresentationDigest(canonicalBody) !== target.digest) {
+  const canonicalBody = canonicalClientModuleRepresentation(body);
+  if (canonicalBody !== body || clientModuleRepresentationDigest(canonicalBody) !== target.digest) {
     throw new TypeError('Client-module store returned bytes that do not match the sealed href.');
   }
   return verifiedClientModuleResponse(canonicalBody, canonicalHref);
 }
 
 function responseHeader(headers: unknown, name: string): string | undefined {
-  if (typeof headers !== 'object' || headers === null) return undefined;
+  if (typeof headers !== 'object' || headers === null || nativeIsProxy(headers)) return undefined;
   const descriptor = witnessGetOwnPropertyDescriptor(headers, name);
   return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
     ? descriptor.value

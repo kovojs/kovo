@@ -5,11 +5,6 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
-  kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleSource,
-} from '@kovojs/browser/internal/inline-loader';
-import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
-import {
   createFrameworkOutputFileSystemBoundary,
   type ConfinedFileSystemEntry,
 } from '@kovojs/core/internal/filesystem';
@@ -61,7 +56,6 @@ import {
   securityPromiseResolve,
   securityPromiseThen,
   securityRegExpTest,
-  securityStringEndsWith,
   securityStringIncludes,
 } from './response-security-intrinsics.js';
 import {
@@ -86,7 +80,6 @@ const revalidatingAssetHeadersSource = buildSecuritySourceLiteral(
 );
 const documentStaticHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('document'));
 const staticErrorHeadersSource = buildSecuritySourceLiteral(staticHostHeaders('errorDocument'));
-const frameworkRuntimeClientModulePathSuffix = kovoDeferredRuntimeModulePath.replace(/^\/c\//, '/');
 const nativeExecFileSync = execFileSync;
 const nodeExecutablePath = process.execPath;
 const generatedJavaScriptValidationEnvironment = Object.freeze(
@@ -637,13 +630,10 @@ function clientModuleRetentionDiagnostics(
     build.clientModules,
     'preset deploy-skew client modules',
   );
-  let hasRetainedClientModule = false;
-  for (let index = 0; index < clientModules.length; index += 1) {
-    if (isFrameworkRuntimeClientModule(clientModules[index]!)) continue;
-    hasRetainedClientModule = true;
-    break;
-  }
-  if (!hasRetainedClientModule) return [];
+  // The framework loader is itself an immutable representation referenced by every interactive
+  // document. A loader-only deployment therefore needs the same §14 retention proof; excluding it
+  // would turn the mandatory runtime into an unacknowledged 404 window.
+  if (clientModules.length === 0) return [];
   if (deploySkewRetentionProofSatisfiesFloor(options.retention)) return [];
 
   return [
@@ -830,15 +820,6 @@ function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolea
   return securityRegExpTest(
     /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3)["']/,
     source,
-  );
-}
-
-function isFrameworkRuntimeClientModule(
-  module: KovoNeutralBuild['clientModules'][number],
-): boolean {
-  return (
-    securityStringEndsWith(module.path, frameworkRuntimeClientModulePathSuffix) &&
-    module.digest === clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource)
   );
 }
 

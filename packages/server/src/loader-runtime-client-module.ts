@@ -2,7 +2,10 @@ import {
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
-import type { VersionedClientModuleRegistry } from './client-modules.js';
+import {
+  registerMandatoryVersionedClientModule,
+  type VersionedClientModuleRegistry,
+} from './client-modules.js';
 import {
   createWitnessWeakMap,
   witnessWeakMapGet,
@@ -18,7 +21,7 @@ export function ensureKovoLoaderRuntimeClientModule(
   const existing = witnessWeakMapGet(registeredRuntimeHrefs, registry);
   if (existing !== undefined) return existing;
 
-  const href = registry.put({
+  const href = registerMandatoryVersionedClientModule(registry, {
     path: kovoDeferredRuntimeModulePath,
     source: kovoDeferredRuntimeModuleSource,
   });

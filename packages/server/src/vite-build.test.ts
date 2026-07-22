@@ -13,7 +13,13 @@ import { compileComponentModule, type CompileResult } from '../../compiler/src/i
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 
 import { createApp, createRequestHandler } from './app.js';
-import { computeRenderPlanFingerprint, versionedClientModuleHref } from './client-modules.js';
+import {
+  computeRenderPlanFingerprint,
+  createMemoryVersionedClientModuleStore,
+  versionedClientModuleHref,
+  type VersionedClientModuleActiveSnapshot,
+  type VersionedClientModuleStore,
+} from './client-modules.js';
 import { cspSha256 } from './csp.js';
 import { domain } from './domain.js';
 import { renderedHtml } from './html.js';
@@ -238,10 +244,7 @@ describe('server app shell Vite build seam', () => {
       await writeFile(join(distDir, 'assets/catalog.json'), '{"items":2}');
       const cartClientSource = 'export const cartClient = true;';
       const cartClientDigest = clientModuleRepresentationDigest(cartClientSource);
-      const cartClientHref = versionedClientModuleHref(
-        '/c/cart.client.js',
-        cartClientDigest,
-      );
+      const cartClientHref = versionedClientModuleHref('/c/cart.client.js', cartClientDigest);
 
       const build = createKovoAppShellViteBuild({
         app: createApp({
@@ -317,9 +320,9 @@ describe('server app shell Vite build seam', () => {
           source: join(distDir, 'assets/catalog.json'),
         },
       ]);
-      await expect(
-        readFile(join(distDir, cartClientHref.slice(1)), 'utf8'),
-      ).resolves.toBe(cartClientSource);
+      await expect(readFile(join(distDir, cartClientHref.slice(1)), 'utf8')).resolves.toBe(
+        cartClientSource,
+      );
 
       const exported = output.staticExport;
       if (!exported) throw new Error('expected app-shell build output static export');
@@ -397,6 +400,40 @@ describe('server app shell Vite build seam', () => {
     expect(tokenA).not.toBe(tokenB);
     expect(buildA.app.clientModules.buildToken()).toBe(tokenA);
     expect(buildB.app.clientModules.buildToken()).toBe(tokenB);
+  });
+
+  it('publishes one complete production snapshot including loader and manual modules', () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    const committed: VersionedClientModuleActiveSnapshot[] = [];
+    const store: VersionedClientModuleStore = {
+      readActiveSnapshot: () => backing.readActiveSnapshot(),
+      replaceActiveSnapshot(snapshot) {
+        committed.push(snapshot);
+        backing.replaceActiveSnapshot(snapshot);
+      },
+      retain: (module) => backing.retain(module),
+      resolve: (href) => backing.resolve(href),
+    };
+    const app = createApp({ clientModules: store, routes: [] });
+    const manual = { path: '/c/manual.client.js', source: 'export const manual = true;' };
+    app.clientModules.put(manual);
+
+    createKovoAppShellViteBuild({
+      app,
+      clientModules: [
+        {
+          path: '/c/compiled.client.js',
+          renderPlanFingerprint: testRenderPlanFingerprint,
+          source: 'export const compiled = true;',
+        },
+      ],
+    });
+
+    expect(committed).toHaveLength(1);
+    expect(committed[0]?.modules.map((module) => module.path)).toEqual(
+      expect.arrayContaining([kovoDeferredRuntimeModulePath, manual.path, '/c/compiled.client.js']),
+    );
+    expect(committed[0]?.modules).toHaveLength(3);
   });
 
   it('moves app tokens but not identical representation hrefs across render-shape changes', async () => {
@@ -658,10 +695,7 @@ export const CartButton = component({
     try {
       await writeFile(join(distDir, 'c'), 'blocked parent');
       const cartClientSource = 'export const cart = true;';
-      const cartClientHref = testVersionedClientModuleHref(
-        '/c/cart.client.js',
-        cartClientSource,
-      );
+      const cartClientHref = testVersionedClientModuleHref('/c/cart.client.js', cartClientSource);
 
       const build = createKovoAppShellViteBuild({
         app: createApp({
@@ -786,10 +820,7 @@ export const CartButton = component({
       await writeFile(join(distDir, 'assets/shop.css'), '.shop{color:green}');
       await writeFile(join(distDir, 'assets/shop.js'), 'export const shopAsset = true;');
       const shopClientSource = 'export const shopClient = true;';
-      const shopClientHref = testVersionedClientModuleHref(
-        '/c/shop.client.js',
-        shopClientSource,
-      );
+      const shopClientHref = testVersionedClientModuleHref('/c/shop.client.js', shopClientSource);
 
       const build = createKovoAppShellViteBuild({
         app: createApp({
@@ -1270,10 +1301,7 @@ export const CartButton = component({
       );
 
       const docsClientSource = 'export const docsClient = true;';
-      const docsClientHref = testVersionedClientModuleHref(
-        '/c/docs.client.js',
-        docsClientSource,
-      );
+      const docsClientHref = testVersionedClientModuleHref('/c/docs.client.js', docsClientSource);
       const createDocsApp = () =>
         createApp({
           routes: [

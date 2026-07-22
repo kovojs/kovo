@@ -1455,6 +1455,20 @@ export default createRequestHandler(app);
         clientModuleRetentionError('cloudflare'),
       ]);
 
+      const loaderOnlyBuild = await writeKovoNeutralBuild({
+        app: createApp({ routes: [] }),
+        outDir: join(root, '.kovo-loader-only'),
+        serverHandlerSource: 'export default function handler() {}\n',
+      });
+      expect(loaderOnlyBuild.clientModules).toEqual([
+        expect.objectContaining({
+          href: expect.stringMatching(runtimeClientModulePath),
+        }),
+      ]);
+      expect(node().inspect!(loaderOnlyBuild, { declaredEnv: [] })).toEqual([
+        clientModuleRetentionError('node'),
+      ]);
+
       // SPEC §14: the serving layer may configure a supported skew window upward, but not below the
       // 24-hour prior-version floor.
       const underFloorRetention = {
