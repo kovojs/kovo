@@ -14,7 +14,10 @@ import { applyCompiledQueryUpdatePlan, applyStateBindings } from './query-bindin
 import { applyHtmlResponseFragments } from './response-fragment-apply.js';
 import { kovoTrustedHtmlContent, safeRichHtml } from './security-output.js';
 import { StreamTextBuffer } from './stream-text.js';
-import { readInlineMutationResponseBodyChunks } from './wire-response-scanner.js';
+import {
+  readExactTypedQueryResponseElement,
+  readInlineMutationResponseBodyChunks,
+} from './wire-response-scanner.js';
 
 const originalTrim = String.prototype.trim;
 const originalLowerCase = String.prototype.toLowerCase;
@@ -687,6 +690,7 @@ describe('browser-runtime security regressions', () => {
       canonicalRequestUrl: (value) => value,
       currentBuild: () => 'build-test',
       currentHref: () => security.currentUrl()?.href,
+      discardResponseBody: () => undefined,
       document,
       encodeAttribute: (value) => value,
       fetchValue: (input, init) => security.fetchValue(input, init),
@@ -716,6 +720,8 @@ describe('browser-runtime security regressions', () => {
       reload: () => security.reload(),
       snapshotElementHtml: (element) => security.readElementOuterHtml(element),
       targetHeader: () => [],
+      typedReadBodyIsExact: (body, identity) =>
+        readExactTypedQueryResponseElement(body, identity) !== undefined,
       wireKey: () => undefined,
     });
 
@@ -771,6 +777,7 @@ describe('browser-runtime security regressions', () => {
       canonicalRequestUrl: (value: string) => value,
       currentBuild: () => 'build-test',
       currentHref: () => undefined,
+      discardResponseBody: () => undefined,
       document,
       encodeAttribute: (value: string) => value,
       fetchValue: safeFetch,
@@ -792,10 +799,13 @@ describe('browser-runtime security regressions', () => {
       responseIsBuildSkew: () => false,
       responseUrlIsExact: () => true,
       readResponseStatus: () => 200,
-      readResponseText: async () => '<kovo-fragment target="cart">SAFE</kovo-fragment>',
+      readResponseText: async () =>
+        '<kovo-query name="cart" key="primary">{"value":"SAFE"}</kovo-query>',
       reload: () => false,
       snapshotElementHtml: () => undefined,
       targetHeader: () => [],
+      typedReadBodyIsExact: (body: string, identity: { key?: string; name: string }) =>
+        readExactTypedQueryResponseElement(body, identity) !== undefined,
       wireKey: (name: string | null, key: string | null) =>
         name ? (key ? { key, name } : { name }) : undefined,
     };
@@ -845,7 +855,10 @@ describe('browser-runtime security regressions', () => {
     expect(safeFetchInit).toEqual(expect.objectContaining({ method: 'GET' }));
     expect(attackerFetchCalls).toBe(0);
     expect(applied).toEqual([
-      { body: '<kovo-fragment target="cart">SAFE</kovo-fragment>', build: 'build-test' },
+      {
+        body: '<kovo-query name="cart" key="primary">{"value":"SAFE"}</kovo-query>',
+        build: 'build-test',
+      },
     ]);
   });
 
@@ -858,6 +871,7 @@ describe('browser-runtime security regressions', () => {
       canonicalRequestUrl: (value) => value,
       currentBuild: () => '',
       currentHref: () => undefined,
+      discardResponseBody: () => undefined,
       document,
       encodeAttribute: (value) => value,
       fetchValue: async () => ({}),
@@ -882,6 +896,8 @@ describe('browser-runtime security regressions', () => {
       reload: () => false,
       snapshotElementHtml: () => undefined,
       targetHeader: () => [],
+      typedReadBodyIsExact: (body, identity) =>
+        readExactTypedQueryResponseElement(body, identity) !== undefined,
       wireKey: (name) => (name ? { name } : undefined),
     });
     const defineDescriptor = Object.getOwnPropertyDescriptor(Object, 'defineProperty');
@@ -924,6 +940,7 @@ describe('browser-runtime security regressions', () => {
       canonicalRequestUrl: (value: string) => value,
       currentBuild: () => '',
       currentHref: () => undefined,
+      discardResponseBody: () => undefined,
       document,
       encodeAttribute: (value: string) => value,
       encodeWireEntries: (values: readonly string[]) => values.join('; '),
@@ -948,6 +965,7 @@ describe('browser-runtime security regressions', () => {
       reload: () => false,
       snapshotElementHtml: () => undefined,
       targetHeader: () => [],
+      typedReadBodyIsExact: () => false,
       wireKey: () => '',
     };
     Object.defineProperty(options, 'fetchValue', {

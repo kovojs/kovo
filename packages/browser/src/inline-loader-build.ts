@@ -112,7 +112,10 @@ const inlineHelperSpecs = {
     label: 'wire parser',
     readableParityLabel: 'canonical wire parser helper closure',
     minifiedParityLabel: 'canonical minified wire parser helper closure',
-    rootFunctionNames: ['readInlineMutationResponseBodyChunks'],
+    rootFunctionNames: [
+      'readExactTypedQueryResponseElement',
+      'readInlineMutationResponseBodyChunks',
+    ],
     sourceFileName: 'wire-response-scanner.ts',
     sourcePath: wireResponseScannerSourcePath,
     sourcePaths: [wireTokenizerSourcePath, wireHtmlSourcePath, wireResponseScannerSourcePath],
@@ -1484,6 +1487,13 @@ function installInlineKovoLoader(im) {
       const current = bns.currentUrl();
       return current ? current.origin + current.pathname + current.search : undefined;
     },
+    discardResponseBody: (response) => {
+      const body = bns.readResponseField(response, 'body');
+      if (body === null || typeof body !== 'object') return;
+      try {
+        bns.observePromiseRejection(bns.cancelReadableStream(body));
+      } catch {}
+    },
     document: doc,
     encodeAttribute: ea,
     fetchValue: (input, init) => bns.fetchValue(input, init),
@@ -1503,7 +1513,7 @@ function installInlineKovoLoader(im) {
     responseAllowsInlineBody: (response) =>
       bns.isInlineContentDisposition(bns.readHeader(response, 'Content-Disposition')),
     responseIsBuildSkew: (response) =>
-      bns.isTrimmedAsciiEqual(bns.readHeader(response, 'Kovo-Build-Skew'), 'true'),
+      bns.readHeader(response, 'Kovo-Build-Skew') === 'true',
     responseUrlIsExact: (response, expectedUrl) => {
       const redirected = bns.readResponseField(response, 'redirected');
       const value = bns.readResponseField(response, 'url');
@@ -1518,6 +1528,8 @@ function installInlineKovoLoader(im) {
     reload: recoverDocument,
     snapshotElementHtml: (element) => bns.readElementOuterHtml(element),
     targetHeader: rt,
+    typedReadBodyIsExact: (body, identity) =>
+      readExactTypedQueryResponseElement(body, identity) !== undefined,
     wireKey: qwk,
   });
   const qd = dl.isDeltaQuery;
@@ -2055,7 +2067,7 @@ function installInlineKovoLoader(im) {
         if (
           status === 409 &&
           envelopeBuild === pbt &&
-          bns.isTrimmedAsciiEqual(bns.readHeader(response, 'Kovo-Build-Skew'), 'true')
+          bns.readHeader(response, 'Kovo-Build-Skew') === 'true'
         ) {
           recoverDocument();
           return;
@@ -3456,7 +3468,7 @@ function inlineManifestString(expression: ts.Expression | undefined): string {
 
 export function extractInlineWireParserReadableSource(
   source: string,
-  rootFunctionNames: readonly string[] = inlineHelperSpecs.wireParser.rootFunctionNames,
+  rootFunctionNames: readonly string[] = ['readInlineMutationResponseBodyChunks'],
 ): string {
   return extractInlineHelperReadableSourceForSpec(inlineHelperSpecs.wireParser, source, {
     rootFunctionNames,
@@ -3569,6 +3581,9 @@ export function assertInlineKovoLoaderInstallerWireParserParity(
     inlineHelperSpecs.wireParser,
     installerSource,
     wireParserSource,
+    wireParserSource.includes('readExactTypedQueryResponseElement')
+      ? inlineHelperSpecs.wireParser.rootFunctionNames
+      : ['readInlineMutationResponseBodyChunks'],
   );
 }
 
@@ -3580,6 +3595,9 @@ export function assertMinifiedInlineKovoLoaderInstallerWireParserParity(
     inlineHelperSpecs.wireParser,
     installerSource,
     wireParserSource,
+    wireParserSource.includes('readExactTypedQueryResponseElement')
+      ? inlineHelperSpecs.wireParser.rootFunctionNames
+      : ['readInlineMutationResponseBodyChunks'],
   );
 }
 
@@ -3691,10 +3709,11 @@ function assertInlineKovoLoaderInstallerHelperParity(
   spec: InlineHelperSpec,
   installerSource: string,
   helperSource: string,
+  rootFunctionNames: readonly string[] = spec.rootFunctionNames,
 ): void {
   assertInlineKovoLoaderInstallerHelperContains(
     installerSource,
-    extractInlineHelperReadableSourceForSpec(spec, helperSource),
+    extractInlineHelperReadableSourceForSpec(spec, helperSource, { rootFunctionNames }),
     spec.readableParityLabel,
     'readable',
   );
@@ -3704,8 +3723,11 @@ function assertMinifiedInlineKovoLoaderInstallerHelperParity(
   spec: InlineHelperSpec,
   installerSource: string,
   helperSource: string,
+  rootFunctionNames: readonly string[] = spec.rootFunctionNames,
 ): void {
-  const expectedSource = extractInlineHelperReadableSourceForSpec(spec, helperSource);
+  const expectedSource = extractInlineHelperReadableSourceForSpec(spec, helperSource, {
+    rootFunctionNames,
+  });
   const expected = minifyInlineJavaScriptSource(expectedSource);
   const compactExpected = minifyInlineJavaScriptSource(
     compactInlineKovoLoaderInstallerLocalNames(expectedSource),
@@ -3729,6 +3751,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
   // the parse-checked minifier runs.
   const replacements = new Map([
     ['readMutationResponseBodyCore', 'rb'],
+    ['readExactTypedQueryResponseElement', 'req'],
     ['readInlineMutationResponseBodyChunks', 'ri'],
     ['readMutationResponseElementChunks', 'rc'],
     ['readFragmentChunksFromElements', 'rfs'],
@@ -3738,6 +3761,7 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['readWireElementTokens', 'rwt'],
     ['readWireAttributes', 'rwa'],
     ['readWireElementAttribute', 'rwe'],
+    ['countWireElementAttributes', 'cwa'],
     ['matchingWireElementEnd', 'mwe'],
     ['findWireClosingTagStart', 'fwc'],
     ['findWireTagStart', 'fwt'],

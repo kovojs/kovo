@@ -5,6 +5,7 @@ import {
   createDocumentLifecycleRecovery,
   type DocumentLifecycleRecoveryOptions,
 } from './document-lifecycle.js';
+import { readExactTypedQueryResponseElement } from './wire-response-scanner.js';
 
 function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = {}) {
   const applied: Array<{ body: string; build?: string }> = [];
@@ -19,6 +20,7 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     canonicalRequestUrl: (value) => value,
     currentBuild: (root) => (root === nextDocument ? 'build-old' : 'build-old'),
     currentHref: () => 'https://kovo.test/account',
+    discardResponseBody: () => undefined,
     document: {} as Document,
     encodeAttribute: (value) => value,
     fetchValue: async () => ({ status: 200 }),
@@ -43,6 +45,8 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     reload,
     snapshotElementHtml: () => '<section kovo-fragment-target="account">next</section>',
     targetHeader: () => [],
+    typedReadBodyIsExact: (body, identity) =>
+      readExactTypedQueryResponseElement(body, identity) !== undefined,
     wireKey: () => undefined,
     ...overrides,
   };
@@ -108,6 +112,71 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
 
     expect(reload).toHaveBeenCalledOnce();
     expect(readResponseText).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
+  it('rejects a typed-read body that mixes its requested query with fragment or text authority', async () => {
+    const fetchValue = vi.fn(async () => ({ status: 200 }));
+    const { applied, options, reload } = recoveryOptions({
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseText: async () =>
+        '<kovo-query name="cart">{"count":2}</kovo-query>' +
+        '<kovo-fragment target="admin">BAD</kovo-fragment>' +
+        '<kovo-text target="log">BAD</kovo-text>',
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+
+    expect(applied).toEqual([]);
+  });
+
+  it('rejects a delta on the full typed-read recovery surface', async () => {
+    const fetchValue = vi.fn(async () => ({ status: 200 }));
+    const { applied, options, reload } = recoveryOptions({
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseText: async () =>
+        '<kovo-query name="cart" delta>{"set":{"count":2}}</kovo-query>',
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+
+    expect(applied).toEqual([]);
+  });
+
+  it('rejects a mixed multi-query pass atomically before applying an earlier valid body', async () => {
+    const fetchValue = vi.fn(async (url: string) => ({ status: 200, url }));
+    const { applied, options, reload } = recoveryOptions({
+      fetchValue,
+      liveTargets: () => [],
+      queryUrl: (identity) => `https://kovo.test/_q/${identity.name}`,
+      readAttribute: (attrs, name) => {
+        const match = new RegExp(`${name}="([^"]*)"`, 'u').exec(attrs);
+        return match?.[1] ?? null;
+      },
+      readResponseText: async (response) => {
+        const url = (response as { url: string }).url;
+        return url.endsWith('/cart')
+          ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+          : '<kovo-query name="private">{"secret":true}</kovo-query>' +
+              '<kovo-query name="foreign">{"secret":true}</kovo-query>';
+      },
+      responseUrlIsExact: (response, expected) => (response as { url: string }).url === expected,
+      wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+    lifecycle.rememberQueryChunk({ attrs: ' name="cart" href="/_q/cart"' });
+    lifecycle.rememberQueryChunk({ attrs: ' name="private" href="/_q/private"' });
+
+    lifecycle.visibleReturnRefresh();
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+
     expect(applied).toEqual([]);
   });
 

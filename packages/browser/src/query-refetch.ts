@@ -11,8 +11,9 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryIdentity, QueryStore } from './query-store.js';
 import { createQueryIdentity, queryStoreKey } from './query-store.js';
 import { queryRefetchHref } from './query-refetch-metadata.js';
-import { readQueryChunks } from './wire-parser.js';
+import { readQueryElementChunk } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
+import { readExactTypedQueryResponseElement } from './wire-response-scanner.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 import { readPageBuildToken } from './build-token.js';
 import { reloadSessionTransitionDocument } from './session-transition.js';
@@ -141,6 +142,7 @@ export interface QueryRefetchFetch {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchResponse {
+  body?: ReadableStream<Uint8Array> | null;
   headers?: { get(name: string): string | null };
   ok?: boolean;
   redirected?: boolean;
@@ -214,7 +216,12 @@ export async function refetchQueries(
     return [];
   }
   const queryNames = snapshotQueryIdentities(options.queries);
-  let terminalRecovery: 'auth-denied' | 'build-skew' | 'missing-href' | undefined;
+  let terminalRecovery:
+    | 'auth-denied'
+    | 'build-skew'
+    | 'invalid-response'
+    | 'missing-href'
+    | undefined;
 
   for (let index = 0; terminalRecovery === undefined && index < queryNames.length; index += 1) {
     if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
@@ -259,7 +266,13 @@ export async function refetchQueries(
       // SPEC §9.4/§14: response headers gain recovery authority only at the exact typed-read URL.
       // A readable redirect must not forge a build-skew reload or become query truth.
       if (!queryResponseUrlIsAdmitted(response, request.expectedUrl, queryRefetchSecurity)) {
-        throw new TypeError('Kovo refused a redirected or malformed typed-read response.');
+        discardQueryResponseBody(response, queryRefetchSecurity);
+        reportRuntimeError(
+          onError,
+          new TypeError('Kovo refused a redirected or malformed typed-read response.'),
+        );
+        terminalRecovery = 'invalid-response';
+        continue;
       }
 
       const ok = queryRefetchSecurity.readResponseField(response, 'ok');
@@ -268,18 +281,21 @@ export async function refetchQueries(
       // terminal recovery authority. Content-Type cannot downgrade it into a background error.
       const responseBuildToken = queryRefetchSecurity.readHeader(response, 'Kovo-Build');
       if (responseBuildToken === undefined || responseBuildToken !== expectedBuildToken) {
+        discardQueryResponseBody(response, queryRefetchSecurity);
         terminalRecovery = 'build-skew';
         continue;
       }
       const markedBuildSkew =
-        status === 409 &&
-        queryRefetchSecurity.isTrimmedAsciiEqual(
-          queryRefetchSecurity.readHeader(response, 'Kovo-Build-Skew'),
-          'true',
-        );
+        status === 409 && queryRefetchSecurity.readHeader(response, 'Kovo-Build-Skew') === 'true';
       const expectedMediaType = markedBuildSkew ? 'text/vnd.kovo.fragment+html' : 'text/html';
       if (!queryResponseEnvelopeHasMediaType(response, expectedMediaType, queryRefetchSecurity)) {
-        throw new TypeError('Kovo refused an attachment or malformed typed-read response.');
+        discardQueryResponseBody(response, queryRefetchSecurity);
+        reportRuntimeError(
+          onError,
+          new TypeError('Kovo refused an attachment or malformed typed-read response.'),
+        );
+        terminalRecovery = 'invalid-response';
+        continue;
       }
 
       if (
@@ -289,32 +305,38 @@ export async function refetchQueries(
         responseBuildToken === expectedBuildToken &&
         markedBuildSkew
       ) {
+        discardQueryResponseBody(response, queryRefetchSecurity);
         terminalRecovery = 'build-skew';
       } else if (status === 401 || status === 403) {
         // SPEC §9.4: an admitted auth denial revokes the old private query truth. The native
         // route reached by this recovery owns the eventual login redirect/forbidden document.
         // Fetch rejection remains an ordinary transport failure; never infer revocation from it.
+        discardQueryResponseBody(response, queryRefetchSecurity);
         terminalRecovery = 'auth-denied';
       } else if (ok !== false && (typeof status !== 'number' || status < 400)) {
-        const responseQueries = readQueryChunks(
-          await queryRefetchSecurity.readResponseTextOptionalSync(response),
-          onError,
-        );
+        const responseBody = await queryRefetchSecurity.readResponseTextOptionalSync(response);
         if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
-        const responseQuery = securityOwnArrayEntry(responseQueries, 0);
-        if (
-          responseQueries.length !== 1 ||
-          !responseQuery.ok ||
-          responseQuery.value.name !== query.name ||
-          responseQuery.value.key !== query.key
-        ) {
-          throw new TypeError('Kovo refused typed-read truth for a different query identity.');
+        const responseElement = readExactTypedQueryResponseElement(responseBody, query);
+        const responseQuery = responseElement
+          ? readQueryElementChunk(responseElement, onError)
+          : undefined;
+        if (!responseQuery || responseQuery.delta === true) {
+          reportRuntimeError(
+            onError,
+            new TypeError(
+              'Kovo refused typed-read truth outside the exact full-query response vocabulary.',
+            ),
+          );
+          terminalRecovery = 'invalid-response';
+          continue;
         }
         securityArrayAppend(
           bodies,
-          { queries: responseQueries },
+          { queries: [responseQuery] },
           'Browser typed-read response bodies',
         );
+      } else {
+        discardQueryResponseBody(response, queryRefetchSecurity);
       }
     } catch (error) {
       reportRuntimeError(onError, error);
@@ -429,6 +451,17 @@ function queryResponseUrlIsAdmitted(
     (final.protocol === 'http:' || final.protocol === 'https:') &&
     final.href === expected.href
   );
+}
+
+function discardQueryResponseBody(
+  response: QueryRefetchResponse,
+  security: QueryRefetchSecurity,
+): void {
+  const body = security.readResponseField(response, 'body');
+  if (body === null || typeof body !== 'object') return;
+  try {
+    security.observePromiseRejection(security.cancelReadableStream(body));
+  } catch {}
 }
 
 function admittedQueryRequest(

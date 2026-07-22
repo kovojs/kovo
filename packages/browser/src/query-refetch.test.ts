@@ -221,10 +221,7 @@ describe('query refetch', () => {
       status: 200,
       text: async () =>
         queryRequestPath(url) === '/_q/cart'
-          ? [
-              '<kovo-query name="cart">{"count":2}</kovo-query>',
-              '<kovo-fragment target="cart-badge"><cart-badge>2</cart-badge></kovo-fragment>',
-            ].join('')
+          ? '<kovo-query name="cart">{"count":2}</kovo-query>'
           : '<kovo-query name="reviews">{"total":5}</kovo-query>',
       url: queryResponseUrl(url),
     }));
@@ -653,39 +650,87 @@ describe('query refetch', () => {
     expect(store.get('cart')).toBeUndefined();
   });
 
-  it('reports malformed typed read query chunks through the shared decoded apply path', async () => {
+  it('rejects a mixed typed-read body atomically before applying an earlier valid response', async () => {
     const store = createQueryStore();
     const onError = vi.fn();
+    const onDocumentRecovery = vi.fn();
     const fetch = vi.fn(async (url: string) => ({
       headers: fragmentHeaders(),
       redirected: false,
       status: 200,
       text: async () =>
-        queryRequestPath(url) === '/_q/cart'
-          ? '<kovo-query name="cart">{</kovo-query><kovo-query name="inventory">{"available":true}</kovo-query>'
-          : '<kovo-query name="reviews">{"total":2}</kovo-query>',
+        queryRequestPath(url) === '/_q/reviews'
+          ? '<kovo-query name="reviews">{"total":2}</kovo-query>'
+          : '<kovo-query name="cart">{"count":2}</kovo-query>' +
+            '<kovo-query name="inventory">{"available":true}</kovo-query>',
       url: queryResponseUrl(url),
     }));
 
     const applied = await refetchQueries({
       fetch,
+      onDocumentRecovery,
       onError,
-      queries: ['cart', 'reviews'],
+      queries: ['reviews', 'cart', 'inventory'],
       queryStore: store,
     });
 
-    // SPEC.md §4.4/§9.4: typed-read visible-return refetch applies server query chunks
-    // through the same decoded runtime apply primitive as mutation bodies, but endpoint identity
-    // is exact: an `inventory` chunk cannot gain truth authority from the `cart` response.
-    expect(applied).toEqual([{ fragments: [], queries: [{ name: 'reviews' }] }]);
+    // SPEC §9.4: one endpoint may return exactly one full value for its requested identity. A
+    // later mixed response invalidates the whole batch; the earlier decoded value never applies.
+    expect(applied).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toBeUndefined();
-    expect(store.get('reviews')).toEqual({ total: 2 });
-    expect(onError).toHaveBeenCalledTimes(2);
-    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
-      'Malformed JSON in kovo-query cart',
+    expect(store.get('reviews')).toBeUndefined();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringMatching(/full-query response vocabulary/u),
+      }),
     );
-    expect(String(onError.mock.calls[1]?.[0].message)).toContain('different query identity');
+  });
+
+  it.each([
+    [
+      'fragment vocabulary',
+      '<kovo-query name="cart">{"count":2}</kovo-query>' +
+        '<kovo-fragment target="cart">BAD</kovo-fragment>',
+    ],
+    [
+      'text vocabulary',
+      '<kovo-query name="cart">{"count":2}</kovo-query>' +
+        '<kovo-text target="cart">BAD</kovo-text>',
+    ],
+    ['delta vocabulary', '<kovo-query name="cart" delta>{"set":{"count":2}}</kovo-query>'],
+    ['foreign identity', '<kovo-query name="inventory">{"available":true}</kovo-query>'],
+    [
+      'duplicate identity attributes',
+      '<kovo-query name="cart" NAME="inventory">{"count":2}</kovo-query>',
+    ],
+    [
+      'malformed recognized vocabulary',
+      '<kovo-fragment target="cart"><kovo-query name="cart">{"count":2}</kovo-query>',
+    ],
+  ])('rejects %s on the closed typed-read body carrier', async (_label, body) => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onDocumentRecovery = vi.fn();
+
+    const applied = await refetchQueries({
+      fetch: async (url) => ({
+        headers: fragmentHeaders(),
+        redirected: false,
+        status: 200,
+        text: async () => body,
+        url: queryResponseUrl(url),
+      }),
+      onDocumentRecovery,
+      queries: ['cart'],
+      queryStore: store,
+    });
+
+    expect(applied).toEqual([]);
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(store.get('cart')).toEqual({ count: 1 });
   });
 
   it('reports typed read apply hook failures while continuing later chunks in the batch', async () => {
@@ -813,6 +858,66 @@ describe('query refetch', () => {
     expect(onError).toHaveBeenCalledWith(redirectError);
     expect(store.get('secret')).toEqual({ value: 'prior-private-truth' });
   });
+
+  it('recovers atomically and cancels an unread body when final URL proof is foreign', async () => {
+    const store = createQueryStore();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const onDocumentRecovery = vi.fn();
+    const text = vi.fn(async () => '<kovo-query name="cart">{"count":99}</kovo-query>');
+
+    const applied = await refetchQueries({
+      fetch: async () => ({
+        body,
+        headers: fragmentHeaders(),
+        redirected: false,
+        status: 200,
+        text,
+        url: 'https://foreign.test/_q/cart',
+      }),
+      onDocumentRecovery,
+      queries: ['cart'],
+      queryStore: store,
+    });
+
+    expect(applied).toEqual([]);
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(text).not.toHaveBeenCalled();
+    expect(store.get('cart')).toBeUndefined();
+  });
+
+  it.each(['TRUE', ' true '])(
+    'does not grant build-skew recovery authority to a non-exact %j marker',
+    async (marker) => {
+      const store = createQueryStore();
+      const onBuildSkew = vi.fn();
+      const onDocumentRecovery = vi.fn();
+      const text = vi.fn(async () => 'ordinary conflict');
+
+      const applied = await refetchQueries({
+        fetch: async (url) => ({
+          headers: fragmentHeaders((name) => {
+            if (name === 'Kovo-Build') return 'test-build';
+            return name === 'Kovo-Build-Skew' ? marker : null;
+          }),
+          redirected: false,
+          status: 409,
+          text,
+          url: queryResponseUrl(url),
+        }),
+        onBuildSkew,
+        onDocumentRecovery,
+        queries: ['cart'],
+        queryStore: store,
+      });
+
+      expect(applied).toEqual([]);
+      expect(onBuildSkew).not.toHaveBeenCalled();
+      expect(onDocumentRecovery).not.toHaveBeenCalled();
+      expect(text).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps auth denial terminal when recovery throws after an earlier query response', async () => {
     const store = createQueryStore();

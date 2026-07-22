@@ -19,6 +19,7 @@ export function createHmrTargetSnapshotReader(
   const NativeArray = Array;
   const NativeDocument = scope.Document;
   const NativeElement = scope.Element;
+  const NativeJson = JSON;
   const NativeNodeList = scope.NodeList;
   const NativeObject = Object;
   const NativeReflect = Reflect;
@@ -27,6 +28,7 @@ export function createHmrTargetSnapshotReader(
   const nativeReflectApply = NativeReflect.apply;
   const arrayIsArray = NativeArray.isArray;
   const arrayPush = NativeArray.prototype.push;
+  const jsonParse = NativeJson.parse;
   const objectFreeze = NativeObject.freeze;
   const objectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
   const stringSlice = String.prototype.slice;
@@ -96,6 +98,7 @@ export function createHmrTargetSnapshotReader(
   const nodeListItem = ownMethod(nodeListPrototype, 'item');
   const encodeLiveTargetHeader = ownMethod(codec, 'encodeLiveTargetHeader');
   const encodeTargetHeader = ownMethod(codec, 'encodeTargetHeader');
+  const snapshotLiveTargetProps = ownMethod(codec, 'snapshotLiveTargetProps');
   const decodeIdentityToken = ownMethod(codec, 'decodeIdentityToken');
   const decodeQueryDependencyToken = ownMethod(codec, 'decodeQueryDependencyToken');
   const identityIsValid = ownMethod(codec, 'identityIsValid');
@@ -142,6 +145,7 @@ export function createHmrTargetSnapshotReader(
       !nodeListItem ||
       !encodeLiveTargetHeader ||
       !encodeTargetHeader ||
+      !snapshotLiveTargetProps ||
       !decodeIdentityToken ||
       !decodeQueryDependencyToken ||
       !identityIsValid ||
@@ -163,6 +167,15 @@ export function createHmrTargetSnapshotReader(
       apply(elementSetAttribute, element, ['data-kovo-hmr-control', 'exact']);
       if (rawReadAttribute(element, 'data-kovo-hmr-control') !== 'exact') return false;
       if (rawReadAttribute(element, 'data-kovo-hmr-missing') !== null) return false;
+      const jsonControl = apply<unknown>(jsonParse, NativeJson, ['{"hmr":1}']);
+      if (ownData<number>(jsonControl, 'hmr') !== 1) return false;
+      let rejectedMalformedJson = false;
+      try {
+        apply(jsonParse, NativeJson, ['{malformed']);
+      } catch {
+        rejectedMalformedJson = true;
+      }
+      if (!rejectedMalformedJson) return false;
       const empty = apply<unknown>(documentQuerySelectorAll, bootDocument, [':not(*)']);
       if (rawNodeListLength(empty) !== 0) return false;
       const html = apply<unknown>(documentQuerySelectorAll, bootDocument, ['html']);
@@ -202,6 +215,9 @@ export function createHmrTargetSnapshotReader(
           ],
         ]) !== 'target-control#component-control@token-control:{}'
       ) {
+        return false;
+      }
+      if (apply<string>(snapshotLiveTargetProps, codec, ['{"z":1,"a":2}']) !== '{"a":2,"z":1}') {
         return false;
       }
       return true;
@@ -373,12 +389,31 @@ export function createHmrTargetSnapshotReader(
         throw new NativeTypeError('Kovo HMR live-target identities must be unique.');
       }
       appendDense(seen, target, 'Kovo HMR live-target identity snapshot');
+      const propsSource = readAttribute(element, 'kovo-props');
+      if (propsSource !== null) {
+        if (propsSource.length > (maxHeaderCharacters as number)) {
+          throw new NativeTypeError('Kovo HMR live-target props exceed their wire budget.');
+        }
+        let parsedProps: unknown;
+        try {
+          parsedProps = apply(jsonParse, NativeJson, [propsSource]);
+        } catch {
+          throw new NativeTypeError('Kovo HMR live-target props must be JSON object text.');
+        }
+        if (
+          parsedProps === null ||
+          typeof parsedProps !== 'object' ||
+          apply(arrayIsArray, NativeArray, [parsedProps]) === true
+        ) {
+          throw new NativeTypeError('Kovo HMR live-target props must be JSON object text.');
+        }
+      }
       const wireEntry = apply<string>(encodeLiveTargetHeader!, codec, [
         [
           {
             attestation,
             component,
-            propsSource: readAttribute(element, 'kovo-props'),
+            propsSource,
             target,
           },
         ],

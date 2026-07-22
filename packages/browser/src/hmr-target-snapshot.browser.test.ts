@@ -160,6 +160,32 @@ describe('HMR target snapshot browser security', () => {
     }
   });
 
+  it.each(['{bad', 'null', '[]', '418'])(
+    'fails a mixed live-target snapshot atomically for malformed props %j',
+    (props) => {
+      const codec = createFrameworkWireTargetCodec(FRAMEWORK_WIRE_INPUT_GRAMMAR);
+      const reader = createHmrTargetSnapshotReader(FRAMEWORK_WIRE_INPUT_GRAMMAR, codec);
+      const valid = document.createElement('section');
+      valid.setAttribute('kovo-deps', 'public');
+      valid.setAttribute('kovo-fragment-target', 'valid-panel');
+      valid.setAttribute('kovo-live-token', 'tok_valid');
+      valid.setAttribute('kovo-props', '{}');
+      const malformed = document.createElement('section');
+      malformed.setAttribute('kovo-deps', 'public');
+      malformed.setAttribute('kovo-fragment-target', 'malformed-panel');
+      malformed.setAttribute('kovo-live-token', 'tok_malformed');
+      malformed.setAttribute('kovo-props', props);
+      document.body.append(valid, malformed);
+
+      try {
+        expect(() => reader.liveTargets(document)).toThrow(/JSON object text/u);
+      } finally {
+        valid.remove();
+        malformed.remove();
+      }
+    },
+  );
+
   it('keeps keyed dependencies structured and rejects duplicate build or dependency identities', () => {
     const codec = createFrameworkWireTargetCodec(FRAMEWORK_WIRE_INPUT_GRAMMAR);
     const reader = createHmrTargetSnapshotReader(FRAMEWORK_WIRE_INPUT_GRAMMAR, codec);

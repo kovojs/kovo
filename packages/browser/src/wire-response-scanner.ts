@@ -1,7 +1,12 @@
 import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 
 import { readAttribute } from './wire-html.js';
-import { readWireElementTokens, type WireAttribute } from './wire-tokenizer.js';
+import {
+  countWireElementAttributes,
+  readWireElementAttribute,
+  readWireElementTokens,
+  type WireAttribute,
+} from './wire-tokenizer.js';
 import { securityArrayAppend } from './security-witness-intrinsics.js';
 
 export interface FragmentChunk {
@@ -47,6 +52,11 @@ export interface ElementChunk {
 export interface ReadElementChunksOptions {
   nested?: boolean;
   onMalformed?: (reason: string) => void;
+}
+
+export interface TypedQueryResponseIdentity {
+  key?: string;
+  name: string;
 }
 
 export function readMutationResponseBodyCore(
@@ -100,6 +110,59 @@ export function readMutationResponseElementChunks(
     fragments: readElementChunks(body, 'kovo-fragment', fragmentOptions),
     texts: readElementChunks(body, 'kovo-text', textOptions),
   };
+}
+
+/**
+ * Admit the closed typed-read response vocabulary before any query becomes browser truth.
+ *
+ * SPEC §9.4 gives `/_q/<name>` authority to return one full value for the requested structured
+ * identity. A delta, foreign/sibling query, fragment, text chunk, malformed recognized element,
+ * or duplicate identity attribute belongs to a different carrier and invalidates the whole body.
+ */
+export function readExactTypedQueryResponseElement(
+  body: string,
+  expected: TypedQueryResponseIdentity,
+): ElementChunk | undefined {
+  let malformed = false;
+  const chunks = readMutationResponseElementChunks(body, {
+    onMalformedFragment() {
+      malformed = true;
+    },
+    onMalformedQuery() {
+      malformed = true;
+    },
+    onMalformedText() {
+      malformed = true;
+    },
+  });
+  if (
+    malformed ||
+    chunks.queries.length !== 1 ||
+    chunks.fragments.length !== 0 ||
+    chunks.texts.length !== 0
+  ) {
+    return undefined;
+  }
+  const query = chunks.queries[0];
+  if (
+    query === undefined ||
+    countWireElementAttributes(query, 'name') !== 1 ||
+    countWireElementAttributes(query, 'key') > 1 ||
+    countWireElementAttributes(query, 'delta') !== 0
+  ) {
+    return undefined;
+  }
+  const name = readWireElementAttribute(query, 'name');
+  const key = readWireElementAttribute(query, 'key');
+  if (
+    !name.present ||
+    !name.hasValue ||
+    name.value !== expected.name ||
+    (key.present ? (key.value ?? '') : undefined) !== expected.key
+  ) {
+    return undefined;
+  }
+  return query;
 }
 
 function readFragmentElementChunk(

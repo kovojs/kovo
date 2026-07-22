@@ -21,6 +21,8 @@ export interface DocumentLifecycleRecoveryOptions {
   canonicalRequestUrl: (value: string, surface: 'document' | 'query') => string | undefined;
   currentBuild: (root?: ParentNode) => string;
   currentHref: () => string | undefined;
+  /** Cancel an unread response body before terminal recovery or ordinary typed failure. */
+  discardResponseBody: (response: unknown) => void;
   document: Document;
   encodeAttribute: (value: string) => string;
   fetchValue: (input: string, init: object) => Promise<unknown>;
@@ -62,6 +64,8 @@ export interface DocumentLifecycleRecoveryOptions {
   /** Boot-pinned serialization for fetched live-target truth (SPEC §6.6/§8). */
   snapshotElementHtml: (element: Element) => string | undefined;
   targetHeader: () => readonly FrameworkWireEntrySnapshot[];
+  /** Admit exactly one full-value query chunk for the requested structured identity. */
+  typedReadBodyIsExact: (body: string, identity: QueryIdentity) => boolean;
   wireKey: (name: string | null, key: string | null) => QueryIdentity | undefined;
 }
 
@@ -104,6 +108,9 @@ export function createDocumentLifecycleRecovery(
     options,
     'currentHref',
   );
+  const discardResponseBody = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['discardResponseBody']
+  >(options, 'discardResponseBody');
   const doc = lifecycleObjectOption<Document>(options, 'document');
   const encodeAttribute = lifecycleFunctionOption<
     DocumentLifecycleRecoveryOptions['encodeAttribute']
@@ -183,6 +190,9 @@ export function createDocumentLifecycleRecovery(
     options,
     'targetHeader',
   );
+  const typedReadBodyIsExact = lifecycleFunctionOption<
+    DocumentLifecycleRecoveryOptions['typedReadBodyIsExact']
+  >(options, 'typedReadBodyIsExact');
   const wireKey = lifecycleFunctionOption<DocumentLifecycleRecoveryOptions['wireKey']>(
     options,
     'wireKey',
@@ -252,6 +262,7 @@ export function createDocumentLifecycleRecovery(
           });
           if (!queryGenerationIsCurrent(generation)) return;
           if (!responseUrlIsExact(res, u)) {
+            discardResponseBody(res);
             recoverQueryDocument(generation);
             return;
           }
@@ -259,6 +270,7 @@ export function createDocumentLifecycleRecovery(
           // Content-Type is malformed. Media grants body/auth-marker authority only afterward.
           const responseBuild = buildHeader(res);
           if (!responseBuild || responseBuild !== pageBuild) {
+            discardResponseBody(res);
             recoverQueryDocument(generation);
             return;
           }
@@ -270,9 +282,11 @@ export function createDocumentLifecycleRecovery(
               !inlineBody ||
               !lifecycleMediaTypeEquals(contentType, 'text/vnd.kovo.fragment+html')
             ) {
+              discardResponseBody(res);
               recoverQueryDocument(generation);
               return;
             }
+            discardResponseBody(res);
             recoverQueryDocument(generation);
             return;
           }
@@ -280,19 +294,29 @@ export function createDocumentLifecycleRecovery(
           // rejection is caught below as an ordinary transport failure and never inferred.
           if (status === 401 || status === 403) {
             if (!inlineBody || !lifecycleMediaTypeEquals(contentType, 'text/html')) {
+              discardResponseBody(res);
               recoverQueryDocument(generation);
               return;
             }
+            discardResponseBody(res);
             recoverQueryDocument(generation);
             return;
           }
-          if (status === undefined || status >= 400) continue;
+          if (status === undefined || status >= 400) {
+            discardResponseBody(res);
+            continue;
+          }
           if (!inlineBody || !lifecycleMediaTypeEquals(contentType, 'text/html')) {
+            discardResponseBody(res);
             recoverQueryDocument(generation);
             return;
           }
           const text = await readResponseText(res);
           if (!queryGenerationIsCurrent(generation)) return;
+          if (!typedReadBodyIsExact(text, identity)) {
+            recoverQueryDocument(generation);
+            return;
+          }
           bodies += text;
         } catch {
           // A network/redirect-error rejection is not an auth verdict. Continue the same batch so

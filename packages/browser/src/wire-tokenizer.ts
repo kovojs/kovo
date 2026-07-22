@@ -201,6 +201,29 @@ export function readWireElementAttribute(
   };
 }
 
+/**
+ * Count one attribute name without consulting mutable String/Array prototype methods.
+ *
+ * Typed-read response admission uses this to reject duplicate identity or `delta` facts instead
+ * of letting the first duplicate silently win (SPEC §9.4).
+ */
+export function countWireElementAttributes(
+  element: { attrs?: string; attributes?: readonly WireAttribute[] } | string,
+  name: string,
+): number {
+  const expected = wireAsciiLower(name);
+  const attributes =
+    typeof element === 'string'
+      ? readWireAttributes(element)
+      : (element.attributes ?? readWireAttributes(element.attrs ?? ''));
+  let count = 0;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const candidate = attributes[index];
+    if (candidate !== undefined && wireAsciiLower(candidate.name) === expected) count += 1;
+  }
+  return count;
+}
+
 function matchingWireElementEnd(
   body: string,
   tagName: string,

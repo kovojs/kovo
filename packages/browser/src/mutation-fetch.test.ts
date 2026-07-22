@@ -268,7 +268,8 @@ describe('enhanced mutation fetch', () => {
   it('retires a streaming transition before exposing or consuming its body', async () => {
     const onSessionTransition = vi.fn();
     const text = vi.fn(async () => 'must not be read');
-    const streamBody = {} as ReadableStream<Uint8Array>;
+    const cancel = vi.fn();
+    const streamBody = new ReadableStream<Uint8Array>({ cancel });
     const fetched = await fetchEnhancedMutation({
       fetch: async () => ({
         body: streamBody,
@@ -294,6 +295,7 @@ describe('enhanced mutation fetch', () => {
     });
 
     expect(onSessionTransition).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
     expect(fetched).not.toHaveProperty('streamBody');
     expect(text).not.toHaveBeenCalled();
   });
@@ -940,8 +942,11 @@ describe('enhanced mutation fetch', () => {
   it('recovers before reading a response whose Kovo-Build header is absent', async () => {
     const onBuildSkew = vi.fn();
     const text = vi.fn(async () => '');
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
     const fetched = await fetchEnhancedMutation({
       fetch: async () => ({
+        body,
         headers: {
           get: (name: string) =>
             name.toLowerCase() === 'content-type'
@@ -962,6 +967,35 @@ describe('enhanced mutation fetch', () => {
     expect(fetched.buildToken).toBeUndefined();
     expect(fetched.sessionTransition).toBe(true);
     expect(onBuildSkew).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
     expect(text).not.toHaveBeenCalled();
   });
+
+  it.each(['TRUE', ' true '])(
+    'does not grant build-skew recovery authority to a non-exact %j mutation marker',
+    async (marker) => {
+      const onBuildSkew = vi.fn();
+      const text = vi.fn(async () => '<kovo-fragment target="cart">conflict</kovo-fragment>');
+      const fetched = await fetchEnhancedMutation({
+        fetch: async () => ({
+          headers: fragmentHeaders((name) =>
+            name === 'Kovo-Build-Skew' ? marker : name === 'Kovo-Build' ? TEST_BUILD : null,
+          ),
+          redirected: false,
+          status: 409,
+          text,
+          url: 'http://localhost/_m/cart/add',
+        }),
+        form: typedMutationForm('cart/add'),
+        formData: new FormData(),
+        onBuildSkew,
+        root: new FakeTargetRoot([]),
+      });
+
+      expect(onBuildSkew).not.toHaveBeenCalled();
+      expect(text).toHaveBeenCalledOnce();
+      expect(fetched.body).toContain('conflict');
+      expect(isFailedMutationResponse(fetched.response)).toBe(true);
+    },
+  );
 });

@@ -204,11 +204,17 @@ export async function fetchEnhancedMutation(
     referrerPolicy: 'origin',
     ...definedProps({ onUploadProgress, signal }),
   })) as EnhancedMutationResponseLike;
-  assertExactMutationResponse(response, transport, security);
+  try {
+    assertExactMutationResponse(response, transport, security);
+  } catch (error) {
+    discardEnhancedMutationResponseBody(response, security);
+    throw error;
+  }
   const failed = isFailedBoundMutationResponse(response, security);
   securityWeakMapSet(mutationResponseFailures, response, failed);
   const status = responseStatus(response, security, 0);
   if (status >= 300 && status < 400) {
+    discardEnhancedMutationResponseBody(response, security);
     throw new TypeError('Kovo refused an enhanced mutation redirect response.');
   }
   // SPEC §5.2.1/§14: after exact final-URL admission, missing/foreign build proof is terminal
@@ -216,6 +222,7 @@ export async function fetchEnhancedMutation(
   // recovery or grant any later header/body observer authority.
   const buildToken = security.readHeader(response, 'Kovo-Build') ?? undefined;
   if (buildToken !== options.expectedBuildToken) {
+    discardEnhancedMutationResponseBody(response, security);
     onSessionTransition?.();
     onBuildSkew();
     return {
@@ -232,6 +239,7 @@ export async function fetchEnhancedMutation(
   // envelope. A text/html response cannot promote Kovo-* lookalike headers into session or DOM
   // authority.
   if (!isMutationFragmentContentType(response, security)) {
+    discardEnhancedMutationResponseBody(response, security);
     throw new TypeError('Kovo refused a non-fragment enhanced mutation response.');
   }
   const sessionTransition = readSessionTransition(response, security);
@@ -240,6 +248,7 @@ export async function fetchEnhancedMutation(
   // stream is consumed, because an incoming old-principal envelope would still apply in that
   // window. Retire synchronously at header observation and discard all response truth.
   if (sessionTransition) {
+    discardEnhancedMutationResponseBody(response, security);
     onSessionTransition?.();
     onSessionTransitionReload?.();
     return {
@@ -256,6 +265,7 @@ export async function fetchEnhancedMutation(
     // C180 / SPEC §6.5/§9.3: Kovo-Reauth means the page-load principal is no longer
     // authenticated. Cut its origin-wide mutation authority before the login navigation,
     // which can be delayed or cancelled by the browser.
+    discardEnhancedMutationResponseBody(response, security);
     onSessionTransition?.();
     followReauthDirective(reauth, security);
     return {
@@ -271,8 +281,9 @@ export async function fetchEnhancedMutation(
   const markedBuildSkew =
     status === 409 &&
     buildToken === options.expectedBuildToken &&
-    security.isTrimmedAsciiEqual(security.readHeader(response, 'Kovo-Build-Skew'), 'true');
+    security.readHeader(response, 'Kovo-Build-Skew') === 'true';
   if (markedBuildSkew) {
+    discardEnhancedMutationResponseBody(response, security);
     securityWeakSetAdd(mutationBuildSkewResponses, response);
     onSessionTransition?.();
     onBuildSkew();
@@ -460,6 +471,17 @@ function snapshotEnhancedMutationTransport(
     return undefined;
   }
   return { action: action.pathname, method: 'POST', origin, sourceUrl };
+}
+
+function discardEnhancedMutationResponseBody(
+  response: EnhancedMutationResponseLike,
+  security: BrowserNavigationSecurityControls,
+): void {
+  const body = security.readResponseField(response, 'body');
+  if (body === null || typeof body !== 'object') return;
+  try {
+    security.observePromiseRejection(security.cancelReadableStream(body));
+  } catch {}
 }
 
 function assertExactMutationResponse(
