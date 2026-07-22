@@ -490,6 +490,51 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     expect(result.ok).toBe(false);
   });
 
+  it.each(['@KOVOJS/server/hidden', '@kovojs/server./hidden', '@kovojs/ſerver/hidden'])(
+    'rejects noncanonical portable first-party import alias %j before opaque classification',
+    async (aliasedSpecifier) => {
+      // SPEC §6.6 requires closure over the exact packed first-party graph. A case-insensitive
+      // filesystem can resolve these spellings to the reviewed lowercase package without creating
+      // a second artifact path for the portable-path collision census to observe.
+      const hiddenModule = '@kovojs/server/dist/hidden.mjs';
+      const artifacts = artifactSource({
+        [hiddenModule]: "import 'node:child_process';",
+        [rootModule]: `import ${JSON.stringify(aliasedSpecifier)};`,
+      });
+      const opaqueReason = `imports external module ${JSON.stringify(aliasedSpecifier)} outside the nine-kind lexical capability domain`;
+      const certificate = certificateFor(artifacts, {
+        cap: { [hiddenModule]: ['process'], [rootModule]: [] },
+        opaque: [{ module: rootModule, reason: opaqueReason }],
+        roots: [{ module: rootModule, rootKind: 'application' }],
+      });
+
+      const result = await verifyBound(certificate, artifacts, {
+        packages: [
+          {
+            manifest: {
+              exports: {
+                '.': './dist/root.mjs',
+                './hidden': './dist/hidden.mjs',
+              },
+              name: '@kovojs/server',
+            },
+            name: '@kovojs/server',
+          },
+        ],
+      });
+
+      expect(result).toMatchObject({
+        findings: expect.arrayContaining([
+          expect.objectContaining({
+            code: 'noncanonical-first-party-import',
+            obligation: 'coverage',
+          }),
+        ]),
+        ok: false,
+      });
+    },
+  );
+
   it('bounds generic artifact lists and byte carriers before iterable-sensitive copies', async () => {
     const ordinary = artifactSource({ [rootModule]: 'export {};' });
     const certificate = certificateFor(ordinary);

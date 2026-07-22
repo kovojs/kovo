@@ -326,6 +326,51 @@ describe('filesystem certificate artifacts', () => {
     );
   });
 
+  it('rejects a case-folded first-party package import in the real packed tree', async () => {
+    // SPEC §6.6: portable module resolution must not turn an opaque premise into an omitted
+    // first-party edge after the reviewed tree moves to a case-insensitive filesystem.
+    const rootModule = '@kovojs/server/dist/root.mjs';
+    const hiddenModule = '@kovojs/server/dist/hidden.mjs';
+    const aliasedSpecifier = '@KOVOJS/server/hidden';
+    const fixture = createDirectoryFixture({
+      [hiddenModule]: "import 'node:child_process';",
+      [rootModule]: `import ${JSON.stringify(aliasedSpecifier)};`,
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/root.mjs', './hidden': './dist/hidden.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    const opaqueReason = `imports external module ${JSON.stringify(aliasedSpecifier)} outside the nine-kind lexical capability domain`;
+    const initialPolicy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, initialPolicy);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { [hiddenModule]: ['process'], [rootModule]: [] },
+      opaque: [{ module: rootModule, reason: opaqueReason }],
+      roots: [{ module: rootModule, rootKind: 'application' }],
+    };
+    const policy = policyBytesForCertificate(fixture.sources, fixture.root, manifest);
+
+    await expect(
+      verifyCertificateDirectory(
+        { ...manifest, policySha512: integrity(policy) },
+        policy,
+        fixture.root,
+      ),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'noncanonical-first-party-import',
+          obligation: 'coverage',
+        }),
+      ]),
+      ok: false,
+    });
+  });
+
   it('rejects insertion-ordered conditional exports that can select another listed module', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',

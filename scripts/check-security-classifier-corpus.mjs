@@ -4510,6 +4510,15 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'certificate-portable-first-party-specifier-closure',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'rejects noncanonical portable first-party import alias %j before opaque classification',
+          '@KOVOJS/server/hidden',
+          "code: 'noncanonical-first-party-import'",
+        ],
+      },
+      {
         id: 'certificate-generic-artifact-budgets',
         file: 'packages/verify/src/index.test.ts',
         snippets: [

@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(488);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(489);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -854,6 +854,7 @@ describe('security-gate-mutations', () => {
       'certificate-verifier/drop-portable-bin-shim-closure',
       'certificate-verifier/drop-portable-package-name-closure',
       'certificate-verifier/downgrade-template-import-to-opaque',
+      'certificate-verifier/allow-portable-first-party-specifier-alias',
       'certificate-verifier/restore-prefix-only-module-parse',
       'certificate-verifier/restore-conventional-package-resolution',
       'certificate-verifier/restore-iterable-byte-copy',

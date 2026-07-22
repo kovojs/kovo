@@ -2137,6 +2137,21 @@ function parseArtifact(
       }
       continue;
     }
+    const aliasedPolicyPackage = noncanonicalPortablePolicyPackageAlias(policy, specifier);
+    if (aliasedPolicyPackage !== undefined) {
+      if (
+        !recordFinding(
+          finding(
+            'coverage',
+            'noncanonical-first-party-import',
+            `${module} imports ${JSON.stringify(specifier)}, which aliases reviewer package ${aliasedPolicyPackage} on a supported filesystem`,
+          ),
+        )
+      ) {
+        return budgetExceededParsedArtifact();
+      }
+      continue;
+    }
     const target = resolveArtifactSpecifier(module, specifier, policy);
     if (target === undefined) {
       if (specifier.startsWith('@kovojs/') || specifier.startsWith('#')) {
@@ -2259,6 +2274,25 @@ function unsupportedModuleSpecifier(specifier: string): boolean {
 
 function externalOpaqueReason(specifier: string): string {
   return `imports external module ${JSON.stringify(specifier)} outside the nine-kind lexical capability domain`;
+}
+
+function noncanonicalPortablePolicyPackageAlias(
+  policy: KovoCertificatePolicyV1,
+  specifier: string,
+): string | undefined {
+  const parts = specifier.split('/');
+  if (parts.length < 2) return undefined;
+  const packageSpelling = `${parts[0]}/${parts[1]}`;
+  const packageIdentity = portableArtifactPathIdentity(packageSpelling);
+  for (const reviewedPackage of policy.packages) {
+    if (
+      reviewedPackage.name !== packageSpelling &&
+      portableArtifactPathIdentity(reviewedPackage.name) === packageIdentity
+    ) {
+      return reviewedPackage.name;
+    }
+  }
+  return undefined;
 }
 
 function resolvePolicyPackageSpecifier(

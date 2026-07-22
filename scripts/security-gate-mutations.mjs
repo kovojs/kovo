@@ -2399,6 +2399,9 @@ const weakenedVerifyCaseFoldedNodeModulesBranch = "      if (entry.name === 'nod
 const verifyPortableArtifactIdentityBranch =
   "  return portableFilesystemName(value).replace(/[ .]+$/u, '');";
 const weakenedVerifyPortableArtifactIdentityBranch = '  return value;';
+const verifyPortableFirstPartySpecifierBranch = '    if (aliasedPolicyPackage !== undefined) {';
+const removedVerifyPortableFirstPartySpecifierBranch =
+  '    if (false && aliasedPolicyPackage !== undefined) {';
 const verifyPortablePackageBinNamesBranch = [
   '  assertPortablePackageBinNames(',
   '    entries.map(([name]) => name),',
@@ -8288,6 +8291,18 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralTypeScript: true,
     description:
+      'Downgrades a portable alias of a reviewer-owned first-party package into an opaque external import.',
+    expectedKiller:
+      'case-folded first-party package imports must fail before opaque classification can omit their capability edge',
+    name: 'certificate-verifier/allow-portable-first-party-specifier-alias',
+    replacement: removedVerifyPortableFirstPartySpecifierBranch,
+    search: verifyPortableFirstPartySpecifierBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsPortableFirstPartySpecifierBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
       'Stops checking package bin keys against the cross-platform command-shim namespace.',
     expectedKiller:
       'one portable npm command shim must never select between two reviewed runtime targets',
@@ -8628,6 +8643,28 @@ async function assertVerifierRejectsPortableArtifactCollisionBehavior(moduleUnde
   });
   if (!result.findings.some((entry) => entry.code === 'artifact-path-collision')) {
     throw new Error('certificate verifier admitted cross-platform artifact path aliases');
+  }
+}
+
+async function assertVerifierRejectsPortableFirstPartySpecifierBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/root.mjs';
+  const hiddenModule = '@kovojs/server/dist/hidden.mjs';
+  const aliasedSpecifier = '@KOVOJS/server/hidden';
+  const opaqueReason = `imports external module ${JSON.stringify(aliasedSpecifier)} outside the nine-kind lexical capability domain`;
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    capabilities: { [hiddenModule]: ['process'] },
+    manifest: {
+      exports: { '.': './dist/root.mjs', './hidden': './dist/hidden.mjs' },
+      name: '@kovojs/server',
+    },
+    opaque: [{ module: rootModule, reason: opaqueReason }],
+    sources: {
+      [hiddenModule]: "import 'node:child_process';",
+      [rootModule]: `import ${JSON.stringify(aliasedSpecifier)};`,
+    },
+  });
+  if (!result.findings.some((entry) => entry.code === 'noncanonical-first-party-import')) {
+    throw new Error('certificate verifier admitted a portable first-party package alias as opaque');
   }
 }
 

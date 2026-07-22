@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 351,
+    "historicalWitnesses": 352,
     "productions": 12
   },
   "productions": [
@@ -2120,6 +2120,12 @@
       "corpus": "certificate-verifier",
       "production": "module-boundary",
       "reason": "The generic checker derives first-party package and import edges from the exact reviewer-owned manifests instead of a conventional dist filename guess or caller resolver."
+    },
+    {
+      "anchor": "certificate-portable-first-party-specifier-closure",
+      "corpus": "certificate-verifier",
+      "production": "platform-differential",
+      "reason": "A noncanonical portable spelling of a reviewed first-party package fails before opaque classification, so case-insensitive filesystems cannot add an omitted capability edge."
     },
     {
       "anchor": "certificate-generic-artifact-budgets",
