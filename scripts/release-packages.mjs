@@ -8,6 +8,7 @@ export const repoRoot = publicPackageRepoRoot;
 export const releaseDir = path.join(repoRoot, '.release');
 export const tarballDir = path.join(releaseDir, 'tarballs');
 export const manifestPath = path.join(releaseDir, 'packed-packages.json');
+export const packedManifestMaxBytes = 4 * 1024 * 1024;
 
 export function packageDir(pkg) {
   return path.join(repoRoot, 'packages', pkg.dir);

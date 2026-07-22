@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
+import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
 import {
   readPackageTarballSnapshot,
   validatedPackageTarballEntries,
@@ -12,6 +13,7 @@ import { npmPublicRegistry, readNpmPublishedState } from './npm-registry-state.m
 import {
   assertPackedManifestMatchesSource,
   manifestPath,
+  packedManifestMaxBytes,
   releasePackages,
   repoRoot,
   tarballDir,
@@ -35,7 +37,7 @@ export function publishPackedPackages(
     throw new Error(`Missing packed package manifest: ${manifestPath}`);
   }
 
-  const loadedManifest = manifest ?? JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const loadedManifest = manifest ?? readPackedReleaseManifest();
   const packages = validatePackedReleaseManifest(loadedManifest, releasePackagesFn());
 
   for (const pkg of packages) {
@@ -87,6 +89,14 @@ export function publishPackedPackages(
       },
     );
   }
+}
+
+export function readPackedReleaseManifest(file = manifestPath) {
+  return JSON.parse(
+    readBoundedRegularFile(file, packedManifestMaxBytes, 'packed release manifest').toString(
+      'utf8',
+    ),
+  );
 }
 
 export function validatePackedReleaseManifest(manifest, expectedPackages) {

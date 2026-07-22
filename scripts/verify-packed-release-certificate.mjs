@@ -11,11 +11,15 @@ import {
   validatePackedReleaseManifest,
   verifyPackedAttestation,
 } from './publish-packed-packages.mjs';
-import { manifestPath, releasePackages, repoRoot } from './release-packages.mjs';
+import {
+  manifestPath,
+  packedManifestMaxBytes,
+  releasePackages,
+  repoRoot,
+} from './release-packages.mjs';
 
 const certificatePath = path.join(repoRoot, 'security', 'kovo-certificate-v1.json');
 const policyPath = path.join(repoRoot, 'security', 'kovo-certificate-policy-v1.json');
-const MAX_PACKED_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MAX_CERTIFICATE_BYTES = 2 * 1024 * 1024;
 const MAX_DEPENDENCY_MANIFEST_BYTES = 1024 * 1024;
@@ -35,7 +39,7 @@ export function verifyPackedReleaseCertificate({
   const packedManifest = JSON.parse(
     readBoundedRegularFile(
       packedManifestFile,
-      MAX_PACKED_MANIFEST_BYTES,
+      packedManifestMaxBytes,
       'packed release manifest',
     ).toString('utf8'),
   );

@@ -1,9 +1,14 @@
+import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   publishPackedPackages,
+  readPackedReleaseManifest,
   validatePackedReleaseManifest,
 } from './publish-packed-packages.mjs';
+import { packedManifestMaxBytes } from './release-packages.mjs';
 
 const localIntegrity = `sha512-${'A'.repeat(86)}==`;
 
@@ -31,6 +36,20 @@ function releasePackagesFor(packedManifest) {
 }
 
 describe('publish-packed-packages', () => {
+  it('bounds the downloaded release manifest before allocating or parsing it', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-packed-manifest-limit-'));
+    const sparseManifest = path.join(root, 'packed-packages.json');
+    try {
+      writeFileSync(sparseManifest, '{}');
+      truncateSync(sparseManifest, packedManifestMaxBytes + 1);
+      expect(() => readPackedReleaseManifest(sparseManifest)).toThrow(
+        `packed release manifest must be a regular non-symlink file no larger than ${packedManifestMaxBytes}`,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('publishes missing packages and skips published ones', () => {
     const exec = vi.fn();
     const log = vi.fn();
