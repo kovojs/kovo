@@ -3616,7 +3616,14 @@ export default async function handler(request) {
       expect(runtimePackage.dependencies).not.toHaveProperty('attacker-runtime');
       expect(runtimePackage.devDependencies).not.toHaveProperty('attacker-dev-runtime');
       expect(runtimePackage.devDependencies).toHaveProperty('vitest', '4.1.8');
-      expect(runtimePackage.pnpm?.overrides).toEqual({ esbuild: '0.28.1' });
+      expect(runtimePackage.pnpm?.overrides).toEqual({
+        '@hono/node-server': '2.0.10',
+        'body-parser': '2.3.0',
+        'brace-expansion': '5.0.7',
+        esbuild: '0.28.1',
+        'fast-uri': '3.1.4',
+        hono: '4.12.27',
+      });
       expect(copiedLockfile).toBe(true);
       expect(parseHitsAfterEmit).toBe(0);
       expect(iteratorHitsAfterEmit).toBe(0);
