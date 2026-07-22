@@ -71,6 +71,8 @@ import {
 import {
   createWitnessWeakMap,
   witnessFreeze,
+  witnessGetOwnPropertyDescriptor,
+  witnessOwnKeys,
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
@@ -2054,6 +2056,15 @@ interface AgentRequestOptions {
   [key: string]: unknown;
 }
 
+type SocketLookupCallback = (
+  error: Error | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
+
+const MAX_SOCKET_LOOKUP_ADDRESSES = 256;
+const MAX_AGENT_REQUEST_OPTION_PROPERTIES = 128;
+
 type AgentSocket = net.Socket & { remotePort?: number };
 
 /**
@@ -2168,19 +2179,18 @@ export function installNetConnectFloor(
     const pinnedLookup = ((
       hostname: string,
       lookupOptions: unknown,
-      callback: (err: Error | null, address: string, family: number) => void,
+      callback: SocketLookupCallback,
     ) => {
       const cb =
-        typeof lookupOptions === 'function'
-          ? (lookupOptions as (err: Error | null, a: string, f: number) => void)
-          : callback;
+        typeof lookupOptions === 'function' ? (lookupOptions as SocketLookupCallback) : callback;
       const opts = typeof lookupOptions === 'function' ? {} : (lookupOptions as object);
+      const expectsAll = stableConnectCarrierValue(opts, 'all') === true;
       const resolver = (userLookup ?? dns.lookup) as typeof dns.lookup;
       egressApply<void>(resolver, dns, [
         hostname,
         opts as dns.LookupOptions,
         (err: Error | null, address: string | LookupAddress[], family: number) => {
-          if (err) return cb(err, address as unknown as string, family as unknown as number);
+          if (err) return rejectPinnedLookup(cb, expectsAll, err);
           // SPEC §6.6 rule 2 ("the answer we validate is the answer we connect to"): classify
           // EVERY resolved IP, not just address[0]. Under Node's default autoSelectFamily the
           // lookup is invoked with `{ all: true }` and `address` is a `LookupAddress[]` that
@@ -2190,9 +2200,13 @@ export function installNetConnectFloor(
           // the floor and then connect to the private sibling — SSRF/DNS-rebind to cloud metadata.
           // Fail the WHOLE lookup CLOSED if any entry is non-public/not-allowlisted; never forward
           // an unvalidated array on the strength of one passing record.
-          if (egressArrayIsArray(address)) {
-            for (let index = 0; index < address.length; index += 1) {
-              const entry = address[index] as LookupAddress;
+          if (expectsAll) {
+            const snapshots = snapshotLookupAddresses(address);
+            if (snapshots === null) {
+              return rejectPinnedLookup(cb, true, invalidLookupResultBlocked(host, port));
+            }
+            for (let index = 0; index < snapshots.length; index += 1) {
+              const entry = snapshots[index]!;
               const blocked = evaluateSocketEgress(
                 {
                   host,
@@ -2202,17 +2216,21 @@ export function installNetConnectFloor(
                 },
                 this,
               );
-              if (blocked) return cb(blocked, entry.address, family as unknown as number);
+              if (blocked) return rejectPinnedLookup(cb, true, blocked);
             }
-            return cb(null, address as unknown as string, family as unknown as number);
+            return cb(null, snapshots);
           }
-          const resolvedIp = address as string;
+          const scalar = snapshotScalarLookupAddress(address, family);
+          if (scalar === null) {
+            return rejectPinnedLookup(cb, false, invalidLookupResultBlocked(host, port));
+          }
+          const resolvedIp = scalar.address;
           const blocked = evaluateSocketEgress(
             { host, port, resolvedIp, policy: activePolicy },
             this,
           );
-          if (blocked) return cb(blocked, resolvedIp, family as unknown as number);
-          cb(null, address as unknown as string, family as unknown as number);
+          if (blocked) return rejectPinnedLookup(cb, false, blocked);
+          cb(null, resolvedIp, scalar.family);
         },
       ]);
     }) as typeof dns.lookup;
@@ -2249,20 +2267,260 @@ function installHttpAgentReuseFloor(state: NetConnectFloorState): void {
     options: AgentRequestOptions,
   ): void {
     const activePolicy = state.policy;
+    // SPEC §6.6 rule 5: Agent.addRequest() is a second native consumer after this decision. Copy
+    // the exact enumerable own-data carrier once, classify that copy, then forward only that same
+    // framework-owned snapshot. Accessors, unstable descriptors, symbol extensions, and
+    // unbounded bags fail closed instead of receiving a check-then-use opportunity.
+    const requestSnapshot = snapshotAgentRequestOptions(options);
+    const pinnedAgentOptions = pinHttpAgentOptions(this);
+    try {
+      // Native Agent.addRequest overlays `this.options` on the per-request carrier before both
+      // getName() and createConnection(). Classify that exact effective carrier and temporarily
+      // pin the same agent-options snapshot while native code performs its synchronous merge.
+      const effectiveSnapshot = {
+        __proto__: null,
+        ...requestSnapshot,
+        ...pinnedAgentOptions.snapshot,
+      } as AgentRequestOptions;
+      const blocked = evaluateHttpAgentRequest(this, effectiveSnapshot, activePolicy);
+      if (blocked) {
+        // Raw node:http/node:https keep-alive reuse skips net.Socket.prototype.connect. Deny the
+        // request at the agent boundary so a socket opened before Kovo installed the SPEC §6.6
+        // runtime floor cannot carry another request to a now-blocked private destination.
+        throw blocked;
+      }
 
-    const blocked = evaluateHttpAgentRequest(this, options, activePolicy);
-    if (blocked) {
-      // Raw node:http/node:https keep-alive reuse skips net.Socket.prototype.connect. Deny the
-      // request at the agent boundary so a socket opened before Kovo installed the SPEC §6.6
-      // runtime floor cannot carry another request to a now-blocked private destination.
-      throw blocked;
+      return egressApply(original, this, [req, effectiveSnapshot]);
+    } finally {
+      pinnedAgentOptions.restore();
     }
-
-    return egressApply(original, this, [req, options]);
   };
 
   state.httpAgentWrapper = patchedAddRequest;
   agentProto.addRequest = patchedAddRequest;
+}
+
+function pinHttpAgentOptions(agent: http.Agent): {
+  restore: () => void;
+  snapshot: AgentRequestOptions;
+} {
+  let before: PropertyDescriptor | undefined;
+  let after: PropertyDescriptor | undefined;
+  try {
+    before = witnessGetOwnPropertyDescriptor(agent, 'options');
+    after = witnessGetOwnPropertyDescriptor(agent, 'options');
+  } catch {
+    throw invalidAgentRequestCarrierBlocked();
+  }
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable ||
+    !egressObjectIs(before.value, after.value) ||
+    before.value === null ||
+    typeof before.value !== 'object'
+  ) {
+    throw invalidAgentRequestCarrierBlocked();
+  }
+  const snapshot = snapshotAgentRequestOptions(before.value as AgentRequestOptions);
+  try {
+    egressObjectDefineProperty(agent, 'options', {
+      configurable: before.configurable === true,
+      enumerable: before.enumerable === true,
+      value: snapshot,
+      writable: before.writable === true,
+    });
+    const installed = witnessGetOwnPropertyDescriptor(agent, 'options');
+    if (installed === undefined || !('value' in installed) || installed.value !== snapshot) {
+      throw invalidAgentRequestCarrierBlocked();
+    }
+  } catch {
+    try {
+      egressObjectDefineProperty(agent, 'options', before);
+    } catch {
+      // The enclosing floor is already fail-closed. Keep the original carrier error rather than
+      // allowing a hostile Proxy's second define trap to replace it with an arbitrary value.
+    }
+    throw invalidAgentRequestCarrierBlocked();
+  }
+  return {
+    restore() {
+      egressObjectDefineProperty(agent, 'options', before);
+    },
+    snapshot,
+  };
+}
+
+function snapshotAgentRequestOptions(options: AgentRequestOptions): AgentRequestOptions {
+  if (options === null || typeof options !== 'object') {
+    throw invalidAgentRequestCarrierBlocked();
+  }
+
+  let beforeKeys: PropertyKey[];
+  let afterKeys: PropertyKey[];
+  try {
+    beforeKeys = witnessOwnKeys(options);
+    afterKeys = witnessOwnKeys(options);
+  } catch {
+    throw invalidAgentRequestCarrierBlocked();
+  }
+  if (
+    beforeKeys.length > MAX_AGENT_REQUEST_OPTION_PROPERTIES ||
+    beforeKeys.length !== afterKeys.length
+  ) {
+    throw invalidAgentRequestCarrierBlocked();
+  }
+  for (let index = 0; index < beforeKeys.length; index += 1) {
+    if (!egressObjectIs(beforeKeys[index], afterKeys[index])) {
+      throw invalidAgentRequestCarrierBlocked();
+    }
+  }
+
+  const snapshot = { __proto__: null } as AgentRequestOptions;
+  for (let index = 0; index < beforeKeys.length; index += 1) {
+    const property = beforeKeys[index]!;
+    let before: PropertyDescriptor | undefined;
+    let after: PropertyDescriptor | undefined;
+    try {
+      before = witnessGetOwnPropertyDescriptor(options, property);
+      after = witnessGetOwnPropertyDescriptor(options, property);
+    } catch {
+      throw invalidAgentRequestCarrierBlocked();
+    }
+    if (
+      before === undefined ||
+      after === undefined ||
+      before.configurable !== after.configurable ||
+      before.enumerable !== after.enumerable
+    ) {
+      throw invalidAgentRequestCarrierBlocked();
+    }
+    if (!before.enumerable) continue;
+    if (
+      typeof property !== 'string' ||
+      !('value' in before) ||
+      !('value' in after) ||
+      before.writable !== after.writable ||
+      !egressObjectIs(before.value, after.value)
+    ) {
+      throw invalidAgentRequestCarrierBlocked();
+    }
+    egressObjectDefineProperty(snapshot, property, {
+      configurable: true,
+      enumerable: true,
+      value: before.value,
+      writable: true,
+    });
+  }
+  return snapshot;
+}
+
+function snapshotLookupAddresses(value: unknown): LookupAddress[] | null {
+  if (!egressArrayIsArray(value)) return null;
+  const length = stableOwnDataValue(value, 'length');
+  if (
+    typeof length !== 'number' ||
+    !egressNumberIsInteger(length) ||
+    length < 1 ||
+    length > MAX_SOCKET_LOOKUP_ADDRESSES
+  ) {
+    return null;
+  }
+
+  const snapshots: LookupAddress[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = stableOwnDataValue(value, index);
+    if (entry === INVALID_OWN_DATA_VALUE || entry === null || typeof entry !== 'object') {
+      return null;
+    }
+    const address = stableOwnDataValue(entry, 'address');
+    const family = stableOwnDataValue(entry, 'family');
+    if (
+      address === INVALID_OWN_DATA_VALUE ||
+      family === INVALID_OWN_DATA_VALUE ||
+      !validLookupAddress(address, family)
+    ) {
+      return null;
+    }
+    const snapshot = { __proto__: null, address, family: family as number } as LookupAddress;
+    egressObjectDefineProperty(snapshots, index, {
+      configurable: true,
+      enumerable: true,
+      value: snapshot,
+      writable: true,
+    });
+  }
+  return snapshots;
+}
+
+function snapshotScalarLookupAddress(address: unknown, family: unknown): LookupAddress | null {
+  if (!validLookupAddress(address, family)) return null;
+  return { address, family: family as number };
+}
+
+function validLookupAddress(address: unknown, family: unknown): address is string {
+  return (
+    typeof address === 'string' &&
+    address.length <= 45 &&
+    (family === 4 || family === 6) &&
+    egressNetIsIp(address) === family
+  );
+}
+
+const INVALID_OWN_DATA_VALUE = Symbol('server.invalid-own-data-value');
+
+function stableOwnDataValue(value: object, property: PropertyKey): unknown {
+  let before: PropertyDescriptor | undefined;
+  let after: PropertyDescriptor | undefined;
+  try {
+    before = witnessGetOwnPropertyDescriptor(value, property);
+    after = witnessGetOwnPropertyDescriptor(value, property);
+  } catch {
+    return INVALID_OWN_DATA_VALUE;
+  }
+  if (
+    before === undefined ||
+    after === undefined ||
+    !('value' in before) ||
+    !('value' in after) ||
+    before.configurable !== after.configurable ||
+    before.enumerable !== after.enumerable ||
+    before.writable !== after.writable ||
+    !egressObjectIs(before.value, after.value)
+  ) {
+    return INVALID_OWN_DATA_VALUE;
+  }
+  return before.value;
+}
+
+function rejectPinnedLookup(
+  callback: SocketLookupCallback,
+  expectsAll: boolean,
+  error: Error,
+): void {
+  if (expectsAll) {
+    callback(error, []);
+    return;
+  }
+  callback(error, '', 0);
+}
+
+function invalidLookupResultBlocked(host: string, port: number): EgressBlockedError {
+  return new EgressBlockedError({
+    classification: 'special-use',
+    destination: `${host}:${port}`,
+  });
+}
+
+function invalidAgentRequestCarrierBlocked(): EgressBlockedError {
+  return new EgressBlockedError({
+    classification: 'special-use',
+    destination: 'unstable-agent-request-carrier',
+  });
 }
 
 function evaluateHttpAgentRequest(
@@ -2273,10 +2531,17 @@ function evaluateHttpAgentRequest(
   if (stableConnectTargetValue(options, 'socketPath') != null) {
     return unixDomainSocketBlocked();
   }
-  const host = egressString(options.hostname ?? options.host ?? 'localhost');
-  const port = egressNumber(
-    options.port ?? options.defaultPort ?? (options.protocol === 'https:' ? 443 : 80),
-  );
+  // Native Agent.getName()/createConnection consume `host`, not a later `hostname` reread. A
+  // normal ClientRequest has already normalized hostname into host before this boundary. Mirror
+  // that exact carrier grammar so `{ hostname: <allowed>, host: <private> }` cannot classify one
+  // authority and pool/dial another.
+  const hostValue = options.host;
+  const host = !hostValue ? 'localhost' : typeof hostValue === 'string' ? hostValue : undefined;
+  if (host === undefined) return invalidAgentRequestCarrierBlocked();
+  const portValue =
+    options.port ?? options.defaultPort ?? (options.protocol === 'https:' ? 443 : 80);
+  if (!isNodeTcpPortValue(portValue)) return invalidAgentRequestCarrierBlocked();
+  const port = egressNumber(portValue);
   const literalIp = normalizeFastPathIpLiteral(host);
   if (literalIp !== null) {
     return evaluateEgress({ host, port, resolvedIp: literalIp, policy });
