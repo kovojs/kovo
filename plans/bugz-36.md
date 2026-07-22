@@ -304,13 +304,18 @@ trusted the expected identity supplied by the same subject.
     (SPEC §9 and §14 deploy skew).
   - **Dedup:** distinct from M11's same-version identity collapse and previous response-only build
     mismatch checks: this root occurred before the server selected a grammar and registry.
-  - **Open work:** bind the wire grammar into every default and injected-registry app build token,
-    carry `Kovo-Build` on every enhanced query, mutation, and HMR request, route to a retained exact
-    build when the deployment owns one, and make the current app reject missing/mismatched builds
-    after mandatory coarse admission but before target decode or handler work. Give stripped-header
-    rejection an unambiguous typed response marker so it cannot be confused with an app 409; require
-    exact dev-only `oldBuild` HMR continuity. Prove module-less apps rotate tokens and old/current
-    grammars never use heuristic dual decoding.
+  - **Open work:** carry `Kovo-Build` on every enhanced query, mutation, and HMR request, route to a
+    retained exact build when the deployment owns one, and make the current app reject
+    missing/mismatched builds after mandatory coarse admission but before target decode or handler
+    work. Give stripped-header rejection an unambiguous typed response marker so it cannot be
+    confused with an app 409; require exact dev-only `oldBuild` HMR continuity. Define the build
+    identity as one length-framed composition of (a) render/wire/query grammar and (b) the active
+    immutable client-module graph. Reject conflicting source/content-type reuse of one immutable
+    path+version, include exact module bytes in the module-graph identity, and exclude retained
+    historical versions so replica history cannot change the current token. Prove the historical
+    delimiter-collision pair, conflicting overwrite, replica-history invariance, custom registries
+    that ignore the render setter, module-less grammar rotation, and that old/current grammars never
+    use heuristic dual decoding. The token remains a public compatibility identity, not authority.
 
 - [ ] **M15 — Typed-read refetch trusted foreign final responses as query truth.**
   - The modular and inline lifecycle `/_q/` refetch paths validated fragment media and a public
@@ -323,9 +328,10 @@ trusted the expected identity supplied by the same subject.
     authenticator.
   - **Open work:** snapshot a canonical same-origin `/_q/` request URL before fetch, then require a
     non-redirected, nonempty final response URL with exact canonical href/origin identity before
-    reading build/skew headers or body. Require the exact fragment media/disposition envelope for
-    both success and skew 409, and cover foreign/cross-origin redirects and forged public tokens in
-    modular and generated-inline paths.
+    reading build/skew headers or body. Preserve SPEC §9.4's `text/html` inline envelope for a
+    successful typed read; require the reserved fragment envelope plus exact marker for the
+    framework's skew 409. Cover foreign/cross-origin redirects and forged public tokens in modular,
+    lifecycle, HMR, and generated-inline paths.
 
 ## Low
 
