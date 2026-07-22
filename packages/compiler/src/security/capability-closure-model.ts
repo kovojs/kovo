@@ -151,6 +151,18 @@ export interface ScannedBindingAliasFact {
   readonly sourceStartsAtUnshadowedGlobalNamespace?: boolean;
 }
 
+/** @internal Per-use syntax-provenance alternative emitted before graph resolution. */
+export type ScannedBindingCandidate =
+  | { readonly exportName: string; readonly kind: 'local'; readonly members?: readonly string[] }
+  | {
+      readonly exportName: string;
+      readonly kind: 'import';
+      readonly members?: readonly string[];
+      readonly namespace?: boolean;
+      readonly specifier: string;
+    }
+  | { readonly kind: 'unknown'; readonly reason: string };
+
 /** @internal */
 export interface ScannedExportBindingFact {
   readonly exported?: string;
@@ -164,8 +176,12 @@ export interface ScannedExportBindingFact {
 export interface ScannedCallFact {
   readonly assignedName?: string;
   readonly callee: string;
+  readonly calleeCandidates?: readonly ScannedBindingCandidate[];
+  readonly calleeUncertain?: boolean;
   readonly carriesCallback: boolean;
   readonly firstArgumentBinding?: string;
+  readonly firstArgumentCandidates?: readonly ScannedBindingCandidate[];
+  readonly firstArgumentUncertain?: boolean;
   readonly firstLiteral?: string;
   readonly hasCron: boolean;
   readonly site: string;

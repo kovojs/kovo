@@ -15,6 +15,10 @@ import type {
   ScannedImportFact,
 } from '../security/capability-closure-model.js';
 import { classifyRawCapabilityImport } from '../security/capability-closure-model.js';
+import {
+  scanLexicalProvenance,
+  type ScannedCallProvenance,
+} from './lexical-provenance.js';
 
 const globalCapabilities = new Map<string, RawCapabilityKind>([
   ['Bun', 'process'],
@@ -150,6 +154,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
   const imports: ScannedImportFact[] = [];
 
   collectStaticImportsAndExports(sourceFile, imports, importBindings, exports);
+  const lexicalProvenance = scanLexicalProvenance(sourceFile, importBindings);
   collectBindingAliases(sourceFile, aliases);
   const callbackCarriers = callbackCarrierNames(sourceFile, importBindings);
   const globalAliases = globalNamespaceAliases(aliases);
@@ -158,7 +163,15 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
   let firstJsxSite: string | undefined;
   visitWithScopes(sourceFile, scopes, (node, activeScopes) => {
     if (ts.isCallExpression(node)) {
-      collectCall(node, sourceFile, callbackCarriers, activeScopes, calls, imports);
+      collectCall(
+        node,
+        sourceFile,
+        callbackCarriers,
+        activeScopes,
+        lexicalProvenance.calls.get(node.getStart(sourceFile)),
+        calls,
+        imports,
+      );
     }
     if (ts.isJsxAttribute(node) && jsxAttributeIsHandler(node)) {
       browserHandlers.push({
@@ -464,6 +477,7 @@ function collectCall(
   sourceFile: ts.SourceFile,
   callbackCarriers: ReadonlySet<string>,
   scopes: readonly Set<string>[],
+  provenance: ScannedCallProvenance | undefined,
   calls: ScannedCallFact[],
   imports: ScannedImportFact[],
 ): void {
@@ -501,10 +515,22 @@ function collectCall(
   calls.push({
     ...(assignedName === undefined ? {} : { assignedName }),
     callee,
+    ...(provenance === undefined
+      ? {}
+      : {
+          calleeCandidates: provenance.callee.candidates,
+          calleeUncertain: provenance.callee.uncertain,
+        }),
     carriesCallback: node.arguments.some((argument) =>
       expressionCarriesCallback(argument, callbackCarriers),
     ),
     ...(firstArgumentBinding === undefined ? {} : { firstArgumentBinding }),
+    ...(provenance?.firstArgument === undefined
+      ? {}
+      : {
+          firstArgumentCandidates: provenance.firstArgument.candidates,
+          firstArgumentUncertain: provenance.firstArgument.uncertain,
+        }),
     ...(first && ts.isStringLiteralLike(first) ? { firstLiteral: first.text } : {}),
     hasCron: node.arguments.some(argumentHasCron),
     site: sourceSite(sourceFile, node.getStart(sourceFile)),

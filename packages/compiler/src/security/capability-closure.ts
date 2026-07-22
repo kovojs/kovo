@@ -18,6 +18,7 @@ import type {
   PackageCapabilitySummaryExport,
   RawCapabilityKind,
   ResolvedCapabilityPackage,
+  ScannedBindingCandidate,
   ScannedCapabilityModule,
   ScannedCompilerDependencyFact,
   ScannedExportBindingFact,
@@ -79,6 +80,7 @@ export interface AnalyzeCapabilityClosureResult {
 interface CapabilityRoot {
   readonly adapterEntryModule?: string;
   readonly kind: CapabilityRootKind;
+  readonly lexicalProvenanceClosed?: boolean;
   readonly module: string;
   readonly name: string;
   readonly site: string;
@@ -528,6 +530,20 @@ export function analyzeCapabilityClosure(
   const factKeys = new Set(facts.map(capabilityFactKey));
 
   for (const root of roots) {
+    if (!root.lexicalProvenanceClosed) continue;
+    appendClosed(
+      root,
+      root.site,
+      undefined,
+      'framework root is reached through mutable or ambiguous lexical provenance',
+      [`root:${root.kind}:${root.name}@${root.module}`, 'lexical-provenance:mutable-or-ambiguous'],
+      facts,
+      factKeys,
+      diagnostics,
+    );
+  }
+
+  for (const root of roots) {
     const rootPath = [`root:${root.kind}:${root.name}@${root.module}`];
     if (root.adapterEntryModule !== undefined) {
       const adapterEntry = modulesByName.get(root.adapterEntryModule);
@@ -930,6 +946,19 @@ function collectCapabilityPackageRequestsFromModules(
     );
 }
 
+function resolveCallUse(
+  resolver: BindingResolver,
+  moduleName: string,
+  call: ScannedCapabilityModule['calls'][number],
+  first = false,
+): { origins: readonly BindingOrigin[]; uncertain: boolean } {
+  const candidates = first ? call.firstArgumentCandidates : call.calleeCandidates;
+  const legacy = first ? call.firstArgumentBinding : call.callee;
+  if (candidates === undefined) return { origins: legacy ? [resolver.resolveBinding(moduleName, legacy)] : [], uncertain: false };
+  const origins = [...new Map(candidates.map((candidate) => resolver.resolveCandidate(moduleName, candidate)).map((origin) => [bindingOriginKey(origin), origin])).values()];
+  return { origins, uncertain: (first ? call.firstArgumentUncertain : call.calleeUncertain) === true || candidates.some((candidate) => candidate.kind === 'unknown') || origins.length !== 1 };
+}
+
 function discoverRoots(
   modules: readonly ScannedCapabilityModule[],
   resolver: BindingResolver,
@@ -946,30 +975,34 @@ function discoverRoots(
       });
     }
     for (const call of module.calls) {
-      const origin = resolver.resolveBinding(module.fileName, call.callee);
-      if (origin.kind !== 'package') continue;
-      const packageName = packageNameForSpecifier(origin.specifier);
-      const subpath = packageSubpath(origin.specifier);
-      let kind = frameworkPostureRegistry.rootFactories.get(
-        frameworkMemberId(packageName, subpath, origin.exportName),
-      );
-      if (kind === undefined) continue;
-      if (kind === 'durable-task' && call.hasCron) kind = 'scheduled-task';
-      const factoryId = frameworkMemberId(packageName, subpath, origin.exportName);
-      const callbackOrigin =
-        factoryId === frameworkMemberId('@kovojs/server', '.', 'toNodeHandler') &&
-        call.firstArgumentBinding !== undefined
-          ? resolver.resolveBinding(module.fileName, call.firstArgumentBinding)
-          : undefined;
-      const separatedAdapter =
-        callbackOrigin?.kind === 'local' && callbackOrigin.module !== module.fileName;
-      appendRoot(roots, keys, {
-        ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),
-        kind,
-        module: separatedAdapter ? callbackOrigin.module : module.fileName,
-        name: call.firstLiteral ?? call.assignedName ?? origin.exportName,
-        site: call.site,
-      });
+      const use = resolveCallUse(resolver, module.fileName, call);
+      for (const origin of use.origins) {
+        if (origin.kind !== 'package') continue;
+        const factoryId = frameworkMemberId(
+          packageNameForSpecifier(origin.specifier),
+          packageSubpath(origin.specifier),
+          origin.exportName,
+        );
+        let kind = frameworkPostureRegistry.rootFactories.get(factoryId);
+        if (kind === undefined) continue;
+        if (kind === 'durable-task' && call.hasCron) kind = 'scheduled-task';
+        const callbackOrigins =
+          factoryId === frameworkMemberId('@kovojs/server', '.', 'toNodeHandler')
+            ? resolveCallUse(resolver, module.fileName, call, true).origins
+            : [];
+        const callbackOrigin = callbackOrigins.find(
+          (candidate) => candidate.kind === 'local' && candidate.module !== module.fileName,
+        );
+        const separatedAdapter = callbackOrigin?.kind === 'local';
+        appendRoot(roots, keys, {
+          ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),
+          kind,
+          ...(use.uncertain ? { lexicalProvenanceClosed: true } : {}),
+          module: separatedAdapter ? callbackOrigin.module : module.fileName,
+          name: call.firstLiteral ?? call.assignedName ?? origin.exportName,
+          site: call.site,
+        });
+      }
     }
   }
   return roots.sort(compareRoots);
@@ -1004,8 +1037,10 @@ function deriveModuleEdges(
     }
     for (const call of module.calls) {
       if (!call.carriesCallback) continue;
-      const origin = resolver.resolveBinding(module.fileName, call.callee);
-      if (origin.kind !== 'local' || origin.module === module.fileName) continue;
+      const origin = resolveCallUse(resolver, module.fileName, call).origins.find(
+        (candidate) => candidate.kind === 'local' && candidate.module !== module.fileName,
+      );
+      if (origin?.kind !== 'local') continue;
       appendEdge(edges, keys, {
         from: origin.module,
         kind: 'callback-transfer',
@@ -1050,17 +1085,20 @@ function packageUses(
   const uses = new Map<string, ReachablePackageUse[]>();
   for (const module of modules) {
     const separatedCustomAdapterEntry = module.calls.some((call) => {
-      const origin = resolver.resolveBinding(module.fileName, call.callee);
+      const origin = resolveCallUse(resolver, module.fileName, call).origins.find(
+        (candidate) => candidate.kind === 'package',
+      );
       if (
-        origin.kind !== 'package' ||
+        origin?.kind !== 'package' ||
         origin.specifier !== '@kovojs/server' ||
         origin.exportName !== 'toNodeHandler' ||
-        call.firstArgumentBinding === undefined
+        (call.firstArgumentBinding === undefined && call.firstArgumentCandidates === undefined)
       ) {
         return false;
       }
-      const handlerOrigin = resolver.resolveBinding(module.fileName, call.firstArgumentBinding);
-      return handlerOrigin.kind === 'local' && handlerOrigin.module !== module.fileName;
+      return resolveCallUse(resolver, module.fileName, call, true).origins.some(
+        (candidate) => candidate.kind === 'local' && candidate.module !== module.fileName,
+      );
     });
     for (const imported of module.imports) {
       const specifier = imported.specifier;
@@ -1806,6 +1844,20 @@ class BindingResolver {
 
   resolveBinding(moduleName: string, binding: string): BindingOrigin {
     return this.#resolveBinding(moduleName, binding, new Set());
+  }
+
+  resolveCandidate(moduleName: string, candidate: ScannedBindingCandidate): BindingOrigin {
+    if (candidate.kind === 'unknown') return { kind: 'unknown', reason: candidate.reason };
+    let origin: BindingOrigin =
+      candidate.kind === 'local'
+        ? { exportName: candidate.exportName, kind: 'local', module: moduleName }
+        : candidate.namespace
+          ? this.#resolveNamespaceImport(moduleName, candidate.specifier)
+          : this.#resolveImport(moduleName, candidate.specifier, candidate.exportName, new Set());
+    for (const member of candidate.members ?? []) {
+      origin = this.#resolveNamespaceMember(origin, member, new Set());
+    }
+    return origin;
   }
 
   #resolveBinding(moduleName: string, binding: string, seen: Set<string>): BindingOrigin {
