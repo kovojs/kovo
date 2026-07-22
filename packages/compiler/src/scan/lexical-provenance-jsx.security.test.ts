@@ -185,6 +185,41 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
     expect(hasCandidate(fact, (candidate) => candidate.kind === 'local')).toBe(true);
   });
 
+  it('invokes the component value snapshotted before props reassign its tag binding', () => {
+    const { call } = analyzeSource(`
+      import { route } from '@kovojs/server';
+      function localFactory() { return null; }
+      let make = localFactory;
+      function Installer() { make = route; return null; }
+      function Reset() { make = localFactory; return null; }
+      let View = Installer;
+      const view = <View value={(View = Reset)} />;
+      make('/snapshotted-component', { render() { return null; } });
+      void view;
+    `);
+
+    const fact = call('make');
+    expect(hasCandidate(fact, (candidate) => isImport(candidate, 'route'))).toBe(true);
+  });
+
+  it('does not invoke a component value assigned only after tag evaluation', () => {
+    const { call } = analyzeSource(`
+      import { route } from '@kovojs/server';
+      function localFactory() { return null; }
+      let make = localFactory;
+      function Installer() { make = route; return null; }
+      function Reset() { make = localFactory; return null; }
+      let View = Reset;
+      const view = <View value={(View = Installer)} />;
+      make('/later-component-not-invoked', { render() { return null; } });
+      void view;
+    `);
+
+    const fact = call('make');
+    expect(hasCandidate(fact, (candidate) => isImport(candidate, 'route'))).toBe(false);
+    expect(hasCandidate(fact, (candidate) => candidate.kind === 'local')).toBe(true);
+  });
+
   it('fails closed across getter-bearing JSX spread effects', () => {
     const { call } = analyzeSource(`
       import { route } from '@kovojs/server';
