@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 348,
+    "historicalWitnesses": 351,
     "productions": 12
   },
   "productions": [
@@ -2144,6 +2144,24 @@
       "corpus": "certificate-verifier",
       "production": "module-boundary",
       "reason": "No-substitution template imports cannot downgrade exact runtime module authority into a reviewer-approved computed-import opacity row."
+    },
+    {
+      "anchor": "certificate-complete-module-parse",
+      "corpus": "certificate-verifier",
+      "production": "module-boundary",
+      "reason": "The standalone verifier parses every admitted module byte before extracting edges and capabilities, so authority hidden near the artifact ceiling cannot fall outside the reviewed graph."
+    },
+    {
+      "anchor": "certificate-reference-budget-sentinel",
+      "corpus": "certificate-verifier",
+      "production": "budget-edge",
+      "reason": "A module that exceeds the finite reference-unit ceiling discards partial analysis and returns one fixed closed verdict."
+    },
+    {
+      "anchor": "certificate-finding-budget-sentinel",
+      "corpus": "certificate-verifier",
+      "production": "budget-edge",
+      "reason": "Reference-derived report amplification stops at the finite finding ceiling and is replaced by one fixed closed verdict."
     }
   ]
 }

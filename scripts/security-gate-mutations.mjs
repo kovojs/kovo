@@ -2338,6 +2338,17 @@ const verifyNoSubstitutionTemplateImportBranch =
   '      if (isNoSubstitutionTemplateDynamicImport(source, imported)) {';
 const removedVerifyNoSubstitutionTemplateImportBranch =
   '      if (false && isNoSubstitutionTemplateDynamicImport(source, imported)) {';
+const verifyCompleteArtifactParseBranch = '    program = parseJavaScriptModule(source);';
+const restoredPrefixOnlyArtifactParseBranch =
+  '    program = parseJavaScriptModule(source.slice(0, 3_899_994));';
+const verifyModuleReferenceBudgetVerdict =
+  '  if (collected.limitExceeded) return budgetExceededParsedArtifact();';
+const removedModuleReferenceBudgetVerdict =
+  '  if (false && collected.limitExceeded) return budgetExceededParsedArtifact();';
+const verifyAnalysisFindingBudgetVerdict =
+  '  if (budget.findings >= MAX_CERTIFICATE_FINDINGS) return false;';
+const removedAnalysisFindingBudgetVerdict =
+  '  if (false && budget.findings >= MAX_CERTIFICATE_FINDINGS) return false;';
 const verifyDirectoryEntryBoundBranch = [
   '      if (entries.length >= maxEntries) {',
   '        throw new TypeError(`${label} exceeds its ${maxEntries}-entry remaining limit`);',
@@ -8083,6 +8094,39 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description:
+      'Restores prefix-only parsing that ignores a capability hidden near the byte ceiling.',
+    expectedKiller: 'certificate analysis must parse every admitted module byte before extraction',
+    name: 'certificate-verifier/restore-prefix-only-module-parse',
+    replacement: restoredPrefixOnlyArtifactParseBranch,
+    search: verifyCompleteArtifactParseBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierParsesCompleteModuleBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Ignores module-reference extraction overflow and continues with an empty summary.',
+    expectedKiller:
+      'reference overflow must replace partial analysis with one fixed closed verdict',
+    name: 'certificate-verifier/drop-module-reference-budget-verdict',
+    replacement: removedModuleReferenceBudgetVerdict,
+    search: verifyModuleReferenceBudgetVerdict,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierModuleReferenceBudgetBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Lets reference-derived findings exceed their finite analysis budget.',
+    expectedKiller: 'finding overflow must replace amplified output with one fixed closed verdict',
+    name: 'certificate-verifier/drop-analysis-finding-budget-verdict',
+    replacement: removedAnalysisFindingBudgetVerdict,
+    search: verifyAnalysisFindingBudgetVerdict,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierAnalysisFindingBudgetBehavior,
+  },
+  {
+    behavioralTypeScript: true,
     description: 'Removes the streamed package-tree entry ceiling from directory verification.',
     expectedKiller: 'empty directories and files must share one finite package-tree census budget',
     name: 'certificate-verifier/drop-directory-entry-bound',
@@ -8233,6 +8277,62 @@ async function assertVerifierRejectsTemplateImportDowngradeBehavior(moduleUnderT
   });
   if (!result.findings.some((entry) => entry.code === 'unsupported-template-import')) {
     throw new Error('certificate verifier downgraded exact template authority into opacity');
+  }
+}
+
+async function assertVerifierParsesCompleteModuleBehavior(moduleUnderTest) {
+  const module = '@kovojs/server/dist/root.mjs';
+  const tail = "import 'node:child_process';\nexport const loaded = true;\n";
+  const source = `/*${'x'.repeat(3_900_051 - Buffer.byteLength(`/**/\n${tail}`))}*/\n${tail}`;
+  if (Buffer.byteLength(source) !== 3_900_051) {
+    throw new Error('complete-module parser mutation fixture drifted from the historical boundary');
+  }
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [module]: source },
+  });
+  if (
+    !result.findings.some(
+      (entry) =>
+        entry.code === 'local-capability-missing' &&
+        entry.obligation === 'stability' &&
+        entry.message.includes('process'),
+    )
+  ) {
+    throw new Error('certificate verifier ignored a capability hidden near the artifact ceiling');
+  }
+}
+
+async function assertVerifierModuleReferenceBudgetBehavior(moduleUnderTest) {
+  const module = '@kovojs/server/dist/root.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [module]: "import 'safe-external';\n".repeat(32_769) },
+  });
+  assertVerifierArtifactAnalysisBudget(result, 'module-reference');
+}
+
+async function assertVerifierAnalysisFindingBudgetBehavior(moduleUnderTest) {
+  const module = '@kovojs/server/dist/root.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [module]: "import 'https://example.invalid/module.js';\n".repeat(1_025) },
+  });
+  assertVerifierArtifactAnalysisBudget(result, 'finding');
+}
+
+function assertVerifierArtifactAnalysisBudget(result, budgetKind) {
+  const [onlyFinding] = result.findings;
+  if (
+    result.findings.length !== 1 ||
+    onlyFinding?.code !== 'artifact-analysis-budget' ||
+    onlyFinding.obligation !== 'coverage' ||
+    onlyFinding.message !==
+      'artifact analysis exceeds the finite module-reference or finding budget'
+  ) {
+    throw new Error(
+      `certificate verifier lost its fixed ${budgetKind} budget verdict: ${JSON.stringify(result.findings)}`,
+    );
   }
 }
 

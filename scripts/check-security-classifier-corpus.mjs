@@ -4546,6 +4546,33 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           "code: 'unsupported-template-import'",
         ],
       },
+      {
+        id: 'certificate-complete-module-parse',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'parses the complete near-limit module before deriving a hidden tail capability',
+          'expect(Buffer.byteLength(rootSource)).toBe(3_900_051)',
+          "code: 'local-capability-missing'",
+        ],
+      },
+      {
+        id: 'certificate-reference-budget-sentinel',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'checks the exact per-module reference limit and closes with one sentinel at limit plus one',
+          'MAX_JAVASCRIPT_MODULE_REFERENCES + 1',
+          'formatCertificateVerification(result).length',
+        ],
+      },
+      {
+        id: 'certificate-finding-budget-sentinel',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'bounds reference-derived findings and replaces limit plus one with one sentinel',
+          'unsupportedImport.repeat(1025)',
+          "code: 'artifact-analysis-budget'",
+        ],
+      },
     ],
   },
 ];
