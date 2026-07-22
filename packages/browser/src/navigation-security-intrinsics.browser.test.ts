@@ -449,6 +449,17 @@ describe('browser navigation security controls', () => {
     }
   });
 
+  it.each([
+    'text/html; charset=utf-8, text/plain',
+    'text/html; charset=utf-8\r\nX-Content-Type: text/plain',
+    'text/html\0',
+  ])('rejects ambiguous HTML navigation media %j', (contentType) => {
+    const controls = createBrowserNavigationSecurityControls();
+
+    expect(controls.isHtmlContentType(contentType)).toBe(false);
+    expect(controls.isHtmlContentType('text/html; charset=utf-8')).toBe(true);
+  });
+
   it('fails closed on pre-initialization snapshot controls selectively forged for Kovo DOM authority', () => {
     const outerHtmlDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'outerHTML')!;
     const cloneNodeDescriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'cloneNode')!;

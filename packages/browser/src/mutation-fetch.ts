@@ -514,13 +514,22 @@ function isMutationFragmentContentType(
 ): boolean {
   const contentType = security.readHeader(response, 'Content-Type');
   const contentDisposition = security.readHeader(response, 'Content-Disposition');
-  const separator = typeof contentType === 'string' ? security.indexOf(contentType, ';') : -1;
-  const mediaType =
-    typeof contentType === 'string'
-      ? security.lower(
-          security.trim(separator < 0 ? contentType : security.slice(contentType, 0, separator)),
-        )
-      : '';
+  // SPEC §9.1: Content-Type selects the mutation wire grammar. A comma-combined field or raw
+  // control byte is not one unambiguous media-type value, even when a semicolon appears before
+  // the ambiguity and a prefix-only parser would otherwise admit the fragment grammar.
+  if (
+    typeof contentType !== 'string' ||
+    security.indexOf(contentType, ',') >= 0 ||
+    security.indexOf(contentType, '\r') >= 0 ||
+    security.indexOf(contentType, '\n') >= 0 ||
+    security.indexOf(contentType, '\0') >= 0
+  ) {
+    return false;
+  }
+  const separator = security.indexOf(contentType, ';');
+  const mediaType = security.lower(
+    security.trim(separator < 0 ? contentType : security.slice(contentType, 0, separator)),
+  );
   return (
     mediaType === 'text/vnd.kovo.fragment+html' &&
     security.isInlineContentDisposition(contentDisposition)

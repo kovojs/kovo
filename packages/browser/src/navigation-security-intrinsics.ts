@@ -2366,6 +2366,17 @@ export function createBrowserNavigationSecurityControls(
 
   function isHtmlContentType(value: unknown): boolean {
     if (!controlsSound || typeof value !== 'string') return false;
+    // SPEC §7: enhanced navigation may interpret only one unambiguous HTML media field. A
+    // comma-combined field or raw control byte cannot gain document-parse/morph authority through
+    // an otherwise-valid prefix before the first semicolon.
+    if (
+      indexOf(value, ',') >= 0 ||
+      indexOf(value, '\r') >= 0 ||
+      indexOf(value, '\n') >= 0 ||
+      indexOf(value, '\0') >= 0
+    ) {
+      return false;
+    }
     const separator = indexOf(value, ';');
     const mediaType = lower(trim(separator < 0 ? value : slice(value, 0, separator)));
     return mediaType === 'text/html';

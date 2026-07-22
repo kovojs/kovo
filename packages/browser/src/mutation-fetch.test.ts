@@ -558,6 +558,34 @@ describe('enhanced mutation fetch', () => {
     expect(wrongMediaText).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'text/vnd.kovo.fragment+html; charset=utf-8, text/html',
+    'text/vnd.kovo.fragment+html; charset=utf-8\r\nX-Content-Type: text/html',
+    'text/vnd.kovo.fragment+html\0',
+  ])('rejects ambiguous mutation media %j before body authority', async (contentType) => {
+    const text = vi.fn(async () => '<kovo-fragment target="cart">attacker</kovo-fragment>');
+    await expect(
+      fetchEnhancedMutation({
+        fetch: async () => ({
+          headers: {
+            get: (name: string) => {
+              const normalized = name.toLowerCase();
+              if (normalized === 'content-type') return contentType;
+              return normalized === 'kovo-build' ? TEST_BUILD : null;
+            },
+          },
+          redirected: false,
+          text,
+          url: 'http://localhost/_m/cart/add',
+        }),
+        form: typedMutationForm('cart/add'),
+        formData: new FormData(),
+        root: new FakeTargetRoot([]),
+      }),
+    ).rejects.toThrow(/non-fragment enhanced mutation response/u);
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('replaces the hidden Kovo-Idem form field with a fresh enhanced-submit token', async () => {
     const formData = new FormData();
     const renderedIdem = 'v1_1750000000000_000102030405060708090a0b0c0d0e0f';

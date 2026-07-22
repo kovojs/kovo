@@ -1986,6 +1986,14 @@ function installInlineKovoLoader(im) {
   };
   const mt = (response) => {
     const contentType = bns.readHeader(response, 'Content-Type') || '';
+    // SPEC §9.1: the media field selects the mutation wire grammar. Reject combined fields and
+    // control-tainted values before a semicolon-prefix parse can grant body/header authority.
+    if (
+      bns.indexOf(contentType, ',') >= 0 ||
+      bns.indexOf(contentType, '\r') >= 0 ||
+      bns.indexOf(contentType, '\n') >= 0 ||
+      bns.indexOf(contentType, '\0') >= 0
+    ) return '';
     const separator = bns.indexOf(contentType, ';');
     return bns.lower(bns.trim(separator < 0 ? contentType : bns.slice(contentType, 0, separator)));
   };

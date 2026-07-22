@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 
+const ambiguousNavigationMediaCases = inlineSourceInstallCases.flatMap(
+  ([sourceName, installSource]) =>
+    [
+      ['comma-combined HTML', 'text/html; charset=utf-8, text/plain'],
+      ['control-tainted HTML', 'text/html; charset=utf-8\r\nX-Content-Type: text/plain'],
+    ].map(([posture, contentType]) => [posture, sourceName, installSource, contentType] as const),
+);
+
 class TestNavSegment {
   attributes: Array<{ name: string; value: string }>;
   childNodes: TestNavSegment[] = [];
@@ -1196,7 +1204,7 @@ describe('inline loader enhanced navigation fallback', () => {
 
   it.each(inlineSourceInstallCases)(
     'falls back to native navigation on non-html responses through %s',
-    async (_name, installSource) => {
+    async (_sourceName, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
       const originals = {
         addEventListener: globalRecord.addEventListener,
@@ -1279,6 +1287,55 @@ describe('inline loader enhanced navigation fallback', () => {
           globalRecord.__kovoInlineImport = originals.importModule;
         }
       }
+    },
+  );
+
+  it.each(ambiguousNavigationMediaCases)(
+    'falls back before parsing %s navigation media through %s',
+    async (_posture, _sourceName, installSource, contentType) => {
+      const replaceWith = vi.fn();
+      const responseText = vi.fn(async () => '<!doctype html><html></html>');
+      const currentLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Products',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Products',
+        },
+        '<main><section>Products</section></main>',
+      );
+      const targetLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'Cart',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:Cart',
+        },
+        '<main><section>Cart</section></main>',
+      );
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument: createTestShell({ replaceWith, segments: [currentLayout] }),
+        documents: [createTestShell({ segments: [targetLayout] })],
+        fetch: vi.fn(async () => ({
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType : null),
+          },
+          redirected: false,
+          status: 200,
+          text: responseText,
+          url: 'http://app.test/cart',
+        })),
+        async assert({ assign, preventDefault, pushState }) {
+          await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('http://app.test/cart'));
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(responseText).not.toHaveBeenCalled();
+          expect(replaceWith).not.toHaveBeenCalled();
+          expect(pushState).not.toHaveBeenCalled();
+        },
+      });
     },
   );
 

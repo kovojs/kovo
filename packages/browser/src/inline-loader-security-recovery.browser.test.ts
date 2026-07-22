@@ -428,6 +428,37 @@ it('keeps generated mutation on the response transport captured at boot', async 
   expect(attackFetch).not.toHaveBeenCalled();
 });
 
+it('hard-recovers ambiguous generated mutation media before body apply', async () => {
+  const harness = await createFrame(
+    [
+      '<section kovo-fragment-target="account">SERVER TRUTH</section>',
+      '<form enhance data-mutation="account" action="/_m/account" method="post">',
+      serverStampedMutationIdemInput(),
+      '<button>save</button></form>',
+    ].join(''),
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const oldTarget = harness.window.document.querySelector('[kovo-fragment-target="account"]');
+  (harness.window as unknown as Record<string, unknown>).fetch = vi.fn(async () => ({
+    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html; charset=utf-8, text/html'),
+    ok: true,
+    redirected: false,
+    status: 200,
+    async text() {
+      return '<kovo-fragment target="account"><section kovo-fragment-target="account">ATTACKER</section></kovo-fragment>';
+    },
+    url: `${harness.window.location.origin}/_m/account`,
+  }));
+
+  await installGeneratedInlineLoader(harness.window);
+  harness.window.document
+    .querySelector('form')
+    ?.dispatchEvent(new harness.window.SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+  await expectHardReload(harness);
+  expect(oldTarget?.textContent).toBe('SERVER TRUTH');
+});
+
 it.each(['data:/_m/chat', 'blob:/_m/chat', 'file:/_m/chat'])(
   'blocks %s mutation actions in an opaque generated-loader document without fetching',
   async (action) => {
