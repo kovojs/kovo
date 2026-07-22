@@ -5,16 +5,23 @@ import {
   frameworkWireAttestationIsValid,
   frameworkWireComponentIsValid,
   frameworkWireIdentityIsValid,
+  type FrameworkWireLiveTarget,
   type FrameworkWireTarget,
 } from '@kovojs/core/internal/wire-input-grammar';
 
 import { readDeps } from './pending.js';
 import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js';
+import { queryRuntimeElements, readRuntimeElementAttribute } from './runtime-dom-security.js';
 import {
+  securityArrayAppend,
   securityArrayIsArray,
+  securityGetOwnPropertyDescriptor,
   securityJsonParse,
   securityJsonStringify,
+  securityOwnArrayEntry,
 } from './security-witness-intrinsics.js';
+
+const maxTargetCollectionElements = 100_000;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
@@ -42,81 +49,201 @@ export function readLiveTargets(root: TargetCollectorRoot): string[] {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSnapshot {
-  const { liveTargets, targetEntries, targets } = collectLiveTargetSnapshot(root);
-  const attestedLiveTargets = liveTargets.flatMap((descriptor) =>
-    descriptor.attestation === undefined
-      ? []
-      : [
-          {
-            attestation: descriptor.attestation,
-            component: descriptor.component,
-            props: descriptor.props,
-            target: descriptor.target,
-          },
-        ],
-  );
+  const collected = collectLiveTargetSnapshot(root);
+  const attestedLiveTargets: FrameworkWireLiveTarget[] = [];
+  for (let index = 0; index < collected.liveTargetCount; index += 1) {
+    const descriptor = securityOwnArrayEntry(collected.liveTargets, index);
+    if (!descriptor.ok) {
+      throw new TypeError('Kovo live target snapshot must contain dense own-data entries.');
+    }
+    if (descriptor.value.attestation === undefined) continue;
+    securityArrayAppend(
+      attestedLiveTargets,
+      {
+        attestation: descriptor.value.attestation,
+        component: descriptor.value.component,
+        props: descriptor.value.props,
+        target: descriptor.value.target,
+      },
+      'Kovo attested live target snapshot',
+    );
+  }
   return {
-    header: encodeFrameworkTargetHeader(targetEntries),
+    header: encodeFrameworkTargetHeader(collected.targetEntries),
     liveHeader: encodeFrameworkLiveTargetHeader(attestedLiveTargets, stringifyLiveTargetProps),
-    liveTargets,
-    targets,
+    liveTargets: collected.liveTargets,
+    targets: collected.targets,
   };
 }
 
 function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
+  liveTargetCount: number;
   liveTargets: LiveTargetDescriptor[];
   targetEntries: FrameworkWireTarget[];
   targets: string[];
 } {
-  const targetEntries = new Map<string, FrameworkWireTarget>();
-  const liveTargets = new Map<string, LiveTargetDescriptor>();
+  const targetEntries: FrameworkWireTarget[] = [];
+  const targetIdentities: string[] = [];
+  const liveTargets: LiveTargetDescriptor[] = [];
+  const liveTargetIdentities: string[] = [];
+  let targetEntryCount = 0;
+  let liveTargetCount = 0;
+  const elements = readTargetElements(root);
 
-  for (const element of root.querySelectorAll('[kovo-deps]')) {
+  for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+    const elementEntry = securityOwnArrayEntry(elements.value, elementIndex);
+    if (!elementEntry.ok || elementEntry.value === null || typeof elementEntry.value !== 'object') {
+      throw new TypeError('Kovo target collection must contain dense element entries.');
+    }
+    const element = elementEntry.value;
     // SPEC.md §9.1: Kovo-Targets is read from the live DOM so patched-in
     // fragment targets participate in the stateless enhanced mutation request.
-    const target =
-      element.getAttribute('kovo-fragment-target') ??
-      element.getAttribute('id') ??
-      (typeof element.id === 'string' ? element.id : null) ??
-      element.getAttribute('kovo-c');
-    const deps = readDeps(element.getAttribute('kovo-deps'));
+    const target = readTargetIdentity(element);
+    const deps = readDeps(readRuntimeElementAttribute(element, 'kovo-deps'));
     if (!target) continue;
-    if (!frameworkWireIdentityIsValid(target) || !deps.every(frameworkWireIdentityIsValid))
-      continue;
+    if (!frameworkWireIdentityIsValid(target) || !dependenciesAreValid(deps)) continue;
 
     if (
-      !targetEntries.has(target) &&
-      targetEntries.size < FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries
+      targetEntryCount < FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries &&
+      !snapshotContains(targetIdentities, targetEntryCount, target, 'Kovo target identity snapshot')
     ) {
-      targetEntries.set(target, { deps, target });
+      securityArrayAppend(targetIdentities, target, 'Kovo target identity snapshot');
+      securityArrayAppend(targetEntries, { deps, target }, 'Kovo target entry snapshot');
+      targetEntryCount += 1;
     }
 
-    if (liveTargets.has(target) || liveTargets.size >= FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries) {
+    if (
+      liveTargetCount >= FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries ||
+      snapshotContains(
+        liveTargetIdentities,
+        liveTargetCount,
+        target,
+        'Kovo live target identity snapshot',
+      )
+    ) {
       continue;
     }
     const component =
-      element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target;
+      readRuntimeElementAttribute(element, 'kovo-live-component') ??
+      readRuntimeElementAttribute(element, 'kovo-c') ??
+      target;
     if (!frameworkWireComponentIsValid(component)) continue;
     const attestation = readLiveTargetAttestation(element);
-    liveTargets.set(target, {
-      ...(attestation === undefined ? {} : { attestation }),
-      component,
-      props: readLiveProps(element.getAttribute('kovo-props')),
-      target,
-    });
+    const props = readLiveProps(readRuntimeElementAttribute(element, 'kovo-props'));
+    securityArrayAppend(liveTargetIdentities, target, 'Kovo live target identity snapshot');
+    if (attestation === undefined) {
+      securityArrayAppend(
+        liveTargets,
+        { component, props, target },
+        'Kovo live target descriptor snapshot',
+      );
+    } else {
+      securityArrayAppend(
+        liveTargets,
+        { attestation, component, props, target },
+        'Kovo live target descriptor snapshot',
+      );
+    }
+    liveTargetCount += 1;
+
+    if (
+      targetEntryCount === FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries &&
+      liveTargetCount === FRAMEWORK_WIRE_INPUT_GRAMMAR.maxEntries
+    ) {
+      break;
+    }
   }
 
-  const entries = [...targetEntries.values()];
+  const targets: string[] = [];
+  for (let index = 0; index < targetEntryCount; index += 1) {
+    const entry = securityOwnArrayEntry(targetEntries, index);
+    if (!entry.ok) {
+      throw new TypeError('Kovo target entry snapshot must contain dense own-data entries.');
+    }
+    securityArrayAppend(
+      targets,
+      encodeFrameworkTargetHeader([entry.value]),
+      'Kovo encoded target snapshot',
+    );
+  }
   return {
-    liveTargets: [...liveTargets.values()],
-    targetEntries: entries,
-    targets: entries.map((entry) => encodeFrameworkTargetHeader([entry])),
+    liveTargetCount,
+    liveTargets,
+    targetEntries,
+    targets,
   };
 }
 
 function readLiveTargetAttestation(element: TargetElementLike): string | undefined {
-  const value = element.getAttribute('kovo-live-token');
+  const value = readRuntimeElementAttribute(element, 'kovo-live-token');
   return frameworkWireAttestationIsValid(value) ? value : undefined;
+}
+
+function readTargetElements(root: TargetCollectorRoot): {
+  length: number;
+  value: readonly TargetElementLike[];
+} {
+  const values = queryRuntimeElements<TargetElementLike>(root, '[kovo-deps]');
+  const length = securityGetOwnPropertyDescriptor(values, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value > maxTargetCollectionElements ||
+    length.value % 1 !== 0
+  ) {
+    throw new TypeError('Kovo target collection must have a bounded own-data length.');
+  }
+  return { length: length.value, value: values };
+}
+
+function readTargetIdentity(element: TargetElementLike): string | null {
+  const fragmentTarget = readRuntimeElementAttribute(element, 'kovo-fragment-target');
+  if (fragmentTarget !== null) return fragmentTarget;
+  const idAttribute = readRuntimeElementAttribute(element, 'id');
+  if (idAttribute !== null) return idAttribute;
+  // Browser-free conformance fakes historically expose `id` as own data. Real
+  // Elements use the boot-witnessed attribute read above and never dispatch a
+  // late replacement through the live `Element.prototype.id` accessor.
+  const structuralId = securityGetOwnPropertyDescriptor(element, 'id');
+  if (structuralId && 'value' in structuralId && typeof structuralId.value === 'string') {
+    return structuralId.value;
+  }
+  return readRuntimeElementAttribute(element, 'kovo-c');
+}
+
+function dependenciesAreValid(deps: readonly string[]): boolean {
+  const length = securityGetOwnPropertyDescriptor(deps, 'length');
+  if (
+    length === undefined ||
+    !('value' in length) ||
+    typeof length.value !== 'number' ||
+    length.value < 0 ||
+    length.value > maxTargetCollectionElements ||
+    length.value % 1 !== 0
+  ) {
+    return false;
+  }
+  for (let index = 0; index < length.value; index += 1) {
+    const dep = securityOwnArrayEntry(deps, index);
+    if (!dep.ok || !frameworkWireIdentityIsValid(dep.value)) return false;
+  }
+  return true;
+}
+
+function snapshotContains(
+  values: readonly string[],
+  length: number,
+  value: string,
+  label: string,
+): boolean {
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityOwnArrayEntry(values, index);
+    if (!entry.ok) throw new TypeError(label + ' must contain dense own-data entries.');
+    if (entry.value === value) return true;
+  }
+  return false;
 }
 
 function readLiveProps(value: string | null): Record<string, unknown> {

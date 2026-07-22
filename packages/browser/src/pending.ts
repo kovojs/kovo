@@ -1,4 +1,14 @@
+import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from '@kovojs/core/internal/wire-input-grammar';
+
 import type { AttributeMutatorLike, QuerySelectorAllRootLike } from './dom-like.js';
+import {
+  securityArrayAppend,
+  securityRegExpTest,
+  securityStringSlice,
+} from './security-witness-intrinsics.js';
+
+const dependencySeparator = /[\s,]/u;
+const maxDependencyTokens = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters / 2;
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface PendingElementLike extends AttributeMutatorLike {}
@@ -36,8 +46,32 @@ export function stampPendingQueries(
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function readDeps(value: string | null): string[] {
-  return (value ?? '')
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+  const source = value ?? '';
+  if (source.length > FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters) {
+    throw new TypeError(
+      'Kovo dependency input exceeds the ' +
+        FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters +
+        '-character wire budget.',
+    );
+  }
+  const deps: string[] = [];
+  let dependencyCount = 0;
+  let start = 0;
+  for (let index = 0; index <= source.length; index += 1) {
+    const character = index === source.length ? ',' : (source[index] ?? '');
+    if (character !== ',' && !securityRegExpTest(dependencySeparator, character)) continue;
+    if (index > start) {
+      if (dependencyCount >= maxDependencyTokens) {
+        throw new TypeError('Kovo dependency input exceeds its bounded token budget.');
+      }
+      securityArrayAppend(
+        deps,
+        securityStringSlice(source, start, index),
+        'Kovo dependency snapshot',
+      );
+      dependencyCount += 1;
+    }
+    start = index + 1;
+  }
+  return deps;
 }

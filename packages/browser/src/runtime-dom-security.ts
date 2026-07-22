@@ -1,3 +1,5 @@
+/* oxlint-disable typescript/unbound-method -- DOM controls are invoked through captured Reflect.apply. */
+
 import {
   createBrowserNavigationSecurityControls,
   type BrowserDelegatedEventSnapshot,
@@ -5,9 +7,13 @@ import {
 import {
   applySecurityIntrinsic,
   defineSecurityProperties,
+  securityArrayAppend,
   securityGetOwnPropertyDescriptor,
   securityGetPrototypeOf,
+  securityOwnArrayEntry,
 } from './security-witness-intrinsics.js';
+
+const maxRuntimeQueryElements = 100_000;
 
 // SPEC §6.6 rule 6: this module is evaluated by the framework bootstrap before authored client
 // modules. Browser decisions use the witnessed native DOM/Event controls captured at that point.
@@ -198,20 +204,32 @@ export function queryRuntimeElement(root: unknown, selector: string): object | n
       if (value !== null && typeof value === 'object') return value;
     } catch {}
   }
+  const values = queryRuntimeElements(root, selector);
+  const first = securityOwnArrayEntry(values, 0);
+  return first.ok ? first.value : null;
+}
+
+/** Resolve matching live DOM elements through boot-witnessed selector controls. */
+export function queryRuntimeElements<Value extends object = object>(
+  root: unknown,
+  selector: string,
+): Value[] {
+  if (root === null || typeof root !== 'object') return [];
+  if (runtimeDomSecurity) {
+    return runtimeDomSecurity.queryAllElements(root, selector) as Value[];
+  }
+  // Browser-free tests may provide structural roots. Their selector method is
+  // caller authority, but its result is copied through bounded own-data reads;
+  // iterable callbacks never participate in the framework snapshot.
   const queryAll = runtimeStructuralMethod(root, 'querySelectorAll');
-  if (!queryAll) return null;
+  if (!queryAll) return [];
+  let collection: unknown;
   try {
-    const values = applySecurityIntrinsic<unknown>(queryAll, root, [selector]);
-    if (values === null || typeof values !== 'object') return null;
-    const first = securityGetOwnPropertyDescriptor(values, 0);
-    if (first && 'value' in first && first.value !== null && typeof first.value === 'object') {
-      return first.value;
-    }
-    for (const value of values as Iterable<unknown>) {
-      return value !== null && typeof value === 'object' ? value : null;
-    }
-  } catch {}
-  return null;
+    collection = applySecurityIntrinsic<unknown>(queryAll, root, [selector]);
+  } catch {
+    return [];
+  }
+  return snapshotRuntimeStructuralElements<Value>(collection);
 }
 
 /** Read authoritative text through the boot-witnessed Node.textContent getter. */
@@ -271,6 +289,32 @@ export function createRuntimeFormData(form: object, submitter?: unknown): FormDa
 function runtimeOwnData(value: object, property: PropertyKey): unknown {
   const descriptor = securityGetOwnPropertyDescriptor(value, property);
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function snapshotRuntimeStructuralElements<Value extends object>(collection: unknown): Value[] {
+  if (collection === null || typeof collection !== 'object') {
+    throw new TypeError('Kovo runtime query collection must be an own-data array-like object.');
+  }
+  const lengthDescriptor = securityGetOwnPropertyDescriptor(collection, 'length');
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined;
+  if (
+    typeof length !== 'number' ||
+    length < 0 ||
+    length > maxRuntimeQueryElements ||
+    length % 1 !== 0
+  ) {
+    throw new TypeError('Kovo runtime query collection must have a bounded own-data length.');
+  }
+  const snapshot: Value[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const entry = securityGetOwnPropertyDescriptor(collection, index);
+    if (!entry || !('value' in entry) || entry.value === null || typeof entry.value !== 'object') {
+      throw new TypeError('Kovo runtime query collection must contain dense element entries.');
+    }
+    securityArrayAppend(snapshot, entry.value as Value, 'Kovo runtime query snapshot');
+  }
+  return snapshot;
 }
 
 function runtimeStructuralMethod(

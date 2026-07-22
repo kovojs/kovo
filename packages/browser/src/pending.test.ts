@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { FRAMEWORK_WIRE_INPUT_GRAMMAR } from '@kovojs/core/internal/wire-input-grammar';
+
 import { readDeps, stampPendingQueries } from './pending.js';
 import { FakePendingElement, FakePendingRoot } from './runtime-test-fakes.js';
 
@@ -34,5 +36,15 @@ describe('pending query stamps', () => {
       'cart',
     ]);
     expect(readDeps(null)).toEqual([]);
+  });
+
+  it('rejects dependency input before scanning past the shared wire budget', () => {
+    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
+    const atLimit = 'a'.repeat(maximum);
+
+    expect(readDeps(atLimit)).toEqual([atLimit]);
+    expect(() => readDeps(atLimit + 'a')).toThrow(
+      'Kovo dependency input exceeds the 65536-character wire budget.',
+    );
   });
 });

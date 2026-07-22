@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as mutationTargetsModule from './mutation-targets.js';
 import { readLiveTargetSnapshot, readLiveTargets } from './mutation-targets.js';
+import type { TargetCollectorRoot } from './mutation-targets.js';
 
 class FakeTargetRoot {
   queries = 0;
@@ -190,5 +191,170 @@ describe('mutation targets', () => {
       ],
       targets: ['public-panel=public'],
     });
+  });
+
+  it('does not let a late Array.flatMap replacement substitute an attested admin target', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'public-panel',
+        'kovo-live-component': 'components/public/card',
+        'kovo-live-token': 'tok_public',
+        'kovo-props': '{"scope":"public"}',
+      }),
+    ]);
+    const flatMapDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'flatMap');
+    if (!flatMapDescriptor) throw new Error('Array.prototype.flatMap descriptor unavailable');
+    let poisonHits = 0;
+    let snapshot: ReturnType<typeof readLiveTargetSnapshot> | undefined;
+    try {
+      Object.defineProperty(Array.prototype, 'flatMap', {
+        ...flatMapDescriptor,
+        value() {
+          poisonHits += 1;
+          return [
+            {
+              attestation: 'tok_admin',
+              component: 'components/admin/card',
+              props: { scope: 'admin' },
+              target: 'admin-panel',
+            },
+          ];
+        },
+      });
+      snapshot = readLiveTargetSnapshot(root);
+    } finally {
+      Object.defineProperty(Array.prototype, 'flatMap', flatMapDescriptor);
+    }
+
+    // SPEC §6.6 rule 6 / §9.1: a late authored callback cannot replace the
+    // framework-owned live target snapshot sent to the server.
+    expect(poisonHits).toBe(0);
+    expect(snapshot).toEqual({
+      header: 'public-panel=public',
+      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveTargets: [
+        {
+          attestation: 'tok_public',
+          component: 'components/public/card',
+          props: { scope: 'public' },
+          target: 'public-panel',
+        },
+      ],
+      targets: ['public-panel=public'],
+    });
+  });
+
+  it('keeps target collection closed over boot controls after collection intrinsic poisoning', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': ' public, inventory\n',
+        'kovo-fragment-target': 'public-panel',
+        'kovo-live-component': 'components/public/card',
+        'kovo-live-token': 'tok_public',
+        'kovo-props': '{"scope":"public"}',
+      }),
+    ]);
+    const NativeMap = Map;
+    const flatMapDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'flatMap');
+    const mapDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'map');
+    const everyDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'every');
+    const filterDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'filter');
+    const iteratorDescriptor = Object.getOwnPropertyDescriptor(Array.prototype, Symbol.iterator);
+    const splitDescriptor = Object.getOwnPropertyDescriptor(String.prototype, 'split');
+    const trimDescriptor = Object.getOwnPropertyDescriptor(String.prototype, 'trim');
+    const mapHasDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'has');
+    const mapSetDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'set');
+    const mapValuesDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'values');
+    const mapSizeDescriptor = Object.getOwnPropertyDescriptor(Map.prototype, 'size');
+    if (
+      !flatMapDescriptor ||
+      !mapDescriptor ||
+      !everyDescriptor ||
+      !filterDescriptor ||
+      !iteratorDescriptor ||
+      !splitDescriptor ||
+      !trimDescriptor ||
+      !mapHasDescriptor ||
+      !mapSetDescriptor ||
+      !mapValuesDescriptor ||
+      !mapSizeDescriptor
+    ) {
+      throw new Error('collection intrinsic descriptors unavailable');
+    }
+    let poisonHits = 0;
+    const poison = () => {
+      poisonHits += 1;
+      throw new Error('late collection intrinsic poison reached');
+    };
+    let snapshot: ReturnType<typeof readLiveTargetSnapshot> | undefined;
+    try {
+      globalThis.Map = function PoisonedMap() {
+        return poison();
+      } as unknown as MapConstructor;
+      Object.defineProperty(Array.prototype, 'flatMap', { ...flatMapDescriptor, value: poison });
+      Object.defineProperty(Array.prototype, 'map', { ...mapDescriptor, value: poison });
+      Object.defineProperty(Array.prototype, 'every', { ...everyDescriptor, value: poison });
+      Object.defineProperty(Array.prototype, 'filter', { ...filterDescriptor, value: poison });
+      Object.defineProperty(Array.prototype, Symbol.iterator, {
+        ...iteratorDescriptor,
+        value: poison,
+      });
+      Object.defineProperty(String.prototype, 'split', { ...splitDescriptor, value: poison });
+      Object.defineProperty(String.prototype, 'trim', { ...trimDescriptor, value: poison });
+      Object.defineProperty(Map.prototype, 'has', { ...mapHasDescriptor, value: poison });
+      Object.defineProperty(Map.prototype, 'set', { ...mapSetDescriptor, value: poison });
+      Object.defineProperty(Map.prototype, 'values', { ...mapValuesDescriptor, value: poison });
+      Object.defineProperty(Map.prototype, 'size', { ...mapSizeDescriptor, get: poison });
+      snapshot = readLiveTargetSnapshot(root);
+    } finally {
+      globalThis.Map = NativeMap;
+      Object.defineProperty(Array.prototype, 'flatMap', flatMapDescriptor);
+      Object.defineProperty(Array.prototype, 'map', mapDescriptor);
+      Object.defineProperty(Array.prototype, 'every', everyDescriptor);
+      Object.defineProperty(Array.prototype, 'filter', filterDescriptor);
+      Object.defineProperty(Array.prototype, Symbol.iterator, iteratorDescriptor);
+      Object.defineProperty(String.prototype, 'split', splitDescriptor);
+      Object.defineProperty(String.prototype, 'trim', trimDescriptor);
+      Object.defineProperty(Map.prototype, 'has', mapHasDescriptor);
+      Object.defineProperty(Map.prototype, 'set', mapSetDescriptor);
+      Object.defineProperty(Map.prototype, 'values', mapValuesDescriptor);
+      Object.defineProperty(Map.prototype, 'size', mapSizeDescriptor);
+    }
+
+    expect(poisonHits).toBe(0);
+    expect(snapshot).toEqual({
+      header: 'public-panel=public inventory',
+      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveTargets: [
+        {
+          attestation: 'tok_public',
+          component: 'components/public/card',
+          props: { scope: 'public' },
+          target: 'public-panel',
+        },
+      ],
+      targets: ['public-panel=public inventory'],
+    });
+  });
+
+  it('rejects sparse and over-budget structural target collections', () => {
+    const sparse = new Array<FakeTargetElement>(1);
+    const overBudget = new Array<FakeTargetElement>(100_001);
+    const sparseRoot = {
+      querySelectorAll: () => sparse,
+    } as TargetCollectorRoot;
+    const overBudgetRoot = {
+      querySelectorAll: () => overBudget,
+    } as TargetCollectorRoot;
+
+    // SPEC §6.6 rule 6 / §9.1: structural seams are copied through bounded
+    // own-data indexes; inherited entries and iterable callbacks are not facts.
+    expect(() => readLiveTargetSnapshot(sparseRoot)).toThrow(
+      'Kovo runtime query collection must contain dense element entries.',
+    );
+    expect(() => readLiveTargetSnapshot(overBudgetRoot)).toThrow(
+      'Kovo runtime query collection must have a bounded own-data length.',
+    );
   });
 });
