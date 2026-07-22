@@ -243,6 +243,8 @@ describe('release workflow authority', () => {
     expect(seal).toContain('scripts/verify-packed-release-payload.mjs');
     expect(seal).toContain('name: Bind producer payload to exact source and two-build CI subjects');
     expect(seal).toContain('scripts/verify-reproducible-release-subjects.mjs');
+    expect(seal).toContain('name: Validate the final packed-package certificate');
+    expect(seal).toContain('scripts/verify-packed-release-certificate.mjs');
     expect(seal).toContain('name: Archive exact verified release payload');
     expect(seal).toContain('release-artifact-id: ${{ steps.upload-release.outputs.artifact-id }}');
     expect(seal).not.toContain('install --frozen-lockfile');

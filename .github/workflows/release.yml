@@ -246,6 +246,10 @@ jobs:
             scripts/verify-reproducible-release-subjects.mjs \
             --attestation "$REPRODUCIBLE_PACK_ATTESTATION" \
             --source "$GITHUB_SHA"
+      - name: Validate the final packed-package certificate
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          scripts/verify-packed-release-certificate.mjs
       - name: Archive exact verified release payload
         env:
           RELEASE_ARCHIVE: ${{ runner.temp }}/kovo-release-${{ github.sha }}.tgz
