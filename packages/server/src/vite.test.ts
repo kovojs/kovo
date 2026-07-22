@@ -1,8 +1,9 @@
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
@@ -25,7 +26,12 @@ import type { KovoAppShellViteMiddleware } from './vite-dev.js';
 import { webhook } from './webhook.js';
 
 interface KovoViteConfigureServer {
-  configResolved?(config: { plugins?: readonly unknown[]; root: string }): void | Promise<void>;
+  buildStart?(): void | Promise<void>;
+  configResolved?(config: {
+    command?: 'build' | 'serve';
+    plugins?: readonly unknown[];
+    root: string;
+  }): void | Promise<void>;
   configureServer(server: {
     config?: { root?: string };
     middlewares: { use(handler: KovoAppShellViteMiddleware): void };
@@ -36,12 +42,46 @@ interface KovoViteConfigureServer {
     id: string,
   ): null | Promise<null | { code: string; map: null }> | { code: string; map: null };
   enforce?: 'pre';
+  handleHotUpdate?(context: {
+    file: string;
+    modules?: readonly unknown[];
+    read(): Promise<string>;
+    server: { middlewares: { use(handler: KovoAppShellViteMiddleware): void } };
+  }): readonly unknown[] | Promise<readonly unknown[]>;
 }
 
 const authoredCardSource = `
 import { component } from '@kovojs/core';
 export const Card = component({ render: () => <article>Card</article> });
 `;
+
+const importedMutationSource = `
+import { mutation, s } from '@kovojs/server';
+
+export const saveContact = mutation({
+  input: s.object({ name: s.string() }),
+  handler(input) { return input; },
+});
+`;
+
+const importedMutationFormSource = `
+import { component } from '@kovojs/core';
+import { saveContact } from '../mutations.js';
+
+export const ContactForm = component({
+  mutations: { saveContact },
+  render: () => <form mutation={saveContact}><input name="name" /></form>,
+});
+`;
+
+async function writeImportedMutationProject(root: string): Promise<void> {
+  await mkdir(join(root, 'src/components'), { recursive: true });
+  await Promise.all([
+    writeFile(join(root, 'src/app-shell.ts'), 'export default {};\n', 'utf8'),
+    writeFile(join(root, 'src/mutations.ts'), importedMutationSource, 'utf8'),
+    writeFile(join(root, 'src/components/contact-form.tsx'), importedMutationFormSource, 'utf8'),
+  ]);
+}
 
 describe('public Kovo Vite plugin', () => {
   it('runs before JSX lowering and serves lowered handler island markers', async () => {
@@ -138,6 +178,119 @@ export const AuthForms = component({
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+
+  it('refuses to compile imported mutation forms through a factless external owner', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-factless-mutation-owner-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+
+    try {
+      await writeImportedMutationProject(root);
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ root });
+
+      await expect(plugin.configResolved?.({ plugins: [compiler, plugin], root })).rejects.toThrow(
+        /cannot adopt a separately configured compiler owner[\s\S]*1 imported mutation binding[\s\S]*let kovo\(\{ app \}\) be the sole compiler owner/u,
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses to compile derived query shapes through a factless external owner', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-factless-query-owner-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await Promise.all([
+        writeFile(join(root, 'src/app-shell.ts'), 'export default {};\n', 'utf8'),
+        writeFile(
+          join(root, 'src/queries.ts'),
+          `
+import { query, s } from '@kovojs/server';
+export const account = query({
+  output: s.object({ name: s.string() }),
+  load: () => ({ name: 'Ada' }),
+});
+`,
+          'utf8',
+        ),
+      ]);
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ root });
+
+      await expect(plugin.configResolved?.({ plugins: [compiler, plugin], root })).rejects.toThrow(
+        /cannot adopt a separately configured compiler owner[\s\S]*1 query shape[\s\S]*let kovo\(\{ app \}\) be the sole compiler owner/u,
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('revokes empty-fact adoption when build inputs later derive imported mutation facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-late-build-facts-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(join(root, 'src/app-shell.ts'), 'export default {};\n', 'utf8');
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ command: 'build', root });
+      await plugin.configResolved?.({ command: 'build', plugins: [compiler, plugin], root });
+
+      await writeImportedMutationProject(root);
+      await expect(plugin.buildStart?.()).rejects.toThrow(/1 imported mutation binding/u);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('revokes empty-fact adoption when an HMR edit derives imported mutation facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-late-hmr-facts-'));
+    const compiler = compilerKovoVitePlugin({ include: ['src'] });
+
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(join(root, 'src/app-shell.ts'), 'export default {};\n', 'utf8');
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+      await compiler.configResolved?.({ command: 'serve', root });
+      await plugin.configResolved?.({ command: 'serve', plugins: [compiler, plugin], root });
+
+      await writeImportedMutationProject(root);
+      await expect(
+        plugin.handleHotUpdate?.({
+          file: join(root, 'src/components/contact-form.tsx'),
+          read: async () => importedMutationFormSource,
+          server: { middlewares: { use() {} } },
+        }),
+      ).rejects.toThrow(/1 imported mutation binding/u);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it.each([
+    {
+      action: '/_m/mutations/add-contact',
+      app: '/src/app-shell.ts',
+      file: 'src/components/contacts.tsx',
+      root: fileURLToPath(new URL('../../../examples/crm/', import.meta.url)),
+    },
+    {
+      action: '/_m/mutations/post-question-mutation',
+      app: '/src/app-shell.ts',
+      file: 'src/components/question-list.tsx',
+      root: fileURLToPath(new URL('../../../examples/stackoverflow/', import.meta.url)),
+    },
+  ])('compiles $file with server-derived facts under sole ownership', async (fixture) => {
+    const plugin = kovo({ app: fixture.app }) as unknown as KovoViteConfigureServer;
+    await plugin.configResolved?.({ command: 'build', plugins: [plugin], root: fixture.root });
+    const source = await readFile(join(fixture.root, fixture.file), 'utf8');
+
+    const transformed = await plugin.transform?.(source, join(fixture.root, fixture.file));
+
+    expect(transformed?.code).toContain(`action="${fixture.action}"`);
   });
 
   it('does not let a forged structural compiler suppress the built-in compiler', async () => {

@@ -293,16 +293,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     if (!isDataPlaneSourceFile(file, root)) {
       return;
     }
-    compilerQueryShapeFacts = undefined;
     if (devDataPlaneDebounce) viteClearTimeout(devDataPlaneDebounce);
     devDataPlaneDebounce = viteSetTimeout(() => {
-      void collectCompilerQueryShapeFacts(root, app)
-        .then((facts) => {
-          compilerQueryShapeFacts = facts;
-        })
-        .catch(() => {
-          compilerQueryShapeFacts = [];
-        });
       void runDevDataPlaneGate();
     }, DATA_PLANE_GATE_DEBOUNCE_MS);
     devDataPlaneDebounce.unref?.();
@@ -353,12 +345,18 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       const commandProperty = buildOwnDataProperty(config, 'command', 'Vite resolved command');
       viteCommand =
         commandProperty.present && commandProperty.value === 'serve' ? 'serve' : 'build';
-      externalCompilerPlugin = configuredExternalCompilerPlugin(config, plugin, app, root);
       compilerQueryShapeFacts = snapshotBuildArray(
         await collectCompilerQueryShapeFacts(root, app),
         'compiler query-shape facts',
       );
       compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+      const configuredCompiler = configuredExternalCompilerPlugin(config, plugin, app, root);
+      assertExternalCompilerHasNoDerivedFacts(
+        configuredCompiler,
+        compilerQueryShapeFacts,
+        compilerProjectMutationFacts,
+      );
+      externalCompilerPlugin = configuredCompiler;
       const compiler = await compilerPlugin();
       if (externalCompilerPlugin === undefined) await compiler.configResolved?.(config);
     },
@@ -371,6 +369,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       compilerQueryShapeFacts = snapshotBuildArray(
         await collectCompilerQueryShapeFacts(root, app),
         'compiler query-shape facts',
+      );
+      compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+      assertExternalCompilerHasNoDerivedFacts(
+        externalCompilerPlugin,
+        compilerQueryShapeFacts,
+        compilerProjectMutationFacts,
       );
       if (viteCommand === 'serve') {
         // Dev disposition: surface as teaching diagnostics in the ledger; never crash HMR.
@@ -478,6 +482,15 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       // redirected export cannot retain stale positive provenance through the next HMR transform.
       if (isDataPlaneSourceFile(context.file, root)) {
         compilerProjectMutationFacts = collectCompilerProjectMutationFacts(root, app);
+        compilerQueryShapeFacts = snapshotBuildArray(
+          await collectCompilerQueryShapeFacts(root, app),
+          'compiler query-shape facts',
+        );
+        assertExternalCompilerHasNoDerivedFacts(
+          externalCompilerPlugin,
+          compilerQueryShapeFacts,
+          compilerProjectMutationFacts,
+        );
       }
 
       const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
@@ -532,6 +545,37 @@ function configuredExternalCompilerPlugin(
     selected = candidate as KovoCompilerVitePlugin;
   }
   return selected;
+}
+
+/**
+ * A separately configured compiler is deliberately eligible for adoption only when the server
+ * derives no project facts that would change compilation. The genuine-owner proof excludes
+ * app-supplied fact overrides, but it cannot retrofit server-derived query/mutation authority into
+ * an already-created plugin. Refuse that split ownership instead of silently compiling with an
+ * incomplete fact universe (SPEC §5.2 rule 10 / §6.6).
+ */
+function assertExternalCompilerHasNoDerivedFacts(
+  compiler: KovoCompilerVitePlugin | undefined,
+  queryShapeFacts: readonly CompilerViteQueryShapeFact[],
+  projectMutationFacts: ProjectMutationRegistryFacts,
+): void {
+  if (compiler === undefined) return;
+  const mutationBindings = snapshotBuildArray(
+    projectMutationFacts.mutationBindings,
+    'compiler project mutation bindings',
+  );
+  if (queryShapeFacts.length === 0 && mutationBindings.length === 0) return;
+
+  throw new TypeError(
+    securityArrayJoin(
+      [
+        'Kovo cannot adopt a separately configured compiler owner because the app shell derived project query or mutation facts that owner cannot receive safely (SPEC.md §5.2 rule 10 / §6.6).',
+        `Derived facts: ${queryShapeFacts.length} query shape${queryShapeFacts.length === 1 ? '' : 's'}, ${mutationBindings.length} imported mutation binding${mutationBindings.length === 1 ? '' : 's'}.`,
+        'Remove the separate @kovojs/compiler/vite plugin and let kovo({ app }) be the sole compiler owner. Do not copy these facts into authored Vite configuration; Kovo derives them from the pinned project source snapshot.',
+      ],
+      '\n',
+    ),
+  );
 }
 
 function authoredAppSourceRoot(app: string, root: string): string | undefined {

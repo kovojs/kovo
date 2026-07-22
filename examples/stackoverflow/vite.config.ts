@@ -30,9 +30,10 @@ export const soViteConfig = defineConfig({
   },
   // SPEC §5.2 / §9.1: query-backed regions run through the real component
   // compiler so their live-target renderers are compiler-emitted artifacts, not
-  // hand-authored app code. KOVO_DEMO_MULTITENANT still only controls the
-  // singleton app-shell plugin because scripts/demo-serve.mjs mounts its own
-  // per-session request dispatch.
+  // hand-authored app code. The ordinary app lets `kovo({ app })` own compilation
+  // so its project-derived query and imported-mutation facts reach that exact
+  // compiler. KOVO_DEMO_MULTITENANT still only controls the singleton app-shell
+  // plugin because scripts/demo-serve.mjs mounts its own per-session request dispatch.
   plugins: [
     exampleDrizzleRegistryPlugin({
       appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
@@ -50,7 +51,7 @@ export const soViteConfig = defineConfig({
             registryFacts: stackOverflowRegistryFacts,
           }),
         ]
-      : [exampleKovoCompilerPlugin({ include: ['src'] }), kovo({ app: '/src/app-shell.ts' })]),
+      : [kovo({ app: '/src/app-shell.ts' })]),
   ],
   // PGlite (WASM) makes the build/dev paths slow; give the tests room.
   test: {

@@ -11,7 +11,6 @@ const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
 const exampleGeneratedGraphsSetup = fileURLToPath(
   new URL('../../tests/example-generated-graphs.setup.ts', import.meta.url),
 );
-const isVitest = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
 const isMultitenantDemo = process.env.KOVO_DEMO_MULTITENANT === '1';
 
 export const commerceViteConfig = defineConfig({
@@ -29,6 +28,8 @@ export const commerceViteConfig = defineConfig({
   // KOVO_DEMO_MULTITENANT (scripts/demo-serve.mjs) mounts its own per-session
   // request dispatch, so drop the singleton app dev plugin that would
   // otherwise also claim app routes against one shared PGlite (SPEC.md §9.5).
+  // The ordinary app uses `kovo({ app })` as the sole compiler owner so server-derived
+  // project facts cannot be split from the compiler that consumes them (SPEC.md §5.2).
   plugins: isMultitenantDemo
     ? [
         exampleKovoCompilerPlugin({
@@ -36,9 +37,7 @@ export const commerceViteConfig = defineConfig({
           registryFacts: commerceRegistryFacts,
         }),
       ]
-    : isVitest
-      ? [kovo({ app: '/src/app.tsx' })]
-      : [exampleKovoCompilerPlugin({ include: ['src'] }), kovo({ app: '/src/app.tsx' })],
+    : [kovo({ app: '/src/app.tsx' })],
   // The Drizzle/PGlite (WASM) data layer makes the build/dev tests (which spawn
   // real vite builds and a dev server) run well past Vitest's 5s default,
   // especially under the suite's parallelism. Give them room.
