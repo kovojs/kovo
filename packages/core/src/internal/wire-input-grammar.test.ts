@@ -222,7 +222,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     ]);
   });
 
-  it('keeps live-target props semantically canonical and Latin-1 header-safe', () => {
+  it('keeps live-target props semantically canonical and transport-header-safe', () => {
     const corpus = [
       '{"z":1,"a":{"z":2,"a":[true,null,"nested"]}}',
       '{"controls":"\\b\\t\\n\\f\\r\\u0000","quote":"\\\"","slash":"\\\\"}',
@@ -231,6 +231,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       '{"array":[{"z":2,"a":1},[3,2,1]],"semi":"left;right"}',
       '{"toJSON":"data-only","__proto__":{"role":"public"}}',
       '{"lineSeparators":"\u2028\u2029"}',
+      '{"delete":"\u007f"}',
       '{"3":683,"013":{"x":1},"a":2}',
       '{"nested":{"10":"ten","2":"two","01":"leading","4294967294":"max","4294967295":"not-index"}}',
       '{"0":"zero","-0":"negative","00":"double","1":"one","4294967294":"max","4294967295":"outside"}',
@@ -250,12 +251,12 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       {
         attestation: 'token',
         component: 'components/card',
-        propsSource: '{"label":"😀 漢字","line":"\u2028\u2029","latin":"café"}',
+        propsSource: '{"del":"\u007f","label":"😀 漢字","line":"\u2028\u2029","latin":"café"}',
         target: 'card',
       },
     ]);
     expect(unicode).toBe(
-      'card#components/card@token:{"label":"\\ud83d\\ude00 \\u6f22\\u5b57","latin":"café","line":"\\u2028\\u2029"}',
+      'card#components/card@token:{"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","latin":"café","line":"\\u2028\\u2029"}',
     );
     expect(() => new Headers({ 'Kovo-Live-Targets': unicode })).not.toThrow();
   });
@@ -280,6 +281,15 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     const targetHeader = encodeFrameworkTargetHeader([
       { deps: ['x'.repeat(maximum - targetPrefix.length)], target: 'card' },
     ]);
+    const delHeader = encodeFrameworkLiveTargetHeader([
+      {
+        attestation: 'token',
+        component: 'components/card',
+        propsSource: '{"del":"\u007f"}',
+        target: 'card',
+      },
+    ]);
+    expect(delHeader).toBe('card#components/card@token:{"del":"\\u007f"}');
     expect(liveHeader).toHaveLength(maximum);
     expect(targetHeader).toHaveLength(maximum);
     expect(() =>
@@ -330,10 +340,20 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       ).resolves.toBe(204);
       expect(handlerHits).toBe(1);
 
+      await expect(
+        requestStatus({
+          'Kovo-Live-Targets': 'card#components/card@token:{"del":"\u007f"}',
+        }),
+      ).rejects.toMatchObject({ code: 'ERR_INVALID_CHAR' });
+      expect(handlerHits).toBe(1);
+
+      await expect(requestStatus({ 'Kovo-Live-Targets': delHeader })).resolves.toBe(204);
+      expect(handlerHits).toBe(2);
+
       await expect(requestStatus({ 'X-Transport-Control': 'x'.repeat(20 * 1024) })).resolves.toBe(
         431,
       );
-      expect(handlerHits).toBe(1);
+      expect(handlerHits).toBe(2);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -456,14 +476,14 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
           throw new Error('late global Array getter ran');
         },
       });
-      props = snapshotFrameworkLiveTargetProps('{"3":683,"label":"😀 漢字"}');
+      props = snapshotFrameworkLiveTargetProps('{"3":683,"del":"\u007f","label":"😀 漢字"}');
       targets = encodeFrameworkTargetHeader([{ deps: ['product:p1'], target: 'card:primary' }]);
     } finally {
       Object.defineProperty(globalThis, 'Array', arrayDescriptor);
     }
 
     expect(getterHits).toBe(0);
-    expect(props).toBe('{"3":683,"label":"\\ud83d\\ude00 \\u6f22\\u5b57"}');
+    expect(props).toBe('{"3":683,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57"}');
     expect(targets).toBe('card:primary=product:p1');
   });
 

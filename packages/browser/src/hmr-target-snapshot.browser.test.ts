@@ -24,7 +24,7 @@ describe('HMR target snapshot browser security', () => {
     primary.setAttribute('kovo-live-token', 'tok_catalog');
     primary.setAttribute(
       'kovo-props',
-      '{"3":683,"013":{"x":1},"a":2,"label":"😀 漢字","line":"\u2028\u2029"}',
+      '{"3":683,"013":{"x":1},"a":2,"del":"\u007f","label":"😀 漢字","line":"\u2028\u2029"}',
     );
     elements.push(primary);
     const unattested = document.createElement('section');
@@ -122,7 +122,7 @@ describe('HMR target snapshot browser security', () => {
     expect(meta.getAttribute('content')).toBe('build-after');
     expect(live).toHaveLength(64);
     expect(live?.[0]).toBe(
-      'catalog-panel#components/public/catalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
+      'catalog-panel#components/public/catalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
     );
     expect(() => new Headers({ 'Kovo-Live-Targets': live?.join('; ') ?? '' })).not.toThrow();
     expect(live?.join('; ')).not.toContain('unattested-panel');

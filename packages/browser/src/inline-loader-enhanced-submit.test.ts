@@ -1433,7 +1433,7 @@ describe('inline loader enhanced submit source', () => {
           'kovo-live-component': 'components/public/catalog',
           'kovo-live-token': 'tok_catalog',
           'kovo-props':
-            '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first","label":"😀 漢字","line":"\u2028\u2029"}',
+            '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first","del":"\u007f","label":"😀 漢字","line":"\u2028\u2029"}',
         },
       ];
       for (let index = 0; index < 70; index += 1) {
@@ -1566,7 +1566,7 @@ describe('inline loader enhanced submit source', () => {
         'catalog-panel=catalog',
       ]);
       expect(liveEntries[0]).toBe(
-        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
       );
       expect(() => new Headers(requestHeaders)).not.toThrow();
       expect(requestHeaders['Kovo-Live-Targets']).not.toContain('unattested-panel');

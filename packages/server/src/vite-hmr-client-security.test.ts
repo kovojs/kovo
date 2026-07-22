@@ -65,7 +65,8 @@ describe('Vite HMR browser target producer security', () => {
         'kovo-fragment-target': 'catalog-panel',
         'kovo-live-component': 'components/public/catalog',
         'kovo-live-token': 'tok_catalog',
-        'kovo-props': '{"3":683,"013":{"x":1},"a":2,"label":"😀 漢字","line":"\u2028\u2029"}',
+        'kovo-props':
+          '{"3":683,"013":{"x":1},"a":2,"del":"\u007f","label":"😀 漢字","line":"\u2028\u2029"}',
       }),
       new FakeElement({
         'kovo-deps': 'public',
@@ -232,7 +233,7 @@ globalThis.__restoreHmrControls = () => {
     const dependencies = request?.options.headers['Kovo-Targets'] ?? '';
     expect(live.split('; ')).toHaveLength(64);
     expect(live.split('; ')[0]).toBe(
-      'catalog-panel#components/public/catalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
+      'catalog-panel#components/public/catalog@tok_catalog:{"3":683,"013":{"x":1},"a":2,"del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029"}',
     );
     expect(live).not.toContain('unattested-panel');
     expect(dependencies.split('; ')).toHaveLength(64);

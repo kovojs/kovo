@@ -434,10 +434,11 @@ export function createFrameworkWireTargetCodec(
         output += '\\f';
       } else if (code === 0x0d) {
         output += '\\r';
-      } else if (code < 0x20 || code > 0xff) {
-        // Fetch's Headers constructor converts values through Web IDL ByteString before sending
-        // them. Preserve every JSON string code unit while keeping the emitted header Latin-1;
-        // surrogate pairs and U+2028/U+2029 therefore travel as JSON \u escapes.
+      } else if (code < 0x20 || code === 0x7f || code > 0xff) {
+        // Fetch converts header values through Web IDL ByteString, while Node's outgoing HTTP
+        // transport also rejects DEL. Preserve every JSON string code unit while keeping the
+        // emitted field value transport-safe; DEL, surrogate pairs, and U+2028/U+2029 therefore
+        // travel as JSON \u escapes.
         output +=
           '\\u' +
           hexadecimal[(code >>> 12) & 0x0f] +
