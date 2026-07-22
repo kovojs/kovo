@@ -1440,7 +1440,11 @@ export const Demo = component({
     `const [value] = [String(state.value)]; setTimeout(() => { void value; }, 0);`,
     `const { value } = { value: String(state.value) }; setTimeout(() => { void value; }, 0);`,
     `const { box: [value] } = { box: [String(state.value)] }; setTimeout(() => { void value; }, 0);`,
+    `const [...values] = [String(state.value)]; setTimeout(() => { void values; }, 0);`,
+    `const { value, ...rest } = { value: String(state.value), other: 'safe' }; setTimeout(() => { void rest; }, 0);`,
+    `const holder = [String(state.value)]; const [value] = holder; setTimeout(() => { void value; }, 0);`,
     `const [value] = [String(state.value)]; const box = { value }; setTimeout(() => { void box.value; }, 0);`,
+    `const box: string[] = []; box.push(String(state.value)); setTimeout(() => { void box[0]; }, 0);`,
     `function later() { state.value = 'ready'; } setTimeout(later, 0);`,
   ])('rejects deferred state access without a queued state transaction: %s', (operation) => {
     const result = compile(`
