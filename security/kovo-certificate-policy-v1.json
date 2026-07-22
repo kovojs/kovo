@@ -766,15 +766,15 @@
     },
     {
       "path": "@kovojs/verify/dist/bin.mjs",
-      "sha512": "sha512-yo17VrZu38PwxeLG0BNAWbDSMLLKfHLI8pLbsgY/3T7SY8Jdhmxi0irChK1ueVmC3o2Rye/Y92zmbBUQ4MsO5g=="
+      "sha512": "sha512-LwvouG/gR7QJtGw8sXpfKpHzc5MF/Ks/61SB/LEx/XoK/HsXzN+RxJh9h+1Rq2YwAczQcyu6GLLJbwAyBa6brg=="
     },
     {
       "path": "@kovojs/verify/dist/index.mjs",
-      "sha512": "sha512-NlVvoWJuld6605eQ+qGX/9PW0znVlOWrRl6pd5DmPZsUyWGJK+0PtI2xdYW9IQIV9InXLv3/4CXHV39rmQVwnQ=="
+      "sha512": "sha512-Slcufd4T1+ELiR/laJmFdchlKaBP2NAAGC8TUBSbDvCGxPGks4U37yPCEXC2yF4tYe24lDa9Ez6OjK7SKtN1bA=="
     },
     {
-      "path": "@kovojs/verify/dist/src-CZFBT-BN.mjs",
-      "sha512": "sha512-29Cx8eKD93qyNhtYwSTeiFYW3QaDQ2yMA21xfHUZftQRt7XVkyBfs3iBtfuKabxkFzN6xwym/IcN2UGB4DKgLA=="
+      "path": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
+      "sha512": "sha512-QWKIiJDe7h/EQGo5JqDnvEygKj/3MSRCzMmYlOGSRg7TFgt+rQpLjjVTrO+MoDLMrWkXXhtswImuapGxDjZ7lw=="
     },
     {
       "path": "@kovojs/verify/dist/translation.mjs",
@@ -1637,11 +1637,11 @@
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/verify/dist/src-CZFBT-BN.mjs",
+      "module": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
       "reason": "imports external module \"es-module-lexer/js\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/verify/dist/src-CZFBT-BN.mjs",
+      "module": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {

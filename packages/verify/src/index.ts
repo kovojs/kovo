@@ -1,18 +1,10 @@
 import { createHash } from 'node:crypto';
-import {
-  type BigIntStats,
-  closeSync,
-  constants as fsConstants,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-} from 'node:fs';
+import { type BigIntStats, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { parse } from 'es-module-lexer/js';
+
+import { readBoundedRegularFileSnapshot } from './file-snapshot.js';
 
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MAX_CERTIFICATE_ROWS = 131_072;
@@ -1540,35 +1532,8 @@ function readRegularFileSnapshotDetails(
   maxBytes: number,
 ): { bytes: Uint8Array; identity: string } {
   const absolutePath = checkedPath(root, relativePath, 'file');
-  const beforePath = lstatSync(absolutePath, { bigint: true });
-  const noFollow = fsConstants.O_NOFOLLOW ?? 0;
-  const descriptor = openSync(absolutePath, fsConstants.O_RDONLY | noFollow);
-  try {
-    const beforeRead = fstatSync(descriptor, { bigint: true });
-    if (
-      !beforeRead.isFile() ||
-      beforePath.dev !== beforeRead.dev ||
-      beforePath.ino !== beforeRead.ino ||
-      beforeRead.size > BigInt(maxBytes)
-    ) {
-      throw new TypeError(`${relativePath} changed identity or exceeds its byte limit`);
-    }
-    const bytes = Uint8Array.from(readFileSync(descriptor));
-    const afterRead = fstatSync(descriptor, { bigint: true });
-    if (
-      beforeRead.dev !== afterRead.dev ||
-      beforeRead.ino !== afterRead.ino ||
-      beforeRead.size !== afterRead.size ||
-      beforeRead.mtimeNs !== afterRead.mtimeNs ||
-      beforeRead.ctimeNs !== afterRead.ctimeNs ||
-      BigInt(bytes.byteLength) !== afterRead.size
-    ) {
-      throw new TypeError(`${relativePath} changed while its bytes were snapshotted`);
-    }
-    return { bytes, identity: filesystemIdentity(relativePath, afterRead) };
-  } finally {
-    closeSync(descriptor);
-  }
+  const snapshot = readBoundedRegularFileSnapshot(absolutePath, maxBytes, relativePath);
+  return { bytes: snapshot.bytes, identity: filesystemIdentity(relativePath, snapshot.stat) };
 }
 
 function checkedPath(root: string, relativePath: string, expected: 'directory' | 'file'): string {

@@ -193,7 +193,7 @@
     "@kovojs/style/dist/internal.mjs",
     "@kovojs/verify/dist/bin.mjs",
     "@kovojs/verify/dist/index.mjs",
-    "@kovojs/verify/dist/src-CZFBT-BN.mjs",
+    "@kovojs/verify/dist/src-BvXhWGtv.mjs",
     "@kovojs/verify/dist/translation.mjs"
   ],
   "cap": {
@@ -864,7 +864,7 @@
       "digest",
       "filesystem"
     ],
-    "@kovojs/verify/dist/src-CZFBT-BN.mjs": [
+    "@kovojs/verify/dist/src-BvXhWGtv.mjs": [
       "digest",
       "filesystem"
     ],
@@ -4950,11 +4950,11 @@
     ],
     [
       "@kovojs/verify/dist/bin.mjs",
-      "@kovojs/verify/dist/src-CZFBT-BN.mjs"
+      "@kovojs/verify/dist/src-BvXhWGtv.mjs"
     ],
     [
       "@kovojs/verify/dist/index.mjs",
-      "@kovojs/verify/dist/src-CZFBT-BN.mjs"
+      "@kovojs/verify/dist/src-BvXhWGtv.mjs"
     ]
   ],
   "opaque": [
@@ -5271,11 +5271,11 @@
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/verify/dist/src-CZFBT-BN.mjs",
+      "module": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
       "reason": "imports external module \"es-module-lexer/js\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/verify/dist/src-CZFBT-BN.mjs",
+      "module": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5283,7 +5283,7 @@
       "reason": "imports external module \"es-module-lexer/js\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-Q2qjmoBUy+aou0kJt+z39lJYoOqH09iKn6o42B9PI7ByYkxh8td/0GhHlS/ht5VNrkeOQujfuzIKjgiNEzb6+g==",
+  "policySha512": "sha512-4YBSJYS/SZ2Y6MyVz+vupW9M7MwOEJkd1A0R56xIMKuQFktt1ksw2wDchnyLtjxiSA8VRUtKtCNFuL5L/3qsug==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",

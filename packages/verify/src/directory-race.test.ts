@@ -30,9 +30,9 @@ vi.mock('node:fs', async () => {
       }
       return Reflect.apply(actual.lstatSync, actual, [filePath, ...args]);
     },
-    readFileSync(file: Parameters<typeof actual.readFileSync>[0], ...args: unknown[]) {
-      const value = Reflect.apply(actual.readFileSync, actual, [file, ...args]);
-      if (race.swapped && typeof file === 'number') {
+    readSync(file: Parameters<typeof actual.readSync>[0], ...args: unknown[]) {
+      const value = Reflect.apply(actual.readSync, actual, [file, ...args]);
+      if (race.swapped) {
         actual.renameSync(race.original, race.replacement);
         actual.renameSync(race.backup, race.original);
         race.swapped = false;
@@ -57,47 +57,53 @@ afterEach(() => {
 });
 
 describe('filesystem certificate snapshot identity', () => {
-  it('rejects a tree swapped after census and restored before the final census', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'kovo-verify-tree-swap-'));
-    roots.push(root);
-    const original = path.join(root, '@kovojs/server');
-    const replacement = path.join(root, 'replacement-server');
-    const backup = path.join(root, 'original-server');
-    const module = '@kovojs/server/dist/index.mjs';
-    const source = 'export const safe = true;';
-    const manifest = { exports: { '.': './dist/index.mjs' }, name: '@kovojs/server' };
-    writePackageTree(original, source, manifest);
-    writePackageTree(replacement, source, manifest);
-    const policy = policyBytes(module, source, manifest);
-    const certificate: KovoCertificateV1 = {
-      artifacts: [module],
-      cap: { [module]: [] },
-      domain: KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
-      doors: [],
-      edges: [],
-      opaque: [],
-      policySha512: sha512(policy),
-      roots: [],
-      schema: 'kovo.certificate/v1',
-    };
-    Object.assign(race, {
-      active: true,
-      backup,
-      hits: 0,
-      original,
-      replacement,
-      swapped: false,
-      target: realpathSync(path.join(original, 'dist/index.mjs')),
-    });
+  it.each([
+    { code: 'artifact-list', targetPath: 'dist/index.mjs' },
+    { code: 'manifest-invalid', targetPath: 'package.json' },
+  ])(
+    'rejects a tree swapped at the $targetPath read and restored before the final census',
+    async ({ code, targetPath }) => {
+      const root = mkdtempSync(path.join(tmpdir(), 'kovo-verify-tree-swap-'));
+      roots.push(root);
+      const original = path.join(root, '@kovojs/server');
+      const replacement = path.join(root, 'replacement-server');
+      const backup = path.join(root, 'original-server');
+      const module = '@kovojs/server/dist/index.mjs';
+      const source = 'export const safe = true;';
+      const manifest = { exports: { '.': './dist/index.mjs' }, name: '@kovojs/server' };
+      writePackageTree(original, source, manifest);
+      writePackageTree(replacement, source, manifest);
+      const policy = policyBytes(module, source, manifest);
+      const certificate: KovoCertificateV1 = {
+        artifacts: [module],
+        cap: { [module]: [] },
+        domain: KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
+        doors: [],
+        edges: [],
+        opaque: [],
+        policySha512: sha512(policy),
+        roots: [],
+        schema: 'kovo.certificate/v1',
+      };
+      Object.assign(race, {
+        active: true,
+        backup,
+        hits: 0,
+        original,
+        replacement,
+        swapped: false,
+        target: realpathSync(path.join(original, targetPath)),
+      });
 
-    const result = await verifyCertificateDirectory(certificate, policy, root);
-    expect(race.hits).toBeGreaterThanOrEqual(2);
-    expect(race.swapped).toBe(false);
-    expect(result).toMatchObject({
-      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
-      ok: false,
-    });
-  });
+      const result = await verifyCertificateDirectory(certificate, policy, root);
+      expect(race.hits).toBeGreaterThanOrEqual(2);
+      expect(race.swapped).toBe(false);
+      expect(result).toMatchObject({
+        findings: expect.arrayContaining([expect.objectContaining({ code })]),
+        ok: false,
+      });
+    },
+  );
 });
 
 function writePackageTree(
