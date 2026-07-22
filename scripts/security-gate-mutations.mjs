@@ -2301,6 +2301,23 @@ const removedFrameworkOwnedConnectCarrierSnapshot = [
   '      options = snapshotConnectOptions(options);',
   '      void options;',
 ].join('\n');
+const pinnedLookupResultArrayForward = '            return cb(null, snapshots);';
+const restoredResolverOwnedLookupResultForward =
+  '            return cb(null, address as LookupAddress[]);';
+const pinnedHttpAgentRequestCarrierForward =
+  '      return egressApply(original, this, [req, effectiveSnapshot]);';
+const restoredCallerOwnedHttpAgentRequestCarrierForward =
+  '      return egressApply(original, this, [req, options]);';
+const nativeHttpAgentHostCarrier = '  const hostValue = options.host;';
+const mismatchedHttpAgentHostnameCarrier = '  const hostValue = options.hostname ?? options.host;';
+const nativeHttpAgentOptionsOverlay = [
+  '        ...requestSnapshot,',
+  '        ...pinnedAgentOptions.snapshot,',
+].join('\n');
+const removedNativeHttpAgentOptionsOverlay = [
+  '        ...requestSnapshot,',
+  '        ...requestSnapshot,',
+].join('\n');
 const verifyPercentArtifactPathBranch =
   '    /^@kovojs\\/[a-z0-9]+(?:-[a-z0-9]+)*\\/dist\\/[A-Za-z0-9_./-]+\\.mjs$/u.test(value) &&';
 const removedVerifyPercentArtifactPathBranch = '    true &&';
@@ -2331,10 +2348,8 @@ const removedVerifyDirectoryEntryBoundBranch = [
   '        throw new TypeError(`${label} exceeds its ${maxEntries}-entry remaining limit`);',
   '      }',
 ].join('\n');
-const verifyCaseFoldedNodeModulesBranch =
-  '      if (isNodeModulesDirectoryName(entry.name)) {';
-const weakenedVerifyCaseFoldedNodeModulesBranch =
-  "      if (entry.name === 'node_modules') {";
+const verifyCaseFoldedNodeModulesBranch = '      if (isNodeModulesDirectoryName(entry.name)) {';
+const weakenedVerifyCaseFoldedNodeModulesBranch = "      if (entry.name === 'node_modules') {";
 const verifyPolicyPackageResolutionBranch = [
   "  if (specifier.startsWith('@kovojs/')) {",
   '    return resolvePolicyPackageSpecifier(policy, module, specifier);',
@@ -2343,17 +2358,16 @@ const verifyPolicyPackageResolutionBranch = [
 const restoredConventionalPackageResolutionBranch = [
   "  if (specifier.startsWith('@kovojs/')) {",
   "    const parts = specifier.split('/');",
-  "    const packageName = `${parts[0]}/${parts[1]}`;",
+  '    const packageName = `${parts[0]}/${parts[1]}`;',
   '    const subpath = parts.slice(2);',
   '    return subpath.length === 0',
-  "      ? `${packageName}/dist/index.mjs`",
+  '      ? `${packageName}/dist/index.mjs`',
   "      : `${packageName}/dist/${subpath.join('/')}.mjs`;",
   '  }',
 ].join('\n');
 const verifyArtifactListBoundBranch = '      length > MAX_PACKAGE_ENTRIES';
 const removedArtifactListBoundBranch = '      false';
-const verifyArtifactByteBoundBranch =
-  '    if (inspected.byteLength > MAX_ARTIFACT_BYTES) {';
+const verifyArtifactByteBoundBranch = '    if (inspected.byteLength > MAX_ARTIFACT_BYTES) {';
 const removedArtifactByteBoundBranch =
   '    if (false && inspected.byteLength > MAX_ARTIFACT_BYTES) {';
 const verifyArtifactTotalByteBoundBranch =
@@ -7654,6 +7668,56 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralInstrumentation: serverEgressBehavioralInstrumentation,
     behavioralTypeScript: true,
+    description:
+      'Classifies framework-owned DNS result snapshots but forwards the resolver-owned array to Node.',
+    expectedKiller:
+      'custom resolver results must be consumed from the exact bounded snapshot that was classified',
+    name: 'server-egress/restore-resolver-owned-lookup-result-forward',
+    replacement: restoredResolverOwnedLookupResultForward,
+    search: pinnedLookupResultArrayForward,
+    sourceFile: serverEgressPath,
+    test: assertPinnedLookupResultArrayForwardBehavior,
+  },
+  {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Classifies a framework-owned Agent request snapshot but forwards the caller-owned options.',
+    expectedKiller:
+      'Agent socket reuse must consume the exact request carrier snapshot that was classified',
+    name: 'server-egress/restore-caller-owned-agent-request-forward',
+    replacement: restoredCallerOwnedHttpAgentRequestCarrierForward,
+    search: pinnedHttpAgentRequestCarrierForward,
+    sourceFile: serverEgressPath,
+    test: assertPinnedHttpAgentRequestCarrierForwardBehavior,
+  },
+  {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Classifies hostname while Node Agent pooling and dialing consume a conflicting host value.',
+    expectedKiller: 'the Agent floor must classify the exact native host carrier',
+    name: 'server-egress/restore-hostname-host-classification-mismatch',
+    replacement: mismatchedHttpAgentHostnameCarrier,
+    search: nativeHttpAgentHostCarrier,
+    sourceFile: serverEgressPath,
+    test: assertNativeHttpAgentHostCarrierBehavior,
+  },
+  {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description: 'Omits the native Agent options overlay from the classified effective carrier.',
+    expectedKiller:
+      'the Agent floor must classify the same agent-options overlay native reuse consumes',
+    name: 'server-egress/drop-native-agent-options-overlay',
+    replacement: removedNativeHttpAgentOptionsOverlay,
+    search: nativeHttpAgentOptionsOverlay,
+    sourceFile: serverEgressPath,
+    test: assertNativeHttpAgentOptionsOverlayBehavior,
+  },
+  {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
     description: 'Deletes the positive origin decision before framework-owned DNS resolution.',
     expectedKiller: 'framework egress must reject an undeclared origin before DNS',
     name: 'server-egress/drop-origin-before-dns',
@@ -8090,7 +8154,8 @@ export const SECURITY_GATE_MUTANTS = [
   {
     behavioralTypeScript: true,
     description: 'Allows npm publish and postpublish lifecycle authority in certified packages.',
-    expectedKiller: 'installed reviewer manifests must reject every automatic publish lifecycle hook',
+    expectedKiller:
+      'installed reviewer manifests must reject every automatic publish lifecycle hook',
     name: 'certificate-verifier/allow-publish-lifecycle',
     replacement: removedPublishLifecycleClosureBranch,
     search: verifyPublishLifecycleClosureBranch,
@@ -8297,14 +8362,10 @@ async function assertVerifierGenericArtifactListBoundBehavior(moduleUnderTest) {
     { length: 4_097 },
     (_, index) => `@kovojs/server/dist/list-${String(index).padStart(4, '0')}.mjs`,
   );
-  const result = await moduleUnderTest.verifyCertificate(
-    fixture.certificate,
-    fixture.policyBytes,
-    {
-      listArtifactPaths: () => paths,
-      readArtifact: () => Buffer.from('export {};'),
-    },
-  );
+  const result = await moduleUnderTest.verifyCertificate(fixture.certificate, fixture.policyBytes, {
+    listArtifactPaths: () => paths,
+    readArtifact: () => Buffer.from('export {};'),
+  });
   if (!result.findings.some((entry) => entry.code === 'artifact-list-size')) {
     throw new Error('generic certificate verifier lost its finite artifact-list ceiling');
   }
@@ -8325,10 +8386,7 @@ async function assertVerifierGenericArtifactByteBoundBehavior(moduleUnderTest) {
 async function assertVerifierGenericArtifactTotalByteBoundBehavior(moduleUnderTest) {
   const source = ' '.repeat(4 * 1024 * 1024);
   const sources = Object.fromEntries(
-    Array.from({ length: 9 }, (_, index) => [
-      `@kovojs/server/dist/aggregate-${index}.mjs`,
-      source,
-    ]),
+    Array.from({ length: 9 }, (_, index) => [`@kovojs/server/dist/aggregate-${index}.mjs`, source]),
   );
   const result = await verifyCertificateMutationFixture(moduleUnderTest, {
     manifest: { name: '@kovojs/server' },
@@ -8350,14 +8408,10 @@ async function assertVerifierIteratorFreeByteCopyBehavior(moduleUnderTest) {
       throw new Error('caller-owned byte iterator executed');
     },
   });
-  const result = await moduleUnderTest.verifyCertificate(
-    fixture.certificate,
-    fixture.policyBytes,
-    {
-      listArtifactPaths: () => [module],
-      readArtifact: () => Buffer.from('export {};'),
-    },
-  );
+  const result = await moduleUnderTest.verifyCertificate(fixture.certificate, fixture.policyBytes, {
+    listArtifactPaths: () => [module],
+    readArtifact: () => Buffer.from('export {};'),
+  });
   if (!result.ok) throw new Error('generic certificate verifier rejected exact byte snapshots');
 }
 
@@ -15982,6 +16036,233 @@ async function assertFrameworkOwnedConnectCarrierSnapshotBehavior(moduleUnderTes
     uninstall();
     await new Promise((resolve) => server.close(resolve));
   }
+}
+
+async function assertPinnedLookupResultArrayForwardBehavior(moduleUnderTest) {
+  let allowedConnections = 0;
+  let resolveAllowedConnection;
+  const allowedConnection = new Promise((resolve) => {
+    resolveAllowedConnection = resolve;
+  });
+  const allowedServer = net.createServer((socket) => {
+    allowedConnections += 1;
+    resolveAllowedConnection();
+    socket.end();
+  });
+  await new Promise((resolve, reject) => {
+    allowedServer.once('error', reject);
+    allowedServer.listen(0, '127.0.0.1', resolve);
+  });
+  const address = allowedServer.address();
+  if (address === null || typeof address === 'string') {
+    allowedServer.close();
+    throw new Error('behavioral lookup-snapshot server did not bind a TCP port');
+  }
+
+  const policy = moduleUnderTest.resolveEgressPolicy(
+    { allowInternal: [`127.0.0.1:${address.port}`] },
+    () => {},
+  );
+  const uninstall = moduleUnderTest.installNetConnectFloor(policy);
+  let socket;
+  try {
+    const resolverEntry = new Proxy(
+      { address: '127.0.0.1', family: 4 },
+      {
+        get(target, property, receiver) {
+          if (property === 'address') return '127.0.0.2';
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    socket = net.createConnection({
+      autoSelectFamily: true,
+      host: 'lookup-snapshot.test',
+      lookup(_hostname, _options, callback) {
+        callback(null, [resolverEntry]);
+      },
+      port: address.port,
+    });
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        socket.destroy();
+        reject(new Error('classified lookup snapshot did not connect within 1000ms'));
+      }, 1_000);
+      socket.once('connect', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      socket.once('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+    });
+    await allowedConnection;
+    if (allowedConnections !== 1) {
+      throw new Error(`classified lookup snapshot was not consumed: allowed=${allowedConnections}`);
+    }
+  } finally {
+    socket?.destroy();
+    uninstall();
+    await new Promise((resolve) => allowedServer.close(resolve));
+  }
+}
+
+async function assertPinnedHttpAgentRequestCarrierForwardBehavior(moduleUnderTest) {
+  const harness = await mutationPrewarmedAgent();
+  const uninstall = moduleUnderTest.installNetConnectFloor(
+    moduleUnderTest.resolveEgressPolicy(undefined, () => {}),
+  );
+  let attached;
+  try {
+    let hostReads = 0;
+    const options = new Proxy(
+      { host: '93.184.216.34', port: harness.port },
+      {
+        get(target, property, receiver) {
+          if (property === 'host') {
+            hostReads += 1;
+            return harness.hostname;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    attached = await mutationAddRequestAndCaptureSocket(harness.agent, options);
+    if (attached === harness.pooledSocket || hostReads !== 0) {
+      throw new Error('caller-owned Agent request carrier retained native reuse authority');
+    }
+  } finally {
+    if (attached !== undefined && attached !== harness.pooledSocket) attached.destroy();
+    uninstall();
+    await harness.close();
+  }
+}
+
+async function assertNativeHttpAgentHostCarrierBehavior(moduleUnderTest) {
+  const harness = await mutationPrewarmedAgent();
+  const uninstall = moduleUnderTest.installNetConnectFloor(
+    moduleUnderTest.resolveEgressPolicy(
+      { allowInternal: [`allowed-alias.test:${harness.port}`] },
+      () => {},
+    ),
+  );
+  try {
+    const error = await mutationAddRequestAndCaptureSocket(harness.agent, {
+      host: harness.hostname,
+      hostname: 'allowed-alias.test',
+      port: harness.port,
+    }).catch((caught) => caught);
+    if (!(error instanceof moduleUnderTest.EgressBlockedError)) {
+      if (error instanceof net.Socket) error.destroy();
+      throw new Error('Agent floor classified hostname instead of native host');
+    }
+  } finally {
+    uninstall();
+    await harness.close();
+  }
+}
+
+async function assertNativeHttpAgentOptionsOverlayBehavior(moduleUnderTest) {
+  const harness = await mutationPrewarmedAgent();
+  Object.assign(harness.agent.options, {
+    host: harness.hostname,
+    port: harness.port,
+  });
+  const uninstall = moduleUnderTest.installNetConnectFloor(
+    moduleUnderTest.resolveEgressPolicy(undefined, () => {}),
+  );
+  try {
+    const error = await mutationAddRequestAndCaptureSocket(harness.agent, {
+      host: '93.184.216.34',
+      port: harness.port,
+    }).catch((caught) => caught);
+    if (!(error instanceof moduleUnderTest.EgressBlockedError)) {
+      if (error instanceof net.Socket) error.destroy();
+      throw new Error('Agent options overlay bypassed the classified effective carrier');
+    }
+  } finally {
+    uninstall();
+    await harness.close();
+  }
+}
+
+async function mutationPrewarmedAgent() {
+  const server = http.createServer((_request, response) => response.end('ok'));
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    server.close();
+    throw new Error('behavioral Agent server did not bind a TCP port');
+  }
+  const hostname = 'private-pool.test';
+  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  const lookup = (_hostname, options, callback) => {
+    const cb = typeof options === 'function' ? options : callback;
+    if (typeof options !== 'function' && options.all) {
+      cb(null, [{ address: '127.0.0.1', family: 4 }]);
+      return;
+    }
+    cb(null, '127.0.0.1', 4);
+  };
+  await new Promise((resolve, reject) => {
+    const request = http.get({ agent, host: hostname, lookup, port: address.port }, (response) => {
+      response.resume();
+      response.once('end', resolve);
+    });
+    request.once('error', reject);
+  });
+  const poolName = agent.getName({ host: hostname, port: address.port });
+  const pooledSocket = agent.freeSockets[poolName]?.[0];
+  if (pooledSocket === undefined) {
+    agent.destroy();
+    await new Promise((resolve) => server.close(resolve));
+    throw new Error('behavioral Agent server did not retain a pooled socket');
+  }
+  return {
+    agent,
+    async close() {
+      agent.destroy();
+      await new Promise((resolve) => server.close(resolve));
+    },
+    hostname,
+    pooledSocket,
+    port: address.port,
+  };
+}
+
+function mutationAddRequestAndCaptureSocket(agent, options) {
+  return new Promise((resolve, reject) => {
+    const request = {
+      _last: false,
+      emit: (_event, error) => {
+        reject(error);
+        return true;
+      },
+      getHeader: () => undefined,
+      onSocket: (socket, error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        if (socket === null) {
+          reject(new Error('Agent returned no socket'));
+          return;
+        }
+        socket.once('error', () => undefined);
+        resolve(socket);
+      },
+      shouldKeepAlive: true,
+    };
+    try {
+      agent.addRequest(request, options);
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 async function assertFrameworkEgressPinsInstalledDispatcher(moduleUnderTest) {

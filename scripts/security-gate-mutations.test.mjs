@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(472);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(476);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -862,9 +862,13 @@ describe('security-gate-mutations', () => {
       'server-egress/drop-dispatcher-pin',
       'server-egress/drop-framework-owned-connect-carrier-snapshot',
       'server-egress/drop-implicit-localhost-carrier-classification',
+      'server-egress/drop-native-agent-options-overlay',
       'server-egress/drop-origin-before-dns',
       'server-egress/drop-task-context-fetch-seal',
       'server-egress/drop-webhook-context-fetch-seal',
+      'server-egress/restore-caller-owned-agent-request-forward',
+      'server-egress/restore-hostname-host-classification-mismatch',
+      'server-egress/restore-resolver-owned-lookup-result-forward',
       'server-wire-html/drop-query-wire-body-escaping',
       'sql-safe-handle/drop-managed-raw-driver-escape-denial',
       'trusted-html-provenance/weaken-call-result-taint-fail-closed',
