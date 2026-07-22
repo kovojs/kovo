@@ -9,6 +9,7 @@ import {
 import {
   contextualizeCompilerDiagnostic,
   diagnosticFor,
+  offsetToPosition,
   type CompilerDiagnostic,
 } from '../diagnostics.js';
 import {
@@ -90,6 +91,7 @@ export function lowerEventHandlers(
       compilerFailClosed(`Lowered event attributes[${attributeIndex}] must be dense own data.`);
     }
     const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
+    assertHandlerTypeScriptIsErasable(options, eventAttribute.zeroArgArrow);
     if (compilerSetHas(analysis.blockedHandlerAttributeStarts, attributeStart)) continue;
     // SPEC §5.2: branch on the typed parser fact, not a regex over the raw attribute snippet, and
     // use the typed bare-identifier NAME (parenthesization-resistant) for the lowered export name
@@ -149,6 +151,7 @@ export function lowerEventHandlers(
         ...(eventAttribute.zeroArgArrow
           ? {
               arrowBody: {
+                erasures: loweredArrowTypeScriptErasures(eventAttribute.zeroArgArrow),
                 kind: eventAttribute.zeroArgArrow.bodyKind,
                 propertyAccesses: loweredArrowPropertyAccesses(eventAttribute.zeroArgArrow),
                 references: loweredArrowReferences(eventAttribute.zeroArgArrow),
@@ -185,6 +188,24 @@ export function lowerEventHandlers(
   return handlers;
 }
 
+function assertHandlerTypeScriptIsErasable(
+  options: CompileComponentOptions,
+  arrow: ZeroArgArrowModel | undefined,
+): void {
+  const unsupported = arrow?.bodyUnsupportedTypeScript;
+  if (unsupported === undefined) return;
+  const length = compilerArrayLength(unsupported, 'Unsupported handler TypeScript facts');
+  if (length === 0) return;
+  const first = compilerOwnDataValue(unsupported, 0, 'Unsupported handler TypeScript facts') as
+    | ZeroArgArrowModel['bodyUnsupportedTypeScript'][number]
+    | undefined;
+  if (!first) compilerFailClosed('Unsupported handler TypeScript facts[0] must be dense.');
+  const position = offsetToPosition(options.source, first.start);
+  compilerFailClosed(
+    `Unsupported TypeScript client-handler syntax (${first.kind}) in ${options.fileName}:${position.line}:${position.column}. This construct needs runtime TypeScript transpilation, which Kovo does not perform across the SPEC §5.2 handler boundary. Move it to a reviewed client module or rewrite the inline handler with erasable type annotations and plain JavaScript runtime syntax.`,
+  );
+}
+
 function loweredBrowserSecurityOperations(
   arrow: ZeroArgArrowModel | undefined,
   namedHandler: string | undefined,
@@ -218,6 +239,40 @@ function loweredBrowserSecurityOperations(
         ...(operation.target === undefined ? {} : { target: operation.target }),
       },
       'Lowered browser security operations',
+    );
+  }
+  return result;
+}
+
+function loweredArrowTypeScriptErasures(arrow: ZeroArgArrowModel): Array<{
+  end: number;
+  kind: ZeroArgArrowModel['bodyTypeScriptErasures'][number]['kind'];
+  start: number;
+}> {
+  const result: Array<{
+    end: number;
+    kind: ZeroArgArrowModel['bodyTypeScriptErasures'][number]['kind'];
+    start: number;
+  }> = [];
+  const length = compilerArrayLength(
+    arrow.bodyTypeScriptErasures,
+    'Handler arrow TypeScript erasures',
+  );
+  for (let index = 0; index < length; index += 1) {
+    const erasure = compilerOwnDataValue(
+      arrow.bodyTypeScriptErasures,
+      index,
+      'Handler arrow TypeScript erasures',
+    ) as ZeroArgArrowModel['bodyTypeScriptErasures'][number] | undefined;
+    if (!erasure) compilerFailClosed(`Handler arrow TypeScript erasures[${index}] must be dense.`);
+    appendHandlerFact(
+      result,
+      {
+        end: erasure.end - arrow.bodySourceStart,
+        kind: erasure.kind,
+        start: erasure.start - arrow.bodySourceStart,
+      },
+      'Handler arrow TypeScript erasures',
     );
   }
   return result;
@@ -646,6 +701,7 @@ const SAFE_HANDLER_GLOBAL_REFERENCES = [
   'Array',
   'BigInt',
   'Boolean',
+  'globalThis',
   'JSON',
   'Math',
   'Number',
@@ -788,6 +844,7 @@ function extractElementParams(
               `Handler call argument property accesses[${accessIndex}] must be dense.`,
             );
           }
+          if (access.elementParamEligible === false) continue;
           if (serializableMemberExpression(access.path, localNames)) {
             appendHandlerFact(
               candidates,
@@ -920,7 +977,9 @@ function simpleCallArgumentReference(
   const reference = compilerOwnDataValue(references, 0, 'Handler call argument references') as
     | IdentifierReferenceModel
     | undefined;
-  return reference && typeof reference.name === 'string' ? reference.name : null;
+  return reference && reference.elementParamEligible !== false && typeof reference.name === 'string'
+    ? reference.name
+    : null;
 }
 
 function inferElementParamType(
@@ -960,6 +1019,7 @@ function serializableMemberExpressions(
     if (!access) {
       compilerFailClosed(`Serializable handler member expressions[${index}] must be dense.`);
     }
+    if (access.elementParamEligible === false) continue;
     if (serializableMemberExpression(access.path, localNames)) {
       appendHandlerFact(
         result,
@@ -989,6 +1049,7 @@ function serializableBareReferences(
       compilerFailClosed(`Serializable handler bare references[${index}] must be dense.`);
     }
     if (
+      reference.elementParamEligible !== false &&
       compilerSetHas(eligibleBareReferenceNames, reference.name) &&
       !compilerSetHas(localNames, reference.name)
     ) {

@@ -176,6 +176,8 @@ export interface WebhookHandlerModel extends MutationHandlerModel {
 }
 
 export interface PropertyAccessPathModel {
+  /** Parser-owned denial when this use requires runtime object/callable identity. */
+  elementParamEligible?: false;
   end: number;
   inferredType?: 'boolean' | 'number';
   path: string;
@@ -199,6 +201,8 @@ export interface TemporalReadModel {
 }
 
 export interface IdentifierReferenceModel {
+  /** Parser-owned denial when this use requires runtime object/callable identity. */
+  elementParamEligible?: false;
   end: number;
   name: string;
   start: number;
@@ -372,6 +376,45 @@ export type ZeroArgArrowCallArgumentKind =
   | 'static'
   | 'other';
 
+export type HandlerBodyTypeScriptErasureKind =
+  | 'as-assertion'
+  | 'implements-clause'
+  | 'non-null-assertion'
+  | 'optional-marker'
+  | 'satisfies-clause'
+  | 'this-parameter'
+  | 'type-annotation'
+  | 'type-arguments'
+  | 'type-assertion'
+  | 'type-modifier'
+  | 'type-only-declaration'
+  | 'type-parameters';
+
+/** Parser-owned TypeScript-only source that must not cross into an emitted JavaScript handler. */
+export interface HandlerBodyTypeScriptErasureModel extends SourceSpan {
+  kind: HandlerBodyTypeScriptErasureKind;
+}
+
+export type UnsupportedHandlerBodyTypeScriptKind =
+  | 'accessor-field'
+  | 'ambient-declaration'
+  | 'decorator'
+  | 'enum-declaration'
+  | 'function-signature'
+  | 'import-equals-declaration'
+  | 'jsx-expression'
+  | 'module-syntax'
+  | 'namespace-declaration'
+  | 'parameter-property'
+  | 'unclassified-typescript'
+  | 'uninitialized-const'
+  | 'using-declaration';
+
+/** Runtime-bearing TypeScript syntax that cannot be represented by source erasure alone. */
+export interface UnsupportedHandlerBodyTypeScriptModel extends SourceSpan {
+  kind: UnsupportedHandlerBodyTypeScriptKind;
+}
+
 export interface ZeroArgArrowModel {
   body: string;
   bodyEnd: number;
@@ -387,6 +430,8 @@ export interface ZeroArgArrowModel {
   bodyReferences: readonly IdentifierReferenceModel[];
   bodyStart: number;
   bodySourceStart: number;
+  bodyTypeScriptErasures: readonly HandlerBodyTypeScriptErasureModel[];
+  bodyUnsupportedTypeScript: readonly UnsupportedHandlerBodyTypeScriptModel[];
   callArguments?: readonly string[];
   documentElementAction?: DocumentElementActionModel;
   references: readonly string[];

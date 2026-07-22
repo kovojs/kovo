@@ -91,6 +91,8 @@ import type {
   HandlerWriteSinkOperationKind,
   HandlerWriteSinkOwner,
   HandlerWriteSinkSurface,
+  HandlerBodyTypeScriptErasureKind,
+  HandlerBodyTypeScriptErasureModel,
   IdentifierReferenceModel,
   JsxCommentModel,
   JsxAttributeModel,
@@ -118,6 +120,8 @@ import type {
   StringRenderModel,
   TaskRunHandlerModel,
   TemporalReadModel,
+  UnsupportedHandlerBodyTypeScriptKind,
+  UnsupportedHandlerBodyTypeScriptModel,
   WebhookRecordChangeFact,
   WebhookHandlerModel,
   ZeroArgArrowCallArgumentKind,
@@ -2198,11 +2202,46 @@ export function identifierIsShadowedBeforeScope(
   while (current && current !== boundary) {
     if (
       isLexicalScopeNode(current) &&
-      scopeDeclaresIdentifierNamed(current, identifier.text, binding)
+      (isFunctionScopeNode(current) && nodeIsWithinFunctionParameterInitializer(identifier, current)
+        ? functionParameterScopeDeclaresIdentifierNamed(current, identifier.text, binding)
+        : scopeDeclaresIdentifierNamed(current, identifier.text, binding))
     ) {
       return true;
     }
     current = current.parent;
+  }
+  return false;
+}
+
+function functionParameterScopeDeclaresIdentifierNamed(
+  scope: ts.FunctionLikeDeclaration,
+  name: string,
+  excluded: ts.Identifier | undefined,
+): boolean {
+  const bindingNameMatches = (bindingName: ts.BindingName): boolean => {
+    if (ts.isIdentifier(bindingName)) return bindingName !== excluded && bindingName.text === name;
+    const elements = compilerSnapshotDenseArray(
+      bindingName.elements,
+      'Function parameter binding elements',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isBindingElement(element) && bindingNameMatches(element.name)) return true;
+    }
+    return false;
+  };
+
+  if (
+    (ts.isFunctionDeclaration(scope) || ts.isFunctionExpression(scope)) &&
+    scope.name !== undefined &&
+    scope.name !== excluded &&
+    scope.name.text === name
+  ) {
+    return true;
+  }
+  const parameters = compilerSnapshotDenseArray(scope.parameters, 'Function scope parameters');
+  for (let index = 0; index < parameters.length; index += 1) {
+    if (bindingNameMatches(parameters[index]!.name)) return true;
   }
   return false;
 }
@@ -2249,7 +2288,9 @@ function scopeDeclaresIdentifierNamed(
     if (ts.isVariableDeclaration(node)) {
       const declarationList = ts.isVariableDeclarationList(node.parent) ? node.parent : undefined;
       const blockScoped =
-        declarationList !== undefined && (declarationList.flags & ts.NodeFlags.BlockScoped) !== 0;
+        (declarationList !== undefined &&
+          (declarationList.flags & ts.NodeFlags.BlockScoped) !== 0) ||
+        ts.isCatchClause(node.parent);
       if (!insideNestedLexicalBlock || !blockScoped) visitBindingName(node.name);
     }
     if (ts.isFunctionDeclaration(node) && node.name && !insideNestedLexicalBlock) {
@@ -2259,7 +2300,7 @@ function scopeDeclaresIdentifierNamed(
       visitBindingName(node.name);
     }
     const nestedForChildren =
-      insideNestedLexicalBlock || (node !== scope && (ts.isBlock(node) || ts.isModuleBlock(node)));
+      insideNestedLexicalBlock || (node !== scope && isLexicalScopeNode(node));
     ts.forEachChild(node, (child) => visit(child, nestedForChildren));
   };
 
@@ -2269,11 +2310,19 @@ function scopeDeclaresIdentifierNamed(
 
 function isLexicalScopeNode(node: ts.Node): boolean {
   return (
-    ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node) || isFunctionScopeNode(node)
+    ts.isSourceFile(node) ||
+    ts.isBlock(node) ||
+    ts.isModuleBlock(node) ||
+    ts.isCaseBlock(node) ||
+    ts.isCatchClause(node) ||
+    ts.isForStatement(node) ||
+    ts.isForInStatement(node) ||
+    ts.isForOfStatement(node) ||
+    isFunctionScopeNode(node)
   );
 }
 
-function isFunctionScopeNode(node: ts.Node): boolean {
+function isFunctionScopeNode(node: ts.Node): node is ts.FunctionLikeDeclaration {
   return (
     ts.isFunctionDeclaration(node) ||
     ts.isFunctionExpression(node) ||
@@ -3254,6 +3303,7 @@ function handlerBodyReferencesArguments(body: ts.ConciseBody): boolean {
 
 interface HandlerLocalBinding {
   readonly name: string;
+  readonly unavailableInParameterInitializersOf?: ts.FunctionLikeDeclaration;
   readonly scope: ts.Node;
 }
 
@@ -3272,8 +3322,41 @@ function handlerReferencesUnprovenFreeAuthority(
 ): boolean {
   const handler = body.parent;
   const root = ts.isFunctionLike(handler) ? handler : body;
-  const bindings: HandlerLocalBinding[] = [];
+  const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Handler authority parameters');
+  const bindings = collectHandlerLocalBindings(root, body, parameterSnapshot);
 
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (unsafe) return;
+    if (node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword) {
+      unsafe = true;
+      return;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      isRuntimeIdentifierReference(node, root) &&
+      !compilerSetHas(INERT_FREE_HANDLER_IDENTIFIERS, node.text) &&
+      !handlerBindingCoversIdentifier(bindings, node)
+    ) {
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  for (let index = 0; index < parameterSnapshot.length; index += 1) {
+    const parameter = parameterSnapshot[index]!;
+    if (parameter.initializer !== undefined) visit(parameter.initializer);
+  }
+  visit(body);
+  return unsafe;
+}
+
+function collectHandlerLocalBindings(
+  root: ts.Node,
+  body: ts.Node,
+  parameters: readonly ts.ParameterDeclaration[],
+): HandlerLocalBinding[] {
+  const bindings: HandlerLocalBinding[] = [];
   const parameterSnapshot = compilerSnapshotDenseArray(parameters, 'Handler authority parameters');
   for (let index = 0; index < parameterSnapshot.length; index += 1) {
     const parameter = parameterSnapshot[index]!;
@@ -3289,7 +3372,13 @@ function handlerReferencesUnprovenFreeAuthority(
 
   const collectBindings = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node)) {
-      recordHandlerBindingName(bindings, node.name, handlerVariableBindingScope(node, root));
+      const scope = handlerVariableBindingScope(node, root);
+      recordHandlerBindingName(
+        bindings,
+        node.name,
+        scope,
+        isFunctionScopeNode(scope) ? scope : undefined,
+      );
     } else if (ts.isParameter(node) && !handlerParameterIsDeclared(parameterSnapshot, node)) {
       recordHandlerBindingName(bindings, node.name, node.parent);
     } else if (ts.isCatchClause(node) && node.variableDeclaration !== undefined) {
@@ -3333,31 +3422,7 @@ function handlerReferencesUnprovenFreeAuthority(
     if (parameter.initializer !== undefined) collectBindings(parameter.initializer);
   }
   collectBindings(body);
-
-  let unsafe = false;
-  const visit = (node: ts.Node): void => {
-    if (unsafe) return;
-    if (node.kind === ts.SyntaxKind.ThisKeyword || node.kind === ts.SyntaxKind.SuperKeyword) {
-      unsafe = true;
-      return;
-    }
-    if (
-      ts.isIdentifier(node) &&
-      isRuntimeIdentifierReference(node, root) &&
-      !compilerSetHas(INERT_FREE_HANDLER_IDENTIFIERS, node.text) &&
-      !handlerBindingCoversIdentifier(bindings, node)
-    ) {
-      unsafe = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  for (let index = 0; index < parameterSnapshot.length; index += 1) {
-    const parameter = parameterSnapshot[index]!;
-    if (parameter.initializer !== undefined) visit(parameter.initializer);
-  }
-  visit(body);
-  return unsafe;
+  return bindings;
 }
 
 function handlerParameterIsDeclared(
@@ -3377,7 +3442,15 @@ function handlerBindingCoversIdentifier(
   const snapshot = compilerSnapshotDenseArray(bindings, 'Handler-local authority bindings');
   for (let index = 0; index < snapshot.length; index += 1) {
     const binding = snapshot[index]!;
-    if (binding.name === identifier.text && handlerNodeIsWithin(identifier, binding.scope)) {
+    if (
+      binding.name === identifier.text &&
+      handlerNodeIsWithin(identifier, binding.scope) &&
+      (binding.unavailableInParameterInitializersOf === undefined ||
+        !handlerNodeIsWithinParameterInitializer(
+          identifier,
+          binding.unavailableInParameterInitializersOf,
+        ))
+    ) {
       return true;
     }
   }
@@ -3388,11 +3461,18 @@ function recordHandlerBindingName(
   bindings: HandlerLocalBinding[],
   name: ts.BindingName,
   scope: ts.Node,
+  unavailableInParameterInitializersOf?: ts.FunctionLikeDeclaration,
 ): void {
   if (ts.isIdentifier(name)) {
     compilerArrayAppend(
       bindings,
-      { name: name.text, scope },
+      {
+        name: name.text,
+        ...(unavailableInParameterInitializersOf === undefined
+          ? {}
+          : { unavailableInParameterInitializersOf }),
+        scope,
+      },
       'Compiler packages/compiler/src/scan/parse.ts collection',
     );
     return;
@@ -3401,8 +3481,32 @@ function recordHandlerBindingName(
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
     if (ts.isOmittedExpression(element)) continue;
-    recordHandlerBindingName(bindings, element.name, scope);
+    recordHandlerBindingName(bindings, element.name, scope, unavailableInParameterInitializersOf);
   }
+}
+
+function handlerNodeIsWithinParameterInitializer(
+  node: ts.Node,
+  owner: ts.FunctionLikeDeclaration,
+): boolean {
+  return nodeIsWithinFunctionParameterInitializer(node, owner);
+}
+
+function nodeIsWithinFunctionParameterInitializer(
+  node: ts.Node,
+  owner: ts.FunctionLikeDeclaration,
+): boolean {
+  const parameters = compilerSnapshotDenseArray(owner.parameters, 'Handler function parameters');
+  for (let index = 0; index < parameters.length; index += 1) {
+    const parameter = parameters[index]!;
+    if (
+      handlerNodeIsWithin(node, parameter.name) ||
+      (parameter.initializer && handlerNodeIsWithin(node, parameter.initializer))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function handlerVariableBindingScope(node: ts.VariableDeclaration, root: ts.Node): ts.Node {
@@ -3410,7 +3514,7 @@ function handlerVariableBindingScope(node: ts.VariableDeclaration, root: ts.Node
   if (list && (ts.getCombinedNodeFlags(list) & ts.NodeFlags.BlockScoped) === 0) {
     let current: ts.Node | undefined = node.parent;
     while (current && current !== root) {
-      if (ts.isFunctionLike(current)) return current;
+      if (ts.isFunctionLike(current) || ts.isClassStaticBlockDeclaration(current)) return current;
       current = current.parent;
     }
     return root;
@@ -3463,7 +3567,12 @@ function handlerNodeIsWithin(node: ts.Node, scope: ts.Node): boolean {
 function isRuntimeIdentifierReference(node: ts.Identifier, root: ts.Node): boolean {
   let current: ts.Node | undefined = node.parent;
   while (current && current !== root) {
-    if (ts.isTypeNode(current)) return false;
+    if (
+      ts.isTypeNode(current) &&
+      (!ts.isExpressionWithTypeArguments(current) || !expressionWithTypeArgumentsIsRuntime(current))
+    ) {
+      return false;
+    }
     current = current.parent;
   }
 
@@ -3504,6 +3613,15 @@ function isRuntimeIdentifierReference(node: ts.Identifier, root: ts.Node): boole
     return !compilerRegExpTest(/^[a-z]/, node.text);
   }
   return true;
+}
+
+function expressionWithTypeArgumentsIsRuntime(node: ts.ExpressionWithTypeArguments): boolean {
+  const heritage = node.parent;
+  if (!ts.isHeritageClause(heritage)) return true;
+  return (
+    heritage.token === ts.SyntaxKind.ExtendsKeyword &&
+    (ts.isClassDeclaration(heritage.parent) || ts.isClassExpression(heritage.parent))
+  );
 }
 
 function identifierBelongsToBindingName(node: ts.Identifier): boolean {
@@ -6064,10 +6182,12 @@ function parameterName(name: ts.BindingName): string | undefined {
 export function propertyAccessPathModels(
   sourceFile: ts.SourceFile,
   root: ts.Node,
+  excludedSpans: readonly SourceSpan[] = [],
+  classifyElementParamEligibility = false,
 ): PropertyAccessPathModel[] {
   const paths: PropertyAccessPathModel[] = [];
 
-  const pushElementAccessRoot = (node: ts.Expression): void => {
+  const pushElementAccessRoot = (node: ts.Expression, elementParamEligible: boolean): void => {
     const rootPath = elementAccessRootPath(node);
     if (!rootPath) return;
     const segments = compilerStringSplit(rootPath, '.');
@@ -6083,6 +6203,7 @@ export function propertyAccessPathModels(
     compilerArrayAppend(
       paths,
       {
+        ...(elementParamEligible ? {} : { elementParamEligible: false as const }),
         end: node.getEnd(),
         path: rootPath,
         start: node.getStart(sourceFile),
@@ -6093,12 +6214,16 @@ export function propertyAccessPathModels(
   };
 
   const visit = (node: ts.Node): void => {
+    if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
+    const elementParamEligible =
+      !classifyElementParamEligibility || handlerElementParamUseIsEligible(node, root);
     if (ts.isPropertyAccessExpression(node) && !isReceiverOfOuterAccess(node)) {
       const path = propertyAccessPath(node);
       if (path) {
         compilerArrayAppend(
           paths,
           {
+            ...(elementParamEligible ? {} : { elementParamEligible: false as const }),
             end: node.getEnd(),
             ...propertyAccessInferredType(sourceFile, node),
             path,
@@ -6113,7 +6238,7 @@ export function propertyAccessPathModels(
         // The read is still rooted at a reactive query/state (`rows`); surface that root so the
         // derive-input/dependency extractor never emits a derive that references an unbound query
         // (ReferenceError) and silently drops the query dependency.
-        pushElementAccessRoot(node);
+        pushElementAccessRoot(node, elementParamEligible);
       }
     }
 
@@ -6121,7 +6246,7 @@ export function propertyAccessPathModels(
     // reads a reactive root; surface it the same way. Inner receivers are skipped so the root is
     // modeled once per chain.
     if (ts.isElementAccessExpression(node) && !isReceiverOfOuterAccess(node)) {
-      pushElementAccessRoot(node);
+      pushElementAccessRoot(node, elementParamEligible);
     }
 
     ts.forEachChild(node, visit);
@@ -6130,6 +6255,147 @@ export function propertyAccessPathModels(
   visit(root);
 
   return paths;
+}
+
+function handlerElementParamUseIsEligible(node: ts.Node, root: ts.Node): boolean {
+  const carrier = handlerElementParamCarrier(node);
+  if (handlerExpressionIsDirectAuthorityPosition(carrier)) return false;
+  const aliases = handlerAliasTargets(carrier);
+  for (let index = 0; index < aliases.length; index += 1) {
+    if (handlerAliasFeedsAuthority(root, aliases[index]!, compilerCreateSet<string>()))
+      return false;
+  }
+  return true;
+}
+
+function handlerReferenceElementParamUseIsEligible(node: ts.Identifier, root: ts.Node): boolean {
+  const carrier = handlerElementParamCarrier(node);
+  if (ts.isPropertyAccessExpression(carrier) || ts.isElementAccessExpression(carrier)) return false;
+  if (
+    ts.isExpressionWithTypeArguments(carrier) &&
+    (ts.isPropertyAccessExpression(carrier.expression) ||
+      ts.isElementAccessExpression(carrier.expression))
+  ) {
+    return false;
+  }
+  return handlerElementParamUseIsEligible(node, root);
+}
+
+function handlerElementParamCarrier(node: ts.Node): ts.Node {
+  let current = node;
+  while (true) {
+    const parent = current.parent;
+    if (
+      (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+      parent.expression === current
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      ((ts.isParenthesizedExpression(parent) ||
+        ts.isAsExpression(parent) ||
+        ts.isSatisfiesExpression(parent) ||
+        ts.isNonNullExpression(parent) ||
+        ts.isTypeAssertionExpression(parent) ||
+        ts.isExpressionWithTypeArguments(parent)) &&
+        parent.expression === current) ||
+      (ts.isConditionalExpression(parent) &&
+        (parent.whenTrue === current || parent.whenFalse === current)) ||
+      (ts.isBinaryExpression(parent) &&
+        (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+          parent.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+          parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) &&
+        (parent.left === current || parent.right === current))
+    ) {
+      current = parent;
+      continue;
+    }
+    return current;
+  }
+}
+
+function handlerExpressionIsDirectAuthorityPosition(node: ts.Node): boolean {
+  const parent = node.parent;
+  if (
+    ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression === node) ||
+    (ts.isTaggedTemplateExpression(parent) && parent.tag === node) ||
+    (ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
+      (parent.left === node || parent.right === node)) ||
+    (ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.InKeyword &&
+      parent.right === node) ||
+    (ts.isAwaitExpression(parent) && parent.expression === node) ||
+    (ts.isYieldExpression(parent) &&
+      parent.asteriskToken !== undefined &&
+      parent.expression === node) ||
+    (ts.isForOfStatement(parent) && parent.expression === node) ||
+    ((ts.isSpreadElement(parent) || ts.isSpreadAssignment(parent)) && parent.expression === node) ||
+    (ts.isComputedPropertyName(parent) && parent.expression === node)
+  ) {
+    return true;
+  }
+  return ts.isExpressionWithTypeArguments(node) && expressionWithTypeArgumentsIsRuntime(node);
+}
+
+function handlerAliasTargets(node: ts.Node): string[] {
+  const names: string[] = [];
+  const parent = node.parent;
+  if (ts.isVariableDeclaration(parent) && parent.initializer === node) {
+    collectBindingNames(parent.name, names);
+  } else if (
+    ts.isBinaryExpression(parent) &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    parent.right === node &&
+    ts.isIdentifier(parent.left)
+  ) {
+    compilerArrayAppend(names, parent.left.text, 'Handler authority alias targets');
+  }
+  return names;
+}
+
+function handlerAliasFeedsAuthority(root: ts.Node, name: string, seen: Set<string>): boolean {
+  if (compilerSetHas(seen, name)) return true;
+  compilerSetAdd(seen, name);
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (ts.isIdentifier(node) && node.text === name && isRuntimeIdentifierReference(node, root)) {
+      const carrier = handlerElementParamCarrier(node);
+      if (handlerExpressionIsDirectAuthorityPosition(carrier)) {
+        found = true;
+        return;
+      }
+      const aliases = handlerAliasTargets(carrier);
+      for (let index = 0; index < aliases.length; index += 1) {
+        if (handlerAliasFeedsAuthority(root, aliases[index]!, seen)) {
+          found = true;
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+}
+
+function nodeIsWithinSourceSpans(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  spans: readonly SourceSpan[],
+): boolean {
+  const start = node.getStart(sourceFile);
+  const end = node.getEnd();
+  const length = compilerArrayLength(spans, 'Excluded parser source spans');
+  for (let index = 0; index < length; index += 1) {
+    const span = compilerOwnDataValue(spans, index, 'Excluded parser source spans') as
+      | SourceSpan
+      | undefined;
+    if (span && start >= span.start && end <= span.end) return true;
+  }
+  return false;
 }
 
 // SPEC §4.8/§4.9 (A1): a node is the receiver of an outer access (`X.foo` / `X[i]`) when its
@@ -7344,7 +7610,12 @@ function jsxAttributeExpression(
       source,
       initializer.expression,
     ),
-    expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
+    expressionPropertyAccesses: propertyAccessPathModels(
+      sourceFile,
+      initializer.expression,
+      [],
+      true,
+    ),
     expressionReferences: referenceIdentifiers(initializer.expression),
     expressionStart,
     ...jsxAttributeExpressionStaticValue(initializer.expression),
@@ -7499,6 +7770,7 @@ function zeroArgArrowModel(
   const bodyEnd = ts.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
   const rawBodySource = compilerStringSlice(source, bodyStart, bodyEnd);
   const bodySource = compilerStringTrim(rawBodySource);
+  const bodyTypeScriptFacts = handlerBodyTypeScriptFacts(sourceFile, body);
   let leadingWhitespace = 0;
   while (
     leadingWhitespace < rawBodySource.length &&
@@ -7534,12 +7806,12 @@ function zeroArgArrowModel(
       );
       compilerArrayAppend(
         callArgumentPropertyAccesses,
-        propertyAccessPathModels(sourceFile, argument),
+        propertyAccessPathModels(sourceFile, argument, bodyTypeScriptFacts.erasures, true),
         'Zero-arg arrow call property accesses',
       );
       compilerArrayAppend(
         callArgumentReferences,
-        referenceIdentifierModels(sourceFile, argument),
+        referenceIdentifierModels(sourceFile, argument, true, bodyTypeScriptFacts.erasures),
         'Zero-arg arrow call references',
       );
       compilerArrayAppend(
@@ -7565,13 +7837,25 @@ function zeroArgArrowModel(
       ...(callArgumentStaticValues === undefined ? {} : { callArgumentStaticValues }),
       ...(callArgumentKinds === undefined ? {} : { callArgumentKinds }),
       bodyLocalNames: localDeclarationNames(body),
-      bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
-      bodyReferences: referenceIdentifierModels(sourceFile, body),
+      bodyPropertyAccesses: propertyAccessPathModels(
+        sourceFile,
+        body,
+        bodyTypeScriptFacts.erasures,
+        true,
+      ),
+      bodyReferences: referenceIdentifierModels(
+        sourceFile,
+        body,
+        true,
+        bodyTypeScriptFacts.erasures,
+      ),
       bodyStart,
       bodySourceStart,
+      bodyTypeScriptErasures: bodyTypeScriptFacts.erasures,
+      bodyUnsupportedTypeScript: bodyTypeScriptFacts.unsupported,
       ...(callArguments === undefined ? {} : { callArguments }),
       ...documentElementActionModel(sourceFile, body),
-      references: referenceIdentifiers(body),
+      references: referenceIdentifiers(body, true, bodyTypeScriptFacts.erasures),
       ...(securityOperations.operations.length === 0
         ? {}
         : { securityOperations: securityOperations.operations }),
@@ -7580,6 +7864,320 @@ function zeroArgArrowModel(
         : { securityOperationViolations: securityOperations.violations }),
     },
   };
+}
+
+// SPEC §5.2: the scanner is the only phase allowed to interpret authored TypeScript syntax.
+// Record exact TS-only spans here so later lowering/emission can mechanically erase them without
+// reparsing or guessing from source text. Constructs that require semantic TypeScript emit (for
+// example enums and parameter properties) become explicit unsupported facts and fail before
+// emission; the independent JavaScript translation gate remains the final backstop.
+function handlerBodyTypeScriptFacts(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+): {
+  erasures: HandlerBodyTypeScriptErasureModel[];
+  unsupported: UnsupportedHandlerBodyTypeScriptModel[];
+} {
+  const erasures: HandlerBodyTypeScriptErasureModel[] = [];
+  const unsupported: UnsupportedHandlerBodyTypeScriptModel[] = [];
+
+  const append = (kind: HandlerBodyTypeScriptErasureKind, start: number, end: number): void => {
+    if (end <= start) return;
+    compilerArrayAppend(erasures, { end, kind, start }, 'Handler TypeScript erasure facts');
+  };
+
+  const appendTypeList = (
+    kind: 'type-arguments' | 'type-parameters',
+    nodes: ts.NodeArray<ts.TypeNode | ts.TypeParameterDeclaration> | undefined,
+    owner: ts.Node,
+  ): void => {
+    if (!nodes || compilerArrayLength(nodes, 'Handler TypeScript type list') === 0) return;
+    // NodeArray.end stops before trailing trivia. Take the parser-owned delimiter tokens from the
+    // owning expression/declaration so comments before `>` are erased with the type list.
+    const children = owner.getChildren(sourceFile);
+    const childLength = compilerArrayLength(children, 'Handler TypeScript type-list children');
+    let opening: ts.Node | undefined;
+    let closing: ts.Node | undefined;
+    for (let index = 0; index < childLength; index += 1) {
+      const child = compilerOwnDataValue(
+        children,
+        index,
+        'Handler TypeScript type-list children',
+      ) as ts.Node | undefined;
+      if (!child) continue;
+      if (child.kind === ts.SyntaxKind.LessThanToken && child.getEnd() <= nodes.pos) {
+        opening = child;
+        continue;
+      }
+      if (
+        child.kind === ts.SyntaxKind.GreaterThanToken &&
+        child.getStart(sourceFile) >= nodes.end
+      ) {
+        closing = child;
+        break;
+      }
+    }
+    if (!opening || !closing) {
+      appendUnsupported('unclassified-typescript', owner);
+      return;
+    }
+    append(kind, opening.getStart(sourceFile), closing.getEnd());
+  };
+
+  const appendUnsupported = (kind: UnsupportedHandlerBodyTypeScriptKind, node: ts.Node): void => {
+    compilerArrayAppend(
+      unsupported,
+      { end: node.getEnd(), kind, start: node.getStart(sourceFile) },
+      'Unsupported handler TypeScript facts',
+    );
+  };
+
+  const firstDecorator = (node: ts.Node): ts.Decorator | undefined => {
+    if (!ts.canHaveDecorators(node)) return undefined;
+    const decorators = ts.getDecorators(node);
+    if (!decorators || compilerArrayLength(decorators, 'Handler decorators') === 0) {
+      return undefined;
+    }
+    return compilerOwnDataValue(decorators, 0, 'Handler decorators') as ts.Decorator | undefined;
+  };
+
+  const erasureContains = (node: ts.Node): boolean => {
+    const start = node.getStart(sourceFile);
+    const end = node.getEnd();
+    const length = compilerArrayLength(erasures, 'Handler TypeScript erasure facts');
+    for (let index = 0; index < length; index += 1) {
+      const erasure = compilerOwnDataValue(erasures, index, 'Handler TypeScript erasure facts') as
+        | HandlerBodyTypeScriptErasureModel
+        | undefined;
+      if (!erasure) continue;
+      if (start >= erasure.start && end <= erasure.end) return true;
+    }
+    return false;
+  };
+
+  const visit = (node: ts.Node): void => {
+    const decorator = firstDecorator(node);
+    if (decorator) {
+      appendUnsupported('decorator', decorator);
+      return;
+    }
+    if (hasModifier(node, ts.SyntaxKind.DeclareKeyword)) {
+      // An ambient declaration can assert that a runtime binding exists. Erasing it while also
+      // treating its name as handler-local would bypass client-capture closure.
+      appendUnsupported('ambient-declaration', node);
+      return;
+    }
+    if (
+      ts.isTypeAliasDeclaration(node) ||
+      ts.isInterfaceDeclaration(node) ||
+      ts.isIndexSignatureDeclaration(node) ||
+      (ts.isMethodDeclaration(node) && node.body === undefined) ||
+      (ts.isConstructorDeclaration(node) && node.body === undefined) ||
+      (ts.isGetAccessorDeclaration(node) && node.body === undefined) ||
+      (ts.isSetAccessorDeclaration(node) && node.body === undefined) ||
+      (ts.isPropertyDeclaration(node) && hasModifier(node, ts.SyntaxKind.AbstractKeyword))
+    ) {
+      append('type-only-declaration', node.getStart(sourceFile), node.getEnd());
+      return;
+    }
+
+    if (ts.isFunctionDeclaration(node) && node.body === undefined) {
+      appendUnsupported('function-signature', node);
+      return;
+    }
+
+    if (ts.isEnumDeclaration(node)) {
+      appendUnsupported('enum-declaration', node);
+      return;
+    }
+    if (ts.isModuleDeclaration(node)) {
+      appendUnsupported('namespace-declaration', node);
+      return;
+    }
+    if (ts.isImportEqualsDeclaration(node)) {
+      appendUnsupported('import-equals-declaration', node);
+      return;
+    }
+    if (
+      ts.isImportDeclaration(node) ||
+      ts.isExportDeclaration(node) ||
+      ts.isExportAssignment(node) ||
+      ts.isNamespaceExportDeclaration(node)
+    ) {
+      appendUnsupported('module-syntax', node);
+      return;
+    }
+    if (ts.isDecorator(node)) {
+      appendUnsupported('decorator', node);
+      return;
+    }
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
+      appendUnsupported('jsx-expression', node);
+      return;
+    }
+    if (
+      ts.isParameter(node) &&
+      ts.isConstructorDeclaration(node.parent) &&
+      ts.isParameterPropertyDeclaration(node, node.parent)
+    ) {
+      appendUnsupported('parameter-property', node);
+      return;
+    }
+    if (ts.isParameter(node) && ts.isIdentifier(node.name) && node.name.text === 'this') {
+      const parent = node.parent;
+      if (ts.isFunctionLike(parent)) {
+        const parameterLength = compilerArrayLength(
+          parent.parameters,
+          'Handler function parameters',
+        );
+        let parameterIndex = -1;
+        for (let index = 0; index < parameterLength; index += 1) {
+          if (
+            compilerOwnDataValue(parent.parameters, index, 'Handler function parameters') === node
+          ) {
+            parameterIndex = index;
+            break;
+          }
+        }
+        if (parameterIndex < 0) {
+          appendUnsupported('unclassified-typescript', node);
+          return;
+        }
+        const next =
+          parameterIndex + 1 < parameterLength
+            ? (compilerOwnDataValue(
+                parent.parameters,
+                parameterIndex + 1,
+                'Handler function parameters',
+              ) as ts.ParameterDeclaration | undefined)
+            : undefined;
+        if (next) {
+          append('this-parameter', node.getStart(sourceFile), next.getStart(sourceFile));
+        } else if (parameterIndex > 0) {
+          const previous = compilerOwnDataValue(
+            parent.parameters,
+            parameterIndex - 1,
+            'Handler function parameters',
+          ) as ts.ParameterDeclaration | undefined;
+          if (!previous) {
+            appendUnsupported('unclassified-typescript', node);
+            return;
+          }
+          append('this-parameter', previous.getEnd(), parent.parameters.end);
+        } else {
+          append('this-parameter', node.getStart(sourceFile), parent.parameters.end);
+        }
+        return;
+      }
+    }
+    if (
+      ts.isVariableDeclarationList(node) &&
+      (node.flags & ts.NodeFlags.Using) === ts.NodeFlags.Using
+    ) {
+      appendUnsupported('using-declaration', node);
+      return;
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.initializer === undefined &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Const) === ts.NodeFlags.Const
+    ) {
+      appendUnsupported('uninitialized-const', node);
+      return;
+    }
+    if (ts.isModifier(node)) {
+      if (node.kind === ts.SyntaxKind.AccessorKeyword) {
+        appendUnsupported('accessor-field', node.parent);
+        return;
+      }
+      if (
+        node.kind === ts.SyntaxKind.AbstractKeyword ||
+        node.kind === ts.SyntaxKind.OverrideKeyword ||
+        node.kind === ts.SyntaxKind.PrivateKeyword ||
+        node.kind === ts.SyntaxKind.ProtectedKeyword ||
+        node.kind === ts.SyntaxKind.PublicKeyword ||
+        node.kind === ts.SyntaxKind.ReadonlyKeyword
+      ) {
+        append('type-modifier', node.getStart(sourceFile), node.getEnd());
+        return;
+      }
+    }
+
+    if (ts.isHeritageClause(node) && node.token === ts.SyntaxKind.ImplementsKeyword) {
+      append('implements-clause', node.getStart(sourceFile), node.getEnd());
+      return;
+    }
+
+    if (ts.isAsExpression(node)) {
+      append('as-assertion', node.expression.getEnd(), node.getEnd());
+    } else if (ts.isSatisfiesExpression(node)) {
+      append('satisfies-clause', node.expression.getEnd(), node.getEnd());
+    } else if (ts.isNonNullExpression(node)) {
+      append('non-null-assertion', node.expression.getEnd(), node.getEnd());
+    } else if (ts.isTypeAssertionExpression(node)) {
+      append('type-assertion', node.getStart(sourceFile), node.expression.getStart(sourceFile));
+    }
+
+    if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
+      appendTypeList('type-parameters', node.typeParameters, node);
+    }
+    if (
+      ts.isCallExpression(node) ||
+      ts.isNewExpression(node) ||
+      ts.isTaggedTemplateExpression(node) ||
+      ts.isExpressionWithTypeArguments(node)
+    ) {
+      appendTypeList('type-arguments', node.typeArguments, node);
+    }
+
+    // ExpressionWithTypeArguments is considered a TypeNode even for the runtime `value<T>` form.
+    // Its expression remains executable while its type arguments are erased.
+    if (ts.isExpressionWithTypeArguments(node)) {
+      visit(node.expression);
+      return;
+    }
+    if (ts.isTypeNode(node) || ts.isTypeParameterDeclaration(node)) {
+      if (!erasureContains(node)) appendUnsupported('unclassified-typescript', node);
+      return;
+    }
+
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)) {
+      if (node.type) {
+        append('type-annotation', node.name.getEnd(), node.type.getEnd());
+      } else {
+        if ((ts.isParameter(node) || ts.isPropertyDeclaration(node)) && node.questionToken) {
+          append(
+            'optional-marker',
+            node.questionToken.getStart(sourceFile),
+            node.questionToken.end,
+          );
+        }
+        if (
+          (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
+          node.exclamationToken
+        ) {
+          append(
+            'non-null-assertion',
+            node.exclamationToken.getStart(sourceFile),
+            node.exclamationToken.end,
+          );
+        }
+      }
+    } else if (ts.isFunctionLike(node) && node.type) {
+      // A return type node starts immediately after its colon token (including following trivia).
+      append('type-annotation', node.type.pos - 1, node.type.getEnd());
+    }
+
+    if (ts.isMethodDeclaration(node) && node.questionToken) {
+      append('optional-marker', node.questionToken.getStart(sourceFile), node.questionToken.end);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+  return { erasures, unsupported };
 }
 
 // SPEC §5.2: classify a zero-arg-arrow call argument from its ts node so handler lowering can
@@ -7644,8 +8242,17 @@ function documentElementActionModel(
   return action ? { documentElementAction: action } : {};
 }
 
-function referenceIdentifiers(root: ts.Node): string[] {
-  const references = referenceIdentifierModels(root.getSourceFile(), root);
+function referenceIdentifiers(
+  root: ts.Node,
+  runtimeOnly = false,
+  excludedSpans: readonly SourceSpan[] = [],
+): string[] {
+  const references = referenceIdentifierModels(
+    root.getSourceFile(),
+    root,
+    runtimeOnly,
+    excludedSpans,
+  );
   const result: string[] = [];
   for (let index = 0; index < references.length; index += 1) {
     compilerArrayAppend(result, references[index]!.name, 'Reference identifier names');
@@ -7656,14 +8263,59 @@ function referenceIdentifiers(root: ts.Node): string[] {
 function referenceIdentifierModels(
   sourceFile: ts.SourceFile,
   root: ts.Node,
+  runtimeOnly = false,
+  excludedSpans: readonly SourceSpan[] = [],
 ): IdentifierReferenceModel[] {
   const declared = compilerCreateSet<string>();
   const referenced: IdentifierReferenceModel[] = [];
+  const runtimeBindings = runtimeOnly ? collectHandlerLocalBindings(root, root, []) : undefined;
 
   const visit = (node: ts.Node): void => {
+    if (runtimeOnly) {
+      if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
+      // Inline-handler type names are erased, not runtime captures. ExpressionWithTypeArguments
+      // is TypeScript's unusual type-node wrapper around a runtime expression, so preserve that
+      // expression only.
+      if (ts.isExpressionWithTypeArguments(node)) {
+        visit(node.expression);
+        return;
+      }
+      if (
+        ts.isTypeNode(node) ||
+        ts.isTypeParameterDeclaration(node) ||
+        ts.isTypeAliasDeclaration(node) ||
+        ts.isInterfaceDeclaration(node) ||
+        ts.isIndexSignatureDeclaration(node)
+      ) {
+        return;
+      }
+    }
     if (ts.isIdentifier(node)) {
-      if (isDeclaredIdentifier(node)) compilerSetAdd(declared, node.text);
-      if (isReferenceIdentifier(node)) {
+      if (runtimeOnly) {
+        if (
+          isRuntimeIdentifierReference(node, root) &&
+          runtimeBindings !== undefined &&
+          !handlerBindingCoversIdentifier(runtimeBindings, node)
+        ) {
+          compilerArrayAppend(
+            referenced,
+            {
+              ...(handlerReferenceElementParamUseIsEligible(node, root)
+                ? {}
+                : { elementParamEligible: false as const }),
+              end: node.getEnd(),
+              name: node.text,
+              start: node.getStart(sourceFile),
+            },
+            'Runtime reference identifier models',
+          );
+        }
+      } else {
+        if (isDeclaredIdentifier(node)) compilerSetAdd(declared, node.text);
+        if (!isReferenceIdentifier(node)) {
+          ts.forEachChild(node, visit);
+          return;
+        }
         compilerArrayAppend(
           referenced,
           {
@@ -7680,6 +8332,7 @@ function referenceIdentifierModels(
   };
 
   visit(root);
+  if (runtimeOnly) return referenced;
   const result: IdentifierReferenceModel[] = [];
   for (let index = 0; index < referenced.length; index += 1) {
     const reference = referenced[index]!;

@@ -590,11 +590,30 @@ export interface ClientConstantDependency {
 }
 
 export interface HandlerArrowBody {
+  erasures: readonly HandlerArrowBodyErasure[];
   kind: 'block' | 'expression';
   propertyAccesses: readonly HandlerArrowBodyPropertyAccess[];
   references: readonly HandlerArrowBodyReference[];
   source: string;
   sourceStart: number;
+}
+
+export interface HandlerArrowBodyErasure {
+  end: number;
+  kind:
+    | 'as-assertion'
+    | 'implements-clause'
+    | 'non-null-assertion'
+    | 'optional-marker'
+    | 'satisfies-clause'
+    | 'this-parameter'
+    | 'type-annotation'
+    | 'type-arguments'
+    | 'type-assertion'
+    | 'type-modifier'
+    | 'type-only-declaration'
+    | 'type-parameters';
+  start: number;
 }
 
 export interface HandlerArrowBodyPropertyAccess {

@@ -1347,16 +1347,19 @@ export const CartActions = component({
       ],
       bodyReferences: [
         {
+          elementParamEligible: false,
           end: source.indexOf('log(') + 'log'.length,
           name: 'log',
           start: source.indexOf('log('),
         },
         {
+          elementParamEligible: false,
           end: source.indexOf('state.count') + 'state'.length,
           name: 'state',
           start: source.indexOf('state.count'),
         },
         {
+          elementParamEligible: false,
           end: source.indexOf('item.quantity') + 'item'.length,
           name: 'item',
           start: source.indexOf('item.quantity'),
@@ -1364,6 +1367,8 @@ export const CartActions = component({
       ],
       bodyStart: source.indexOf(" log('item.id');"),
       bodySourceStart: source.indexOf("log('item.id');"),
+      bodyTypeScriptErasures: [],
+      bodyUnsupportedTypeScript: [],
       references: ['log', 'state', 'item'],
       securityOperations: [
         {
@@ -1386,6 +1391,58 @@ export const CartActions = component({
         },
       ],
     });
+  });
+
+  it('records typed erasure spans for TypeScript-only handler syntax', () => {
+    const source = `
+export const TypedHandler = component({
+  render: () => (
+    <button onClick={() => {
+      type Local = { value: number };
+      const raw!: unknown = getValue();
+      const value: number = ((raw! as unknown) as { value: number }).value!;
+      const normalize = <T,>(input?: T): T | undefined => input;
+      consume<string>(normalize(value)! satisfies number);
+    }}>Run</button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('typed-handler.tsx', source));
+    const handler = button?.attributes.find(
+      (attribute) => attribute.name === 'onClick',
+    )?.zeroArgArrow;
+    const span = (text: string, kind: string, from = 0) => {
+      const start = source.indexOf(text, from);
+      return { end: start + text.length, kind, start };
+    };
+
+    expect(handler?.bodyTypeScriptErasures).toHaveLength(13);
+    expect(handler?.bodyTypeScriptErasures).toEqual(
+      expect.arrayContaining([
+        span('type Local = { value: number };', 'type-only-declaration'),
+        span('!: unknown', 'type-annotation'),
+        span(': number', 'type-annotation', source.indexOf('const value')),
+        span('!', 'non-null-assertion', source.indexOf('raw! as unknown') + 'raw'.length),
+        span(' as unknown', 'as-assertion'),
+        span(' as { value: number }', 'as-assertion'),
+        span('!', 'non-null-assertion', source.indexOf('.value!') + '.value'.length),
+        span('<T,>', 'type-parameters'),
+        span('?: T', 'type-annotation'),
+        span(': T | undefined', 'type-annotation'),
+        span('<string>', 'type-arguments'),
+        span(
+          '!',
+          'non-null-assertion',
+          source.indexOf('normalize(value)!') + 'normalize(value)'.length,
+        ),
+        span(' satisfies number', 'satisfies-clause'),
+      ]),
+    );
+    expect(handler?.bodyUnsupportedTypeScript).toEqual([]);
+    expect(handler?.bodyReferences.map((reference) => reference.name)).toEqual([
+      'getValue',
+      'consume',
+    ]);
   });
 
   it('records component event props separately from host DOM events', () => {

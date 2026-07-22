@@ -1197,6 +1197,41 @@ export function scanBrowserSecurityOperations(
           `browser constructor ${nodeName(constructor)} cannot receive browser authority`,
         );
       }
+    } else if (ts.isTaggedTemplateExpression(node)) {
+      const tag = unwrapExpression(node.tag);
+      const reviewedLocalTag =
+        ts.isIdentifier(tag) &&
+        compilerSetHas(locals, tag.text) &&
+        !browserLocalCallableAliasIsOpaque(body, tag.text, compilerCreateSet<string>());
+      if (!reviewedLocalTag) {
+        appendViolation(
+          node.tag,
+          'computed-security-operation',
+          `browser template tag ${nodeName(tag)} is outside the finite handler IR`,
+        );
+      }
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword
+    ) {
+      const constructor = unwrapExpression(node.right);
+      const reviewedConstructor =
+        ts.isIdentifier(constructor) &&
+        ((compilerSetHas(locals, constructor.text) &&
+          !browserLocalCallableAliasIsOpaque(
+            body,
+            constructor.text,
+            compilerCreateSet<string>(),
+          )) ||
+          (compilerSetHas(browserPureConstructors, constructor.text) &&
+            !identifierIsShadowedWithinBoundary(constructor, body)));
+      if (!reviewedConstructor) {
+        appendViolation(
+          node.right,
+          'computed-security-operation',
+          `browser instanceof target ${nodeName(constructor)} is outside the finite handler IR`,
+        );
+      }
     } else if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       const provenance = browserMutationTargetProvenance(node.left, aliases, body);
       if (provenance === 'state') {
@@ -1272,6 +1307,18 @@ export function scanBrowserSecurityOperations(
           `browser delete ${browserExpressionTarget(node.expression) ?? 'computed'} has no reviewed finite operation`,
         );
       }
+    } else if (
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      !browserMemberUseIsOwnedByParent(node)
+    ) {
+      const receiverProvenance = browserExpressionProvenance(node.expression, aliases, body);
+      if (receiverProvenance === 'raw-browser' || receiverProvenance === 'unknown-authority') {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          `raw browser member ${browserExpressionTarget(node) ?? 'computed'} is outside the finite handler IR`,
+        );
+      }
     }
 
     ts.forEachChild(node, visit);
@@ -1282,6 +1329,25 @@ export function scanBrowserSecurityOperations(
     operations: dedupeBrowserOperations(operations),
     violations: dedupeViolations(violations),
   };
+}
+
+function browserMemberUseIsOwnedByParent(
+  node: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+): boolean {
+  const parent = node.parent;
+  return (
+    ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+      parent.expression === node) ||
+    ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression === node) ||
+    (ts.isTaggedTemplateExpression(parent) && parent.tag === node) ||
+    (ts.isBinaryExpression(parent) &&
+      (isAssignmentOperator(parent.operatorToken.kind) ||
+        parent.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword) &&
+      (parent.left === node || parent.right === node)) ||
+    ((ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent)) &&
+      parent.operand === node) ||
+    (ts.isDeleteExpression(parent) && parent.expression === node)
+  );
 }
 
 function browserTimerCallbackIsSourceText(expression: ts.Expression | undefined): boolean {
@@ -1338,6 +1404,14 @@ function classifyBrowserCall(
       return;
     }
     if (compilerSetHas(locals, callee.text)) {
+      if (browserLocalCallableAliasIsOpaque(body, callee.text, compilerCreateSet<string>())) {
+        appendViolation(
+          callee,
+          'computed-security-operation',
+          `browser callable alias ${callee.text} is outside the finite handler IR`,
+        );
+        return;
+      }
       if (callArgumentsContainBrowserAuthority(call, aliases, body)) {
         appendViolation(
           call,
@@ -1506,6 +1580,51 @@ function classifyBrowserCall(
       `browser call ${browserExpressionTarget(callee) ?? member.name} has no reviewed finite operation`,
     );
   }
+}
+
+function browserLocalCallableAliasIsOpaque(
+  body: ts.ConciseBody,
+  name: string,
+  seen: Set<string>,
+): boolean {
+  if (compilerSetHas(seen, name)) return true;
+  compilerSetAdd(seen, name);
+  let foundBinding = false;
+  let opaque = false;
+  const visit = (node: ts.Node): void => {
+    if (opaque) return;
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      node.name?.text === name
+    ) {
+      foundBinding = true;
+      return;
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
+      foundBinding = true;
+      if (!node.initializer) {
+        opaque = true;
+        return;
+      }
+      const initializer = unwrapExpression(node.initializer);
+      if (
+        ts.isArrowFunction(initializer) ||
+        ts.isFunctionExpression(initializer) ||
+        ts.isClassExpression(initializer)
+      ) {
+        return;
+      }
+      if (ts.isIdentifier(initializer)) {
+        opaque = browserLocalCallableAliasIsOpaque(body, initializer.text, seen);
+        return;
+      }
+      opaque = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return foundBinding ? opaque : !compilerSetHas(localBindingNames(body), name);
 }
 
 /** Scanner/source-text boundary for structured server effects. */

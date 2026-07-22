@@ -1000,6 +1000,22 @@ function handlerArrowBodyReplacements(
   params: readonly ElementParam[],
 ): SourceReplacement[] {
   const replacements: SourceReplacement[] = [];
+  const erasures = compilerSnapshotDenseArray(body.erasures, 'Client handler TypeScript erasures');
+  for (let index = 0; index < erasures.length; index += 1) {
+    const erasure = erasures[index]!;
+    appendClientValue(
+      replacements,
+      {
+        end: erasure.end,
+        // A parser-owned type declaration is a statement/class-element boundary. Removing it to
+        // empty text can join the surrounding JavaScript through ASI (`foo()\ntype T = 0\n(bar)()`),
+        // so preserve that grammar boundary mechanically from the typed scanner fact.
+        replacement: erasure.kind === 'type-only-declaration' ? ';' : '',
+        start: erasure.start,
+      },
+      'Client handler source replacements',
+    );
+  }
   const paramSnapshot = compilerSnapshotDenseArray(params, 'Client handler element params');
   const paramEntries: { param: ElementParam; sourceExpression: string }[] = [];
   for (let index = 0; index < paramSnapshot.length; index += 1) {
