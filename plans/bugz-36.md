@@ -365,6 +365,21 @@ trusted the expected identity supplied by the same subject.
     absent/ambiguous redirect facts, and prove modular and generated-inline wrong-endpoint, every
     3xx/followed-redirect shape, session, and fragment case.
 
+- [ ] **M17 — Typed-read authorization failures preserved previously authorized browser truth.**
+  - The visible-return/delta-miss typed-read client reported and skipped an exact same-build 403,
+    and reported a followed unauthenticated redirect as a generic fetch error. In both cases the
+    prior query-store value and dependent DOM remained authoritative-looking after the server had
+    denied the current principal (SPEC §6.5, §9.4, and §14 recovery).
+  - **Dedup:** distinct from M15's foreign-final-response authority and M14's build selection: this
+    root is the same-origin exact typed-read endpoint's negative authorization outcome after URL
+    and build admission.
+  - **Open work:** make typed reads reject redirects at Fetch, and turn an admitted authorization
+    denial or unauthenticated redirect failure into full-document recovery before any later query
+    response is applied. Preserve ordinary diagnostics for non-authorization transport failures,
+    but never retain a denied query as fresh truth. Prove seeded-private-value 403, unauthenticated
+    redirect, multi-query atomicity, visible-return, delta-miss, lifecycle, and generated-inline
+    parity.
+
 ## Low
 
 - [x] **L1 — Dry-run release dispatch still exercised attestation authority.**
