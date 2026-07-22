@@ -181,6 +181,7 @@ describe('Vite-dev intrinsic closure', () => {
       routes: [route('/origin', { page: () => renderedHtml('<main>HOSTILE ORIGIN</main>') })],
     });
     const harness = await startDevServer(app);
+    const buildToken = app.clientModules.buildToken();
     const NativeURL = globalThis.URL;
     let poisonHits = 0;
     try {
@@ -200,7 +201,8 @@ describe('Vite-dev intrinsic closure', () => {
         }
       };
       const response = await fetch(
-        `${harness.origin}/@kovo/hmr/refresh/route?url=${encodeURIComponent('https://attacker.example/origin')}`,
+        `${harness.origin}/@kovo/hmr/refresh/route?url=${encodeURIComponent('https://attacker.example/origin')}&oldBuild=${encodeURIComponent(buildToken)}`,
+        { headers: { 'Kovo-Build': buildToken } },
       );
       expect(response.status).toBe(400);
       expect(await response.text()).not.toContain('HOSTILE ORIGIN');
