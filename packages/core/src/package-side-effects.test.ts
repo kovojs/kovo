@@ -133,6 +133,8 @@ describe('core package selective side effects (SPEC §6.6)', () => {
     expect(componentBundle.source).not.toContain('Kovo storage refused an unbounded byte stream.');
     expect(componentBundle.source).not.toContain('createS3CompatibleStorage');
     expect(componentBundle.source).not.toContain('node:fs');
+    expect(componentBundle.source).not.toContain('node:buffer');
+    expect(namespaceBundle.source).not.toContain('node:buffer');
     expect(namespaceBundle.source).toContain('Kovo storage refused an unbounded byte stream.');
     expect(namespaceBundle.source).toContain('createS3CompatibleStorage');
     expect(componentBundle.source.length * 2).toBeLessThan(namespaceBundle.source.length);
@@ -193,6 +195,8 @@ describe('core package selective side effects (SPEC §6.6)', () => {
       );
       expect(componentBundle.source).not.toContain('createS3CompatibleStorage');
       expect(componentBundle.source).not.toContain('node:fs');
+      expect(componentBundle.source).not.toContain('node:buffer');
+      expect(namespaceBundle.source).not.toContain('node:buffer');
       expect(namespaceBundle.source).toContain('Kovo storage refused an unbounded byte stream.');
       expect(namespaceBundle.source).toContain('createS3CompatibleStorage');
       expect(componentBundle.source.length * 2).toBeLessThan(namespaceBundle.source.length);

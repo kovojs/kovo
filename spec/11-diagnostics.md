@@ -126,3 +126,33 @@ emit a bounded own-data diagnostic wire record; the receiving realm MUST validat
 reconstruct it through its own generated diagnostic constructor before collection or rendering.
 Copying a diagnostic object, sharing a public symbol brand, or accepting a wire record without the
 originating registry check cannot transfer framework diagnostic authority.
+
+### 11.5 Finite MCP stdio transport
+
+Kovo's CLI and devtool MCP surfaces use newline-delimited JSON over stdio only. The closed method
+set is `initialize`, `ping`, `tools/list`, and `tools/call`; the only lifecycle notification with
+state is `notifications/initialized`. The server has three ordered phases: it first accepts one
+valid `initialize` request, then waits for `notifications/initialized`, then serves `ping` and tool
+requests. Duplicate initialization, or a request before the ready phase, fails closed. Other
+notification-shaped messages receive no response and cannot change lifecycle state.
+
+Every request MUST be a JSON-RPC 2.0 own-data object with the exact request envelope and a string or
+safe-integer id whose echo fits the bounded error envelope. Each method has a closed top-level
+parameter grammar: initialize requires
+`protocolVersion`, `capabilities`, and name/version `clientInfo`; ping permits only optional `_meta`;
+list permits only optional string `cursor` and `_meta`; call requires `name` and permits only object
+`arguments` and `_meta`. `_meta`, capabilities, and arguments remain inert JSON data. Surplus fields,
+accessor-bearing direct inputs, invalid ids, and malformed params are rejected. Supported protocol
+versions are `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`, and `2024-10-07`; an unknown
+requested version negotiates to `2025-11-25` so the client can decide whether to continue.
+
+Each input or output line is at most 4 MiB of UTF-8 bytes. The parser preserves code points split
+across chunks, rejects malformed UTF-8 and malformed JSON, processes a final nonempty EOF segment as
+one line, discards an oversized line through its next delimiter, and then resumes. Dispatch and
+output are sequential and backpressure-aware. Protocol failures use JSON-RPC errors; a tool-domain
+failure is a successful JSON-RPC result with `isError: true`. Static tool descriptors that cannot
+fit the output ceiling are rejected at construction. An oversized tool result emits one bounded
+protocol error and leaves the connection usable. The surface provides no HTTP, SSE, OAuth,
+resources, prompts, sampling, tasks, logging channel, server-to-client request, or extensible method
+router. MCP diagnostics remain the registry-owned diagnostics above, not a second diagnostic
+channel.
