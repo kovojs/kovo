@@ -154,7 +154,7 @@ export function createDocumentLifecycleRecovery(
     options,
     'wireKey',
   );
-  // SPEC §6.6/§9.1.1: the active render-plan token is page-load authority. Snapshot it once so
+  // SPEC §6.6/§9.1.1: the active app-build token is page-load authority. Snapshot it once so
   // authored DOM changes cannot weaken later visibility/pageshow recovery checks.
   const pageBuild = currentBuild();
   const fqs: string[] = [];

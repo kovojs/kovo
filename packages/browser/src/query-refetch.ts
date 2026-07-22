@@ -88,7 +88,7 @@ export function deriveRefetchOnFocusOptOut(
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchOptions {
   /**
-   * The current document's render-plan version token (`<meta name="kovo-build">`). When set, a
+   * The current document's app-build token (`<meta name="kovo-build">`). When set, a
    * `/_q/` refetch whose `Kovo-Build` response header differs is a deploy-skew event: the chunks
    * are NOT applied to the stale-build store and `onBuildSkew` is invoked instead (SPEC §5.2.1
    * rule 2d, §14 recovery — "if the refetch still differs … perform a full navigation reload").

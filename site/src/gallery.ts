@@ -16,7 +16,9 @@ import {
   galleryRuntimeModuleSpecifier,
   rebaseGalleryClientModuleManifest,
   resolveGalleryClientModuleSpecifiers,
+  rewriteGalleryClientModuleHrefs,
   type GalleryClientModuleManifest,
+  type GalleryClientModuleHrefRewrite,
 } from '../../examples/gallery/src/client-module-manifest.js';
 import { galleryComponentCatalog } from '../../examples/gallery/src/component-catalog.js';
 import { galleryHandlerCompilerProjectFiles } from '../../examples/gallery/src/compiler-project.js';
@@ -73,10 +75,14 @@ interface InteractiveDemo {
 }
 
 interface GalleryData {
-  clientHrefs: readonly string[];
+  clientModuleBindings: readonly GalleryInteractiveClientModuleBinding[];
   galleryRoutes: readonly GalleryRoute[];
   interactiveDemos: readonly InteractiveDemo[];
   supportClientHrefs: readonly string[];
+}
+
+interface GalleryInteractiveClientModuleBinding extends GalleryClientModuleHrefRewrite {
+  readonly demoName: string;
 }
 
 // Component route paths are already authored as `/components/<name>` in
@@ -113,7 +119,7 @@ async function loadGalleryData(): Promise<GalleryData> {
     const interactive = await vite.ssrLoadModule('/src/interactive-docs.tsx');
     const appShell = await vite.ssrLoadModule('/src/app-shell.ts');
     return {
-      clientHrefs: appShell.galleryInteractiveClientModuleHrefs,
+      clientModuleBindings: appShell.galleryInteractiveClientModuleBindings,
       galleryRoutes: gallery.galleryRoutes,
       interactiveDemos: interactive.interactiveGalleryDemos,
       supportClientHrefs: appShell.galleryInteractiveSupportClientModuleHrefs,
@@ -162,8 +168,8 @@ async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
 }
 
 /** @internal Build the temporary gallery server artifact with the same finite handler-project
- * provenance as the registered client module. SPEC §5.2.1 and §9.5 require the rendered handler
- * href and the immutable module served during export replay to name one production version. */
+ * provenance as the registered client module. SPEC §5.2.1 and §9.5 require its rendered handler
+ * href to be rebased if later gallery-owned import resolution changes the final representation. */
 export function compileGalleryInteractiveServerModule(fileName: string, source: string): string {
   const result = compileComponentModule({
     extraFiles: galleryHandlerCompilerProjectFiles(),
@@ -334,31 +340,44 @@ function registerPrimitiveActionsGeneratedClientModule(
   });
 }
 
-/** Register the compiled interactive-gallery client modules with the same path +
- * version the folded component pages reference. SPEC §4.4 makes load-bearing import maps a
- * non-goal, so resolve manifest-declared dependencies to registered /c/ URLs. Mirrors
- * examples/gallery/src/app-shell.ts registerGalleryInteractiveClientModule. */
+/** Register the compiled interactive-gallery client modules from their final browser bytes.
+ * SPEC §4.4 makes load-bearing import maps a non-goal, so resolve manifest-declared dependencies
+ * to registered /c/ URLs, then preserve the compiler-to-final href rewrite for rendered markup. */
 function registerGalleryInteractiveClientModules(
   clientModules: GalleryDeps['clientModules'],
   support: SupportRegistration,
   demos: readonly InteractiveDemo[],
-  expectedHrefs: readonly string[],
-): void {
+  expectedBindings: readonly GalleryInteractiveClientModuleBinding[],
+): readonly GalleryInteractiveClientModuleBinding[] {
+  const bindings: GalleryInteractiveClientModuleBinding[] = [];
   for (const [index, demo] of demos.entries()) {
     const compiled = galleryInteractiveClientModule(demo.name);
-    const expected = clientModulePathFromHref(expectedHrefs[index]);
-    const pathName = expected ?? compiled.pathName;
+    const expected = expectedBindings[index];
+    if (expected === undefined || expected.demoName !== demo.name) {
+      throw new Error(`site app shell: missing gallery client binding for ${demo.name}.`);
+    }
+    const expectedPath = clientModulePathFromHref(expected.href);
+    const pathName = expectedPath ?? compiled.pathName;
     const rawClientSource = compiled.source;
     const source = resolveGalleryClientModuleSpecifiers(
       rawClientSource,
       compiled.manifest,
       (moduleSpecifier) => resolveGalleryClientModuleSpecifier(moduleSpecifier, support),
     );
-    clientModules.put({
+    const href = clientModules.put({
       path: pathName,
       source,
     });
+    if (href !== expected.href) {
+      throw new Error(
+        `site app shell: gallery client representation drifted for ${demo.name}: expected ${expected.href}, received ${href}.`,
+      );
+    }
+    bindings.push(
+      Object.freeze({ compiledHref: expected.compiledHref, demoName: demo.name, href }),
+    );
   }
+  return Object.freeze(bindings);
 }
 
 function clientModulePathFromHref(href: string | undefined): string | null {
@@ -541,7 +560,7 @@ function rewriteGalleryDemoHrefs(html: string, galleryRoute: GalleryRoute): stri
 export async function buildGalleryRoutePages({
   clientModules,
 }: GalleryDeps): Promise<GalleryRoutePageData[]> {
-  const { clientHrefs, galleryRoutes, interactiveDemos, supportClientHrefs } =
+  const { clientModuleBindings, galleryRoutes, interactiveDemos, supportClientHrefs } =
     await loadGalleryData();
 
   // Register the interactive demos' client modules into the same registry
@@ -549,7 +568,12 @@ export async function buildGalleryRoutePages({
   // (else KV229). Support modules (runtime shim + primitives) first, then the
   // per-demo compiled handlers.
   const support = registerGalleryInteractiveSupportClientModules(clientModules);
-  registerGalleryInteractiveClientModules(clientModules, support, interactiveDemos, clientHrefs);
+  const registeredBindings = registerGalleryInteractiveClientModules(
+    clientModules,
+    support,
+    interactiveDemos,
+    clientModuleBindings,
+  );
 
   // Map gallery component → its compiled interactive demo. Demo names are the
   // component plus a `-demo` suffix; client-module hrefs are index-aligned with
@@ -558,7 +582,8 @@ export async function buildGalleryRoutePages({
     interactiveDemos.map((demo, index) => [
       demo.name.replace(/-demo$/, ''),
       {
-        modulepreloads: [...supportClientHrefs, clientHrefs[index]!],
+        binding: registeredBindings[index]!,
+        modulepreloads: [...supportClientHrefs, registeredBindings[index]!.href],
         name: demo.name,
         render: demo.render,
       },
@@ -626,7 +651,11 @@ export async function buildGalleryRoutePages({
   for (const galleryRoute of galleryRoutes) {
     const interactive = interactiveByComponent.get(galleryRoute.component);
     const staticHtml = renderedValueToHtml(await galleryRoute.render());
-    const interactiveHtml = interactive ? renderedValueToHtml(await interactive.render()) : '';
+    const interactiveHtml = interactive
+      ? rewriteGalleryClientModuleHrefs(renderedValueToHtml(await interactive.render()), [
+          interactive.binding,
+        ])
+      : '';
     // Wrap with the demo's id (as the standalone interactive page did) so any
     // in-demo self-anchor (e.g. hover-card → #hover-card-demo) still resolves.
     const demoSource = interactive

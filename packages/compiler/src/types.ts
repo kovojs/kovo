@@ -70,8 +70,8 @@ export interface InternalCompileComponentOptions extends Omit<
 
 /**
  * @internal Build-facing KV416 inputs for SPEC §5.2.2. A production caller supplies the previous
- * projected query-shape token input; the compiler computes the current input from this compile's
- * query-shape facts and fails the compile if a shape change does not move the render-plan token.
+ * projected query-shape fingerprint input; the compiler computes the current input from this
+ * compile's query-shape facts and fails if a shape change does not move the render-plan fingerprint.
  */
 export interface ProductionRenderPlanGateOptions {
   previous: Record<string, string>;

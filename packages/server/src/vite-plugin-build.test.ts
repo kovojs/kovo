@@ -4,8 +4,9 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { createApp } from './app.js';
-import { computeRenderPlanFingerprint } from './client-modules.js';
+import { computeRenderPlanFingerprint, versionedClientModuleHref } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { writeKovoAppShellVitePluginBuild } from './vite-plugin-build.js';
@@ -22,6 +23,11 @@ describe('server app shell Vite plugin build boundary', () => {
     const exportDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-helper-export-'));
     const built: KovoAppShellBuild[] = [];
     const outputs: KovoAppShellViteBuildOutput[] = [];
+    const cartClientSource = 'export const cartClient = true;';
+    const cartClientHref = versionedClientModuleHref(
+      '/c/cart.client.js',
+      clientModuleRepresentationDigest(cartClientSource),
+    );
 
     try {
       await mkdir(join(outDir, 'assets'), { recursive: true });
@@ -36,7 +42,7 @@ describe('server app shell Vite plugin build boundary', () => {
                 return renderedHtml(
                   [
                     '<main class="cart">Cart',
-                    '<button on:click="/c/__v/cart-v1/cart.client.js#Cart$add">Add</button>',
+                    `<button on:click="${cartClientHref}#Cart$add">Add</button>`,
                     '</main>',
                   ].join(''),
                 );
@@ -49,8 +55,7 @@ describe('server app shell Vite plugin build boundary', () => {
             {
               path: '/c/cart.client.js',
               renderPlanFingerprint: testRenderPlanFingerprint,
-              source: 'export const cartClient = true;',
-              version: 'cart-v1',
+              source: cartClientSource,
             },
           ],
           onBuild(build, output) {
@@ -90,8 +95,8 @@ describe('server app shell Vite plugin build boundary', () => {
       ]);
       expect(result.output.clientModuleOutputPlan).toEqual([
         {
-          path: '/c/__v/cart-v1/cart.client.js',
-          targetPath: join(outDir, 'c/__v/cart-v1/cart.client.js'),
+          path: cartClientHref,
+          targetPath: join(outDir, cartClientHref.slice(1)),
         },
       ]);
       expect(result.output.staticExportAssets).toEqual([
@@ -116,9 +121,10 @@ describe('server app shell Vite plugin build boundary', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
+            'x-content-type-options': 'nosniff',
           },
-          href: '/c/__v/cart-v1/cart.client.js#Cart$add',
-          path: '/c/__v/cart-v1/cart.client.js',
+          href: `${cartClientHref}#Cart$add`,
+          path: cartClientHref,
           status: 200,
         },
         {
@@ -127,6 +133,7 @@ describe('server app shell Vite plugin build boundary', () => {
             'cache-control': 'public, max-age=31536000, immutable',
             'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
+            'x-content-type-options': 'nosniff',
           },
           href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
           path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
@@ -135,14 +142,14 @@ describe('server app shell Vite plugin build boundary', () => {
       ]);
       expect(built).toEqual([result.build]);
       expect(outputs).toEqual([result.output]);
-      await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cartClient = true;',
+      await expect(readFile(join(outDir, cartClientHref.slice(1)), 'utf8')).resolves.toBe(
+        cartClientSource,
       );
       await expect(readFile(join(exportDir, 'cart/index.html'), 'utf8')).resolves.toMatch(
         /<link rel="stylesheet" href="\/assets\/cart\.css" integrity="sha384-[^"]+">/,
       );
-      await expect(readFile(join(exportDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cartClient = true;',
+      await expect(readFile(join(exportDir, cartClientHref.slice(1)), 'utf8')).resolves.toBe(
+        cartClientSource,
       );
       await expect(readFile(join(exportDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
         'export const cartAsset = true;',

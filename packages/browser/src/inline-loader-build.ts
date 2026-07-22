@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured byte-length control is invoked through pinned Reflect.apply. */
 import { Buffer as NativeBuffer } from 'node:buffer';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { lstat, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -2815,10 +2815,6 @@ export function buildInlineKovoLoaderModuleSource(
   const installerSource = buildInlineKovoLoaderInstallerSource(source);
   const stubInstallerSource = buildInlineKovoLoaderStubInstallerSource();
   const runtimeModuleSource = buildKovoDeferredRuntimeModuleSource(installerSource);
-  const runtimeModuleVersion = createHash('sha256')
-    .update(runtimeModuleSource)
-    .digest('hex')
-    .slice(0, 12);
   assertInlineKovoLoaderBootstrapGzipBudget(
     stubInstallerSource,
     'Generated inline Kovo loader bootstrap',
@@ -2827,7 +2823,6 @@ export function buildInlineKovoLoaderModuleSource(
   const moduleSource = `${buildInlineKovoLoaderModuleLines({
     installerSource,
     runtimeModuleSource,
-    runtimeModuleVersion,
     stubInstallerSource,
   }).join('\n')}\n`;
   assertInlineKovoLoaderModuleArtifactParity(moduleSource, 'Generated inline Kovo loader module');
@@ -2838,14 +2833,12 @@ export function buildInlineKovoLoaderModuleSource(
 interface InlineKovoLoaderModuleLineParts {
   installerSource: string;
   runtimeModuleSource: string;
-  runtimeModuleVersion: string;
   stubInstallerSource: string;
 }
 
 function buildInlineKovoLoaderModuleLines({
   installerSource,
   runtimeModuleSource,
-  runtimeModuleVersion,
   stubInstallerSource,
 }: InlineKovoLoaderModuleLineParts): string[] {
   const moduleHeaderLines = [
@@ -2867,8 +2860,6 @@ function buildInlineKovoLoaderModuleLines({
     )};`,
     '/** @internal Deferred runtime module path emitted by server document rendering. */',
     "export const kovoDeferredRuntimeModulePath = '/c/kovo-runtime.client.js';",
-    '/** @internal Content version for the deferred runtime module emitted by server document rendering. */',
-    `export const kovoDeferredRuntimeModuleVersion = '${runtimeModuleVersion}';`,
     '/** @internal Deferred runtime module source emitted by server document rendering. */',
     `export const kovoDeferredRuntimeModuleSource = ${inlineJavaScriptTemplateLiteral(
       runtimeModuleSource,

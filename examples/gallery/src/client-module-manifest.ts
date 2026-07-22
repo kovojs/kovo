@@ -9,6 +9,16 @@ export interface GalleryClientModuleStub {
   readonly moduleSpecifier: string;
 }
 
+/**
+ * A compiler-emitted module href and the immutable href of the exact final browser bytes after
+ * gallery-owned import resolution. Rendered handler references must be rebased through this pair
+ * whenever the resolver changes the emitted representation (SPEC §5.2.1).
+ */
+export interface GalleryClientModuleHrefRewrite {
+  readonly compiledHref: string;
+  readonly href: string;
+}
+
 export const galleryRuntimeModuleSpecifier = '@kovojs/browser/generated';
 export const galleryPrimitiveActionsGeneratedModuleSpecifier = './primitive-actions.generated.js';
 export const galleryHeadlessGeneratedModuleSpecifier = '@kovojs/headless-ui/generated';
@@ -112,6 +122,18 @@ export function resolveGalleryClientModuleSpecifiers(
   }
 
   return applySourceReplacements(source, replacements);
+}
+
+export function rewriteGalleryClientModuleHrefs(
+  source: string,
+  rewrites: readonly GalleryClientModuleHrefRewrite[],
+): string {
+  let rewritten = source;
+  for (const { compiledHref, href } of rewrites) {
+    if (compiledHref === href) continue;
+    rewritten = rewritten.replaceAll(compiledHref, href);
+  }
+  return rewritten;
 }
 
 export function galleryPrimitiveActionsImportManifest(): GalleryClientModuleManifest {

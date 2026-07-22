@@ -554,7 +554,6 @@ describe('server app shell Vite dev seam', () => {
     const moduleHref = clientModules.put({
       path: '/c/dev.client.js',
       source: 'export const loaded = true;',
-      version: 'r7',
     });
     const app = createApp({
       clientModules,
@@ -1014,7 +1013,6 @@ describe('server app shell Vite dev seam', () => {
     clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const cart = true;',
-      version: 'cart-v1',
     });
     let observedRequest: Request | undefined;
     const app = createApp({
@@ -1074,7 +1072,7 @@ describe('server app shell Vite dev seam', () => {
       expect(response.headers.get('content-type')).toContain('text/html');
       expect(response.headers.get('kovo-hmr-refresh')).toBe('route');
       expect(response.headers.get('kovo-previous-build')).toBe('old-build');
-      expect(response.headers.get('kovo-build')).toBe(clientModules.buildToken());
+      expect(response.headers.get('kovo-build')).toBe(app.clientModules.buildToken());
       expect(response.headers.get('cache-control')).toBe('private, no-store');
       expect(response.headers.get('vary')).toContain('Cookie');
       expect(body).toContain('<meta name="kovo-build" content="');
@@ -1170,7 +1168,6 @@ describe('server app shell Vite dev seam', () => {
     clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const cart = true;',
-      version: 'cart-v1',
     });
     const observedSourceRequests: Request[] = [];
     const cartRenderer: LiveTargetRenderer<Request> = {
@@ -1265,7 +1262,7 @@ describe('server app shell Vite dev seam', () => {
       );
       expect(response.headers.get('kovo-hmr-refresh')).toBe('live-targets');
       expect(response.headers.get('kovo-previous-build')).toBe('old-build');
-      expect(response.headers.get('kovo-build')).toBe(clientModules.buildToken());
+      expect(response.headers.get('kovo-build')).toBe(app.clientModules.buildToken());
       expect(response.headers.get('cache-control')).toBe('private, no-store');
       expect(response.headers.get('vary')).toContain('Cookie');
       expect(body).toBe(

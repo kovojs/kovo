@@ -718,7 +718,7 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV201",
           "fileName": "handler-captures-bad.tsx",
-          "help": "Would lower to: on:click="/c/__v/<version>/handler-captures-bad.client.js#HandlerCapturesBad$button_click"
+          "help": "Would lower to: on:click="/c/__v/<representation-digest>/handler-captures-bad.client.js#HandlerCapturesBad$button_click"
       Blocked expression: () => window.alert("x")
       Element params: -
       Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
@@ -1497,7 +1497,7 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV201",
           "fileName": "handler-captures-bad.tsx",
-          "help": "Would lower to: on:click="/c/__v/<version>/handler-captures-bad.client.js#HandlerCapturesBad$button_click"
+          "help": "Would lower to: on:click="/c/__v/<representation-digest>/handler-captures-bad.client.js#HandlerCapturesBad$button_click"
       Blocked expression: () => window.alert("x")
       Element params: -
       Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
@@ -1595,5 +1595,5 @@ function snapshotDiagnostic(diagnostic: CompilerDiagnostic): DiagnosticSnapshotF
 }
 
 function normalizeDiagnosticText(text: string): string {
-  return text.replaceAll(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\//g, '/c/__v/<version>/');
+  return text.replaceAll(/\/c\/__v\/[0-9a-f]{64}\//g, '/c/__v/<representation-digest>/');
 }

@@ -22,7 +22,9 @@ import {
   galleryRuntimeModuleSpecifier,
   rebaseGalleryClientModuleManifest,
   resolveGalleryClientModuleSpecifiers,
+  rewriteGalleryClientModuleHrefs,
   type GalleryClientModuleManifest,
+  type GalleryClientModuleHrefRewrite,
 } from './client-module-manifest.js';
 import { galleryHandlerCompilerProjectFiles } from './compiler-project.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
@@ -53,8 +55,11 @@ export const galleryInteractiveSupportClientModuleHrefs = Object.freeze([
   ...galleryHeadlessUiClientModuleHrefs,
 ]);
 
-export const galleryInteractiveClientModuleHrefs = Object.freeze(
+export const galleryInteractiveClientModuleBindings = Object.freeze(
   interactiveGalleryDemos.map((demo) => registerGalleryInteractiveClientModule(demo.name)),
+);
+export const galleryInteractiveClientModuleHrefs = Object.freeze(
+  galleryInteractiveClientModuleBindings.map(({ href }) => href),
 );
 
 export const galleryInteractiveRoute = route('/gallery/interactive', {
@@ -70,8 +75,11 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
     ...galleryInteractiveSupportClientModuleHrefs,
     ...galleryInteractiveClientModuleHrefs,
   ],
-  page() {
-    return renderInteractiveGalleryRoute();
+  async page() {
+    return rewriteGalleryClientModuleHrefs(
+      await renderInteractiveGalleryRoute(),
+      galleryInteractiveClientModuleBindings,
+    );
   },
   // SPEC §13.1: the document head delivers the stylesheet. The gallery is
   // exported into the docs dist alongside exportSiteStaticApp, which copies the
@@ -103,9 +111,19 @@ export const galleryInteractiveAppShell = createGalleryInteractiveApplication();
 
 export default galleryInteractiveAppShell.app;
 
-function registerGalleryInteractiveClientModule(demoName: string): string {
-  const { manifest, modulePath, source: rawClientSource } =
-    galleryInteractiveClientModule(demoName);
+export interface GalleryInteractiveClientModuleBinding extends GalleryClientModuleHrefRewrite {
+  readonly demoName: string;
+}
+
+function registerGalleryInteractiveClientModule(
+  demoName: string,
+): GalleryInteractiveClientModuleBinding {
+  const {
+    compiledHref,
+    manifest,
+    modulePath,
+    source: rawClientSource,
+  } = galleryInteractiveClientModule(demoName);
   const generatedClientSource = resolveGalleryClientModuleSpecifiers(
     rawClientSource,
     manifest,
@@ -115,10 +133,11 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
     path: modulePath,
     source: generatedClientSource,
   });
-  return href;
+  return Object.freeze({ compiledHref, demoName, href });
 }
 
 function galleryInteractiveClientModule(demoName: string): {
+  compiledHref: string;
   modulePath: string;
   source: string;
   manifest: GalleryClientModuleManifest;
@@ -136,10 +155,11 @@ function galleryInteractiveClientModule(demoName: string): {
       new URL(`./generated/interactive/${demoName}.tsx`, import.meta.url),
       'utf8',
     );
-    const modulePath = parseGalleryCompiledClientPath(demoName, generatedServerSource);
+    const compiledIdentity = parseGalleryCompiledClientIdentity(demoName, generatedServerSource);
     return {
+      compiledHref: compiledIdentity.compiledHref,
       manifest: rebaseMovedGalleryInteractiveClientManifest(compiled.manifest),
-      modulePath,
+      modulePath: compiledIdentity.modulePath,
       source: readFileSync(generatedClientUrl, 'utf8'),
     };
   }
@@ -160,6 +180,7 @@ function compileGalleryInteractiveClientModule(
   demoName: string,
   fileName: string,
 ): {
+  compiledHref: string;
   manifest: GalleryClientModuleManifest;
   modulePath: string;
   source: string;
@@ -186,10 +207,11 @@ function compileGalleryInteractiveClientModule(
     throw new Error(`Gallery interactive demo ${demoName} produced no server module.`);
   }
 
-  const modulePath = parseGalleryCompiledClientPath(demoName, serverSource);
+  const compiledIdentity = parseGalleryCompiledClientIdentity(demoName, serverSource);
   return {
+    compiledHref: compiledIdentity.compiledHref,
     manifest: result.clientModuleImportManifest,
-    modulePath,
+    modulePath: compiledIdentity.modulePath,
     source: clientSource,
   };
 }
@@ -313,16 +335,22 @@ function headlessUiClientModuleHref(sourcePathWithoutExtension: string): string 
   return href;
 }
 
-function parseGalleryCompiledClientPath(demoName: string, source: string): string {
+function parseGalleryCompiledClientIdentity(
+  demoName: string,
+  source: string,
+): { compiledHref: string; modulePath: string } {
   const pattern = new RegExp(
-    String.raw`/c/__v/([^/"#?]+)/([^"'#?]*${escapeRegExp(demoName)}\.client\.js)#`,
+    String.raw`(/c/__v/[0-9a-f]{64}/([^"'#?]*${escapeRegExp(demoName)}\.client\.js))#`,
   );
   const match = pattern.exec(source);
   if (match === null) {
     throw new Error(`Gallery interactive demo ${demoName} produced no client handler ref.`);
   }
 
-  return `/c/${match[2] ?? ''}`;
+  return {
+    compiledHref: match[1] ?? '',
+    modulePath: `/c/${match[2] ?? ''}`,
+  };
 }
 
 function escapeRegExp(value: string): string {

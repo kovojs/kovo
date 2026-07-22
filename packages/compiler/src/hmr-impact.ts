@@ -68,9 +68,9 @@ export function createComponentHmrImpactMetadata(input: HmrImpactMetadataInput):
   const stylesheetAssetsHash = factHash(stylesheetAssets);
   const renderOutputHash = factHash(
     input.renderEquivalenceChecks.map((check) => ({
-      actual: normalizeCompilerClientVersions(check.actual),
+      actual: normalizeCompilerClientRepresentationHrefs(check.actual),
       artifact: check.artifact,
-      expected: normalizeCompilerClientVersions(check.expected),
+      expected: normalizeCompilerClientRepresentationHrefs(check.expected),
       ok: check.ok,
     })),
   );
@@ -166,8 +166,6 @@ function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic[
   return diagnosticDefinitions[diagnostic.code]?.severity ?? diagnostic.severity;
 }
 
-function normalizeCompilerClientVersions(value: string): string {
-  return value
-    .replace(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/([^"'#?\s]+\.client\.js)/g, '/c/$1')
-    .replace(/\/c\/([^"'#?\s]+\.client\.js)\?v=[0-9a-f]{8}/g, '/c/$1');
+function normalizeCompilerClientRepresentationHrefs(value: string): string {
+  return value.replace(/\/c\/__v\/[0-9a-f]{64}\/([^"'#?\s]+\.client\.js)/g, '/c/$1');
 }

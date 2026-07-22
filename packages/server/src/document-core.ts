@@ -83,7 +83,7 @@ export interface DeferredDocumentFrame {
 /** @internal */
 export interface DocumentAssemblyOptions {
   /**
-   * Build-global render-plan version token (SPEC §5.1, §9.1.1). When present and
+   * App-build token (SPEC §5.2.1, §9.1.1). When present and
    * non-empty, stamped as `<meta name="kovo-build" content="<token>">` in the
    * document `<head>` so the client can detect deploy skew.
    */

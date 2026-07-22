@@ -42,19 +42,19 @@ function appModuleSource(options: {
       ? []
       : [
           'const modules = new Map();',
-          'const versionedHref = (module) => `/c/__v/${encodeURIComponent(module.version)}/${module.path.slice("/c/".length)}`;',
+          'const versionedHref = (module) => `/c/__v/0000000000000000000000000000000000000000000000000000000000000000/${module.path.slice("/c/".length)}`;',
         ]),
     `${exportPrefix}${closed ? 'createApp({' : '{'}`,
     ...(closed
       ? []
       : [
           '  clientModules: {',
-          "    buildToken() { return 'test'; },",
+          "    buildToken() { return '0000000000000000000000000000000000000000000000000000000000000000'; },",
           '    entries() { return [...modules.values()]; },',
-          '    put(module) { const href = versionedHref(module); modules.set(new URL(href, "https://kovo.local").pathname, module); return href; },',
+          '    put(module) { const stored = { path: module.path, source: module.source }; const href = versionedHref(stored); modules.set(new URL(href, "https://kovo.local").pathname, stored); return href; },',
           '    resolve(href) {',
           '      const module = modules.get(new URL(href ?? "", "https://kovo.local").pathname);',
-          "      return module ? { body: module.source, headers: { 'Content-Type': module.contentType ?? 'text/javascript; charset=utf-8' }, status: 200 } : { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 };",
+          "      return module ? { body: module.source, headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'X-Content-Type-Options': 'nosniff' }, status: 200 } : { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 };",
           '    },',
           '  },',
         ]),

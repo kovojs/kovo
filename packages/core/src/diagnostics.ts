@@ -987,9 +987,9 @@ export const diagnosticDefinitions = {
   KV416: {
     code: 'KV416',
     help: [
-      'Would lower to: a production delta payload whose render-plan token matches the full dev render contract and whose delta applies back to the same HTML.',
-      'Blocked reason: production delta output or render-plan token monotonicity failed, so a stale tab could patch DOM produced by a different render contract.',
-      'Fixes: include every query shape and the update-plan grammar version in the render-plan token, fix the delta encoder, or disable the production build until the corpus gate passes.',
+      'Would lower to: a production delta payload whose app-build token covers the full dev render contract and whose delta applies back to the same HTML.',
+      'Blocked reason: production delta output or render-plan fingerprint monotonicity failed, so a stale tab could patch DOM produced by a different render contract.',
+      'Fixes: include every query shape and the update-plan grammar version in the render-plan fingerprint, fix the delta encoder, or disable the production build until the corpus gate passes.',
       'SPEC §5.2.2 makes this a build-failing production render-equivalence gate.',
     ].join('\n'),
     severity: 'error',

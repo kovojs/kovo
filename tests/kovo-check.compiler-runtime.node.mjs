@@ -1405,7 +1405,7 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
   assert.deepEqual(contract.handlerSummary, {
     handlerName: 'ProductCard$button_click',
     modulePath: '/c/routes/products/product-card.client.js',
-    versionShape: 'render-plan-hex-16-plus-hash-hex-64',
+    versionShape: 'representation-digest-hex-64',
   });
   assert.deepEqual(contract.middleware, {
     cartEvents: ['p1'],
@@ -1474,7 +1474,7 @@ export const DiagnosticCard = component({
     assert.deepEqual(diagnosticFact.loweredHandler, {
       handlerName: 'DiagnosticCard$button_click',
       modulePath: '/c/routes/diagnostic-card.client.js',
-      versionShape: 'render-plan-hex-16-plus-hash-hex-64',
+      versionShape: 'representation-digest-hex-64',
     });
     assert.deepEqual(
       diagnosticFact.help.map(({ label }) => label),
@@ -1542,7 +1542,7 @@ export const DiagnosticCard = component({
   assert.deepEqual(lintTransform.handlerSummary, {
     handlerName: 'DiagnosticCard$button_click',
     modulePath: '/c/routes/diagnostic-card.client.js',
-    versionShape: 'render-plan-hex-16-plus-hash-hex-64',
+    versionShape: 'representation-digest-hex-64',
   });
   assert.deepEqual(
     lintDiagnostics.map((diagnostic) => ({

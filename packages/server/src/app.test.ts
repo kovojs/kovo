@@ -3,6 +3,7 @@ import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
@@ -3481,9 +3482,13 @@ describe('server createApp request shell', () => {
     const href = app.clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const ok = true;',
-      version: 'v1',
     });
-    expect(href).toBe(versionedClientModuleHref('/c/cart.client.js', 'v1'));
+    expect(href).toBe(
+      versionedClientModuleHref(
+        '/c/cart.client.js',
+        clientModuleRepresentationDigest('export const ok = true;'),
+      ),
+    );
 
     const handler = createRequestHandler(app);
 

@@ -8,7 +8,7 @@ const buildTokenSecurity =
   typeof document === 'undefined' ? undefined : createBrowserNavigationSecurityControls();
 
 /**
- * Read the render-plan version token from the page's `<meta name="kovo-build">`.
+ * Read the app-build token from the page's `<meta name="kovo-build">`.
  * Returns undefined in non-DOM environments (tests, SSR) or when the tag is absent
  * (SPEC §9.1.1).
  */

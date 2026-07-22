@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { galleryInteractiveClientModuleHrefs } from '../../examples/gallery/src/app-shell.js';
+import { galleryInteractiveClientModuleBindings } from '../../examples/gallery/src/app-shell.js';
+import { rewriteGalleryClientModuleHrefs } from '../../examples/gallery/src/client-module-manifest.js';
 
 import {
   compileGalleryInteractiveClientModule,
@@ -10,7 +11,7 @@ import {
 } from './gallery.js';
 
 describe('site gallery client module parity', () => {
-  it('renders combobox refs for the exact production module registered by the app shell', () => {
+  it('rebases combobox refs to the exact final representation registered by the app shell', () => {
     const demoName = 'combobox-demo';
     const source = readFileSync(
       new URL(`../../examples/gallery/src/interactive/${demoName}.tsx`, import.meta.url),
@@ -20,14 +21,24 @@ describe('site gallery client module parity', () => {
       `src/interactive/${demoName}.tsx`,
       source,
     );
-    const registeredHref = galleryInteractiveClientModuleHrefs.find((href) =>
-      href.includes(`/src/interactive/${demoName}.client.js`),
+    const binding = galleryInteractiveClientModuleBindings.find(
+      ({ demoName: candidate }) => candidate === demoName,
     );
+    expect(binding).toBeDefined();
+    if (binding === undefined) throw new Error(`Missing ${demoName} client binding.`);
+    const rebasedServerSource = rewriteGalleryClientModuleHrefs(serverSource, [binding]);
 
-    expect(registeredHref).toBeDefined();
-    expect(serverSource).toContain(`${registeredHref}#GalleryComboboxDemo$ComboboxInput_click`);
-    expect(serverSource).toContain(`${registeredHref}#GalleryComboboxDemo$ComboboxInput_input`);
-    expect(serverSource).toContain(`${registeredHref}#GalleryComboboxDemo$ComboboxInput_keydown`);
+    expect(binding.compiledHref).not.toBe(binding.href);
+    expect(rebasedServerSource).not.toContain(binding.compiledHref);
+    expect(rebasedServerSource).toContain(
+      `${binding.href}#GalleryComboboxDemo$ComboboxInput_click`,
+    );
+    expect(rebasedServerSource).toContain(
+      `${binding.href}#GalleryComboboxDemo$ComboboxInput_input`,
+    );
+    expect(rebasedServerSource).toContain(
+      `${binding.href}#GalleryComboboxDemo$ComboboxInput_keydown`,
+    );
   });
 
   it('keeps the handler export referenced by a reviewed UI component boundary', () => {

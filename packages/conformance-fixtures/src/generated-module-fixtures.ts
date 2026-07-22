@@ -532,9 +532,7 @@ interface InlineEnhancedFormFetchOptions {
   method: string;
 }
 
-export type GeneratedHandlerReferenceVersionShape =
-  | 'render-plan-hex-16-plus-hash-hex-64'
-  | 'invalid';
+export type GeneratedHandlerReferenceVersionShape = 'representation-digest-hex-64' | 'invalid';
 
 export interface GeneratedHandlerReferenceFact {
   handlerName: string;
@@ -601,21 +599,17 @@ export function generatedHandlerReferenceFact(
 ): GeneratedHandlerReferenceFact {
   const url = new URL(href, baseUrl);
   const pathVersion = /^\/c\/__v\/([^/]+)\/(.+)$/.exec(url.pathname);
-  const version = pathVersion?.[1] ?? url.searchParams.get('v') ?? '';
+  const version = pathVersion?.[1] ?? '';
   const modulePath = pathVersion ? `/c/${pathVersion[2] ?? ''}` : url.pathname;
   return {
     handlerName: url.hash.startsWith('#') ? url.hash.slice(1) : '',
     modulePath,
-    requestPath: pathVersion
-      ? `/c/__v/${version}/${pathVersion[2] ?? ''}?cache=1`
-      : `${url.pathname}?cache=1&v=${version}`,
+    requestPath: pathVersion ? `/c/__v/${version}/${pathVersion[2] ?? ''}` : url.pathname,
     staleVersionRequestPath: pathVersion
-      ? `/c/__v/0000000000000000-${'0'.repeat(64)}/${pathVersion[2] ?? ''}`
-      : `${url.pathname}?v=00000000`,
+      ? `/c/__v/${'0'.repeat(64)}/${pathVersion[2] ?? ''}`
+      : url.pathname,
     version,
-    versionShape: /^[0-9a-f]{16}-[0-9a-f]{64}$/.test(version)
-      ? 'render-plan-hex-16-plus-hash-hex-64'
-      : 'invalid',
+    versionShape: /^[0-9a-f]{64}$/.test(version) ? 'representation-digest-hex-64' : 'invalid',
   };
 }
 

@@ -40,7 +40,6 @@ describe('server app matched dispatch boundary', () => {
     const href = app.clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "ok";',
-      version: 'v1',
     });
     const request = new Request(`https://shop.example.test${href}`);
 

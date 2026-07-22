@@ -1095,7 +1095,8 @@ const REQUEST_HANDLER_FACTORIES = [
         property: 'onError',
         roles: ['input', 'input'],
       },
-      { property: 'clientModules.buildToken', publicWire: true, roles: [] },
+      // SPEC §5.2.1: injected stores own only entries/put/resolve. A caller-supplied
+      // buildToken member is ignored when createApp closes the store behind its registry facade.
       { property: 'clientModules.resolve', publicWire: true, roles: ['input'] },
       { property: 'mutationReplayStore.get', publicWire: true, roles: ['input', 'input', 'input'] },
       { property: 'mutationReplayStore.reserve', roles: ['input', 'input', 'input'] },
@@ -9595,10 +9596,8 @@ function requestMemoryClientModulePutRecordIsClosed(
   const record = unwrapStaticExpression(args[0]!);
   if (!Node.isObjectLiteralExpression(record)) return false;
 
-  let contentType = false;
   let path = false;
   let source = false;
-  let version = false;
   const properties = record.getProperties();
   for (let index = 0; index < properties.length; index += 1) {
     const property = properties[index]!;
@@ -9608,10 +9607,6 @@ function requestMemoryClientModulePutRecordIsClosed(
     if (Node.isComputedPropertyName(nameNode) || !value || !isStringLiteralLike(value))
       return false;
     const name = staticMemberName(nameNode);
-    if (name === 'contentType' && !contentType) {
-      contentType = true;
-      continue;
-    }
     if (name === 'path' && !path) {
       path = true;
       continue;
@@ -9620,13 +9615,9 @@ function requestMemoryClientModulePutRecordIsClosed(
       source = true;
       continue;
     }
-    if (name === 'version' && !version) {
-      version = true;
-      continue;
-    }
     return false;
   }
-  return path && source && version;
+  return path && source;
 }
 
 function requestMemoryClientModuleRegistryIsPristine(

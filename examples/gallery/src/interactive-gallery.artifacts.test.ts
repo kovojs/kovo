@@ -11,6 +11,7 @@ vi.mock('@kovojs/server', async (importOriginal) => ({
 
 import {
   galleryInteractiveClientModuleHrefs,
+  galleryInteractiveClientModuleBindings,
   galleryInteractiveSupportClientModuleHrefs,
   routeValueToHtml,
 } from './app-shell.js';
@@ -133,6 +134,11 @@ describe('compiled interactive gallery demos', () => {
       expect(html).toContain(`href="#${demo}"`);
       expect(html).toContain(`data-gallery-interactive="${componentName}"`);
     }
+
+    for (const binding of galleryInteractiveClientModuleBindings) {
+      expect(binding.compiledHref).toMatch(/^\/c\/__v\/[0-9a-f]{64}\//);
+      expect(binding.href).toMatch(/^\/c\/__v\/[0-9a-f]{64}\//);
+    }
   });
 
   it('resolves nested styled UI descriptors in the interactive route render path', async () => {
@@ -253,9 +259,9 @@ describe('compiled interactive gallery demos', () => {
         `${demo} module paths`,
       ).toEqual(renderedRefs.map(() => expectedModulePath));
       expect(
-        renderedRefs.map((ref) => ref.version),
-        `${demo} version stamps`,
-      ).toEqual(renderedRefs.map(() => expect.stringMatching(/^[0-9a-f][0-9a-f-]*$/)));
+        renderedRefs.map((ref) => ref.digest),
+        `${demo} representation digests`,
+      ).toEqual(renderedRefs.map(() => expect.stringMatching(/^[0-9a-f]{64}$/)));
       expect(renderedRefs.map((ref) => ref.exportName).sort(compareStrings)).toEqual(clientExports);
 
       for (const ref of renderedRefs) {

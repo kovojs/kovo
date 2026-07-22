@@ -341,18 +341,16 @@ describe('closed app declaration semantics', () => {
   it('pins injected client-module registry methods before immutable JavaScript dispatch', async () => {
     const backing = createMemoryVersionedClientModuleRegistry();
     const registry = {
-      buildToken: () => backing.buildToken(),
+      buildToken: () => 'attacker-controlled-token',
       entries: () => backing.entries(),
       put: (module: Parameters<typeof backing.put>[0]) => backing.put(module),
       resolve: (href: string) => backing.resolve(href),
-      setRenderPlanFingerprint: (fingerprint: string) =>
-        backing.setRenderPlanFingerprint?.(fingerprint),
+      setRenderPlanFingerprint: (_fingerprint: string) => undefined,
     };
     const app = createApp({ clientModules: registry });
     const href = app.clientModules.put({
       path: '/c/account.client.js',
       source: 'export const account = "safe";',
-      version: 'safe-v1',
     });
     const handler = createRequestHandler(app);
 

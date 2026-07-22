@@ -54,7 +54,7 @@ export function readMutationChangeHeader(
 export function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
   /**
-   * D3 / SPEC §9.1.1: the sender's render-plan version token, stamped on publish so a
+   * D3 / SPEC §9.1.1: the sender's app-build token, stamped on publish so a
    * receiver on a different build can convert the body's delta chunks to misses.
    */
   buildToken?: string;

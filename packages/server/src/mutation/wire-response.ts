@@ -395,7 +395,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
     appendChunks(responseChunks, fragmentChunks);
 
     // SPEC §5.2.1 rule 2(c): enhanced mutation/full fragment responses are build-scoped
-    // payloads, so a successful response must carry the render-plan token.
+    // payloads, so a successful response must carry the app-build token.
     const buildHeaders: ResponseHeaders = {
       'Kovo-Build': requiredMutationBuildToken(wireRequest),
     };
@@ -483,7 +483,7 @@ function requiredMutationBuildToken<Request>(wireRequest: MutationWireRequest<Re
   }
 
   throw new TypeError(
-    'renderMutationResponse() requires a non-empty buildToken for successful mutation wire responses. SPEC §5.2.1 requires every mutation delta/full response to carry the render-plan token.',
+    'renderMutationResponse() requires a non-empty buildToken for successful mutation wire responses. SPEC §5.2.1 requires every mutation delta/full response to carry the app-build token.',
   );
 }
 

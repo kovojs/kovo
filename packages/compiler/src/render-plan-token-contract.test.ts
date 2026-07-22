@@ -8,11 +8,11 @@ import {
 
 import { computeCompilerRenderPlanFingerprint } from './compile.js';
 
-// CAP6 (plans/compiler-refactoring.md): drift-proof render-plan token contract.
+// CAP6 (plans/compiler-refactoring.md): drift-proof render-plan fingerprint contract.
 //
-// SPEC.md §5.2.1 mandates ONE opaque build-stable render-plan token, and KV416
-// fails the build on token/grammar drift between the producer (compiler) and the
-// consumer (server). FN1 hoisted the grammar version + fingerprint to a single
+// SPEC.md §5.2.1 separates the render-plan fingerprint from the derived app-build token. KV416
+// fails the build on fingerprint/grammar drift between the producer (compiler) and the consumer
+// (server). FN1 hoisted the grammar version + fingerprint to a single
 // `@kovojs/core/internal/render-plan-token` module that BOTH @kovojs/compiler
 // (`computeCompilerRenderPlanFingerprint`) and @kovojs/server (`client-modules.ts`
 // re-export) delegate to. This contract test locks the compiler wrapper to the
@@ -21,7 +21,7 @@ import { computeCompilerRenderPlanFingerprint } from './compile.js';
 // == server transitively; a 3-way corpus test that also imports the server lives in
 // tests/integration where both packages are deps.)
 
-describe('CAP6: render-plan token cross-package contract', () => {
+describe('CAP6: render-plan fingerprint cross-package contract', () => {
   const corpus: RenderPlanFingerprintInput[] = [
     {},
     { cart: 'shape:{count:number}' },
@@ -44,7 +44,7 @@ describe('CAP6: render-plan token cross-package contract', () => {
     expect(a).toBe(b);
   });
 
-  it('moves the token when any projected query shape changes (KV416 monotonicity)', () => {
+  it('moves the fingerprint when any projected query shape changes (KV416 monotonicity)', () => {
     const base = computeCompilerRenderPlanFingerprint({ cart: 'shape:{count:number}' });
     const changed = computeCompilerRenderPlanFingerprint({ cart: 'shape:{count:string}' });
     expect(changed).not.toBe(base);

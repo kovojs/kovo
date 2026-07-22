@@ -282,8 +282,8 @@ describe('compiler SPEC coverage map', () => {
         },
         {
           "accepted": [
-            "moves the token when any projected query shape changes (KV416 monotonicity)",
-            "versions handler URLs from the render-plan fingerprint plus emitted client module source",
+            "moves the fingerprint when any projected query shape changes (KV416 monotonicity)",
+            "keeps handler URLs stable across render-shape changes and moves them with module bytes",
           ],
           "clause": "SPEC.md §5.2.1",
           "diagnostics": [
@@ -315,7 +315,7 @@ describe('compiler SPEC coverage map', () => {
               "codes": [
                 "KV416",
               ],
-              "testName": "includes secret query shape metadata in the production render-plan token gate",
+              "testName": "includes secret query shape metadata in the production render-plan fingerprint gate",
             },
           ],
           "referenceApp": [

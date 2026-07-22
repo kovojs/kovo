@@ -30,9 +30,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { createApp, createRequestHandler } from './app.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
-import { computeRenderPlanFingerprint } from './client-modules.js';
+import { computeRenderPlanFingerprint, versionedClientModuleHref } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import {
@@ -61,6 +62,10 @@ const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
+
+function testClientModuleHref(path: string, source: string): string {
+  return versionedClientModuleHref(path, clientModuleRepresentationDigest(source));
+}
 
 interface NodeAdapterModule {
   nodeRequestToWebRequest(
@@ -603,6 +608,9 @@ export default createRequestHandler(app);
           },
         }),
       );
+      const cartClientSource = 'export const cart = true;';
+      const cartClientHref = testClientModuleHref('/c/cart.client.js', cartClientSource);
+      const cartClientFile = cartClientHref.slice(1);
 
       const outDir = join(root, 'dist', '.kovo');
       const build = await writeKovoNeutralBuild({
@@ -611,7 +619,7 @@ export default createRequestHandler(app);
             route('/cart', {
               page() {
                 return renderedHtml(
-                  '<main>Cart <img src="/logo.svg" alt=""> <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>',
+                  `<main>Cart <img src="/logo.svg" alt=""> <button on:click="${cartClientHref}#Cart$click">Click</button></main>`,
                 );
               },
             }),
@@ -621,8 +629,7 @@ export default createRequestHandler(app);
           {
             path: '/c/cart.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            source: cartClientSource,
           },
         ],
         manifestFile: join(distDir, '.vite/manifest.json'),
@@ -634,9 +641,9 @@ export default createRequestHandler(app);
           'export default async function handler() { return new Response("ok"); }\n',
       });
 
-      await expect(
-        readFile(join(outDir, 'client/c/__v/cart-v1/cart.client.js'), 'utf8'),
-      ).resolves.toBe('export const cart = true;');
+      await expect(readFile(join(outDir, 'client', cartClientFile), 'utf8')).resolves.toBe(
+        cartClientSource,
+      );
       await expect(readFile(join(outDir, 'client/assets/cart.css'), 'utf8')).resolves.toBe(
         '.cart { color: green; }',
       );
@@ -649,9 +656,9 @@ export default createRequestHandler(app);
       await expect(readFile(join(outDir, 'static/cart/index.html'), 'utf8')).resolves.toContain(
         '<img src="/logo.svg"',
       );
-      await expect(
-        readFile(join(outDir, 'static/c/__v/cart-v1/cart.client.js'), 'utf8'),
-      ).resolves.toBe('export const cart = true;');
+      await expect(readFile(join(outDir, 'static', cartClientFile), 'utf8')).resolves.toBe(
+        cartClientSource,
+      );
       await expect(readFile(join(outDir, 'static/logo.svg'), 'utf8')).resolves.toBe(
         '<svg viewBox="0 0 1 1"></svg>',
       );
@@ -665,16 +672,16 @@ export default createRequestHandler(app);
         ],
         clientModules: [
           {
-            file: 'c/__v/cart-v1/cart.client.js',
-            href: '/c/__v/cart-v1/cart.client.js',
-            path: '/c/__v/cart-v1/cart.client.js',
-            version: 'cart-v1',
+            digest: clientModuleRepresentationDigest(cartClientSource),
+            file: cartClientFile,
+            href: cartClientHref,
+            path: cartClientHref,
           },
           {
             file: expect.stringMatching(runtimeClientModuleFile),
             href: expect.stringMatching(runtimeClientModulePath),
             path: expect.stringMatching(runtimeClientModulePath),
-            version: expect.stringMatching(/^[a-f0-9]+$/),
+            digest: expect.stringMatching(/^[a-f0-9]{64}$/),
           },
         ],
         routeHints: [
@@ -709,12 +716,12 @@ export default createRequestHandler(app);
       });
       expect(build).toMatchObject({
         clientModules: [
-          { href: '/c/__v/cart-v1/cart.client.js' },
+          { href: cartClientHref },
           {
             file: expect.stringMatching(runtimeClientModuleFile),
             href: expect.stringMatching(runtimeClientModulePath),
             path: expect.stringMatching(runtimeClientModulePath),
-            version: expect.stringMatching(/^[a-f0-9]+$/),
+            digest: expect.stringMatching(/^[a-f0-9]{64}$/),
           },
         ],
         outDir,
@@ -1433,7 +1440,6 @@ export default createRequestHandler(app);
             path: '/c/app.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const app = true;',
-            version: 'app-v1',
           },
         ],
         outDir: join(root, '.kovo'),
@@ -1526,7 +1532,6 @@ export default createRequestHandler(app);
             path: '/c/app.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const app = true;',
-            version: 'app-v1',
           },
         ],
         outDir: join(root, '.kovo'),
@@ -1571,7 +1576,6 @@ export default createRequestHandler(app);
             path: '/c/app.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const app = true;',
-            version: 'app-v1',
           },
         ],
         outDir: join(root, '.kovo'),
@@ -1960,6 +1964,9 @@ export default createRequestHandler(app);
 
   it('emits app-registered client modules by default in neutral builds', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-default-modules-'));
+    const appClientSource = 'export const appClient = true;';
+    const appClientHref = testClientModuleHref('/c/app.client.js', appClientSource);
+    const appClientFile = appClientHref.slice(1);
     const app = createApp({
       routes: [
         route('/app', {
@@ -1971,8 +1978,7 @@ export default createRequestHandler(app);
     });
     app.clientModules.put({
       path: '/c/app.client.js',
-      source: 'export const appClient = true;',
-      version: 'app-v1',
+      source: appClientSource,
     });
 
     try {
@@ -1984,39 +1990,42 @@ export default createRequestHandler(app);
           'export default async function handler() { return new Response("ok"); }\n',
       });
 
-      await expect(
-        readFile(join(outDir, 'client/c/__v/app-v1/app.client.js'), 'utf8'),
-      ).resolves.toBe('export const appClient = true;');
+      await expect(readFile(join(outDir, 'client', appClientFile), 'utf8')).resolves.toBe(
+        appClientSource,
+      );
       await expect(readJson(join(outDir, 'manifest.json'))).resolves.toMatchObject({
-        clientModules: [
+        clientModules: expect.arrayContaining([
           {
-            file: 'c/__v/app-v1/app.client.js',
-            href: '/c/__v/app-v1/app.client.js',
-            path: '/c/__v/app-v1/app.client.js',
-            version: 'app-v1',
+            digest: clientModuleRepresentationDigest(appClientSource),
+            file: appClientFile,
+            href: appClientHref,
+            path: appClientHref,
           },
           expect.objectContaining({
             file: expect.stringMatching(runtimeClientModuleFile),
             href: expect.stringMatching(runtimeClientModulePath),
             path: expect.stringMatching(runtimeClientModulePath),
           }),
-        ],
+        ]),
       });
-      expect(build.clientModules).toEqual([
-        {
-          file: 'c/__v/app-v1/app.client.js',
-          href: '/c/__v/app-v1/app.client.js',
-          path: '/c/__v/app-v1/app.client.js',
-          source: 'export const appClient = true;',
-          version: 'app-v1',
-        },
-        expect.objectContaining({
-          file: expect.stringMatching(runtimeClientModuleFile),
-          href: expect.stringMatching(runtimeClientModulePath),
-          path: expect.stringMatching(runtimeClientModulePath),
-          source: expect.stringContaining('installKovoDeferredRuntime'),
-        }),
-      ]);
+      expect(build.clientModules).toHaveLength(2);
+      expect(build.clientModules).toEqual(
+        expect.arrayContaining([
+          {
+            digest: clientModuleRepresentationDigest(appClientSource),
+            file: appClientFile,
+            href: appClientHref,
+            path: appClientHref,
+            source: appClientSource,
+          },
+          expect.objectContaining({
+            file: expect.stringMatching(runtimeClientModuleFile),
+            href: expect.stringMatching(runtimeClientModulePath),
+            path: expect.stringMatching(runtimeClientModulePath),
+            source: expect.stringContaining('installKovoDeferredRuntime'),
+          }),
+        ]),
+      );
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -2040,6 +2049,9 @@ export default createRequestHandler(app);
         }),
       );
       await writeFile(join(distDir, 'assets/cart.js'), 'export const viteAsset = true;');
+      const cartClientSource = 'export const cart = true;';
+      const cartClientHref = testClientModuleHref('/c/cart.client.js', cartClientSource);
+      const missingClientHref = cartClientHref.replace(/cart\.client\.js$/u, 'missing.client.js');
 
       const neutralDir = join(root, 'dist', '.kovo');
       const build = await writeKovoNeutralBuild({
@@ -2057,8 +2069,7 @@ export default createRequestHandler(app);
           {
             path: '/c/cart.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            source: cartClientSource,
           },
         ],
         manifestFile: join(distDir, '.vite/manifest.json'),
@@ -2331,8 +2342,8 @@ export default async function handler(request) {
           'csrf=c1; Path=/; SameSite=Strict',
         ]);
 
-        const clientModuleResponse = await fetch(`${baseUrl}/c/__v/cart-v1/cart.client.js`);
-        await expect(clientModuleResponse.text()).resolves.toBe('export const cart = true;');
+        const clientModuleResponse = await fetch(`${baseUrl}${cartClientHref}`);
+        await expect(clientModuleResponse.text()).resolves.toBe(cartClientSource);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
         );
@@ -2359,7 +2370,7 @@ export default async function handler(request) {
         expect(assetResponse.headers.get('set-cookie')).toBeNull();
         expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
 
-        const missingClientModule = await fetch(`${baseUrl}/c/__v/cart-v1/missing.client.js`);
+        const missingClientModule = await fetch(`${baseUrl}${missingClientHref}`);
         expect(missingClientModule.status).toBe(404);
         expect(missingClientModule.headers.get('cache-control')).toBe('no-store');
         expect(missingClientModule.headers.get('cross-origin-resource-policy')).toBe('same-origin');
@@ -3659,6 +3670,9 @@ export default async function handler(request) {
           },
         }),
       );
+      const cartClientSource = 'export const cart = true;';
+      const cartClientHref = testClientModuleHref('/c/cart.client.js', cartClientSource);
+      const cartClientFile = cartClientHref.slice(1);
 
       const neutralDir = join(root, 'dist', '.kovo');
       const build = await writeKovoNeutralBuild({
@@ -3676,8 +3690,7 @@ export default async function handler(request) {
           {
             path: '/c/cart.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            source: cartClientSource,
           },
         ],
         manifestFile: join(distDir, '.vite/manifest.json'),
@@ -3748,9 +3761,9 @@ export default async function handler(request) {
       });
 
       expect(logs).toEqual([`Emitted Kovo vercel preset output to ${vercelOutDir}`]);
-      await expect(
-        readFile(join(vercelOutDir, 'static/c/__v/cart-v1/cart.client.js'), 'utf8'),
-      ).resolves.toBe('export const cart = true;');
+      await expect(readFile(join(vercelOutDir, 'static', cartClientFile), 'utf8')).resolves.toBe(
+        cartClientSource,
+      );
       await expect(readFile(join(vercelOutDir, 'static/assets/cart.css'), 'utf8')).resolves.toBe(
         'main { color: teal; }',
       );
@@ -3882,7 +3895,7 @@ export default async function handler(request) {
           },
           name: 'kovo',
         },
-        staticFiles: ['assets/cart.css', 'c/__v/cart-v1/cart.client.js'],
+        staticFiles: ['assets/cart.css', cartClientFile],
       });
 
       const middlewareResponses = runGeneratedVercelIngressMiddleware(
@@ -3922,7 +3935,7 @@ export default async function handler(request) {
           {
             headers: [['transfer-encoding', 'chunked']],
             method: 'HEAD',
-            url: 'https://deployment.example/c/__v/cart-v1/cart.client.js',
+            url: `https://deployment.example${cartClientHref}`,
           },
           {
             headers: [['content-length', '7']],
@@ -3950,7 +3963,7 @@ export default async function handler(request) {
           {
             headers: [['content-length', '00']],
             method: 'HEAD',
-            url: 'https://deployment.example/c/__v/cart-v1/cart.client.js',
+            url: `https://deployment.example${cartClientHref}`,
           },
           {
             method: 'GET',
@@ -4200,6 +4213,8 @@ export default async function handler(request) {
 
   it('lets presets prefer a proven static-only neutral build', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-static-preset-'));
+    const staticClientSource = 'export const staticClient = true;';
+    const staticClientHref = testClientModuleHref('/c/static.client.js', staticClientSource);
 
     try {
       const build = await writeKovoNeutralBuild({
@@ -4216,8 +4231,7 @@ export default async function handler(request) {
           {
             path: '/c/static.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const staticClient = true;',
-            version: 'static-v1',
+            source: staticClientSource,
           },
         ],
         outDir: join(root, '.kovo'),
@@ -4240,7 +4254,7 @@ export default async function handler(request) {
         'createServer',
       );
       await expect(
-        readFile(join(nodeOutDir, 'client/c/__v/static-v1/static.client.js'), 'utf8'),
+        readFile(join(nodeOutDir, 'client', staticClientHref.slice(1)), 'utf8'),
       ).resolves.toContain('staticClient');
 
       const vercelOutDir = join(root, '.vercel/output');
@@ -4388,7 +4402,7 @@ export default async function handler(request) {
           asset: { body: 'FRAMED_CLIENT_MUST_NOT_RUN' },
           headers: { 'transfer-encoding': 'chunked' },
           method: 'HEAD',
-          url: 'https://worker.test/c/__v/static-v1/static.client.js',
+          url: `https://worker.test${staticClientHref}`,
         },
         {
           asset: { body: 'FRAMED_DOCUMENT_MUST_NOT_RUN' },
@@ -4404,7 +4418,7 @@ export default async function handler(request) {
           asset: { body: 'ZERO_PADDED_CLIENT' },
           headers: { 'content-length': '00' },
           method: 'HEAD',
-          url: 'https://worker.test/c/__v/static-v1/static.client.js',
+          url: `https://worker.test${staticClientHref}`,
         },
         {
           asset: {
@@ -4840,6 +4854,9 @@ export default async function handler(request) {
 
   it('emits a Cloudflare Workers project with assets binding and node compatibility', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-preset-'));
+    const cartClientSource = 'export const cart = true;';
+    const cartClientHref = testClientModuleHref('/c/cart.client.js', cartClientSource);
+    const missingClientHref = cartClientHref.replace(/cart\.client\.js$/u, 'missing.client.js');
 
     try {
       const neutralDir = join(root, 'dist', '.kovo');
@@ -4858,8 +4875,7 @@ export default async function handler(request) {
           {
             path: '/c/cart.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            source: cartClientSource,
           },
         ],
         outDir: neutralDir,
@@ -4903,8 +4919,8 @@ export default async function handler(request) {
 
       expect(logs).toEqual([`Emitted Kovo cloudflare preset output to ${cloudflareOutDir}`]);
       await expect(
-        readFile(join(cloudflareOutDir, 'client/c/__v/cart-v1/cart.client.js'), 'utf8'),
-      ).resolves.toBe('export const cart = true;');
+        readFile(join(cloudflareOutDir, 'client', cartClientHref.slice(1)), 'utf8'),
+      ).resolves.toBe(cartClientSource);
       await expect(
         readFile(join(cloudflareOutDir, 'server/handler.mjs'), 'utf8'),
       ).resolves.toContain('cloudflare:');
@@ -4987,7 +5003,7 @@ export default async function handler(request) {
             body: 'export const asset = true;',
             headers: { 'content-type': 'text/javascript; charset=utf-8' },
           },
-          url: 'https://worker.test/c/__v/cart-v1/cart.client.js',
+          url: `https://worker.test${cartClientHref}`,
         },
         {
           asset: {
@@ -4995,7 +5011,7 @@ export default async function handler(request) {
             headers: { 'content-type': 'text/plain; charset=utf-8' },
             status: 500,
           },
-          url: 'https://worker.test/c/__v/cart-v1/missing.client.js',
+          url: `https://worker.test${missingClientHref}`,
         },
         {
           asset: { body: 'Not Found', status: 404 },
@@ -5027,7 +5043,7 @@ export default async function handler(request) {
           asset: { body: 'FRAMED_CLIENT_MUST_NOT_RUN' },
           headers: { 'transfer-encoding': 'chunked' },
           method: 'HEAD',
-          url: 'https://worker.test/c/__v/cart-v1/cart.client.js',
+          url: `https://worker.test${cartClientHref}`,
         },
         {
           asset: { body: 'FRAMED_DOCUMENT_MUST_NOT_RUN' },
@@ -5043,7 +5059,7 @@ export default async function handler(request) {
           asset: { body: 'ZERO_PADDED_CLIENT' },
           headers: { 'content-length': '00' },
           method: 'HEAD',
-          url: 'https://worker.test/c/__v/cart-v1/cart.client.js',
+          url: `https://worker.test${cartClientHref}`,
         },
         {
           asset: { body: 'ABSENT_DOCUMENT' },
@@ -5581,7 +5597,6 @@ export default async function handler() {
             path: '/c/app.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const app = true;',
-            version: 'app-v1',
           },
         ],
         outDir: join(root, '.kovo'),
@@ -5635,7 +5650,6 @@ export default async function handler() {
             path: '/c/app.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
             source: 'export const app = true;',
-            version: 'app-v1',
           },
         ],
         outDir: join(root, '.kovo'),

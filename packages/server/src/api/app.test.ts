@@ -220,6 +220,9 @@ type InternalMemoryRegistryOptions =
 type InternalVersionedClientModuleRegistryType =
   import('@kovojs/server/internal/client-modules').VersionedClientModuleRegistry;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalVersionedClientModuleStoreType =
+  import('@kovojs/server/internal/client-modules').VersionedClientModuleStore;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalVersionedClientModuleInputType =
   import('@kovojs/server/internal/client-modules').VersionedClientModuleInput;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -290,8 +293,7 @@ if (false) {
   // @ts-expect-error SPEC §6.6/§9.5: undeclared raw environment keys are absent.
   void appWithEnv.env.UNDECLARED_OPERATOR_SECRET;
 }
-// SPEC.md §9.5: the versioned client-module registry constructor and its option
-// surface are public at the root barrel for `createApp({ clientModules })` consumers.
+// SPEC.md §9.5: client-module storage input and the framework-owned registry facade are distinct.
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootCreateMemoryVersionedClientModuleRegistry =
   typeof import('@kovojs/server').createMemoryVersionedClientModuleRegistry;
@@ -300,6 +302,8 @@ type RootMemoryVersionedClientModuleRegistryOptions =
   import('@kovojs/server').MemoryVersionedClientModuleRegistryOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootVersionedClientModuleRegistry = import('@kovojs/server').VersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootVersionedClientModuleStore = import('@kovojs/server').VersionedClientModuleStore;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootVersionedClientModuleInput = import('@kovojs/server').VersionedClientModuleInput;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
@@ -1087,12 +1091,16 @@ describe('server app-shell public API barrels', () => {
     // app-shell subpaths stay focused so Vite, static export, and outside adoption paths do not
     // regain an aggregate compatibility surface by accident.
     expect(moduleValueKeys(packageInternalClientModulesApi)).toEqual([
-      // D1/DEPLOY-3: render-plan token preimage now folds in a grammar version + a query-shape
-      // fingerprint (exported on the internal subpath for the build pipeline to wire).
+      // D1/DEPLOY-3: the render-plan fingerprint folds in grammar + query-shape facts and remains
+      // separate from the app-build token derived by the registry facade.
       'RENDER_PLAN_GRAMMAR_VERSION',
       'computeRenderPlanFingerprint',
       'createMemoryVersionedClientModuleRegistry',
+      'finalizeVersionedClientModuleBuild',
+      'isVersionedClientModuleBuildSealed',
       'renderVersionedClientModuleResponse',
+      'replaceVersionedClientModuleBuildSnapshot',
+      'snapshotVersionedClientModuleRegistry',
       'versionedClientModuleHref',
     ]);
     // A2: the per-submit Kovo-Idem hidden field is minted/rendered through the internal csrf subpath.

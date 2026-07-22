@@ -6087,7 +6087,7 @@ export const report = query('report', {
       const clientModules = {
         buildToken() { execFileSync('registry-build-token'); return 'build'; },
         entries() { return []; },
-        put() { return '/c/example.js?v=1'; },
+        put() { return '/c/__v/0000000000000000000000000000000000000000000000000000000000000000/example.js'; },
         resolve() {
           execFileSync('registry-resolve');
           return { body: 'export {}', headers: {}, status: 200 };
@@ -6181,7 +6181,6 @@ export const report = query('report', {
         "'layout-access'",
         "'layout-query'",
         "'on-error'",
-        "'registry-build-token'",
         "'registry-resolve'",
         "'replay-abort'",
         "'replay-commit'",
@@ -6199,6 +6198,7 @@ export const report = query('report', {
         "'webhook-access'",
       ]),
     );
+    expect(sources).not.toContain("'registry-build-token'");
   });
 
   it('tracks import.meta env through aliases, destructuring, containers, and assignments', () => {
@@ -10847,10 +10847,8 @@ export const report = query('report', {
       } from '@kovojs/server';
       const clientModules = createMemoryVersionedClientModuleRegistry();
       clientModules.put({
-        contentType: 'text/javascript; charset=utf-8',
         path: '/c/cart.client.js',
         source: 'export const cartClient = true;',
-        version: 'cart-v1',
       });
       export default createApp({
         clientModules,
@@ -10867,7 +10865,7 @@ export const report = query('report', {
       'an aliased registry receiver',
       `const clientModules = createMemoryVersionedClientModuleRegistry();
        const alias = clientModules;
-       alias.put({ path: '/c/x.js', source: 'export {};', version: 'v1' });`,
+       alias.put({ path: '/c/x.js', source: 'export {};' });`,
     ],
     [
       'a reassigned registry binding',
@@ -10894,7 +10892,7 @@ export const report = query('report', {
       `const clientModules = createMemoryVersionedClientModuleRegistry();
        const page = route('/', {
          page(request) {
-           clientModules.put({ path: '/c/x.js', source: request.url, version: 'v1' });
+           clientModules.put({ path: '/c/x.js', source: request.url });
            return 'ok';
          },
        });`,
@@ -10902,19 +10900,33 @@ export const report = query('report', {
     [
       'a computed put call',
       `const clientModules = createMemoryVersionedClientModuleRegistry();
-       clientModules['put']({ path: '/c/x.js', source: 'export {};', version: 'v1' });`,
+       clientModules['put']({ path: '/c/x.js', source: 'export {};' });`,
     ],
     [
       'an aliased module record',
       `const clientModules = createMemoryVersionedClientModuleRegistry();
-       const moduleRecord = { path: '/c/x.js', source: 'export {};', version: 'v1' };
+       const moduleRecord = { path: '/c/x.js', source: 'export {};' };
        clientModules.put(moduleRecord);`,
     ],
     [
       'a spread module record',
       `const clientModules = createMemoryVersionedClientModuleRegistry();
-       const moduleRecord = { path: '/c/x.js', source: 'export {};', version: 'v1' };
+       const moduleRecord = { path: '/c/x.js', source: 'export {};' };
        clientModules.put({ ...moduleRecord });`,
+    ],
+    [
+      'an obsolete author version field',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       clientModules.put({ path: '/c/x.js', source: 'export {};', version: 'v1' });`,
+    ],
+    [
+      'an authored content type field',
+      `const clientModules = createMemoryVersionedClientModuleRegistry();
+       clientModules.put({
+         contentType: 'text/javascript; charset=utf-8',
+         path: '/c/x.js',
+         source: 'export {};',
+       });`,
     ],
     [
       'a replaced put method',
@@ -11138,7 +11150,7 @@ export const report = query('report', {
     );
   });
 
-  it('traverses inherited schema, replay, registry, and mutation-replay adapter methods', () => {
+  it('traverses inherited schema, replay, store, and mutation-replay adapter methods', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import { createApp, query, webhook } from '@kovojs/server';
@@ -11173,7 +11185,6 @@ export const report = query('report', {
       .map((fact) => fact.source);
     expect(sources, JSON.stringify(facts)).toEqual(
       expect.arrayContaining([
-        "'registry-build'",
         "'registry-resolve'",
         "'replay-get'",
         "'replay-reserve'",
@@ -11182,6 +11193,7 @@ export const report = query('report', {
         "'schema-parse-async'",
       ]),
     );
+    expect(sources).not.toContain("'registry-build'");
   });
 
   it('closes factory laundering through aggregate selectors and namespace copies', () => {

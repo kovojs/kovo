@@ -1202,7 +1202,7 @@ import {
   type MutationReplayStore,
   type Schema,
   type VersionedClientModuleInput,
-  type VersionedClientModuleRegistry,
+  type VersionedClientModuleStore,
   type WebhookReplayIdentity,
   type WebhookReplayStore,
 } from '@kovojs/server';
@@ -1247,11 +1247,7 @@ class BaseReplay implements WebhookReplayStore, MutationReplayStore {
 }
 class InheritedReplay extends BaseReplay {}
 
-class BaseRegistry implements VersionedClientModuleRegistry {
-  buildToken(): string {
-    execFileSync('registry-build-token');
-    return 'strict-inherited-registry';
-  }
+class BaseRegistry implements VersionedClientModuleStore {
   entries(): readonly VersionedClientModuleInput[] {
     return [];
   }
@@ -1307,7 +1303,7 @@ export default createApp({
     expect(result.stderr).toContain("source='replay-get'");
     expect(result.stderr).toContain("source='replay-reserve'");
     expect(result.stderr).toContain("source='replay-set'");
-    expect(result.stderr).toContain("source='registry-build-token'");
+    expect(result.stderr).not.toContain("source='registry-build-token'");
     expect(result.stderr).toContain("source='registry-resolve'");
   }, 120_000);
 

@@ -99,7 +99,7 @@ Kovo-Fragment: true
 <kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>
 ```
 
-`/_q/<query-key>` responses carry the build's render-plan version token. If a long-open tab has a
+`/_q/<query-key>` responses carry the app-build token. If a long-open tab has a
 different token, the client discards the in-place merge and follows the build-skew recovery path
 instead of merging a foreign query shape.
 
@@ -154,7 +154,7 @@ The attributes matter when you are reading a trace:
 - `key` names the concrete query instance.
 - `version` is the query value version when the response carries one.
 - `settles` names the optimistic tokens this truth chunk commits.
-- `Kovo-Build` on the HTTP response carries the render-plan/build token used for skew checks.
+- `Kovo-Build` on the HTTP response carries the app-build token used for skew checks.
 
 The client treats arriving server truth as authoritative for the committed mutation response. It
 drops the matching optimistic prediction before re-applying any still-pending predictions, so

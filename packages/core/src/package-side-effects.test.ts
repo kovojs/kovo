@@ -55,7 +55,7 @@ globalThis.__kovoTreeShakeAll = core;
 `;
 
 const bootstrapConsumer = `
-import '@kovojs/core/internal/client-module-url';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/filesystem';
 import '@kovojs/core/internal/render-plan-token';
 globalThis.__kovoBootstrapProbe = 'KOVO_BOOTSTRAP_RETAINED';
@@ -81,7 +81,7 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
 const clientSource = 'export const safe = true;';
-const expectedClientVersion = createHash('sha256').update(clientSource).digest('hex');
+const expectedClientDigest = clientModuleRepresentationDigest(clientSource);
 const hashPrototype = Object.getPrototypeOf(createHash('sha256'));
 const originalApply = Reflect.apply;
 const originalByteLength = Buffer.byteLength;
@@ -102,7 +102,7 @@ try {
   const firstRenderPlan = renderPlan.computeRenderPlanFingerprint({ account: 'field:id' });
   const secondRenderPlan = renderPlan.computeRenderPlanFingerprint({ account: 'field:role' });
   const capturesStayedEffective =
-    clientModule.clientModuleContentVersion(clientSource) === expectedClientVersion &&
+    clientModule.clientModuleRepresentationDigest(clientSource) === expectedClientDigest &&
     fileSystem.containsPath('/srv/kovo', '/srv/kovo/public/index.html') &&
     /^[0-9a-f]{16}$/.test(firstRenderPlan) &&
     firstRenderPlan !== secondRenderPlan;

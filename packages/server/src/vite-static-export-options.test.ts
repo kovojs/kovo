@@ -193,7 +193,6 @@ describe('server app shell Vite static export options boundary', () => {
         {
           path: '/c/docs.client.js',
           source: 'export const docs = true;',
-          version: 'docs-v1',
         },
       ];
       const robots = {

@@ -84,8 +84,8 @@ import { componentGraphFact, findFragmentTargetFacts, findLiveTargetFacts } from
 import { cssIrHeader } from './ir.js';
 import { createComponentHmrImpactMetadata } from './hmr-impact.js';
 import {
+  clientModuleRepresentationIdentity,
   clientModuleUrl,
-  clientModuleVersion,
   lowerEventHandlers,
   versionHandlerLowering,
 } from './lower/handlers.js';
@@ -578,7 +578,10 @@ function emitClientPhase(
   // SPEC §5.2.1/§14: immutable module identity covers the exact final browser representation,
   // after the compiler-owned generated-runtime import rewrite. Render-plan identity stays separate.
   const browserClientSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
-  const clientHref = clientModuleUrl(parsed.options.fileName, clientModuleVersion(browserClientSource));
+  const clientHref = clientModuleUrl(
+    parsed.options.fileName,
+    clientModuleRepresentationIdentity(browserClientSource),
+  );
   const versionedHandlers = compilerMapDense(
     validatedHandlers,
     'Versioned client handlers',
@@ -1921,10 +1924,10 @@ export function computeCompilerRenderPlanFingerprint(
 }
 
 /**
- * Input for a KV416 token-monotonicity check: a "before" and "after" snapshot of
- * the projected query-shape signatures, plus an optional token function that takes
+ * Input for a KV416 fingerprint-monotonicity check: a "before" and "after" snapshot of
+ * the projected query-shape signatures, plus an optional fingerprint function that takes
  * a {@link CompilerRenderPlanFingerprintInput} and returns an opaque string.
- * Supply `tokenFn` to use a custom token provider; omit it to use the built-in
+ * Supply `tokenFn` to test a custom fingerprint provider; omit it to use the built-in
  * {@link computeCompilerRenderPlanFingerprint}.
  * @internal
  */
@@ -1935,14 +1938,14 @@ export interface AssertRenderPlanTokenMonotonicityOptions {
 }
 
 /**
- * Assert SPEC §5.2.2 KV416 token monotonicity: if the projected query shapes (or the
- * grammar version) changed between `before` and `after`, the render-plan token MUST
- * also change.  A token that fails to move on a shape change causes a `KV416` build
+ * Assert SPEC §5.2.2 KV416 fingerprint monotonicity: if the projected query shapes (or the
+ * grammar version) changed between `before` and `after`, the render-plan fingerprint MUST
+ * also change. A fingerprint that fails to move on a shape change causes a `KV416` build
  * failure.
  *
  * Callers pass the "before" and "after" shape-signature records; the function uses
  * `computeCompilerRenderPlanFingerprint` (or a custom `tokenFn`) to compute both
- * tokens and compares them.  Call this from the build gate after a differential corpus
+ * fingerprints and compares them. Call this from the build gate after a differential corpus
  * run (SPEC §5.2.2).
  */
 export function assertRenderPlanTokenMonotonicity(
@@ -1958,8 +1961,8 @@ export function assertRenderPlanTokenMonotonicity(
   if (shapesChanged && beforeToken === afterToken) {
     throw new CompilerDiagnosticError(
       kv416Diagnostic(
-        'render-plan token failed to move on a projected-query-shape change',
-        `Token before and after: "${beforeToken}".`,
+        'render-plan fingerprint failed to move on a projected-query-shape change',
+        `Fingerprint before and after: "${beforeToken}".`,
       ),
     );
   }
@@ -1967,8 +1970,8 @@ export function assertRenderPlanTokenMonotonicity(
 
 /**
  * Build-facing SPEC §5.2.2 production gate. Production callers pass the compile result plus the
- * previous/current render-plan token inputs; this assertion combines the existing semantic
- * render-equivalence checks with KV416 token monotonicity so the build fails before output is
+ * previous/current render-plan fingerprint inputs; this assertion combines the existing semantic
+ * render-equivalence checks with KV416 fingerprint monotonicity so the build fails before output is
  * published.
  */
 export function assertProductionRenderPlanGate(options: {
@@ -2045,7 +2048,7 @@ function productionRenderPlanGateDiagnostics(
     if (error instanceof CompilerDiagnosticError) return [error.diagnostic];
     return [
       kv416Diagnostic(
-        'production render-plan token gate failed',
+        'production render-plan fingerprint gate failed',
         error instanceof Error ? error.message : String(error),
         options.fileName,
       ),

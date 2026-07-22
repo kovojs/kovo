@@ -317,16 +317,17 @@ export const compilerSpecCoverageMap = [
   {
     clause: 'SPEC.md §5.2.1',
     promise:
-      'render-plan version tokens are one opaque build-stable contract shared across compiler and runtime URL/version consumers',
+      'separate full render-plan fingerprints and app-build tokens cover grammar and active immutable module hrefs without becoming module identity',
     accepted: [
       {
         file: 'packages/compiler/src/render-plan-token-contract.test.ts',
-        testName: 'moves the token when any projected query shape changes (KV416 monotonicity)',
+        testName:
+          'moves the fingerprint when any projected query shape changes (KV416 monotonicity)',
       },
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',
         testName:
-          'versions handler URLs from the render-plan fingerprint plus emitted client module source',
+          'keeps handler URLs stable across render-shape changes and moves them with module bytes',
       },
     ],
     diagnostics: [
@@ -367,7 +368,8 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'packages/compiler/src/compile-component.test.ts',
-        testName: 'includes secret query shape metadata in the production render-plan token gate',
+        testName:
+          'includes secret query shape metadata in the production render-plan fingerprint gate',
         codes: ['KV416'],
       },
     ],

@@ -254,8 +254,8 @@ export interface CreateAppOptions<
    */
   appId?: string;
   /**
-   * Versioned client-module registry to inject (SPEC §9.5). Apps that emit
-   * interactive client modules pass their own registry here (e.g. via
+   * Client-module representation store to inject (SPEC §5.2.1/§9.5). Apps that emit
+   * interactive client modules pass their store here (e.g. via
    * `createMemoryVersionedClientModuleRegistry`); when omitted, `createApp`
    * provisions a fresh in-memory registry.
    */

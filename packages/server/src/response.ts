@@ -627,8 +627,8 @@ export function shouldEmitDocumentHsts(secureRequest: boolean): boolean {
 }
 
 // SF-WIRE (SPEC §6.6, Cross-Origin-Resource-Policy): immutable client-module asset
-// responses are served by `client-modules.ts` (`createVersionedClientModuleRegistry`'s
-// `resolve(...)`, the `/c/__v/<version>/<module>` 200 with
+// responses are served by the framework-closed facade in `client-modules.ts`
+// (`resolve(...)`, the `/c/__v/<representation-digest>/<module>` 200 with
 // `Cache-Control: public, max-age=31536000, immutable`), which is NOT owned by this
 // slice. Add `'Cross-Origin-Resource-Policy': 'same-origin'` to that response's
 // `headers` object so a cross-origin page cannot pull the app's immutable JS as a

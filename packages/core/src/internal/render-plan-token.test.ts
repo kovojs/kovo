@@ -7,7 +7,7 @@ import { computeRenderPlanFingerprint, encodeRenderPlanFrame } from './render-pl
 
 const renderPlanIntrinsicsUrl = new URL('./render-plan-token-intrinsics.ts', import.meta.url).href;
 
-describe('render-plan token security controls', () => {
+describe('render-plan fingerprint security controls', () => {
   it('keeps exact framing and fingerprints after late collection, string, Buffer, and hash poisoning', () => {
     const expectedFrame = encodeRenderPlanFrame('名', '🙂');
     const expected = computeRenderPlanFingerprint({ a: 'field:id', z: 'field:role' });

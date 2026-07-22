@@ -12,7 +12,6 @@ export {
   installInlineKovoLoader,
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
-  kovoDeferredRuntimeModuleVersion,
   kovoLoaderSource,
 } from '../inline-loader.js';
 export {

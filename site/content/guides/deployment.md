@@ -45,7 +45,11 @@ Here's why it matters. Kovo documents are long-lived. A tab opened before your T
 has HTML pointing at Tuesday-minus-one's handler modules:
 
 ```html
-<button on:click="/c/__v/8f3a1c/cart.client.js#Cart$removeItem">×</button>
+<button
+  on:click="/c/__v/8f3a1c40a176a92571fb2dc2ea4c4e431376c36da7e55cfb8a9cc2975e30cfe7/cart.client.js#Cart$removeItem"
+>
+  ×
+</button>
 ```
 
 The loader imports that URL on first interaction, which may be hours after the deploy that replaced
@@ -56,8 +60,8 @@ So the rule for your serving layer:
 
 - **Publish `/c/*` artifacts additively.** New deploys add new versioned URLs; they never rewrite or
   delete the ones still referenced by documents in the wild.
-- **Serve them immutable.** The version lives in the URL (cache-busting query strings or ETag-driven,
-  a server-controlled choice), so `Cache-Control: public, max-age=31536000, immutable` is correct.
+- **Serve them immutable.** A full SHA-256 digest of the exact JavaScript response lives in the URL,
+  so `Cache-Control: public, max-age=31536000, immutable` is correct. There is no `?v=` fallback.
 - **Keep the required skew window.** Retain prior immutable modules and prior-token `/_q/` reads for
   the supported deploy-skew window, with a required minimum of 24 hours. Configuring less, or using a
   platform that cannot retain both artifact classes for that window, is a deploy-skew error.
@@ -87,7 +91,7 @@ A CDN or object store in front of `/c/*` makes this nearly free: deploys upload 
 touch nothing else.
 
 The framework handles the merge decision. Every page render, mutation truth chunk, delta, and typed
-read response carries the render-plan version token. If a stale document receives a mismatched
+read response carries one app-build token. If a stale document receives a mismatched
 payload, the loader discards it, refetches the full query over `/_q/<key>`, and reloads the current
 route if the refetch still belongs to a different token. A long-lived document that POSTs yesterday's
 form shape is answered by schema validation and the 422 path, never undefined behavior.
@@ -99,7 +103,7 @@ It helps to see the two artifact classes a deploy touches and their opposite cac
 | Artifact              | URL stability          | Cache policy                             | On deploy                                    |
 | --------------------- | ---------------------- | ---------------------------------------- | -------------------------------------------- |
 | HTML documents        | stable paths (`/cart`) | revalidate (`no-store` on PRG responses) | replaced — next navigation gets the new page |
-| `/c/*` client modules | versioned, immutable   | `immutable`, long max-age                | added — old versions retained                |
+| `/c/*` client modules | content-addressed      | `immutable`, long max-age                | added — old representations retained         |
 | `/_q/*` typed reads   | stable typed endpoint  | private/no-store when session-dependent  | serves current and in-window prior tokens    |
 
 Documents update by navigation; modules update by being referenced from newer documents. A tab that
@@ -272,7 +276,7 @@ Access logs can group by endpoint without parsing a framework envelope:
 
 - `POST /_m/<mutation-key>` — mutation submissions, including no-JS form posts.
 - `GET /_q/<query-key>` — typed reads, refetch-on-focus, and stale-tab recovery.
-- `/c/__v/<version>/<module>` — immutable client modules.
+- `/c/__v/<representation-digest>/<module>` — immutable client modules.
 - Declared `endpoint()` and `webhook()` paths — raw machine ingress.
 
 Use `createApp({ onError })` for runtime exceptions from the request shell. It receives the thrown

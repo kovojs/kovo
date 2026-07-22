@@ -1,7 +1,6 @@
 import type { JsonValue } from '@kovojs/core';
 
 import { createApp } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import type { CsrfOptions } from './csrf.js';
 import { domain } from './domain.js';
 import {
@@ -22,11 +21,7 @@ export function createLiveTargetTestAuthority<Request>(
   buildToken: string,
   csrf?: CsrfOptions<Request>,
 ) {
-  const backing = createMemoryVersionedClientModuleRegistry();
-  const app = createApp({
-    clientModules: { ...backing, buildToken: () => buildToken },
-    ...(csrf === undefined ? {} : { csrf }),
-  });
+  const app = createApp(csrf === undefined ? {} : { csrf });
   return {
     app,
     audience: appLiveTargetAttestationAudience(app, buildToken),

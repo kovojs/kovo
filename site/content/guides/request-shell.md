@@ -85,7 +85,9 @@ Start the app and hit one route from each dispatch tier:
 
 ```sh
 curl -i http://localhost:3000/_q/cart
-curl -i http://localhost:3000/c/__v/dev/cart-badge.client.js
+# Copy this digest from the module URL in View Source.
+DIGEST=8f3a1c40a176a92571fb2dc2ea4c4e431376c36da7e55cfb8a9cc2975e30cfe7
+curl -i "http://localhost:3000/c/__v/$DIGEST/cart-badge.client.js"
 curl -i http://localhost:3000/cart
 ```
 
@@ -98,7 +100,7 @@ Dispatch is fixed and printable:
 
 1. `/_m/<mutation-key>` mutation POSTs.
 2. `/_q/<query-key>` typed reads.
-3. `/c/__v/<version>/<module>` immutable client modules.
+3. `/c/__v/<representation-digest>/<module>` immutable client modules.
 4. Declared `endpoint()` exact and prefix mounts.
 5. The route table.
 6. The 404 shell.

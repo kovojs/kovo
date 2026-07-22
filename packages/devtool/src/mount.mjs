@@ -50,7 +50,6 @@ export function createDevtoolApp({ bundles, base = process.env.KOVO_DEVTOOL_BASE
   const pzHref = clientModules.put({
     path: '/c/devtool-pz.client.js',
     source: readFileSync(join(HERE, 'client', 'devtool-pz.client.js'), 'utf8'),
-    version: 'pz-r1',
   });
 
   const byApp = new Map(bundles.map((b) => [b.app, b]));

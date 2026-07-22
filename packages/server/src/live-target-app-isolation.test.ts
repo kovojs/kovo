@@ -240,15 +240,16 @@ describe('live-target app authority isolation', () => {
     expect(String(response.body)).not.toContain('OWNER_A');
   });
 
-  it('rejects an empty custom build token before any app lifecycle can run', () => {
+  it('ignores custom store build tokens and derives a non-empty framework token', () => {
     const backing = createMemoryVersionedClientModuleRegistry();
-    expect(() =>
-      createApp({
-        clientModules: {
-          ...backing,
-          buildToken: () => '',
-        },
-      }),
-    ).toThrow(/buildToken\(\).*non-empty/u);
+    const customStore = {
+      ...backing,
+      buildToken: () => '',
+    };
+    const app = createApp({
+      clientModules: customStore,
+    });
+
+    expect(app.clientModules.buildToken()).toMatch(/^[0-9a-f]{64}$/u);
   });
 });

@@ -620,7 +620,6 @@ describe('server app shell Vite plugin', () => {
     const clientHref = registry.put({
       path: '/c/product.client.js',
       source: 'export const product = true;',
-      version: 'product-v1',
     });
     const productRoute = route('/products/:id', {
       modulepreloads: [clientHref],
@@ -669,7 +668,7 @@ describe('server app shell Vite plugin', () => {
       await expect(nodeFetch(`${origin}/products/p1`)).resolves.toMatchObject({
         body: expect.stringContaining('<main>p1</main>'),
         headers: expect.objectContaining({
-          link: `</c/__v/product-v1/product.client.js>; rel=modulepreload`,
+          link: `<${clientHref}>; rel=modulepreload`,
         }),
         status: 200,
       });

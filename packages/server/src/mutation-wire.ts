@@ -124,7 +124,7 @@ export interface MutationWireRequest<
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
   /**
-   * Build-global render-plan version token for this server build (SPEC §5.1,
+   * App-build token for this server build (SPEC §5.2.1,
    * §9.1.1). When set, the server emits it as the `Kovo-Build` response header
    * on 200 mutation responses so the client can detect deploy skew and fall back
    * to full rather than applying a delta against a stale base.
@@ -132,7 +132,7 @@ export interface MutationWireRequest<
   buildToken?: string;
   /** Opaque app-owned authority required by live-target render/stamp sinks. */
   liveTargetAttestationAuthority?: LiveTargetAttestationAuthority;
-  /** App-bound live-target signing audience; distinct from the public render-plan token. */
+  /** App-bound live-target signing audience; distinct from the public app-build token. */
   liveTargetAudience?: string;
   /** Canonical document URL context that minted the live-target descriptor. */
   liveTargetSourceUrl?: string;
@@ -266,7 +266,7 @@ export interface MutationWireRequestOptions<
   Request,
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
-  /** Build-global render-plan version token (SPEC §5.1, §9.1.1). */
+  /** App-build token (SPEC §5.2.1, §9.1.1). */
   buildToken?: string;
   /** Opaque app-owned authority required by live-target render/stamp sinks. */
   liveTargetAttestationAuthority?: LiveTargetAttestationAuthority;

@@ -12,7 +12,7 @@ const kv210 = diagnosticDefinitions.KV210;
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`/c/__v/[0-9a-f]{16}-[0-9a-f]{64}/${relativePath}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{64}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 
@@ -177,7 +177,7 @@ export const CartBadge = component({
     ]);
     const kv201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
     expect(kv201?.help).toMatch(
-      /Would lower to: on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/cart-badge\.client\.js#CartBadge\$button_click"/,
+      /Would lower to: on:click="\/c\/__v\/[0-9a-f]{64}\/cart-badge\.client\.js#CartBadge\$button_click"/,
     );
     expect(kv201?.help).toContain('Blocked expression: () => window.alert("x")');
     expect(kv201?.help).toContain(
@@ -589,7 +589,7 @@ export const CartBadge = component({
     ]);
   });
 
-  it('versions handler URLs from the render-plan fingerprint plus emitted client module source', () => {
+  it('keeps handler URLs stable across render-shape changes and moves them with module bytes', () => {
     const source = `
 import { component } from '@kovojs/core';
 
@@ -618,18 +618,16 @@ export const CartBadge = component({
       source: source.replace('add(item.id)', 'remove(item.id)'),
     });
 
-    const versionPattern = /\/c\/__v\/([0-9a-f]{16})-([0-9a-f]{64})\//;
-    const firstVersion = first.files[0]?.source.match(versionPattern);
-    const secondVersion = second.files[0]?.source.match(versionPattern);
-    const shapeChangedVersion = shapeChanged.files[0]?.source.match(versionPattern);
-    const changedVersion = changed.files[0]?.source.match(versionPattern);
+    const digestPattern = /\/c\/__v\/([0-9a-f]{64})\//;
+    const firstDigest = first.files[0]?.source.match(digestPattern);
+    const secondDigest = second.files[0]?.source.match(digestPattern);
+    const shapeChangedDigest = shapeChanged.files[0]?.source.match(digestPattern);
+    const changedDigest = changed.files[0]?.source.match(digestPattern);
 
-    expect(firstVersion).toBeDefined();
-    expect(secondVersion?.[0]).toBe(firstVersion?.[0]);
-    expect(shapeChangedVersion?.[1]).not.toBe(firstVersion?.[1]);
-    expect(shapeChangedVersion?.[2]).toBe(firstVersion?.[2]);
-    expect(changedVersion?.[1]).toBe(firstVersion?.[1]);
-    expect(changedVersion?.[2]).not.toBe(firstVersion?.[2]);
+    expect(firstDigest).toBeDefined();
+    expect(secondDigest?.[1]).toBe(firstDigest?.[1]);
+    expect(shapeChangedDigest?.[1]).toBe(firstDigest?.[1]);
+    expect(changedDigest?.[1]).not.toBe(firstDigest?.[1]);
   });
 
   it('emits executable handler bodies with stable unique anonymous names', () => {
@@ -755,7 +753,7 @@ export const CartActions = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
     );
     expect(serverSource).not.toContain('onClick=');
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
@@ -794,7 +792,7 @@ export const CartActions = component({
     const clientSource = result.files[1]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/toggle\.client\.js#toggleTriggerClick"/,
     );
     expect(serverSource).toContain('data-state="off"');
     expect(serverSource).toContain('role="button"');
@@ -835,7 +833,7 @@ export const CartActions = component({
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('role="button"');
@@ -876,7 +874,7 @@ export const CartActions = component({
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
+      /on:click="\/c\/__v\/[0-9a-f]{64}\/components\/cart\/cart-actions\.client\.js#CartActions\$button_click \/c\/primitives\/tooltip\.client\.js#tooltipTriggerClick"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('role="button"');

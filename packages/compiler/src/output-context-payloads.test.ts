@@ -683,7 +683,7 @@ function executeClientModule(source: string): Record<string, unknown> {
 }
 
 function normalizeArtifact(source: string): string {
-  return source.replaceAll(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\//g, '/c/__v/HASH/').trim();
+  return source.replaceAll(/\/c\/__v\/[0-9a-f]{64}\//g, '/c/__v/HASH/').trim();
 }
 
 class FakeElement {

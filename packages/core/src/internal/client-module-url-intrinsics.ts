@@ -13,7 +13,7 @@ import {
  * Package-private URL controls for the immutable client-module registry.
  *
  * Application modules share the framework realm and can replace URL/string/math methods. The
- * client-module path and version are registry authority, so every normalization step consumes
+ * client-module path and representation digest are registry authority, so every normalization step consumes
  * these bootstrap-captured controls after supported Kovo runners initialize framework modules and
  * before they evaluate app/plugins (SPEC §5.2.1/§6.6/§9.5). Pre-run host loaders are part of the
  * host TCB; finite vectors or Function#toString likeness cannot attest them from JavaScript.
@@ -92,8 +92,8 @@ function bootstrapSelfCheckPasses(): boolean {
       local.search === '' &&
       local.hash === '#handler' &&
       foreign.origin === 'https://attacker.invalid' &&
-      securityApply(nativeStringIndexOf, 'version/path', ['/']) === 7 &&
-      securityApply(nativeStringIndexOf, 'version', ['/']) === -1 &&
+      securityApply(nativeStringIndexOf, 'digest/path', ['/']) === 6 &&
+      securityApply(nativeStringIndexOf, 'digest', ['/']) === -1 &&
       securityApply(nativeMathImul, NativeMath, [0x01020304, 0x01000193]) === -1708474548
     );
   } catch {

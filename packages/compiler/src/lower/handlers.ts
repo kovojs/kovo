@@ -346,7 +346,7 @@ export function clientModuleUrl(fileName: string, version?: string): string {
   return clientModuleHrefForSourceFile(normalizeComponentFileName(fileName), version);
 }
 
-export function clientModuleVersion(source: string): string {
+export function clientModuleRepresentationIdentity(source: string): string {
   return clientModuleRepresentationDigest(source);
 }
 

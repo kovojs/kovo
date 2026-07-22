@@ -111,7 +111,7 @@ The split is editorial, not semantic. It reduces the root to the material reader
 | Old section(s)    | Normative module                                         | Owns                                                                                                                                                                                  |
 | ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | §4, §13.1, §13.2  | [spec/04-component-model.md](spec/04-component-model.md) | Component authoring, rendered output, handlers, loader obligations, composition, primitive merging, update plans, dynamic rendering bounds, StyleX/theme tokens, `kovo-key` identity. |
-| §5                | [spec/05-compiler.md](spec/05-compiler.md)               | Compiler pipeline, hard rules, render-plan version token, prod render-equivalence, and `kovo explain`.                                                                                |
+| §5                | [spec/05-compiler.md](spec/05-compiler.md)               | Compiler pipeline, hard rules, representation/render/app-build identities, prod render-equivalence, and `kovo explain`.                                                               |
 | §6                | [spec/06-type-system.md](spec/06-type-system.md)         | Generated registries, package component prefixes, typed surfaces, mutation typing, routes/links, sessions, and soundness boundaries.                                                  |
 | §7, §8            | [spec/07-navigation.md](spec/07-navigation.md)           | Interaction ladder, MPA spine, enhanced navigation, bfcache posture, speculation rules, view transitions, and streaming/defer behavior.                                               |
 | §9                | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     | Mutation round trips, prod deltas, error envelopes, live/liveness, typed reads, request shell, HMR, durable tasks, and scheduling.                                                    |
@@ -119,7 +119,7 @@ The split is editorial, not semantic. It reduces the root to the material reader
 | §11, except §11.3 | [spec/11-verification.md](spec/11-verification.md)       | Touch-set extraction, runtime verification, and the browser-free verification surface.                                                                                                |
 | §11.3             | [spec/11-diagnostics.md](spec/11-diagnostics.md)         | Normative KV### diagnostic registry and generated-reference comparison target.                                                                                                        |
 | §12               | [spec/12-testing.md](spec/12-testing.md)                 | Framework testing API and proof-surface test model.                                                                                                                                   |
-| §14               | [spec/14-deploy-skew.md](spec/14-deploy-skew.md)         | Deploy skew recovery, render-plan token mismatch handling, and prior-version retention floor.                                                                                         |
+| §14               | [spec/14-deploy-skew.md](spec/14-deploy-skew.md)         | Deploy skew recovery, app-build-token mismatch handling, and prior-version retention floor.                                                                                           |
 
 SPEC §6.6's finite-transfer claim is accompanied by the
 [reviewed analyzable-fragment hand argument](spec/06-analyzable-fragment-hand-argument.md),
@@ -132,55 +132,55 @@ Existing comments, diagnostics, tests, and docs may still cite `SPEC §N.M`. Tho
 
 Detailed moved-subsection map:
 
-| Citation                                         | Detailed owner                                           |
-| ------------------------------------------------ | -------------------------------------------------------- |
-| §4.1 Anatomy of a component                      | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.2 Rendered output                             | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.3 Handlers and closures                       | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.4 The loader                                  | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.5 Composition: children, slots, layouts       | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.6 Primitive composition and attribute merging | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.7 Execution triggers                          | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.8 The update plan: bindings, derives, stamps  | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.9 Update coverage                             | [spec/04-component-model.md](spec/04-component-model.md) |
-| §4.10 Registry-bounded dynamic rendering         | [spec/04-component-model.md](spec/04-component-model.md) |
-| §5.1 Pipeline                                    | [spec/05-compiler.md](spec/05-compiler.md)               |
-| §5.2 Hard rules                                  | [spec/05-compiler.md](spec/05-compiler.md)               |
-| §5.2.1 Render-plan version token                 | [spec/05-compiler.md](spec/05-compiler.md)               |
-| §5.2.2 Prod render-equivalence gate              | [spec/05-compiler.md](spec/05-compiler.md)               |
-| §5.2.3 Build artifact provenance                 | [spec/05-compiler.md](spec/05-compiler.md)               |
-| §5.3 `kovo explain`                              | [spec/05-compiler.md](spec/05-compiler.md)               |
-| §6.1 The registries                              | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §6.1.1 Package component prefixes                | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §6.2 Typed surfaces                              | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §6.3 Mutation typing contract                    | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §6.4 Routes and links                            | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §6.5 Session schema                              | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §6.6 Soundness boundary                          | [spec/06-type-system.md](spec/06-type-system.md)         |
-| §7 Interaction ladder                            | [spec/07-navigation.md](spec/07-navigation.md)           |
-| §8 MPA spine and navigation                      | [spec/07-navigation.md](spec/07-navigation.md)           |
-| §9.1 Enhanced mutation round-trip                | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.1.1 Prod delta encoding                       | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.2 Errors                                      | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.3 Liveness and live                           | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.4 Typed reads: the query endpoint             | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.5 Request shell                               | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.5.1 Dev HMR                                   | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §9.6 Durable tasks and scheduling                | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
-| §10.1 Schema as domain registry                  | [spec/10-data-plane.md](spec/10-data-plane.md)           |
-| §10.2 Queries                                    | [spec/10-data-plane.md](spec/10-data-plane.md)           |
-| §10.3 Mutations and writes                       | [spec/10-data-plane.md](spec/10-data-plane.md)           |
-| §10.4 Optimistic updates                         | [spec/10-data-plane.md](spec/10-data-plane.md)           |
-| §10.5 Derivation algebra                         | [spec/10-data-plane.md](spec/10-data-plane.md)           |
-| §10.6 Exhaustiveness                             | [spec/10-data-plane.md](spec/10-data-plane.md)           |
-| §11.1 Touch-set extraction                       | [spec/11-verification.md](spec/11-verification.md)       |
-| §11.2 Runtime verification                       | [spec/11-verification.md](spec/11-verification.md)       |
-| §11.3 Diagnostic codes                           | [spec/11-diagnostics.md](spec/11-diagnostics.md)         |
-| §11.4 Verification surface                       | [spec/11-verification.md](spec/11-verification.md)       |
-| §12 Testing API                                  | [spec/12-testing.md](spec/12-testing.md)                 |
-| §13.1 StyleX and theme tokens                    | [spec/04-component-model.md](spec/04-component-model.md) |
-| §13.2 `kovo-key` runtime identity                | [spec/04-component-model.md](spec/04-component-model.md) |
-| §14 Deploy skew and version recovery             | [spec/14-deploy-skew.md](spec/14-deploy-skew.md)         |
+| Citation                                                            | Detailed owner                                           |
+| ------------------------------------------------------------------- | -------------------------------------------------------- |
+| §4.1 Anatomy of a component                                         | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.2 Rendered output                                                | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.3 Handlers and closures                                          | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.4 The loader                                                     | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.5 Composition: children, slots, layouts                          | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.6 Primitive composition and attribute merging                    | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.7 Execution triggers                                             | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.8 The update plan: bindings, derives, stamps                     | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.9 Update coverage                                                | [spec/04-component-model.md](spec/04-component-model.md) |
+| §4.10 Registry-bounded dynamic rendering                            | [spec/04-component-model.md](spec/04-component-model.md) |
+| §5.1 Pipeline                                                       | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §5.2 Hard rules                                                     | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §5.2.1 Client representation, render-plan, and app-build identities | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §5.2.2 Prod render-equivalence gate                                 | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §5.2.3 Build artifact provenance                                    | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §5.3 `kovo explain`                                                 | [spec/05-compiler.md](spec/05-compiler.md)               |
+| §6.1 The registries                                                 | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §6.1.1 Package component prefixes                                   | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §6.2 Typed surfaces                                                 | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §6.3 Mutation typing contract                                       | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §6.4 Routes and links                                               | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §6.5 Session schema                                                 | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §6.6 Soundness boundary                                             | [spec/06-type-system.md](spec/06-type-system.md)         |
+| §7 Interaction ladder                                               | [spec/07-navigation.md](spec/07-navigation.md)           |
+| §8 MPA spine and navigation                                         | [spec/07-navigation.md](spec/07-navigation.md)           |
+| §9.1 Enhanced mutation round-trip                                   | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.1.1 Prod delta encoding                                          | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.2 Errors                                                         | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.3 Liveness and live                                              | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.4 Typed reads: the query endpoint                                | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.5 Request shell                                                  | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.5.1 Dev HMR                                                      | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §9.6 Durable tasks and scheduling                                   | [spec/09-wire-protocol.md](spec/09-wire-protocol.md)     |
+| §10.1 Schema as domain registry                                     | [spec/10-data-plane.md](spec/10-data-plane.md)           |
+| §10.2 Queries                                                       | [spec/10-data-plane.md](spec/10-data-plane.md)           |
+| §10.3 Mutations and writes                                          | [spec/10-data-plane.md](spec/10-data-plane.md)           |
+| §10.4 Optimistic updates                                            | [spec/10-data-plane.md](spec/10-data-plane.md)           |
+| §10.5 Derivation algebra                                            | [spec/10-data-plane.md](spec/10-data-plane.md)           |
+| §10.6 Exhaustiveness                                                | [spec/10-data-plane.md](spec/10-data-plane.md)           |
+| §11.1 Touch-set extraction                                          | [spec/11-verification.md](spec/11-verification.md)       |
+| §11.2 Runtime verification                                          | [spec/11-verification.md](spec/11-verification.md)       |
+| §11.3 Diagnostic codes                                              | [spec/11-diagnostics.md](spec/11-diagnostics.md)         |
+| §11.4 Verification surface                                          | [spec/11-verification.md](spec/11-verification.md)       |
+| §12 Testing API                                                     | [spec/12-testing.md](spec/12-testing.md)                 |
+| §13.1 StyleX and theme tokens                                       | [spec/04-component-model.md](spec/04-component-model.md) |
+| §13.2 `kovo-key` runtime identity                                   | [spec/04-component-model.md](spec/04-component-model.md) |
+| §14 Deploy skew and version recovery                                | [spec/14-deploy-skew.md](spec/14-deploy-skew.md)         |
 
 ### 3.5 Diagnostic and generated-reference ownership
 
@@ -216,7 +216,7 @@ Normative module: [spec/05-compiler.md](spec/05-compiler.md).
 
 The compiler lowers authored TSX into readable server/client modules, generated registries, CSS assets, query/update metadata, and verification artifacts. Its hard rules keep generated output authorable, deterministic, source-derived, and security-preserving. The compiler must prove its own fixpoint and prod render-equivalence instead of relying on opaque optimizer behavior.
 
-The local invariant is that every emitted artifact remains auditable: generated names survive minification, app-authored TSX remains the source of truth, render-plan version tokens move with shape-changing grammar edits, and `kovo explain` exposes the graph facts needed for review without executing a browser.
+The local invariant is that every emitted artifact remains auditable: generated names survive minification, app-authored TSX remains the source of truth, representation digests identify exact final module bytes, render-plan fingerprints move with shape-changing grammar edits, app build tokens bind the exact active deployment snapshot, and `kovo explain` exposes the graph facts needed for review without executing a browser.
 
 ## 6. Type System
 
@@ -246,7 +246,7 @@ The local invariant is that navigation state is URL/server-owned. Speculation Ru
 
 Normative module: [spec/09-wire-protocol.md](spec/09-wire-protocol.md).
 
-The wire is the documentation: mutation posts, fragment responses, query reads, live events, errors, HMR frames, endpoint audits, durable-task scheduling, and prod deltas use named, schema-shaped traffic. Dev can ship full self-describing frames; prod may compress them only when render-plan tokens and reconstruction rules keep the delta auditable.
+The wire is the documentation: mutation posts, fragment responses, query reads, live events, errors, HMR frames, endpoint audits, durable-task scheduling, and prod deltas use named, schema-shaped traffic. Dev can ship full self-describing frames; prod may compress them only when app build tokens and reconstruction rules keep the delta auditable.
 
 The local invariant is that server truth always wins and every trust boundary stays explicit. Client optimism is disposable, `/_q/` reads are typed and token-tagged, errors preserve per-region/per-field identity where applicable, and endpoint/webhook surfaces are auditable through declared auth, CSRF, cache, and response-body posture.
 
@@ -305,6 +305,6 @@ Rules and roadmaps do not weaken the spec. If a plan conflicts with this root or
 
 Normative module: [spec/14-deploy-skew.md](spec/14-deploy-skew.md).
 
-Kovo treats long-lived documents, stale prerenders, and redeploy skew as recoverable version mismatches, not silent stale patches. A render-plan token mismatch prevents delta/query merge, triggers full-value refetch when possible, and escalates to full page reload when document and server tokens cannot be reconciled.
+Kovo treats long-lived documents, stale prerenders, and redeploy skew as recoverable version mismatches, not silent stale patches. An app build token mismatch prevents delta/query merge, triggers full-value refetch when possible, and escalates to full page reload when document and server tokens cannot be reconciled.
 
 The local invariant is a deployment floor: every supported deployment must retain prior immutable client modules and token-scoped `/_q/` reads for at least 24 hours of wall-clock retention across redeploys, or surface KV417 instead of shipping a broken artifact.

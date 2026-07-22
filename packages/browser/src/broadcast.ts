@@ -38,7 +38,7 @@ export interface MutationBroadcast {
 export interface InstallMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   /**
-   * D3 / SPEC §9.1.1, §847, §14: the page's render-plan version token, read once
+   * D3 / SPEC §9.1.1, §847, §14: the page's app-build token, read once
    * from `<meta name="kovo-build">`. The publisher stamps this token into every
    * broadcast envelope; a receiver passes its own page token as the expected
    * token and the envelope token as the response token so a cross-build delta
@@ -87,7 +87,7 @@ export interface DefaultMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   broadcastOnError?: RuntimeErrorReporter;
-  /** D3 / SPEC §9.1.1: page render-plan version token; defaults to `readPageBuildToken()`. */
+  /** D3 / SPEC §9.1.1: page app-build token; defaults to `readPageBuildToken()`. */
   buildToken?: string;
   /** K4 / SPEC §4.7: loader's islandSignalScope to abort removed-island signals on broadcast morph. */
   islandSignalScope?: IslandSignalScope;
@@ -186,7 +186,7 @@ export function installMutationBroadcast(
       publish() {},
     };
   }
-  // D3 / SPEC §9.1.1, §847, §14: resolve this page's render-plan version token
+  // D3 / SPEC §9.1.1, §847, §14: resolve this page's app-build token
   // once. The same token is stamped onto outgoing envelopes (so peers can detect
   // skew against their own page) and used as the `expectedBuildToken` for incoming
   // envelopes. BroadcastChannel replay is a distinct apply path from direct submit,
@@ -275,7 +275,7 @@ export function installMutationBroadcast(
       }
       const envelope = browserBroadcastSecurity.snapshotMutationBroadcastEnvelopeData({
         body,
-        // D3 / SPEC §9.1.1, §847, §14: stamp the sender's render-plan version token so
+        // D3 / SPEC §9.1.1, §847, §14: stamp the sender's app-build token so
         // a receiver on a different build converts the body's delta chunks to misses
         // instead of merging a cross-build delta onto a stale base.
         ...(responseBuildToken === undefined ? {} : { buildToken: responseBuildToken }),

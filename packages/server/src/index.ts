@@ -243,11 +243,9 @@ export type {
 // re-exports them next to `webhook()`.
 export { customVerifier, hmacSignature, standardWebhooks } from '@kovojs/core';
 export type { WebhookVerifier } from '@kovojs/core';
-// SPEC.md §9.5: apps inject a custom versioned client-module registry through
-// `createApp({ clientModules })`. Real example/site consumers (examples/gallery,
-// crm, stackoverflow, reference; site/src/client/modules.ts) construct one with
-// `createMemoryVersionedClientModuleRegistry`, so the constructor and its option
-// surface stay public at the root barrel (also available on the internal subpath).
+// SPEC.md §5.2.1/§9.5: apps inject a representation store through
+// `createApp({ clientModules })`; createApp closes it behind framework-owned build identity.
+// Real example/site consumers construct the development/build-assembly memory store here.
 export { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 export { toNodeHandler } from './node.js';
 export { exportStaticApp } from './static-export-public.js';
@@ -299,8 +297,7 @@ export type {
   CspReportingConfig,
   DocumentCspConfig,
 } from './csp.js';
-// Option/registry types named by `createApp({ clientModules })` and by app
-// consumers that hold a registry reference (recursive publicness,
+// Store/config and framework-facade types named by createApp and App (recursive publicness,
 // rules/api-surface.md). They also remain on `@kovojs/server/internal/client-modules`.
 export type {
   MemoryVersionedClientModuleRegistryOptions,

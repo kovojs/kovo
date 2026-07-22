@@ -1766,7 +1766,7 @@ export const CartBadge = component({
   });
 });
 
-// ─── D4: KV416 render-plan token monotonicity (SPEC §5.2.2) ─────────────────
+// ─── D4: KV416 render-plan fingerprint monotonicity (SPEC §5.2.2) ────────────
 
 describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () => {
   it('passes when shapes are unchanged (same token)', () => {
@@ -1891,13 +1891,13 @@ export const CollisionProof = component({
         expect.objectContaining({
           code: 'KV416',
           severity: 'error',
-          message: expect.stringContaining('render-plan token failed to move'),
+          message: expect.stringContaining('render-plan fingerprint failed to move'),
         }),
       ]),
     );
   });
 
-  it('includes secret query shape metadata in the production render-plan token gate', () => {
+  it('includes secret query shape metadata in the production render-plan fingerprint gate', () => {
     const frozenToken = (_: Record<string, string>) => 'frozen-v1';
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -1919,7 +1919,7 @@ export const CollisionProof = component({
         expect.objectContaining({
           code: 'KV416',
           severity: 'error',
-          message: expect.stringContaining('render-plan token failed to move'),
+          message: expect.stringContaining('render-plan fingerprint failed to move'),
         }),
       ]),
     );

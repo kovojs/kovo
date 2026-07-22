@@ -1243,7 +1243,6 @@ describe('server node adapter', () => {
     const clientHref = clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const cartClient = true;',
-      version: 'cart-v1',
     });
     const app = createApp({
       clientModules,
@@ -1264,7 +1263,7 @@ describe('server node adapter', () => {
         body: expect.stringContaining('<main>Cart 0</main>'),
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
-          link: `</c/__v/cart-v1/cart.client.js>; rel=modulepreload`,
+          link: `<${clientHref}>; rel=modulepreload`,
         }),
         status: 200,
       });

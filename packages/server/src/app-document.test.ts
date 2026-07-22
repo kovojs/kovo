@@ -14,6 +14,7 @@ import { s } from './schema.js';
 import {
   computeRenderPlanFingerprint,
   createMemoryVersionedClientModuleRegistry,
+  replaceVersionedClientModuleBuildSnapshot,
 } from './client-modules.js';
 
 async function responseBodyText(body: unknown): Promise<string> {
@@ -272,11 +273,15 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
 
     const makeApp = (fingerprint: string) => {
-      const registry = createMemoryVersionedClientModuleRegistry({
+      const app = createApp({
+        clientModules: createMemoryVersionedClientModuleRegistry(),
+        routes: [homeRoute],
+      });
+      replaceVersionedClientModuleBuildSnapshot(app.clientModules, {
+        modules: [{ path: '/c/cart.client.js', source: 'export {}' }],
         renderPlanFingerprint: fingerprint,
       });
-      registry.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
-      return createApp({ clientModules: registry, routes: [homeRoute] });
+      return app;
     };
 
     const fp1 = computeRenderPlanFingerprint({ cart: 'field:id,count' });
