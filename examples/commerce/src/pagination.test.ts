@@ -13,8 +13,8 @@ import { loadProductGrid, productGridInput } from './app-test-helpers.js';
 // pagination loop end to end: the server emits ONLY the new page as a keyed-delta
 // `<kovo-query … delta>` (renderQueryPageWireHtml), and the client merges it into the
 // SAME held instance (applyQueryDelta) so "load more"/"load older" pages accumulate
-// without re-shipping or duplicating prior rows. Product cards are keyed by `id`
-// (components/product-grid.tsx `kovo-key={item.id}`), so the §13.2 reconciliation is keyed.
+// without re-shipping or duplicating prior rows. Product cards author `key={item.id}` in TSX and
+// the compiler emits the `kovo-key` runtime identity, so the §13.2 reconciliation is keyed.
 
 /** Decode the JSON delta body the server's `<kovo-query … delta>` chunk carries. */
 function decodeDeltaChunk(wire: string): QueryDelta {

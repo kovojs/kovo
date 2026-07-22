@@ -182,7 +182,7 @@ export function renderQuestionRow(
   const tags = parseTags(question.tags);
   const views = viewsFor(question.id, question.score);
   return (
-    <li kovo-key={question.id} style={cardStyles.row}>
+    <li key={question.id} style={cardStyles.row}>
       <div style={cardStyles.stats}>
         {voteStat(question, interactive)}
         {answerStat(question.answerCount)}

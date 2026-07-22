@@ -242,7 +242,7 @@ function renderQuestionPost(question: QuestionDetailResult): ComponentChild {
 
 function renderAnswerPost(answer: QuestionAnswersResult[number]): ComponentChild {
   return (
-    <li kovo-key={answer.id} style={detailStyles.post}>
+    <li key={answer.id} style={detailStyles.post}>
       <div style={detailStyles.gutter}>
         <span style={detailStyles.voteArrow} aria-hidden="true">
           &#9650;
@@ -284,7 +284,7 @@ function renderQuestionDetailSecondary(
   questionId: string,
 ): ComponentChild {
   return (
-    <section kovo-fragment-target={`question-detail-secondary:${question.id}`}>
+    <section>
       <div style={detailStyles.answersHead}>
         <h2 style={detailStyles.answersTitle}>
           {question.answerCount} {question.answerCount === 1 ? 'Answer' : 'Answers'}
