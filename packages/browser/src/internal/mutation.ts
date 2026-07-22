@@ -23,3 +23,5 @@ export { installMutationBroadcast } from '../broadcast.js';
 export type { BroadcastLike, MutationBroadcast } from '../broadcast.js';
 export { applyCompiledQueryUpdatePlan } from '../query-bindings.js';
 export type { CompiledQueryUpdatePlans } from '../query-bindings.js';
+/** @internal Dev-only HMR target producer serialized by @kovojs/server. */
+export { createHmrTargetSnapshotReader } from '../hmr-target-snapshot.js';

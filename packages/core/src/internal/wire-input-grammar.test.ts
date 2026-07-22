@@ -1,3 +1,4 @@
+import { createServer, request } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
 import { canonicalJsonStringify } from '../json-clone.js';
@@ -59,7 +60,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
   it('derives target encoders and decoders from one finite grammar with seeded round trips', () => {
     expect(FRAMEWORK_WIRE_INPUT_GRAMMAR).toMatchObject({
       maxEntries: 64,
-      maxHeaderCharacters: 64 * 1024,
+      maxHeaderCharacters: 6 * 1024,
       schema: 'kovo.wire-input-grammar/v1',
     });
 
@@ -80,6 +81,12 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
           propsSource: JSON.stringify(props),
           target,
         },
+        {
+          attestation: `token_${seed}_secondary`,
+          component: `components/card-${seed}/secondary`,
+          propsSource: JSON.stringify({ nested: props, role: 'secondary' }),
+          target: `${target}-secondary`,
+        },
       ];
       const descriptors = [
         {
@@ -87,6 +94,12 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
           component: `components/card-${seed}`,
           props,
           target,
+        },
+        {
+          attestation: `token_${seed}_secondary`,
+          component: `components/card-${seed}/secondary`,
+          props: { nested: props, role: 'secondary' },
+          target: `${target}-secondary`,
         },
       ];
 
@@ -105,7 +118,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       { deps: ['one'], target: 'safe' },
     ]);
     expect(decodeFrameworkLiveTargetHeader('safe#component@token:{bad', JSON.parse)).toEqual([]);
-    expect(decodeFrameworkTargetHeader('x'.repeat(64 * 1024 + 1))).toEqual([]);
+    expect(decodeFrameworkTargetHeader('x'.repeat(6 * 1024 + 1))).toEqual([]);
     expect(
       decodeFrameworkTargetHeader(
         Array.from({ length: 65 }, (_, index) => `target-${index}`).join(';'),
@@ -116,13 +129,100 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       /wire identity/iu,
     );
     expect(() =>
-      encodeFrameworkLiveTargetHeader(
-        [{ attestation: 'token', component: 'bad:component', propsSource: '{}', target: 'safe' }],
-      ),
+      encodeFrameworkLiveTargetHeader([
+        { attestation: 'token', component: 'bad:component', propsSource: '{}', target: 'safe' },
+      ]),
     ).toThrow(/component/iu);
   });
 
-  it('keeps raw live-target props byte-for-byte equivalent to server canonical JSON', () => {
+  it('rejects identities that can alter framing or cannot enter a browser header', () => {
+    const unsafeSuffixes = ['{', '}', '[', ']', '"', '\\', '#', ';', '=', ',', '漢'];
+    for (const suffix of unsafeSuffixes) {
+      expect(() =>
+        encodeFrameworkTargetHeader([
+          { deps: ['public'], target: `card${suffix}` },
+          { deps: [], target: 'safe-second' },
+        ]),
+      ).toThrow(/wire identity/iu);
+      expect(() =>
+        encodeFrameworkTargetHeader([{ deps: [`query${suffix}`], target: 'safe' }]),
+      ).toThrow(/dependency wire identity/iu);
+      expect(() =>
+        encodeFrameworkLiveTargetHeader([
+          {
+            attestation: 'token',
+            component: 'components/card',
+            propsSource: '{}',
+            target: `card${suffix}`,
+          },
+          {
+            attestation: 'token_second',
+            component: 'components/second',
+            propsSource: '{}',
+            target: 'safe-second',
+          },
+        ]),
+      ).toThrow(/target wire identity/iu);
+      expect(() =>
+        encodeFrameworkLiveTargetHeader([
+          {
+            attestation: 'token',
+            component: `components/card${suffix}`,
+            propsSource: '{}',
+            target: 'safe',
+          },
+        ]),
+      ).toThrow(/component wire identity/iu);
+      expect(() =>
+        encodeFrameworkLiveTargetHeader([
+          {
+            attestation: `token${suffix}`,
+            component: 'components/card',
+            propsSource: '{}',
+            target: 'safe',
+          },
+        ]),
+      ).toThrow(/attestation wire identity/iu);
+    }
+
+    const targets = [
+      { deps: ['product:p1', 'catalog/v2'], target: 'card:primary' },
+      { deps: ['inventory.current'], target: 'card-secondary' },
+    ];
+    const descriptors = [
+      {
+        attestation: 'token_primary',
+        component: 'components/cards/primary',
+        propsSource: '{"label":"primary"}',
+        target: 'card:primary',
+      },
+      {
+        attestation: 'token_secondary',
+        component: 'components/cards/secondary',
+        propsSource: '{"label":"secondary"}',
+        target: 'card-secondary',
+      },
+    ];
+    expect(decodeFrameworkTargetHeader(encodeFrameworkTargetHeader(targets))).toEqual(targets);
+    expect(
+      decodeFrameworkLiveTargetHeader(encodeFrameworkLiveTargetHeader(descriptors), JSON.parse),
+    ).toEqual([
+      {
+        attestation: 'token_primary',
+        component: 'components/cards/primary',
+        props: { label: 'primary' },
+        target: 'card:primary',
+      },
+      {
+        attestation: 'token_secondary',
+        component: 'components/cards/secondary',
+        props: { label: 'secondary' },
+        target: 'card-secondary',
+      },
+    ]);
+  });
+
+  it('keeps live-target props semantically canonical and Latin-1 header-safe', () => {
     const corpus = [
       '{"z":1,"a":{"z":2,"a":[true,null,"nested"]}}',
       '{"controls":"\\b\\t\\n\\f\\r\\u0000","quote":"\\\"","slash":"\\\\"}',
@@ -131,9 +231,155 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       '{"array":[{"z":2,"a":1},[3,2,1]],"semi":"left;right"}',
       '{"toJSON":"data-only","__proto__":{"role":"public"}}',
       '{"lineSeparators":"\u2028\u2029"}',
+      '{"3":683,"013":{"x":1},"a":2}',
+      '{"nested":{"10":"ten","2":"two","01":"leading","4294967294":"max","4294967295":"not-index"}}',
+      '{"0":"zero","-0":"negative","00":"double","1":"one","4294967294":"max","4294967295":"outside"}',
     ];
 
     for (const source of corpus) {
+      const snapshot = snapshotFrameworkLiveTargetProps(source);
+      expect(canonicalJsonStringify(JSON.parse(snapshot))).toBe(
+        canonicalJsonStringify(JSON.parse(source)),
+      );
+      for (let index = 0; index < snapshot.length; index += 1) {
+        expect(snapshot.charCodeAt(index)).toBeLessThanOrEqual(0xff);
+      }
+    }
+
+    const unicode = encodeFrameworkLiveTargetHeader([
+      {
+        attestation: 'token',
+        component: 'components/card',
+        propsSource: '{"label":"😀 漢字","line":"\u2028\u2029","latin":"café"}',
+        target: 'card',
+      },
+    ]);
+    expect(unicode).toBe(
+      'card#components/card@token:{"label":"\\ud83d\\ude00 \\u6f22\\u5b57","latin":"café","line":"\\u2028\\u2029"}',
+    );
+    expect(() => new Headers({ 'Kovo-Live-Targets': unicode })).not.toThrow();
+  });
+
+  it('keeps both maximum framework headers inside the default Node transport door', async () => {
+    const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
+    const livePrefix = 'card#components/card@token:';
+    const propsPrefix = '{"payload":"';
+    const propsSuffix = '"}';
+    const liveHeader = encodeFrameworkLiveTargetHeader([
+      {
+        attestation: 'token',
+        component: 'components/card',
+        propsSource:
+          propsPrefix +
+          'x'.repeat(maximum - livePrefix.length - propsPrefix.length - propsSuffix.length) +
+          propsSuffix,
+        target: 'card',
+      },
+    ]);
+    const targetPrefix = 'card=';
+    const targetHeader = encodeFrameworkTargetHeader([
+      { deps: ['x'.repeat(maximum - targetPrefix.length)], target: 'card' },
+    ]);
+    expect(liveHeader).toHaveLength(maximum);
+    expect(targetHeader).toHaveLength(maximum);
+    expect(() =>
+      encodeFrameworkTargetHeader([
+        { deps: ['x'.repeat(maximum - targetPrefix.length + 1)], target: 'card' },
+      ]),
+    ).toThrow(/character budget/iu);
+
+    let handlerHits = 0;
+    const server = createServer((_incoming, response) => {
+      handlerHits += 1;
+      response.statusCode = 204;
+      response.end();
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    try {
+      const address = server.address();
+      if (address === null || typeof address === 'string') {
+        throw new Error('Node HTTP test server address unavailable');
+      }
+      const requestStatus = (headers: Readonly<Record<string, string>>): Promise<number> =>
+        new Promise((resolve, reject) => {
+          const outgoing = request(
+            {
+              headers,
+              host: '127.0.0.1',
+              method: 'POST',
+              path: '/',
+              port: address.port,
+            },
+            (response) => {
+              response.resume();
+              response.once('end', () => resolve(response.statusCode ?? 0));
+            },
+          );
+          outgoing.once('error', reject);
+          outgoing.end();
+        });
+
+      await expect(
+        requestStatus({
+          'Kovo-Live-Targets': liveHeader,
+          'Kovo-Targets': targetHeader,
+        }),
+      ).resolves.toBe(204);
+      expect(handlerHits).toBe(1);
+
+      await expect(requestStatus({ 'X-Transport-Control': 'x'.repeat(20 * 1024) })).resolves.toBe(
+        431,
+      );
+      expect(handlerHits).toBe(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('matches canonical integer-index ordering across a deterministic adversarial corpus', () => {
+    const boundaryKeys = [
+      '0',
+      '-0',
+      '00',
+      '01',
+      '1',
+      '2',
+      '3',
+      '9',
+      '10',
+      '99',
+      '100',
+      '013',
+      '4294967293',
+      '4294967294',
+      '4294967295',
+      '4294967296',
+      '9007199254740991',
+      'a',
+      'z',
+      'zz',
+    ];
+    let state = 0x9e37_79b9;
+    const next = (): number => {
+      state = Math.imul(state ^ (state >>> 16), 0x21f0_aaad) >>> 0;
+      state = Math.imul(state ^ (state >>> 15), 0x735a_2d97) >>> 0;
+      return (state ^ (state >>> 15)) >>> 0;
+    };
+
+    for (let round = 0; round < 128; round += 1) {
+      const entries: string[] = [];
+      for (let index = 0; index < boundaryKeys.length; index += 1) {
+        const key = boundaryKeys[(index + next()) % boundaryKeys.length]!;
+        entries.push(
+          `${JSON.stringify(key)}:{"round":${round},"nested":{"10":${index},"2":${next()}}}`,
+        );
+      }
+      const source = `{${entries.join(',')}}`;
       expect(snapshotFrameworkLiveTargetProps(source)).toBe(
         canonicalJsonStringify(JSON.parse(source)),
       );
@@ -142,9 +388,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
 
   it('bounds and normalizes invalid, non-record, and whitespace-padded props sources', () => {
     const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
-    expect(snapshotFrameworkLiveTargetProps(' { "z": 1, "a": [2, 3] } ')).toBe(
-      '{"a":[2,3],"z":1}',
-    );
+    expect(snapshotFrameworkLiveTargetProps(' { "z": 1, "a": [2, 3] } ')).toBe('{"a":[2,3],"z":1}');
     expect(snapshotFrameworkLiveTargetProps('{"message":"left;right"}')).toBe(
       '{"message":"left;right"}',
     );
@@ -196,6 +440,31 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       target: string;
     };
     expect(() => encodeFrameworkLiveTargetHeader([inherited])).toThrow(/target wire identity/iu);
+  });
+
+  it('uses the captured Array receiver after a late global constructor replacement', () => {
+    const arrayDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Array');
+    if (!arrayDescriptor) throw new Error('Global Array descriptor unavailable');
+    let getterHits = 0;
+    let props = '';
+    let targets = '';
+    try {
+      Object.defineProperty(globalThis, 'Array', {
+        configurable: true,
+        get() {
+          getterHits += 1;
+          throw new Error('late global Array getter ran');
+        },
+      });
+      props = snapshotFrameworkLiveTargetProps('{"3":683,"label":"😀 漢字"}');
+      targets = encodeFrameworkTargetHeader([{ deps: ['product:p1'], target: 'card:primary' }]);
+    } finally {
+      Object.defineProperty(globalThis, 'Array', arrayDescriptor);
+    }
+
+    expect(getterHits).toBe(0);
+    expect(props).toBe('{"3":683,"label":"\\ud83d\\ude00 \\u6f22\\u5b57"}');
+    expect(targets).toBe('card:primary=product:p1');
   });
 
   it('keeps codec acceptance and rejection exact after late intrinsic replacement', () => {
@@ -271,16 +540,14 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         invalidTargetRejected = true;
       }
       try {
-        encodeFrameworkLiveTargetHeader(
-          [
-            {
-              attestation: 'token',
-              component: 'bad:component',
-              propsSource: '{}',
-              target: 'safe',
-            },
-          ],
-        );
+        encodeFrameworkLiveTargetHeader([
+          {
+            attestation: 'token',
+            component: 'bad:component',
+            propsSource: '{}',
+            target: 'safe',
+          },
+        ]);
       } catch {
         invalidDescriptorRejected = true;
       }

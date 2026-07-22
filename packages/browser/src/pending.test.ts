@@ -44,7 +44,7 @@ describe('pending query stamps', () => {
 
     expect(readDeps(atLimit)).toEqual([atLimit]);
     expect(() => readDeps(atLimit + 'a')).toThrow(
-      'Kovo dependency input exceeds the 65536-character wire budget.',
+      'Kovo dependency input exceeds the 6144-character wire budget.',
     );
   });
 });

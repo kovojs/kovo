@@ -261,13 +261,10 @@ describe('mutation targets', () => {
         'kovo-live-component': 'components/public/catalog',
         'kovo-live-token': 'tok_catalog',
         'kovo-props':
-          '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first"}',
+          '{"z":1,"nested":{"z":"last","a":[{"z":2,"a":1}]},"a":"first","label":"😀 漢字","line":"\u2028\u2029"}',
       }),
     ]);
-    const attestationDescriptor = Object.getOwnPropertyDescriptor(
-      Object.prototype,
-      'attestation',
-    );
+    const attestationDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'attestation');
     const toJsonDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'toJSON');
     let callbackHits = 0;
     let snapshot: ReturnType<typeof readLiveTargetSnapshot> | undefined;
@@ -305,7 +302,7 @@ describe('mutation targets', () => {
     expect(snapshot).toEqual({
       header: 'unattested-panel=public; catalog-panel=catalog',
       liveHeader:
-        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+        'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
       liveTargets: [
         {
           component: 'components/public/unattested',
@@ -317,6 +314,8 @@ describe('mutation targets', () => {
           component: 'components/public/catalog',
           props: {
             a: 'first',
+            label: '😀 漢字',
+            line: '\u2028\u2029',
             nested: { a: [{ a: 1, z: 2 }], z: 'last' },
             z: 1,
           },

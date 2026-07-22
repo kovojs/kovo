@@ -17,7 +17,10 @@ export const FRAMEWORK_WIRE_INPUT_GRAMMAR = Object.freeze({
   }),
   entrySeparator: ';',
   maxEntries: 64,
-  maxHeaderCharacters: 64 * 1024,
+  // Node's default HTTP parser accepts roughly 16 KiB across the entire request-header block.
+  // Two 6 KiB Kovo target headers leave about 4 KiB for names, origin/cookie/CSRF metadata, and
+  // ordinary transport headers while keeping the browser producer below the default server door.
+  maxHeaderCharacters: 6 * 1024,
   presentationSeparator: '; ',
   schema: 'kovo.wire-input-grammar/v1',
   target: Object.freeze({
@@ -337,14 +340,15 @@ export function createFrameworkWireTargetCodec(
   // §6.6 rule 6 / §9.1). Keep these captures local: the emitted loader must remain a
   // self-contained rendering of this function plus the frozen grammar data.
   const apply = Reflect.apply;
+  const IntrinsicArray = Array;
   const IntrinsicJson = JSON;
   const IntrinsicNumber = Number;
   const IntrinsicObject = Object;
   const IntrinsicString = String;
-  const arrayIsArray = Array.isArray;
-  const arrayJoin = Array.prototype.join;
-  const arrayPush = Array.prototype.push;
-  const arraySort = Array.prototype.sort;
+  const arrayIsArray = IntrinsicArray.isArray;
+  const arrayJoin = IntrinsicArray.prototype.join;
+  const arrayPush = IntrinsicArray.prototype.push;
+  const arraySort = IntrinsicArray.prototype.sort;
   const jsonParse = JSON.parse;
   const numberIsFinite = Number.isFinite;
   const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
@@ -363,16 +367,12 @@ export function createFrameworkWireTargetCodec(
     carrier: unknown,
     name: string | number,
   ): { readonly found: boolean; readonly value?: Value } => {
-    if (
-      carrier === null ||
-      (typeof carrier !== 'object' && typeof carrier !== 'function')
-    ) {
+    if (carrier === null || (typeof carrier !== 'object' && typeof carrier !== 'function')) {
       return { found: false };
     }
-    const descriptor = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [
-      carrier,
-      name,
-    ]) as PropertyDescriptor | undefined;
+    const descriptor = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [carrier, name]) as
+      | PropertyDescriptor
+      | undefined;
     if (descriptor === undefined) return { found: false };
     const descriptorValue = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [
       descriptor,
@@ -384,7 +384,7 @@ export function createFrameworkWireTargetCodec(
   };
 
   const arrayLength = (value: unknown, label: string): number => {
-    if (!apply(arrayIsArray, Array, [value])) {
+    if (!apply(arrayIsArray, IntrinsicArray, [value])) {
       throw new TypeError(label + ' must be an array.');
     }
     const length = ownData<number>(value, 'length');
@@ -434,15 +434,10 @@ export function createFrameworkWireTargetCodec(
         output += '\\f';
       } else if (code === 0x0d) {
         output += '\\r';
-      } else if (code < 0x20 || (code >= 0xd800 && code <= 0xdfff)) {
-        if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
-          const next = apply(stringCharCodeAt, value, [index + 1]);
-          if (next >= 0xdc00 && next <= 0xdfff) {
-            output += slice(value, index, index + 2);
-            index += 1;
-            continue;
-          }
-        }
+      } else if (code < 0x20 || code > 0xff) {
+        // Fetch's Headers constructor converts values through Web IDL ByteString before sending
+        // them. Preserve every JSON string code unit while keeping the emitted header Latin-1;
+        // surrogate pairs and U+2028/U+2029 therefore travel as JSON \u escapes.
         output +=
           '\\u' +
           hexadecimal[(code >>> 12) & 0x0f] +
@@ -454,6 +449,33 @@ export function createFrameworkWireTargetCodec(
       }
     }
     return output + '"';
+  };
+
+  const jsonArrayIndex = (key: string): number => {
+    // JSON.stringify enumerates canonical array-index property names ahead of every other
+    // string key, even when those properties were inserted in lexical order. Match that final
+    // server canonicalJsonStringify ordering without converting attacker-controlled keys through
+    // an ambient numeric coercion hook.
+    if (key.length === 0 || key.length > 10) return -1;
+    const first = apply(stringCharCodeAt, key, [0]);
+    if (first < 0x30 || first > 0x39 || (first === 0x30 && key.length > 1)) return -1;
+    let index = 0;
+    for (let offset = 0; offset < key.length; offset += 1) {
+      const code = apply(stringCharCodeAt, key, [offset]);
+      if (code < 0x30 || code > 0x39) return -1;
+      index = index * 10 + code - 0x30;
+      if (index > 4_294_967_294) return -1;
+    }
+    return index;
+  };
+
+  const compareCanonicalJsonKeys = (left: string, right: string): number => {
+    const leftIndex = jsonArrayIndex(left);
+    const rightIndex = jsonArrayIndex(right);
+    if (leftIndex >= 0 && rightIndex >= 0) return leftIndex - rightIndex;
+    if (leftIndex >= 0) return -1;
+    if (rightIndex >= 0) return 1;
+    return left < right ? -1 : left > right ? 1 : 0;
   };
 
   const snapshotLiveTargetProps = (source: string | null | undefined): string => {
@@ -475,7 +497,11 @@ export function createFrameworkWireTargetCodec(
     } catch {
       return '{}';
     }
-    if (parsed === null || typeof parsed !== 'object' || apply(arrayIsArray, Array, [parsed])) {
+    if (
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      apply(arrayIsArray, IntrinsicArray, [parsed])
+    ) {
       return '{}';
     }
 
@@ -498,13 +524,15 @@ export function createFrameworkWireTargetCodec(
         throw new TypeError('Kovo live-target props contain a non-JSON value.');
       }
 
-      if (apply(arrayIsArray, Array, [value])) {
+      if (apply(arrayIsArray, IntrinsicArray, [value])) {
         const length = arrayLength(value, 'Kovo live-target props array');
         let output = '[';
         for (let index = 0; index < length; index += 1) {
           const entry = ownData<unknown>(value, index);
           if (!entry.found) {
-            throw new TypeError('Kovo live-target props arrays must contain dense own-data values.');
+            throw new TypeError(
+              'Kovo live-target props arrays must contain dense own-data values.',
+            );
           }
           output += (index === 0 ? '' : ',') + encodeJsonValue(entry.value, depth + 1);
         }
@@ -512,7 +540,7 @@ export function createFrameworkWireTargetCodec(
       }
 
       const keys = apply(objectKeys, IntrinsicObject, [value]) as string[];
-      apply(arraySort, keys, []);
+      apply(arraySort, keys, [compareCanonicalJsonKeys]);
       const keyCount = arrayLength(keys, 'Kovo live-target props key snapshot');
       let output = '{';
       for (let index = 0; index < keyCount; index += 1) {
@@ -543,12 +571,19 @@ export function createFrameworkWireTargetCodec(
       const character = value[index] ?? '';
       if (
         code <= 0x1f ||
+        code > 0xff ||
         code === 0x7f ||
         isWhitespace(character) ||
         character === grammar.entrySeparator ||
         character === ',' ||
         character === grammar.descriptor.targetComponentSeparator ||
-        character === grammar.target.assignmentSeparator
+        character === grammar.target.assignmentSeparator ||
+        character === '{' ||
+        character === '}' ||
+        character === '[' ||
+        character === ']' ||
+        character === '"' ||
+        character === '\\'
       ) {
         return false;
       }
@@ -612,10 +647,7 @@ export function createFrameworkWireTargetCodec(
       if (!dependencies.found) {
         throw new TypeError('Kovo target header contains an invalid dependency list.');
       }
-      const dependencyCount = arrayLength(
-        dependencies.value,
-        'Kovo target header dependency list',
-      );
+      const dependencyCount = arrayLength(dependencies.value, 'Kovo target header dependency list');
       let entry = target.value;
       if (dependencyCount > 0) {
         const deps: string[] = [];
@@ -635,9 +667,7 @@ export function createFrameworkWireTargetCodec(
     return encodeEntryList(encoded);
   };
 
-  const encodeLiveTargetHeader = (
-    values: readonly FrameworkWireLiveTargetInput[],
-  ): string => {
+  const encodeLiveTargetHeader = (values: readonly FrameworkWireLiveTargetInput[]): string => {
     const encoded: string[] = [];
     const valueCount = arrayLength(values, 'Kovo live-target header input');
     if (valueCount > grammar.maxEntries) {

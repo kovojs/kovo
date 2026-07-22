@@ -8,10 +8,12 @@ import {
   createRegisteredDiagnostic,
   diagnosticDefinitions,
 } from '@kovojs/core/internal/diagnostics';
+import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   createFrameworkWireTargetCodec,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
 } from '@kovojs/core/internal/wire-input-grammar';
+import { createHmrTargetSnapshotReader } from '@kovojs/browser/internal/mutation';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
@@ -117,11 +119,17 @@ import {
 } from './security-witness-intrinsics.js';
 import { createNativeRequest } from './request-carrier.js';
 import { sourceDocumentHeaderIsRetained } from './source-document-headers.js';
+import { buildSecurityFunctionSource } from './build-security-intrinsics.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
 const kovoHmrLiveTargetRefreshPath = '/@kovo/hmr/refresh/live-targets';
 const kovoHmrClientScript = `<script type="module" src="${kovoHmrClientPath}"></script>`;
+const kovoHmrWireInputGrammarSource = canonicalJsonStringify(FRAMEWORK_WIRE_INPUT_GRAMMAR);
+const kovoHmrWireTargetCodecSource = buildSecurityFunctionSource(createFrameworkWireTargetCodec);
+const kovoHmrTargetSnapshotReaderSource = buildSecurityFunctionSource(
+  createHmrTargetSnapshotReader,
+);
 const kovoAppShellViteDevModuleId = '@kovojs/server/internal/app-shell-vite';
 const kovoServerRootModuleId = '@kovojs/server';
 const viteDevNodeResponseEnd = captureViteDevNodeResponseMethod('end');
@@ -1218,60 +1226,24 @@ function injectKovoHmrScript(html: string): string {
   return `${kovoHmrClientScript}${html}`;
 }
 
-function kovoHmrClientSource(): string {
+/** @internal Exact dev-client source; exported for in-repo security execution tests. */
+export function kovoHmrClientSource(): string {
   return String.raw`
 import { createHotContext } from "/@vite/client";
 
 const hot = createHotContext("${kovoHmrClientPath}");
 const reload = () => location.reload();
-const frameworkWireInputGrammar = ${JSON.stringify(FRAMEWORK_WIRE_INPUT_GRAMMAR)};
-const createFrameworkWireTargetCodec = ${createFrameworkWireTargetCodec.toString()};
+const frameworkWireInputGrammar = ${kovoHmrWireInputGrammarSource};
+const createFrameworkWireTargetCodec = ${kovoHmrWireTargetCodecSource};
 const frameworkWireTargetCodec = createFrameworkWireTargetCodec(frameworkWireInputGrammar);
-const qa = (root, selector) => root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
-const rd = (value) => {
-  const source = value || "";
-  if (source.length > frameworkWireInputGrammar.maxHeaderCharacters) {
-    throw new TypeError("Kovo dependency input exceeds the wire character budget.");
-  }
-  return source.split(/[\s,]+/).map((dep) => dep.trim()).filter(Boolean);
-};
-const targetIdentity = (el) => el.getAttribute("kovo-fragment-target") || el.id || el.getAttribute("kovo-c") || "";
-const liveTargetIdentity = (el) => el.getAttribute("kovo-live-component") || el.getAttribute("kovo-c") || targetIdentity(el);
-const safeHeaderToken = frameworkWireTargetCodec.identityIsValid;
-const safeAttestation = frameworkWireTargetCodec.attestationIsValid;
-const safeComponent = frameworkWireTargetCodec.componentIsValid;
-const currentBuild = () => document.querySelector('meta[name="kovo-build"]')?.getAttribute("content") || "";
-const liveTargets = () => {
-  const seen = new Set();
-  const targets = [];
-  for (const el of qa(document, "[kovo-deps]")) {
-    const target = targetIdentity(el);
-    const component = liveTargetIdentity(el);
-    const token = el.getAttribute("kovo-live-token");
-    if (!safeHeaderToken(target) || !safeComponent(component) || !safeAttestation(token)) continue;
-    if (!target || seen.has(target)) continue;
-    seen.add(target);
-    targets.push(frameworkWireTargetCodec.encodeLiveTargetHeader(
-      [{ attestation: token, component, propsSource: el.getAttribute("kovo-props"), target }],
-    ));
-    if (targets.length === frameworkWireInputGrammar.maxEntries) break;
-  }
-  return targets;
-};
-const dependencyTargets = () => [
-  ...new Set(
-    qa(document, "[kovo-deps]")
-      .map((el) => {
-        const target = targetIdentity(el);
-        const deps = rd(el.getAttribute("kovo-deps"));
-        if (!safeHeaderToken(target) || !deps.every(safeHeaderToken)) return "";
-        return target
-          ? frameworkWireTargetCodec.encodeTargetHeader([{ deps, target }])
-          : "";
-      })
-      .filter(Boolean),
-  ).values(),
-].slice(0, frameworkWireInputGrammar.maxEntries);
+const createHmrTargetSnapshotReader = ${kovoHmrTargetSnapshotReaderSource};
+const hmrTargetSnapshotReader = createHmrTargetSnapshotReader(
+  frameworkWireInputGrammar,
+  frameworkWireTargetCodec,
+);
+const currentBuild = () => hmrTargetSnapshotReader.currentBuild(document);
+const liveTargets = () => hmrTargetSnapshotReader.liveTargets(document);
+const dependencyTargets = () => hmrTargetSnapshotReader.dependencyTargets(document);
 
 async function refreshLiveTargets(event) {
   const apply = globalThis.__kovo_a;
@@ -1302,10 +1274,7 @@ async function refreshLiveTargets(event) {
   }
 
   apply(await response.text());
-  if (nextBuild) {
-    const meta = document.querySelector('meta[name="kovo-build"]');
-    meta?.setAttribute("content", nextBuild);
-  }
+  if (nextBuild) hmrTargetSnapshotReader.writeBuild(document, nextBuild);
 }
 
 hot.on("kovo:component-render", (event) => {
