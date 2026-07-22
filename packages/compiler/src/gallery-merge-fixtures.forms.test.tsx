@@ -396,7 +396,7 @@ describe('gallery G5 primitive merge fixtures', () => {
       {
         ...toggleRootAttributes({ pressed: true }),
         class: 'inline-flex saved',
-        'kovo-deps': 'toggle:pressed',
+        'kovo-deps': '!toggle!toggle%3Apressed',
         'on:click': '/gallery/toggle.client.js#primitiveToggle',
         style: '--toggle-state: pressed; color: blue',
       },
@@ -405,7 +405,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         class: 'saved rounded-sm',
         'data-state': 'author-pressed',
         disabled: true,
-        'kovo-deps': 'route:gallery',
+        'kovo-deps': '!route!route%3Agallery',
         'on:click': '/gallery/author.client.js#trackToggle',
         style: 'color: red; margin: 0',
         type: 'submit',
@@ -425,7 +425,7 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(String(<button {...merged.attrs}>Saved</button>)).toBe(
       // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" wins over author "mixed".
-      '<button data-state="pressed" aria-pressed="true" disabled type="submit" class="inline-flex saved rounded-sm" kovo-deps="toggle:pressed route:gallery" on:click="/gallery/author.client.js#trackToggle /gallery/toggle.client.js#primitiveToggle" style="--toggle-state: pressed; color: blue; color: red; margin: 0">Saved</button>',
+      '<button data-state="pressed" aria-pressed="true" disabled type="submit" class="inline-flex saved rounded-sm" kovo-deps="!toggle!toggle%3Apressed !route!route%3Agallery" on:click="/gallery/author.client.js#trackToggle /gallery/toggle.client.js#primitiveToggle" style="--toggle-state: pressed; color: blue; color: red; margin: 0">Saved</button>',
     );
   });
   it('renders a golden checkbox merge with native control logical-OR attributes', () => {

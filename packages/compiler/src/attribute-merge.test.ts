@@ -3,6 +3,34 @@ import { describe, expect, it } from 'vitest';
 import { compileCompilerEmittedFixture as compileComponentModule } from './test-support.js';
 
 describe('compiler attribute merge diagnostics', () => {
+  it('retains and rejects non-canonical dependency tokens during primitive composition', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-invalid-dependency.tsx',
+      registryFacts: { queries: { cart: 'CartQuery' } },
+      source: `
+export const PrimitiveInvalidDependency = component({
+  render: () => (
+    <Tooltip.Trigger attrs={{ 'kovo-deps': 'legacy:key' }}>
+      {(attrs) => <button {...attrs} kovo-deps="cart">Open</button>}
+    </Tooltip.Trigger>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain('kovo-deps="legacy:key cart"');
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV226',
+          message: expect.stringContaining(
+            'kovo-deps contains a non-canonical identity token. kovo-deps="legacy:key"',
+          ),
+        }),
+      ]),
+    );
+  });
+
   it('merges primitive attrs-function records into the author element on the wire', () => {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',

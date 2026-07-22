@@ -6,7 +6,7 @@ import {
   type JsxAttributeModel,
   type ObjectLiteralEntry,
 } from '../scan/parse.js';
-import { dedupeBy, escapeAttribute, splitDepTokenValue } from '../shared.js';
+import { dedupeBy, escapeAttribute, parseDepValue } from '../shared.js';
 import {
   compilerArrayJoin,
   compilerArrayLength,
@@ -29,7 +29,7 @@ import {
   compilerWeakMapSet,
 } from '../compiler-security-intrinsics.js';
 
-export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233' | 'KV317';
+export type AttributeMergeDiagnosticCode = 'KV226' | 'KV231' | 'KV232' | 'KV233' | 'KV317';
 
 /**
  * A single attribute participating in primitive/author attribute merging: its name, the
@@ -491,6 +491,8 @@ function mergeAttribute(
   }
 
   if (name === 'kovo-deps') {
+    appendInvalidDepDiagnostics(primitive, options, diagnostics);
+    appendInvalidDepDiagnostics(author, options, diagnostics);
     return authorValue(name, mergeDepLists(primitive.value, author.value), author);
   }
 
@@ -604,7 +606,10 @@ function mergeDepLists(
   if (left === undefined || right === undefined) return undefined;
   const unique = compilerCreateSet<string>();
   const values: string[] = [];
-  const dependencies = splitDepTokenValue(`${left} ${right}`);
+  // Preserve invalid tokens in the emitted residual stamp so validation cannot be bypassed by
+  // primitive composition. appendInvalidDepDiagnostics() makes the build fail with KV226; this
+  // union is not a compatibility decoder and never assigns legacy punctuation a query identity.
+  const dependencies = splitWhitespaceTokens(`${left} ${right}`);
   const length = compilerArrayLength(dependencies, 'Dependency merge tokens');
   for (let index = 0; index < length; index += 1) {
     const dependency = compilerOwnDataValue(
@@ -617,6 +622,34 @@ function mergeDepLists(
     appendMergeFact(values, dependency, 'Dependency merge tokens');
   }
   return { kind: 'string', value: compilerArrayJoin(values, ' ') };
+}
+
+function appendInvalidDepDiagnostics(
+  attribute: MergeableAttribute,
+  options: { fileName: string; source: string },
+  diagnostics: CompilerDiagnostic[],
+): void {
+  const value = staticString(attribute.value);
+  if (value === undefined) return;
+  const invalidTokens = parseDepValue(value).invalidTokens;
+  const length = compilerArrayLength(invalidTokens, 'Invalid dependency merge tokens');
+  for (let index = 0; index < length; index += 1) {
+    const token = compilerOwnDataValue(
+      invalidTokens,
+      index,
+      'Invalid dependency merge tokens',
+    ) as string;
+    appendMergeFact(
+      diagnostics,
+      attributeMergeDiagnostic(
+        options,
+        'KV226',
+        `kovo-deps contains a non-canonical identity token. kovo-deps="${token}"`,
+        attribute,
+      ),
+      'Attribute merge diagnostics',
+    );
+  }
 }
 
 function logicalOr(
