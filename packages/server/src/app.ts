@@ -1,5 +1,6 @@
 import {
   createMemoryVersionedClientModuleRegistry,
+  finalizeVersionedClientModuleBuild,
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
 import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
@@ -927,6 +928,13 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
   }
 
   appLiveTargetAttestationAudience(app);
+
+  // SPEC §14: production request dispatch observes one sealed scalar. Registration remains open
+  // between createApp() and this boot chokepoint so manual apps can assemble their active modules;
+  // no request performs hashing or silently mutates the manifest.
+  if (resolveBootMode() === 'production') {
+    finalizeVersionedClientModuleBuild(app.clientModules);
+  }
 
   const taskRuntime = createAppTaskRuntime(app);
   registerAppTaskRuntime(app, taskRuntime);

@@ -22,7 +22,7 @@ export interface SiteRouteData {
 }
 
 export interface SiteRouteDataDeps {
-  clientModules: { put(input: { path: string; source: string; version: string }): string };
+  clientModules: { put(input: { path: string; source: string }): string };
 }
 
 export async function buildSiteRouteData({

@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
+
 import { createApp, createRequestHandler } from './app.js';
 import { computeRenderPlanFingerprint } from './client-modules.js';
 import { route } from './route.js';
@@ -20,8 +22,10 @@ import { renderedHtml } from './html.js';
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
-const testFingerprintVersionPattern = new RegExp(
-  `^/?c/__v/${testRenderPlanFingerprint}-[a-f0-9]{64}/cart\\.client\\.js$`,
+const testClientModuleSource = 'export const cart = 1;';
+const testClientModuleDigest = clientModuleRepresentationDigest(testClientModuleSource);
+const testRepresentationPathPattern = new RegExp(
+  `^/?c/__v/${testClientModuleDigest}/cart\\.client\\.js$`,
 );
 
 describe('server app shell Vite plugin', () => {
@@ -39,7 +43,7 @@ describe('server app shell Vite plugin', () => {
         {
           path: '/c/cart.client.js',
           renderPlanFingerprint: testRenderPlanFingerprint,
-          source: 'export const cart = 1;',
+          source: testClientModuleSource,
         },
       ],
       manifest: {
@@ -60,10 +64,11 @@ describe('server app shell Vite plugin', () => {
     const module = build.clientModules[0];
     if (!module) throw new Error('expected a compiled client module');
     expect(module).toMatchObject({
-      file: expect.stringMatching(testFingerprintVersionPattern),
-      href: expect.stringMatching(testFingerprintVersionPattern),
-      path: expect.stringMatching(testFingerprintVersionPattern),
-      source: 'export const cart = 1;',
+      digest: testClientModuleDigest,
+      file: expect.stringMatching(testRepresentationPathPattern),
+      href: expect.stringMatching(testRepresentationPathPattern),
+      path: expect.stringMatching(testRepresentationPathPattern),
+      source: testClientModuleSource,
     });
     expect(build.assets).toEqual([
       { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
@@ -102,7 +107,7 @@ describe('server app shell Vite plugin', () => {
     const moduleResponse = await handler(new Request(`https://example.test${module.href}`));
     expect(moduleResponse.status).toBe(200);
     expect(moduleResponse.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
-    await expect(moduleResponse.text()).resolves.toBe('export const cart = 1;');
+    await expect(moduleResponse.text()).resolves.toBe(testClientModuleSource);
   });
 
   it('wires a route-entry map through the Vite build helper before route hints are applied', async () => {
@@ -291,6 +296,9 @@ describe('server app shell Vite plugin', () => {
 
   it('emits compiled app-shell client modules into the Vite output tree', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-client-modules-'));
+    const source = 'export const cart = true;';
+    const digest = clientModuleRepresentationDigest(source);
+    const modulePath = `/c/__v/${digest}/cart.client.js`;
 
     try {
       const build = createKovoAppShellViteBuild({
@@ -299,8 +307,7 @@ describe('server app shell Vite plugin', () => {
           {
             path: '/c/cart.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            source,
           },
         ],
       });
@@ -308,23 +315,23 @@ describe('server app shell Vite plugin', () => {
       await expect(writeKovoAppShellViteBuildOutput(build, { outDir })).resolves.toEqual({
         clientModuleOutputPlan: [
           {
-            path: '/c/__v/cart-v1/cart.client.js',
-            targetPath: join(outDir, 'c/__v/cart-v1/cart.client.js'),
+            path: modulePath,
+            targetPath: join(outDir, `c/__v/${digest}/cart.client.js`),
           },
         ],
         clientModules: [
           {
-            file: 'c/__v/cart-v1/cart.client.js',
-            href: '/c/__v/cart-v1/cart.client.js',
-            path: '/c/__v/cart-v1/cart.client.js',
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            digest,
+            file: `c/__v/${digest}/cart.client.js`,
+            href: modulePath,
+            path: modulePath,
+            source,
           },
         ],
         staticExportAssets: [],
       });
-      await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cart = true;',
+      await expect(readFile(join(outDir, `c/__v/${digest}/cart.client.js`), 'utf8')).resolves.toBe(
+        source,
       );
     } finally {
       await rm(outDir, { force: true, recursive: true });
@@ -333,6 +340,9 @@ describe('server app shell Vite plugin', () => {
 
   it('emits app-shell build output from the Vite plugin writeBundle hook', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-plugin-build-'));
+    const source = 'export const cart = true;';
+    const digest = clientModuleRepresentationDigest(source);
+    const modulePath = `/c/__v/${digest}/cart.client.js`;
     const built: KovoAppShellBuild[] = [];
     const outputs: KovoAppShellViteBuildOutput[] = [];
     const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', {})] }), {
@@ -341,8 +351,7 @@ describe('server app shell Vite plugin', () => {
           {
             path: '/c/cart.client.js',
             renderPlanFingerprint: testRenderPlanFingerprint,
-            source: 'export const cart = true;',
-            version: 'cart-v1',
+            source,
           },
         ],
         onBuild(build, output) {
@@ -372,25 +381,25 @@ describe('server app shell Vite plugin', () => {
         },
       );
 
-      await expect(readFile(join(outDir, 'c/__v/cart-v1/cart.client.js'), 'utf8')).resolves.toBe(
-        'export const cart = true;',
+      await expect(readFile(join(outDir, `c/__v/${digest}/cart.client.js`), 'utf8')).resolves.toBe(
+        source,
       );
       expect(built).toHaveLength(1);
       expect(outputs).toEqual([
         {
           clientModuleOutputPlan: [
             {
-              path: '/c/__v/cart-v1/cart.client.js',
-              targetPath: join(outDir, 'c/__v/cart-v1/cart.client.js'),
+              path: modulePath,
+              targetPath: join(outDir, `c/__v/${digest}/cart.client.js`),
             },
           ],
           clientModules: [
             {
-              file: 'c/__v/cart-v1/cart.client.js',
-              href: '/c/__v/cart-v1/cart.client.js',
-              path: '/c/__v/cart-v1/cart.client.js',
-              source: 'export const cart = true;',
-              version: 'cart-v1',
+              digest,
+              file: `c/__v/${digest}/cart.client.js`,
+              href: modulePath,
+              path: modulePath,
+              source,
             },
           ],
           staticExportAssets: [

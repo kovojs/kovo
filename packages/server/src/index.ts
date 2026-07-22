@@ -306,6 +306,7 @@ export type {
   MemoryVersionedClientModuleRegistryOptions,
   VersionedClientModuleInput,
   VersionedClientModuleRegistry,
+  VersionedClientModuleStore,
 } from './client-modules.js';
 // Opaque recursive public type carried by generated live-target render contexts. The framework
 // issues values from a module-private WeakMap; exporting the type does not expose a constructor or

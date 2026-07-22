@@ -5,15 +5,14 @@
 
 import {
   freezeSecurityValue,
-  securityDecodeURIComponent,
-  securityEncodeURIComponent,
   securityRegExpExec,
   securityStringCharCodeAt,
   securityStringSlice,
   securityStringStartsWith,
 } from '#security-witness-intrinsics';
 import {
-  clientModuleContentHash,
+  canonicalClientModuleSource,
+  clientModuleRepresentationHash,
   clientModuleStringIndexOf,
   snapshotClientModuleUrl,
   type ClientModuleUrlSnapshot,
@@ -25,12 +24,12 @@ const CLIENT_MODULE_VERSION_PREFIX = '/c/__v/';
 
 /** @internal Parsed immutable client-module request target. */
 export interface ClientModuleRequestTarget {
+  digest: string;
   path: string;
-  version: string;
 }
 
 /** @internal Construct the canonical `/c/...client.js` href for a source module file name. */
-export function clientModuleHrefForSourceFile(fileName: string, version?: string): string {
+export function clientModuleHrefForSourceFile(fileName: string, digest?: string): string {
   assertClientModuleScalar(fileName, 'source file name');
   let firstNonSlash = 0;
   while (
@@ -41,23 +40,22 @@ export function clientModuleHrefForSourceFile(fileName: string, version?: string
   }
   const relativeFileName = securityStringSlice(fileName, firstNonSlash);
   const path = `${CLIENT_MODULE_PREFIX}${replaceClientModuleSourceExtension(relativeFileName)}`;
-  return version === undefined ? path : versionedClientModuleHref(path, version);
+  return digest === undefined ? path : versionedClientModuleHref(path, digest);
 }
 
 /**
- * @internal Construct the immutable `/c/__v/<version>/...` href for a client module.
+ * @internal Construct the immutable `/c/__v/<digest>/...` href for a client module.
  * Fragments are preserved so event handler refs can version the module URL without
  * losing the exported handler anchor.
  */
-export function versionedClientModuleHref(href: string, version: string): string {
-  assertClientModuleScalar(version, 'version');
-  if (version.length === 0) throw new Error('Client module version must not be empty.');
+export function versionedClientModuleHref(href: string, digest: string): string {
+  assertClientModuleDigest(digest);
   const url = parseClientModuleUrl(href);
   if (securityStringStartsWith(url.pathname, CLIENT_MODULE_VERSION_PREFIX)) {
     throw new Error(`Client module source href must not already be versioned: ${href}`);
   }
   const relativePath = securityStringSlice(url.pathname, CLIENT_MODULE_PREFIX.length);
-  return `${CLIENT_MODULE_VERSION_PREFIX}${securityEncodeURIComponent(version)}/${relativePath}${url.hash}`;
+  return `${CLIENT_MODULE_VERSION_PREFIX}${digest}/${relativePath}${url.hash}`;
 }
 
 /** @internal Normalize a same-origin client-module href to its `/c/...` pathname. */
@@ -79,14 +77,19 @@ export function versionedClientModuleRequestKey(href: string): string | undefine
   const target = versionedClientModuleTargetFromUrl(url);
   if (target === undefined) return undefined;
 
-  if (securityStringStartsWith(url.pathname, CLIENT_MODULE_VERSION_PREFIX)) return url.pathname;
-  return `${target.path}?v=${securityEncodeURIComponent(target.version)}`;
+  return url.pathname;
 }
 
-/** @internal Deterministic content version used in generated client-module URLs. */
-export function clientModuleContentVersion(source: string): string {
+/** @internal Canonical well-formed source bytes served by every Kovo module resolver. */
+export function canonicalClientModuleRepresentation(source: string): string {
   assertClientModuleScalar(source, 'source');
-  return clientModuleContentHash(source);
+  return canonicalClientModuleSource(source);
+}
+
+/** @internal Full immutable representation digest used in generated client-module URLs. */
+export function clientModuleRepresentationDigest(source: string): string {
+  assertClientModuleScalar(source, 'source');
+  return clientModuleRepresentationHash(source);
 }
 
 function parseClientModuleUrl(href: string): ClientModuleUrlSnapshot {
@@ -104,12 +107,10 @@ function parseClientModuleUrl(href: string): ClientModuleUrlSnapshot {
 function versionedClientModuleTargetFromUrl(
   url: ClientModuleUrlSnapshot,
 ): ClientModuleRequestTarget | undefined {
-  const versionedPath = versionedClientModulePathTarget(url.pathname);
-  if (versionedPath !== undefined) return versionedPath;
-
-  const version = url.versionSearchParam;
-  if (!version) return undefined;
-  return freezeSecurityValue({ path: url.pathname, version });
+  // Technical-preview policy: the former `?v=` compatibility spelling and every other query
+  // spelling are invalid. There is exactly one canonical immutable URL grammar.
+  if (url.search.length !== 0) return undefined;
+  return versionedClientModulePathTarget(url.pathname);
 }
 
 function versionedClientModulePathTarget(pathname: string): ClientModuleRequestTarget | undefined {
@@ -119,17 +120,13 @@ function versionedClientModulePathTarget(pathname: string): ClientModuleRequestT
   const separator = clientModuleStringIndexOf(rest, '/');
   if (separator <= 0 || separator === rest.length - 1) return undefined;
 
-  let version: string;
-  try {
-    version = securityDecodeURIComponent(securityStringSlice(rest, 0, separator));
-  } catch {
-    return undefined;
-  }
+  const digest = securityStringSlice(rest, 0, separator);
+  if (!isClientModuleDigest(digest)) return undefined;
 
   const path = `${CLIENT_MODULE_PREFIX}${securityStringSlice(rest, separator + 1)}`;
   if (securityStringStartsWith(path, CLIENT_MODULE_VERSION_PREFIX)) return undefined;
 
-  return freezeSecurityValue({ path, version });
+  return freezeSecurityValue({ digest, path });
 }
 
 function replaceClientModuleSourceExtension(fileName: string): string {
@@ -142,4 +139,19 @@ function assertClientModuleScalar(value: unknown, name: string): asserts value i
   if (typeof value !== 'string') {
     throw new TypeError(`Client module ${name} must be a string.`);
   }
+}
+
+function assertClientModuleDigest(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !isClientModuleDigest(value)) {
+    throw new TypeError('Client module representation digest must be 64 lowercase hex characters.');
+  }
+}
+
+function isClientModuleDigest(value: string): boolean {
+  if (value.length !== 64) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (!((code >= 0x30 && code <= 0x39) || (code >= 0x61 && code <= 0x66))) return false;
+  }
+  return true;
 }

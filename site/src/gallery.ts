@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +47,7 @@ const headlessUiSourceRoot = path.join(repoRoot, 'packages/headless-ui/src');
 
 export interface GalleryDeps {
   // The same registry passed to createApp(); register interactive demo modules here.
-  clientModules: { put(input: { path: string; source: string; version: string }): string };
+  clientModules: { put(input: { path: string; source: string }): string };
 }
 
 export interface GalleryRoutePageData {
@@ -78,10 +77,6 @@ interface GalleryData {
   galleryRoutes: readonly GalleryRoute[];
   interactiveDemos: readonly InteractiveDemo[];
   supportClientHrefs: readonly string[];
-}
-
-function contentHash(source: string): string {
-  return createHash('sha256').update(source).digest('hex').slice(0, 12);
 }
 
 // Component route paths are already authored as `/components/<name>` in
@@ -214,7 +209,6 @@ function registerGalleryInteractiveSupportClientModules(
   const runtimeHref = clientModules.put({
     path: runtimePath,
     source: galleryRuntimeModuleSource,
-    version: contentHash(galleryRuntimeModuleSource).slice(0, 8),
   });
   moduleHrefs.set(runtimePath, runtimeHref);
 
@@ -231,15 +225,10 @@ function registerGalleryInteractiveSupportClientModules(
     }
   }
 
-  const graphVersion = contentHash(
-    modules.map((module) => `${module.pathName}\n${module.source}`).join('\n'),
-  ).slice(0, 8);
-
   for (const module of modules) {
     const href = clientModules.put({
       path: module.pathName,
       source: module.source,
-      version: graphVersion,
     });
     moduleHrefs.set(module.pathName, href);
   }
@@ -308,7 +297,6 @@ function registerPrimitiveActionsClientModule(
   return clientModules.put({
     path: pathName,
     source,
-    version: contentHash(source).slice(0, 8),
   });
 }
 
@@ -343,7 +331,6 @@ function registerPrimitiveActionsGeneratedClientModule(
   return clientModules.put({
     path: pathName,
     source,
-    version: contentHash(source).slice(0, 8),
   });
 }
 
@@ -359,8 +346,8 @@ function registerGalleryInteractiveClientModules(
 ): void {
   for (const [index, demo] of demos.entries()) {
     const compiled = galleryInteractiveClientModule(demo.name);
-    const expected = clientModuleRegistrationFromHref(expectedHrefs[index]);
-    const pathName = expected?.pathName ?? compiled.pathName;
+    const expected = clientModulePathFromHref(expectedHrefs[index]);
+    const pathName = expected ?? compiled.pathName;
     const rawClientSource = compiled.source;
     const source = resolveGalleryClientModuleSpecifiers(
       rawClientSource,
@@ -370,14 +357,11 @@ function registerGalleryInteractiveClientModules(
     clientModules.put({
       path: pathName,
       source,
-      version: expected?.version ?? galleryInteractiveClientModuleVersion(rawClientSource),
     });
   }
 }
 
-function clientModuleRegistrationFromHref(
-  href: string | undefined,
-): { pathName: string; version: string } | null {
+function clientModulePathFromHref(href: string | undefined): string | null {
   if (!href) return null;
   const prefix = '/c/__v/';
   if (!href.startsWith(prefix)) {
@@ -388,10 +372,7 @@ function clientModuleRegistrationFromHref(
     throw new Error(`site app shell: malformed gallery client href: ${href}`);
   }
   const pathEnd = href.search(/[?#]/);
-  return {
-    pathName: `/c/${href.slice(versionEnd + 1, pathEnd === -1 ? href.length : pathEnd)}`,
-    version: decodeURIComponent(href.slice(prefix.length, versionEnd)),
-  };
+  return `/c/${href.slice(versionEnd + 1, pathEnd === -1 ? href.length : pathEnd)}`;
 }
 
 function galleryInteractiveClientModule(demoName: string): {
@@ -511,16 +492,6 @@ function headlessUiClientModuleHref(
     );
   }
   return href;
-}
-
-function galleryInteractiveClientModuleVersion(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index++) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-
-  return hash.toString(16).padStart(8, '0');
 }
 
 function sortedDirectoryEntries(directory: string): string[] {

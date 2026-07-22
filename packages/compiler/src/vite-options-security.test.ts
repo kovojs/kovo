@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  clientModuleContentVersion,
   clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
 } from '@kovojs/core/internal/client-module-url';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
@@ -267,7 +267,7 @@ export const saveOrder = mutation({ handler() {}, input: {} });
       await plugin.transform(source, join(rootB, 'src/card.tsx'));
       const rootBHref = clientModuleHrefForSourceFile(
         'src/card.tsx',
-        clientModuleContentVersion(clientSourceB),
+        clientModuleRepresentationDigest(clientSourceB),
       );
       const response = {
         body: '',
@@ -294,7 +294,7 @@ export const saveOrder = mutation({ handler() {}, input: {} });
     const clientSource = 'export const reviewedClient = true;';
     const clientHref = clientModuleHrefForSourceFile(
       'src/card.tsx',
-      clientModuleContentVersion(clientSource),
+      clientModuleRepresentationDigest(clientSource),
     );
     const plugin = createKovoVitePlugin(() => ({
       clientExports: ['reviewedClient'],

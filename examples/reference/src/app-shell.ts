@@ -40,7 +40,6 @@ export const referencePublicClientModuleHref = publicClientModules.put({
     '}',
     '',
   ].join('\n'),
-  version: 'reference-r7',
 });
 
 export const referencePublicRoute = route('/', {

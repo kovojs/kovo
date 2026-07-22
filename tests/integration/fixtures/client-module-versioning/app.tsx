@@ -10,7 +10,6 @@ const moduleHref = clientModules.put({
       if (output) output.textContent = 'loaded:a1b2c3d4';
     }
   `,
-  version: 'a1b2c3d4',
 });
 
 const homeRoute = route('/', {

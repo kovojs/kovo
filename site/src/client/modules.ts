@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,10 +13,6 @@ import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
 
 const clientDir = fileURLToPath(new URL('./', import.meta.url));
 
-function contentHash(source: string): string {
-  return createHash('sha256').update(source).digest('hex').slice(0, 12);
-}
-
 function register(
   registry: ReturnType<typeof createMemoryVersionedClientModuleRegistry>,
   name: string,
@@ -26,13 +21,12 @@ function register(
   return registry.put({
     path: `/c/${name}`,
     source,
-    version: `site-${contentHash(source)}`,
   });
 }
 
 export const siteClientModules = createMemoryVersionedClientModuleRegistry();
 
-/** Versioned hrefs (/c/__v/<version>/...) for each island, threaded into chrome
+/** Content-addressed hrefs (/c/__v/<digest>/...) for each island, threaded into chrome
  * render context and the markdown copy button so on:click resolves the exact
  * registered module. */
 export const clientHrefs = {

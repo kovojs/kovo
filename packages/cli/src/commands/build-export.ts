@@ -39,6 +39,7 @@ import {
 } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
 import {
   snapshotCacheInfluenceManifest,
@@ -5392,11 +5393,16 @@ function assertNoUnloweredKovoClientIslandHooks(source: string): void {
 function uniqueKovoCompiledClientModules(
   modules: readonly KovoAppShellCompiledClientModule[],
 ): KovoAppShellCompiledClientModule[] {
-  const byPath = new Map<string, KovoAppShellCompiledClientModule>();
+  const byPath = new Map<string, Map<string, KovoAppShellCompiledClientModule>>();
   for (const module of modules) {
-    byPath.set(`${module.path}\0${module.version ?? ''}`, module);
+    let byDigest = byPath.get(module.path);
+    if (byDigest === undefined) {
+      byDigest = new Map();
+      byPath.set(module.path, byDigest);
+    }
+    byDigest.set(clientModuleRepresentationDigest(module.source), module);
   }
-  return [...byPath.values()];
+  return [...byPath.values()].flatMap((byDigest) => [...byDigest.values()]);
 }
 
 function kovoBuildApprovedSourceFilter(

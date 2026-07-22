@@ -10,12 +10,10 @@ export function createStaticExportL0L1App(counter: StaticExportRenderCounter = {
   const analyticsHref = clientModules.put({
     path: '/c/static-export-analytics.client.js',
     source: 'export const staticExportAnalytics = true;',
-    version: 'static-export-analytics-1',
   });
   const docsHref = clientModules.put({
     path: '/c/static-export-docs.client.js',
     source: 'export const staticExportDocs = true;',
-    version: 'static-export-docs-1',
   });
 
   return createApp({

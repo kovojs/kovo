@@ -8,8 +8,8 @@ import { URL as BuiltinURL } from 'node:url';
 import { runInNewContext as builtinRunInNewContext } from 'node:vm';
 
 import {
-  clientModuleContentVersion,
   clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
@@ -137,7 +137,6 @@ export interface KovoViteCompiledClientModule {
   path: string;
   renderPlanFingerprint?: string;
   source: string;
-  version?: string;
 }
 
 /** @internal Callback the Vite plugin invokes per non-error compiler diagnostic. */
@@ -568,7 +567,9 @@ function createBoundKovoVitePlugin(
         res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
         res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.end(rewriteDevClientModuleRuntimeImports(source));
+        // The state map already holds the exact final browser representation whose digest appears
+        // in the request URL. Dev and production therefore serve byte-identical module bodies.
+        res.end(source);
       });
     },
     getCssAssetManifest(manifestOptions = {}) {
@@ -928,17 +929,6 @@ function normalizeFrameworkViteSourceRoot(value: string): string | null {
     return null;
   }
   return normalized;
-}
-
-function rewriteDevClientModuleRuntimeImports(source: string): string {
-  // papercuts-super-6 A2: emitted client-island modules are served directly by this middleware,
-  // bypassing Vite's normal import-rewrite transform. Rewrite the compiler-owned runtime barrel to
-  // Vite's resolvable module-id URL so browsers can load the island module without an import map.
-  return compilerStringReplaceAll(
-    source,
-    "from '@kovojs/browser/generated'",
-    "from '/@id/@kovojs/browser/generated'",
-  );
 }
 
 function transformViteCompileResult(
@@ -2019,10 +2009,12 @@ function recordViteCompileResult(
   let clientHistory: ViteClientModuleHistory | undefined;
   let compiledClientModule: KovoViteCompiledClientModule | undefined;
   if (clientSource !== undefined) {
-    const href =
-      metadata.hmrImpact?.clientHref ??
-      clientModuleHrefForSourceFile(fileName, clientModuleContentVersion(clientSource));
-    clientHistory = nextViteClientModuleHistory(existing?.clientHistory, href, clientSource);
+    const finalSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
+    const href = clientModuleHrefForSourceFile(
+      fileName,
+      clientModuleRepresentationDigest(finalSource),
+    );
+    clientHistory = nextViteClientModuleHistory(existing?.clientHistory, href, finalSource);
     const target = parseVersionedClientModuleTarget(href);
     if (
       metadata.hmrImpact?.clientHref !== null &&
@@ -2034,8 +2026,7 @@ function recordViteCompileResult(
         ...(metadata.renderPlanFingerprint
           ? { renderPlanFingerprint: metadata.renderPlanFingerprint }
           : {}),
-        source: rewriteClientModuleRuntimeImportsForBrowser(clientSource),
-        ...(target?.version === undefined ? {} : { version: target.version }),
+        source: finalSource,
       });
     }
   }
@@ -2114,13 +2105,6 @@ function nextViteClientModuleHistory(
 ): ViteClientModuleHistory {
   const keys: string[] = [];
   compilerArrayAppend(keys, href, 'Kovo Vite client-module history keys');
-  const target = parseVersionedClientModuleTarget(href);
-  if (target !== undefined) {
-    const queryKey = `${target.path}?v=${target.version}`;
-    if (queryKey !== href) {
-      compilerArrayAppend(keys, queryKey, 'Kovo Vite client-module history keys');
-    }
-  }
   let previous: ViteClientModuleVersion | undefined;
   if (existing !== undefined) {
     if (existing.current.href === href && existing.current.source === source) {

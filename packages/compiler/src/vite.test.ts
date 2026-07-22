@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
-  clientModuleContentVersion,
   clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
 } from '@kovojs/core/internal/client-module-url';
 import {
   createRegisteredDiagnostic,
@@ -16,6 +17,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { KovoViteMiddleware } from './internal.js';
 import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
+import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import {
   createFrameworkKovoCssCollectorVitePlugin,
   createKovoVitePlugin,
@@ -1093,9 +1095,14 @@ export const RealKv437 = component({
   it('binds production client registration to the reviewed generated-runtime rewrite', async () => {
     const clientSource =
       "import { runQueryUpdatePlan } from '@kovojs/browser/generated';\nexport const reviewedClient = runQueryUpdatePlan;";
-    const clientHref = clientModuleHrefForSourceFile(
+    const rawClientHref = clientModuleHrefForSourceFile(
       'src/reviewed.tsx',
-      clientModuleContentVersion(clientSource),
+      clientModuleRepresentationDigest(clientSource),
+    );
+    const finalSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
+    const finalClientHref = clientModuleHrefForSourceFile(
+      'src/reviewed.tsx',
+      clientModuleRepresentationDigest(finalSource),
     );
     const plugin = createKovoVitePlugin(() => ({
       clientExports: ['reviewedClient'],
@@ -1104,8 +1111,16 @@ export const RealKv437 = component({
         { kind: 'server', source: 'export const reviewedServer = true;' },
         { kind: 'client', source: clientSource },
       ],
-      hmrImpact: hmrMetadata({ clientHref }),
+      hmrImpact: hmrMetadata({ clientHref: rawClientHref }),
     }));
+    const middlewares: KovoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
     const nativeReplace = String.prototype.replace;
     const nativeToString = String.prototype.toString;
     const nativeExec = RegExp.prototype.exec;
@@ -1133,12 +1148,25 @@ export const RealKv437 = component({
     expect(compiled?.source).toContain('const runQueryUpdatePlan');
     expect(compiled?.source).toContain('export const reviewedClient = runQueryUpdatePlan;');
     expect(compiled?.source).not.toContain('attackerClient');
-    expect(compiled?.version).toBe(clientModuleContentVersion(clientSource));
+    expect(compiled).not.toHaveProperty('version');
     expect(Reflect.set(compiled!, 'source', 'globalThis.pwned = true;')).toBe(false);
     expect(Reflect.set(compiled!, 'path', '/pwned.js')).toBe(false);
     const [reread] = plugin.getClientModules?.() ?? [];
     expect(reread?.source).toContain('export const reviewedClient = runQueryUpdatePlan;');
     expect(reread?.path).not.toBe('/pwned.js');
+
+    const response = createMiddlewareResponse();
+    const next = vi.fn();
+    middlewares[0]?.({ url: finalClientHref }, response, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(response.body).toBe(finalSource);
+    expect(clientModuleRepresentationDigest(response.body)).toBe(
+      parseVersionedClientModuleTarget(finalClientHref)?.digest,
+    );
+    const staleResponse = createMiddlewareResponse();
+    const staleNext = vi.fn();
+    middlewares[0]?.({ url: rawClientHref }, staleResponse, staleNext);
+    expect(staleNext).toHaveBeenCalledOnce();
   });
 
   it('reports warn, lint, and notice diagnostics without blocking the Vite transform', async () => {
@@ -1254,7 +1282,8 @@ export const RealKv437 = component({
       'Content-Type': 'text/javascript; charset=utf-8',
       'X-Content-Type-Options': 'nosniff',
     });
-    expect(res.body).toContain("from '/@id/@kovojs/browser/generated'");
+    expect(res.body).toContain('const runQueryUpdatePlan');
+    expect(res.body).not.toContain("from '/@id/@kovojs/browser/generated'");
     expect(res.body).not.toContain("from '@kovojs/browser/generated'");
     expect(res.body).toContain('export const CartBadge$button_click');
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
@@ -1279,20 +1308,22 @@ export const RealKv437 = component({
 
     await plugin.transform('component(', 'src/shared-abi.tsx');
 
-    const version = clientModuleContentVersion(clientSource);
+    const version = clientModuleRepresentationDigest(clientSource);
     const versionedPath = clientModuleHrefForSourceFile('src/shared-abi.tsx', version);
     const queryVersionedPath = `/c/src/shared-abi.client.js?v=${version}`;
-    for (const href of [versionedPath, queryVersionedPath]) {
-      const res = createMiddlewareResponse();
-      const next = vi.fn();
+    const res = createMiddlewareResponse();
+    const next = vi.fn();
+    middlewares[0]?.({ url: versionedPath }, res, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.body).toBe(clientSource);
+    expect(res.headers['Cross-Origin-Resource-Policy']).toBe('same-origin');
+    expect(res.headers['Cache-Control']).toBe('no-store');
 
-      middlewares[0]?.({ url: href }, res, next);
-
-      expect(next).not.toHaveBeenCalled();
-      expect(res.body).toBe(clientSource);
-      expect(res.headers['Cross-Origin-Resource-Policy']).toBe('same-origin');
-      expect(res.headers['Cache-Control']).toBe('no-store');
-    }
+    const legacy = createMiddlewareResponse();
+    const legacyNext = vi.fn();
+    middlewares[0]?.({ url: queryVersionedPath }, legacy, legacyNext);
+    expect(legacyNext).toHaveBeenCalledOnce();
+    expect(legacy.body).toBe('');
   });
 
   it('surfaces a deduped CSS asset manifest for transformed app components', async () => {
@@ -1711,11 +1742,11 @@ export const CartBadge = component({
     }
     const firstHref = clientModuleHrefForSourceFile(
       firstFile,
-      clientModuleContentVersion('export const bounded0 = true;'),
+      clientModuleRepresentationDigest('export const bounded0 = true;'),
     );
     const lastHref = clientModuleHrefForSourceFile(
       lastFile,
-      clientModuleContentVersion('export const bounded1024 = true;'),
+      clientModuleRepresentationDigest('export const bounded1024 = true;'),
     );
     const firstResponse = createMiddlewareResponse();
     const lastResponse = createMiddlewareResponse();
@@ -1757,7 +1788,7 @@ export const CartBadge = component({
     const clientSource = 'export const staleClient = true;';
     const clientHref = clientModuleHrefForSourceFile(
       'src/stale.tsx',
-      clientModuleContentVersion(clientSource),
+      clientModuleRepresentationDigest(clientSource),
     );
     let compileCount = 0;
     const plugin = createKovoVitePlugin(() => {

@@ -29,7 +29,7 @@ export const CartBadge = component({
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`/c/__v/[0-9a-f]{16}-[0-9a-f]{64}/${relativePath}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{64}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 
@@ -188,7 +188,7 @@ export const Evil = component({
       'generated/registries.d.ts',
     ]);
     expect(result.hmrImpact?.clientHref).toMatch(
-      /^\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{64}\/outside\/evil\.client\.js$/,
+      /^\/c\/__v\/[0-9a-f]{64}\/outside\/evil\.client\.js$/,
     );
     expect(result.hmrImpact?.clientHref).not.toContain('..');
     expect(result.files.map((file) => file.fileName).join('\n')).not.toContain('..');
@@ -1870,7 +1870,8 @@ export const CollisionProof = component({
     expect(before.renderPlanFingerprint).toBeTruthy();
     expect(after.renderPlanFingerprint).toBeTruthy();
     expect(before.renderPlanFingerprint).not.toBe(after.renderPlanFingerprint);
-    expect(before.hmrImpact?.clientHref).not.toBe(after.hmrImpact?.clientHref);
+    // Module representation identity is deliberately independent of query/render grammar.
+    expect(before.hmrImpact?.clientHref).toBe(after.hmrImpact?.clientHref);
   });
 
   it('wires KV416 into the production compile gate diagnostics', () => {

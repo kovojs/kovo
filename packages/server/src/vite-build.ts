@@ -1,15 +1,19 @@
-import { clientModulePath } from '@kovojs/core/internal/client-module-url';
+import {
+  canonicalClientModuleRepresentation,
+  clientModulePath,
+  parseVersionedClientModuleTarget,
+} from '@kovojs/core/internal/client-module-url';
 
 import { assertNoBlockingAppDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import type { AppRouteDeclaration, KovoApp } from './app-types.js';
+import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import {
-  buildOwnDataProperty,
-  buildSecuritySha256Hex,
-  snapshotBuildArray,
-} from './build-security-intrinsics.js';
-import type { VersionedClientModuleInput } from './client-modules.js';
+  computeRenderPlanFingerprint,
+  finalizeVersionedClientModuleBuild,
+  type VersionedClientModuleInput,
+} from './client-modules.js';
 import type { PageHintOptions } from './hints.js';
 import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 import type { KovoAppShellVitePluginStaticExportOptions } from './vite-static-export-options.js';
@@ -31,19 +35,15 @@ import { witnessArrayAppend } from './security-witness-intrinsics.js';
 
 /**
  * @internal App-shell Vite build pipeline internal (SPEC.md §9.5). Compiled client module
- * input with an optional precomputed version for the build.
+ * input carrying the compiler-owned render-plan fingerprint for the build.
  * Exported only for in-repo build/host config, not app authors.
  */
-export interface KovoAppShellCompiledClientModule extends Omit<
-  VersionedClientModuleInput,
-  'version'
-> {
+export interface KovoAppShellCompiledClientModule extends VersionedClientModuleInput {
   /**
    * @internal Compiler render-plan fingerprint. Required for compiled modules so
    * SPEC §5.2.1 shape-only render-plan changes move the registry build token.
    */
   renderPlanFingerprint?: string;
-  version?: string;
 }
 
 /**
@@ -118,12 +118,11 @@ export interface KovoAppShellVitePluginBuildOptions extends Omit<
  * Exported only for in-repo build/host config, not app authors.
  */
 export interface KovoAppShellBuiltClientModule {
-  contentType?: string;
+  digest: string;
   file: string;
   href: string;
   path: string;
   source: string;
-  version: string;
 }
 
 /**
@@ -440,43 +439,39 @@ function registerCompiledClientModules(
 ): KovoAppShellBuiltClientModule[] {
   const pinnedModules = snapshotCompiledClientModules(modules);
   const renderPlanFingerprint = compiledClientModulesRenderPlanFingerprint(pinnedModules);
-  if (renderPlanFingerprint !== undefined) {
-    if (!app.clientModules.setRenderPlanFingerprint) {
-      throw new TypeError(
-        'createKovoAppShellBuild() requires app.clientModules.setRenderPlanFingerprint() when compiled client modules are registered. SPEC §5.2.1 requires the build token to include the compiler render-plan fingerprint.',
-      );
-    }
-    app.clientModules.setRenderPlanFingerprint(renderPlanFingerprint);
-  }
 
   const builtModules: KovoAppShellBuiltClientModule[] = [];
   for (let index = 0; index < pinnedModules.length; index += 1) {
     const module = pinnedModules[index]!;
-    const { renderPlanFingerprint: _renderPlanFingerprint, ...registryModule } = module;
-    // SPEC §6.6: production client module URLs are immutable and versioned.
-    // SPEC §5.2.1: the default version also carries the render-plan fingerprint
-    // so a shape-only render-plan change moves the client href as well as the token.
-    const version =
-      module.version ?? `${module.renderPlanFingerprint}-${sourceVersion(module.source)}`;
+    const source = canonicalClientModuleRepresentation(module.source);
     const href = app.clientModules.put({
-      ...registryModule,
-      version,
+      path: module.path,
+      source,
     });
     const pathname = clientModulePath(href);
+    const target = parseVersionedClientModuleTarget(href);
+    if (target === undefined) {
+      throw new TypeError(`Compiled client module ${module.path} produced a non-canonical href.`);
+    }
 
     const built: KovoAppShellBuiltClientModule = {
+      digest: target.digest,
       file: normalizedDistFile(pathname),
       href,
       path: pathname,
-      source: module.source,
-      version,
+      source,
     };
     witnessArrayAppend(
       builtModules,
-      module.contentType === undefined ? built : { ...built, contentType: module.contentType },
+      built,
       'Server packages/server/src/vite-build.ts collection',
     );
   }
+
+  finalizeVersionedClientModuleBuild(
+    app.clientModules,
+    renderPlanFingerprint ?? computeRenderPlanFingerprint({}),
+  );
 
   return builtModules;
 }
@@ -493,21 +488,17 @@ function snapshotCompiledClientModules(
     }
     const path = requiredCompiledClientModuleString(raw, 'path', index);
     const source = requiredCompiledClientModuleString(raw, 'source', index);
-    const contentType = optionalCompiledClientModuleString(raw, 'contentType', index);
     const renderPlanFingerprint = optionalCompiledClientModuleString(
       raw,
       'renderPlanFingerprint',
       index,
     );
-    const version = optionalCompiledClientModuleString(raw, 'version', index);
     witnessArrayAppend(
       pinned,
       {
         path,
         source,
-        ...(contentType === undefined ? {} : { contentType }),
         ...(renderPlanFingerprint === undefined ? {} : { renderPlanFingerprint }),
-        ...(version === undefined ? {} : { version }),
       },
       'Server packages/server/src/vite-build.ts collection',
     );
@@ -529,7 +520,7 @@ function requiredCompiledClientModuleString(
 
 function optionalCompiledClientModuleString(
   module: object,
-  field: 'contentType' | 'renderPlanFingerprint' | 'version',
+  field: 'renderPlanFingerprint',
   index: number,
 ): string | undefined {
   const property = buildOwnDataProperty(module, field, `compiled client module ${index}.${field}`);
@@ -588,10 +579,4 @@ function mergePageHints<MetaContext>(
   if (extra.prerenderUrls !== undefined) merged.prerenderUrls = extra.prerenderUrls;
 
   return merged;
-}
-
-function sourceVersion(source: string): string {
-  // SPEC §6.6/§14: immutable executable URLs use the complete collision-resistant source
-  // identity. Truncated cache-busting hashes silently alias distinct deploys.
-  return buildSecuritySha256Hex(source);
 }

@@ -4343,7 +4343,6 @@ const clientModules = createMemoryVersionedClientModuleRegistry();
 clientModules.put({
   path: '/c/cart.client.js',
   source: 'export const cartClient = true;',
-  version: 'cart-v1',
 });
 const cartQuery = query('cart', {
   access: { kind: 'public', reason: 'build fixture query' },

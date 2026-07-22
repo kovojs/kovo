@@ -16,7 +16,6 @@ const {
   createInlineKovoLoaderSource,
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
-  kovoDeferredRuntimeModuleVersion,
 } = await import('../dist/browser/src/internal/inline-loader.mjs');
 
 export const p10PerfAcceptance = {
@@ -33,7 +32,6 @@ const clientModules = createMemoryVersionedClientModuleRegistry();
 const runtimeHref = clientModules.put({
   path: kovoDeferredRuntimeModulePath,
   source: kovoDeferredRuntimeModuleSource,
-  version: kovoDeferredRuntimeModuleVersion,
 });
 const kovoLoaderSource = createInlineKovoLoaderSource(
   JSON.stringify(runtimeHref),
@@ -47,7 +45,6 @@ export function increment(_event, ctx) {
   ctx.state.count += 1;
 }
 `,
-  version: 'p10',
 });
 const app = createApp({
   clientModules,

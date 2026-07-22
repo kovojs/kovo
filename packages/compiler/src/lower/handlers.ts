@@ -2,8 +2,8 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { securityOperationDoorForKind } from '@kovojs/core/internal/security-operation-ir';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
-  clientModuleContentVersion,
   clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
 } from '@kovojs/core/internal/client-module-url';
 
 import {
@@ -347,7 +347,7 @@ export function clientModuleUrl(fileName: string, version?: string): string {
 }
 
 export function clientModuleVersion(source: string): string {
-  return clientModuleContentVersion(source);
+  return clientModuleRepresentationDigest(source);
 }
 
 function eventAttributeReferences(eventAttribute: {

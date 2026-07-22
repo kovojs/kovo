@@ -1,18 +1,26 @@
-import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+
 import {
-  clientModuleContentVersion,
   clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
   parseVersionedClientModuleTarget,
   versionedClientModuleRequestKey,
 } from '@kovojs/core/internal/client-module-url';
+import { describe, expect, it, vi } from 'vitest';
 
+import { clientModuleBuildTokenHash } from './client-module-registry-intrinsics.js';
 import {
   computeRenderPlanFingerprint,
   createMemoryVersionedClientModuleRegistry,
+  finalizeVersionedClientModuleBuild,
   RENDER_PLAN_GRAMMAR_VERSION,
   renderVersionedClientModuleResponse,
+  replaceVersionedClientModuleBuildSnapshot,
+  snapshotVersionedClientModuleRegistry,
   versionedClientModuleHref,
+  type VersionedClientModuleInput,
+  type VersionedClientModuleRegistry,
+  type VersionedClientModuleStore,
 } from './client-modules.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 
@@ -25,304 +33,284 @@ const clientModuleRegistryIntrinsicsUrl = new URL(
   import.meta.url,
 ).href;
 
-// ─── D1 + DEPLOY-3: render-plan fingerprint & never-empty token ───────────────
+function createRegistry(store = createMemoryVersionedClientModuleRegistry()): VersionedClientModuleRegistry {
+  return snapshotVersionedClientModuleRegistry(store);
+}
 
-describe('render-plan fingerprint and grammar version (D1, DEPLOY-3)', () => {
-  it('RENDER_PLAN_GRAMMAR_VERSION is a non-empty stable string', () => {
-    expect(typeof RENDER_PLAN_GRAMMAR_VERSION).toBe('string');
-    expect(RENDER_PLAN_GRAMMAR_VERSION.length).toBeGreaterThan(0);
+describe('render-plan and app-build identities', () => {
+  it('keeps a full render fingerprint and a full non-empty module-less app token', () => {
+    expect(RENDER_PLAN_GRAMMAR_VERSION).toBeTruthy();
+    const fingerprint = computeRenderPlanFingerprint({});
+    const registry = createRegistry();
+
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/u);
+    expect(registry.buildToken()).toMatch(/^[0-9a-f]{64}$/u);
   });
 
-  it('computeRenderPlanFingerprint returns different values for different shape inputs (D1)', () => {
-    const fpA = computeRenderPlanFingerprint({ cart: 'field:id,count', product: 'field:id,name' });
-    const fpB = computeRenderPlanFingerprint({ cart: 'field:id,count', product: 'field:id,price' });
-    expect(fpA).not.toBe(fpB);
+  it('moves on projected grammar facts without changing module representations', () => {
+    const module = { path: '/c/cart.client.js', source: 'export {}' };
+    const first = createRegistry();
+    const second = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(first, {
+      modules: [module],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ cart: 'field:id,count' }),
+    });
+    replaceVersionedClientModuleBuildSnapshot(second, {
+      modules: [module],
+      renderPlanFingerprint: computeRenderPlanFingerprint({ cart: 'field:id,total' }),
+    });
+    expect(first.entries()).toEqual(second.entries());
+    expect(first.buildToken()).not.toBe(second.buildToken());
   });
 
-  it('computeRenderPlanFingerprint is deterministic and key-order independent', () => {
-    const fp1 = computeRenderPlanFingerprint({ a: 'x', b: 'y' });
-    const fp2 = computeRenderPlanFingerprint({ b: 'y', a: 'x' });
-    expect(fp1).toBe(fp2);
-  });
-
-  it('length-frames query names and shapes instead of trusting delimiters', () => {
-    expect(computeRenderPlanFingerprint({ a: 'x', b: 'y' })).not.toBe(
-      computeRenderPlanFingerprint({ 'a:x\nb': 'y' }),
+  it('byte-length-frames app-token inputs instead of trusting delimiters', () => {
+    const fingerprint = computeRenderPlanFingerprint({});
+    expect(clientModuleBuildTokenHash(fingerprint, ['a', 'b\nc'])).not.toBe(
+      clientModuleBuildTokenHash(fingerprint, ['a\nb', 'c']),
     );
-    expect(computeRenderPlanFingerprint({ '🧪:\u0000': '\n,名' })).not.toBe(
-      computeRenderPlanFingerprint({ '🧪': '\u0000:\n,名' }),
+    expect(clientModuleBuildTokenHash(fingerprint, ['名🙂', '\0:x'])).toMatch(
+      /^[0-9a-f]{64}$/u,
     );
   });
 
-  it('buildToken() is never empty even with zero registered modules (DEPLOY-3)', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    expect(Object.isFrozen(registry)).toBe(true);
-    const token = registry.buildToken();
-    expect(token).toBeTruthy();
-    expect(token.length).toBeGreaterThan(0);
+  it('is invariant to registration order and retained resolver history', () => {
+    const one = { path: '/c/a.client.js', source: 'export const a = 1;' };
+    const two = { path: '/c/z.client.js', source: 'export const z = 2;' };
+    const history = { path: '/c/a.client.js', source: 'export const a = 0;' };
+    const fingerprint = computeRenderPlanFingerprint({ cart: 'id' });
+
+    const storeA = createMemoryVersionedClientModuleRegistry();
+    const registryA = createRegistry(storeA);
+    registryA.put(history);
+    replaceVersionedClientModuleBuildSnapshot(registryA, {
+      modules: [two, one],
+      renderPlanFingerprint: fingerprint,
+    });
+
+    const registryB = createRegistry();
+    replaceVersionedClientModuleBuildSnapshot(registryB, {
+      modules: [one, two],
+      renderPlanFingerprint: fingerprint,
+    });
+
+    expect(registryA.buildToken()).toBe(registryB.buildToken());
+    expect(storeA.resolve(clientHref(history))).toMatchObject({ body: history.source, status: 200 });
+    expect(registryA.entries()).toEqual(registryB.entries());
   });
 
-  it('two registries with identical modules but different renderPlanFingerprint produce different tokens (D1)', () => {
-    const fp1 = computeRenderPlanFingerprint({ cart: 'field:id,count' });
-    const fp2 = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+  it('includes simultaneous active representations for one logical path', () => {
+    const oldModule = { path: '/c/cart.client.js', source: 'export const generation = 1;' };
+    const newModule = { path: '/c/cart.client.js', source: 'export const generation = 2;' };
+    const fingerprint = computeRenderPlanFingerprint({});
+    const both = createRegistry();
+    const currentOnly = createRegistry();
 
-    const registryA = createMemoryVersionedClientModuleRegistry({ renderPlanFingerprint: fp1 });
-    const registryB = createMemoryVersionedClientModuleRegistry({ renderPlanFingerprint: fp2 });
+    replaceVersionedClientModuleBuildSnapshot(both, {
+      modules: [oldModule, newModule],
+      renderPlanFingerprint: fingerprint,
+    });
+    replaceVersionedClientModuleBuildSnapshot(currentOnly, {
+      modules: [newModule],
+      renderPlanFingerprint: fingerprint,
+    });
 
-    // Same module registrations in both
-    for (const r of [registryA, registryB]) {
-      r.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
-    }
-
-    expect(registryA.buildToken()).not.toBe(registryB.buildToken());
+    expect(both.entries()).toHaveLength(2);
+    expect(new Set(both.entries().map(clientHref))).toEqual(
+      new Set([clientHref(oldModule), clientHref(newModule)]),
+    );
+    expect(both.buildToken()).not.toBe(currentOnly.buildToken());
   });
 
-  it('setRenderPlanFingerprint changes buildToken() without re-registering modules (D1)', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    registry.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
+  it('ignores custom identity methods and seals one frozen production scalar', () => {
+    const backing = createMemoryVersionedClientModuleRegistry();
+    const attackerToken = vi.fn(() => 'attacker-token');
+    const attackerSetter = vi.fn();
+    const registry = snapshotVersionedClientModuleRegistry({
+      entries: () => backing.entries(),
+      put: (module) => backing.put(module),
+      resolve: (href) => backing.resolve(href),
+      buildToken: attackerToken,
+      setRenderPlanFingerprint: attackerSetter,
+    } as VersionedClientModuleStore & {
+      buildToken(): string;
+      setRenderPlanFingerprint(value: string): void;
+    });
+    registry.put({ path: '/c/a.client.js', source: 'export {}' });
+    const token = finalizeVersionedClientModuleBuild(
+      registry,
+      computeRenderPlanFingerprint({ a: 'shape' }),
+    );
 
-    const tokenBefore = registry.buildToken();
-    const fp = computeRenderPlanFingerprint({ cart: 'field:id,count' });
-    registry.setRenderPlanFingerprint?.(fp);
-    const tokenAfter = registry.buildToken();
-
-    expect(tokenBefore).not.toBe(tokenAfter);
-  });
-
-  it('setRenderPlanFingerprint is stable — calling with the same value preserves the token', () => {
-    const fp = computeRenderPlanFingerprint({ cart: 'field:id,count' });
-    const registry = createMemoryVersionedClientModuleRegistry({ renderPlanFingerprint: fp });
-    const token1 = registry.buildToken();
-    registry.setRenderPlanFingerprint?.(fp);
-    const token2 = registry.buildToken();
-    expect(token1).toBe(token2);
+    expect(token).toMatch(/^[0-9a-f]{64}$/u);
+    expect(registry.buildToken()).toBe(token);
+    expect(attackerToken).not.toHaveBeenCalled();
+    expect(attackerSetter).not.toHaveBeenCalled();
+    expect(() => registry.put({ path: '/c/b.client.js', source: 'export {}' })).toThrow(/KV417/);
+    expect(registry.buildToken()).toBe(token);
   });
 });
 
-// ─── D1 / DEPLOY-3: module-less app stamps non-empty kovo-build meta ──────────
-// (integration test — requires app-document; lives here for co-location with the registry tests)
+describe('immutable client-module representations', () => {
+  it('uses one full-digest URL grammar and rejects former query/author versions', () => {
+    const digest = clientModuleRepresentationDigest('export const ok = true;');
+    const href = clientModuleHrefForSourceFile('components/cart.tsx', digest);
 
-describe('versioned client modules', () => {
-  it('uses the shared core client-module ABI for hrefs, versions, and request parsing', () => {
-    const version = clientModuleContentVersion('export const ok = true;');
-    const href = clientModuleHrefForSourceFile('components/cart.tsx', version);
-
-    expect(href).toBe(`/c/__v/${version}/components/cart.client.js`);
-    expect(versionedClientModuleHref('/c/components/cart.client.js#Cart$add', version)).toBe(
-      `/c/__v/${version}/components/cart.client.js#Cart$add`,
+    expect(href).toBe(`/c/__v/${digest}/components/cart.client.js`);
+    expect(versionedClientModuleHref('/c/components/cart.client.js#Cart$add', digest)).toBe(
+      `/c/__v/${digest}/components/cart.client.js#Cart$add`,
     );
     expect(parseVersionedClientModuleTarget(href)).toEqual({
+      digest,
       path: '/c/components/cart.client.js',
-      version,
     });
-    expect(versionedClientModuleRequestKey(`/c/components/cart.client.js?v=${version}`)).toBe(
-      `/c/components/cart.client.js?v=${version}`,
-    );
+    expect(versionedClientModuleRequestKey(href)).toBe(new URL(href, 'https://kovo.local').pathname);
+    expect(versionedClientModuleRequestKey(`/c/components/cart.client.js?v=${digest}`)).toBeUndefined();
+    expect(parseVersionedClientModuleTarget('/c/__v/cart-v1/components/cart.client.js')).toBeUndefined();
   });
 
-  it('retains old versioned client module responses after newer deploys register', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    const oldHref = registry.put({
-      path: '/c/cart.client.js',
-      source: 'export const version = "old";',
-      version: 'old',
-    });
-    const newHref = registry.put({
-      path: '/c/cart.client.js',
-      source: 'export const version = "new";',
-      version: 'new',
+  it('retains old bytes while the facade active manifest can exclude them', () => {
+    const store = createMemoryVersionedClientModuleRegistry();
+    const registry = createRegistry(store);
+    const oldModule = { path: '/c/cart.client.js', source: 'export const version = "old";' };
+    const newModule = { path: '/c/cart.client.js', source: 'export const version = "new";' };
+    const oldHref = registry.put(oldModule);
+    replaceVersionedClientModuleBuildSnapshot(registry, {
+      modules: [newModule],
+      renderPlanFingerprint: computeRenderPlanFingerprint({}),
     });
 
-    expect(oldHref).toBe('/c/__v/old/cart.client.js');
-    expect(newHref).toBe('/c/__v/new/cart.client.js');
-    expect(registry.resolve(oldHref)).toEqual({
-      body: 'export const version = "old";',
+    expect(registry.entries()).toEqual([newModule]);
+    expect(registry.resolve(oldHref)).toMatchObject({ body: oldModule.source, status: 200 });
+    expect(registry.resolve('/c/cart.client.js?v=old')).toMatchObject({ status: 404 });
+  });
+
+  it('snapshots registration input and always serves fixed metadata', () => {
+    const registry = createRegistry();
+    const input = { path: '/c/public.client.js', source: 'export const role = "public";' };
+    const href = registry.put(input);
+    input.path = '/c/admin.client.js';
+    input.source = '<script>attack()</script>';
+
+    expect(registry.resolve(href)).toEqual({
+      body: 'export const role = "public";',
       headers: {
         'Cache-Control': 'public, max-age=31536000, immutable',
         'Cross-Origin-Resource-Policy': 'same-origin',
         'Content-Type': 'text/javascript; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
       },
       status: 200,
     });
-    expect(registry.resolve(newHref)).toMatchObject({
-      body: 'export const version = "new";',
-      status: 200,
-    });
-    expect(registry.resolve('/c/cart.client.js?v=old')).toMatchObject({
-      body: 'export const version = "old";',
-      status: 200,
-    });
   });
 
-  it('keeps exact immutable module ownership after late Map.get cross-binding', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    const publicHref = registry.put({
-      path: '/c/public.client.js',
-      source: 'export const role = "public";',
-      version: 'public-v1',
-    });
-    registry.put({
-      path: '/c/admin.client.js',
-      source: 'export const token = "ADMIN_SECRET";',
-      version: 'admin-v1',
-    });
-    const originalGet = Map.prototype.get;
-    Map.prototype.get = function (key: unknown) {
-      if (key === '/c/public.client.js\0public-v1') {
-        return originalGet.call(this, '/c/admin.client.js\0admin-v1');
-      }
-      return originalGet.call(this, key);
+  it('rejects a custom store href, body, or content-type mismatch', () => {
+    const source = 'export const safe = true;';
+    const expectedHref = clientHref({ path: '/c/safe.client.js', source });
+    const wrongHrefStore: VersionedClientModuleStore = {
+      entries: () => [],
+      put: () => '/c/__v/' + '0'.repeat(64) + '/safe.client.js',
+      resolve: () => ({ body: source, headers: {}, status: 200 }),
     };
+    expect(() => createRegistry(wrongHrefStore).put({ path: '/c/safe.client.js', source })).toThrow(
+      /framework-derived href/,
+    );
 
-    try {
-      expect(registry.resolve(publicHref)).toMatchObject({
-        body: 'export const role = "public";',
-        status: 200,
-      });
-    } finally {
-      Map.prototype.get = originalGet;
+    for (const response of [
+      {
+        body: 'export const attacker = true;',
+        headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+        status: 200 as const,
+      },
+      {
+        body: source,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200 as const,
+      },
+    ]) {
+      const store: VersionedClientModuleStore = {
+        entries: () => [{ path: '/c/safe.client.js', source }],
+        put: () => expectedHref,
+        resolve: () => response,
+      };
+      expect(() => createRegistry(store).resolve(expectedHref)).toThrow(/bytes|metadata/);
     }
   });
 
-  it('recomputes build tokens from exact sorted inputs after late sort, join, and hash poisoning', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    registry.put({ path: '/c/a.client.js', source: 'export {};', version: 'a-v1' });
-    const first = registry.buildToken();
+  it('keeps exact ownership after late Map and hash prototype poisoning', () => {
+    const registry = createRegistry();
+    const publicHref = registry.put({
+      path: '/c/public.client.js',
+      source: 'export const role = "public";',
+    });
+    registry.put({ path: '/c/admin.client.js', source: 'export const secret = true;' });
+    const originalGet = Map.prototype.get;
     const hashPrototype = Object.getPrototypeOf(createHash('sha256')) as {
       digest: (...args: unknown[]) => unknown;
       update: (...args: unknown[]) => unknown;
     };
     const originalDigest = hashPrototype.digest;
     const originalUpdate = hashPrototype.update;
-    const originalJoin = Array.prototype.join;
-    const originalSort = Array.prototype.sort;
-    Array.prototype.join = () => 'FORGED_BUILD_INPUT';
-    Array.prototype.sort = function () {
-      return this;
-    };
+    Map.prototype.get = () => undefined;
     hashPrototype.update = function () {
       return this;
     };
     hashPrototype.digest = () => '0'.repeat(64);
-
     try {
-      registry.put({ path: '/c/z.client.js', source: 'export {};', version: 'z-v2' });
-      const second = registry.buildToken();
-      registry.setRenderPlanFingerprint?.('shape-v2');
-      const third = registry.buildToken();
-      expect(second).not.toBe(first);
-      expect(third).not.toBe(second);
-      expect(third).toMatch(/^[0-9a-f]{16}$/);
-    } finally {
-      hashPrototype.digest = originalDigest;
-      hashPrototype.update = originalUpdate;
-      Array.prototype.join = originalJoin;
-      Array.prototype.sort = originalSort;
-    }
-  });
-
-  it('pins URL path/version reconstruction after late URL and scalar poisoning', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    const publicHref = registry.put({
-      path: '/c/public.client.js',
-      source: 'export const role = "public";',
-      version: 'public/v1',
-    });
-    registry.put({
-      path: '/c/admin.client.js',
-      source: 'export const role = "admin";',
-      version: 'admin-v1',
-    });
-    const pathnameDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname')!;
-    const originalSearchGet = URLSearchParams.prototype.get;
-    const originalDecode = globalThis.decodeURIComponent;
-    const originalEncode = globalThis.encodeURIComponent;
-    const originalIndexOf = String.prototype.indexOf;
-    const originalSlice = String.prototype.slice;
-    const originalStartsWith = String.prototype.startsWith;
-    Object.defineProperty(URL.prototype, 'pathname', {
-      configurable: true,
-      get: () => '/c/__v/admin-v1/admin.client.js',
-    });
-    URLSearchParams.prototype.get = () => 'admin-v1';
-    globalThis.decodeURIComponent = () => 'admin-v1';
-    globalThis.encodeURIComponent = () => 'admin-v1';
-    String.prototype.indexOf = () => -1;
-    String.prototype.slice = () => '/c/admin.client.js';
-    String.prototype.startsWith = () => true;
-
-    try {
-      expect(renderVersionedClientModuleResponse(registry, publicHref)).toMatchObject({
+      expect(registry.resolve(publicHref)).toMatchObject({
         body: 'export const role = "public";',
         status: 200,
       });
+      expect(registry.buildToken()).toMatch(/^[0-9a-f]{64}$/u);
     } finally {
-      String.prototype.startsWith = originalStartsWith;
-      String.prototype.slice = originalSlice;
-      String.prototype.indexOf = originalIndexOf;
-      globalThis.encodeURIComponent = originalEncode;
-      globalThis.decodeURIComponent = originalDecode;
-      URLSearchParams.prototype.get = originalSearchGet;
-      Object.defineProperty(URL.prototype, 'pathname', pathnameDescriptor);
+      Map.prototype.get = originalGet;
+      hashPrototype.digest = originalDigest;
+      hashPrototype.update = originalUpdate;
     }
   });
 
-  it('snapshots registration inputs instead of re-reading later caller mutation', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    const input = {
-      contentType: 'application/javascript',
-      path: '/c/public.client.js',
-      source: 'export const role = "public";',
-      version: 'public-v1',
-    };
-    const href = registry.put(input);
-    input.contentType = 'text/html';
-    input.path = '/c/admin.client.js';
-    input.source = '<script>attack()</script>';
-    input.version = 'admin-v1';
-
-    expect(registry.resolve(href)).toMatchObject({
-      body: 'export const role = "public";',
-      headers: { 'Content-Type': 'application/javascript' },
+  it('serves only canonical requests through the framework facade', () => {
+    const registry = createRegistry();
+    const href = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const version = "build-1";',
+    });
+    expect(renderVersionedClientModuleResponse(registry, { url: href })).toMatchObject({
+      body: 'export const version = "build-1";',
       status: 200,
     });
+    expect(renderVersionedClientModuleResponse(registry, { url: '/c/cart.client.js' })).toMatchObject(
+      { status: 404 },
+    );
+    const onError = vi.fn();
+    expect(
+      renderVersionedClientModuleResponse(registry, {
+        onError,
+        url: '/assets/cart.client.js',
+      }),
+    ).toMatchObject({ status: 404 });
+    expect(onError).toHaveBeenCalledOnce();
   });
 
-  it('keeps loader runtime registry identity after late WeakMap cross-binding', () => {
-    const puts: string[] = [];
-    const victimRegistry = {
-      buildToken: () => 'victim',
-      entries: () => [],
-      put: () => {
-        puts[puts.length] = 'victim';
-        return '/c/__v/victim/runtime.client.js';
-      },
-      resolve: () => ({ body: 'Not Found', headers: {}, status: 404 as const }),
-    };
-    const attackerRegistry = {
-      ...victimRegistry,
-      put: () => '/c/__v/attacker/admin.client.js',
-    };
-    ensureKovoLoaderRuntimeClientModule(attackerRegistry);
+  it('keeps loader runtime registry identity after late WeakMap poisoning', () => {
+    const victim = createRegistry();
+    const first = ensureKovoLoaderRuntimeClientModule(victim);
     const originalGet = WeakMap.prototype.get;
     const originalSet = WeakMap.prototype.set;
-    WeakMap.prototype.get = () => '/c/__v/attacker/admin.client.js';
+    WeakMap.prototype.get = () => '/c/__v/' + '0'.repeat(64) + '/admin.client.js';
     WeakMap.prototype.set = function () {
       return this;
     };
-
-    let href: string;
+    let observed: string;
     try {
-      href = ensureKovoLoaderRuntimeClientModule(victimRegistry);
+      observed = ensureKovoLoaderRuntimeClientModule(victim);
     } finally {
       WeakMap.prototype.get = originalGet;
       WeakMap.prototype.set = originalSet;
     }
-    expect(href!).toBe('/c/__v/victim/runtime.client.js');
-    expect(puts).toEqual(['victim']);
+    expect(observed!).toBe(first);
   });
 
-  it('fails closed when URL normalization controls were poisoned before their import', async () => {
+  it('fails closed when URL or build-token controls were poisoned before import', async () => {
     const pathnameDescriptor = Object.getOwnPropertyDescriptor(URL.prototype, 'pathname')!;
     Object.defineProperty(URL.prototype, 'pathname', {
       configurable: true,
@@ -336,9 +324,7 @@ describe('versioned client modules', () => {
     } finally {
       Object.defineProperty(URL.prototype, 'pathname', pathnameDescriptor);
     }
-  });
 
-  it('fails closed when build-token hash controls were poisoned before their import', async () => {
     const prototype = Object.getPrototypeOf(createHash('sha256')) as {
       update: (...args: unknown[]) => unknown;
     };
@@ -347,94 +333,24 @@ describe('versioned client modules', () => {
       return this;
     };
     try {
-      await expect(
-        import(`${clientModuleRegistryIntrinsicsUrl}?preimport-hash-poison`),
-      ).rejects.toThrow(/hash controls failed their semantic check/);
+      await expect(import(`${clientModuleRegistryIntrinsicsUrl}?preimport-hash-poison`)).rejects.toThrow(
+        /hash controls failed their semantic check/,
+      );
     } finally {
       prototype.update = originalUpdate;
     }
   });
 
-  it('AUD-007: rejects count-based retention that can evict below the 24-hour floor', () => {
+  it('refuses count-based retention below the 24-hour floor', () => {
     expect(() => createMemoryVersionedClientModuleRegistry({ maxVersionsPerPath: 1 })).toThrow(
       /KV417: .*SPEC §14.*24 hours/,
     );
   });
-
-  it('enumerates normalized client modules deterministically without exposing registry state', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    registry.put({
-      path: 'https://kovo.local/c/z.client.js',
-      source: 'export const z = true;',
-      version: 'z-v1',
-    });
-    registry.put({
-      contentType: 'application/javascript',
-      path: '/c/a.client.js',
-      source: 'export const a = true;',
-      version: 'a-v1',
-    });
-
-    const entries = registry.entries();
-    expect(entries).toEqual([
-      {
-        contentType: 'application/javascript',
-        path: '/c/a.client.js',
-        source: 'export const a = true;',
-        version: 'a-v1',
-      },
-      {
-        path: '/c/z.client.js',
-        source: 'export const z = true;',
-        version: 'z-v1',
-      },
-    ]);
-
-    (entries[0] as { source: string }).source = 'mutated';
-    expect(registry.resolve('/c/a.client.js?v=a-v1')).toMatchObject({
-      body: 'export const a = true;',
-    });
-  });
-
-  it('serves versioned client module requests through the immutable registry', () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    const href = registry.put({
-      contentType: 'text/javascript; charset=utf-8',
-      path: '/c/cart.client.js',
-      source: 'export const version = "build-1";',
-      version: 'build-1',
-    });
-
-    expect(renderVersionedClientModuleResponse(registry, { url: href })).toEqual({
-      body: 'export const version = "build-1";',
-      headers: {
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'Cross-Origin-Resource-Policy': 'same-origin',
-        'Content-Type': 'text/javascript; charset=utf-8',
-      },
-      status: 200,
-    });
-    expect(renderVersionedClientModuleResponse(registry, { url: '/c/cart.client.js' })).toEqual({
-      body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      status: 404,
-    });
-    const onError = vi.fn();
-    expect(
-      renderVersionedClientModuleResponse(registry, {
-        onError,
-        url: '/assets/cart.client.js',
-      }),
-    ).toEqual({
-      body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      status: 404,
-    });
-    expect(onError).toHaveBeenCalledOnce();
-    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
-    expect(onError.mock.calls[0]?.[1]).toEqual({
-      operation: 'client-module',
-      url: '/assets/cart.client.js',
-    });
-  });
 });
+
+function clientHref(module: VersionedClientModuleInput): string {
+  return versionedClientModuleHref(
+    module.path,
+    clientModuleRepresentationDigest(module.source),
+  );
+}

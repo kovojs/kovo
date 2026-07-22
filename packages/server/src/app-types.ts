@@ -1,5 +1,8 @@
 import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
-import type { VersionedClientModuleRegistry } from './client-modules.js';
+import type {
+  VersionedClientModuleRegistry,
+  VersionedClientModuleStore,
+} from './client-modules.js';
 import type { EgressOptions } from './egress.js';
 import type { CsrfOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
@@ -256,7 +259,7 @@ export interface CreateAppOptions<
    * `createMemoryVersionedClientModuleRegistry`); when omitted, `createApp`
    * provisions a fresh in-memory registry.
    */
-  clientModules?: VersionedClientModuleRegistry;
+  clientModules?: VersionedClientModuleStore;
   csrf?: CsrfOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions | DocumentDeclaration;

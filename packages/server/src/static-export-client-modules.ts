@@ -1,8 +1,9 @@
 import { collectStaticExportClientModuleHrefs } from './static-export-document-refs.js';
 import {
   kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleVersion,
+  kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { versionedClientModuleHref } from './client-modules.js';
 import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import {
@@ -46,7 +47,10 @@ export async function replayStaticExportClientModuleArtifacts({
   if (routeArtifactSnapshot.length > 0) {
     securitySetAdd(
       hrefSet,
-      versionedClientModuleHref(kovoDeferredRuntimeModulePath, kovoDeferredRuntimeModuleVersion),
+      versionedClientModuleHref(
+        kovoDeferredRuntimeModulePath,
+        clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource),
+      ),
     );
   }
   const hrefs: string[] = [];

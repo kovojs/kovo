@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -39,7 +38,6 @@ const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/kovo-runtime
 const galleryRuntimeModuleHref = galleryInteractiveClientModules.put({
   path: galleryRuntimeModulePath,
   source: galleryRuntimeModuleSource,
-  version: createHash('sha256').update(galleryRuntimeModuleSource).digest('hex').slice(0, 8),
 });
 const galleryHeadlessUiClientModuleHrefMap = registerHeadlessUiClientModules();
 export const galleryHeadlessUiClientModuleHrefs = Object.freeze([
@@ -106,12 +104,8 @@ export const galleryInteractiveAppShell = createGalleryInteractiveApplication();
 export default galleryInteractiveAppShell.app;
 
 function registerGalleryInteractiveClientModule(demoName: string): string {
-  const {
-    manifest,
-    modulePath,
-    source: rawClientSource,
-    version,
-  } = galleryInteractiveClientModule(demoName);
+  const { manifest, modulePath, source: rawClientSource } =
+    galleryInteractiveClientModule(demoName);
   const generatedClientSource = resolveGalleryClientModuleSpecifiers(
     rawClientSource,
     manifest,
@@ -120,13 +114,7 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
   const href = galleryInteractiveClientModules.put({
     path: modulePath,
     source: generatedClientSource,
-    version,
   });
-
-  if (href !== `/c/__v/${version}/${modulePath.slice('/c/'.length)}`) {
-    throw new Error(`Unexpected gallery client module href for ${demoName}: ${href}`);
-  }
-
   return href;
 }
 
@@ -134,7 +122,6 @@ function galleryInteractiveClientModule(demoName: string): {
   modulePath: string;
   source: string;
   manifest: GalleryClientModuleManifest;
-  version: string;
 } {
   const generatedClientUrl = new URL(
     `./generated/interactive/${demoName}.client.js`,
@@ -149,12 +136,11 @@ function galleryInteractiveClientModule(demoName: string): {
       new URL(`./generated/interactive/${demoName}.tsx`, import.meta.url),
       'utf8',
     );
-    const { modulePath, version } = parseGalleryCompiledClientRef(demoName, generatedServerSource);
+    const modulePath = parseGalleryCompiledClientPath(demoName, generatedServerSource);
     return {
       manifest: rebaseMovedGalleryInteractiveClientManifest(compiled.manifest),
       modulePath,
       source: readFileSync(generatedClientUrl, 'utf8'),
-      version,
     };
   }
 
@@ -177,7 +163,6 @@ function compileGalleryInteractiveClientModule(
   manifest: GalleryClientModuleManifest;
   modulePath: string;
   source: string;
-  version: string;
 } {
   const source = readFileSync(new URL(`./interactive/${demoName}.tsx`, import.meta.url), 'utf8');
   const generatedDirectory = fileName.includes('/generated/interactive/') ? 'src/generated' : 'src';
@@ -201,12 +186,11 @@ function compileGalleryInteractiveClientModule(
     throw new Error(`Gallery interactive demo ${demoName} produced no server module.`);
   }
 
-  const { modulePath, version } = parseGalleryCompiledClientRef(demoName, serverSource);
+  const modulePath = parseGalleryCompiledClientPath(demoName, serverSource);
   return {
     manifest: result.clientModuleImportManifest,
     modulePath,
     source: clientSource,
-    version,
   };
 }
 
@@ -229,16 +213,10 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
     }
   }
 
-  const graphVersion = createHash('sha256')
-    .update(modules.map((module) => `${module.modulePath}\n${module.source}`).join('\n'))
-    .digest('hex')
-    .slice(0, 8);
-
   for (const module of modules) {
     const href = galleryInteractiveClientModules.put({
       path: module.modulePath,
       source: module.source,
-      version: graphVersion,
     });
 
     hrefs.set(module.modulePath, href);
@@ -280,7 +258,6 @@ function registerPrimitiveActionsClientModule(): string {
   return galleryInteractiveClientModules.put({
     path: modulePath,
     source,
-    version: createHash('sha256').update(source).digest('hex').slice(0, 8),
   });
 }
 
@@ -306,7 +283,6 @@ function registerPrimitiveActionsGeneratedClientModule(): string {
   return galleryInteractiveClientModules.put({
     path: modulePath,
     source,
-    version: createHash('sha256').update(source).digest('hex').slice(0, 8),
   });
 }
 
@@ -337,10 +313,7 @@ function headlessUiClientModuleHref(sourcePathWithoutExtension: string): string 
   return href;
 }
 
-function parseGalleryCompiledClientRef(
-  demoName: string,
-  source: string,
-): { modulePath: string; version: string } {
+function parseGalleryCompiledClientPath(demoName: string, source: string): string {
   const pattern = new RegExp(
     String.raw`/c/__v/([^/"#?]+)/([^"'#?]*${escapeRegExp(demoName)}\.client\.js)#`,
   );
@@ -349,10 +322,7 @@ function parseGalleryCompiledClientRef(
     throw new Error(`Gallery interactive demo ${demoName} produced no client handler ref.`);
   }
 
-  return {
-    modulePath: `/c/${match[2] ?? ''}`,
-    version: decodeURIComponent(match[1] ?? ''),
-  };
+  return `/c/${match[2] ?? ''}`;
 }
 
 function escapeRegExp(value: string): string {

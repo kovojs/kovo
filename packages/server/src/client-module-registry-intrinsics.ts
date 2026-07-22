@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 
 import {
   witnessGetOwnPropertyDescriptor,
@@ -8,6 +9,9 @@ import {
 
 /** Package-private hash controls for immutable client-module build tokens (SPEC §5.2.1). */
 const nativeCreateHash = createHash;
+const NativeBuffer = Buffer;
+const nativeBufferByteLength = NativeBuffer.byteLength;
+const nativeStringCharCodeAt = String.prototype.charCodeAt;
 const hashControl = nativeCreateHash('sha256');
 const hashPrototype = witnessGetPrototypeOf(hashControl);
 const nativeHashUpdate =
@@ -26,6 +30,7 @@ if (typeof nativeHashUpdate !== 'function' || typeof nativeHashDigest !== 'funct
 const semanticHash = nativeCreateHash('sha256');
 witnessReflectApply(nativeHashUpdate, semanticHash, ['abc']);
 if (
+  witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, ['名🙂', 'utf8']) !== 7 ||
   witnessReflectApply<string>(nativeHashDigest, semanticHash, ['hex']) !==
   'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 ) {
@@ -33,26 +38,36 @@ if (
 }
 
 export function clientModuleBuildTokenHash(
-  grammarVersion: string,
-  renderPlanFingerprint: string | undefined,
+  renderPlanFingerprint: string,
   entries: readonly string[],
 ): string {
   const hash = nativeCreateHash('sha256');
-  witnessReflectApply(nativeHashUpdate, hash, [grammarVersion]);
-  witnessReflectApply(nativeHashUpdate, hash, ['\0']);
-  if (renderPlanFingerprint !== undefined) {
-    witnessReflectApply(nativeHashUpdate, hash, [renderPlanFingerprint]);
-    witnessReflectApply(nativeHashUpdate, hash, ['\0']);
-  }
+  updateFrame(hash, 'domain', 'kovo-app-build-token/v1');
+  updateFrame(hash, 'render-plan', renderPlanFingerprint);
   for (let index = 0; index < entries.length; index += 1) {
-    if (index > 0) witnessReflectApply(nativeHashUpdate, hash, ['\n']);
-    witnessReflectApply(nativeHashUpdate, hash, [entries[index]!]);
+    updateFrame(hash, 'active-module-href', entries[index]!);
   }
   const digest = witnessReflectApply<string>(nativeHashDigest, hash, ['hex']);
   if (digest.length !== 64) {
     throw new TypeError('Kovo client-module build-token digest has an invalid shape.');
   }
-  let token = '';
-  for (let index = 0; index < 16; index += 1) token += digest[index];
-  return token;
+  for (let index = 0; index < digest.length; index += 1) {
+    const code = witnessReflectApply<number>(nativeStringCharCodeAt, digest, [index]);
+    if (!((code >= 0x30 && code <= 0x39) || (code >= 0x61 && code <= 0x66))) {
+      throw new TypeError('Kovo client-module build-token digest has an invalid shape.');
+    }
+  }
+  return digest;
+}
+
+function updateFrame(hash: object, tag: string, value: string): void {
+  const tagLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [tag, 'utf8']);
+  const valueLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [
+    value,
+    'utf8',
+  ]);
+  witnessReflectApply(nativeHashUpdate, hash, [`${tagLength}:`]);
+  witnessReflectApply(nativeHashUpdate, hash, [tag]);
+  witnessReflectApply(nativeHashUpdate, hash, [`${valueLength}:`]);
+  witnessReflectApply(nativeHashUpdate, hash, [value]);
 }

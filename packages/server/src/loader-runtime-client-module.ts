@@ -1,7 +1,6 @@
 import {
   kovoDeferredRuntimeModulePath,
   kovoDeferredRuntimeModuleSource,
-  kovoDeferredRuntimeModuleVersion,
 } from '@kovojs/browser/internal/inline-loader';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import {
@@ -22,7 +21,6 @@ export function ensureKovoLoaderRuntimeClientModule(
   const href = registry.put({
     path: kovoDeferredRuntimeModulePath,
     source: kovoDeferredRuntimeModuleSource,
-    version: kovoDeferredRuntimeModuleVersion,
   });
   witnessWeakMapSet(registeredRuntimeHrefs, registry, href);
   return href;

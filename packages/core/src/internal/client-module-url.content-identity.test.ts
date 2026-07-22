@@ -2,7 +2,12 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { clientModuleContentVersion, clientModuleHrefForSourceFile } from './client-module-url.js';
+import {
+  canonicalClientModuleRepresentation,
+  clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+} from './client-module-url.js';
 
 describe('client-module immutable content identity', () => {
   it('does not alias distinct valid JavaScript sources that collide under 32-bit FNV-1a', () => {
@@ -13,8 +18,8 @@ describe('client-module immutable content identity', () => {
     expect(fnv1a(first)).toBe('f1d01c97');
     expect(fnv1a(second)).toBe('f1d01c97');
 
-    const firstVersion = clientModuleContentVersion(first);
-    const secondVersion = clientModuleContentVersion(second);
+    const firstVersion = clientModuleRepresentationDigest(first);
+    const secondVersion = clientModuleRepresentationDigest(second);
     expect(firstVersion).toMatch(/^[0-9a-f]{64}$/u);
     expect(secondVersion).toMatch(/^[0-9a-f]{64}$/u);
     expect(firstVersion).not.toBe(secondVersion);
@@ -26,8 +31,8 @@ describe('client-module immutable content identity', () => {
   it('keeps content identity after a post-bootstrap lookalike Hash.update replacement', () => {
     const safe = 'export const safe = true;';
     const target = 'export const adminToken = leak;';
-    const safeVersion = clientModuleContentVersion(safe);
-    const targetVersion = clientModuleContentVersion(target);
+    const safeVersion = clientModuleRepresentationDigest(safe);
+    const targetVersion = clientModuleRepresentationDigest(target);
     const prototype = Object.getPrototypeOf(createHash('sha256')) as { update: Function };
     const nativeUpdate = prototype.update;
     const nativeApply = Reflect.apply;
@@ -36,12 +41,36 @@ describe('client-module immutable content identity', () => {
       return nativeApply(nativeUpdate, this, [data === target ? safe : data, encoding]);
     };
     try {
-      expect(clientModuleContentVersion(safe)).toBe(safeVersion);
-      expect(clientModuleContentVersion(target)).toBe(targetVersion);
-      expect(clientModuleContentVersion(target)).not.toBe(clientModuleContentVersion(safe));
+      expect(clientModuleRepresentationDigest(safe)).toBe(safeVersion);
+      expect(clientModuleRepresentationDigest(target)).toBe(targetVersion);
+      expect(clientModuleRepresentationDigest(target)).not.toBe(
+        clientModuleRepresentationDigest(safe),
+      );
     } finally {
       prototype.update = nativeUpdate;
     }
+  });
+
+  it('hashes and serves one well-formed UTF-8 representation for lone surrogates', () => {
+    const lone = 'export const value = "\ud800";';
+    const replacement = 'export const value = "�";';
+    expect(canonicalClientModuleRepresentation(lone)).toBe(replacement);
+    expect(clientModuleRepresentationDigest(lone)).toBe(
+      clientModuleRepresentationDigest(replacement),
+    );
+  });
+
+  it('uses byte-length frames and one full-digest URL grammar', () => {
+    const a = clientModuleRepresentationDigest('a|bc');
+    const b = clientModuleRepresentationDigest('ab|c');
+    expect(a).toMatch(/^[0-9a-f]{64}$/u);
+    expect(b).toMatch(/^[0-9a-f]{64}$/u);
+    expect(a).not.toBe(b);
+
+    const href = clientModuleHrefForSourceFile('x.tsx', a);
+    expect(parseVersionedClientModuleTarget(href)).toEqual({ digest: a, path: '/c/x.client.js' });
+    expect(parseVersionedClientModuleTarget(`/c/x.client.js?v=${a}`)).toBeUndefined();
+    expect(parseVersionedClientModuleTarget('/c/__v/old/x.client.js')).toBeUndefined();
   });
 });
 

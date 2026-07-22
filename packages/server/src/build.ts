@@ -6,8 +6,9 @@ import * as path from 'node:path';
 
 import {
   kovoDeferredRuntimeModulePath,
-  kovoDeferredRuntimeModuleVersion,
+  kovoDeferredRuntimeModuleSource,
 } from '@kovojs/browser/internal/inline-loader';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import {
   createFrameworkOutputFileSystemBoundary,
   type ConfinedFileSystemEntry,
@@ -837,7 +838,7 @@ function isFrameworkRuntimeClientModule(
 ): boolean {
   return (
     securityStringEndsWith(module.path, frameworkRuntimeClientModulePathSuffix) &&
-    module.version === kovoDeferredRuntimeModuleVersion
+    module.digest === clientModuleRepresentationDigest(kovoDeferredRuntimeModuleSource)
   );
 }
 

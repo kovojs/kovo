@@ -62,7 +62,11 @@ import {
 import { deriveComponentNames } from './component-names.js';
 import { deriveMutationKey } from './mutation-names.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
-import { emitClientModule, emitClientModuleImportManifest } from './emit/client.js';
+import {
+  emitClientModule,
+  emitClientModuleImportManifest,
+  rewriteClientModuleRuntimeImportsForBrowser,
+} from './emit/client.js';
 import { removeUnreferencedNamedImports } from './emit/dead-imports.js';
 import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js';
 import { emitRegistryModule } from './emit/registry.js';
@@ -571,10 +575,10 @@ function emitClientPhase(
   );
   const renderPlanFingerprintInput = renderPlanFingerprintInputForOptions(parsed.compileOptions);
   const renderPlanFingerprint = computeCompilerRenderPlanFingerprint(renderPlanFingerprintInput);
-  const clientHref = clientModuleUrl(
-    parsed.options.fileName,
-    `${renderPlanFingerprint}-${clientModuleVersion(clientSource)}`,
-  );
+  // SPEC §5.2.1/§14: immutable module identity covers the exact final browser representation,
+  // after the compiler-owned generated-runtime import rewrite. Render-plan identity stays separate.
+  const browserClientSource = rewriteClientModuleRuntimeImportsForBrowser(clientSource);
+  const clientHref = clientModuleUrl(parsed.options.fileName, clientModuleVersion(browserClientSource));
   const versionedHandlers = compilerMapDense(
     validatedHandlers,
     'Versioned client handlers',

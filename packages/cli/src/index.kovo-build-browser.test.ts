@@ -29,17 +29,16 @@ import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, rou
 import { trustedHtml } from '@kovojs/browser';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
-clientModules.put({
+const clientHref = clientModules.put({
   path: '/c/counter.client.js',
   source: 'export function increment(event, ctx){ ctx.state.n = (ctx.state.n || 0) + 1; }',
-  version: 'counter-v1',
 });
 
 const home = route('/', {
   access: publicAccess('browser build fixture'),
   page: () =>
     trustedHtml('<main><counter-island kovo-c="counter-island" kovo-state="{&quot;n&quot;:0}">' +
-    '<button on:click="/c/__v/counter-v1/counter.client.js#increment" data-kovo-module-allowlist="/c/__v/counter-v1/counter.client.js">bump</button> ' +
+    '<button on:click="' + clientHref + '#increment" data-kovo-module-allowlist="' + clientHref + '">bump</button> ' +
     '<output data-bind="state.n">0</output>' +
     '</counter-island></main>'),
 });

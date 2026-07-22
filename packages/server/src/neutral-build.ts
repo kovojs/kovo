@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
-import { clientModulePath } from '@kovojs/core/internal/client-module-url';
+import {
+  clientModulePath,
+  clientModuleRepresentationDigest,
+} from '@kovojs/core/internal/client-module-url';
 import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   createFrameworkFileSystemBoundary,
@@ -365,20 +368,17 @@ function registeredClientModuleBuildArtifacts(
   const builtModules: KovoAppShellBuiltClientModule[] = [];
   for (let index = 0; index < source.length; index += 1) {
     const module = snapshotRegisteredClientModule(source[index]!, index);
-    const href = versionedClientModuleHref(module.path, module.version);
+    const digest = clientModuleRepresentationDigest(module.source);
+    const href = versionedClientModuleHref(module.path, digest);
     const pathname = clientModulePath(href);
     const built: KovoAppShellBuiltClientModule = {
+      digest,
       file: normalizedDistFile(pathname),
       href,
       path: pathname,
       source: module.source,
-      version: module.version,
     };
-    commitBuildArrayValue(
-      builtModules,
-      module.contentType === undefined ? built : { ...built, contentType: module.contentType },
-      'registered client module build artifact',
-    );
+    commitBuildArrayValue(builtModules, built, 'registered client module build artifact');
   }
   return builtModules;
 }
@@ -392,22 +392,7 @@ function snapshotRegisteredClientModule(
   }
   const path = requiredNeutralString(value, 'path', `registered client module ${index}.path`);
   const source = requiredNeutralString(value, 'source', `registered client module ${index}.source`);
-  const version = requiredNeutralString(
-    value,
-    'version',
-    `registered client module ${index}.version`,
-  );
-  const contentType = optionalNeutralString(
-    value,
-    'contentType',
-    `registered client module ${index}.contentType`,
-  );
-  return {
-    ...(contentType === undefined ? {} : { contentType }),
-    path,
-    source,
-    version,
-  };
+  return { path, source };
 }
 
 function neutralBuildClientModuleMetadata(
@@ -420,23 +405,17 @@ function neutralBuildClientModuleMetadata(
     if (typeof module !== 'object' || module === null) {
       throw new TypeError(`Neutral build client module ${index} must be an object.`);
     }
-    const contentType = optionalNeutralString(
-      module,
-      'contentType',
-      `neutral build client module ${index}.contentType`,
-    );
     commitBuildArrayValue(
       metadata,
       {
-        ...(contentType === undefined ? {} : { contentType }),
+        digest: requiredNeutralString(
+          module,
+          'digest',
+          `neutral build client module ${index}.digest`,
+        ),
         file: requiredNeutralString(module, 'file', `neutral build client module ${index}.file`),
         href: requiredNeutralString(module, 'href', `neutral build client module ${index}.href`),
         path: requiredNeutralString(module, 'path', `neutral build client module ${index}.path`),
-        version: requiredNeutralString(
-          module,
-          'version',
-          `neutral build client module ${index}.version`,
-        ),
       },
       'neutral build client module metadata',
     );
