@@ -1,5 +1,13 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { renameSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+
+import { readBoundedRegularFile } from './bounded-regular-file.mjs';
+
+const MAX_COMPRESSED_TARBALL_BYTES = 16 * 1024 * 1024;
+const MAX_UNCOMPRESSED_TARBALL_BYTES = 32 * 1024 * 1024;
+const MAX_TARBALL_ENTRIES = 8_192;
+const MAX_TARBALL_ENTRY_BYTES = 16 * 1024 * 1024;
 
 export const deterministicPackContract = Object.freeze({
   gid: 0,
@@ -27,13 +35,31 @@ export function deterministicPackEnvironment(base = process.env) {
 }
 
 export function canonicalizePackedTarball(tarballPath) {
-  const canonical = canonicalizeTarballBytes(readFileSync(tarballPath));
-  writeFileSync(tarballPath, canonical);
-  return canonical;
+  const canonical = canonicalizeTarballBytes(readPackageTarballSnapshot(tarballPath));
+  const temporaryPath = `${tarballPath}.kovo-canonical-${process.pid}`;
+  try {
+    writeFileSync(temporaryPath, canonical, { flag: 'wx', mode: 0o600 });
+    renameSync(temporaryPath, tarballPath);
+    return canonical;
+  } finally {
+    rmSync(temporaryPath, { force: true });
+  }
+}
+
+export function readPackageTarballSnapshot(tarballPath) {
+  return readBoundedRegularFile(
+    tarballPath,
+    MAX_COMPRESSED_TARBALL_BYTES,
+    `package tarball ${tarballPath}`,
+  );
 }
 
 export function canonicalizeTarballBytes(compressed) {
-  const entries = parseTar(gunzipSync(compressed));
+  const entries = parseCompressedTar(compressed);
+  return canonicalizeTarEntries(entries);
+}
+
+function canonicalizeTarEntries(entries) {
   entries.sort((left, right) => Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)));
   const tar = Buffer.concat([
     ...entries.flatMap((entry) => canonicalEntryBlocks(entry)),
@@ -45,22 +71,35 @@ export function canonicalizeTarballBytes(compressed) {
 }
 
 export function deterministicTarballFindings(compressed) {
+  return inspectDeterministicTarball(compressed).findings;
+}
+
+function inspectDeterministicTarball(compressed) {
   const findings = [];
-  if (compressed.length < 10 || compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
-    return ['tarball is not gzip encoded'];
+  let bytes;
+  try {
+    bytes = snapshotCompressedTarball(compressed);
+  } catch (error) {
+    return {
+      entries: undefined,
+      findings: [error instanceof Error ? error.message : String(error)],
+    };
   }
-  if (compressed.readUInt32LE(4) !== deterministicPackContract.gzipMtime) {
+  if (bytes.length < 10 || bytes[0] !== 0x1f || bytes[1] !== 0x8b) {
+    return { entries: undefined, findings: ['tarball is not gzip encoded'] };
+  }
+  if (bytes.readUInt32LE(4) !== deterministicPackContract.gzipMtime) {
     findings.push('gzip mtime is not zero');
   }
-  if (compressed[9] !== deterministicPackContract.gzipOs) {
-    findings.push(`gzip OS byte is ${compressed[9]}, expected ${deterministicPackContract.gzipOs}`);
+  if (bytes[9] !== deterministicPackContract.gzipOs) {
+    findings.push(`gzip OS byte is ${bytes[9]}, expected ${deterministicPackContract.gzipOs}`);
   }
   let entries;
   try {
-    entries = parseTar(gunzipSync(compressed));
+    entries = parseCompressedTarBytes(bytes);
   } catch (error) {
     findings.push(error instanceof Error ? error.message : String(error));
-    return findings;
+    return { entries: undefined, findings };
   }
   const sorted = [...entries].sort((left, right) =>
     Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)),
@@ -68,7 +107,12 @@ export function deterministicTarballFindings(compressed) {
   if (entries.some((entry, index) => entry.name !== sorted[index].name)) {
     findings.push('tar entries are not in bytewise path order');
   }
+  const seenNames = new Set();
   for (const entry of entries) {
+    if (seenNames.has(entry.name)) findings.push(`${entry.name}: duplicate tar entry`);
+    seenNames.add(entry.name);
+    const pathFinding = packageTarPathFinding(entry.name);
+    if (pathFinding !== undefined) findings.push(`${entry.name}: ${pathFinding}`);
     const expectedMode = entry.executable
       ? deterministicPackContract.modeExecutable
       : deterministicPackContract.modeRegular;
@@ -93,31 +137,98 @@ export function deterministicTarballFindings(compressed) {
     }
   }
   try {
-    if (!compressed.equals(canonicalizeTarballBytes(compressed))) {
+    if (!bytes.equals(canonicalizeTarEntries([...entries]))) {
       findings.push('tarball bytes do not equal their canonical representation');
     }
   } catch (error) {
     findings.push(error instanceof Error ? error.message : String(error));
   }
-  return findings;
+  return { entries, findings };
+}
+
+/**
+ * Parse one canonical npm package tarball only after its complete byte/path/metadata contract has
+ * passed. Returned entry bytes can be materialized without invoking a system tar extractor.
+ */
+export function validatedPackageTarballEntries(compressed) {
+  const { entries, findings } = inspectDeterministicTarball(compressed);
+  if (findings.length > 0) {
+    throw new TypeError(`invalid canonical package tarball:\n  ${findings.join('\n  ')}`);
+  }
+  return entries.map((entry) => ({
+    data: Buffer.from(entry.data),
+    executable: entry.executable,
+    name: entry.name,
+  }));
+}
+
+function parseCompressedTar(compressed) {
+  return parseCompressedTarBytes(snapshotCompressedTarball(compressed));
+}
+
+function snapshotCompressedTarball(compressed) {
+  if (!Buffer.isBuffer(compressed)) {
+    throw new TypeError('tarball bytes must be a Buffer');
+  }
+  if (compressed.byteLength > MAX_COMPRESSED_TARBALL_BYTES) {
+    throw new TypeError(
+      `tarball exceeds the ${MAX_COMPRESSED_TARBALL_BYTES}-byte compressed limit`,
+    );
+  }
+  return Buffer.from(compressed);
+}
+
+function parseCompressedTarBytes(compressed) {
+  let tar;
+  try {
+    tar = gunzipSync(compressed, {
+      maxOutputLength: MAX_UNCOMPRESSED_TARBALL_BYTES,
+    });
+  } catch {
+    throw new Error(
+      `tarball is invalid gzip or exceeds the ${MAX_UNCOMPRESSED_TARBALL_BYTES}-byte uncompressed limit`,
+    );
+  }
+  return parseTar(tar);
 }
 
 function parseTar(tar) {
   const entries = [];
   let offset = 0;
+  let totalEntryBytes = 0;
   while (offset + 512 <= tar.length) {
     const header = tar.subarray(offset, offset + 512);
-    if (header.every((byte) => byte === 0)) return entries;
+    if (header.every((byte) => byte === 0)) {
+      const second = tar.subarray(offset + 512, offset + 1024);
+      if (second.byteLength !== 512 || !second.every((byte) => byte === 0)) {
+        throw new Error('tarball is missing its second zero-block terminator');
+      }
+      if (!tar.subarray(offset + 1024).every((byte) => byte === 0)) {
+        throw new Error('tarball contains data after its zero-block terminator');
+      }
+      return entries;
+    }
+    if (entries.length >= MAX_TARBALL_ENTRIES) {
+      throw new Error(`tarball exceeds the ${MAX_TARBALL_ENTRIES}-entry limit`);
+    }
+    assertTarHeaderChecksum(header);
     const name = tarString(header, 0, 100);
     const prefix = tarString(header, 345, 500);
     const fullName = prefix === '' ? name : `${prefix}/${name}`;
     const size = tarOctal(header, 124, 136);
+    if (!Number.isSafeInteger(size) || size > MAX_TARBALL_ENTRY_BYTES) {
+      throw new Error(`${fullName || 'tar entry'} exceeds the per-entry byte limit`);
+    }
+    totalEntryBytes += size;
+    if (totalEntryBytes > MAX_UNCOMPRESSED_TARBALL_BYTES) {
+      throw new Error('tarball entries exceed the aggregate byte limit');
+    }
     const bodyStart = offset + 512;
     const bodyEnd = bodyStart + size;
     if (fullName === '' || bodyEnd > tar.length) throw new Error('tarball has a malformed entry');
     const mode = tarOctal(header, 100, 108);
     entries.push({
-      data: Buffer.from(tar.subarray(bodyStart, bodyEnd)),
+      data: tar.subarray(bodyStart, bodyEnd),
       executable: (mode & 0o111) !== 0,
       gid: tarOctal(header, 116, 124),
       gname: tarString(header, 297, 329),
@@ -131,6 +242,31 @@ function parseTar(tar) {
     offset = bodyStart + Math.ceil(size / 512) * 512;
   }
   throw new Error('tarball is missing its zero-block terminator');
+}
+
+function assertTarHeaderChecksum(header) {
+  const expected = tarOctal(header, 148, 156);
+  const snapshot = Buffer.from(header);
+  snapshot.fill(0x20, 148, 156);
+  const actual = snapshot.reduce((sum, byte) => sum + byte, 0);
+  if (actual !== expected) throw new Error('tarball contains an invalid header checksum');
+}
+
+function packageTarPathFinding(value) {
+  if (!/^package\/[\x21-\x7e]+$/u.test(value)) {
+    return 'path must be visible ASCII below package/';
+  }
+  if (value.includes('\\') || value.includes('\0')) return 'path contains an ambiguous separator';
+  const relative = value.slice('package/'.length);
+  if (
+    relative === '' ||
+    path.posix.isAbsolute(relative) ||
+    path.posix.normalize(relative) !== relative ||
+    relative.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')
+  ) {
+    return 'path is not canonical';
+  }
+  return undefined;
 }
 
 function canonicalEntryBlocks(entry) {
@@ -195,7 +331,9 @@ function canonicalEntryData(entry) {
 }
 
 function tarString(header, start, end) {
-  return header.subarray(start, end).toString('utf8').replace(/\0.*$/su, '');
+  const value = header.subarray(start, end).toString('utf8');
+  const nulIndex = value.indexOf('\0');
+  return nulIndex === -1 ? value : value.slice(0, nulIndex);
 }
 
 function tarOctal(header, start, end) {

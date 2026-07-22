@@ -4,6 +4,7 @@ import {
   assertSnapshotMatches,
   collectFirstPartyScopes,
   collectManifestTargets,
+  inspectValidatedPackedEntries,
   normalizePackedPath,
   parsePackJson,
   validateBetterAuthMountAuthorityPack,
@@ -31,6 +32,37 @@ function validateFixture(files, overrides = {}) {
 }
 
 describe('pack-security gate', () => {
+  it('inspects the validated in-memory entry bytes without a system extractor view', () => {
+    const packageJson = {
+      exports: { '.': './src/index.ts' },
+      name: '@kovojs/example',
+    };
+    const packedManifest = {
+      exports: {
+        '.': { default: './dist/index.mjs', types: './dist/index.d.mts' },
+      },
+      name: '@kovojs/example',
+      version: '1.2.3',
+    };
+    const inspected = inspectValidatedPackedEntries({
+      entries: [
+        { data: Buffer.from(JSON.stringify(packedManifest)), name: 'package/package.json' },
+        { data: Buffer.from('export {};'), name: 'package/dist/index.mjs' },
+        { data: Buffer.from('export {};'), name: 'package/dist/index.d.mts' },
+      ],
+      packageJson,
+      packageName: packageJson.name,
+    });
+
+    expect(inspected.findings).toEqual([]);
+    expect(inspected.files.map((file) => file.path)).toEqual([
+      'dist/index.d.mts',
+      'dist/index.mjs',
+      'package.json',
+    ]);
+    expect(inspected.manifest).toEqual(packedManifest);
+  });
+
   it('keeps the Better Auth mount-adapter mint unreachable in the packed exports map', () => {
     const safeManifest = {
       exports: {

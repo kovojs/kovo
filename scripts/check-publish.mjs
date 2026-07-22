@@ -7,7 +7,11 @@ import { repoRoot } from './public-packages.mjs';
 import { deterministicPackEnvironment } from './lib/deterministic-tarball.mjs';
 
 export function checkPublish({ exec = execFileSync } = {}) {
-  for (const script of ['build-publish.mjs', 'pack-public-packages.mjs']) {
+  for (const script of [
+    'build-publish.mjs',
+    'pack-public-packages.mjs',
+    'verify-packed-release-certificate.mjs',
+  ]) {
     exec(process.execPath, [path.join(repoRoot, 'scripts', script)], {
       cwd: repoRoot,
       env: deterministicPackEnvironment(process.env),

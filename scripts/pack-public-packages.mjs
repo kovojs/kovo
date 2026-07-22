@@ -1,27 +1,27 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
   deterministicPackContract,
-  deterministicTarballFindings,
+  readPackageTarballSnapshot,
+  validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import {
   assertNoPackSecurityFindings,
   assertSnapshotMatches,
   buildPackSecuritySnapshot,
-  inspectPackedTarball,
+  inspectValidatedPackedEntries,
   readPackSecuritySnapshot,
   rootNpmConfigPath,
   validateFirstPartyScopeRegistryPolicy,
 } from './check-pack-security.mjs';
 import {
   assertNoWorkspaceProtocols,
+  assertPackedManifestMatchesSource,
   manifestPath,
   repoRoot,
   releasePackages,
@@ -33,9 +33,9 @@ export function packPublicPackages() {
   mkdirSync(tarballDir, { recursive: true });
 
   const packages = releasePackages();
+  const releaseVersions = new Map(packages.map((pkg) => [pkg.name, pkg.version]));
   const packedPackages = [];
   const securityPackages = [];
-  const inspectDir = mkdtempSync(path.join(os.tmpdir(), 'kovo-release-pack-security-'));
   const registryFindings = validateFirstPartyScopeRegistryPolicy({
     npmConfigText: readFileSync(rootNpmConfigPath, 'utf8'),
     npmConfigPath: path.relative(repoRoot, rootNpmConfigPath),
@@ -43,63 +43,68 @@ export function packPublicPackages() {
   });
   assertNoPackSecurityFindings(registryFindings);
 
-  try {
-    for (const pkg of packages) {
-      console.log(`Packing ${pkg.name}@${pkg.version} without lifecycle scripts`);
-      const tarballPath = packWithoutLifecycleScripts(pkg, tarballDir);
-      const {
-        files: securityFiles,
-        findings,
-        manifest: packedManifest,
-      } = inspectPackedTarball({
-        extractBaseDir: inspectDir,
-        packageJson: pkg.manifest,
-        packageName: pkg.name,
-        tarballPath,
-      });
-      assertNoPackSecurityFindings(findings);
-      const tarballBytes = readFileSync(tarballPath);
-      const deterministicFindings = deterministicTarballFindings(tarballBytes);
-      if (deterministicFindings.length > 0) {
-        throw new Error(
-          `${pkg.name} tarball violates the deterministic package contract:\n  ${deterministicFindings.join('\n  ')}`,
-        );
-      }
-      assertNoWorkspaceProtocols(packedManifest, `${pkg.name} packed manifest`);
-      assertPackedLifecyclePolicy(packedManifest, pkg.name);
-      const files = tarEntries(tarballPath);
-      securityPackages.push({ files: securityFiles, name: pkg.name });
-      packedPackages.push({
-        dependencies: dependencySnapshot(packedManifest),
-        files,
-        manifest: packedManifest,
-        name: pkg.name,
-        sha512: `sha512-${sha512(tarballBytes)}`,
-        version: pkg.version,
-        tarball: path.relative(repoRoot, tarballPath),
+  for (const pkg of packages) {
+    console.log(`Packing ${pkg.name}@${pkg.version} without lifecycle scripts`);
+    const tarballPath = packWithoutLifecycleScripts(pkg, tarballDir);
+    const tarballBytes = readPackageTarballSnapshot(tarballPath);
+    let validatedEntries;
+    try {
+      validatedEntries = validatedPackageTarballEntries(tarballBytes);
+    } catch (error) {
+      throw new Error(`${pkg.name} tarball violates the deterministic package contract`, {
+        cause: error,
       });
     }
-
-    assertSnapshotMatches(buildPackSecuritySnapshot(securityPackages), readPackSecuritySnapshot());
-    writeFileSync(
-      manifestPath,
-      `${JSON.stringify(
-        {
-          buildEnvironment: packBuildEnvironment(),
-          deterministicInputs: deterministicPackContract,
-          packages: packedPackages,
-          schema: 'kovo.packed-public-packages/v2',
-        },
-        null,
-        2,
-      )}\n`,
+    const {
+      files: securityFiles,
+      findings,
+      manifest: packedManifest,
+    } = inspectValidatedPackedEntries({
+      entries: validatedEntries,
+      packageJson: pkg.manifest,
+      packageName: pkg.name,
+    });
+    assertNoPackSecurityFindings(findings);
+    assertPackedManifestMatchesSource(
+      packedManifest,
+      pkg.manifest,
+      releaseVersions,
+      `${pkg.name}@${pkg.version}`,
     );
-    console.log(
-      `Packed and security-verified ${packedPackages.length} public packages into ${tarballDir}`,
-    );
-  } finally {
-    rmSync(inspectDir, { recursive: true, force: true });
+    assertNoWorkspaceProtocols(packedManifest, `${pkg.name} packed manifest`);
+    assertPackedLifecyclePolicy(packedManifest, pkg.name);
+    const files = validatedEntries
+      .map((entry) => entry.name)
+      .sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
+    securityPackages.push({ files: securityFiles, name: pkg.name });
+    packedPackages.push({
+      dependencies: dependencySnapshot(packedManifest),
+      files,
+      manifest: packedManifest,
+      name: pkg.name,
+      sha512: `sha512-${sha512(tarballBytes)}`,
+      version: pkg.version,
+      tarball: path.relative(repoRoot, tarballPath),
+    });
   }
+
+  assertSnapshotMatches(buildPackSecuritySnapshot(securityPackages), readPackSecuritySnapshot());
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        buildEnvironment: packBuildEnvironment(),
+        deterministicInputs: deterministicPackContract,
+        packages: packedPackages,
+        schema: 'kovo.packed-public-packages/v2',
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  console.log(
+    `Packed and security-verified ${packedPackages.length} public packages into ${tarballDir}`,
+  );
 }
 
 function packBuildEnvironment() {
@@ -122,13 +127,6 @@ function packBuildEnvironment() {
 
 function sha512(bytes) {
   return createHash('sha512').update(bytes).digest('base64');
-}
-
-function tarEntries(tarballPath) {
-  return execFileSync('tar', ['-tf', tarballPath], { encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean)
-    .sort();
 }
 
 function dependencySnapshot(manifest) {

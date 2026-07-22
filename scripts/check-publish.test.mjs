@@ -8,12 +8,13 @@ describe('publish readiness orchestration', () => {
 
     checkPublish({ exec });
 
-    expect(exec).toHaveBeenCalledTimes(3);
-    expect(exec.mock.calls.slice(0, 2).map((call) => call[1][0])).toEqual([
+    expect(exec).toHaveBeenCalledTimes(4);
+    expect(exec.mock.calls.slice(0, 3).map((call) => call[1][0])).toEqual([
       expect.stringMatching(/scripts\/build-publish\.mjs$/u),
       expect.stringMatching(/scripts\/pack-public-packages\.mjs$/u),
+      expect.stringMatching(/scripts\/verify-packed-release-certificate\.mjs$/u),
     ]);
-    expect(exec.mock.calls[2][1]).toEqual([
+    expect(exec.mock.calls[3][1]).toEqual([
       expect.stringMatching(/scripts\/egress-floor\.mjs$/u),
       '--policy',
       'install',

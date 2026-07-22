@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
 
@@ -8,6 +8,7 @@ import {
   deterministicPackContract,
   deterministicPackEnvironment,
   deterministicTarballFindings,
+  validatedPackageTarballEntries,
 } from './deterministic-tarball.mjs';
 
 describe('deterministic package tarballs', () => {
@@ -79,6 +80,73 @@ describe('deterministic package tarballs', () => {
       SOURCE_DATE_EPOCH: String(deterministicPackContract.sourceDateEpoch),
       TZ: 'UTC',
     });
+  });
+
+  it('rejects duplicate package paths before materialization', () => {
+    const duplicate = canonicalizeTarballBytes(
+      fixtureTarball([
+        fixtureEntry('package/index.mjs', 'first'),
+        fixtureEntry('package/index.mjs', 'second'),
+      ]),
+    );
+
+    expect(deterministicTarballFindings(duplicate)).toContain(
+      'package/index.mjs: duplicate tar entry',
+    );
+    expect(() => validatedPackageTarballEntries(duplicate)).toThrow('duplicate tar entry');
+  });
+
+  it('rejects traversal and non-canonical package paths before materialization', () => {
+    const traversal = canonicalizeTarballBytes(
+      fixtureTarball([fixtureEntry('package/../escape.mjs', 'escape')]),
+    );
+
+    expect(deterministicTarballFindings(traversal)).toContain(
+      'package/../escape.mjs: path is not canonical',
+    );
+    expect(() => validatedPackageTarballEntries(traversal)).toThrow('path is not canonical');
+  });
+
+  it('rejects a tar header whose bytes no longer match its checksum', () => {
+    const tar = gunzipSync(fixtureTarball([fixtureEntry('package/index.mjs', 'index')]));
+    tar[0] ^= 1;
+    const corrupted = gzipSync(tar, { level: 9, mtime: 0 });
+    corrupted[9] = deterministicPackContract.gzipOs;
+
+    expect(deterministicTarballFindings(corrupted)).toContain(
+      'tarball contains an invalid header checksum',
+    );
+    expect(() => validatedPackageTarballEntries(corrupted)).toThrow('invalid header checksum');
+  });
+
+  it('returns owned bytes only after the complete canonical contract passes', () => {
+    const canonical = canonicalizeTarballBytes(
+      fixtureTarball([
+        fixtureEntry('package/package.json', '{"name":"@kovojs/example","version":"0.2.0"}'),
+        fixtureEntry('package/dist/index.mjs', 'export const value = 1;'),
+      ]),
+    );
+
+    const entries = validatedPackageTarballEntries(canonical);
+    expect(entries.map((entry) => entry.name)).toEqual([
+      'package/dist/index.mjs',
+      'package/package.json',
+    ]);
+    const first = entries[0].data;
+    canonical.fill(0);
+    expect(first.toString('utf8')).toBe('export const value = 1;');
+  });
+
+  it('bounds gzip expansion before parsing archive entries', () => {
+    const expanding = gzipSync(Buffer.alloc(32 * 1024 * 1024 + 1), { level: 9, mtime: 0 });
+    expanding[9] = deterministicPackContract.gzipOs;
+
+    expect(deterministicTarballFindings(expanding)).toContain(
+      'tarball is invalid gzip or exceeds the 33554432-byte uncompressed limit',
+    );
+    expect(() => validatedPackageTarballEntries(expanding)).toThrow(
+      'exceeds the 33554432-byte uncompressed limit',
+    );
   });
 });
 

@@ -23,7 +23,11 @@ function manifest() {
 }
 
 function releasePackagesFor(packedManifest) {
-  return packedManifest.packages.map(({ name, version }) => ({ name, version }));
+  return packedManifest.packages.map(({ manifest: packedPackageManifest, name, version }) => ({
+    manifest: { ...packedPackageManifest, publishConfig: {} },
+    name,
+    version,
+  }));
 }
 
 describe('publish-packed-packages', () => {
@@ -154,7 +158,7 @@ describe('publish-packed-packages', () => {
         exec,
         manifest: attackedManifest,
         npmPublishedState,
-        releasePackagesFn: () => [{ name: '@kovojs/a', version: '1.2.3' }],
+        releasePackagesFn: () => releasePackagesFor(manifest()),
         verifyPackedAttestationFn,
       }),
     ).toThrow('must be @kovojs/a@1.2.3');
@@ -165,8 +169,16 @@ describe('publish-packed-packages', () => {
 
   it('rejects path escapes, package-set drift, duplicates, and packed identity drift', () => {
     const expected = [
-      { name: '@kovojs/a', version: '1.2.3' },
-      { name: '@kovojs/b', version: '1.2.3' },
+      {
+        manifest: { name: '@kovojs/a', publishConfig: {}, version: '1.2.3' },
+        name: '@kovojs/a',
+        version: '1.2.3',
+      },
+      {
+        manifest: { name: '@kovojs/b', publishConfig: {}, version: '1.2.3' },
+        name: '@kovojs/b',
+        version: '1.2.3',
+      },
     ];
     const a = manifest().packages[0];
     const b = {
@@ -194,5 +206,65 @@ describe('publish-packed-packages', () => {
         [expected[0]],
       ),
     ).toThrow('packed manifest name/version does not match');
+  });
+
+  it('rejects self-attested dependency, export, import, bin, and script drift', () => {
+    const sourceManifest = {
+      bin: { example: './dist/bin.mjs' },
+      dependencies: { reviewed: '1.0.0' },
+      exports: { '.': { default: './dist/index.mjs', types: './dist/index.d.mts' } },
+      imports: { '#internal': './dist/internal.mjs' },
+      name: '@kovojs/a',
+      publishConfig: {},
+      scripts: { check: 'vitest --run' },
+      version: '1.2.3',
+    };
+    const packed = {
+      ...manifest().packages[0],
+      manifest: { ...sourceManifest },
+    };
+    delete packed.manifest.publishConfig;
+    const expected = [{ manifest: sourceManifest, name: '@kovojs/a', version: '1.2.3' }];
+    expect(validatePackedReleaseManifest({ packages: [packed] }, expected)).toHaveLength(1);
+
+    for (const attackedManifest of [
+      { ...packed.manifest, dependencies: { reviewed: '1.0.0', unreviewed: '9.9.9' } },
+      { ...packed.manifest, exports: { '.': './dist/attacker.mjs' } },
+      { ...packed.manifest, imports: { '#internal': './dist/attacker.mjs' } },
+      { ...packed.manifest, bin: { example: './dist/attacker.mjs' } },
+      { ...packed.manifest, scripts: { check: 'node attacker.mjs' } },
+    ]) {
+      expect(() =>
+        validatePackedReleaseManifest(
+          { packages: [{ ...packed, manifest: attackedManifest }] },
+          expected,
+        ),
+      ).toThrow('does not match the reviewed source-derived manifest');
+    }
+  });
+
+  it('preserves order-sensitive export and import condition maps', () => {
+    const sourceManifest = {
+      exports: { '.': { import: './dist/import.mjs', default: './dist/default.mjs' } },
+      imports: { '#mode': { node: './dist/node.mjs', default: './dist/default.mjs' } },
+      name: '@kovojs/a',
+      publishConfig: {},
+      version: '1.2.3',
+    };
+    const packed = {
+      ...manifest().packages[0],
+      manifest: {
+        ...sourceManifest,
+        exports: { '.': { default: './dist/default.mjs', import: './dist/import.mjs' } },
+        imports: { '#mode': { default: './dist/default.mjs', node: './dist/node.mjs' } },
+      },
+    };
+    delete packed.manifest.publishConfig;
+
+    expect(() =>
+      validatePackedReleaseManifest({ packages: [packed] }, [
+        { manifest: sourceManifest, name: '@kovojs/a', version: '1.2.3' },
+      ]),
+    ).toThrow('does not match the reviewed source-derived manifest');
   });
 });

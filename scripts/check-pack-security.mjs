@@ -1,22 +1,15 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import {
+  readPackageTarballSnapshot,
+  validatedPackageTarballEntries,
+} from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import { derivePublishPlan } from './build-publish.mjs';
-import { collectFiles } from './lib/source-files.mjs';
 import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
@@ -487,19 +480,6 @@ function trailingJsonCandidates(output) {
   return starts.reverse().map((index) => output.slice(index).trim());
 }
 
-function readTarball(tarballPath, extractBaseDir) {
-  const extractDir = mkdtempSync(path.join(extractBaseDir, 'extract-'));
-  mkdirSync(extractDir, { recursive: true });
-  execFileSync('tar', ['-xzf', tarballPath, '-C', extractDir], { stdio: 'ignore' });
-  const packageDir = path.join(extractDir, 'package');
-  return collectFiles(packageDir, ['.'], { absolute: true })
-    .map((diskPath) => {
-      const rel = path.relative(packageDir, diskPath).replace(/\\/g, '/');
-      return { diskPath, path: rel, size: statSync(diskPath).size };
-    })
-    .sort((left, right) => compareStrings(left.path, right.path));
-}
-
 function createReader(files) {
   const byPath = new Map(files.map((file) => [file.path, file]));
   return (rel) => {
@@ -531,9 +511,20 @@ export function readPackSecuritySnapshot() {
   return JSON.parse(readFileSync(packSecuritySnapshotPath, 'utf8'));
 }
 
-export function inspectPackedTarball({ extractBaseDir, packageJson, packageName, tarballPath }) {
+/** Inspect entries returned by validatedPackageTarballEntries without a second extractor view. */
+export function inspectValidatedPackedEntries({ entries, packageJson, packageName }) {
+  const files = entries
+    .map((entry) => ({
+      bytes: entry.data,
+      path: normalizePackedPath(entry.name),
+      size: entry.data.byteLength,
+    }))
+    .sort((left, right) => compareStrings(left.path, right.path));
+  return inspectPackedFiles({ files, packageJson, packageName });
+}
+
+function inspectPackedFiles({ files, packageJson, packageName }) {
   const plan = derivePublishPlan(packageJson);
-  const files = readTarball(tarballPath, extractBaseDir);
   const manifest = readPackedManifest(files, packageName);
   const findings = validatePackedPackage({
     allowedSourceFiles: allowedPublishedSourceFiles(packageJson),
@@ -575,11 +566,11 @@ function main() {
       const pkgJson = JSON.parse(readFileSync(path.join(packageDir(pkg), 'package.json'), 'utf8'));
       console.log(`Packing ${pkg.name} for tarball security inspection...`);
       const tarballPath = packPackage(pkg, tempDir);
-      const { files, findings: packageFindings } = inspectPackedTarball({
-        extractBaseDir: tempDir,
+      const entries = validatedPackageTarballEntries(readPackageTarballSnapshot(tarballPath));
+      const { files, findings: packageFindings } = inspectValidatedPackedEntries({
+        entries,
         packageJson: pkgJson,
         packageName: pkg.name,
-        tarballPath,
       });
       findings.push(...packageFindings);
       packedPackages.push({ files, name: pkg.name });

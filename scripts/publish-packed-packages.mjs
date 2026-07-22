@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
+import {
+  readPackageTarballSnapshot,
+  validatedPackageTarballEntries,
+} from './lib/deterministic-tarball.mjs';
 import { npmPublicRegistry, readNpmPublishedState } from './npm-registry-state.mjs';
-import { manifestPath, releasePackages, repoRoot, tarballDir } from './release-packages.mjs';
+import {
+  assertPackedManifestMatchesSource,
+  manifestPath,
+  releasePackages,
+  repoRoot,
+  tarballDir,
+} from './release-packages.mjs';
 
 export function publishPackedPackages(
   args = process.argv,
@@ -92,6 +102,11 @@ export function validatePackedReleaseManifest(manifest, expectedPackages) {
     );
   }
 
+  const releaseVersions = new Map(expectedPackages.map((pkg) => [pkg.name, pkg.version]));
+  if (releaseVersions.size !== expectedPackages.length) {
+    throw new Error('Release package inventory contains duplicate package names');
+  }
+
   const seenNames = new Set();
   const seenTarballs = new Set();
   for (const [index, expected] of expectedPackages.entries()) {
@@ -113,6 +128,12 @@ export function validatePackedReleaseManifest(manifest, expectedPackages) {
         `${pkg.name}@${pkg.version} packed manifest name/version does not match the release inventory`,
       );
     }
+    assertPackedManifestMatchesSource(
+      pkg.manifest,
+      expected.manifest,
+      releaseVersions,
+      `${pkg.name}@${pkg.version}`,
+    );
     if (typeof pkg.tarball !== 'string' || pkg.tarball.length === 0) {
       throw new Error(`${pkg.name}@${pkg.version} has no tarball path`);
     }
@@ -144,10 +165,6 @@ export function verifyPackedAttestation(pkg, tarball) {
   if (!existsSync(tarball)) {
     throw new Error(`Missing tarball for ${pkg.name}: ${tarball}`);
   }
-  const tarballStat = lstatSync(tarball);
-  if (tarballStat.isSymbolicLink() || !tarballStat.isFile()) {
-    throw new Error(`${pkg.name} tarball must be a regular non-symlink file`);
-  }
   const realTarballRoot = realpathSync(tarballDir);
   const realTarball = realpathSync(tarball);
   const realRelativeTarball = path.relative(realTarballRoot, realTarball);
@@ -159,25 +176,27 @@ export function verifyPackedAttestation(pkg, tarball) {
   ) {
     throw new Error(`${pkg.name} tarball resolves outside ${tarballDir}`);
   }
-  const expectedSha512 = `sha512-${createHash('sha512').update(readFileSync(tarball)).digest('base64')}`;
+  const tarballBytes = readPackageTarballSnapshot(tarball);
+  const expectedSha512 = `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`;
   if (pkg.sha512 !== expectedSha512) {
     throw new Error(`${pkg.name} tarball sha512 attestation mismatch`);
   }
 
-  const files = execFileSync('tar', ['-tf', tarball], { encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean)
-    .sort();
+  const entries = validatedPackageTarballEntries(tarballBytes);
+  const files = entries
+    .map((entry) => entry.name)
+    .sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right)));
   if (JSON.stringify(pkg.files) !== JSON.stringify(files)) {
     throw new Error(`${pkg.name} tarball file-list attestation mismatch`);
   }
 
-  const packedManifest = JSON.parse(
-    execFileSync('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' }),
-  );
+  const manifestEntry = entries.find((entry) => entry.name === 'package/package.json');
+  if (manifestEntry === undefined) throw new Error(`${pkg.name} tarball has no package manifest`);
+  const packedManifest = JSON.parse(manifestEntry.data.toString('utf8'));
   if (JSON.stringify(pkg.manifest) !== JSON.stringify(packedManifest)) {
     throw new Error(`${pkg.name} packed manifest attestation mismatch`);
   }
+  return { entries, tarballBytes };
 }
 
 function readTag(args) {
