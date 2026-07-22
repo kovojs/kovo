@@ -10,6 +10,7 @@ import {
 import {
   assertWritableKovoAppShellViteClientModuleOutput,
   kovoAppShellViteClientModuleOutputPlan,
+  snapshotKovoAppShellViteBuiltClientModules,
   writeKovoAppShellViteClientModuleOutput,
   type KovoAppShellViteClientModuleOutputPlanItem,
 } from './vite-client-module-output.js';
@@ -56,9 +57,25 @@ export async function writeKovoAppShellViteBuildOutput(
     Partial<Pick<KovoAppShellBuild, 'app' | 'assets'>>,
   options: KovoAppShellViteBuildOutputOptions,
 ): Promise<KovoAppShellViteBuildOutput> {
+  const clientModuleField = buildOwnDataProperty(
+    build,
+    'clientModules',
+    'Vite app-shell build clientModules',
+  );
+  if (!clientModuleField.present) {
+    throw new TypeError('Vite app-shell build clientModules is required.');
+  }
+  // SPEC §5.2.1: static-export replay executes authored route code between output preflight and
+  // final commit. Close the array and each representation before that replay so neither a replaced
+  // build field nor a mutated element can swap executable bytes under an approved digest.
+  const clientModules = snapshotKovoAppShellViteBuiltClientModules(
+    clientModuleField.value as readonly KovoAppShellBuiltClientModule[],
+  );
   const root = resolvedFileSystemPath(options.outDir);
   const staticExportOptions = options.staticExport || undefined;
-  const staticExportBuild = staticExportOptions ? assertStaticExportBuild(build) : undefined;
+  const staticExportBuild = staticExportOptions
+    ? assertStaticExportBuild(build, clientModules)
+    : undefined;
   const staticExportPlan =
     staticExportBuild && staticExportOptions
       ? kovoAppShellViteBuildOutputStaticExportPlan(staticExportBuild, staticExportOptions, root)
@@ -68,18 +85,18 @@ export async function writeKovoAppShellViteBuildOutput(
     kovoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root });
 
   const output: KovoAppShellViteBuildOutput = {
-    clientModuleOutputPlan: kovoAppShellViteClientModuleOutputPlan(root, build.clientModules),
-    clientModules: build.clientModules,
+    clientModuleOutputPlan: kovoAppShellViteClientModuleOutputPlan(root, clientModules),
+    clientModules,
     staticExportAssets,
   };
 
-  await assertWritableKovoAppShellViteClientModuleOutput(root, build.clientModules);
+  await assertWritableKovoAppShellViteClientModuleOutput(root, clientModules);
 
   if (staticExportBuild && staticExportPlan) {
     output.staticExport = await exportStaticApp(staticExportBuild.app, staticExportPlan.options);
   }
 
-  await writeKovoAppShellViteClientModuleOutput(root, build.clientModules);
+  await writeKovoAppShellViteClientModuleOutput(root, clientModules);
 
   return output;
 }
@@ -103,6 +120,7 @@ export function kovoAppShellViteOutputDir(options: KovoAppShellViteOutputOptions
 function assertStaticExportBuild(
   build: Pick<KovoAppShellBuild, 'clientModules'> &
     Partial<Pick<KovoAppShellBuild, 'app' | 'assets'>>,
+  clientModules: readonly KovoAppShellBuiltClientModule[],
 ): KovoAppShellBuild {
   if (!build.app) {
     throw new Error('App shell Vite build output static export requires a Kovo app.');
@@ -111,7 +129,7 @@ function assertStaticExportBuild(
   return {
     app: build.app,
     assets: build.assets ?? [],
-    clientModules: build.clientModules,
+    clientModules,
     routeHints: [],
   };
 }

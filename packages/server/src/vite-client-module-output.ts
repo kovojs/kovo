@@ -1,6 +1,14 @@
+import {
+  canonicalClientModuleRepresentation,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+  versionedClientModuleHref,
+} from '@kovojs/core/internal/client-module-url';
+
 import type { KovoAppShellBuiltClientModule } from './vite-build.js';
 import { buildOwnDataProperty, snapshotBuildArray } from './build-security-intrinsics.js';
 import { viteDistSourcePath } from './vite-build-assets.js';
+import { normalizedDistFile } from './vite-manifest.js';
 import { writeArtifactOutput } from './output-staging.js';
 import {
   createSecuritySet,
@@ -20,6 +28,54 @@ export interface KovoAppShellViteClientModuleOutputPlanItem {
 
 interface KovoAppShellViteClientModuleWrite extends KovoAppShellViteClientModuleOutputPlanItem {
   source: string;
+}
+
+/**
+ * @internal Pin and re-verify the exact final representation carried by a built client module.
+ * Every later output phase consumes this one framework-owned snapshot (SPEC §5.2.1).
+ */
+export function snapshotKovoAppShellViteBuiltClientModules(
+  modules: readonly KovoAppShellBuiltClientModule[],
+): readonly KovoAppShellBuiltClientModule[] {
+  const sourceModules = snapshotBuildArray(modules, 'built client modules');
+  const pinned: KovoAppShellBuiltClientModule[] = [];
+  for (let index = 0; index < sourceModules.length; index += 1) {
+    const module = sourceModules[index];
+    if (typeof module !== 'object' || module === null) {
+      throw new TypeError(`Built client module ${index} must be an object.`);
+    }
+    const digest = requiredBuiltClientModuleString(module, 'digest', index);
+    const file = requiredBuiltClientModuleString(module, 'file', index);
+    const href = requiredBuiltClientModuleString(module, 'href', index);
+    const path = requiredBuiltClientModuleString(module, 'path', index);
+    const source = requiredBuiltClientModuleString(module, 'source', index);
+    const canonicalSource = canonicalClientModuleRepresentation(source);
+    const target = parseVersionedClientModuleTarget(href);
+    const canonicalHref =
+      target === undefined ? undefined : versionedClientModuleHref(target.path, target.digest);
+    // Preserve the path-confinement refusal before reporting a cross-field identity mismatch.
+    const normalizedFile = normalizedDistFile(file);
+    if (
+      canonicalSource !== source ||
+      target === undefined ||
+      canonicalHref !== href ||
+      path !== canonicalHref ||
+      digest !== target.digest ||
+      clientModuleRepresentationDigest(canonicalSource) !== target.digest ||
+      normalizedFile !== file ||
+      normalizedDistFile(path) !== file
+    ) {
+      throw new TypeError(
+        `Built client module ${index} bytes or metadata do not match its full representation digest and canonical immutable output path (SPEC §5.2.1).`,
+      );
+    }
+    witnessArrayAppend(
+      pinned,
+      witnessFreeze({ digest, file, href, path, source: canonicalSource }),
+      'Server packages/server/src/vite-client-module-output.ts module snapshot',
+    );
+  }
+  return witnessFreeze(pinned);
 }
 
 /**
@@ -92,22 +148,16 @@ function kovoAppShellViteClientModuleWrites(
 ): KovoAppShellViteClientModuleWrite[] {
   // SPEC §6.6: module registry review and output staging consume one pinned snapshot. A live
   // Array.prototype.map or module getter cannot swap executable source after build registration.
-  const sourceModules = snapshotBuildArray(modules, 'built client modules');
+  const sourceModules = snapshotKovoAppShellViteBuiltClientModules(modules);
   const writes: KovoAppShellViteClientModuleWrite[] = [];
   for (let index = 0; index < sourceModules.length; index += 1) {
-    const module = sourceModules[index];
-    if (typeof module !== 'object' || module === null) {
-      throw new TypeError(`Built client module ${index} must be an object.`);
-    }
-    const path = requiredBuiltClientModuleString(module, 'path', index);
-    const source = requiredBuiltClientModuleString(module, 'source', index);
-    const file = requiredBuiltClientModuleString(module, 'file', index);
+    const module = sourceModules[index]!;
     witnessArrayAppend(
       writes,
       witnessFreeze({
-        path,
-        source,
-        targetPath: viteDistSourcePath(root, file),
+        path: module.path,
+        source: module.source,
+        targetPath: viteDistSourcePath(root, module.file),
       }),
       'Server packages/server/src/vite-client-module-output.ts collection',
     );
@@ -117,7 +167,7 @@ function kovoAppShellViteClientModuleWrites(
 
 function requiredBuiltClientModuleString(
   module: object,
-  field: 'file' | 'path' | 'source',
+  field: 'digest' | 'file' | 'href' | 'path' | 'source',
   index: number,
 ): string {
   const property = buildOwnDataProperty(module, field, `built client module ${index}.${field}`);

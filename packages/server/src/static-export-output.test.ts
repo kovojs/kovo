@@ -184,6 +184,7 @@ describe('server static export output boundary', () => {
     expect(Object.isFrozen(plan.assets)).toBe(true);
     expect(Object.isFrozen(plan.clientModules)).toBe(true);
     expect(Object.isFrozen(plan.writes)).toBe(true);
+    expect(Object.isFrozen(plan.writes[0])).toBe(true);
   });
 
   it('rejects stale client-module output evidence outside versioned /c/ URLs', () => {
@@ -244,6 +245,36 @@ describe('server static export output boundary', () => {
         clientModules: [{ ...canonical, body: 'export const cart = false;' }],
       }),
     ).toThrow(/bytes or fixed Content-Type do not match the full representation digest/);
+  });
+
+  it('rejects accessor-backed client-module bytes before digest validation and write planning', () => {
+    const reviewedBody = 'export const role = "public";';
+    const substitutedBody = 'export const role = "admin";';
+    const href = versionedClientModuleHref(
+      '/c/accessor.client.js',
+      clientModuleRepresentationDigest(reviewedBody),
+    );
+    let bodyReads = 0;
+    const artifact = {
+      get body() {
+        bodyReads += 1;
+        return bodyReads <= 2 ? reviewedBody : substitutedBody;
+      },
+      headers: { 'content-type': 'text/javascript; charset=utf-8' },
+      href,
+      path: href,
+      status: 200 as const,
+    };
+
+    expect(() =>
+      createStaticExportOutputPlan({
+        artifacts: [],
+        assets: [],
+        clientModules: [artifact],
+        outDir: '/tmp/kovo-static-export-accessor-module',
+      }),
+    ).toThrow(/accessor-backed static-export client module 0\.body/);
+    expect(bodyReads).toBe(0);
   });
 
   it('validates static asset sources before writing any output files', async () => {

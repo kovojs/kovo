@@ -739,6 +739,66 @@ export const CartButton = component({
     }
   });
 
+  it('pins exact client-module bytes across authored static-export replay', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-module-replay-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'kovo-vite-module-replay-export-'));
+    const reviewedSource = 'export const role = "public";';
+    const substitutedSource = 'export const role = "admin";';
+    const reviewedHref = testVersionedClientModuleHref('/c/account.client.js', reviewedSource);
+    let build!: ReturnType<typeof createKovoAppShellViteBuild>;
+
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page() {
+              // Static export executes authored route code between the output preflight and the
+              // final Vite module commit. That code must not be able to swap bytes under the
+              // already-reviewed representation digest (SPEC §5.2.1).
+              build.clientModules[0]!.source = substitutedSource;
+              (build as { clientModules: typeof build.clientModules }).clientModules = [
+                {
+                  ...build.clientModules[0]!,
+                  source: 'export const role = "root";',
+                },
+              ];
+              return renderedHtml(
+                `<main>Home</main><script type="module" src="${reviewedHref}"></script>`,
+              );
+            },
+          }),
+        ],
+      });
+      build = createKovoAppShellViteBuild({
+        app,
+        clientModules: [
+          {
+            path: '/c/account.client.js',
+            renderPlanFingerprint: testRenderPlanFingerprint,
+            source: reviewedSource,
+          },
+        ],
+      });
+
+      await writeKovoAppShellViteBuildOutput(build, {
+        outDir: distDir,
+        staticExport: { outDir },
+      });
+
+      await expect(readFile(join(distDir, reviewedHref.slice(1)), 'utf8')).resolves.toBe(
+        reviewedSource,
+      );
+      await expect(readFile(join(outDir, reviewedHref.slice(1)), 'utf8')).resolves.toBe(
+        reviewedSource,
+      );
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('validates Vite app-shell client module targets before committing staged output', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-output-target-dist-'));
     const okModule = testBuiltClientModule('/c/ok.client.js', 'export const ok = true;');
@@ -754,6 +814,22 @@ export const CartButton = component({
         writeKovoAppShellViteClientModuleOutput(distDir, [okModule, blockedModule]),
       ).rejects.toThrow(/target '.*blocked\.client\.js' is a directory/);
       await expect(readFile(join(distDir, okModule.file))).rejects.toThrow();
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
+  it('re-verifies final Vite client-module bytes against the full digest at the write sink', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-client-module-digest-dist-'));
+    const reviewed = testBuiltClientModule('/c/account.client.js', 'export const role = "public";');
+
+    try {
+      await expect(
+        writeKovoAppShellViteClientModuleOutput(distDir, [
+          { ...reviewed, source: 'export const role = "admin";' },
+        ]),
+      ).rejects.toThrow(/do not match its full representation digest.*SPEC §5\.2\.1/);
+      await expect(readFile(join(distDir, reviewed.file), 'utf8')).rejects.toThrow();
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }

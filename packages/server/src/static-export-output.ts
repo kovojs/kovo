@@ -121,7 +121,11 @@ export function createStaticExportOutputPlan(
   const pinnedArtifacts = witnessFreeze({
     artifacts: snapshotBuildArray(plan.artifacts, 'static-export route artifacts'),
     assets: snapshotBuildArray(plan.assets, 'static-export assets'),
-    clientModules: snapshotBuildArray(plan.clientModules, 'static-export client modules'),
+    // SPEC §5.2.1: the digest check and the eventual file write must consume one exact body and
+    // metadata snapshot. Pin every field through own-data descriptors before target validation so
+    // an accessor/Proxy cannot return reviewed bytes to the digest gate and different executable
+    // bytes when `staticExportPlannedWrite()` builds the output entry.
+    clientModules: snapshotStaticExportClientModules(plan.clientModules),
   });
   const root = staticExportOutputRoot(plan.outDir);
   const writes = snapshotBuildArray(
@@ -130,6 +134,80 @@ export function createStaticExportOutputPlan(
   );
 
   return witnessFreeze({ ...pinnedArtifacts, outDir: plan.outDir, root, writes });
+}
+
+function snapshotStaticExportClientModules(
+  source: readonly StaticExportClientModuleArtifact[],
+): readonly StaticExportClientModuleArtifact[] {
+  const artifacts = snapshotBuildArray(source, 'static-export client modules');
+  const snapshot: StaticExportClientModuleArtifact[] = [];
+  for (let index = 0; index < artifacts.length; index += 1) {
+    const artifact = artifacts[index];
+    if (typeof artifact !== 'object' || artifact === null) {
+      throw new TypeError(`Static-export client module ${index} must be an own-data object.`);
+    }
+    const body = staticExportClientModuleOwnString(artifact, 'body', index);
+    const headers = staticExportClientModuleHeaders(artifact, index);
+    const href = staticExportClientModuleOwnString(artifact, 'href', index);
+    const path = staticExportClientModuleOwnString(artifact, 'path', index);
+    const status = buildOwnDataProperty(
+      artifact,
+      'status',
+      `static-export client module ${index}.status`,
+    );
+    if (!status.present || typeof status.value !== 'number') {
+      throw new TypeError(`Static-export client module ${index}.status must be a number.`);
+    }
+    witnessArrayAppend(
+      snapshot,
+      witnessFreeze({ body, headers, href, path, status: status.value }),
+      'Server packages/server/src/static-export-output.ts client-module snapshot',
+    );
+  }
+  return witnessFreeze(snapshot);
+}
+
+function staticExportClientModuleOwnString(
+  artifact: object,
+  property: 'body' | 'href' | 'path',
+  index: number,
+): string {
+  const field = buildOwnDataProperty(
+    artifact,
+    property,
+    `static-export client module ${index}.${property}`,
+  );
+  if (!field.present || typeof field.value !== 'string') {
+    throw new TypeError(`Static-export client module ${index}.${property} must be a string.`);
+  }
+  return field.value;
+}
+
+function staticExportClientModuleHeaders(artifact: object, index: number): Record<string, string> {
+  const field = buildOwnDataProperty(
+    artifact,
+    'headers',
+    `static-export client module ${index}.headers`,
+  );
+  if (!field.present || typeof field.value !== 'object' || field.value === null) {
+    throw new TypeError(`Static-export client module ${index}.headers must be an object.`);
+  }
+  const source = field.value;
+  const headers = createSecurityNullRecord<string>();
+  const names = securityObjectKeys(source);
+  for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+    const name = names[nameIndex]!;
+    const header = buildOwnDataProperty(
+      source,
+      name,
+      `static-export client module ${index}.headers.${name}`,
+    );
+    if (!header.present || typeof header.value !== 'string') {
+      throw new TypeError(`Static-export client module ${index}.headers.${name} must be a string.`);
+    }
+    headers[name] = header.value;
+  }
+  return witnessFreeze(headers);
 }
 
 /**
@@ -333,18 +411,18 @@ function staticExportPlannedWrite(
 ): StaticExportPlannedWrite {
   if (target.itemKind === 'route-document') {
     const artifact = plan.artifacts[target.itemIndex]!;
-    return {
+    return witnessFreeze({
       ...target,
       content: artifact.body,
-    };
+    });
   }
 
   if (target.itemKind === 'client-module') {
     const artifact = plan.clientModules[target.itemIndex]!;
-    return {
+    return witnessFreeze({
       ...target,
       content: artifact.body,
-    };
+    });
   }
 
   // SPEC §6.6 / bugz M4: emit a Netlify-compatible `_headers` sidecar that materializes the
@@ -353,17 +431,17 @@ function staticExportPlannedWrite(
   // (Netlify, Cloudflare Pages) serve these headers alongside the prerendered HTML files,
   // restoring the floor that dynamic dispatch emits but a bare static file cannot carry.
   if (target.itemKind === 'header-sidecar') {
-    return {
+    return witnessFreeze({
       ...target,
       content: buildNetlifyHeadersSidecar(plan),
-    };
+    });
   }
 
   const artifact = plan.assets[target.itemIndex]!;
-  return {
+  return witnessFreeze({
     ...target,
     sourcePath: artifact.source,
-  };
+  });
 }
 
 /**
