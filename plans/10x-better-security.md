@@ -443,6 +443,15 @@ Measurements are versioned and reproducible:
       this ledger: refresh the framework-export posture, convergence row, C9/C13/mutation denominators,
       survivor register, and an independent architecture/security re-review that explicitly accepts
       or rejects the Phase 3C deletions after the historical REJECT above.
+  - The evidence-only descendant has one predeclared path allowlist:
+    `security/security-convergence-baseline.json`, `security/decided-surface.json`,
+    `plans/10x-better-security.md`, `plans/10x-better-security-2.md`,
+    `plans/10x-better-security-3.md`, `docs/v1-acceptance-ledger.md`, and
+    `plans/security-architecture-final-review-v1-candidate.md`. Authored production, SPEC/rules,
+    scripts, workflows, manifests, lockfiles, and every other `security/*.json` path are forbidden.
+    The descendant must be the direct child of `codeSubjectSha`; a clean-tree ancestry check and an
+    exact `git diff --name-status` comparison to this list are the complete identity proof. Do not add
+    another hash manifest or ledger-only stamping commit.
   - Final evidence placeholder: `codeSubjectSha`, the externally observed evidence/release SHA, the
     evidence-only diff, review artifact, and proving commands are intentionally absent until
     implementation stops moving; no earlier checkpoint is final-tip evidence. This protocol uses no
@@ -458,7 +467,7 @@ Measurements are versioned and reproducible:
 - [ ] R is zero across three consecutive weekly rounds under the frozen charter; each round records
       an exact SHA and detects every seeded canary.
 - [ ] Every release-significant security mutation is killed at `codeSubjectSha`.
-- [ ] Release-budget fuzzers have no unresolved normative-property violation across at least 14
+- [ ] Nightly-budget fuzzers have no unresolved normative-property violation across at least 14
       terminal-green scheduled nightly runs spanning at least 14 days.
 - [ ] The deterministic release-budget fuzz command passes at `codeSubjectSha` with no unresolved
       normative-property violation.

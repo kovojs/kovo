@@ -130,6 +130,10 @@ or served artifact.
       Plan-2 digest/manifest-backed forcing gate. Replace stale checkpoint counts instead of appending
       a transcript, and contribute the terminal Plan-2 commands and results to Plan 1's single
       canonical final identity/evidence record; do not create a Plan-2 SHA block or descendant commit.
+  - The premise-audit denominator is exactly the 17 §1.1–§4.5 rows in the Phase 0 table above. For
+    each row, re-inspect the named authoritative source/door and replace its classification and
+    shortest current gate result; missing, stale, or indirectly supported rows fail reconciliation.
+    This finite table review plus the digest/manifest-backed gates is the complete terminal audit.
   - Evidence pending: Plan-2 terminal commands and results in the Plan 1 Phase 6 record. The historical
     Phase 0 checkpoint must not be presented as final-candidate proof.
 - [x] Reproduce the storage-key blob read/overwrite channel at the baseline across every supported
