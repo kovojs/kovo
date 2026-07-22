@@ -191,11 +191,48 @@ jobs:
           subject-name: kovo-release-${{ github.sha }}.tgz
           subject-path: ${{ runner.temp }}/kovo-release-attestation/kovo-release-${{ github.sha }}/kovo-release-${{ github.sha }}.tgz
 
+  attest-committed-evidence:
+    if: ${{ !inputs.dry_run }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Attest exact advisory feed
+        # This OIDC job reads reviewed files from the authorized main commit. It performs no
+        # dependency installation, build, script execution, or long-lived key handling.
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: security/advisories/feed.json
+          subject-path: security/advisories/feed.json
+
+      - name: Attest exact certificate reviewer policy
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: security/kovo-certificate-policy-v1.json
+          subject-path: security/kovo-certificate-policy-v1.json
+
+      - name: Attest exact framework certificate
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: security/kovo-certificate-v1.json
+          subject-path: security/kovo-certificate-v1.json
+
   publish:
     if: ${{ !inputs.dry_run }}
     needs:
       - prepare
       - attest-release-archive
+      - attest-committed-evidence
     runs-on: ubuntu-latest
     environment: release
     permissions:

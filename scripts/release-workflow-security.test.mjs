@@ -9,6 +9,7 @@ const releaseWorkflow = readFileSync(
 const DOWNLOAD_ARTIFACT_ACTION =
   'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093';
 const ATTEST_ACTION = 'actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6';
+const CHECKOUT_ACTION = 'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5';
 const RELEASE_ARTIFACT_NAME = 'kovo-release-${{ github.sha }}';
 const RELEASE_ARCHIVE_NAME = `${RELEASE_ARTIFACT_NAME}.tgz`;
 const RELEASE_ARTIFACT_ID = '${{ needs.prepare.outputs.release-artifact-id }}';
@@ -24,25 +25,44 @@ const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
 ]);
 const ATTESTATION_DOWNLOAD_INPUTS = `artifact-ids=${RELEASE_ARTIFACT_ID}\0path=${ATTESTATION_DOWNLOAD_DIRECTORY}`;
 const ATTESTATION_SUBJECT_INPUTS = `subject-name=${RELEASE_ARCHIVE_NAME}\0subject-path=${ATTESTATION_ARCHIVE_PATH}`;
+const COMMITTED_EVIDENCE_CHECKOUT_INPUTS =
+  'fetch-depth=1\0persist-credentials=false\0ref=${{ github.sha }}';
+const COMMITTED_EVIDENCE_SUBJECT_INPUTS = Object.freeze([
+  'subject-name=security/advisories/feed.json\0subject-path=security/advisories/feed.json',
+  'subject-name=security/kovo-certificate-policy-v1.json\0subject-path=security/kovo-certificate-policy-v1.json',
+  'subject-name=security/kovo-certificate-v1.json\0subject-path=security/kovo-certificate-v1.json',
+]);
 
-function attestationJob(source) {
+function archiveAttestationJob(source) {
   const start = source.indexOf('  attest-release-archive:');
+  const end = source.indexOf('  attest-committed-evidence:', start);
+  return start < 0 || end < 0 ? '' : source.slice(start, end);
+}
+
+function committedEvidenceAttestationJob(source) {
+  const start = source.indexOf('  attest-committed-evidence:');
   const end = source.indexOf('  publish:', start);
   return start < 0 || end < 0 ? '' : source.slice(start, end);
 }
 
-function attestationJobMatchesStepAllowlist(source) {
-  const job = attestationJob(source);
-  const actions = [...job.matchAll(/^[ \t]+(?:-\s+)?uses:\s+(\S+)\s*$/gmu)].map(
-    (match) => match[1],
-  );
-  const steps = job.match(/^      -\s+/gmu) ?? [];
+function jobActions(job) {
+  return [...job.matchAll(/^[ \t]+(?:-\s+)?uses:\s+(\S+)\s*$/gmu)].map((match) => match[1]);
+}
+
+function jobPermissions(job) {
   const permissionStart = job.indexOf('    permissions:');
   const permissionEnd = job.indexOf('    steps:', permissionStart);
-  const permissions = job
+  return job
     .slice(permissionStart, permissionEnd)
     .match(/^      [a-z-]+:\s+(?:read|write|none)$/gmu)
     ?.map((line) => line.trim());
+}
+
+function archiveAttestationJobMatchesStepAllowlist(source) {
+  const job = archiveAttestationJob(source);
+  const actions = jobActions(job);
+  const steps = job.match(/^      -\s+/gmu) ?? [];
+  const permissions = jobPermissions(job);
   const downloads = actionInputSignatures(job, DOWNLOAD_ARTIFACT_ACTION);
   const subjects = actionInputSignatures(job, ATTEST_ACTION);
   return (
@@ -55,6 +75,27 @@ function attestationJobMatchesStepAllowlist(source) {
     downloads[0] === ATTESTATION_DOWNLOAD_INPUTS &&
     subjects.length === 1 &&
     subjects[0] === ATTESTATION_SUBJECT_INPUTS
+  );
+}
+
+function committedEvidenceJobMatchesStepAllowlist(source) {
+  const job = committedEvidenceAttestationJob(source);
+  const actions = jobActions(job);
+  const steps = job.match(/^      -\s+/gmu) ?? [];
+  const permissions = jobPermissions(job);
+  const checkouts = actionInputSignatures(job, CHECKOUT_ACTION);
+  const subjects = actionInputSignatures(job, ATTEST_ACTION);
+  return (
+    steps.length === 4 &&
+    actions.length === 4 &&
+    actions[0] === CHECKOUT_ACTION &&
+    actions.slice(1).every((action) => action === ATTEST_ACTION) &&
+    permissions?.length === ATTESTATION_JOB_PERMISSIONS.length &&
+    permissions.every((permission, index) => permission === ATTESTATION_JOB_PERMISSIONS[index]) &&
+    checkouts.length === 1 &&
+    checkouts[0] === COMMITTED_EVIDENCE_CHECKOUT_INPUTS &&
+    subjects.length === COMMITTED_EVIDENCE_SUBJECT_INPUTS.length &&
+    subjects.every((subject, index) => subject === COMMITTED_EVIDENCE_SUBJECT_INPUTS[index])
   );
 }
 
@@ -86,20 +127,23 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow).not.toContain('SKIP_RELEASE_CHECKS');
   });
 
-  it('isolates release preparation, archive attestation, and package-publish authority', () => {
+  it('isolates release preparation, exact attestations, and package-publish authority', () => {
     const authorizeJob = releaseWorkflow.indexOf('  authorize:');
     const prepareJob = releaseWorkflow.indexOf('  prepare:');
     const attestJob = releaseWorkflow.indexOf('  attest-release-archive:');
+    const committedEvidenceJob = releaseWorkflow.indexOf('  attest-committed-evidence:');
     const publishJob = releaseWorkflow.indexOf('  publish:');
     const authorize = releaseWorkflow.slice(authorizeJob, prepareJob);
     const prepare = releaseWorkflow.slice(prepareJob, attestJob);
-    const attest = attestationJob(releaseWorkflow);
+    const attest = archiveAttestationJob(releaseWorkflow);
+    const committedEvidence = committedEvidenceAttestationJob(releaseWorkflow);
     const publish = releaseWorkflow.slice(publishJob);
 
     expect(authorizeJob).toBeGreaterThanOrEqual(0);
     expect(prepareJob).toBeGreaterThan(authorizeJob);
     expect(attestJob).toBeGreaterThan(prepareJob);
-    expect(publishJob).toBeGreaterThan(attestJob);
+    expect(committedEvidenceJob).toBeGreaterThan(attestJob);
+    expect(publishJob).toBeGreaterThan(committedEvidenceJob);
     expect(authorize).not.toContain('environment: release');
     expect(authorize).not.toContain('id-token: write');
     expect(authorize).not.toContain('actions/checkout@');
@@ -151,15 +195,37 @@ describe('release workflow authority', () => {
     expect(attest).not.toContain('vp install');
     expect(attest).not.toContain('npm install');
     expect(attest).not.toContain('pnpm ');
-    expect(attestationJobMatchesStepAllowlist(releaseWorkflow)).toBe(true);
-    expect(releaseWorkflow.split(`uses: ${ATTEST_ACTION}`)).toHaveLength(2);
+    expect(archiveAttestationJobMatchesStepAllowlist(releaseWorkflow)).toBe(true);
+
+    expect(committedEvidence).toContain('needs: prepare');
+    expect(committedEvidence).toContain('if: ${{ !inputs.dry_run }}');
+    expect(committedEvidence).toContain(`uses: ${CHECKOUT_ACTION}`);
+    expect(committedEvidence).toContain('fetch-depth: 1');
+    expect(committedEvidence).toContain('persist-credentials: false');
+    expect(committedEvidence).toContain('ref: ${{ github.sha }}');
+    for (const subject of [
+      'security/advisories/feed.json',
+      'security/kovo-certificate-policy-v1.json',
+      'security/kovo-certificate-v1.json',
+    ]) {
+      expect(committedEvidence).toContain(`subject-name: ${subject}`);
+      expect(committedEvidence).toContain(`subject-path: ${subject}`);
+    }
+    expect(committedEvidence).not.toContain('voidzero-dev/setup-vp@');
+    expect(committedEvidence).not.toContain('run:');
+    expect(committedEvidence).not.toContain('vp install');
+    expect(committedEvidence).not.toContain('npm install');
+    expect(committedEvidence).not.toContain('pnpm ');
+    expect(committedEvidenceJobMatchesStepAllowlist(releaseWorkflow)).toBe(true);
+    expect(releaseWorkflow.split(`uses: ${ATTEST_ACTION}`)).toHaveLength(5);
     expect(releaseWorkflow).not.toContain('attest-advisory-feed');
-    expect(releaseWorkflow.match(/^\s+artifact-metadata: write$/gmu)).toHaveLength(1);
-    expect(releaseWorkflow.match(/^\s+attestations: write$/gmu)).toHaveLength(1);
+    expect(releaseWorkflow.match(/^\s+artifact-metadata: write$/gmu)).toHaveLength(2);
+    expect(releaseWorkflow.match(/^\s+attestations: write$/gmu)).toHaveLength(2);
 
     expect(publish).toContain('if: ${{ !inputs.dry_run }}');
     expect(publish).toContain('- prepare');
     expect(publish).toContain('- attest-release-archive');
+    expect(publish).toContain('- attest-committed-evidence');
     expect(publish).toContain('environment: release');
     expect(publish).toContain('id-token: write');
     expect(publish).not.toContain('artifact-metadata: write');
@@ -195,7 +261,7 @@ describe('release workflow authority', () => {
         '      - name: Attest exact verified release archive',
     );
     expect(mutated).not.toBe(releaseWorkflow);
-    expect(attestationJobMatchesStepAllowlist(mutated)).toBe(false);
+    expect(archiveAttestationJobMatchesStepAllowlist(mutated)).toBe(false);
   });
 
   it('rejects a substituted or merely comment-mentioned attestation subject', () => {
@@ -205,7 +271,7 @@ describe('release workflow authority', () => {
         '          subject-name: security/kovo-certificate-v1.json',
     );
     expect(mutated).not.toBe(releaseWorkflow);
-    expect(attestationJobMatchesStepAllowlist(mutated)).toBe(false);
+    expect(archiveAttestationJobMatchesStepAllowlist(mutated)).toBe(false);
   });
 
   it('rejects artifact or path substitutions across the attestation boundary', () => {
@@ -219,8 +285,24 @@ describe('release workflow authority', () => {
     );
     expect(wrongArtifact).not.toBe(releaseWorkflow);
     expect(wrongSubjectPath).not.toBe(releaseWorkflow);
-    expect(attestationJobMatchesStepAllowlist(wrongArtifact)).toBe(false);
-    expect(attestationJobMatchesStepAllowlist(wrongSubjectPath)).toBe(false);
+    expect(archiveAttestationJobMatchesStepAllowlist(wrongArtifact)).toBe(false);
+    expect(archiveAttestationJobMatchesStepAllowlist(wrongSubjectPath)).toBe(false);
+  });
+
+  it('rejects extra authority or subject drift in the committed-evidence job', () => {
+    const extraAction = releaseWorkflow.replace(
+      '      - name: Attest exact advisory feed',
+      '      - uses: actions/cache@2f8e54208210a422b2efd51efaa6bd6d7ca8920f\n\n' +
+        '      - name: Attest exact advisory feed',
+    );
+    const wrongSubject = releaseWorkflow.replace(
+      '          subject-path: security/advisories/feed.json',
+      '          subject-path: security/kovo-certificate-v1.json',
+    );
+    expect(extraAction).not.toBe(releaseWorkflow);
+    expect(wrongSubject).not.toBe(releaseWorkflow);
+    expect(committedEvidenceJobMatchesStepAllowlist(extraAction)).toBe(false);
+    expect(committedEvidenceJobMatchesStepAllowlist(wrongSubject)).toBe(false);
   });
 
   it('rejects build-time drift anywhere in the tracked release tree', () => {
