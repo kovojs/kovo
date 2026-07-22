@@ -1489,6 +1489,17 @@ const removedImportEqualsCapabilityClosureBranch = [
   '      continue;',
 ].join('\n');
 
+const importEqualsNamespaceMemberProjectionBranch = [
+  "    if (origin.kind === 'package') {",
+  "      return { exportName: member, kind: 'package', specifier: origin.specifier };",
+  '    }',
+].join('\n');
+const removedImportEqualsNamespaceMemberProjectionBranch = [
+  "    if (origin.kind === 'package') {",
+  "      return { kind: 'unknown', reason: `mutant dropped ${member} namespace projection` };",
+  '    }',
+].join('\n');
+
 const exactFrameworkImplementationDigestBranch =
   '  return installedDigest !== undefined && reviewedDigests.includes(installedDigest);';
 const deletedFrameworkImplementationDigestBranch = '  return true;';
@@ -5683,6 +5694,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: importEqualsCapabilityClosureBranch,
     sourceFile: compilerCapabilityClosureScannerPath,
     test: assertImportEqualsCapabilityClosureIsEnforced,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Drops exact member projection from a re-exported import-equals namespace.',
+    expectedKiller:
+      'capability closure must preserve framework-root identity through import-equals namespace re-exports',
+    name: 'compiler-capability-closure/drop-import-equals-namespace-member-projection',
+    replacement: removedImportEqualsNamespaceMemberProjectionBranch,
+    search: importEqualsNamespaceMemberProjectionBranch,
+    sourceFile: compilerCapabilityClosureVerdictPath,
+    test: assertImportEqualsNamespaceMemberProjectionIsEnforced,
   },
   {
     behavioralTypeScript: true,
@@ -10787,6 +10809,39 @@ async function assertImportEqualsCapabilityClosureIsEnforced(moduleUnderTest) {
   }
   if (!scanned?.aliases.some((fact) => fact.local === 'route' && fact.source === 'server.route')) {
     throw new Error('capability closure dropped entity-name import-equals provenance');
+  }
+}
+
+async function assertImportEqualsNamespaceMemberProjectionIsEnforced(moduleUnderTest) {
+  const result = moduleUnderTest.analyzeCapabilityClosure({
+    files: [
+      {
+        fileName: 'bridge.ts',
+        source: "export import server = require('@kovojs/server');",
+      },
+      {
+        fileName: 'app.ts',
+        source: [
+          "import { server } from './bridge.js';",
+          "import fs = require('node:fs');",
+          "export const page = server.route('/namespace-import-equals', {",
+          "  render() { return fs.readFileSync('/etc/hosts', 'utf8'); },",
+          '});',
+        ].join('\n'),
+      },
+    ],
+  });
+  const retainedRoot = result.facts.some(
+    (fact) =>
+      fact.kind === 'root' && fact.rootKind === 'route' && fact.name === '/namespace-import-equals',
+  );
+  const closedFilesystem = result.facts.some(
+    (fact) => fact.kind === 'closed' && fact.capability === 'filesystem',
+  );
+  if (!retainedRoot || !closedFilesystem) {
+    throw new Error(
+      `capability closure dropped an import-equals namespace root (${retainedRoot}/${closedFilesystem})`,
+    );
   }
 }
 

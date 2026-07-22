@@ -2666,6 +2666,19 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'dependency-import-equals-namespace-reexport-closure',
+        file: 'packages/compiler/src/capability-closure.security.test.ts',
+        snippets: [
+          '@kovo-security-certifies C13 dependency-import-equals-namespace-reexport-closure',
+          'retains namespace identity when an external import-equals is re-exported',
+          "export import server = require('@kovojs/server')",
+          'projects re-exported local namespaces and qualified aliases to their exact members',
+          'import route = bridge.server.route',
+          'projects ESM namespace re-exports to exact external and local members',
+          "export * as server from '@kovojs/server'",
+        ],
+      },
+      {
         id: 'dependency-transitive-bundle-closure',
         file: 'packages/cli/src/dependency-capability-loader.test.ts',
         snippets: [

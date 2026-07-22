@@ -340,6 +340,7 @@ describe('security-gate-mutations', () => {
   it('executes framework-identity and compiler-resolution mutants against behavioral verdicts', () => {
     const behavioralNames = [
       'compiler-capability-closure/drop-import-equals-closure',
+      'compiler-capability-closure/drop-import-equals-namespace-member-projection',
       'compiler-capability-closure/drop-webrtc-network-global',
       'compiler-compile/drop-framework-identity-project-registration',
       'compiler-render-equivalence/drop-project-identity-files',
@@ -527,6 +528,10 @@ describe('security-gate-mutations', () => {
         }),
         expect.objectContaining({
           name: 'compiler-capability-closure/drop-import-equals-closure',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-capability-closure/drop-import-equals-namespace-member-projection',
           status: 'killed',
         }),
         expect.objectContaining({

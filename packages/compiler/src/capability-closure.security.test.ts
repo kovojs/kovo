@@ -654,6 +654,126 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(exported.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
   });
 
+  // @kovo-security-certifies C13 dependency-import-equals-namespace-reexport-closure
+  it('retains namespace identity when an external import-equals is re-exported', () => {
+    const result = analyze([
+      {
+        fileName: 'bridge.ts',
+        source: `export import server = require('@kovojs/server');`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { server } from './bridge.js';
+          import fs = require('node:fs');
+          export const page = server.route('/namespace-import-equals', {
+            render() { return fs.readFileSync('/etc/hosts', 'utf8'); },
+          });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'root',
+        name: '/namespace-import-equals',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'filesystem', kind: 'closed' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
+  it('projects re-exported local namespaces and qualified aliases to their exact members', () => {
+    const localNamespace = analyze([
+      {
+        fileName: 'helper.ts',
+        source: `
+          export { route } from '@kovojs/server';
+          export function read() { return process.env.SECRET; }
+        `,
+      },
+      {
+        fileName: 'bridge.ts',
+        source: `export import helper = require('./helper.js');`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { helper } from './bridge.js';
+          export const page = helper.route('/local-namespace', {
+            render() { return helper.read(); },
+          });
+        `,
+      },
+    ]);
+    expect(localNamespace.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/local-namespace', rootKind: 'route' }),
+    );
+    expect(localNamespace.facts).toContainEqual(
+      expect.objectContaining({ capability: 'process', kind: 'closed' }),
+    );
+
+    const qualified = analyze([
+      {
+        fileName: 'bridge.ts',
+        source: `export import server = require('@kovojs/server');`,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import * as bridge from './bridge.js';
+          import route = bridge.server.route;
+          export const qualified = route('/qualified-namespace', { render() { return null; } });
+          export const computed = bridge.server['route']('/computed-namespace', {
+            render() { return null; },
+          });
+        `,
+      },
+    ]);
+    expect(
+      qualified.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/computed-namespace', '/qualified-namespace']);
+  });
+
+  it('projects ESM namespace re-exports to exact external and local members', () => {
+    const result = analyze([
+      {
+        fileName: 'helper.ts',
+        source: `export function read() { return process.env.SECRET; }`,
+      },
+      {
+        fileName: 'bridge.ts',
+        source: `
+          export * as server from '@kovojs/server';
+          export * as helper from './helper.js';
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { helper, server } from './bridge.js';
+          export const page = server.route('/esm-namespace-reexport', {
+            render() { return helper.read(); },
+          });
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/esm-namespace-reexport', rootKind: 'route' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'process', kind: 'closed' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {

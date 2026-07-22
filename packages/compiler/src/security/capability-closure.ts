@@ -93,8 +93,18 @@ interface ModuleEdge {
 }
 
 type BindingOrigin =
-  | { readonly exportName: string; readonly kind: 'local'; readonly module: string }
-  | { readonly exportName: string; readonly kind: 'package'; readonly specifier: string }
+  | {
+      readonly exportName: string;
+      readonly kind: 'local';
+      readonly module: string;
+      readonly namespace?: boolean;
+    }
+  | {
+      readonly exportName: string;
+      readonly kind: 'package';
+      readonly namespace?: boolean;
+      readonly specifier: string;
+    }
   | { readonly kind: 'unknown'; readonly reason: string };
 
 interface ReachablePackageUse {
@@ -1826,13 +1836,17 @@ class BindingResolver {
     for (const imported of module.importBindings) {
       if (binding === imported.local) {
         if (imported.namespace) {
-          return { kind: 'local', module: moduleName, exportName: binding };
+          return this.#resolveNamespaceImport(moduleName, imported.specifier);
         }
         return this.#resolveImport(moduleName, imported.specifier, imported.imported, seen);
       }
-      if (imported.namespace && binding.startsWith(`${imported.local}.`)) {
-        const exportName = binding.slice(imported.local.length + 1);
-        return this.#resolveImport(moduleName, imported.specifier, exportName, seen);
+      if (binding.startsWith(`${imported.local}.`)) {
+        const member = binding.slice(imported.local.length + 1);
+        if (imported.namespace) {
+          return this.#resolveImport(moduleName, imported.specifier, member, seen);
+        }
+        const origin = this.#resolveImport(moduleName, imported.specifier, imported.imported, seen);
+        return this.#resolveNamespaceMember(origin, member, seen);
       }
     }
     return { exportName: binding, kind: 'local', module: moduleName };
@@ -1852,6 +1866,15 @@ class BindingResolver {
     return this.#resolveExport(target, imported, seen);
   }
 
+  #resolveNamespaceImport(importer: string, specifier: string): BindingOrigin {
+    if (!isRelativeSpecifier(specifier)) {
+      return { exportName: '*', kind: 'package', namespace: true, specifier };
+    }
+    const target = resolveRelativeModule(importer, specifier, this.#modules);
+    if (target === undefined) return { kind: 'unknown', reason: `unresolved ${specifier}` };
+    return { exportName: '*', kind: 'local', module: target, namespace: true };
+  }
+
   #resolveExport(moduleName: string, exportName: string, seen: Set<string>): BindingOrigin {
     const visitKey = `export\0${moduleName}\0${exportName}`;
     if (seen.has(visitKey)) return { kind: 'unknown', reason: 're-export cycle' };
@@ -1864,6 +1887,11 @@ class BindingResolver {
       return (
         sameOrigin(origins) ?? { kind: 'unknown', reason: `contradictory export ${exportName}` }
       );
+    }
+    const separator = exportName.indexOf('.');
+    if (separator > 0) {
+      const namespace = this.#resolveExport(moduleName, exportName.slice(0, separator), seen);
+      return this.#resolveNamespaceMember(namespace, exportName.slice(separator + 1), seen);
     }
     const wildcard = module.exports.filter(
       (entry) => entry.wildcard && entry.specifier !== undefined,
@@ -1883,6 +1911,9 @@ class BindingResolver {
     seen: Set<string>,
   ): BindingOrigin {
     if (entry.specifier !== undefined) {
+      if (entry.imported === '*' && entry.exported !== undefined) {
+        return this.#resolveNamespaceImport(moduleName, entry.specifier);
+      }
       return this.#resolveImport(
         moduleName,
         entry.specifier,
@@ -1892,6 +1923,17 @@ class BindingResolver {
     }
     if (entry.local !== undefined) return this.#resolveBinding(moduleName, entry.local, seen);
     return { kind: 'unknown', reason: 'malformed export' };
+  }
+
+  #resolveNamespaceMember(origin: BindingOrigin, member: string, seen: Set<string>): BindingOrigin {
+    if (origin.kind === 'unknown') return origin;
+    if (origin.namespace !== true) {
+      return { kind: 'unknown', reason: `${member} is not a namespace member` };
+    }
+    if (origin.kind === 'package') {
+      return { exportName: member, kind: 'package', specifier: origin.specifier };
+    }
+    return this.#resolveExport(origin.module, member, seen);
   }
 }
 
@@ -1906,8 +1948,8 @@ function sameOrigin(origins: readonly BindingOrigin[]): BindingOrigin | undefine
 function bindingOriginKey(origin: BindingOrigin): string {
   if (origin.kind === 'unknown') return `unknown:${origin.reason}`;
   return origin.kind === 'local'
-    ? `local:${origin.module}:${origin.exportName}`
-    : `package:${origin.specifier}:${origin.exportName}`;
+    ? `local:${origin.module}:${origin.exportName}:${origin.namespace === true ? 'namespace' : 'value'}`
+    : `package:${origin.specifier}:${origin.exportName}:${origin.namespace === true ? 'namespace' : 'value'}`;
 }
 
 function resolveRelativeModule(

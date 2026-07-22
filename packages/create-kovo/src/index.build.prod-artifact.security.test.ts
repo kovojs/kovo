@@ -231,6 +231,39 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  // @kovo-security-certifies KV448 production-import-equals-namespace-reexport-closure
+  it('blocks authority under a route reached through a re-exported import-equals namespace', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-prod-import-equals-namespace-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Import Equals Namespace Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src', 'import-equals-bridge.ts'),
+        "export import server = require('@kovojs/server');\n",
+      );
+      writeFileSync(
+        join(root, 'src', 'import-equals-namespace-route.tsx'),
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { server } from './import-equals-bridge.js';",
+          "import fs = require('node:fs');",
+          "export const namespaceRoute = server.route('/namespace-import-equals', {",
+          "  page() { return <p>{fs.readFileSync('/etc/hosts', 'utf8')}</p>; },",
+          '});',
+        ].join('\n'),
+      );
+
+      const output = captureBuildFailure(() => buildProductionArtifact(root));
+      expect(output).toContain('KV448');
+      expect(output).toContain('/namespace-import-equals');
+      expect(output).toContain('raw filesystem authority');
+      expect(output).toContain('node:fs');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV435 runtime-secret-view-egress
   it('refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode', async () => {
     const tempParent = tmpdir();

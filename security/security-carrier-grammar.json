@@ -1066,6 +1066,12 @@
       "reason": "Runtime TypeScript import-equals forms enter the same raw-package and local-module closure as ESM imports, while type-only forms remain inert and entity-name aliases preserve their original binding provenance."
     },
     {
+      "anchor": "dependency-import-equals-namespace-reexport-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Re-exported external and local namespaces preserve exact member provenance across TypeScript import-equals, ESM namespace exports, named imports, and qualified aliases."
+    },
+    {
       "anchor": "dependency-transitive-bundle-closure",
       "corpus": "capability-closure",
       "production": "module-boundary",
