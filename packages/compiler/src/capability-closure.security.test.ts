@@ -1033,6 +1033,67 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
   });
 
+  it('retains an immutable root captured before its initializer is analyzed', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          const invoke = () => future('/forward-immutable-capture', {
+            render() { return null; },
+          });
+          const future = route;
+          invoke();
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'root',
+        name: '/forward-immutable-capture',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/forward-immutable-capture',
+        reason: expect.stringContaining('mutable or ambiguous lexical provenance'),
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
+  it('keeps a function-valued const as a separated toNodeHandler root', () => {
+    const result = analyze([
+      {
+        fileName: 'server.ts',
+        source: `
+          import '@kovojs/server/runtime-bootstrap';
+          import { toNodeHandler } from '@kovojs/server';
+          import { handler } from './handler.js';
+          export const listener = toNodeHandler(handler);
+        `,
+      },
+      {
+        fileName: 'handler.ts',
+        source: `
+          import { readFileSync } from 'node:fs';
+          export const handler = async () => new Response(readFileSync('/tmp/secret'));
+        `,
+      },
+    ]);
+
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', module: 'handler.ts', rootKind: 'endpoint' }),
+    );
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ capability: 'filesystem', kind: 'closed' }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
+  });
+
   it('joins loop, exception, switch, and logical writes while honoring definite finally writes', () => {
     const result = analyze([
       {

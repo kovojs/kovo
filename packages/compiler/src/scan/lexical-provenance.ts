@@ -437,7 +437,7 @@ function readBinding(binding: Binding, path: string, env: Environment, scope: Sc
   const exact = value !== undefined;
   if (!value && path) value = projectValue(readBinding(binding, '', env, scope, state), path);
   value ??= valueOf({ exportName: binding.name, kind: 'local', ...(path ? { members: path.split('.') } : {}) });
-  if (binding.owner !== scope.owner && binding.mutable) {
+  if (binding.owner !== scope.owner && (binding.mutable || !exact)) {
     value = joinValues(value, state.history.get(key) ?? value);
     value = { ...value, captured: [...new Set([...value.captured, key])], uncertain: true };
   }
@@ -449,7 +449,7 @@ function writeBinding(binding: Binding, path: string, value: Value, env: Environ
   if (!path) for (const existing of [...env.keys()]) if (existing.startsWith(`${binding.id}\0`) && existing !== key) env.delete(existing);
   const written = { ...value, uncertain: value.uncertain || assignment || path !== '' };
   env.set(key, written);
-  if (binding.mutable || assignment || path) state.history.set(key, joinValues(state.history.get(key) ?? written, written));
+  state.history.set(key, joinValues(state.history.get(key) ?? written, written));
   return env;
 }
 
