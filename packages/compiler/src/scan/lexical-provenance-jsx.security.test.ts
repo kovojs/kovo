@@ -274,6 +274,39 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
     expect(fact.candidates).toContainEqual(expect.objectContaining({ kind: 'unknown' }));
   });
 
+  it('does not launder a root-bearing argument through a reviewed receiver transition', () => {
+    const { call } = analyzeSource(`
+      import { route, s } from '@kovojs/server';
+      const schema = s.number().default(route);
+      schema.parse(undefined);
+    `);
+
+    expect(call('schema.parse').rootWideningRequired).toBe(true);
+  });
+
+  it('keeps unknown reviewed-receiver members root-bearing by default', () => {
+    const { call } = analyzeSource(`
+      import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
+      const clientModules = createMemoryVersionedClientModuleRegistry();
+      clientModules.futureMethod();
+    `);
+
+    expect(call('clientModules.futureMethod').rootWideningRequired).toBe(true);
+  });
+
+  it('does not let a reviewed receiver token survive a mutable root-factory overwrite', () => {
+    const { call } = analyzeSource(`
+      import { createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
+      let clientModules = createMemoryVersionedClientModuleRegistry();
+      clientModules = route;
+      clientModules.put({ source: 'export const value = 1;' });
+    `);
+
+    const fact = call('clientModules.put');
+    expect(fact.rootWideningRequired).toBe(true);
+    expect(hasCandidate(fact, (candidate) => isImport(candidate, 'route'))).toBe(true);
+  });
+
   it('does not invent query or mutation roots at safe real-app-shaped JSX calls', () => {
     const files: CapabilityClosureSourceFile[] = [
       {
