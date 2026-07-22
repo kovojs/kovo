@@ -804,9 +804,9 @@ function extractElementParams(
   eligibleBareReferenceNames: ReadonlySet<string> = compilerCreateSet(),
 ): ElementParam[] {
   const callArgumentKinds = zeroArgArrow?.callArgumentKinds;
-  const localNames = compilerSetFromStrings(
-    zeroArgArrow?.bodyLocalNames ?? [],
-    'Handler body local names',
+  const unsafeRoots = compilerSetFromStrings(
+    zeroArgArrow?.bodyElementParamUnsafeRoots ?? [],
+    'Unsafe handler element-param roots',
   );
   const candidates: ElementParamCandidate[] = [];
   if (callArgumentKinds) {
@@ -817,8 +817,9 @@ function extractElementParams(
       // the old `arg.length === 0`, `arg === 'state'`, and static-value source comparisons).
       if (kind === 'empty' || kind === 'state' || kind === 'static') continue;
 
-      // Any remaining argument (a bare member, or an object/expression that embeds serializable
-      // member accesses such as `{ id: item.id }`) contributes its parsed property accesses.
+      // A remaining scalar expression contributes only the member occurrences for which the
+      // parser recorded a positive proof. Container/object/array occurrences remain in the typed
+      // facts for diagnostics but are closed and cannot become element params.
       const propertyAccessGroups = zeroArgArrow?.callArgumentPropertyAccesses;
       const propertyAccesses = propertyAccessGroups
         ? (compilerOwnDataValue(
@@ -844,8 +845,11 @@ function extractElementParams(
               `Handler call argument property accesses[${accessIndex}] must be dense.`,
             );
           }
-          if (access.elementParamEligible === false) continue;
-          if (serializableMemberExpression(access.path, localNames)) {
+          if (access.elementParamEligible !== true) continue;
+          if (
+            !compilerSetHas(unsafeRoots, elementParamExpressionRoot(access.path)) &&
+            serializableMemberExpression(access.path)
+          ) {
             appendHandlerFact(
               candidates,
               elementParamCandidateFromAccess(access),
@@ -869,7 +873,11 @@ function extractElementParams(
             ) as readonly IdentifierReferenceModel[] | undefined)
           : undefined;
         const reference = simpleCallArgumentReference(references ?? []);
-        if (reference && compilerSetHas(eligibleBareReferenceNames, reference)) {
+        if (
+          reference &&
+          !compilerSetHas(unsafeRoots, reference) &&
+          compilerSetHas(eligibleBareReferenceNames, reference)
+        ) {
           appendHandlerFact(
             candidates,
             { expression: reference, terminalName: reference },
@@ -881,11 +889,11 @@ function extractElementParams(
   } else {
     appendElementParamCandidates(
       candidates,
-      serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, localNames),
+      serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses, unsafeRoots),
     );
     appendElementParamCandidates(
       candidates,
-      serializableBareReferences(zeroArgArrow, eligibleBareReferenceNames, localNames),
+      serializableBareReferences(zeroArgArrow, eligibleBareReferenceNames, unsafeRoots),
     );
   }
 
@@ -977,7 +985,7 @@ function simpleCallArgumentReference(
   const reference = compilerOwnDataValue(references, 0, 'Handler call argument references') as
     | IdentifierReferenceModel
     | undefined;
-  return reference && reference.elementParamEligible !== false && typeof reference.name === 'string'
+  return reference && reference.elementParamEligible === true && typeof reference.name === 'string'
     ? reference.name
     : null;
 }
@@ -1005,7 +1013,7 @@ function inferElementParamType(
 function serializableMemberExpressions(
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
-  localNames: ReadonlySet<string> = compilerCreateSet(),
+  unsafeRoots: ReadonlySet<string> = compilerCreateSet(),
 ): ElementParamCandidate[] {
   const accesses = collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
   const result: ElementParamCandidate[] = [];
@@ -1019,8 +1027,11 @@ function serializableMemberExpressions(
     if (!access) {
       compilerFailClosed(`Serializable handler member expressions[${index}] must be dense.`);
     }
-    if (access.elementParamEligible === false) continue;
-    if (serializableMemberExpression(access.path, localNames)) {
+    if (access.elementParamEligible !== true) continue;
+    if (
+      !compilerSetHas(unsafeRoots, elementParamExpressionRoot(access.path)) &&
+      serializableMemberExpression(access.path)
+    ) {
       appendHandlerFact(
         result,
         elementParamCandidateFromAccess(access),
@@ -1034,7 +1045,7 @@ function serializableMemberExpressions(
 function serializableBareReferences(
   zeroArgArrow: ZeroArgArrowModel | undefined,
   eligibleBareReferenceNames: ReadonlySet<string>,
-  localNames: ReadonlySet<string>,
+  unsafeRoots: ReadonlySet<string>,
 ): ElementParamCandidate[] {
   const references = zeroArgArrow?.bodyReferences ?? [];
   const result: ElementParamCandidate[] = [];
@@ -1049,9 +1060,9 @@ function serializableBareReferences(
       compilerFailClosed(`Serializable handler bare references[${index}] must be dense.`);
     }
     if (
-      reference.elementParamEligible !== false &&
-      compilerSetHas(eligibleBareReferenceNames, reference.name) &&
-      !compilerSetHas(localNames, reference.name)
+      reference.elementParamEligible === true &&
+      !compilerSetHas(unsafeRoots, reference.name) &&
+      compilerSetHas(eligibleBareReferenceNames, reference.name)
     ) {
       appendHandlerFact(
         result,
@@ -1066,14 +1077,15 @@ function serializableBareReferences(
   return result;
 }
 
-function serializableMemberExpression(
-  member: string,
-  localNames: ReadonlySet<string> = compilerCreateSet(),
-): boolean {
+function elementParamExpressionRoot(expression: string): string {
+  const separator = compilerStringIndexOf(expression, '.');
+  return separator < 0 ? expression : compilerStringSlice(expression, 0, separator);
+}
+
+function serializableMemberExpression(member: string): boolean {
   const root = compilerRegExpExec(/^[A-Za-z_$][\w$]*/, member)?.[0];
   if (root && compilerSetHas(SAFE_HANDLER_GLOBAL_REFERENCE_SET, root)) return false;
   return (
-    (root === undefined || !compilerSetHas(localNames, root)) &&
     !compilerStringStartsWith(member, 'state.') &&
     !compilerStringStartsWith(member, 'ctx.') &&
     !compilerStringStartsWith(member, 'event.') &&

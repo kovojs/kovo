@@ -17,6 +17,20 @@ export const TypedHandler = component({
   });
 }
 
+function compileItemHandler(handlerBody: string) {
+  return compileComponentModule({
+    fileName: 'typed-item-handler.tsx',
+    source: `
+export const TypedItemHandler = component({
+  state: () => ({ count: 0 }),
+  render: ({ item }) => (
+    <button onClick={() => { ${handlerBody} }}>Run</button>
+  ),
+});
+`,
+  });
+}
+
 function clientSource(result: ReturnType<typeof compileComponentModule>): string {
   return result.files.find((file) => file.kind === 'client')?.source ?? '';
 }
@@ -300,6 +314,95 @@ export const HeritageCapture = component({
     expect(source).not.toContain('ctx.params.base');
     expect(source).not.toContain('ctx.params.fn');
     expect(source).not.toContain('ctx.params.external');
+  });
+
+  it.each([
+    ['local helper parameter', 'function invoke(f) { f(); } invoke(item.fn);'],
+    ['direct callee', 'item.fn();'],
+    ['constructor callee', 'new item.Ctor();'],
+    ['template tag', 'item.tag`value`;'],
+    ['instanceof target', 'void ({} instanceof item.Ctor);'],
+    ['object container', 'const box = { f: item.fn }; box.f();'],
+    ['array container', 'const box = [item.fn]; box[0]();'],
+    ['destructuring container', 'const { f } = { f: item.fn }; f();'],
+    ['declaration alias', 'const f = item.fn; f();'],
+    ['assignment alias', 'let f; f = item.fn; f();'],
+    ['prototype path', 'state.count = Number(item.constructor.name);'],
+    ['computed key', 'const box = {}; box[item.key] = 1;'],
+    ['member write', 'item.value = 1;'],
+    ['member delete', 'delete item.value;'],
+    ['member update', 'item.value++;'],
+    ['opaque return', 'return item.value;'],
+  ])('withholds %s from the scalar element-param channel', (_label, handlerBody) => {
+    const result = compileItemHandler(handlerBody);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
+    expect(sources).not.toMatch(/data-p-(?:fn|key|name|value)=/);
+    expect(clientSource(result)).not.toMatch(/ctx\.params\.(?:fn|key|name|value)/);
+  });
+
+  it('withholds every sibling param when one use of the same render root is unproved', () => {
+    const result = compileItemHandler(`
+      state.count = Number(item.id);
+      function invoke(f) { f(); }
+      invoke(item.fn);
+    `);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
+    expect(sources).not.toContain('data-p-id');
+    expect(sources).not.toContain('data-p-fn');
+    expect(clientSource(result)).not.toContain('ctx.params.id');
+    expect(clientSource(result)).not.toContain('ctx.params.fn');
+  });
+
+  it('withholds a param passed to an unsummarized same-file helper', () => {
+    const result = compileComponentModule({
+      fileName: 'same-file-helper.tsx',
+      source: `
+function invoke(value) { value(); }
+export const SameFileHelper = component({
+  render: ({ item }) => <button onClick={() => { invoke(item.fn); }}>Run</button>,
+});
+`,
+    });
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
+    expect(sources).not.toContain('data-p-fn');
+    expect(clientSource(result)).not.toContain('ctx.params.fn');
+  });
+
+  it('keeps finite arithmetic, comparison, template, and scalar-coercion uses eligible', () => {
+    const result = compileItemHandler(`
+      if (item.enabled) state.count = Number(item.count) + (item.delta > 0 ? item.delta : 0);
+      state.label = \`item:\${String(item.id)}\`;
+    `);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV201');
+    expect(sources).toContain('data-p-enabled');
+    expect(sources).toContain('data-p-count');
+    expect(sources).toContain('data-p-delta');
+    expect(sources).toContain('data-p-id');
+    expect(clientSource(result)).toContain('ctx.params.enabled');
+    expect(clientSource(result)).toContain('ctx.params.count');
+    expect(clientSource(result)).toContain('ctx.params.delta');
+    expect(clientSource(result)).toContain('ctx.params.id');
+  });
+
+  it('keeps scalar proof tied to lexical bindings rather than unrelated same-name text', () => {
+    const result = compileItemHandler(`
+      { const item = { fn() {} }; item.fn(); }
+      { const Number = (value) => value; Number(1); }
+      state.count = Number(item.id);
+    `);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV201');
+    expect(sources).toContain('data-p-id');
+    expect(clientSource(result)).toContain('ctx.params.id');
   });
 
   it('keeps an ordinary scalar member capture eligible', () => {

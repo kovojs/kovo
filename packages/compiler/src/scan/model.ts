@@ -176,8 +176,8 @@ export interface WebhookHandlerModel extends MutationHandlerModel {
 }
 
 export interface PropertyAccessPathModel {
-  /** Parser-owned denial when this use requires runtime object/callable identity. */
-  elementParamEligible?: false;
+  /** Parser-owned positive proof that this exact handler use is scalar-only. */
+  elementParamEligible?: boolean;
   end: number;
   inferredType?: 'boolean' | 'number';
   path: string;
@@ -201,8 +201,8 @@ export interface TemporalReadModel {
 }
 
 export interface IdentifierReferenceModel {
-  /** Parser-owned denial when this use requires runtime object/callable identity. */
-  elementParamEligible?: false;
+  /** Parser-owned positive proof that this exact handler use is scalar-only. */
+  elementParamEligible?: boolean;
   end: number;
   name: string;
   start: number;
@@ -426,6 +426,8 @@ export interface ZeroArgArrowModel {
   // never re-derives element-param eligibility by comparing the raw argument source string.
   callArgumentKinds?: readonly ZeroArgArrowCallArgumentKind[];
   bodyLocalNames: readonly string[];
+  /** Roots withheld when a scalar-safe candidate has any unproved executable sibling use. */
+  bodyElementParamUnsafeRoots?: readonly string[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyReferences: readonly IdentifierReferenceModel[];
   bodyStart: number;

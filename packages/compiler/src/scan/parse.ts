@@ -6184,8 +6184,13 @@ export function propertyAccessPathModels(
   root: ts.Node,
   excludedSpans: readonly SourceSpan[] = [],
   classifyElementParamEligibility = false,
+  handlerRoot: ts.Node = root,
+  securityOperations: readonly BrowserSecurityOperationModel[] = [],
 ): PropertyAccessPathModel[] {
   const paths: PropertyAccessPathModel[] = [];
+  const elementParamContext = classifyElementParamEligibility
+    ? handlerElementParamClassificationContext(sourceFile, handlerRoot, securityOperations)
+    : undefined;
 
   const pushElementAccessRoot = (node: ts.Expression, elementParamEligible: boolean): void => {
     const rootPath = elementAccessRootPath(node);
@@ -6203,7 +6208,7 @@ export function propertyAccessPathModels(
     compilerArrayAppend(
       paths,
       {
-        ...(elementParamEligible ? {} : { elementParamEligible: false as const }),
+        ...(classifyElementParamEligibility ? { elementParamEligible } : {}),
         end: node.getEnd(),
         path: rootPath,
         start: node.getStart(sourceFile),
@@ -6216,14 +6221,15 @@ export function propertyAccessPathModels(
   const visit = (node: ts.Node): void => {
     if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
     const elementParamEligible =
-      !classifyElementParamEligibility || handlerElementParamUseIsEligible(node, root);
+      elementParamContext === undefined ||
+      handlerElementParamUseIsEligible(node, elementParamContext);
     if (ts.isPropertyAccessExpression(node) && !isReceiverOfOuterAccess(node)) {
       const path = propertyAccessPath(node);
       if (path) {
         compilerArrayAppend(
           paths,
           {
-            ...(elementParamEligible ? {} : { elementParamEligible: false as const }),
+            ...(classifyElementParamEligibility ? { elementParamEligible } : {}),
             end: node.getEnd(),
             ...propertyAccessInferredType(sourceFile, node),
             path,
@@ -6257,128 +6263,387 @@ export function propertyAccessPathModels(
   return paths;
 }
 
-function handlerElementParamUseIsEligible(node: ts.Node, root: ts.Node): boolean {
-  const carrier = handlerElementParamCarrier(node);
-  if (handlerExpressionIsDirectAuthorityPosition(carrier)) return false;
-  const aliases = handlerAliasTargets(carrier);
-  for (let index = 0; index < aliases.length; index += 1) {
-    if (handlerAliasFeedsAuthority(root, aliases[index]!, compilerCreateSet<string>()))
-      return false;
-  }
-  return true;
+interface HandlerElementParamClassificationContext {
+  readonly bindings: readonly HandlerLocalBinding[];
+  readonly root: ts.Node;
+  readonly securityOperations: readonly BrowserSecurityOperationModel[];
+  readonly sourceFile: ts.SourceFile;
 }
 
-function handlerReferenceElementParamUseIsEligible(node: ts.Identifier, root: ts.Node): boolean {
-  const carrier = handlerElementParamCarrier(node);
-  if (ts.isPropertyAccessExpression(carrier) || ts.isElementAccessExpression(carrier)) return false;
-  if (
-    ts.isExpressionWithTypeArguments(carrier) &&
-    (ts.isPropertyAccessExpression(carrier.expression) ||
-      ts.isElementAccessExpression(carrier.expression))
-  ) {
-    return false;
-  }
-  return handlerElementParamUseIsEligible(node, root);
+function handlerElementParamClassificationContext(
+  sourceFile: ts.SourceFile,
+  root: ts.Node,
+  securityOperations: readonly BrowserSecurityOperationModel[],
+): HandlerElementParamClassificationContext {
+  return {
+    bindings: collectHandlerLocalBindings(root, root, []),
+    root,
+    securityOperations,
+    sourceFile,
+  };
 }
 
-function handlerElementParamCarrier(node: ts.Node): ts.Node {
+/**
+ * SPEC §4.3/§5.2: an element param is a scalar serialization channel, never a generic closure
+ * capture. Prove one use by walking outward through a deliberately finite scalar expression
+ * language until it reaches a reviewed sink. Everything not named here is closed by default.
+ */
+function handlerElementParamUseIsEligible(
+  node: ts.Node,
+  context: HandlerElementParamClassificationContext,
+): boolean {
+  if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+    const root = handlerElementParamRootIdentifier(node);
+    if (root !== undefined && handlerBindingCoversIdentifier(context.bindings, root)) return false;
+  }
+  if (handlerElementParamAccessIsUnsafe(node)) return false;
+
   let current = node;
-  while (true) {
+  while (current !== context.root) {
     const parent = current.parent;
+
+    if (handlerTransparentExpressionContains(parent, current)) {
+      current = parent;
+      continue;
+    }
+
+    if (ts.isTemplateSpan(parent) && parent.expression === current) {
+      current = parent.parent;
+      continue;
+    }
+
+    if (ts.isPrefixUnaryExpression(parent) && parent.operand === current) {
+      if (
+        parent.operator !== ts.SyntaxKind.ExclamationToken &&
+        parent.operator !== ts.SyntaxKind.PlusToken &&
+        parent.operator !== ts.SyntaxKind.MinusToken &&
+        parent.operator !== ts.SyntaxKind.TildeToken &&
+        parent.operator !== ts.SyntaxKind.TypeOfKeyword &&
+        parent.operator !== ts.SyntaxKind.VoidKeyword
+      ) {
+        return false;
+      }
+      current = parent;
+      continue;
+    }
+
+    if (ts.isPostfixUnaryExpression(parent) && parent.operand === current) return false;
+    if (ts.isDeleteExpression(parent) && parent.expression === current) return false;
+
+    if (ts.isBinaryExpression(parent) && (parent.left === current || parent.right === current)) {
+      const operator = parent.operatorToken.kind;
+      if (handlerIsAssignmentOperator(operator)) {
+        return (
+          parent.right === current && handlerAssignmentTargetIsReviewedState(parent.left, context)
+        );
+      }
+      if (!handlerIsScalarBinaryOperator(operator)) return false;
+      current = parent;
+      continue;
+    }
+
+    if (ts.isConditionalExpression(parent)) {
+      if (parent.condition === current) return true;
+      if (parent.whenTrue !== current && parent.whenFalse !== current) return false;
+      current = parent;
+      continue;
+    }
+
+    if (ts.isCallExpression(parent)) {
+      if (parent.expression === current) return false;
+      if (!handlerCallHasDirectArgument(parent, current)) return false;
+      if (handlerCallIsPureScalar(context.sourceFile, parent)) {
+        current = parent;
+        continue;
+      }
+      return handlerCallIsReviewedScalarSink(parent, context);
+    }
+
     if (
-      (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+      (ts.isIfStatement(parent) ||
+        ts.isWhileStatement(parent) ||
+        ts.isDoStatement(parent) ||
+        ts.isSwitchStatement(parent) ||
+        ts.isCaseClause(parent)) &&
       parent.expression === current
     ) {
-      current = parent;
-      continue;
+      return true;
     }
+
+    if (ts.isForStatement(parent) && parent.condition === current) return true;
+
+    // Containers, declarations/destructuring, local aliases, property keys, writes, spread,
+    // return/throw, constructors, tags, await/yield, iteration, and every future syntax form are
+    // deliberately absent. They cannot transport an element-param value without a new reviewed
+    // scalar rule and regression corpus.
+    return false;
+  }
+  return false;
+}
+
+function handlerReferenceElementParamUseIsEligible(
+  node: ts.Identifier,
+  context: HandlerElementParamClassificationContext,
+): boolean {
+  if (handlerIdentifierIsMemberReceiver(node)) return false;
+  return handlerElementParamUseIsEligible(node, context);
+}
+
+function handlerTransparentExpressionContains(parent: ts.Node, child: ts.Node): boolean {
+  return (
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isSatisfiesExpression(parent) ||
+      ts.isNonNullExpression(parent) ||
+      ts.isTypeAssertionExpression(parent) ||
+      ts.isExpressionWithTypeArguments(parent)) &&
+    parent.expression === child
+  );
+}
+
+function handlerIdentifierIsMemberReceiver(node: ts.Identifier): boolean {
+  let current: ts.Node = node;
+  while (handlerTransparentExpressionContains(current.parent, current)) current = current.parent;
+  const parent = current.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === current
+  );
+}
+
+function handlerElementParamAccessIsUnsafe(node: ts.Node): boolean {
+  if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
+  let current: ts.Expression = node;
+  while (ts.isPropertyAccessExpression(current)) {
+    if (handlerElementParamSegmentIsUnsafe(current.name.text)) return true;
+    current = unwrapExpression(current.expression);
+  }
+  if (ts.isElementAccessExpression(current)) return true;
+  return ts.isIdentifier(current) && handlerElementParamSegmentIsUnsafe(current.text);
+}
+
+function handlerElementParamSegmentIsUnsafe(segment: string): boolean {
+  return segment === '__proto__' || segment === 'constructor' || segment === 'prototype';
+}
+
+function handlerIsAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
+function handlerIsScalarBinaryOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    isEqualityOperator(kind) ||
+    isOrderingOperator(kind) ||
+    kind === ts.SyntaxKind.PlusToken ||
+    kind === ts.SyntaxKind.MinusToken ||
+    kind === ts.SyntaxKind.AsteriskToken ||
+    kind === ts.SyntaxKind.AsteriskAsteriskToken ||
+    kind === ts.SyntaxKind.SlashToken ||
+    kind === ts.SyntaxKind.PercentToken ||
+    kind === ts.SyntaxKind.AmpersandToken ||
+    kind === ts.SyntaxKind.BarToken ||
+    kind === ts.SyntaxKind.CaretToken ||
+    kind === ts.SyntaxKind.LessThanLessThanToken ||
+    kind === ts.SyntaxKind.GreaterThanGreaterThanToken ||
+    kind === ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken ||
+    kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+    kind === ts.SyntaxKind.BarBarToken ||
+    kind === ts.SyntaxKind.QuestionQuestionToken
+  );
+}
+
+function handlerAssignmentTargetIsReviewedState(
+  node: ts.Expression,
+  context: HandlerElementParamClassificationContext,
+): boolean {
+  const current = unwrapExpression(node);
+  if (!ts.isPropertyAccessExpression(current)) return false;
+  const path = propertyAccessPath(current);
+  if (!path) return false;
+  const segments = compilerStringSplit(path, '.');
+  if (compilerOwnDataValue(segments, 0, 'Handler state-write path') !== 'state') return false;
+  const start = current.getStart(context.sourceFile);
+  const end = current.getEnd();
+  const operations = context.securityOperations;
+  const length = compilerArrayLength(operations, 'Handler reviewed state writes');
+  for (let index = 0; index < length; index += 1) {
+    const operation = compilerOwnDataValue(operations, index, 'Handler reviewed state writes') as
+      | BrowserSecurityOperationModel
+      | undefined;
+    if (!operation)
+      throw new TypeError(`Handler reviewed state writes[${index}] must be own data.`);
     if (
-      ((ts.isParenthesizedExpression(parent) ||
-        ts.isAsExpression(parent) ||
-        ts.isSatisfiesExpression(parent) ||
-        ts.isNonNullExpression(parent) ||
-        ts.isTypeAssertionExpression(parent) ||
-        ts.isExpressionWithTypeArguments(parent)) &&
-        parent.expression === current) ||
-      (ts.isConditionalExpression(parent) &&
-        (parent.whenTrue === current || parent.whenFalse === current)) ||
-      (ts.isBinaryExpression(parent) &&
-        (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
-          parent.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
-          parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) &&
-        (parent.left === current || parent.right === current))
+      operation.kind === 'browser.state.write' &&
+      operation.span.start === start &&
+      operation.span.end === end
     ) {
-      current = parent;
-      continue;
+      return true;
     }
-    return current;
   }
+  return false;
 }
 
-function handlerExpressionIsDirectAuthorityPosition(node: ts.Node): boolean {
-  const parent = node.parent;
-  if (
-    ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression === node) ||
-    (ts.isTaggedTemplateExpression(parent) && parent.tag === node) ||
-    (ts.isBinaryExpression(parent) &&
-      parent.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
-      (parent.left === node || parent.right === node)) ||
-    (ts.isBinaryExpression(parent) &&
-      parent.operatorToken.kind === ts.SyntaxKind.InKeyword &&
-      parent.right === node) ||
-    (ts.isAwaitExpression(parent) && parent.expression === node) ||
-    (ts.isYieldExpression(parent) &&
-      parent.asteriskToken !== undefined &&
-      parent.expression === node) ||
-    (ts.isForOfStatement(parent) && parent.expression === node) ||
-    ((ts.isSpreadElement(parent) || ts.isSpreadAssignment(parent)) && parent.expression === node) ||
-    (ts.isComputedPropertyName(parent) && parent.expression === node)
-  ) {
-    return true;
+function handlerCallHasDirectArgument(call: ts.CallExpression, node: ts.Node): boolean {
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    call.arguments,
+    'Handler scalar call arguments',
+  );
+  for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+    if (argumentsSnapshot[index] === node) return true;
   }
-  return ts.isExpressionWithTypeArguments(node) && expressionWithTypeArgumentsIsRuntime(node);
+  return false;
 }
 
-function handlerAliasTargets(node: ts.Node): string[] {
-  const names: string[] = [];
-  const parent = node.parent;
-  if (ts.isVariableDeclaration(parent) && parent.initializer === node) {
-    collectBindingNames(parent.name, names);
-  } else if (
-    ts.isBinaryExpression(parent) &&
-    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-    parent.right === node &&
-    ts.isIdentifier(parent.left)
-  ) {
-    compilerArrayAppend(names, parent.left.text, 'Handler authority alias targets');
+function handlerCallIsReviewedScalarSink(
+  call: ts.CallExpression,
+  context: HandlerElementParamClassificationContext,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (ts.isIdentifier(callee)) {
+    // Browser security-IR classifies a direct non-local identifier call as a reviewed framework
+    // edge; capture analysis separately proves an imported executable's exact package identity.
+    // Exact same-file helpers need a parameter summary that this finite language does not have, so
+    // reject them alongside handler-local helpers. Resolve locality at this use site so an
+    // unrelated same-name binding in a sibling block cannot change the verdict.
+    return (
+      !handlerBindingCoversIdentifier(context.bindings, callee) &&
+      resolveSameFileSecurityIrCallable(context.sourceFile, callee) === undefined
+    );
   }
-  return names;
+  const start = call.getStart(context.sourceFile);
+  const end = call.getEnd();
+  const length = compilerArrayLength(
+    context.securityOperations,
+    'Handler scalar-sink security operations',
+  );
+  for (let index = 0; index < length; index += 1) {
+    const operation = compilerOwnDataValue(
+      context.securityOperations,
+      index,
+      'Handler scalar-sink security operations',
+    ) as BrowserSecurityOperationModel | undefined;
+    if (!operation) {
+      throw new TypeError(`Handler scalar-sink security operations[${index}] must be own data.`);
+    }
+    if (operation.span.start === start && operation.span.end === end) return true;
+  }
+  return false;
 }
 
-function handlerAliasFeedsAuthority(root: ts.Node, name: string, seen: Set<string>): boolean {
-  if (compilerSetHas(seen, name)) return true;
-  compilerSetAdd(seen, name);
-  let found = false;
+function handlerCallIsPureScalar(sourceFile: ts.SourceFile, call: ts.CallExpression): boolean {
+  const callee = unwrapExpression(call.expression);
+  if (ts.isIdentifier(callee)) {
+    return (
+      (callee.text === 'BigInt' ||
+        callee.text === 'Boolean' ||
+        callee.text === 'Number' ||
+        callee.text === 'String' ||
+        callee.text === 'isFinite' ||
+        callee.text === 'isNaN' ||
+        callee.text === 'parseFloat' ||
+        callee.text === 'parseInt') &&
+      identifierResolvesToUnshadowedGlobal(sourceFile, callee, callee.text)
+    );
+  }
+  if (!ts.isPropertyAccessExpression(callee) || !ts.isIdentifier(callee.expression)) return false;
+  const root = callee.expression;
+  if (!identifierResolvesToUnshadowedGlobal(sourceFile, root, root.text)) return false;
+  const member = callee.name.text;
+  if (root.text === 'JSON') return member === 'stringify';
+  if (root.text === 'Number') {
+    return member === 'isFinite' || member === 'isInteger' || member === 'isNaN';
+  }
+  if (root.text === 'Object') return member === 'is';
+  if (root.text === 'String') return member === 'fromCharCode' || member === 'fromCodePoint';
+  if (root.text !== 'Math') return false;
+  return (
+    member === 'abs' ||
+    member === 'ceil' ||
+    member === 'floor' ||
+    member === 'max' ||
+    member === 'min' ||
+    member === 'round' ||
+    member === 'sign' ||
+    member === 'trunc'
+  );
+}
+
+function handlerElementParamUnsafeRoots(
+  sourceFile: ts.SourceFile,
+  root: ts.Node,
+  excludedSpans: readonly SourceSpan[],
+  securityOperations: readonly BrowserSecurityOperationModel[],
+): string[] {
+  const context = handlerElementParamClassificationContext(sourceFile, root, securityOperations);
+  const seen = compilerCreateSet<string>();
+  const safe = compilerCreateSet<string>();
+  const unsafe = compilerCreateSet<string>();
+  const order: string[] = [];
+
+  const record = (name: string | undefined, eligible: boolean): void => {
+    if (!name) return;
+    if (!compilerSetHas(seen, name)) {
+      compilerSetAdd(seen, name);
+      compilerArrayAppend(order, name, 'Handler element-param root order');
+    }
+    compilerSetAdd(eligible ? safe : unsafe, name);
+  };
+
   const visit = (node: ts.Node): void => {
-    if (found) return;
-    if (ts.isIdentifier(node) && node.text === name && isRuntimeIdentifierReference(node, root)) {
-      const carrier = handlerElementParamCarrier(node);
-      if (handlerExpressionIsDirectAuthorityPosition(carrier)) {
-        found = true;
+    if (node !== root && nodeIsWithinSourceSpans(sourceFile, node, excludedSpans)) return;
+    if (
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      !isReceiverOfOuterAccess(node)
+    ) {
+      const rootIdentifier = handlerElementParamRootIdentifier(node);
+      if (
+        rootIdentifier !== undefined &&
+        handlerBindingCoversIdentifier(context.bindings, rootIdentifier)
+      ) {
+        ts.forEachChild(node, visit);
         return;
       }
-      const aliases = handlerAliasTargets(carrier);
-      for (let index = 0; index < aliases.length; index += 1) {
-        if (handlerAliasFeedsAuthority(root, aliases[index]!, seen)) {
-          found = true;
-          return;
-        }
-      }
+      const path = ts.isPropertyAccessExpression(node)
+        ? propertyAccessPath(node)
+        : elementAccessRootPath(node);
+      record(
+        path
+          ? compilerOwnDataValue(compilerStringSplit(path, '.'), 0, 'Handler element-param root')
+          : undefined,
+        handlerElementParamUseIsEligible(node, context),
+      );
+    } else if (
+      ts.isIdentifier(node) &&
+      isRuntimeIdentifierReference(node, root) &&
+      !handlerBindingCoversIdentifier(context.bindings, node) &&
+      !handlerIdentifierIsMemberReceiver(node)
+    ) {
+      record(node.text, handlerReferenceElementParamUseIsEligible(node, context));
     }
     ts.forEachChild(node, visit);
   };
   visit(root);
-  return found;
+
+  const result: string[] = [];
+  const length = compilerArrayLength(order, 'Handler element-param root order');
+  for (let index = 0; index < length; index += 1) {
+    const name = compilerOwnDataValue(order, index, 'Handler element-param root order');
+    if (typeof name !== 'string') {
+      throw new TypeError(`Handler element-param root order[${index}] must be own data.`);
+    }
+    if (compilerSetHas(safe, name) && compilerSetHas(unsafe, name)) {
+      compilerArrayAppend(result, name, 'Unsafe handler element-param roots');
+    }
+  }
+  return result;
+}
+
+function handlerElementParamRootIdentifier(node: ts.Expression): ts.Identifier | undefined {
+  let current = unwrapExpression(node);
+  while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    current = unwrapExpression(current.expression);
+  }
+  return ts.isIdentifier(current) ? current : undefined;
 }
 
 function nodeIsWithinSourceSpans(
@@ -7610,12 +7875,7 @@ function jsxAttributeExpression(
       source,
       initializer.expression,
     ),
-    expressionPropertyAccesses: propertyAccessPathModels(
-      sourceFile,
-      initializer.expression,
-      [],
-      true,
-    ),
+    expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
     expressionReferences: referenceIdentifiers(initializer.expression),
     expressionStart,
     ...jsxAttributeExpressionStaticValue(initializer.expression),
@@ -7779,6 +8039,28 @@ function zeroArgArrowModel(
     leadingWhitespace += 1;
   }
   const bodySourceStart = bodyStart + leadingWhitespace;
+  const bodyPropertyAccesses = propertyAccessPathModels(
+    sourceFile,
+    body,
+    bodyTypeScriptFacts.erasures,
+    true,
+    body,
+    securityOperations.operations,
+  );
+  const bodyReferences = referenceIdentifierModels(
+    sourceFile,
+    body,
+    true,
+    bodyTypeScriptFacts.erasures,
+    body,
+    securityOperations.operations,
+  );
+  const bodyElementParamUnsafeRoots = handlerElementParamUnsafeRoots(
+    sourceFile,
+    body,
+    bodyTypeScriptFacts.erasures,
+    securityOperations.operations,
+  );
   let callArguments: string[] | undefined;
   let callArgumentPropertyAccesses: PropertyAccessPathModel[][] | undefined;
   let callArgumentReferences: IdentifierReferenceModel[][] | undefined;
@@ -7806,12 +8088,26 @@ function zeroArgArrowModel(
       );
       compilerArrayAppend(
         callArgumentPropertyAccesses,
-        propertyAccessPathModels(sourceFile, argument, bodyTypeScriptFacts.erasures, true),
+        propertyAccessPathModels(
+          sourceFile,
+          argument,
+          bodyTypeScriptFacts.erasures,
+          true,
+          body,
+          securityOperations.operations,
+        ),
         'Zero-arg arrow call property accesses',
       );
       compilerArrayAppend(
         callArgumentReferences,
-        referenceIdentifierModels(sourceFile, argument, true, bodyTypeScriptFacts.erasures),
+        referenceIdentifierModels(
+          sourceFile,
+          argument,
+          true,
+          bodyTypeScriptFacts.erasures,
+          body,
+          securityOperations.operations,
+        ),
         'Zero-arg arrow call references',
       );
       compilerArrayAppend(
@@ -7836,19 +8132,10 @@ function zeroArgArrowModel(
       ...(callArgumentPropertyAccesses === undefined ? {} : { callArgumentPropertyAccesses }),
       ...(callArgumentStaticValues === undefined ? {} : { callArgumentStaticValues }),
       ...(callArgumentKinds === undefined ? {} : { callArgumentKinds }),
+      ...(bodyElementParamUnsafeRoots.length === 0 ? {} : { bodyElementParamUnsafeRoots }),
       bodyLocalNames: localDeclarationNames(body),
-      bodyPropertyAccesses: propertyAccessPathModels(
-        sourceFile,
-        body,
-        bodyTypeScriptFacts.erasures,
-        true,
-      ),
-      bodyReferences: referenceIdentifierModels(
-        sourceFile,
-        body,
-        true,
-        bodyTypeScriptFacts.erasures,
-      ),
+      bodyPropertyAccesses,
+      bodyReferences,
       bodyStart,
       bodySourceStart,
       bodyTypeScriptErasures: bodyTypeScriptFacts.erasures,
@@ -8265,10 +8552,15 @@ function referenceIdentifierModels(
   root: ts.Node,
   runtimeOnly = false,
   excludedSpans: readonly SourceSpan[] = [],
+  handlerRoot: ts.Node = root,
+  securityOperations: readonly BrowserSecurityOperationModel[] = [],
 ): IdentifierReferenceModel[] {
   const declared = compilerCreateSet<string>();
   const referenced: IdentifierReferenceModel[] = [];
-  const runtimeBindings = runtimeOnly ? collectHandlerLocalBindings(root, root, []) : undefined;
+  const elementParamContext = runtimeOnly
+    ? handlerElementParamClassificationContext(sourceFile, handlerRoot, securityOperations)
+    : undefined;
+  const runtimeBindings = elementParamContext?.bindings;
 
   const visit = (node: ts.Node): void => {
     if (runtimeOnly) {
@@ -8300,9 +8592,9 @@ function referenceIdentifierModels(
           compilerArrayAppend(
             referenced,
             {
-              ...(handlerReferenceElementParamUseIsEligible(node, root)
-                ? {}
-                : { elementParamEligible: false as const }),
+              elementParamEligible:
+                elementParamContext !== undefined &&
+                handlerReferenceElementParamUseIsEligible(node, elementParamContext),
               end: node.getEnd(),
               name: node.text,
               start: node.getStart(sourceFile),

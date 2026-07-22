@@ -1331,6 +1331,7 @@ export const CartActions = component({
       bodyLocalNames: [],
       bodyPropertyAccesses: [
         {
+          elementParamEligible: false,
           end: source.indexOf('state.count') + 'state.count'.length,
           inferredType: 'number',
           path: 'state.count',
@@ -1338,6 +1339,7 @@ export const CartActions = component({
           terminalName: 'count',
         },
         {
+          elementParamEligible: true,
           end: source.indexOf('item.quantity') + 'item.quantity'.length,
           inferredType: 'number',
           path: 'item.quantity',
@@ -1594,6 +1596,7 @@ export const CartActions = component({
 
     expect(click?.zeroArgArrow?.bodyPropertyAccesses).toEqual([
       {
+        elementParamEligible: true,
         end: source.indexOf('item.quantity') + 'item.quantity'.length,
         inferredType: 'number',
         path: 'item.quantity',
@@ -1601,6 +1604,7 @@ export const CartActions = component({
         terminalName: 'quantity',
       },
       {
+        elementParamEligible: true,
         end: source.indexOf('item.selected') + 'item.selected'.length,
         inferredType: 'boolean',
         path: 'item.selected',
@@ -1608,6 +1612,7 @@ export const CartActions = component({
         terminalName: 'selected',
       },
       {
+        elementParamEligible: true,
         end: source.indexOf('item.name') + 'item.name'.length,
         path: 'item.name',
         start: source.indexOf('item.name'),

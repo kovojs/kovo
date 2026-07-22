@@ -946,7 +946,7 @@ export const CartActions = component({
     expect(clientSource).not.toContain('swap(ctx.params.id, ctx.params.id)');
   });
 
-  it('extracts and rewrites handlers with nested object and block expressions', () => {
+  it('withholds nested object-container captures from the scalar param channel', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
@@ -976,15 +976,13 @@ export const CartActions = component({
       '/c/components/cart/cart-actions.client.js',
       'CartActions$button_click_2',
     );
-    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
+    expect(serverSource).not.toContain('data-p-id="{item.id}"');
     expect(serverSource).not.toContain('onClick={');
-    expect(clientSource).toContain("return emit('cart:add', { id: ctx.params.id });");
-    expect(clientSource).toContain(
-      "log(ctx.params.id); emit('cart:remove', { id: ctx.params.id });",
-    );
+    expect(clientSource).not.toContain('ctx.params.id');
   });
 
-  it('does not rewrite one element param inside a longer member expression', () => {
+  it('does not rewrite element params inside an object container', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
@@ -1001,12 +999,11 @@ export const CartActions = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('data-p-id="{item.id}"');
-    expect(serverSource).toContain('data-p-idx="{item.idx}"');
-    expect(clientSource).toContain(
-      "return emit('cart:add', { id: ctx.params.id, idx: ctx.params.idx });",
-    );
-    expect(clientSource).not.toContain('id: ctx.params.idx');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
+    expect(serverSource).not.toContain('data-p-id="{item.id}"');
+    expect(serverSource).not.toContain('data-p-idx="{item.idx}"');
+    expect(clientSource).not.toContain('ctx.params.id');
+    expect(clientSource).not.toContain('ctx.params.idx');
   });
 
   it('rewrites handler captures without touching strings or template literal text', () => {
@@ -1037,7 +1034,7 @@ export const CartActions = component({
     expect(clientSource).not.toContain('literal ctx.params.quantity stays text');
   });
 
-  it('extracts element params from wrapper calls with quoted commas', () => {
+  it('withholds wrapper-call object-container captures even with quoted commas', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
       source: `
@@ -1054,11 +1051,11 @@ export const CartActions = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('data-p-id="{item.id}"');
-    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
-    expect(clientSource).toContain(
-      "return track('cart,add', ctx.params.id, { qty: ctx.params.quantity });",
-    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV201');
+    expect(serverSource).not.toContain('data-p-id="{item.id}"');
+    expect(serverSource).not.toContain('data-p-quantity="{item.quantity}"');
+    expect(clientSource).not.toContain('ctx.params.id');
+    expect(clientSource).not.toContain('ctx.params.quantity');
   });
 
   it('uses parser reference facts for standalone call argument param names', () => {
