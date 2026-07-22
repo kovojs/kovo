@@ -13,12 +13,7 @@ const nullPrototypeRecord = (value) => Object.assign(Object.create(null), value)
 
 import { missingBuildMessage } from '../scripts/kovo-check.mjs';
 import { readTempCommerceGraph } from '../scripts/commerce-graph.mjs';
-import {
-  kovoCheck,
-  kovoExplain,
-  handleKovoMcpRequest,
-  runMcpStdioServer,
-} from '../dist/cli/src/index.mjs';
+import { kovoCheck, kovoExplain, runMcpStdioServer } from '../dist/cli/src/index.mjs';
 import {
   assertFixpoint,
   assertRenderEquivalence,
@@ -1656,63 +1651,39 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     },
   });
 
-  const redMcp = await handleKovoMcpRequest({
-    id: 'd10-red',
-    jsonrpc: '2.0',
-    method: 'tools/call',
-    params: {
-      arguments: { fileName, source: redSource },
-      name: 'compile_component',
-    },
-  });
-  assert.equal(redMcp.result.version, 'kovo-mcp/v1');
-  assert.equal(redMcp.result.structuredContent.version, 'compile/v1');
-  assert.equal(redMcp.result.structuredContent.ok, false);
-  assert.deepEqual(
-    redMcp.result.structuredContent.diagnostics.map((diagnostic) => ({
-      code: diagnostic.code,
-      severity: diagnostic.severity,
-    })),
-    [
-      { code: 'KV210', severity: 'lint' },
-      { code: 'KV201', severity: 'error' },
-      { code: 'KV449', severity: 'error' },
-    ],
-  );
-
-  const greenMcp = await handleKovoMcpRequest({
-    id: 'd10-green',
-    jsonrpc: '2.0',
-    method: 'tools/call',
-    params: {
-      arguments: { fileName, source: greenSource },
-      name: 'compile_component',
-    },
-  });
-  assert.equal(greenMcp.result.structuredContent.ok, true);
-  assert.deepEqual(greenMcp.result.structuredContent.diagnostics, []);
-
   const mcpStdioChunks = [];
-  const mcpStdioRequests = [redSource, greenSource]
-    .map((source, index) =>
-      JSON.stringify({
-        id: `d10-stdio-${index}`,
-        jsonrpc: '2.0',
-        method: 'tools/call',
-        params: {
-          arguments: { fileName, source },
-          name: 'compile_component',
-        },
-      }),
-    )
+  const mcpStdioRequests = [
+    {
+      id: 'd10-initialize',
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        capabilities: {},
+        clientInfo: { name: 'kovo-check-c213', version: '1' },
+        protocolVersion: '2025-06-18',
+      },
+    },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    ...[redSource, greenSource].map((source, index) => ({
+      id: `d10-stdio-${index}`,
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        arguments: { fileName, source },
+        name: 'compile_component',
+      },
+    })),
+  ]
+    .map((message) => JSON.stringify(message))
     .join('\n');
   await runMcpStdioServer(
     (async function* mcpInput() {
       yield `${mcpStdioRequests}\n`;
     })(),
     { write: (chunk) => mcpStdioChunks.push(chunk) },
+    process.cwd(),
   );
-  assert.deepEqual(mcpCompileResponseFacts(mcpStdioChunks), [
+  assert.deepEqual(mcpCompileResponseFacts(mcpStdioChunks.slice(1)), [
     {
       contentVersion: 'compile/v1',
       diagnostics: [
@@ -1722,14 +1693,12 @@ document.querySelector('#app')!.textContent = 'D10 build green';
       ],
       id: 'd10-stdio-0',
       ok: false,
-      version: 'kovo-mcp/v1',
     },
     {
       contentVersion: 'compile/v1',
       diagnostics: [],
       id: 'd10-stdio-1',
       ok: true,
-      version: 'kovo-mcp/v1',
     },
   ]);
 });

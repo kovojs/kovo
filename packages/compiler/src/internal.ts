@@ -13,6 +13,14 @@ export {
 export type { BrowserPostureSourceFile } from './browser-posture-project.js';
 export { factHash } from './fact-hash.js';
 export {
+  compilerSourceSyntaxBudget,
+  type CompilerSourceSyntaxBudgetResult,
+} from './source-syntax-budget.js';
+export {
+  createCompilerSourceRootWitness,
+  type CompilerSourceRootWitness,
+} from './source-filesystem.js';
+export {
   componentTaskBSourceOperationFacts,
   type CompilerTaskBSourceOperation,
 } from './security-operation-facts.js';

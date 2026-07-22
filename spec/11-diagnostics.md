@@ -157,6 +157,51 @@ its next delimiter, and then resumes. Direct and tool-provided JSON is snapshott
 descriptors before field reads and is limited to 128 container levels, 65,536 value/member nodes,
 and an exact non-allocating estimate no larger than the applicable serialized line ceiling.
 
+The CLI adapter has four tools and an exact, non-extensible argument language:
+
+- `compile_component` accepts only `fileName` and inline `source`. `sourceProvenance` is implicitly
+  `app`; package-prefix, query-shape, and registry fact carriers are not protocol inputs.
+- `kovo_check` accepts only an optional `family` (`all`, `coverage`, or `optimistic`) and an optional
+  inline `graph`.
+- `kovo_explain` accepts only an optional inline `graph` plus one exact options mode: agent,
+  endpoints, access/unguarded/unscoped audit, or a `kind`/`target` lookup. Surplus option fields and
+  multiple modes are errors.
+- `list_diagnostics` accepts the empty object only.
+
+The protocol has no `graphPath` or other caller-selected filesystem input. Human `kovo check` and
+`kovo explain` argv commands may still read an operator-selected graph file; that authority is not
+part of MCP. At server construction the CLI canonicalizes the launch working directory once.
+It retains that directory's device/inode witness; a rename, replacement directory, or symlink at
+the original canonical path cannot become new authority for a later compile.
+Compiler `fileName` is a slash-separated relative path with no absolute, empty, dot, dot-dot,
+backslash, or NUL segment, and has at most 64 path segments. Both package discovery's root and its
+hard canonical boundary are the pinned launch directory. Bounded discovery admits at most 128
+unique bare packages before sorting or filesystem probes. Directory and manifest symlinks cannot
+escape that boundary; FIFO and other non-regular manifest candidates are ignored; and a package
+manifest above 256 KiB is ignored before JSON parsing. Bounded manifests are read from a no-follow,
+nonblocking descriptor with a fixed-size loop and one-byte growth probe, so a same-inode grow race
+cannot allocate past the cap. The accepted descriptor and pathname facts must retain device,
+inode, size, mtime, and ctime through the read, rejecting same-size in-place rewrites as well as
+path swaps. Changing process cwd after construction cannot move this capability.
+
+One inline compiler source is at most 256 KiB UTF-8. Before TypeScript parsing, the adapter performs
+a linear scan capped at 32,768 token starts/punctuation units and 512 potential structural opener
+tokens. After parsing and before lowering, an iterative whole-AST walk admits at most 20,000 nodes
+and depth 256. Recursive parser exhaustion is normalized to one closed parser-budget error rather
+than exposing the host runtime failure text. These are transport work limits, not substitutes for
+the compiler's semantic fail-closed budgets. They keep flat, deeply nested, alias-heavy, and
+malformed boundary inputs local to one bounded call.
+
+Graph admission is also a pre-verifier resource proof. A linear walk counts every traversed object
+property and array entry, then charges their conservative pair envelope plus the explicit
+render-once `updateCoverage × queries × (mutations + touchGraph)` domain work with overflow-safe
+saturating arithmetic. The aggregate ceiling is 65,536 comparison units. It applies before the
+linear graph validator and therefore bounds mutation/query, query/consumer, endpoint/runMutation,
+scope/ownership, session-authority, event/query, and endpoint-posture joins as well as the named
+cubic path. A graph string is at most 4,096 bytes; materialized output is preflighted at 2,048
+estimated rows and 2 MiB of amplified graph text before the transport's independent 4 MiB response
+ceiling. One stdio session admits at most 256 tool calls.
+
 Dispatch and output are sequential and backpressure-aware. A false output write MUST wait for a
 provided drain capability or fail explicitly; it cannot be treated as successful delivery.
 Protocol failures use JSON-RPC errors; a tool-domain failure is a successful JSON-RPC result with

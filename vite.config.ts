@@ -361,6 +361,7 @@ export default defineConfig({
       'packages/core/src/internal/framework-identity.ts',
       'packages/core/src/internal/graph.ts',
       'packages/core/src/internal/json.ts',
+      'packages/core/src/internal/mcp-stdio.ts',
       'packages/core/src/internal/module-ref.ts',
       'packages/core/src/internal/package-prefix.ts',
       'packages/core/src/internal/query-delta.ts',

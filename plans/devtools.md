@@ -52,7 +52,9 @@ generalizes it. So:
   export `generated/graph.json` + `generated/touch-graph.ts`.
 - **MCP server** `kovo mcp` with `kovo_explain`, `kovo_check`, `compile_component`,
   `list_diagnostics` on Kovo's finite dependency-free stdio engine
-  (`packages/core/src/internal/mcp-stdio.ts`, `packages/cli/src/index.ts`).
+  (`packages/core/src/internal/mcp-stdio.ts`, `packages/cli/src/index.ts`). Graph tools accept only
+  bounded inline facts; compilation accepts only relative `fileName` plus inline app source and pins
+  manifest discovery to the canonical launch workspace.
 - **Diagnostics registry** `diagnosticDefinitions` with severity/help/positions
   (`packages/core/src/diagnostics.ts`).
 - **Dev server** Vite middleware mount points (`packages/server/src/vite-dev.ts`,

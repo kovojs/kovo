@@ -6,13 +6,45 @@ import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentV1, handleKovoMcpRequest, runMcpStdioServer } from './index.js';
+import { compileComponentV1, runMcpStdioServer } from './index.js';
 
 const browserAlertKv449Message =
   'Security-critical operation is outside the compiler-owned finite IR. semantic root=serialized-browser-handler:onClick@8; transfers=<direct>; sink=browser capability call window.alert is outside the finite handler IR; verdict=closed:opaque-transfer.';
 
 async function* mcpInputChunks(...chunks: string[]): AsyncIterable<string> {
   yield* chunks;
+}
+
+async function finiteMcpRequest(
+  request: Record<string, unknown>,
+  invocationCwd = process.cwd(),
+): Promise<Record<string, unknown>> {
+  const messages = [
+    {
+      id: 'test-initialize',
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1' },
+        protocolVersion: '2025-06-18',
+      },
+    },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    request,
+  ];
+  const chunks: string[] = [];
+  await runMcpStdioServer(
+    mcpInputChunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
+    { write: (chunk) => chunks.push(chunk) },
+    invocationCwd,
+  );
+  const responses = chunks
+    .join('')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  return responses.at(-1)!;
 }
 
 function writePackageManifest(
@@ -28,10 +60,13 @@ function writePackageManifest(
 describe('compile/v1 and kovo mcp', () => {
   it('returns a snapshot-stable compile/v1 contract for in-memory component source', async () => {
     await expect(
-      compileComponentV1({
-        fileName: 'cart-badge.tsx',
-        source: '<button>x</button>',
-      }),
+      compileComponentV1(
+        {
+          fileName: 'cart-badge.tsx',
+          source: '<button>x</button>',
+        },
+        process.cwd(),
+      ),
     ).resolves.toMatchInlineSnapshot(`
       {
         "componentGraphFacts": [
@@ -76,10 +111,13 @@ describe('compile/v1 and kovo mcp', () => {
   });
 
   it('proves the in-memory repair loop with shared KV201 diagnostics', async () => {
-    const adversarial = await compileComponentV1({
-      fileName: 'cart-badge.tsx',
-      source: '<button onClick={() => window.alert("x")}>x</button>',
-    });
+    const adversarial = await compileComponentV1(
+      {
+        fileName: 'cart-badge.tsx',
+        source: '<button onClick={() => window.alert("x")}>x</button>',
+      },
+      process.cwd(),
+    );
 
     expect(adversarial.ok).toBe(false);
     expect(adversarial.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
@@ -119,10 +157,13 @@ describe('compile/v1 and kovo mcp', () => {
       start: { column: 24, line: 1 },
     });
 
-    const corrected = await compileComponentV1({
-      fileName: 'cart-badge.tsx',
-      source: '<button>x</button>',
-    });
+    const corrected = await compileComponentV1(
+      {
+        fileName: 'cart-badge.tsx',
+        source: '<button>x</button>',
+      },
+      process.cwd(),
+    );
 
     expect(corrected.ok).toBe(true);
     expect(corrected.diagnostics).toEqual([]);
@@ -142,10 +183,10 @@ describe('compile/v1 and kovo mcp', () => {
       });
 
       await expect(
-        compileComponentV1({
-          fileName: 'src/shell.tsx',
-          packagePrefixDiscoveryRoot: root,
-          source: `
+        compileComponentV1(
+          {
+            fileName: 'src/shell.tsx',
+            source: `
 import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets';
@@ -154,7 +195,9 @@ export const Shell = component({
   render: () => <section></section>,
 });
 `,
-        }),
+          },
+          root,
+        ),
       ).resolves.toMatchObject({
         diagnostics: [
           {
@@ -173,126 +216,188 @@ export const Shell = component({
   });
 
   it('exposes MCP-style tool listing and structured compile results over JSON-RPC objects', async () => {
-    await expect(handleKovoMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
+    await expect(finiteMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
       .toMatchInlineSnapshot(`
       {
         "id": 1,
         "jsonrpc": "2.0",
         "result": {
-          "content": [
+          "tools": [
             {
-              "text": "kovo-mcp/v1",
-              "type": "text",
+              "description": "Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "fileName": {
+                    "maxLength": 4096,
+                    "type": "string",
+                  },
+                  "source": {
+                    "maxLength": 262144,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "fileName",
+                  "source",
+                ],
+                "type": "object",
+              },
+              "name": "compile_component",
+            },
+            {
+              "description": "Run kovoCheck against a bounded inline graph.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "family": {
+                    "enum": [
+                      "all",
+                      "coverage",
+                      "optimistic",
+                    ],
+                  },
+                  "graph": {
+                    "type": "object",
+                  },
+                },
+                "required": [],
+                "type": "object",
+              },
+              "name": "kovo_check",
+            },
+            {
+              "description": "Run kovoExplain against a bounded inline graph.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "graph": {
+                    "type": "object",
+                  },
+                  "options": {
+                    "oneOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "agent": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "agent",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "access": {
+                            "const": true,
+                          },
+                          "failOnFindings": {
+                            "type": "boolean",
+                          },
+                        },
+                        "required": [
+                          "access",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "endpoints": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "endpoints",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "failOnFindings": {
+                            "type": "boolean",
+                          },
+                          "unguarded": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "unguarded",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "failOnFindings": {
+                            "type": "boolean",
+                          },
+                          "unscoped": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "unscoped",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "component",
+                              "context",
+                              "mutation",
+                              "page",
+                              "query",
+                              "task",
+                            ],
+                          },
+                          "optimistic": {
+                            "type": "boolean",
+                          },
+                          "target": {
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "kind",
+                          "target",
+                        ],
+                        "type": "object",
+                      },
+                    ],
+                    "type": "object",
+                  },
+                },
+                "required": [
+                  "options",
+                ],
+                "type": "object",
+              },
+              "name": "kovo_explain",
+            },
+            {
+              "description": "List shared diagnostic definitions from the @kovojs/core registry.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object",
+              },
+              "name": "list_diagnostics",
             },
           ],
-          "structuredContent": {
-            "tools": [
-              {
-                "description": "Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.",
-                "inputSchema": {
-                  "additionalProperties": true,
-                  "properties": {
-                    "fileName": {
-                      "maxLength": 4096,
-                      "type": "string",
-                    },
-                    "packageComponentPrefixes": {
-                      "type": "array",
-                    },
-                    "packagePrefixDiscoveryRoot": {
-                      "type": "string",
-                    },
-                    "queryShapeFacts": {
-                      "type": "array",
-                    },
-                    "queryShapes": {
-                      "type": "object",
-                    },
-                    "registryFacts": {
-                      "type": "object",
-                    },
-                    "source": {
-                      "maxLength": 2097152,
-                      "type": "string",
-                    },
-                    "sourceProvenance": {
-                      "enum": [
-                        "app",
-                      ],
-                    },
-                  },
-                  "required": [
-                    "fileName",
-                    "source",
-                  ],
-                  "type": "object",
-                },
-                "name": "compile_component",
-              },
-              {
-                "description": "Run kovoCheck against an inline graph or graphPath.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "family": {
-                      "enum": [
-                        "all",
-                        "coverage",
-                        "optimistic",
-                      ],
-                    },
-                    "graph": {
-                      "type": "object",
-                    },
-                    "graphPath": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [],
-                  "type": "object",
-                },
-                "name": "kovo_check",
-              },
-              {
-                "description": "Run kovoExplain against an inline graph or graphPath.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "graph": {
-                      "type": "object",
-                    },
-                    "graphPath": {
-                      "type": "string",
-                    },
-                    "options": {
-                      "type": "object",
-                    },
-                  },
-                  "required": [
-                    "options",
-                  ],
-                  "type": "object",
-                },
-                "name": "kovo_explain",
-              },
-              {
-                "description": "List shared diagnostic definitions from the @kovojs/core registry.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object",
-                },
-                "name": "list_diagnostics",
-              },
-            ],
-            "version": "kovo-mcp/v1",
-          },
-          "version": "kovo-mcp/v1",
         },
       }
     `);
 
-    const response = await handleKovoMcpRequest({
+    const response = await finiteMcpRequest({
       id: 'compile-1',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -339,13 +444,12 @@ export const Shell = component({
           ok: false,
           version: 'compile/v1',
         },
-        version: 'kovo-mcp/v1',
       },
     });
   });
 
   it('does not let MCP callers spoof compiler-emitted source provenance', async () => {
-    const response = await handleKovoMcpRequest({
+    const response = await finiteMcpRequest({
       id: 'compile-spoof',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -365,24 +469,20 @@ export const Shell = component({
 
     expect(response).toMatchObject({
       result: {
-        structuredContent: {
-          diagnostics: [
-            {
-              code: 'KV235',
-              help: expect.stringContaining(
-                'Blocked reason: app source imports non-public Kovo subpath `@kovojs/browser/generated`.',
-              ),
-            },
-          ],
-          ok: false,
-        },
+        content: [
+          {
+            text: 'compile_component arguments contain unsupported field sourceProvenance',
+            type: 'text',
+          },
+        ],
+        isError: true,
       },
     });
   });
 
   it('wraps kovo_check, kovo_explain, and diagnostic definitions without a second policy', async () => {
     await expect(
-      handleKovoMcpRequest({
+      finiteMcpRequest({
         id: 'check-1',
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -399,7 +499,7 @@ export const Shell = component({
     });
 
     await expect(
-      handleKovoMcpRequest({
+      finiteMcpRequest({
         id: 'explain-1',
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -422,7 +522,7 @@ export const Shell = component({
       },
     });
 
-    const diagnostics = await handleKovoMcpRequest({
+    const diagnostics = await finiteMcpRequest({
       id: 'definitions-1',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -466,6 +566,7 @@ export const Shell = component({
         })}\n`,
       ),
       { write: (chunk) => chunks.push(chunk) },
+      process.cwd(),
     );
 
     const responses = chunks
@@ -509,6 +610,7 @@ export const Shell = component({
         `${JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' })}\n`,
       ),
       { write: (chunk) => chunks.push(chunk) },
+      process.cwd(),
     );
 
     const responses = chunks
@@ -531,22 +633,25 @@ export const Shell = component({
 
   it('rejects oversized compile sources before invoking the compiler', async () => {
     await expect(
-      handleKovoMcpRequest({
+      finiteMcpRequest({
         id: 'compile-limit',
         jsonrpc: '2.0',
         method: 'tools/call',
         params: {
           arguments: {
             fileName: 'oversized.tsx',
-            source: 'x'.repeat(2 * 1024 * 1024 + 1),
+            source: 'x'.repeat(256 * 1024 + 1),
           },
           name: 'compile_component',
         },
       }),
     ).resolves.toMatchObject({
-      error: { code: -32000, message: 'compile_component source exceeds 2097152 bytes' },
       id: 'compile-limit',
       jsonrpc: '2.0',
+      result: {
+        content: [{ text: 'compile_component source exceeds 262144 bytes', type: 'text' }],
+        isError: true,
+      },
     });
   });
 
@@ -581,6 +686,7 @@ export const Shell = component({
     await runMcpStdioServer(
       mcpInputChunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
       { write: (chunk) => chunks.push(chunk) },
+      process.cwd(),
     );
     const [initialize, list, compile] = chunks
       .join('')

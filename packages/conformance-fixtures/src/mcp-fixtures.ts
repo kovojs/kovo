@@ -13,7 +13,6 @@ export interface McpCompileResponseFact {
   diagnostics: McpCompileDiagnosticFact[];
   id: number | string | null;
   ok: boolean;
-  version: 'kovo-mcp/v1';
 }
 
 export function mcpJsonRpcResponseFacts(
@@ -51,10 +50,6 @@ export function mcpCompileResponseFacts(
     if (!isRecord(result)) {
       throw new Error(`MCP compile response result is an object for id ${String(response.id)}`);
     }
-    if (result.version !== 'kovo-mcp/v1') {
-      throw new Error(`MCP compile response uses kovo-mcp/v1 for id ${String(response.id)}`);
-    }
-
     const structuredContent = result.structuredContent;
     if (!isRecord(structuredContent)) {
       throw new Error(`MCP compile response has structured content for id ${String(response.id)}`);
@@ -71,7 +66,6 @@ export function mcpCompileResponseFacts(
       diagnostics: compileDiagnosticFacts(structuredContent.diagnostics, response.id),
       id: response.id,
       ok: structuredContent.ok,
-      version: result.version,
     };
   });
 }

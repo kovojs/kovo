@@ -38,7 +38,6 @@ import {
 import {
   compileComponentV1,
   createKovoMcpServer,
-  handleKovoMcpRequest,
   runMcpCommand,
   runMcpStdioServer,
 } from './commands/mcp.js';
@@ -64,7 +63,6 @@ import {
 export {
   compileComponentV1,
   createKovoMcpServer,
-  handleKovoMcpRequest,
   kovoAudit,
   kovoCheck,
   kovoExplain,
@@ -76,8 +74,6 @@ export type {
   CompileComponentV1Diagnostic,
   CompileComponentV1Input,
   CompileComponentV1Result,
-  KovoMcpRequest,
-  KovoMcpResponse,
   KovoMcpToolName,
 } from './commands/mcp.js';
 export type {
@@ -220,8 +216,8 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runFixCommand(parsed.options, security.invocationCwd));
   },
-  async mcp(args) {
-    return runMcpCommand(args);
+  async mcp(args, security) {
+    return runMcpCommand(args, security.invocationCwd);
   },
   async 'update-docs'(args) {
     if (args.length > 0) return writeUsageError(UPDATE_DOCS_USAGE);

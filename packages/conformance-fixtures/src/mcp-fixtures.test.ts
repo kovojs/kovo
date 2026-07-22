@@ -17,7 +17,6 @@ describe('@kovojs/test MCP fixture seam', () => {
             ok: false,
             version: 'compile/v1',
           },
-          version: 'kovo-mcp/v1',
         },
       }),
       '\n',
@@ -30,7 +29,6 @@ describe('@kovojs/test MCP fixture seam', () => {
             ok: true,
             version: 'compile/v1',
           },
-          version: 'kovo-mcp/v1',
         },
       }),
       '\n',
@@ -45,14 +43,12 @@ describe('@kovojs/test MCP fixture seam', () => {
         ],
         id: 'red',
         ok: false,
-        version: 'kovo-mcp/v1',
       },
       {
         contentVersion: 'compile/v1',
         diagnostics: [],
         id: 'green',
         ok: true,
-        version: 'kovo-mcp/v1',
       },
     ]);
   });
@@ -76,7 +72,7 @@ describe('@kovojs/test MCP fixture seam', () => {
           result: { structuredContent: { diagnostics: [], ok: true, version: 'compile/v2' } },
         }),
       ),
-    ).toThrow('MCP compile response uses kovo-mcp/v1 for id bad');
+    ).toThrow('MCP compile response uses compile/v1 for id bad');
     expect(() =>
       mcpCompileResponseFacts(
         JSON.stringify({
@@ -87,7 +83,6 @@ describe('@kovojs/test MCP fixture seam', () => {
               ok: false,
               version: 'compile/v1',
             },
-            version: 'kovo-mcp/v1',
           },
         }),
       ),

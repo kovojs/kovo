@@ -36,6 +36,7 @@ import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import { attributeKebabCase, normalizeComponentFileName, replaceExtension } from './shared.js';
 import type { CompilerEmittedSourceProvenance } from './source-provenance.js';
+import type { CompilerSourceRootWitness } from './source-filesystem.js';
 
 /**
  * Input to {@link compileComponentModule}: the source file name and contents plus optional
@@ -60,6 +61,10 @@ export interface InternalCompileComponentOptions extends Omit<
   CompileComponentOptions,
   'sourceProvenance'
 > {
+  /** @internal Stop ambient package-manifest discovery at this pinned filesystem boundary. */
+  packagePrefixDiscoveryBoundary?: string;
+  /** @internal Bind ambient package discovery to the launch root's original device/inode. */
+  packagePrefixDiscoveryRootWitness?: CompilerSourceRootWitness;
   sourceProvenance?: 'app' | CompilerEmittedSourceProvenance;
 }
 

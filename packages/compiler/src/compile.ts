@@ -271,6 +271,8 @@ interface CompileComponentProjectFile {
 
 interface CompileComponentProjectOptions extends CompileComponentOptions {
   readonly extraFiles?: readonly CompileComponentProjectFile[];
+  readonly packagePrefixDiscoveryBoundary?: string;
+  readonly packagePrefixDiscoveryRootWitness?: import('./source-filesystem.js').CompilerSourceRootWitness;
 }
 
 /**

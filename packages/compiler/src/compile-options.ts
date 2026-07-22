@@ -22,6 +22,7 @@ type CompileOptionsWithProjectFiles = InternalCompileComponentOptions & {
 
 const jsonCompileOptionNames = [
   'packageComponentPrefixes',
+  'packagePrefixDiscoveryRootWitness',
   'previousRegistryFacts',
   'queryShapeFacts',
   'queryShapes',
@@ -65,6 +66,22 @@ export function snapshotCompileComponentOptions(
       snapshot,
       'packagePrefixDiscoveryRoot',
       packagePrefixDiscoveryRoot,
+    );
+  }
+
+  const packagePrefixDiscoveryBoundary = compilerOwnDataValue(
+    raw,
+    'packagePrefixDiscoveryBoundary',
+    'Compiler options',
+  );
+  if (packagePrefixDiscoveryBoundary !== undefined) {
+    if (typeof packagePrefixDiscoveryBoundary !== 'string') {
+      throw new TypeError('Compiler options.packagePrefixDiscoveryBoundary must be a string.');
+    }
+    compilerDefineOwnDataProperty(
+      snapshot,
+      'packagePrefixDiscoveryBoundary',
+      packagePrefixDiscoveryBoundary,
     );
   }
 
