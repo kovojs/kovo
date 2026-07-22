@@ -55,6 +55,43 @@ describe('kovo-verify CLI', () => {
     );
   });
 
+  it('rejects a vacuous certificate instead of ignoring an installed artifact tree', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kovo-verify-cli-empty-certificate-'));
+    roots.push(root);
+    const artifactRoot = path.join(root, 'artifacts');
+    mkdirSync(path.join(artifactRoot, '@kovojs/server/dist'), { recursive: true });
+    writeFileSync(
+      path.join(artifactRoot, '@kovojs/server/dist/index.mjs'),
+      "import 'node:child_process';",
+      'utf8',
+    );
+    const certificatePath = path.join(root, 'certificate.json');
+    writeFileSync(
+      certificatePath,
+      `${JSON.stringify({
+        artifacts: [],
+        cap: {},
+        domain: KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
+        doors: [],
+        edges: [],
+        opaque: [],
+        roots: [],
+        schema: 'kovo.certificate/v1',
+      })}\n`,
+    );
+
+    let stdout = '';
+    let stderr = '';
+    const exitCode = await runKovoVerify([certificatePath, '--artifacts', artifactRoot], {
+      stderr: (text) => (stderr += text),
+      stdout: (text) => (stdout += text),
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe('');
+    expect(stdout).toContain('kovo-verify/v1 FAIL');
+  });
+
   it('uses exit 2 for usage errors', async () => {
     let stderr = '';
     await expect(

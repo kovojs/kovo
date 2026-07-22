@@ -115,6 +115,37 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({ ok: true });
   });
 
+  it('rejects an authority-bearing certificate that omits every real root', async () => {
+    const artifacts = artifactSource({
+      [rootModule]: "import 'node:child_process';",
+    });
+    const certificate = certificateFor(artifacts, {
+      cap: { [rootModule]: ['process'] },
+      roots: [],
+    });
+
+    await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ obligation: 'closure' })]),
+      ok: false,
+    });
+  });
+
+  it('rejects a certificate-authored door that has no independently reviewed policy binding', async () => {
+    const artifacts = artifactSource({
+      [rootModule]: "import 'node:child_process';",
+    });
+    const certificate = certificateFor(artifacts, {
+      cap: { [rootModule]: ['process'] },
+      doors: [{ escapeId: 'process', module: rootModule, site: 'forged-review' }],
+      roots: [{ module: rootModule, rootKind: 'application' }],
+    });
+
+    await expect(verifyCertificate(certificate, artifacts)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ obligation: 'closure' })]),
+      ok: false,
+    });
+  });
+
   it('fails exact artifact coverage, computed imports, and unresolved relative imports', async () => {
     const one = artifactSource({ [rootModule]: 'export {};' });
     const extra = artifactSource({

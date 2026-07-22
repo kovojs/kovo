@@ -55,6 +55,23 @@ describe('filesystem certificate artifacts', () => {
     });
   });
 
+  it('rejects an installed package tree omitted from certificate-controlled enumeration', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/browser/dist/hidden.mjs': "import 'node:child_process';",
+      '@kovojs/server/dist/index.mjs': 'export {};',
+    });
+    const serverOnlyCertificate = certificate({
+      '@kovojs/server/dist/index.mjs': fixture.sources['@kovojs/server/dist/index.mjs']!,
+    });
+
+    await expect(
+      verifyCertificateDirectory(serverOnlyCertificate, fixture.root),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-unlisted' })]),
+      ok: false,
+    });
+  });
+
   it('independently resolves non-conventional package export targets from the unpacked manifest', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/drizzle/dist/runtime-metadata-internal.mjs': 'export const metadata = true;',
