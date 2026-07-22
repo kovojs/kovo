@@ -103,6 +103,8 @@ const classifyConfiguredErrorShellHeaders = createAppResponseHeaderClassifier({
 
 export interface AppRouteDocumentOptions {
   app: KovoApp;
+  /** App-build scalar snapshotted by the admitted request boundary. */
+  buildToken?: string;
   jsxContext?: RouteJsxContextOptions<Request>;
   params: Record<string, string>;
   request: Request;
@@ -114,6 +116,7 @@ export interface AppRouteDocumentOptions {
 
 export async function renderAppRouteDocumentResponse({
   app,
+  buildToken: admittedBuildToken,
   jsxContext,
   params,
   request,
@@ -126,7 +129,7 @@ export async function renderAppRouteDocumentResponse({
   // bind it into their attestations, and mutation/HMR verification uses the same closed app token
   // so descriptors cannot cross app aggregates that share signing material (SPEC §6.6/§9.3).
   const loaderRuntimeHref = ensureKovoLoaderRuntimeClientModule(app.clientModules);
-  const buildToken = app.clientModules.buildToken();
+  const buildToken = admittedBuildToken ?? app.clientModules.buildToken();
   const liveTargetAttestationAuthority = appLiveTargetAttestationAuthority(app, buildToken);
   // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a storage download endpoint
   // is mounted. The route context must mint with the same configured capability signer that the
@@ -223,7 +226,7 @@ export async function renderAppRouteDocumentResponse({
         appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'session-provider'),
       clientIp: (req) => resolveRequestClientIp(app, req),
       renderForbidden: (async () => {
-        const forbidden = await renderAppErrorDocumentResponse(app, request, 403);
+        const forbidden = await renderAppErrorDocumentResponse(app, request, 403, buildToken);
         return {
           ...forbidden,
           body: typeof forbidden.body === 'string' ? forbidden.body : '',
@@ -296,12 +299,16 @@ export async function renderAppRouteDocumentResponse({
   try {
     if (routeResponse.status === 404 && !routeHasBoundary(route, 'notFound')) {
       captureRouteResponseLifecycleCookies();
-      return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 404));
+      return withRefreshCookies(
+        await renderAppErrorDocumentResponse(app, request, 404, buildToken),
+      );
     }
 
     if (routeResponse.status === 500 && !routeHasBoundary(route, 'error')) {
       captureRouteResponseLifecycleCookies();
-      return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 500));
+      return withRefreshCookies(
+        await renderAppErrorDocumentResponse(app, request, 500, buildToken),
+      );
     }
 
     // K3 / SPEC §9.3: derive the broadcast fingerprint from the session identity already resolved on
@@ -685,7 +692,9 @@ export async function renderAppErrorDocumentResponse(
   app: KovoApp,
   request: Request,
   status: 403 | 404 | 500,
+  admittedBuildToken?: string,
 ): Promise<RoutePageResponse> {
+  const buildToken = admittedBuildToken ?? app.clientModules.buildToken();
   const shellRequest = requestMetadataWithoutAmbientAuthority(request);
   const stableRequestUrl = readErrorShellRequestUrl(shellRequest);
   const stableUrl = requestCreateUrl(stableRequestUrl);
@@ -707,6 +716,7 @@ export async function renderAppErrorDocumentResponse(
       const rendered = await renderer({ request: shellRequest, status });
       return renderConfiguredErrorShellDocumentResponse(
         app,
+        buildToken,
         rendered,
         status,
         reportingOrigin,
@@ -725,6 +735,7 @@ export async function renderAppErrorDocumentResponse(
   // SPEC §9.2/§9.5: error shells are app config, but unexpected failures
   // still fall back to a stable no-internals document.
   return renderErrorDocument({
+    buildToken,
     ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
     ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
@@ -737,6 +748,7 @@ export async function renderAppErrorDocumentResponse(
 
 function renderConfiguredErrorShellDocumentResponse(
   app: KovoApp,
+  buildToken: string,
   rendered: unknown,
   status: 403 | 404 | 500,
   reportingOrigin: string,
@@ -755,6 +767,7 @@ function renderConfiguredErrorShellDocumentResponse(
     },
     {
       ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
+      buildToken,
       ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
       ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),

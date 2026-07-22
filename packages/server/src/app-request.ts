@@ -64,7 +64,7 @@ const FILE_MUTATION_BODY_OVERHEAD_BYTES = 1_048_576;
 const appEnhancedMutationBodyLimits = createWitnessWeakMap<KovoApp, number>();
 
 interface AppRequestAdmissionHooks {
-  /** Exact app-build token pinned when the request handler closes over the app. */
+  /** Exact app-build token sealed at production boot or snapshotted at the dev request boundary. */
   readonly buildToken?: string;
   /**
    * Framework-owned hook invoked only after coarse request admission and any ordinary streamed
@@ -99,6 +99,7 @@ export async function handleAppRequest(
     routes: app.routes,
   });
   const surface = loadShedSurface(match.kind);
+  const dispatchBuildToken = hooks.buildToken;
   const buildToken = systemResponseBuildToken(hooks.buildToken, surface);
 
   if (match.normalization.redirect) {
@@ -236,7 +237,7 @@ export async function handleAppRequest(
 
         return dispatchMatchedAppRequest({
           app,
-          ...(buildToken === undefined ? {} : { buildToken }),
+          ...(dispatchBuildToken === undefined ? {} : { buildToken: dispatchBuildToken }),
           match,
           method,
           request: limitedRequest,
@@ -285,7 +286,12 @@ export async function handleAppRequest(
     }
     const errorShellRequest =
       match.kind === 'mutation' ? requestMetadataWithoutAmbientAuthority(request) : request;
-    const errorShellResponse = await renderAppErrorDocumentResponse(app, errorShellRequest, 500);
+    const errorShellResponse = await renderAppErrorDocumentResponse(
+      app,
+      errorShellRequest,
+      500,
+      dispatchBuildToken,
+    );
     return routeResponseToWebResponse(
       match.kind === 'mutation'
         ? mutationResponseWithoutBrowserState(errorShellResponse)

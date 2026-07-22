@@ -198,6 +198,7 @@ export interface DeferredDocumentAssemblyOptions extends DocumentAssemblyOptions
 
 /** @internal */
 export interface ErrorDocumentOptions {
+  buildToken?: string;
   document?: DocumentConfig;
   hints?: PageHintOptions;
   lang?: string;
@@ -818,6 +819,7 @@ export const renderErrorDocument = wireEmitter(
     }
     const document = renderDocument({
       body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,
+      ...(options.buildToken === undefined ? {} : { buildToken: options.buildToken }),
       ...(options.document === undefined ? {} : { document: options.document }),
       hints: {
         ...options.hints,
@@ -829,7 +831,7 @@ export const renderErrorDocument = wireEmitter(
         : { loaderRuntimeHref: options.loaderRuntimeHref }),
     });
 
-    return {
+    const response = {
       body: document.html,
       headers: {
         ...document.earlyHints,
@@ -853,6 +855,7 @@ export const renderErrorDocument = wireEmitter(
         // route response means no author allowlist here — the plain strict `'self'` policy
         // (with the non-overridable hardening directives) applies unconditionally.
         'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
+        ...(options.buildToken === undefined ? {} : { 'Kovo-Build': options.buildToken }),
         ...renderCspReportingHeaders(
           {},
           options.reportingOrigin === undefined ? {} : { endpointOrigin: options.reportingOrigin },
@@ -860,6 +863,9 @@ export const renderErrorDocument = wireEmitter(
       },
       status: options.status,
     };
+    return options.buildToken === undefined
+      ? response
+      : markFrameworkDocumentResponse(response, options.buildToken);
   },
 );
 

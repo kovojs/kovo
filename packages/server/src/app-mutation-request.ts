@@ -91,7 +91,7 @@ export async function handleAppMutationRequest(
     const errorShellRequest = requestMetadataWithoutAmbientAuthority(request);
     return serverResponseToWebResponse(
       mutationResponseWithoutBrowserState(
-        await renderAppErrorDocumentResponse(app, errorShellRequest, 404),
+        await renderAppErrorDocumentResponse(app, errorShellRequest, 404, admittedBuildToken),
       ),
       { method: ingressMethod },
     );
@@ -181,6 +181,7 @@ export async function handleAppMutationRequest(
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
+    admittedBuildToken,
     sourceRequest,
     sourceUrl,
     mutation.key,
@@ -275,6 +276,7 @@ async function renderPreBodyCsrfFailure(
   const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
+    admittedBuildToken,
     sourceRequest,
     sourceUrl,
     mutation.key,
@@ -447,6 +449,7 @@ function canonicalSourceDocumentUrl(url: URL): URL {
 
 function defaultAppMutationFailurePageRenderer(
   app: KovoApp,
+  admittedBuildToken: string | undefined,
   sourceRequest: Request,
   sourceUrl: URL,
   mutationKey: string,
@@ -459,6 +462,7 @@ function defaultAppMutationFailurePageRenderer(
   return frameworkMutationFailurePageRenderer(async (failure) => {
     const response = await renderAppRouteDocumentResponse({
       app,
+      ...(admittedBuildToken === undefined ? {} : { buildToken: admittedBuildToken }),
       jsxContext: { mutationFailure: { failure, input: rawInput, mutationKey } },
       params: match.params,
       request: sourceRequest,

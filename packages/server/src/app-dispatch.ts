@@ -301,6 +301,7 @@ export async function dispatchMatchedAppRequest({
     return routeResponseToWebResponse(
       await renderAppRouteDocumentResponse({
         app,
+        ...(admittedBuildToken === undefined ? {} : { buildToken: admittedBuildToken }),
         params: match.params,
         request,
         route: match.route,
@@ -310,9 +311,10 @@ export async function dispatchMatchedAppRequest({
     );
   }
 
-  return routeResponseToWebResponse(await renderAppErrorDocumentResponse(app, request, 404), {
-    method: exactMethod,
-  });
+  return routeResponseToWebResponse(
+    await renderAppErrorDocumentResponse(app, request, 404, admittedBuildToken),
+    { method: exactMethod },
+  );
 }
 
 function finalizeMatchedEndpointResponse(

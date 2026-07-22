@@ -933,23 +933,27 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
   // SPEC §14: production request dispatch observes one sealed scalar. Registration remains open
   // between createApp() and this boot chokepoint so manual apps can assemble their active modules;
   // no request performs hashing or silently mutates the manifest.
-  if (resolveBootMode() === 'production') {
+  const production = resolveBootMode() === 'production';
+  if (production) {
     finalizeVersionedClientModuleBuild(app.clientModules);
   } else {
     commitVersionedClientModuleStaging(app.clientModules);
   }
 
-  // Pin one direct app-build token when the handler closes over the fully assembled app. Request
-  // admission can then stamp and compare inert build identity without invoking an app-owned module
-  // registry on attacker-controlled traffic (SPEC §5.2.1/§9.5/§14).
-  const buildToken = app.clientModules.buildToken();
-  appLiveTargetAttestationAudience(app, buildToken);
+  // Production owns one permanently sealed scalar. Development may atomically publish a new
+  // compiler snapshot between requests, so snapshot its framework-owned scalar once at each
+  // request boundary and thread that same value through admission and rendering. buildToken()
+  // performs no hashing or storage access (SPEC §5.2.1/§9.5/§14).
+  const sealedBuildToken = production ? app.clientModules.buildToken() : undefined;
+  if (sealedBuildToken !== undefined) appLiveTargetAttestationAudience(app, sealedBuildToken);
 
   const taskRuntime = createAppTaskRuntime(app);
   registerAppTaskRuntime(app, taskRuntime);
 
   return (request) =>
     runWithoutResponseLifecycleContext(async () => {
+      const buildToken = sealedBuildToken ?? app.clientModules.buildToken();
+      if (sealedBuildToken === undefined) appLiveTargetAttestationAudience(app, buildToken);
       const dispatchRequest = isolateNestedResponseDispatchRequest(request);
       const urlLimitResponse = appRequestUrlLimitResponse(dispatchRequest);
       if (urlLimitResponse) return urlLimitResponse;
