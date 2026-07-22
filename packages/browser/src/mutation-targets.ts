@@ -10,6 +10,11 @@ import {
 
 import { readDeps } from './pending.js';
 import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js';
+import {
+  securityArrayIsArray,
+  securityJsonParse,
+  securityJsonStringify,
+} from './security-witness-intrinsics.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
@@ -52,7 +57,7 @@ export function readLiveTargetSnapshot(root: TargetCollectorRoot): LiveTargetSna
   );
   return {
     header: encodeFrameworkTargetHeader(targetEntries),
-    liveHeader: encodeFrameworkLiveTargetHeader(attestedLiveTargets, JSON.stringify),
+    liveHeader: encodeFrameworkLiveTargetHeader(attestedLiveTargets, stringifyLiveTargetProps),
     liveTargets,
     targets,
   };
@@ -117,7 +122,7 @@ function readLiveTargetAttestation(element: TargetElementLike): string | undefin
 function readLiveProps(value: string | null): Record<string, unknown> {
   if (!value) return {};
   try {
-    const props = JSON.parse(value);
+    const props = securityJsonParse(value);
     return isRecord(props) ? props : {};
   } catch {
     return {};
@@ -125,5 +130,13 @@ function readLiveProps(value: string | null): Record<string, unknown> {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !securityArrayIsArray(value);
+}
+
+function stringifyLiveTargetProps(value: unknown): string {
+  const encoded = securityJsonStringify(value);
+  if (encoded === undefined) {
+    throw new TypeError('Kovo live target props must be JSON-serializable.');
+  }
+  return encoded;
 }

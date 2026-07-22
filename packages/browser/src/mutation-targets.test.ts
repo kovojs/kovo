@@ -144,4 +144,51 @@ describe('mutation targets', () => {
       targets: ['your-answer=answers question'],
     });
   });
+
+  it('pins live target JSON controls before application code can replace them', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': 'public',
+        'kovo-fragment-target': 'public-panel',
+        'kovo-live-component': 'components/public/card',
+        'kovo-live-token': 'tok_public',
+        'kovo-props': '{"scope":"public"}',
+      }),
+    ]);
+    const originalParse = JSON.parse;
+    const originalStringify = JSON.stringify;
+    const originalIsArray = Array.isArray;
+    const originalApply = Reflect.apply;
+    let snapshot: ReturnType<typeof readLiveTargetSnapshot> | undefined;
+    try {
+      JSON.parse = () => ({ scope: 'admin' });
+      JSON.stringify = () => '{"scope":"admin"}';
+      Array.isArray = (() => true) as typeof Array.isArray;
+      Reflect.apply = () => {
+        throw new Error('late poisoned Reflect.apply reached');
+      };
+      snapshot = readLiveTargetSnapshot(root);
+    } finally {
+      JSON.parse = originalParse;
+      JSON.stringify = originalStringify;
+      Array.isArray = originalIsArray;
+      Reflect.apply = originalApply;
+    }
+
+    // SPEC §6.6 rule 6 / §9.1: the modular browser runtime must serialize the same
+    // framework-owned target facts that it parsed from the live DOM.
+    expect(snapshot).toEqual({
+      header: 'public-panel=public',
+      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveTargets: [
+        {
+          attestation: 'tok_public',
+          component: 'components/public/card',
+          props: { scope: 'public' },
+          target: 'public-panel',
+        },
+      ],
+      targets: ['public-panel=public'],
+    });
+  });
 });

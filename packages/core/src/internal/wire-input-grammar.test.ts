@@ -111,4 +111,101 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       ),
     ).toThrow(/component/iu);
   });
+
+  it('keeps codec acceptance and rejection exact after late intrinsic replacement', () => {
+    const targetEntries = [{ deps: ['public', 'catalog'], target: 'public-panel' }];
+    const descriptors = [
+      {
+        attestation: 'token_1',
+        component: 'components/public/card',
+        props: { id: 'safe' },
+        target: 'public-panel',
+      },
+    ];
+    const targetHeader = ' public-panel=public catalog ';
+    const descriptorHeader = ' public-panel#components/public/card@token_1:{"id":"safe"} ';
+    const parseJson = JSON.parse;
+    const stringifyJson = JSON.stringify;
+    const originalApply = Reflect.apply;
+    const originalArrayIsArray = Array.isArray;
+    const originalArrayJoin = Array.prototype.join;
+    const originalArrayPush = Array.prototype.push;
+    const originalRegExpTest = RegExp.prototype.test;
+    const originalCharCodeAt = String.prototype.charCodeAt;
+    const originalIncludes = String.prototype.includes;
+    const originalIndexOf = String.prototype.indexOf;
+    const originalLastIndexOf = String.prototype.lastIndexOf;
+    const originalSlice = String.prototype.slice;
+    const originalTrim = String.prototype.trim;
+    let encodedTargets = '';
+    let encodedDescriptors = '';
+    let decodedTargets: ReturnType<typeof decodeFrameworkTargetHeader> = [];
+    let decodedDescriptors: ReturnType<typeof decodeFrameworkLiveTargetHeader> = [];
+    let decodedInvalidTargets: ReturnType<typeof decodeFrameworkTargetHeader> = [];
+    let decodedInvalidDescriptors: ReturnType<typeof decodeFrameworkLiveTargetHeader> = [];
+    let invalidTargetRejected = false;
+    let invalidDescriptorRejected = false;
+
+    try {
+      Reflect.apply = (() => {
+        throw new Error('late Reflect.apply replacement ran');
+      }) as typeof Reflect.apply;
+      Array.isArray = (() => true) as typeof Array.isArray;
+      Array.prototype.join = () => 'admin';
+      Array.prototype.push = function () {
+        return this.length;
+      };
+      RegExp.prototype.test = () => true;
+      String.prototype.charCodeAt = () => 0;
+      String.prototype.includes = () => true;
+      String.prototype.indexOf = () => -1;
+      String.prototype.lastIndexOf = () => -1;
+      String.prototype.slice = () => 'admin';
+      String.prototype.trim = () => 'admin';
+
+      encodedTargets = encodeFrameworkTargetHeader(targetEntries);
+      encodedDescriptors = encodeFrameworkLiveTargetHeader(descriptors, stringifyJson);
+      decodedTargets = decodeFrameworkTargetHeader(targetHeader);
+      decodedDescriptors = decodeFrameworkLiveTargetHeader(descriptorHeader, parseJson);
+      decodedInvalidTargets = decodeFrameworkTargetHeader('bad\u0000target=admin');
+      decodedInvalidDescriptors = decodeFrameworkLiveTargetHeader(
+        'safe#bad component@token:{}',
+        parseJson,
+      );
+      try {
+        encodeFrameworkTargetHeader([{ deps: ['query;admin'], target: 'safe' }]);
+      } catch {
+        invalidTargetRejected = true;
+      }
+      try {
+        encodeFrameworkLiveTargetHeader(
+          [{ attestation: 'token', component: 'bad:component', props: {}, target: 'safe' }],
+          stringifyJson,
+        );
+      } catch {
+        invalidDescriptorRejected = true;
+      }
+    } finally {
+      String.prototype.trim = originalTrim;
+      String.prototype.slice = originalSlice;
+      String.prototype.lastIndexOf = originalLastIndexOf;
+      String.prototype.indexOf = originalIndexOf;
+      String.prototype.includes = originalIncludes;
+      String.prototype.charCodeAt = originalCharCodeAt;
+      RegExp.prototype.test = originalRegExpTest;
+      Array.prototype.push = originalArrayPush;
+      Array.prototype.join = originalArrayJoin;
+      Array.isArray = originalArrayIsArray;
+      Reflect.apply = originalApply;
+    }
+
+    expect(encodedTargets).toBe('public-panel=public catalog');
+    expect(encodedDescriptors).toBe('public-panel#components/public/card@token_1:{"id":"safe"}');
+    expect(decodedTargets).toEqual(targetEntries);
+    expect(decodedDescriptors).toEqual(descriptors);
+    expect(decodedInvalidTargets).toEqual([]);
+    expect(decodedInvalidDescriptors).toEqual([]);
+    expect(invalidTargetRejected).toBe(true);
+    expect(invalidDescriptorRejected).toBe(true);
+  });
 });

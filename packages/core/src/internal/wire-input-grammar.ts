@@ -1,3 +1,5 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through captured Reflect.apply. */
+
 /**
  * Core-owned mutation wire grammar (SPEC §9.1).
  *
@@ -323,15 +325,49 @@ export type FrameworkWireInputGrammar = typeof FRAMEWORK_WIRE_INPUT_GRAMMAR;
 export function createFrameworkWireTargetCodec(
   grammar: FrameworkWireInputGrammar,
 ): FrameworkWireTargetCodec {
+  // This constructor is serialized into the inline browser loader as well as evaluated by the
+  // server. Capture every scalar/collection control while the framework realm still owns boot so
+  // later app code cannot rewrite a wire identity, dependency, or descriptor verdict (SPEC
+  // §6.6 rule 6 / §9.1). Keep these captures local: the emitted loader must remain a
+  // self-contained rendering of this function plus the frozen grammar data.
+  const apply = Reflect.apply;
+  const arrayIsArray = Array.isArray;
+  const arrayJoin = Array.prototype.join;
+  const arrayPush = Array.prototype.push;
+  const regexpTest = RegExp.prototype.test;
+  const stringCharCodeAt = String.prototype.charCodeAt;
+  const stringIncludes = String.prototype.includes;
+  const stringIndexOf = String.prototype.indexOf;
+  const stringLastIndexOf = String.prototype.lastIndexOf;
+  const stringSlice = String.prototype.slice;
+  const stringTrim = String.prototype.trim;
+  const whitespace = /\s/u;
+
+  const push = <Value>(values: Value[], value: Value): void => {
+    apply(arrayPush, values, [value]);
+  };
+  const trim = (value: string): string => apply(stringTrim, value, []);
+  const slice = (value: string, start: number, end?: number): string =>
+    end === undefined
+      ? apply(stringSlice, value, [start])
+      : apply(stringSlice, value, [start, end]);
+  const indexOf = (value: string, search: string, start?: number): number =>
+    start === undefined
+      ? apply(stringIndexOf, value, [search])
+      : apply(stringIndexOf, value, [search, start]);
+  const lastIndexOf = (value: string, search: string): number =>
+    apply(stringLastIndexOf, value, [search]);
+  const isWhitespace = (value: string): boolean => apply(regexpTest, whitespace, [value]);
+
   const identityIsValid = (value: unknown): value is string => {
     if (typeof value !== 'string' || value.length === 0) return false;
     for (let index = 0; index < value.length; index += 1) {
-      const code = value.charCodeAt(index);
+      const code = apply(stringCharCodeAt, value, [index]);
       const character = value[index] ?? '';
       if (
         code <= 0x1f ||
         code === 0x7f ||
-        /\s/u.test(character) ||
+        isWhitespace(character) ||
         character === grammar.entrySeparator ||
         character === ',' ||
         character === grammar.descriptor.targetComponentSeparator ||
@@ -344,12 +380,13 @@ export function createFrameworkWireTargetCodec(
   };
 
   const componentIsValid = (value: unknown): value is string =>
-    identityIsValid(value) && !value.includes(grammar.descriptor.attestationPropsSeparator);
+    identityIsValid(value) &&
+    !apply(stringIncludes, value, [grammar.descriptor.attestationPropsSeparator]);
 
   const attestationIsValid = (value: unknown): value is string =>
     identityIsValid(value) &&
-    !value.includes(grammar.descriptor.componentAttestationSeparator) &&
-    !value.includes(grammar.descriptor.attestationPropsSeparator);
+    !apply(stringIncludes, value, [grammar.descriptor.componentAttestationSeparator]) &&
+    !apply(stringIncludes, value, [grammar.descriptor.attestationPropsSeparator]);
 
   const appendUniqueByTarget = <Value extends { readonly target: string }>(
     output: Value[],
@@ -358,7 +395,7 @@ export function createFrameworkWireTargetCodec(
     for (let index = 0; index < output.length; index += 1) {
       if (output[index]?.target === value.target) return;
     }
-    output.push(value);
+    push(output, value);
   };
 
   const encodeEntryList = (values: readonly string[]): string => {
@@ -396,11 +433,13 @@ export function createFrameworkWireTargetCodec(
           if (!identityIsValid(dep)) {
             throw new TypeError('Kovo target header contains an invalid dependency wire identity.');
           }
-          deps.push(dep);
+          push(deps, dep);
         }
-        entry += grammar.target.assignmentSeparator + deps.join(grammar.target.dependencySeparator);
+        entry +=
+          grammar.target.assignmentSeparator +
+          apply(arrayJoin, deps, [grammar.target.dependencySeparator]);
       }
-      encoded.push(entry);
+      push(encoded, entry);
     }
     return encodeEntryList(encoded);
   };
@@ -427,7 +466,8 @@ export function createFrameworkWireTargetCodec(
       if (typeof props !== 'string') {
         throw new TypeError('Kovo live-target props must serialize to JSON text.');
       }
-      encoded.push(
+      push(
+        encoded,
         value.target +
           grammar.descriptor.targetComponentSeparator +
           value.component +
@@ -443,15 +483,13 @@ export function createFrameworkWireTargetCodec(
   const boundedInput = (value: string): boolean =>
     typeof value === 'string' && value.length <= grammar.maxHeaderCharacters;
 
-  const trim = (value: string): string => value.trim();
-
   const splitTargetEntries = (value: string): string[] => {
     const entries: string[] = [];
     let start = 0;
     for (let index = 0; index <= value.length; index += 1) {
       const character = index === value.length ? grammar.entrySeparator : value[index];
       if (character !== grammar.entrySeparator && character !== ',') continue;
-      entries.push(value.slice(start, index));
+      push(entries, slice(value, start, index));
       if (entries.length === grammar.maxEntries) return entries;
       start = index + 1;
     }
@@ -480,12 +518,12 @@ export function createFrameworkWireTargetCodec(
       } else if (character === '}' || character === ']') {
         if (depth > 0) depth -= 1;
       } else if (character === grammar.entrySeparator && depth === 0) {
-        entries.push(value.slice(start, index));
+        push(entries, slice(value, start, index));
         if (entries.length === grammar.maxEntries) return entries;
         start = index + 1;
       }
     }
-    if (entries.length < grammar.maxEntries) entries.push(value.slice(start));
+    if (entries.length < grammar.maxEntries) push(entries, slice(value, start));
     return entries;
   };
 
@@ -496,19 +534,19 @@ export function createFrameworkWireTargetCodec(
     for (let index = 0; index < entries.length; index += 1) {
       const entry = trim(entries[index] ?? '');
       if (entry === '') continue;
-      const separator = entry.indexOf(grammar.target.assignmentSeparator);
-      const target = trim(separator < 0 ? entry : entry.slice(0, separator));
+      const separator = indexOf(entry, grammar.target.assignmentSeparator);
+      const target = trim(separator < 0 ? entry : slice(entry, 0, separator));
       if (!identityIsValid(target)) continue;
       const deps: string[] = [];
       if (separator >= 0) {
-        const rawDeps = entry.slice(separator + 1);
+        const rawDeps = slice(entry, separator + 1);
         let start = 0;
         for (let depIndex = 0; depIndex <= rawDeps.length; depIndex += 1) {
           const character = depIndex === rawDeps.length ? ' ' : (rawDeps[depIndex] ?? '');
-          if (character !== ',' && !/\s/u.test(character)) continue;
+          if (character !== ',' && !isWhitespace(character)) continue;
           if (depIndex > start) {
-            const dep = trim(rawDeps.slice(start, depIndex));
-            if (identityIsValid(dep)) deps.push(dep);
+            const dep = trim(slice(rawDeps, start, depIndex));
+            if (identityIsValid(dep)) push(deps, dep);
           }
           start = depIndex + 1;
         }
@@ -528,17 +566,22 @@ export function createFrameworkWireTargetCodec(
     for (let index = 0; index < entries.length; index += 1) {
       const entry = trim(entries[index] ?? '');
       if (entry === '') continue;
-      const targetEnd = entry.indexOf(grammar.descriptor.targetComponentSeparator);
-      const propsStart = entry.indexOf(grammar.descriptor.attestationPropsSeparator, targetEnd + 1);
+      const targetEnd = indexOf(entry, grammar.descriptor.targetComponentSeparator);
+      const propsStart = indexOf(
+        entry,
+        grammar.descriptor.attestationPropsSeparator,
+        targetEnd + 1,
+      );
       if (targetEnd <= 0 || propsStart <= targetEnd + 1) continue;
-      const componentAndAttestation = trim(entry.slice(targetEnd + 1, propsStart));
-      const attestationStart = componentAndAttestation.lastIndexOf(
+      const componentAndAttestation = trim(slice(entry, targetEnd + 1, propsStart));
+      const attestationStart = lastIndexOf(
+        componentAndAttestation,
         grammar.descriptor.componentAttestationSeparator,
       );
       if (attestationStart <= 0) continue;
-      const target = trim(entry.slice(0, targetEnd));
-      const component = trim(componentAndAttestation.slice(0, attestationStart));
-      const attestation = trim(componentAndAttestation.slice(attestationStart + 1));
+      const target = trim(slice(entry, 0, targetEnd));
+      const component = trim(slice(componentAndAttestation, 0, attestationStart));
+      const attestation = trim(slice(componentAndAttestation, attestationStart + 1));
       if (
         !identityIsValid(target) ||
         !componentIsValid(component) ||
@@ -548,11 +591,11 @@ export function createFrameworkWireTargetCodec(
       }
       let props: unknown;
       try {
-        props = parseJson(trim(entry.slice(propsStart + 1)));
+        props = parseJson(trim(slice(entry, propsStart + 1)));
       } catch {
         continue;
       }
-      if (props === null || typeof props !== 'object' || Array.isArray(props)) continue;
+      if (props === null || typeof props !== 'object' || arrayIsArray(props)) continue;
       appendUniqueByTarget(output, {
         attestation,
         component,
