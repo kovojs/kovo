@@ -334,7 +334,7 @@ export const compilerSpecCoverageMap = [
       {
         file: 'packages/compiler/src/compile-component.test.ts',
         testName:
-          'throws KV416 when a projected-query field rename does NOT move a stubbed non-monotonic token (D4)',
+          'throws KV416 when a projected-query field rename does NOT move a stubbed fingerprint (D4)',
         codes: ['KV416'],
       },
     ],
@@ -348,16 +348,15 @@ export const compilerSpecCoverageMap = [
   {
     clause: 'SPEC.md §5.2.2',
     promise:
-      'the production render-plan gate fails builds whose projected shape changes do not move the token',
+      'the production render-plan gate fails builds whose projected shape changes do not move the fingerprint',
     accepted: [
       {
         file: 'packages/compiler/src/compile-component.test.ts',
-        testName: 'passes when shapes change AND the token changes',
+        testName: 'passes when shapes change AND the fingerprint changes',
       },
       {
         file: 'packages/compiler/src/compile-component.test.ts',
-        testName:
-          'does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)',
+        testName: 'does NOT throw KV416 when shapes differ and the real fingerprint moves',
       },
     ],
     diagnostics: [

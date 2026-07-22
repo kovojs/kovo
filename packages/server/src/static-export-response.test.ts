@@ -90,7 +90,9 @@ describe('server static export replay response boundary', () => {
         response,
         routePath: '/docs',
       }),
-    ).rejects.toThrow(/Kovo-Build transport proof does not match/u);
+    ).rejects.toThrow(
+      /Kovo-Build transport proof does not match its private app-build-token marker/u,
+    );
   });
 
   it('rejects a provenance-marked document without its exact Kovo-Build transport proof', async () => {

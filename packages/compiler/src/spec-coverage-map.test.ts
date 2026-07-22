@@ -291,7 +291,7 @@ describe('compiler SPEC coverage map', () => {
               "codes": [
                 "KV416",
               ],
-              "testName": "throws KV416 when a projected-query field rename does NOT move a stubbed non-monotonic token (D4)",
+              "testName": "throws KV416 when a projected-query field rename does NOT move a stubbed fingerprint (D4)",
             },
           ],
           "referenceApp": [
@@ -300,8 +300,8 @@ describe('compiler SPEC coverage map', () => {
         },
         {
           "accepted": [
-            "passes when shapes change AND the token changes",
-            "does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)",
+            "passes when shapes change AND the fingerprint changes",
+            "does NOT throw KV416 when shapes differ and the real fingerprint moves",
           ],
           "clause": "SPEC.md §5.2.2",
           "diagnostics": [

@@ -331,7 +331,7 @@ export interface FrameworkQueryDependencyIdentity {
 
 /** Inputs to the shared target-bearing request-header planner. @internal */
 export interface FrameworkTargetRequestHeaderInput {
-  /** Document render-plan/build token used to route the matching retained decoder. */
+  /** Document app build token used to route the matching retained decoder. */
   readonly build: string;
   readonly currentUrl: string;
   readonly formTarget?: string;

@@ -114,8 +114,9 @@ export const staticExportHeaders = wireEmitter(
 
 /**
  * @internal Capture a provenance-marked framework document's durable headers. The runtime-only
- * `Kovo-Build` transport proof is verified against the private render token and omitted from the
- * file artifact; generic/app-authored Kovo headers still fail in {@link staticExportHeaders}.
+ * `Kovo-Build` transport proof is verified against the private framework-document copy of the
+ * same app build token and omitted from the file artifact; generic/app-authored Kovo headers still
+ * fail in {@link staticExportHeaders}.
  */
 export const staticExportFrameworkDocumentHeaders = wireEmitter(
   'server.wire.static-export-framework-document-headers',
@@ -145,7 +146,7 @@ export const staticExportFrameworkDocumentHeaders = wireEmitter(
       if (options.buildToken === '' || value !== options.buildToken) {
         throw staticExportHeaderError(
           options,
-          'framework document Kovo-Build transport proof does not match its render proof.',
+          'framework document Kovo-Build transport proof does not match its private app-build-token marker.',
         );
       }
     }
