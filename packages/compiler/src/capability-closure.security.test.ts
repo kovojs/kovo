@@ -993,6 +993,101 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448']);
   });
 
+  it('retains captured root candidates written by later closures and invoked callbacks', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+          function invoke(callback) { callback(); }
+
+          let later = localFactory;
+          export function renderLater() {
+            return later('/captured-later-write', { render() { return null; } });
+          }
+          function installLater() { later = route; }
+
+          let callbackFactory = localFactory;
+          invoke(() => { callbackFactory = route; });
+          export const callbackPage = callbackFactory('/callback-write', {
+            render() { return null; },
+          });
+          void installLater;
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/callback-write', '/captured-later-write']);
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'closed')
+        .map((fact) => fact.name)
+        .sort(),
+    ).toEqual(['/callback-write', '/captured-later-write']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV448', 'KV448']);
+  });
+
+  it('joins loop, exception, switch, and logical writes while honoring definite finally writes', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { route } from '@kovojs/server';
+          function localFactory() { return null; }
+
+          let loopFactory = localFactory;
+          while (globalThis.choice) loopFactory = route;
+          export const loopPage = loopFactory('/loop-join', { render() { return null; } });
+
+          let tryFactory = localFactory;
+          try { tryFactory = route; } catch { tryFactory = localFactory; }
+          export const tryPage = tryFactory('/try-join', { render() { return null; } });
+
+          let switchFactory = localFactory;
+          switch (globalThis.choice) {
+            case 'route': switchFactory = route; break;
+            default: switchFactory = localFactory;
+          }
+          export const switchPage = switchFactory('/switch-join', {
+            render() { return null; },
+          });
+
+          let logicalFactory = localFactory;
+          logicalFactory ||= route;
+          export const logicalPage = logicalFactory('/logical-join', {
+            render() { return null; },
+          });
+
+          let finalFactory = route;
+          try { void 0; } catch { finalFactory = route; }
+          finally { finalFactory = localFactory; }
+          export const finalPage = finalFactory('/finally-not-root', {
+            render() { return null; },
+          });
+        `,
+      },
+    ]);
+
+    const roots = result.facts
+      .filter((fact) => fact.kind === 'root')
+      .map((fact) => fact.name)
+      .sort();
+    expect(roots).toEqual(['/logical-join', '/loop-join', '/switch-join', '/try-join']);
+    expect(roots).not.toContain('/finally-not-root');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV448',
+      'KV448',
+      'KV448',
+      'KV448',
+    ]);
+  });
+
   it('follows callbacks and object containers transferred into an imported local wrapper', () => {
     const files = [
       {
