@@ -1437,6 +1437,10 @@ export const Demo = component({
     `setTimeout(() => { state.value = 'ready'; }, 0);`,
     `const model = state; setTimeout(() => { model.value = 'ready'; }, 0);`,
     `const value = String(state.value); setTimeout(() => { void value; }, 0);`,
+    `const [value] = [String(state.value)]; setTimeout(() => { void value; }, 0);`,
+    `const { value } = { value: String(state.value) }; setTimeout(() => { void value; }, 0);`,
+    `const { box: [value] } = { box: [String(state.value)] }; setTimeout(() => { void value; }, 0);`,
+    `const [value] = [String(state.value)]; const box = { value }; setTimeout(() => { void box.value; }, 0);`,
     `function later() { state.value = 'ready'; } setTimeout(later, 0);`,
   ])('rejects deferred state access without a queued state transaction: %s', (operation) => {
     const result = compile(`

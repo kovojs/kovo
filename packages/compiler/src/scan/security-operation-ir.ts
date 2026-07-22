@@ -257,6 +257,10 @@ interface SecurityIrSourceIndex {
 }
 
 const securityIrSourceIndexCache = compilerCreateWeakMap<ts.SourceFile, SecurityIrSourceIndex>();
+const browserStateDerivedBindingNamesCache = compilerCreateWeakMap<
+  ts.ConciseBody,
+  ReadonlySet<string>
+>();
 
 /**
  * SPEC §5.2/§6.6 source boundary index. The AST is immutable after parsing, so one conservative
@@ -2007,15 +2011,137 @@ function browserExpressionMayCarryState(
         if (initializer !== undefined && visitExpression(initializer)) return true;
       }
       let found = false;
-      ts.forEachChild(current, (child) => {
-        if (!found && ts.isExpression(child) && visitExpression(child)) found = true;
-      });
+      const visitChild = (child: ts.Node): void => {
+        if (found) return;
+        if (ts.isExpression(child)) {
+          if (visitExpression(child)) found = true;
+          return;
+        }
+        // Object/binding members are not themselves expressions. Descend through their structural
+        // wrapper so `{ value: String(state.value) }` and nested carrier literals retain origin.
+        ts.forEachChild(child, visitChild);
+      };
+      ts.forEachChild(current, visitChild);
       return found;
     } finally {
       compilerSetDelete(active, key);
     }
   };
   return visitExpression(expression);
+}
+
+/**
+ * Conservative backward slice for values copied out of handler state before a deferred callback.
+ * The ordinary provenance map deliberately treats scalarized state reads as data, but delayed work
+ * must still remember their origin: the synchronous state snapshot has retired before the callback
+ * runs. Track binding-pattern projections and local carrier mutations to a fixpoint so array/object
+ * destructuring cannot erase that temporal provenance (SPEC §4.3/§5.2).
+ */
+function browserStateDerivedBindingNames(
+  boundary: ts.ConciseBody,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): ReadonlySet<string> {
+  const cached = compilerWeakMapGet(browserStateDerivedBindingNamesCache, boundary);
+  if (cached !== undefined) return cached;
+  const derived = compilerCreateSet<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const mark = (names: ReadonlySet<string>): void => {
+      compilerSetForEach(names, (name) => {
+        if (compilerSetHas(derived, name)) return;
+        compilerSetAdd(derived, name);
+        changed = true;
+      });
+    };
+    const markTarget = (target: ts.Node): void => {
+      const names = compilerCreateSet<string>();
+      const expression = ts.isExpression(target) ? unwrapExpression(target) : undefined;
+      const member = expression === undefined ? undefined : staticMember(expression);
+      const root = member === undefined ? undefined : rootIdentifier(member.receiver);
+      if (root !== undefined) compilerSetAdd(names, root);
+      else collectSecurityIrAssignmentTargetNames(target, names);
+      mark(names);
+    };
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        node.initializer !== undefined &&
+        browserExpressionMayCarryStateOrDerived(
+          node.initializer,
+          derived,
+          aliases,
+          boundary,
+        )
+      ) {
+        const names = compilerCreateSet<string>();
+        collectBindingNames(node.name, names);
+        mark(names);
+      } else if (
+        ts.isBinaryExpression(node) &&
+        isAssignmentOperator(node.operatorToken.kind) &&
+        browserExpressionMayCarryStateOrDerived(node.right, derived, aliases, boundary)
+      ) {
+        markTarget(node.left);
+      } else if (ts.isCallExpression(node)) {
+        const callee = unwrapExpression(node.expression);
+        const member = staticMember(callee);
+        if (
+          member !== undefined &&
+          (member.name === 'push' ||
+            member.name === 'unshift' ||
+            member.name === 'splice' ||
+            member.name === 'fill')
+        ) {
+          const argumentsSnapshot = compilerSnapshotDenseArray(
+            node.arguments,
+            'Deferred state carrier arguments',
+          );
+          for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+            if (
+              browserExpressionMayCarryStateOrDerived(
+                argumentsSnapshot[index]!,
+                derived,
+                aliases,
+                boundary,
+              )
+            ) {
+              markTarget(member.receiver);
+              break;
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(boundary);
+  }
+  compilerWeakMapSet(browserStateDerivedBindingNamesCache, boundary, derived);
+  return derived;
+}
+
+function browserExpressionMayCarryStateOrDerived(
+  expression: ts.Expression,
+  derived: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+): boolean {
+  if (browserExpressionMayCarryState(expression, aliases, boundary)) return true;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      ts.isIdentifier(node) &&
+      browserIdentifierIsValueReference(node) &&
+      compilerSetHas(derived, node.text)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
 }
 
 function browserReviewedStateMethodCall(
@@ -2801,6 +2927,7 @@ function browserTimerCallbackStateCaptureNode(
       ? { body: current.body, declaration: current }
       : resolveSameFileSecurityIrCallable(sourceFile, current);
   if (!callable) return expression;
+  const stateDerivedBindings = browserStateDerivedBindingNames(body, aliases);
   let captured: ts.Node | undefined;
   const visit = (node: ts.Node): void => {
     if (captured !== undefined) return;
@@ -2808,7 +2935,8 @@ function browserTimerCallbackStateCaptureNode(
       ts.isIdentifier(node) &&
       browserIdentifierIsValueReference(node) &&
       !identifierIsShadowedWithinBoundary(node, callable.declaration) &&
-      browserExpressionMayCarryState(node, aliases, body)
+      (browserExpressionMayCarryState(node, aliases, body) ||
+        compilerSetHas(stateDerivedBindings, node.text))
     ) {
       captured = node;
       return;
