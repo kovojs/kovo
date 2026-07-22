@@ -396,6 +396,7 @@ it('keeps generated mutation on the response transport captured at boot', async 
   const safeFetch = vi.fn(async () => ({
     headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     ok: true,
+    redirected: false,
     status: 200,
     async text() {
       return '<kovo-fragment target="account"><section kovo-fragment-target="account">MUTATION SERVER SAFE</section></kovo-fragment>';
@@ -404,6 +405,7 @@ it('keeps generated mutation on the response transport captured at boot', async 
   }));
   const attackFetch = vi.fn(async () => ({
     headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
+    redirected: false,
     async text() {
       return '<kovo-fragment target="account"><section kovo-fragment-target="account">ATTACKER</section></kovo-fragment>';
     },
@@ -565,7 +567,7 @@ it('recovers an ambiguous mutation failure with one POST and one fresh replay ke
       '<button>delete</button>',
       '</form>',
     ].join(''),
-    '',
+    '<meta name="kovo-build" content="build-a">',
   );
   const form = harness.window.document.querySelector<HTMLFormElement>('form');
   if (!form) throw new Error('missing no-replay mutation fixture');
@@ -589,6 +591,7 @@ it('recovers an ambiguous mutation failure with one POST and one fresh replay ke
       return {
         headers: responseHeaders(undefined, 'text/html'),
         ok: true,
+        redirected: false,
         status: 200,
         async text() {
           return '<html>not fragment truth</html>';
@@ -726,20 +729,27 @@ it('rejects manifest-listed data modules in an opaque generated loader', async (
 it('keeps generated query and live-target recovery on the captured response transport', async () => {
   const harness = await createFrame(
     [
-      '<script type="application/json" kovo-query="cart">{"count":1}</script>',
+      '<script type="application/json" kovo-query="cart" data-kovo-query-href="/_q/cart">{"count":1}</script>',
       '<section kovo-fragment-target="account" kovo-deps="account" kovo-live-component="account" kovo-live-token="tok_account">INITIAL</section>',
     ].join(''),
     '<meta name="kovo-build" content="build-a">',
   );
   const globalRecord = harness.window as unknown as Record<string, unknown>;
   const safeFetch = vi.fn(async (input: string) => ({
-    headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
+    headers: responseHeaders(
+      'build-a',
+      String(input).includes('/_q/cart')
+        ? 'text/html; charset=utf-8'
+        : 'text/vnd.kovo.fragment+html',
+    ),
+    redirected: false,
     status: 200,
     async text() {
       return String(input).includes('/_q/cart')
         ? '<kovo-query name="cart">{"count":2}</kovo-query>'
         : '<kovo-fragment target="account"><section kovo-fragment-target="account">LIVE SERVER SAFE</section></kovo-fragment>';
     },
+    url: input,
   }));
   const attackFetch = vi.fn(async () => ({
     headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
@@ -972,6 +982,7 @@ it.each([
       body,
       headers: responseHeaders(responseBuild, 'text/vnd.kovo.fragment+html'),
       ok: true,
+      redirected: false,
       status: 200,
       url: `${harness.window.location.origin}/_m/chat`,
     }));
@@ -1030,6 +1041,7 @@ it.each([
       body: frameStream(harness.window, [fragment, ...(terminator ? [terminator] : [])]),
       headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
       ok: true,
+      redirected: false,
       status: 200,
       url: `${harness.window.location.origin}/_m/chat`,
     }));
@@ -1055,7 +1067,7 @@ it('never consults deferred-runtime native submit after an ambiguous POST failur
       '<button>send</button>',
       '</form>',
     ].join(''),
-    '',
+    '<meta name="kovo-build" content="build-a">',
   );
   const form = harness.window.document.querySelector<HTMLFormElement>('form');
   const sink = harness.window.document.querySelector<HTMLIFrameElement>('iframe');
@@ -1105,6 +1117,7 @@ it('keeps complete same-build stream behavior without hard recovery', async () =
     ]),
     headers: responseHeaders('build-a', 'text/vnd.kovo.fragment+html'),
     ok: true,
+    redirected: false,
     status: 200,
     url: `${harness.window.location.origin}/_m/chat`,
   }));
