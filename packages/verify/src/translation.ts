@@ -1,4 +1,10 @@
-import { parse } from 'es-module-lexer/js';
+import {
+  collectJavaScriptModuleReferences,
+  isJavaScriptAstNode,
+  type JavaScriptAstNode,
+  parseJavaScriptModule,
+  staticStringValue,
+} from './javascript-ast.js';
 
 /** @internal One compiler-emitted artifact checked by the Plan 3 §2.2 translation validator. */
 export interface KovoEmittedTranslationArtifact {
@@ -493,9 +499,9 @@ function checkClientImports(
   }
 
   for (const artifact of input.artifacts.filter((entry) => entry.kind === 'client')) {
-    let imports: ReturnType<typeof parse>[0];
+    let imports: ReturnType<typeof collectJavaScriptModuleReferences>;
     try {
-      [imports] = parse(artifact.source, artifact.fileName);
+      imports = collectJavaScriptModuleReferences(parseJavaScriptModule(artifact.source));
     } catch (error) {
       pushFinding(
         findings,
@@ -507,8 +513,7 @@ function checkClientImports(
       continue;
     }
     for (const imported of imports) {
-      if (imported.d === -2 || imported.t === 3) continue;
-      if (imported.d !== -1 || imported.n === undefined) {
+      if (imported.kind !== 'import' || imported.specifier === undefined) {
         pushFinding(
           findings,
           'client-import-subset',
@@ -518,19 +523,19 @@ function checkClientImports(
         );
         continue;
       }
-      const bindings = staticNamedImportBindings(artifact.source, imported);
+      const bindings = staticNamedImportBindings(imported.node);
       if (bindings === undefined) {
         pushFinding(
           findings,
           'client-import-subset',
           'client-import-unreviewed',
-          `${artifact.fileName} contains non-canonical import or re-export from ${JSON.stringify(imported.n)}`,
+          `${artifact.fileName} contains non-canonical import or re-export from ${JSON.stringify(imported.specifier)}`,
           artifact.kind,
         );
         continue;
       }
       for (const binding of bindings) {
-        const key = importKey(imported.n, binding.importedName, binding.localName);
+        const key = importKey(imported.specifier, binding.importedName, binding.localName);
         if (reviewed.has(key)) continue;
         pushFinding(
           findings,
@@ -545,27 +550,44 @@ function checkClientImports(
 }
 
 function staticNamedImportBindings(
-  source: string,
-  imported: ReturnType<typeof parse>[0][number],
+  imported: JavaScriptAstNode,
 ): { importedName: string; localName: string }[] | undefined {
-  const statement = source.slice(imported.ss, imported.se);
-  const start = imported.s - imported.ss;
-  const end = imported.e - imported.ss;
-  if (start < 0 || end < start || end > statement.length) return undefined;
-  const before = statement.slice(0, start);
-  const after = statement.slice(end);
-  const match = /^import\s*\{([\s\S]*)\}\s*from\s*(["'])$/u.exec(before);
-  if (match === null || after !== match[2]) return undefined;
-  const clause = match[1]!.trim();
-  if (clause === '') return [];
+  if (
+    imported.type !== 'ImportDeclaration' ||
+    !Array.isArray(imported.specifiers) ||
+    imported.specifiers.length === 0 ||
+    (Array.isArray(imported.attributes) && imported.attributes.length > 0) ||
+    (Array.isArray(imported.assertions) && imported.assertions.length > 0)
+  ) {
+    return undefined;
+  }
   const result: { importedName: string; localName: string }[] = [];
-  for (const raw of clause.split(',')) {
-    const item = raw.trim();
-    const alias = /^([^\s]+)(?:\s+as\s+([^\s]+))?$/u.exec(item);
-    if (alias === null || !identifier(alias[1]) || !identifier(alias[2] ?? alias[1])) {
+  for (const specifier of imported.specifiers) {
+    if (
+      !isJavaScriptAstNode(specifier) ||
+      specifier.type !== 'ImportSpecifier' ||
+      !isJavaScriptAstNode(specifier.imported) ||
+      !isJavaScriptAstNode(specifier.local)
+    ) {
       return undefined;
     }
-    result.push({ importedName: alias[1]!, localName: alias[2] ?? alias[1]! });
+    const importedName =
+      specifier.imported.type === 'Identifier' && typeof specifier.imported.name === 'string'
+        ? specifier.imported.name
+        : staticStringValue(specifier.imported);
+    const localName =
+      specifier.local.type === 'Identifier' && typeof specifier.local.name === 'string'
+        ? specifier.local.name
+        : undefined;
+    if (
+      importedName === undefined ||
+      localName === undefined ||
+      !identifier(importedName) ||
+      !identifier(localName)
+    ) {
+      return undefined;
+    }
+    result.push({ importedName, localName });
   }
   return result;
 }

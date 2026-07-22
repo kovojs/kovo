@@ -75,7 +75,8 @@ canonical policy bytes. This removes duplicate artifact hashes from the certific
 immutable join, not an additional source of authority.
 
 The standalone `@kovojs/verify` checker imports no Kovo implementation and has one exact parser
-dependency, `es-module-lexer@2.1.0`. It compares the actual packed `@kovojs/*` package census and
+dependency, `acorn@8.17.0`. It parses every published module byte into a complete ESTree before
+deriving imports and re-exports, compares the actual packed `@kovojs/*` package census and
 complete manifests to policy, rejects resolver remaps and automatic lifecycle hooks, requires every
 runtime entry condition to collapse to one listed target, and scans the complete package trees. It
 reads evidence and module bytes through no-follow descriptors, pins reads to the initial file and
@@ -111,7 +112,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
   "securityRatchet": {
     "schema": "kovo.security.tcb-ratchet/v1",
     "limits": {
-      "analysisClosureSize": 340,
+      "analysisClosureSize": 341,
       "entryCount": 134,
       "totalTcbMaxLines": 2024
     },
@@ -142,6 +143,21 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
         "review": "plans/10x-better-security-3.md §4.2 typed declassification and §5.2 signed advisories",
         "to": {
           "analysisClosureSize": 421,
+          "entryCount": 134,
+          "totalTcbMaxLines": 2024
+        }
+      },
+      {
+        "from": {
+          "analysisClosureSize": 340,
+          "entryCount": 134,
+          "totalTcbMaxLines": 2024
+        },
+        "id": "SEC-CERTIFICATE-FULL-PARSER-2026-07-21",
+        "reason": "The standalone checker replaces its truncating lexer with exact-pinned Acorn full-input parsing; es-module-lexer 2.1.0 remains independently reachable through the existing Vitest proof harness, so the closed analysis subject set grows by one.",
+        "review": "SPEC §6.6 complete published-module coverage and the 3,900,051-byte hidden-tail regression",
+        "to": {
+          "analysisClosureSize": 341,
           "entryCount": 134,
           "totalTcbMaxLines": 2024
         }
@@ -190,12 +206,12 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "reviewTrigger": "Any ts-morph bump must re-run Drizzle extraction, schema identity, and compiler conformance suites."
     },
     {
-      "id": "analysis.certificate-es-module-lexer",
-      "dependency": "es-module-lexer",
-      "pinnedVersion": "2.1.0",
-      "integrity": "sha512-n27zTYMjYu1aj4MjCWzSP7G9r75utsaoc8m61weK+W8JMBGGQybd43GstCXZ3WNmSFtGT9wi59qQTW6mhTR5LQ==",
-      "role": "Standalone certificate checker import and re-export extraction from exact published JavaScript bytes.",
-      "reviewTrigger": "Any bump must re-run the certificate schema, three obligation-specific negative controls, lexical-authority audit, packed-package, and outside-process CLI verification."
+      "id": "analysis.certificate-acorn",
+      "dependency": "acorn",
+      "pinnedVersion": "8.17.0",
+      "integrity": "sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==",
+      "role": "Standalone certificate checker full-input JavaScript parsing and complete static, re-export, and dynamic import extraction from exact published bytes.",
+      "reviewTrigger": "Any bump must re-run the near-4 MiB hidden-tail import regression, certificate schema, three obligation-specific negative controls, lexical-authority audit, packed-package, translation-import, and outside-process CLI verification."
     }
   ],
   "analysisDependencies": [
@@ -240,7 +256,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "packages/drizzle/src/derive.ts"
     ],
     "roots": [
-      "analysis.certificate-es-module-lexer",
+      "analysis.certificate-acorn",
       "analysis.esbuild",
       "analysis.lucide-static",
       "analysis.material-color-utilities",
@@ -342,7 +358,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
         "reason": "The docs gate imports the fixed repository diagnostics source URL used to derive the published diagnostic reference."
       }
     ],
-    "maxPackageCount": 340,
+    "maxPackageCount": 341,
     "subjects": [
       "@better-auth/core@1.6.17 sha512-ithzeL/IKsBEYeCDJs9r1KE2nwYC/6ni8oMA8NCCtP18RoCOiWErFSjrnL+XLaN6zxrB0ko7QxREjyzTNBtusQ==",
       "@better-auth/drizzle-adapter@1.6.17 sha512-Dq52cdZ0vREalUwbP8GXBbpk7XTSw5rZtY8n3nTTwrU09RELsXTi0oYQRW62MFYaUqw0mCHIT4H0emAH/5hy5Q==",
@@ -510,6 +526,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "@voidzero-dev/vite-plus-test@0.1.24 sha512-9NiG6UadG0iOaPL1AMsO5sDKkx6MADHw4/mMOmHWZUhhUwqzfVtnnptMK37vD71e6KyR7yAscx19FrtOWWtjvA==",
       "@voidzero-dev/vite-plus-win32-arm64-msvc@0.1.24 sha512-G+/lhLKVjyn3FmgXX8jeWgq7RcE5O1kdR7QyFayQOdlMX/ZRkvUwQD7bFaqhKzgJM6Oj3a1FH3HQPYk5QOYuCQ==",
       "@voidzero-dev/vite-plus-win32-x64-msvc@0.1.24 sha512-b0e5XohEV1w/RdzAtv8/Hm6tvHPXouPtBNsljjW/lDJZq3NCLND5s6lqe8H4IenrgmKSoqakHWtlqJqM36cFbw==",
+      "acorn@8.17.0 sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==",
       "agent-base@9.0.0 sha512-TQf59BsZnytt8GdJKLPfUZ54g/iaUL2OWDSFCCvMOhsHduDQxO8xC4PNeyIkVcA5KwL2phPSv0douC0fgWzmnA==",
       "assertion-error@2.0.1 sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==",
       "balanced-match@4.0.4 sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",

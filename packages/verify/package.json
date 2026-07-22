@@ -36,7 +36,7 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
-    "es-module-lexer": "2.1.0"
+    "acorn": "8.17.0"
   },
   "devDependencies": {
     "vitest": "4.1.8"

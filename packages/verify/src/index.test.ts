@@ -77,6 +77,34 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     expect(result.findings[0]?.message).toContain('process');
   });
 
+  it('parses the complete near-limit module before deriving a hidden tail capability', async () => {
+    // Regression for es-module-lexer/js silently stopping after 14,688 of these 185,714 imports.
+    // The old checker observed only the safe edge and PASSed this exact 3,900,051-byte root with
+    // an empty cap summary. SPEC §6.6 requires local(m) to come from every published module byte.
+    const safeModule = '@kovojs/server/dist/safe.mjs';
+    const rootSource =
+      "import './safe.mjs';\n".repeat(185_714) +
+      "import 'node:child_process';\nexport const loaded = true;\n";
+    expect(Buffer.byteLength(rootSource)).toBe(3_900_051);
+    const artifacts = artifactSource({
+      [rootModule]: rootSource,
+      [safeModule]: 'export {};',
+    });
+    const certificate = certificateFor(artifacts, {
+      cap: { [rootModule]: [], [safeModule]: [] },
+      edges: [[rootModule, safeModule]],
+    });
+
+    const result = await verifyBound(certificate, artifacts);
+    expect(result.findings).toEqual([
+      expect.objectContaining({
+        code: 'local-capability-missing',
+        message: expect.stringContaining('process'),
+        obligation: 'stability',
+      }),
+    ]);
+  });
+
   it('checks imported post-fixpoint summaries and root-door closure as separate obligations', async () => {
     const artifacts = artifactSource({
       [rootModule]: "import './worker.mjs';",
@@ -259,8 +287,14 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
 
     expect(result.findings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'edge-missing', message: expect.stringContaining(helperEvil) }),
-        expect.objectContaining({ code: 'edge-extra', message: expect.stringContaining(helperIndex) }),
+        expect.objectContaining({
+          code: 'edge-missing',
+          message: expect.stringContaining(helperEvil),
+        }),
+        expect.objectContaining({
+          code: 'edge-extra',
+          message: expect.stringContaining(helperIndex),
+        }),
       ]),
     );
     expect(result.ok).toBe(false);
@@ -323,9 +357,7 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
       readArtifact: () => sharedFourMiB,
     } satisfies KovoCertificateArtifactSource;
     await expect(verifyBound(certificateFor(aggregate), aggregate)).resolves.toMatchObject({
-      findings: expect.arrayContaining([
-        expect.objectContaining({ code: 'artifact-total-size' }),
-      ]),
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-total-size' })]),
       ok: false,
     });
   });
