@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(483);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(488);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -866,6 +866,11 @@ describe('security-gate-mutations', () => {
       'postgres-authorization-correspondence/allow-null-owner-via-edge',
       'request-ingress/recompute-vercel-prepared-verdict',
       'server-response-posture/drop-endpoint-verification-choke',
+      'server-response-posture/drop-revalidated-cache-verdict',
+      'server-response-posture/restore-substring-cache-directive',
+      'server-response-posture/restore-word-boundary-media-type',
+      'server-method/restore-endpoint-extension-uppercase-alias',
+      'server-method/restore-shell-extension-uppercase-alias',
       'server-egress/drop-dispatcher-pin',
       'server-egress/drop-framework-owned-connect-carrier-snapshot',
       'server-egress/drop-implicit-localhost-carrier-classification',

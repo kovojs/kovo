@@ -157,6 +157,8 @@ const serverEgressPath = path.join(repoRoot, 'packages/server/src/egress.ts');
 const verifyIndexPath = path.join(repoRoot, 'packages/verify/src/index.ts');
 const verifyFileSnapshotPath = path.join(repoRoot, 'packages/verify/src/file-snapshot.ts');
 const serverAppPath = path.join(repoRoot, 'packages/server/src/app.ts');
+const serverEndpointPath = path.join(repoRoot, 'packages/server/src/endpoint.ts');
+const serverShellPath = path.join(repoRoot, 'packages/server/src/shell.ts');
 const appRequestPath = path.join(repoRoot, 'packages/server/src/app-request.ts');
 const serverNodePath = path.join(repoRoot, 'packages/server/src/node.ts');
 const taskRunnerPath = path.join(repoRoot, 'packages/server/src/task-runner.ts');
@@ -1662,6 +1664,38 @@ const endpointResponsePostureChokeBranch =
   '  assertEndpointResponsePosture(definition, response, options);';
 const removedEndpointResponsePostureChokeBranch =
   '  // endpoint response-posture choke removed by mutant';
+const exactEndpointCacheDirectiveBranch =
+  '  return asciiRangeEquals(value, start, end, directive);';
+const weakenedEndpointCacheDirectiveBranch =
+  '  return value.slice(start, end).toLowerCase().includes(directive);';
+const endpointRevalidatedCachePostureBranch = [
+  '  if (',
+  "    definition.response.cache === 'revalidated' &&",
+  '    !endpointCacheControlMatchesPosture(cacheControl, definition.response.cache)',
+  '  ) {',
+  '    appendResponsePostureValue(',
+  '      failures,',
+  "      'declared cache=revalidated but response lacks Cache-Control: no-cache',",
+  '    );',
+  '  }',
+].join('\n');
+const removedEndpointRevalidatedCachePostureBranch = '';
+const exactEndpointMediaTypeAdmissionBranch = [
+  '  const mediaType = endpointMediaType(contentType);',
+  '  if (mediaType === undefined) return false;',
+].join('\n');
+const restoredEndpointWordBoundaryMediaTypeBranch = [
+  '  if (inspectJson && witnessRegExpTest(/\\bjson\\b/i, contentType)) return true;',
+  '  if (inspectHtml && witnessRegExpTest(/\\bhtml\\b/i, contentType)) return true;',
+  '  const mediaType = endpointMediaType(contentType);',
+  '  if (mediaType === undefined) return false;',
+].join('\n');
+const exactShellRequestMethodBranch = '  const method = input.method;';
+const uppercasedShellRequestMethodBranch =
+  '  const method = input.method === undefined ? undefined : input.method.toUpperCase();';
+const exactEndpointRequestMethodBranch = '    const requestMethod = input.method;';
+const uppercasedEndpointRequestMethodBranch =
+  '    const requestMethod = input.method.toUpperCase();';
 const httpRefreshResponseHeaderRejectionBranch = [
   "      case 'refresh':",
   "        return 'browser-navigation';",
@@ -7285,6 +7319,60 @@ export const SECURITY_GATE_MUTANTS = [
     search: endpointResponsePostureChokeBranch,
     sourceFile: serverResponsePosturePath,
     test: assertEndpointResponsePostureChokeBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Restores substring matching for declared endpoint Cache-Control posture.',
+    expectedKiller:
+      'cache posture must require an exact bare directive outside quoted extension values',
+    name: 'server-response-posture/restore-substring-cache-directive',
+    replacement: weakenedEndpointCacheDirectiveBranch,
+    search: exactEndpointCacheDirectiveBranch,
+    sourceFile: serverResponsePosturePath,
+    test: assertEndpointCacheDirectiveIdentityBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Stops enforcing the declared revalidated endpoint cache posture.',
+    expectedKiller:
+      'cache=revalidated must require one exact bare Cache-Control no-cache directive',
+    name: 'server-response-posture/drop-revalidated-cache-verdict',
+    replacement: removedEndpointRevalidatedCachePostureBranch,
+    search: endpointRevalidatedCachePostureBranch,
+    sourceFile: serverResponsePosturePath,
+    test: assertEndpointRevalidatedCachePostureBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Restores word-boundary matching over the entire endpoint Content-Type value.',
+    expectedKiller:
+      'endpoint body posture must classify the exact media-type token before parameters',
+    name: 'server-response-posture/restore-word-boundary-media-type',
+    replacement: restoredEndpointWordBoundaryMediaTypeBranch,
+    search: exactEndpointMediaTypeAdmissionBranch,
+    sourceFile: serverResponsePosturePath,
+    test: assertEndpointMediaTypeIdentityBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Uppercases extension methods again while matching the server dispatch shell.',
+    expectedKiller:
+      'downstream dispatch must retain the adapter-proved case-sensitive extension method identity',
+    name: 'server-method/restore-shell-extension-uppercase-alias',
+    replacement: uppercasedShellRequestMethodBranch,
+    search: exactShellRequestMethodBranch,
+    sourceFile: serverShellPath,
+    test: assertShellExtensionMethodIdentityBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Uppercases extension methods again in the endpoint matching helper.',
+    expectedKiller: 'endpoint helper matching must retain case-sensitive extension method identity',
+    name: 'server-method/restore-endpoint-extension-uppercase-alias',
+    replacement: uppercasedEndpointRequestMethodBranch,
+    search: exactEndpointRequestMethodBranch,
+    sourceFile: serverEndpointPath,
+    test: assertEndpointExtensionMethodIdentityBehavior,
   },
   {
     behavioralTypeScript: true,
@@ -15118,6 +15206,123 @@ function assertEndpointResponsePostureChokeBehavior(moduleUnderTest) {
     throw error;
   }
   throw new Error('endpoint posture/header-snapshot choke admitted a mismatched raw Response');
+}
+
+function assertEndpointCacheDirectiveIdentityBehavior(moduleUnderTest) {
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: 'text', cache: 'private' },
+    {
+      'Cache-Control': 'public, max-age=300, x-private',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    'endpoint cache posture accepted a directive-name substring',
+  );
+}
+
+function assertEndpointRevalidatedCachePostureBehavior(moduleUnderTest) {
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: 'text', cache: 'revalidated' },
+    {
+      'Cache-Control': 'public, max-age=300',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    'endpoint cache posture stopped enforcing revalidation',
+  );
+}
+
+function assertEndpointMediaTypeIdentityBehavior(moduleUnderTest) {
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: 'json', cache: 'no-store' },
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/html; profile=json',
+    },
+    'endpoint JSON posture accepted a parameter-name lookalike',
+  );
+  assertEndpointPostureRejects(
+    moduleUnderTest,
+    { body: 'html', cache: 'no-store' },
+    {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/plain; profile=html',
+    },
+    'endpoint HTML posture accepted a parameter-name lookalike',
+  );
+}
+
+function assertEndpointPostureRejects(moduleUnderTest, response, headers, message) {
+  const definition = {
+    csrf: { exempt: true, justification: 'behavioral mutation fixture' },
+    handler: () => new Response('unreachable'),
+    method: 'GET',
+    mount: 'exact',
+    path: '/mutation-harness/endpoint-posture-identity',
+    reason: 'behavioral endpoint response identity mutation fixture',
+    response: { appOwnedSafety: true, ...response },
+  };
+  try {
+    moduleUnderTest.assertEndpointResponsePostureAndSnapshot(
+      definition,
+      new Response('body', { headers }),
+      {
+        request: new Request('https://kovo.test/mutation-harness/endpoint-posture-identity'),
+      },
+    );
+  } catch (error) {
+    if (String(error).includes('response posture mismatch')) return;
+    throw error;
+  }
+  throw new Error(message);
+}
+
+function assertShellExtensionMethodIdentityBehavior(moduleUnderTest) {
+  const endpoint = {
+    handler: () => new Response('purged'),
+    method: 'PURGE',
+    mount: 'exact',
+    path: '/mutation-harness/purge',
+  };
+  const lower = moduleUnderTest.matchShellDispatch({
+    endpoints: [endpoint],
+    method: 'purge',
+    pathname: endpoint.path,
+  });
+  const exact = moduleUnderTest.matchShellDispatch({
+    endpoints: [endpoint],
+    method: 'PURGE',
+    pathname: endpoint.path,
+  });
+  if (
+    lower.kind !== 'endpoint' ||
+    lower.methodAllowed !== false ||
+    exact.kind !== 'endpoint' ||
+    exact.methodAllowed !== true
+  ) {
+    throw new Error('server shell aliased extension methods by case');
+  }
+}
+
+function assertEndpointExtensionMethodIdentityBehavior(moduleUnderTest) {
+  const definition = {
+    method: 'PURGE',
+    mount: 'exact',
+    path: '/mutation-harness/purge',
+  };
+  if (
+    moduleUnderTest.endpointMatches(definition, {
+      method: 'purge',
+      pathname: definition.path,
+    }) ||
+    !moduleUnderTest.endpointMatches(definition, {
+      method: 'PURGE',
+      pathname: definition.path,
+    })
+  ) {
+    throw new Error('endpoint matching helper aliased extension methods by case');
+  }
 }
 
 function assertHttpRefreshResponseHeaderRejectionBehavior(moduleUnderTest) {
