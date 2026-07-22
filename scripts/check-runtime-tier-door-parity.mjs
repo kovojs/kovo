@@ -312,8 +312,8 @@ function validateDevHostSourcePins(readText, findings) {
     ],
     'packages/cli/src/commands/dev.ts': [
       'configureKovoDevHostDoor(server);',
-      'installKovoDevHostDoor(server);',
-      'installKovoDevSourceFallbackDoor(server);',
+      'installKovoDevHostDoor(server, nodeIngress);',
+      'installKovoDevSourceFallbackDoor(server, nodeIngress);',
     ],
     'packages/cli/src/index.kovo-dev.test.ts': [
       '@kovo-security-certifies C13 dev-host-http-websocket-rebinding-closed',
