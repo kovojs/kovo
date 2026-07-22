@@ -61,7 +61,13 @@ describe('mutation target browser security', () => {
     expect(poisonHits).toBe(0);
     expect(snapshot).toEqual({
       header: 'public-panel=public',
-      liveHeader: 'public-panel#components/public/card@tok_public:{"scope":"public"}',
+      liveHeader: 'public-panel#components%2Fpublic%2Fcard@tok_public:{"scope":"public"}',
+      liveTargetEntries: [
+        {
+          target: 'public-panel',
+          wireEntry: 'public-panel#components%2Fpublic%2Fcard@tok_public:{"scope":"public"}',
+        },
+      ],
       liveTargets: [
         {
           attestation: 'tok_public',
@@ -70,6 +76,7 @@ describe('mutation target browser security', () => {
           target: 'public-panel',
         },
       ],
+      targetEntries: [{ target: 'public-panel', wireEntry: 'public-panel=public' }],
       targets: ['public-panel=public'],
     });
     expect(documentSnapshot).toEqual(snapshot);
@@ -128,7 +135,7 @@ describe('mutation target browser security', () => {
 
     expect(callbackHits).toBe(0);
     expect(snapshot?.liveHeader).toBe(
-      'catalog-panel#components/public/catalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
+      'catalog-panel#components%2Fpublic%2Fcatalog@tok_catalog:{"a":"first","del":"\\u007f","label":"\\ud83d\\ude00 \\u6f22\\u5b57","line":"\\u2028\\u2029","nested":{"a":[{"a":1,"z":2}],"z":"last"},"z":1}',
     );
     expect(() => new Headers({ 'Kovo-Live-Targets': snapshot?.liveHeader ?? '' })).not.toThrow();
     expect(snapshot?.liveTargets).toHaveLength(2);
