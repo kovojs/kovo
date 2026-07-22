@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 329,
+    "historicalWitnesses": 330,
     "productions": 12
   },
   "productions": [
@@ -1070,6 +1070,12 @@
       "corpus": "capability-closure",
       "production": "module-boundary",
       "reason": "Re-exported external and local namespaces preserve exact member provenance across TypeScript import-equals, ESM namespace exports, named imports, and qualified aliases."
+    },
+    {
+      "anchor": "dependency-lexical-binding-provenance-closure",
+      "corpus": "capability-closure",
+      "production": "module-boundary",
+      "reason": "Per-use lexical identities and bounded control-flow joins retain every reaching framework-root candidate across explicit, implicit, transferred-callback, accessor, and unsupported-result execution; exact reviewed framework root-factory calls and ordinary relative data candidates stay precise, while missing provenance and budget exhaustion widen and close."
     },
     {
       "anchor": "dependency-transitive-bundle-closure",

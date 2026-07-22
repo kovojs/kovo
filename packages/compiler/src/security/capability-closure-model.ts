@@ -177,6 +177,7 @@ export interface ScannedCallFact {
   readonly assignedName?: string;
   readonly callee: string;
   readonly calleeCandidates?: readonly ScannedBindingCandidate[];
+  readonly calleeRootWideningRequired?: boolean;
   readonly calleeUncertain?: boolean;
   readonly carriesCallback: boolean;
   readonly firstArgumentBinding?: string;

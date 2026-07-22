@@ -957,56 +957,108 @@ function resolveCallUse(
   moduleName: string,
   call: ScannedCapabilityModule['calls'][number],
   first = false,
-): { origins: readonly BindingOrigin[]; uncertain: boolean } {
+): { origins: readonly BindingOrigin[]; rootWideningRequired: boolean; uncertain: boolean } {
   const candidates = first ? call.firstArgumentCandidates : call.calleeCandidates;
   const legacy = first ? call.firstArgumentBinding : call.callee;
-  if (candidates === undefined) return { origins: legacy ? [resolver.resolveBinding(moduleName, legacy)] : [], uncertain: false };
-  const origins = [...new Map(candidates.map((candidate) => resolver.resolveCandidate(moduleName, candidate)).map((origin) => [bindingOriginKey(origin), origin])).values()];
-  return { origins, uncertain: (first ? call.firstArgumentUncertain : call.calleeUncertain) === true || candidates.some((candidate) => candidate.kind === 'unknown') || origins.length !== 1 };
+  if (candidates === undefined) {
+    return {
+      origins: legacy ? [resolver.resolveBinding(moduleName, legacy)] : [],
+      rootWideningRequired: false,
+      uncertain: false,
+    };
+  }
+  const origins = [
+    ...new Map(
+      candidates
+        .map((candidate) => resolver.resolveCandidate(moduleName, candidate))
+        .map((origin) => [bindingOriginKey(origin), origin]),
+    ).values(),
+  ];
+  return {
+    origins,
+    rootWideningRequired: first ? false : call.calleeRootWideningRequired === true,
+    uncertain:
+      (first ? call.firstArgumentUncertain : call.calleeUncertain) === true ||
+      candidates.some((candidate) => candidate.kind === 'unknown') ||
+      origins.length !== 1,
+  };
 }
 
-function lexicalOverflowRootOrigins(
-  module: ScannedCapabilityModule,
-): readonly BindingOrigin[] {
-  const roots = new Map<string, BindingOrigin>();
-  const collect = (origin: BindingOrigin): void => {
-    if (origin.kind !== 'package') return;
-    const id = frameworkMemberId(
-      packageNameForSpecifier(origin.specifier),
-      packageSubpath(origin.specifier),
-      origin.exportName,
-    );
-    if (frameworkPostureRegistry.rootFactories.has(id)) {
+function lexicalRootSupplyByModule(
+  modules: readonly ScannedCapabilityModule[],
+): ReadonlyMap<string, readonly BindingOrigin[]> {
+  const indexed = new Map(modules.map((module) => [module.fileName, module]));
+  const supply = new Map(
+    modules.map((module) => [module.fileName, new Map<string, BindingOrigin>()]),
+  );
+  const dependents = new Map<string, Set<string>>();
+  const collectRegistry = (
+    moduleName: string,
+    specifier?: string,
+    importedNames: readonly string[] = ['*'],
+  ): void => {
+    const roots = supply.get(moduleName)!;
+    for (const id of frameworkPostureRegistry.rootFactories.keys()) {
+      const [candidatePackage, subpath, exportName] = id.split('\0');
+      if (
+        specifier !== undefined &&
+        (candidatePackage !== packageNameForSpecifier(specifier) ||
+          subpath !== packageSubpath(specifier) ||
+          (!importedNames.includes('*') && !importedNames.includes(exportName!)))
+      ) {
+        continue;
+      }
+      const origin: BindingOrigin = {
+        exportName: exportName!,
+        kind: 'package',
+        specifier: subpath === '.' ? candidatePackage! : `${candidatePackage}${subpath!.slice(1)}`,
+      };
       roots.set(bindingOriginKey(origin), origin);
     }
   };
-  let includeRegistry = module.imports.some(
-    (imported) => imported.kind === 'dynamic-import' || imported.kind === 'require',
+  for (const module of modules) {
+    for (const imported of module.imports) {
+      if (imported.specifier === undefined) {
+        collectRegistry(module.fileName);
+        continue;
+      }
+      if (!isRelativeSpecifier(imported.specifier)) {
+        const packageName = packageNameForSpecifier(imported.specifier);
+        if (frameworkPostureRegistry.packages.has(packageName)) {
+          collectRegistry(module.fileName, imported.specifier, imported.importedNames);
+        }
+        continue;
+      }
+      const target = resolveRelativeModule(module.fileName, imported.specifier, indexed);
+      if (target === undefined) continue;
+      const importers = dependents.get(target) ?? new Set<string>();
+      importers.add(module.fileName);
+      dependents.set(target, importers);
+    }
+  }
+  const queued = new Set(
+    [...supply].filter(([, roots]) => roots.size > 0).map(([moduleName]) => moduleName),
   );
-  for (const imported of module.importBindings) {
-    if (imported.namespace || !frameworkPostureRegistry.packages.has(
-      packageNameForSpecifier(imported.specifier),
-    )) {
-      includeRegistry = true;
-      continue;
-    }
-    collect({
-      exportName: imported.imported,
-      kind: 'package',
-      specifier: imported.specifier,
-    });
-  }
-  if (includeRegistry) {
-    for (const id of frameworkPostureRegistry.rootFactories.keys()) {
-      const [packageName, subpath, exportName] = id.split('\0');
-      collect({
-        exportName: exportName!,
-        kind: 'package',
-        specifier: subpath === '.' ? packageName! : `${packageName}${subpath!.slice(1)}`,
-      });
+  const pending = [...queued];
+  while (pending.length > 0) {
+    const target = pending.shift()!;
+    queued.delete(target);
+    for (const importer of dependents.get(target) ?? []) {
+      const importerRoots = supply.get(importer)!;
+      const before = importerRoots.size;
+      for (const [key, origin] of supply.get(target)!) importerRoots.set(key, origin);
+      if (importerRoots.size > before && !queued.has(importer)) {
+        queued.add(importer);
+        pending.push(importer);
+      }
     }
   }
-  return [...roots.values()].slice(0, lexicalOverflowRootCandidateBudget);
+  return new Map(
+    [...supply].map(([moduleName, roots]) => [
+      moduleName,
+      [...roots.values()].slice(0, lexicalOverflowRootCandidateBudget),
+    ]),
+  );
 }
 
 function discoverRoots(
@@ -1015,10 +1067,9 @@ function discoverRoots(
 ): CapabilityRoot[] {
   const roots: CapabilityRoot[] = [];
   const keys = new Set<string>();
+  const rootSupply = lexicalRootSupplyByModule(modules);
   for (const module of modules) {
-    const overflowOrigins = module.lexicalProvenanceBudgetExhausted
-      ? lexicalOverflowRootOrigins(module)
-      : [];
+    const conservativeOrigins = rootSupply.get(module.fileName) ?? [];
     for (const handler of module.browserHandlers) {
       appendRoot(roots, keys, {
         kind: 'serialized-browser-handler',
@@ -1029,9 +1080,15 @@ function discoverRoots(
     }
     for (const call of module.calls) {
       const use = resolveCallUse(resolver, module.fileName, call);
-      const origins = [...new Map(
-        [...use.origins, ...overflowOrigins].map((origin) => [bindingOriginKey(origin), origin]),
-      ).values()];
+      const widenedOrigins =
+        module.lexicalProvenanceBudgetExhausted || use.rootWideningRequired
+          ? conservativeOrigins
+          : [];
+      const origins = [
+        ...new Map(
+          [...use.origins, ...widenedOrigins].map((origin) => [bindingOriginKey(origin), origin]),
+        ).values(),
+      ];
       for (const origin of origins) {
         if (origin.kind !== 'package') continue;
         const factoryId = frameworkMemberId(
@@ -1053,7 +1110,7 @@ function discoverRoots(
         appendRoot(roots, keys, {
           ...(separatedAdapter ? { adapterEntryModule: module.fileName } : {}),
           kind,
-          ...(use.uncertain || module.lexicalProvenanceBudgetExhausted
+          ...(use.uncertain || use.rootWideningRequired || module.lexicalProvenanceBudgetExhausted
             ? { lexicalProvenanceClosed: true }
             : {}),
           module: separatedAdapter ? callbackOrigin.module : module.fileName,

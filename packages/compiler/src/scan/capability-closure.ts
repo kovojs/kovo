@@ -16,6 +16,7 @@ import type {
 } from '../security/capability-closure-model.js';
 import { classifyRawCapabilityImport } from '../security/capability-closure-model.js';
 import {
+  lexicalCallKey,
   scanLexicalProvenance,
   type ScannedCallProvenance,
 } from './lexical-provenance.js';
@@ -69,6 +70,18 @@ const globalNamespaceMembers = new Map<string, RawCapabilityKind>([
   ['process', 'process'],
   ['require', 'dynamic-loader'],
 ]);
+const unknownGlobalCapabilities: readonly RawCapabilityKind[] = [
+  'crypto-acquisition',
+  'database-driver',
+  'declassification',
+  'digest',
+  'dynamic-loader',
+  'filesystem',
+  'network',
+  'process',
+  'vm',
+  'worker',
+];
 
 const compilerGeneratedInternalModules = [
   '@kovojs/browser/internal/output',
@@ -168,10 +181,41 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
         sourceFile,
         callbackCarriers,
         activeScopes,
-        lexicalProvenance.calls.get(node.getStart(sourceFile)),
+        lexicalProvenance.calls.get(lexicalCallKey(node, sourceFile)),
         calls,
         imports,
       );
+    } else if (ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node)) {
+      collectCall(
+        node,
+        sourceFile,
+        callbackCarriers,
+        activeScopes,
+        lexicalProvenance.calls.get(lexicalCallKey(node, sourceFile)),
+        calls,
+        imports,
+      );
+    }
+    if (ts.isDecorator(node) && !ts.isCallExpression(node.expression)) {
+      collectImplicitInvocation(
+        node.expression,
+        node,
+        sourceFile,
+        lexicalProvenance.calls.get(lexicalCallKey(node, sourceFile)),
+        calls,
+      );
+    }
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName;
+      if (!ts.isIdentifier(tag) || tag.text[0] !== tag.text[0]?.toLowerCase()) {
+        collectImplicitInvocation(
+          tag as ts.Expression,
+          node,
+          sourceFile,
+          lexicalProvenance.calls.get(lexicalCallKey(node, sourceFile)),
+          calls,
+        );
+      }
     }
     if (ts.isJsxAttribute(node) && jsxAttributeIsHandler(node)) {
       browserHandlers.push({
@@ -227,10 +271,35 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
     globals: dedupeGlobals(globals),
     importBindings,
     imports,
-    ...(lexicalProvenance.budgetExhausted
-      ? { lexicalProvenanceBudgetExhausted: true }
-      : {}),
+    ...(lexicalProvenance.budgetExhausted ? { lexicalProvenanceBudgetExhausted: true } : {}),
   };
+}
+
+function collectImplicitInvocation(
+  expression: ts.Expression,
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  implicit: ScannedCallProvenance | undefined,
+  calls: ScannedCallFact[],
+): void {
+  const callee = expressionBindingKey(expression) ?? expression.getText(sourceFile);
+  calls.push({
+    callee,
+    ...(implicit === undefined
+      ? {
+          calleeCandidates: [{ kind: 'unknown', reason: 'missing implicit invocation provenance' }],
+          calleeRootWideningRequired: true,
+          calleeUncertain: true,
+        }
+      : {
+          calleeCandidates: implicit.callee.candidates,
+          calleeRootWideningRequired: implicit.callee.rootWideningRequired,
+          calleeUncertain: implicit.callee.uncertain,
+        }),
+    carriesCallback: false,
+    hasCron: false,
+    site: sourceSite(sourceFile, node.getStart(sourceFile)),
+  });
 }
 
 function collectStaticImportsAndExports(
@@ -476,7 +545,7 @@ function collectAliasFromBindingName(
 }
 
 function collectCall(
-  node: ts.CallExpression,
+  node: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
   sourceFile: ts.SourceFile,
   callbackCarriers: ReadonlySet<string>,
   scopes: readonly Set<string>[],
@@ -484,7 +553,7 @@ function collectCall(
   calls: ScannedCallFact[],
   imports: ScannedImportFact[],
 ): void {
-  if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+  if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
     const argument = node.arguments[0];
     imports.push({
       importedNames: ['*'],
@@ -496,6 +565,7 @@ function collectCall(
   }
 
   if (
+    ts.isCallExpression(node) &&
     ts.isIdentifier(node.expression) &&
     node.expression.text === 'require' &&
     !scopeBinds(scopes, 'require')
@@ -510,21 +580,35 @@ function collectCall(
     return;
   }
 
-  const callee = expressionBindingKey(node.expression);
-  if (callee === undefined) return;
-  const first = node.arguments[0];
+  const calleeExpression = ts.isTaggedTemplateExpression(node) ? node.tag : node.expression;
+  const arguments_ = ts.isTaggedTemplateExpression(node)
+    ? ts.isTemplateExpression(node.template)
+      ? node.template.templateSpans.map((span) => span.expression)
+      : []
+    : (node.arguments ?? []);
+  const callee = expressionBindingKey(calleeExpression) ?? calleeExpression.getText(sourceFile);
+  const first = arguments_[0];
   const firstArgumentBinding = first === undefined ? undefined : expressionBindingKey(first);
   const assignedName = assignedCallName(node);
+  const taggedLiteral =
+    ts.isTaggedTemplateExpression(node) && ts.isNoSubstitutionTemplateLiteral(node.template)
+      ? node.template.text
+      : undefined;
   calls.push({
     ...(assignedName === undefined ? {} : { assignedName }),
     callee,
     ...(provenance === undefined
-      ? {}
+      ? {
+          calleeCandidates: [{ kind: 'unknown', reason: 'missing lexical call provenance' }],
+          calleeRootWideningRequired: true,
+          calleeUncertain: true,
+        }
       : {
           calleeCandidates: provenance.callee.candidates,
+          calleeRootWideningRequired: provenance.callee.rootWideningRequired,
           calleeUncertain: provenance.callee.uncertain,
         }),
-    carriesCallback: node.arguments.some((argument) =>
+    carriesCallback: arguments_.some((argument) =>
       expressionCarriesCallback(argument, callbackCarriers),
     ),
     ...(firstArgumentBinding === undefined ? {} : { firstArgumentBinding }),
@@ -534,8 +618,12 @@ function collectCall(
           firstArgumentCandidates: provenance.firstArgument.candidates,
           firstArgumentUncertain: provenance.firstArgument.uncertain,
         }),
-    ...(first && ts.isStringLiteralLike(first) ? { firstLiteral: first.text } : {}),
-    hasCron: node.arguments.some(argumentHasCron),
+    ...(taggedLiteral !== undefined
+      ? { firstLiteral: taggedLiteral }
+      : first && ts.isStringLiteralLike(first)
+        ? { firstLiteral: first.text }
+        : {}),
+    hasCron: arguments_.some(argumentHasCron),
     site: sourceSite(sourceFile, node.getStart(sourceFile)),
   });
 }
@@ -547,6 +635,25 @@ function collectGlobalCapability(
   globalAliases: ReadonlySet<string>,
   globals: ScannedGlobalCapabilityFact[],
 ): void {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isObjectBindingPattern(node.name) &&
+    node.initializer &&
+    expressionIsGlobalNamespace(node.initializer, scopes, globalAliases) &&
+    node.name.elements.some(
+      (element) =>
+        element.dotDotDotToken !== undefined ||
+        (element.propertyName !== undefined &&
+          propertyNameText(element.propertyName) === undefined),
+    )
+  ) {
+    appendUnknownGlobalCapabilities(
+      globals,
+      'computed destructuring from global namespace',
+      sourceSite(sourceFile, node.getStart(sourceFile)),
+    );
+  }
+
   if (
     (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
     ts.isIdentifier(node.expression)
@@ -574,6 +681,62 @@ function collectGlobalCapability(
       });
     }
     if (capability !== undefined) {
+      return;
+    }
+    if (
+      ts.isElementAccessExpression(node) &&
+      (directGlobal ? !scopeBinds(scopes, namespace) : globalAliases.has(namespace))
+    ) {
+      appendUnknownGlobalCapabilities(
+        globals,
+        `computed global namespace member ${namespace}`,
+        sourceSite(sourceFile, node.getStart(sourceFile)),
+      );
+      return;
+    }
+  }
+
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) &&
+    node.expression.expression.text === 'Reflect' &&
+    node.expression.name.text === 'get' &&
+    !scopeBinds(scopes, 'Reflect')
+  ) {
+    const namespaceExpression = node.arguments[0];
+    const namespace =
+      namespaceExpression && ts.isIdentifier(namespaceExpression)
+        ? namespaceExpression.text
+        : undefined;
+    const directGlobal =
+      namespace === 'globalThis' ||
+      namespace === 'global' ||
+      namespace === 'window' ||
+      namespace === 'self';
+    if (
+      namespace !== undefined &&
+      (directGlobal ? !scopeBinds(scopes, namespace) : globalAliases.has(namespace))
+    ) {
+      const memberExpression = node.arguments[1];
+      const member =
+        memberExpression && ts.isStringLiteralLike(memberExpression)
+          ? memberExpression.text
+          : undefined;
+      const capability = member === undefined ? undefined : globalNamespaceMembers.get(member);
+      if (capability === undefined) {
+        appendUnknownGlobalCapabilities(
+          globals,
+          `Reflect.get computed global namespace member ${namespace}`,
+          sourceSite(sourceFile, node.getStart(sourceFile)),
+        );
+      } else {
+        globals.push({
+          capability,
+          evidence: `Reflect.get(${namespace}, ${member})`,
+          site: sourceSite(sourceFile, node.getStart(sourceFile)),
+        });
+      }
       return;
     }
   }
@@ -609,6 +772,14 @@ function collectGlobalCapability(
   }
 
   if (!ts.isIdentifier(node) || !identifierIsValueReference(node)) return;
+  if (expressionIsGlobalNamespace(node, scopes, globalAliases) && globalNamespaceEscapes(node)) {
+    appendUnknownGlobalCapabilities(
+      globals,
+      `global namespace escape ${node.text}`,
+      sourceSite(sourceFile, node.getStart(sourceFile)),
+    );
+    return;
+  }
   if (scopeBinds(scopes, node.text)) return;
   const capability = globalCapabilities.get(node.text);
   if (capability === undefined) return;
@@ -627,6 +798,61 @@ function collectGlobalCapability(
     evidence: `global ${node.text}`,
     site: sourceSite(sourceFile, node.getStart(sourceFile)),
   });
+}
+
+function expressionIsGlobalNamespace(
+  expression: ts.Expression,
+  scopes: readonly Set<string>[],
+  globalAliases: ReadonlySet<string>,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isIdentifier(unwrapped)) return false;
+  const direct =
+    unwrapped.text === 'globalThis' ||
+    unwrapped.text === 'global' ||
+    unwrapped.text === 'window' ||
+    unwrapped.text === 'self';
+  return direct ? !scopeBinds(scopes, unwrapped.text) : globalAliases.has(unwrapped.text);
+}
+
+function globalNamespaceEscapes(identifier: ts.Identifier): boolean {
+  const parent = identifier.parent;
+  if (
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === identifier
+  ) {
+    return false;
+  }
+  if (ts.isVariableDeclaration(parent) && parent.initializer === identifier) return false;
+  if (
+    ts.isCallExpression(parent) &&
+    ts.isPropertyAccessExpression(parent.expression) &&
+    ts.isIdentifier(parent.expression.expression) &&
+    parent.expression.expression.text === 'Reflect' &&
+    parent.expression.name.text === 'get' &&
+    parent.arguments[0] === identifier
+  ) {
+    return false;
+  }
+  return (
+    (ts.isCallExpression(parent) && parent.arguments.includes(identifier)) ||
+    (ts.isNewExpression(parent) && parent.arguments?.includes(identifier) === true) ||
+    (ts.isReturnStatement(parent) && parent.expression === identifier) ||
+    ts.isSpreadElement(parent) ||
+    ts.isSpreadAssignment(parent) ||
+    (ts.isPropertyAssignment(parent) && parent.initializer === identifier) ||
+    (ts.isBinaryExpression(parent) && parent.right === identifier)
+  );
+}
+
+function appendUnknownGlobalCapabilities(
+  globals: ScannedGlobalCapabilityFact[],
+  evidence: string,
+  site: string,
+): void {
+  for (const capability of unknownGlobalCapabilities) {
+    globals.push({ capability, evidence, site });
+  }
 }
 
 function visitWithScopes(
@@ -909,7 +1135,9 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function assignedCallName(call: ts.CallExpression): string | undefined {
+function assignedCallName(
+  call: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
+): string | undefined {
   const parent = call.parent;
   if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
   if (
