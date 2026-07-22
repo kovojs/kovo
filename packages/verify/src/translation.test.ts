@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+
+import { Parser } from 'acorn';
 import { describe, expect, it } from 'vitest';
 
 import { MAX_JAVASCRIPT_MODULE_REFERENCES } from './javascript-ast.js';
@@ -99,6 +102,154 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
         }),
       ]),
     );
+  });
+
+  it('removes arbitrary inherited parser callbacks and restores the caller state', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    );
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    const probe = '__kovoParserInheritedGetterProbe__';
+    let getterCalls = 0;
+    function poisonParserPush<T>(this: T[], ...values: T[]): number {
+      if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+        return this.length;
+      }
+      return nativeApply(nativePush, this, values);
+    }
+    const getter = () => {
+      getterCalls += 1;
+      Array.prototype.push = poisonParserPush;
+      return undefined;
+    };
+    const descriptor: PropertyDescriptor = {
+      configurable: true,
+      enumerable: true,
+      get: getter,
+      set() {},
+    };
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    let parserPushLeftPoisoned = false;
+    let restored: PropertyDescriptor | undefined;
+    try {
+      Object.defineProperty(Object.prototype, probe, descriptor);
+      findings = verifyEmittedTranslation(input).findings;
+      parserPushLeftPoisoned = Array.prototype.push === poisonParserPush;
+      restored = Object.getOwnPropertyDescriptor(Object.prototype, probe);
+    } finally {
+      Array.prototype.push = nativePush;
+      Reflect.deleteProperty(Object.prototype, probe);
+    }
+
+    expect(getterCalls).toBe(0);
+    expect(parserPushLeftPoisoned).toBe(false);
+    expect(restored).toEqual(descriptor);
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
+  it('restores the source-reachable Acorn Parser graph around the parse', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    );
+    const original = Object.getOwnPropertyDescriptor(Parser.prototype, 'parse');
+    expect(original).toBeDefined();
+    const emptyParse = () => ({
+      body: [],
+      end: 0,
+      sourceType: 'module',
+      start: 0,
+      type: 'Program',
+    });
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    let callerMutationRestored = false;
+    try {
+      Object.defineProperty(Parser.prototype, 'parse', {
+        ...original,
+        value: emptyParse,
+      });
+      findings = verifyEmittedTranslation(input).findings;
+      callerMutationRestored = Parser.prototype.parse === emptyParse;
+    } finally {
+      Object.defineProperty(Parser.prototype, 'parse', original!);
+    }
+
+    expect(callerMutationRestored).toBe(true);
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
+  it('fails closed on non-restorable parser drift and continues cleanup after a restore failure', () => {
+    const moduleUrl = new URL('./translation-intrinsics.ts', import.meta.url).href;
+    const entryDrift = spawnIsolatedParserControlProbe(`
+        const { translationWithParserControls } = await import(${JSON.stringify(moduleUrl)});
+        let callbackRan = false;
+        let getterCalls = 0;
+        Object.defineProperty(Object.prototype, '__kovoNonconfigurableEntryProbe__', {
+          configurable: false,
+          enumerable: true,
+          get() { getterCalls += 1; return undefined; }
+        });
+        let threw = false;
+        try {
+          translationWithParserControls(() => { callbackRan = true; });
+        } catch (error) {
+          threw = error instanceof TypeError && /could not be installed/u.test(error.message);
+        }
+        if (!threw || callbackRan || getterCalls !== 0) {
+          throw new Error(JSON.stringify({ callbackRan, getterCalls, threw }));
+        }
+      `);
+    expect(entryDrift.status, entryDrift.stderr).toBe(0);
+
+    const restoreFailure = spawnIsolatedParserControlProbe(`
+        const { translationWithParserControls } = await import(${JSON.stringify(moduleUrl)});
+        const nativePush = Array.prototype.push;
+        const nativeSlice = String.prototype.slice;
+        function poisonPush() { return 0; }
+        function poisonSlice() { return ''; }
+        let threw = false;
+        try {
+          translationWithParserControls(() => {
+            Object.defineProperty(Array.prototype, 'push', {
+              configurable: false,
+              enumerable: false,
+              value: poisonPush,
+              writable: true
+            });
+            String.prototype.slice = poisonSlice;
+          });
+        } catch (error) {
+          threw = error instanceof TypeError && /could not be fully restored/u.test(error.message);
+        }
+        if (!threw || Array.prototype.push !== nativePush || String.prototype.slice !== nativeSlice) {
+          throw new Error(JSON.stringify({
+            pushValueRestored: Array.prototype.push === nativePush,
+            sliceRestored: String.prototype.slice === nativeSlice,
+            threw
+          }));
+        }
+      `);
+    expect(restoreFailure.status, restoreFailure.stderr).toBe(0);
   });
 
   it('does not hide an escaped exact secret token through late Array.some', () => {
@@ -397,6 +548,14 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     );
   });
 });
+
+function spawnIsolatedParserControlProbe(source: string) {
+  return spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', '--input-type=module', '--eval', source],
+    { encoding: 'utf8' },
+  );
+}
 
 function validTranslation(): KovoEmittedTranslationInput & {
   artifacts: { fileName: string; kind: string; source: string }[];

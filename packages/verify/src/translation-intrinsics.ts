@@ -1,3 +1,5 @@
+import { Parser as AcornParser } from 'acorn';
+
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls use pinned Reflect.apply. */
 
 /**
@@ -10,12 +12,17 @@
  */
 const NativeArray = globalThis.Array;
 const NativeBigInt = globalThis.BigInt;
+const NativeBoolean = globalThis.Boolean;
 const NativeError = globalThis.Error;
+const NativeEvalError = globalThis.EvalError;
 const NativeFunction = globalThis.Function;
 const NativeJSON = globalThis.JSON;
 const NativeMap = globalThis.Map;
+const NativeMath = globalThis.Math;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
+const NativeRangeError = globalThis.RangeError;
+const NativeReferenceError = globalThis.ReferenceError;
 const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeSet = globalThis.Set;
@@ -23,6 +30,7 @@ const NativeString = globalThis.String;
 const NativeSymbol = globalThis.Symbol;
 const NativeSyntaxError = globalThis.SyntaxError;
 const NativeTypeError = globalThis.TypeError;
+const NativeURIError = globalThis.URIError;
 const NativeErrorPrototype = NativeError.prototype;
 const NativeArrayPrototype = NativeArray.prototype;
 const NativeBigIntPrototype = NativeBigInt.prototype;
@@ -51,7 +59,9 @@ const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
 const nativeReflectApply = NativeReflect.apply;
+const nativeReflectDeleteProperty = NativeReflect.deleteProperty;
 const nativeReflectOwnKeys = NativeReflect.ownKeys;
+const nativeReflectSetPrototypeOf = NativeReflect.setPrototypeOf;
 const nativeRegExpExec = NativeRegExp.prototype.exec;
 const nativeRegExpGlobal = nativeObjectGetOwnPropertyDescriptor(
   NativeRegExp.prototype,
@@ -73,131 +83,362 @@ function apply<Return>(fn: Function, receiver: unknown, args: readonly unknown[]
 export const translationArrayPrototype = NativeArrayPrototype;
 export const translationObjectPrototype = NativeObjectPrototype;
 
-interface TranslationParserControl {
-  descriptor: PropertyDescriptor;
+interface TranslationParserSurfaceDefinition {
+  exact: boolean;
   owner: object;
-  property: PropertyKey;
+  selectedKeys?: readonly PropertyKey[];
 }
 
-interface TranslationParserRestore {
-  control: TranslationParserControl;
-  descriptor: PropertyDescriptor;
+interface TranslationParserSurfaceState {
+  definition: TranslationParserSurfaceDefinition;
+  descriptors: Map<PropertyKey, PropertyDescriptor>;
+  keys: readonly PropertyKey[];
+  prototype: object | null | undefined;
 }
 
-function parserControl(owner: object, property: PropertyKey): TranslationParserControl {
-  const descriptor = nativeObjectGetOwnPropertyDescriptor(owner, property);
-  if (descriptor === undefined) {
-    throw new NativeTypeError('Pinned translation parser control is unavailable at bootstrap.');
-  }
-  return { descriptor, owner, property };
-}
-
-/** Reviewed mutable controls used at runtime by the bundled Acorn 8.17.0 parser. */
-const translationParserControls: readonly TranslationParserControl[] = [
-  parserControl(globalThis, 'Array'),
-  parserControl(globalThis, 'BigInt'),
-  parserControl(globalThis, 'Error'),
-  parserControl(globalThis, 'Object'),
-  parserControl(globalThis, 'RegExp'),
-  parserControl(globalThis, 'String'),
-  parserControl(globalThis, 'SyntaxError'),
-  parserControl(globalThis, 'TypeError'),
-  parserControl(globalThis, 'parseFloat'),
-  parserControl(globalThis, 'parseInt'),
-  parserControl(NativeArray, 'isArray'),
-  parserControl(NativeObject, 'create'),
-  parserControl(NativeObject, 'defineProperties'),
-  parserControl(NativeObject, 'hasOwn'),
-  parserControl(NativeObject, 'keys'),
-  parserControl(NativeString, 'fromCharCode'),
-  parserControl(NativeArrayPrototype, 'indexOf'),
-  parserControl(NativeArrayPrototype, 'lastIndexOf'),
-  parserControl(NativeArrayPrototype, 'map'),
-  parserControl(NativeArrayPrototype, 'pop'),
-  parserControl(NativeArrayPrototype, 'push'),
-  parserControl(NativeArrayPrototype, 'slice'),
-  parserControl(NativeBigIntPrototype, 'toString'),
-  parserControl(NativeFunctionPrototype, 'call'),
-  parserControl(NativeFunctionPrototype, NativeSymbol.hasInstance),
-  parserControl(NativeNumberPrototype, 'toString'),
-  parserControl(NativeRegExpPrototype, 'exec'),
-  parserControl(NativeRegExpPrototype, 'test'),
-  parserControl(NativeRegExpPrototype, NativeSymbol.match),
-  parserControl(NativeRegExpPrototype, NativeSymbol.replace),
-  parserControl(NativeRegExpPrototype, NativeSymbol.split),
-  parserControl(NativeStringPrototype, 'charAt'),
-  parserControl(NativeStringPrototype, 'charCodeAt'),
-  parserControl(NativeStringPrototype, 'indexOf'),
-  parserControl(NativeStringPrototype, 'lastIndexOf'),
-  parserControl(NativeStringPrototype, 'match'),
-  parserControl(NativeStringPrototype, 'replace'),
-  parserControl(NativeStringPrototype, 'slice'),
-  parserControl(NativeStringPrototype, 'split'),
-  parserControl(NativeStringPrototype, 'substr'),
-  parserControl(NativeStringPrototype, 'toString'),
-  parserControl(NativeRegExp, 'prototype'),
+const parserGlobalKeys: readonly PropertyKey[] = [
+  'Array',
+  'BigInt',
+  'Boolean',
+  'Error',
+  'EvalError',
+  'Function',
+  'JSON',
+  'Map',
+  'Math',
+  'Number',
+  'Object',
+  'RangeError',
+  'ReferenceError',
+  'Reflect',
+  'RegExp',
+  'Set',
+  'String',
+  'Symbol',
+  'SyntaxError',
+  'TypeError',
+  'URIError',
+  'parseFloat',
+  'parseInt',
 ];
+
+/**
+ * Mutable objects reachable by the pinned Acorn 8.17.0 parser.
+ *
+ * Acorn exposes its complete mutable parser graph from `Parser`/`Parser.acorn`: the parser
+ * prototype and statics, defaultOptions, token/context tables and constructors, identifier/newline
+ * helpers, and exported RegExp instances. Recursively following own data/accessor descriptors also
+ * captures RegExp `lastIndex` and source-mode mutations that cannot reach the private bundled graph.
+ * Explicit intrinsic roots cover every late host lookup made by that graph. `globalThis` is limited
+ * to the reviewed names above because unrelated application globals are not parser controls.
+ */
+const parserExactRoots: readonly object[] = [
+  NativeObjectPrototype,
+  NativeArrayPrototype,
+  NativeBigIntPrototype,
+  NativeFunctionPrototype,
+  NativeNumberPrototype,
+  NativeRegExpPrototype,
+  NativeStringPrototype,
+  NativeBoolean.prototype,
+  NativeError.prototype,
+  NativeEvalError.prototype,
+  NativeRangeError.prototype,
+  NativeReferenceError.prototype,
+  NativeSyntaxError.prototype,
+  NativeTypeError.prototype,
+  NativeURIError.prototype,
+  NativeSymbol.prototype,
+  NativeArray,
+  NativeBigInt,
+  NativeBoolean,
+  NativeError,
+  NativeEvalError,
+  NativeFunction,
+  NativeJSON,
+  NativeMap,
+  NativeMath,
+  NativeNumber,
+  NativeObject,
+  NativeRangeError,
+  NativeReferenceError,
+  NativeReflect,
+  NativeRegExp,
+  NativeSet,
+  NativeString,
+  NativeSymbol,
+  NativeSyntaxError,
+  NativeTypeError,
+  NativeURIError,
+  AcornParser,
+];
+
+const translationParserSurfaceDefinitions = parserSurfaceDefinitions();
+const translationParserBootState = captureParserState(translationParserSurfaceDefinitions);
 
 /**
  * Run the pinned parser without letting post-bootstrap plugin mutations alter its AST.
  *
- * Parsing is synchronous and consumes a primitive string, so no application callback can observe
- * this short control scope. Every caller descriptor is restored in reverse order. A non-restorable
- * mutation closes instead of running the parser with a partial control set.
+ * Acorn performs inherited enumeration while normalizing options, so restoring a named method is
+ * insufficient: an arbitrary enumerable getter on Object.prototype can execute and re-poison a
+ * method after installation. Before parsing, this scope therefore reconciles every reachable
+ * object to its exact boot descriptor/prototype census. It snapshots and restores the caller's
+ * complete state afterward, continuing best-effort cleanup after any individual restoration error.
+ * A non-restorable entry drift closes without invoking the parser.
  */
 export function translationWithParserControls<Value>(parse: () => Value): Value {
-  const restores: TranslationParserRestore[] = [];
-  let installed = false;
+  const callerState = captureParserState(translationParserSurfaceDefinitions);
   try {
-    for (let index = 0; index < translationArrayLength(translationParserControls); index += 1) {
-      const control = translationParserControls[index]!;
-      const first = translationGetOwnPropertyDescriptor(control.owner, control.property);
-      const second = translationGetOwnPropertyDescriptor(control.owner, control.property);
-      if (!samePropertyDescriptor(first, second) || first === undefined) {
-        throw new NativeTypeError('Translation parser control changed while it was inspected.');
-      }
-      if (samePropertyDescriptor(first, control.descriptor)) continue;
-      translationArrayAppend(restores, { control, descriptor: first });
-      const installDescriptor = parserInstallDescriptor(first, control.descriptor);
-      apply(nativeObjectDefineProperty, NativeObject, [
-        control.owner,
-        control.property,
-        installDescriptor,
-      ]);
+    if (!reconcileParserState(translationParserBootState)) {
+      throw new NativeTypeError('Translation parser controls could not be installed.');
     }
-    installed = true;
     return parse();
   } finally {
-    for (let index = translationArrayLength(restores) - 1; index >= 0; index -= 1) {
-      const restore = restores[index]!;
-      try {
-        apply(nativeObjectDefineProperty, NativeObject, [
-          restore.control.owner,
-          restore.control.property,
-          restore.descriptor,
-        ]);
-      } catch {
-        // A synchronous primitive-string parse cannot run application code. Reaching this branch
-        // means the host changed a parser control reentrantly and the supported runner is lost.
-        throw new NativeTypeError('Translation parser controls could not be restored.');
-      }
-    }
-    if (!installed && translationArrayLength(restores) === 0) {
-      throw new NativeTypeError('Translation parser controls could not be installed.');
+    const restored = reconcileParserState(callerState, true);
+    if (!restored) {
+      throw new NativeTypeError('Translation parser controls could not be fully restored.');
     }
   }
 }
 
-function parserInstallDescriptor(
-  current: PropertyDescriptor,
-  captured: PropertyDescriptor,
-): PropertyDescriptor {
-  if (current.configurable !== false) return captured;
-  if ('value' in current && current.writable === true && 'value' in captured) {
-    return { ...current, value: captured.value };
+function parserSurfaceDefinitions(): readonly TranslationParserSurfaceDefinition[] {
+  const definitions: TranslationParserSurfaceDefinition[] = [
+    { exact: true, owner: NativeObjectPrototype },
+    { exact: false, owner: globalThis, selectedKeys: parserGlobalKeys },
+  ];
+  const owners = parserReachableObjects(parserExactRoots);
+  for (let index = 0; index < translationArrayLength(owners); index += 1) {
+    if (apply<boolean>(nativeObjectIs, NativeObject, [owners[index], NativeObjectPrototype])) {
+      continue;
+    }
+    translationArrayAppend(definitions, { exact: true, owner: owners[index]! });
   }
-  if (samePropertyDescriptor(current, captured)) return current;
-  throw new NativeTypeError('Translation parser control is non-restorable.');
+  return definitions;
+}
+
+function parserReachableObjects(roots: readonly object[]): object[] {
+  const owners: object[] = [];
+  const pending = translationArrayCopy(roots);
+  const seen = new NativeSet<object>();
+  while (translationArrayLength(pending) > 0) {
+    const owner = translationArrayPop(pending)!;
+    if (apply<boolean>(nativeSetHas, seen, [owner])) continue;
+    apply(nativeSetAdd, seen, [owner]);
+    translationArrayAppend(owners, owner);
+    const prototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [owner]);
+    if (prototype !== null) translationArrayAppend(pending, prototype);
+    const keys = apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [owner]);
+    for (let index = 0; index < translationArrayLength(keys); index += 1) {
+      const descriptor = apply<PropertyDescriptor | undefined>(
+        nativeObjectGetOwnPropertyDescriptor,
+        NativeObject,
+        [owner, keys[index]!],
+      );
+      if (descriptor === undefined) continue;
+      if (descriptorIsData(descriptor)) {
+        appendParserObject(pending, descriptor.value);
+      } else {
+        appendParserObject(pending, descriptor.get);
+        appendParserObject(pending, descriptor.set);
+      }
+    }
+  }
+  return owners;
+}
+
+function appendParserObject(target: object[], value: unknown): void {
+  if ((typeof value === 'object' && value !== null) || typeof value === 'function') {
+    translationArrayAppend(target, value);
+  }
+}
+
+function captureParserState(
+  definitions: readonly TranslationParserSurfaceDefinition[],
+): TranslationParserSurfaceState[] {
+  const states: TranslationParserSurfaceState[] = [];
+  for (let index = 0; index < translationArrayLength(definitions); index += 1) {
+    const definition = definitions[index]!;
+    const keys = definition.exact
+      ? apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [definition.owner])
+      : translationArrayCopy(definition.selectedKeys ?? []);
+    const descriptors = new NativeMap<PropertyKey, PropertyDescriptor>();
+    for (let keyIndex = 0; keyIndex < translationArrayLength(keys); keyIndex += 1) {
+      const key = keys[keyIndex]!;
+      const descriptor = apply<PropertyDescriptor | undefined>(
+        nativeObjectGetOwnPropertyDescriptor,
+        NativeObject,
+        [definition.owner, key],
+      );
+      if (descriptor !== undefined) apply(nativeMapSet, descriptors, [key, descriptor]);
+    }
+    translationArrayAppend(states, {
+      definition,
+      descriptors,
+      keys,
+      prototype: definition.exact
+        ? apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [definition.owner])
+        : undefined,
+    });
+  }
+  return states;
+}
+
+function reconcileParserState(
+  targets: readonly TranslationParserSurfaceState[],
+  reverse = false,
+): boolean {
+  let complete = true;
+  for (let offset = 0; offset < translationArrayLength(targets); offset += 1) {
+    const index = reverse ? translationArrayLength(targets) - offset - 1 : offset;
+    if (!reconcileParserSurface(targets[index]!)) complete = false;
+  }
+  return complete;
+}
+
+function reconcileParserSurface(target: TranslationParserSurfaceState): boolean {
+  const { definition } = target;
+  const { owner } = definition;
+  let complete = true;
+  if (definition.exact) {
+    try {
+      const currentPrototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [
+        owner,
+      ]);
+      if (
+        !apply<boolean>(nativeObjectIs, NativeObject, [currentPrototype, target.prototype]) &&
+        !apply<boolean>(nativeReflectSetPrototypeOf, NativeReflect, [owner, target.prototype])
+      ) {
+        complete = false;
+      }
+    } catch {
+      complete = false;
+    }
+  }
+
+  let currentKeys: readonly PropertyKey[];
+  try {
+    currentKeys = definition.exact
+      ? apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [owner])
+      : translationArrayCopy(definition.selectedKeys ?? []);
+  } catch {
+    return false;
+  }
+
+  for (let index = 0; index < translationArrayLength(currentKeys); index += 1) {
+    const key = currentKeys[index]!;
+    if (apply<boolean>(nativeMapHas, target.descriptors, [key])) continue;
+    try {
+      if (!apply<boolean>(nativeReflectDeleteProperty, NativeReflect, [owner, key])) {
+        complete = false;
+      }
+    } catch {
+      complete = false;
+    }
+  }
+
+  for (let index = 0; index < translationArrayLength(target.keys); index += 1) {
+    const key = target.keys[index]!;
+    const expected = apply<PropertyDescriptor | undefined>(nativeMapGet, target.descriptors, [key]);
+    if (expected === undefined) continue;
+    let current: PropertyDescriptor | undefined;
+    try {
+      current = apply<PropertyDescriptor | undefined>(
+        nativeObjectGetOwnPropertyDescriptor,
+        NativeObject,
+        [owner, key],
+      );
+      if (samePropertyDescriptor(current, expected)) continue;
+      apply(nativeObjectDefineProperty, NativeObject, [owner, key, expected]);
+    } catch {
+      complete = false;
+      if (!restoreCompatibleDataValue(owner, key, current, expected)) complete = false;
+    }
+  }
+
+  return parserSurfaceMatches(target) && complete;
+}
+
+function restoreCompatibleDataValue(
+  owner: object,
+  key: PropertyKey,
+  current: PropertyDescriptor | undefined,
+  expected: PropertyDescriptor,
+): boolean {
+  if (
+    current === undefined ||
+    !descriptorIsData(current) ||
+    !descriptorIsData(expected) ||
+    current.configurable !== false ||
+    current.writable !== true
+  ) {
+    return false;
+  }
+  try {
+    apply(nativeObjectDefineProperty, NativeObject, [owner, key, { value: expected.value }]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parserSurfaceMatches(target: TranslationParserSurfaceState): boolean {
+  const { definition } = target;
+  const { owner } = definition;
+  try {
+    if (
+      definition.exact &&
+      !apply<boolean>(nativeObjectIs, NativeObject, [
+        apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [owner]),
+        target.prototype,
+      ])
+    ) {
+      return false;
+    }
+    const keys = definition.exact
+      ? apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [owner])
+      : translationArrayCopy(definition.selectedKeys ?? []);
+    let descriptorCount = 0;
+    for (let index = 0; index < translationArrayLength(keys); index += 1) {
+      const key = keys[index]!;
+      const current = apply<PropertyDescriptor | undefined>(
+        nativeObjectGetOwnPropertyDescriptor,
+        NativeObject,
+        [owner, key],
+      );
+      const expected = apply<PropertyDescriptor | undefined>(nativeMapGet, target.descriptors, [
+        key,
+      ]);
+      if (!samePropertyDescriptor(current, expected)) return false;
+      if (current !== undefined) descriptorCount += 1;
+    }
+    let expectedDescriptorCount = 0;
+    for (let index = 0; index < translationArrayLength(target.keys); index += 1) {
+      if (apply<boolean>(nativeMapHas, target.descriptors, [target.keys[index]!])) {
+        expectedDescriptorCount += 1;
+      }
+    }
+    return descriptorCount === expectedDescriptorCount;
+  } catch {
+    return false;
+  }
+}
+
+function descriptorIsData(
+  descriptor: PropertyDescriptor,
+): descriptor is PropertyDescriptor & { value: unknown } {
+  return (
+    apply<PropertyDescriptor | undefined>(nativeObjectGetOwnPropertyDescriptor, NativeObject, [
+      descriptor,
+      'value',
+    ]) !== undefined
+  );
+}
+
+function descriptorOwnValue(descriptor: PropertyDescriptor, key: PropertyKey): unknown {
+  return apply<PropertyDescriptor | undefined>(nativeObjectGetOwnPropertyDescriptor, NativeObject, [
+    descriptor,
+    key,
+  ])?.value;
 }
 
 function samePropertyDescriptor(
@@ -205,22 +446,30 @@ function samePropertyDescriptor(
   right: PropertyDescriptor | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right;
+  const leftIsData = descriptorIsData(left);
+  const rightIsData = descriptorIsData(right);
   if (
-    left.configurable !== right.configurable ||
-    left.enumerable !== right.enumerable ||
-    'value' in left !== 'value' in right
+    descriptorOwnValue(left, 'configurable') !== descriptorOwnValue(right, 'configurable') ||
+    descriptorOwnValue(left, 'enumerable') !== descriptorOwnValue(right, 'enumerable') ||
+    leftIsData !== rightIsData
   ) {
     return false;
   }
-  if ('value' in left && 'value' in right) {
+  if (leftIsData && rightIsData) {
     return (
       apply<boolean>(nativeObjectIs, NativeObject, [left.value, right.value]) &&
-      left.writable === right.writable
+      descriptorOwnValue(left, 'writable') === descriptorOwnValue(right, 'writable')
     );
   }
   return (
-    apply<boolean>(nativeObjectIs, NativeObject, [left.get, right.get]) &&
-    apply<boolean>(nativeObjectIs, NativeObject, [left.set, right.set])
+    apply<boolean>(nativeObjectIs, NativeObject, [
+      descriptorOwnValue(left, 'get'),
+      descriptorOwnValue(right, 'get'),
+    ]) &&
+    apply<boolean>(nativeObjectIs, NativeObject, [
+      descriptorOwnValue(left, 'set'),
+      descriptorOwnValue(right, 'set'),
+    ])
   );
 }
 
@@ -263,7 +512,7 @@ export function translationArrayLength(value: readonly unknown[]): number {
   const descriptor = translationGetOwnPropertyDescriptor(value, 'length');
   if (
     descriptor === undefined ||
-    !('value' in descriptor) ||
+    !descriptorIsData(descriptor) ||
     typeof descriptor.value !== 'number' ||
     !translationNumberIsSafeInteger(descriptor.value) ||
     descriptor.value < 0 ||
@@ -383,15 +632,19 @@ export function translationSameDataDescriptor(
   left: PropertyDescriptor | undefined,
   right: PropertyDescriptor | undefined,
 ): left is PropertyDescriptor & { value: unknown } {
+  if (
+    left === undefined ||
+    right === undefined ||
+    !descriptorIsData(left) ||
+    !descriptorIsData(right)
+  ) {
+    return false;
+  }
   return (
-    left !== undefined &&
-    right !== undefined &&
-    'value' in left &&
-    'value' in right &&
     apply<boolean>(nativeObjectIs, NativeObject, [left.value, right.value]) &&
-    left.configurable === right.configurable &&
-    left.enumerable === right.enumerable &&
-    left.writable === right.writable
+    descriptorOwnValue(left, 'configurable') === descriptorOwnValue(right, 'configurable') &&
+    descriptorOwnValue(left, 'enumerable') === descriptorOwnValue(right, 'enumerable') &&
+    descriptorOwnValue(left, 'writable') === descriptorOwnValue(right, 'writable')
   );
 }
 

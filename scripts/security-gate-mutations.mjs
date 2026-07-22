@@ -2480,6 +2480,10 @@ const verifierPackRuntimeDependencyClosureBranch =
 const removedVerifierPackRuntimeDependencyClosureBranch = '  for (const field of []) {';
 const verifyTranslationCapturedSetHasBranch = '  return apply(nativeSetHas, set, [value]);';
 const weakenedVerifyTranslationCapturedSetHasBranch = '  return set.has(value);';
+const verifyTranslationExactParserCensusBranch =
+  '    { exact: true, owner: NativeObjectPrototype },';
+const weakenedVerifyTranslationExactParserCensusBranch =
+  '    { exact: false, owner: NativeObjectPrototype, selectedKeys: [] },';
 const installedUpdateDocsSnapshotBranch = '  const resolved = bundledDocs(version);';
 const restoredLiveUpdateDocsFetchBranch = [
   '  const remoteFetch = (options as UpdateDocsOptions & {',
@@ -8479,6 +8483,17 @@ export const SECURITY_GATE_MUTANTS = [
   },
   {
     behavioralTypeScript: true,
+    description: 'Drops the exact descriptor census around the emitted-translation parser graph.',
+    expectedKiller:
+      'translation parser scope must suppress arbitrary inherited callbacks and restore reentrant drift',
+    name: 'translation-verifier/drop-exact-parser-census',
+    replacement: weakenedVerifyTranslationExactParserCensusBranch,
+    search: verifyTranslationExactParserCensusBranch,
+    sourceFile: verifyTranslationIntrinsicsPath,
+    test: assertTranslationExactParserCensusBehavior,
+  },
+  {
+    behavioralTypeScript: true,
     description:
       'Lets a tools request execute after initialize but before the required initialized notification.',
     expectedKiller:
@@ -8519,6 +8534,38 @@ function assertTranslationCapturedSetHasBehavior(moduleUnderTest) {
     }
   } finally {
     Set.prototype.has = nativeHas;
+  }
+}
+
+function assertTranslationExactParserCensusBehavior(moduleUnderTest) {
+  const probe = '__kovoMutationParserGetterProbe__';
+  const nativePush = Array.prototype.push;
+  let getterCalls = 0;
+  function poisonedPush() {
+    return 0;
+  }
+  try {
+    Object.defineProperty(Object.prototype, probe, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        Array.prototype.push = poisonedPush;
+        return undefined;
+      },
+    });
+    moduleUnderTest.translationWithParserControls(() => {
+      const defaults = {};
+      for (const key in defaults) void defaults[key];
+    });
+    if (getterCalls !== 0 || Array.prototype.push !== nativePush) {
+      throw new Error(
+        'translation parser scope executed an inherited callback or leaked its intrinsic drift',
+      );
+    }
+  } finally {
+    Array.prototype.push = nativePush;
+    Reflect.deleteProperty(Object.prototype, probe);
   }
 }
 
