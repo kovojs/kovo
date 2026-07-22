@@ -2335,6 +2335,36 @@ const verifyCaseFoldedNodeModulesBranch =
   '      if (isNodeModulesDirectoryName(entry.name)) {';
 const weakenedVerifyCaseFoldedNodeModulesBranch =
   "      if (entry.name === 'node_modules') {";
+const verifyPolicyPackageResolutionBranch = [
+  "  if (specifier.startsWith('@kovojs/')) {",
+  '    return resolvePolicyPackageSpecifier(policy, module, specifier);',
+  '  }',
+].join('\n');
+const restoredConventionalPackageResolutionBranch = [
+  "  if (specifier.startsWith('@kovojs/')) {",
+  "    const parts = specifier.split('/');",
+  "    const packageName = `${parts[0]}/${parts[1]}`;",
+  '    const subpath = parts.slice(2);',
+  '    return subpath.length === 0',
+  "      ? `${packageName}/dist/index.mjs`",
+  "      : `${packageName}/dist/${subpath.join('/')}.mjs`;",
+  '  }',
+].join('\n');
+const verifyArtifactListBoundBranch = '      length > MAX_PACKAGE_ENTRIES';
+const removedArtifactListBoundBranch = '      false';
+const verifyArtifactByteBoundBranch =
+  '    if (inspected.byteLength > MAX_ARTIFACT_BYTES) {';
+const removedArtifactByteBoundBranch =
+  '    if (false && inspected.byteLength > MAX_ARTIFACT_BYTES) {';
+const verifyArtifactTotalByteBoundBranch =
+  '    if (budget.total > MAX_TOTAL_ARTIFACT_BYTES - inspected.byteLength) {';
+const removedArtifactTotalByteBoundBranch =
+  '    if (false && budget.total > MAX_TOTAL_ARTIFACT_BYTES - inspected.byteLength) {';
+const verifyIteratorFreeByteCopyBranch =
+  '  Reflect.apply(TYPED_ARRAY_SET, snapshot, [source.value]);';
+const restoredIterableByteCopyBranch = '  snapshot.set(Uint8Array.from(source.value));';
+const verifyPublishLifecycleClosureBranch = ["  'publish',", "  'postpublish',"].join('\n');
+const removedPublishLifecycleClosureBranch = '';
 const verifyNonblockingFileOpenBranch =
   '    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),';
 const removedVerifyNonblockingFileOpenBranch =
@@ -8007,6 +8037,67 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertVerifierRejectsCaseFoldedNodeModulesBehavior,
   },
   {
+    behavioralTypeScript: true,
+    description: 'Restores convention-based first-party package resolution in the generic checker.',
+    expectedKiller:
+      'generic certificate edges must resolve exclusively through reviewer-owned package manifests',
+    name: 'certificate-verifier/restore-conventional-package-resolution',
+    replacement: restoredConventionalPackageResolutionBranch,
+    search: verifyPolicyPackageResolutionBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierUsesPolicyPackageResolutionBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Removes the finite generic artifact-path list ceiling.',
+    expectedKiller: 'generic artifact sources must be bounded before any indexed snapshot',
+    name: 'certificate-verifier/drop-artifact-list-bound',
+    replacement: removedArtifactListBoundBranch,
+    search: verifyArtifactListBoundBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierGenericArtifactListBoundBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Removes the per-module byte ceiling from the generic certificate source.',
+    expectedKiller: 'generic certificate modules must close at the 4 MiB byte budget',
+    name: 'certificate-verifier/drop-artifact-byte-bound',
+    replacement: removedArtifactByteBoundBranch,
+    search: verifyArtifactByteBoundBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierGenericArtifactByteBoundBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Removes the aggregate byte ceiling from the generic certificate source.',
+    expectedKiller: 'generic certificate modules must share one 32 MiB byte budget',
+    name: 'certificate-verifier/drop-artifact-total-byte-bound',
+    replacement: removedArtifactTotalByteBoundBranch,
+    search: verifyArtifactTotalByteBoundBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierGenericArtifactTotalByteBoundBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Restores iterator-sensitive copying of caller-owned certificate bytes.',
+    expectedKiller: 'policy and artifact byte snapshots must use typed-array internal slots only',
+    name: 'certificate-verifier/restore-iterable-byte-copy',
+    replacement: restoredIterableByteCopyBranch,
+    search: verifyIteratorFreeByteCopyBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierIteratorFreeByteCopyBehavior,
+  },
+  {
+    behavioralTypeScript: true,
+    description: 'Allows npm publish and postpublish lifecycle authority in certified packages.',
+    expectedKiller: 'installed reviewer manifests must reject every automatic publish lifecycle hook',
+    name: 'certificate-verifier/allow-publish-lifecycle',
+    replacement: removedPublishLifecycleClosureBranch,
+    search: verifyPublishLifecycleClosureBranch,
+    sourceFile: verifyIndexPath,
+    test: assertVerifierRejectsPublishLifecycleBehavior,
+  },
+  {
     baseModule: {},
     description: 'Lets a regular evidence path race into a blocking FIFO open.',
     expectedKiller:
@@ -8168,6 +8259,123 @@ async function assertVerifierRejectsCaseFoldedNodeModulesBehavior(moduleUnderTes
   }
 }
 
+async function assertVerifierUsesPolicyPackageResolutionBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/root.mjs';
+  const helperIndex = '@kovojs/helper/dist/index.mjs';
+  const helperEvil = '@kovojs/helper/dist/evil.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    capabilities: { [helperEvil]: ['process'] },
+    edges: [[rootModule, helperIndex]],
+    packages: [
+      {
+        manifest: { exports: { '.': './dist/evil.mjs' }, name: '@kovojs/helper' },
+        name: '@kovojs/helper',
+      },
+      {
+        manifest: { exports: { '.': './dist/root.mjs' }, name: '@kovojs/server' },
+        name: '@kovojs/server',
+      },
+    ],
+    sources: {
+      [helperEvil]: "import 'node:child_process';",
+      [helperIndex]: 'export const harmless = true;',
+      [rootModule]: "import '@kovojs/helper';",
+    },
+  });
+  if (!result.findings.some((entry) => entry.code === 'edge-missing')) {
+    throw new Error('generic certificate verifier ignored the reviewer package export map');
+  }
+}
+
+async function assertVerifierGenericArtifactListBoundBehavior(moduleUnderTest) {
+  const rootModule = '@kovojs/server/dist/root.mjs';
+  const fixture = certificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [rootModule]: 'export {};' },
+  });
+  const paths = Array.from(
+    { length: 4_097 },
+    (_, index) => `@kovojs/server/dist/list-${String(index).padStart(4, '0')}.mjs`,
+  );
+  const result = await moduleUnderTest.verifyCertificate(
+    fixture.certificate,
+    fixture.policyBytes,
+    {
+      listArtifactPaths: () => paths,
+      readArtifact: () => Buffer.from('export {};'),
+    },
+  );
+  if (!result.findings.some((entry) => entry.code === 'artifact-list-size')) {
+    throw new Error('generic certificate verifier lost its finite artifact-list ceiling');
+  }
+}
+
+async function assertVerifierGenericArtifactByteBoundBehavior(moduleUnderTest) {
+  const module = '@kovojs/server/dist/root.mjs';
+  const source = ' '.repeat(4 * 1024 * 1024 + 1);
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [module]: source },
+  });
+  if (!result.findings.some((entry) => entry.code === 'artifact-size')) {
+    throw new Error('generic certificate verifier lost its per-module byte ceiling');
+  }
+}
+
+async function assertVerifierGenericArtifactTotalByteBoundBehavior(moduleUnderTest) {
+  const source = ' '.repeat(4 * 1024 * 1024);
+  const sources = Object.fromEntries(
+    Array.from({ length: 9 }, (_, index) => [
+      `@kovojs/server/dist/aggregate-${index}.mjs`,
+      source,
+    ]),
+  );
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources,
+  });
+  if (!result.findings.some((entry) => entry.code === 'artifact-total-size')) {
+    throw new Error('generic certificate verifier lost its aggregate module-byte ceiling');
+  }
+}
+
+async function assertVerifierIteratorFreeByteCopyBehavior(moduleUnderTest) {
+  const module = '@kovojs/server/dist/root.mjs';
+  const fixture = certificateMutationFixture(moduleUnderTest, {
+    manifest: { name: '@kovojs/server' },
+    sources: { [module]: 'export {};' },
+  });
+  Object.defineProperty(fixture.policyBytes, Symbol.iterator, {
+    value() {
+      throw new Error('caller-owned byte iterator executed');
+    },
+  });
+  const result = await moduleUnderTest.verifyCertificate(
+    fixture.certificate,
+    fixture.policyBytes,
+    {
+      listArtifactPaths: () => [module],
+      readArtifact: () => Buffer.from('export {};'),
+    },
+  );
+  if (!result.ok) throw new Error('generic certificate verifier rejected exact byte snapshots');
+}
+
+async function assertVerifierRejectsPublishLifecycleBehavior(moduleUnderTest) {
+  const module = '@kovojs/server/dist/root.mjs';
+  const result = await verifyCertificateMutationFixture(moduleUnderTest, {
+    manifest: {
+      exports: { '.': './dist/root.mjs' },
+      name: '@kovojs/server',
+      scripts: { publish: 'node ./dist/root.mjs' },
+    },
+    sources: { [module]: 'export {};' },
+  });
+  if (!result.findings.some((entry) => entry.code === 'policy-manifest-entrypoint')) {
+    throw new Error('certificate verifier admitted automatic publish lifecycle authority');
+  }
+}
+
 function assertVerifierNonblockingSnapshotOpenBehavior(_moduleUnderTest, { sourceText }) {
   if (!sourceText.includes(verifyNonblockingFileOpenBranch)) {
     throw new Error('certificate evidence open lost O_NONBLOCK before descriptor identity checks');
@@ -8209,7 +8417,7 @@ function certificateMutationFixture(moduleUnderTest, options) {
     artifacts,
     doors: [],
     opaque: options.opaque ?? [],
-    packages: [{ manifest: options.manifest, name: '@kovojs/server' }],
+    packages: options.packages ?? [{ manifest: options.manifest, name: '@kovojs/server' }],
     roots: [],
     schema: 'kovo.certificate-policy/v1',
   };

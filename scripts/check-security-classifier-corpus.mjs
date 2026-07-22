@@ -4462,6 +4462,43 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'certificate-policy-owned-package-resolution',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'derives first-party package edges from reviewer policy instead of filename conventions',
+          "exports: { '.': './dist/evil.mjs' }",
+          "code: 'edge-missing'",
+        ],
+      },
+      {
+        id: 'certificate-generic-artifact-budgets',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'bounds generic artifact lists and byte carriers before iterable-sensitive copies',
+          "code: 'artifact-list-size'",
+          "code: 'artifact-size'",
+          "code: 'artifact-total-size'",
+        ],
+      },
+      {
+        id: 'certificate-internal-slot-byte-copy',
+        file: 'packages/verify/src/index.test.ts',
+        snippets: [
+          'copies policy and artifact bytes without consulting caller-owned iterators',
+          'policy iterator must not run',
+          'artifact iterator must not run',
+        ],
+      },
+      {
+        id: 'certificate-publish-lifecycle-closure',
+        file: 'packages/verify/src/directory.test.ts',
+        snippets: [
+          'rejects publish and postpublish lifecycle authority',
+          "['publish', 'postpublish']",
+          "code: 'policy-manifest-entrypoint'",
+        ],
+      },
+      {
         id: 'certificate-template-import-no-downgrade',
         file: 'packages/verify/src/index.test.ts',
         snippets: [

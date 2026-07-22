@@ -15,6 +15,16 @@ const MAX_PACKAGE_ENTRIES = 4096;
 const MAX_PACKAGE_DEPTH = 16;
 const MAX_ARTIFACT_BYTES = 4 * 1024 * 1024;
 const MAX_TOTAL_ARTIFACT_BYTES = 32 * 1024 * 1024;
+const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype) as object;
+const TYPED_ARRAY_BUFFER_GETTER = Object.getOwnPropertyDescriptor(
+  TYPED_ARRAY_PROTOTYPE,
+  'buffer',
+)!.get!;
+const TYPED_ARRAY_BYTE_LENGTH_GETTER = Object.getOwnPropertyDescriptor(
+  TYPED_ARRAY_PROTOTYPE,
+  'byteLength',
+)!.get!;
+const TYPED_ARRAY_SET = Uint8Array.prototype.set;
 const AUTOMATIC_PACKAGE_LIFECYCLE_SCRIPTS = new Set([
   'dependencies',
   'install',
@@ -27,6 +37,8 @@ const AUTOMATIC_PACKAGE_LIFECYCLE_SCRIPTS = new Set([
   'preprepare',
   'prepublish',
   'prepublishOnly',
+  'publish',
+  'postpublish',
 ]);
 
 /** The nine raw authority kinds certified by `kovo.certificate/v1` (SPEC §6.6). */
@@ -100,8 +112,6 @@ export interface KovoCertificateFinding {
 export interface KovoCertificateArtifactSource {
   listArtifactPaths(): readonly string[];
   readArtifact(path: string): Uint8Array | undefined;
-  /** Resolve a first-party package export without consulting Kovo code. */
-  resolveArtifactSpecifier?(from: string, specifier: string): string | undefined;
 }
 
 /** Result of checking all three linear certificate obligations. */
@@ -118,18 +128,89 @@ export interface KovoCertificateVerificationResult {
   };
 }
 
+interface ExactUint8ArraySnapshotSource {
+  byteLength: number;
+  value: Uint8Array;
+}
+
+interface ArtifactSourceSnapshot {
+  listArtifactPaths(): unknown;
+  readArtifact(path: string): unknown;
+}
+
+interface ArtifactByteBudget {
+  exhausted: boolean;
+  total: number;
+}
+
+function snapshotPolicyBytes(value: unknown): Uint8Array | undefined {
+  try {
+    const inspected = inspectExactUint8Array(value);
+    if (inspected.byteLength > MAX_POLICY_BYTES) return undefined;
+    return copyExactUint8Array(inspected);
+  } catch {
+    return undefined;
+  }
+}
+
+function inspectExactUint8Array(value: unknown): ExactUint8ArraySnapshotSource {
+  if (!(value instanceof Uint8Array) || !ArrayBuffer.isView(value)) {
+    throw new TypeError('value is not an exact Uint8Array view');
+  }
+  const buffer = Reflect.apply(TYPED_ARRAY_BUFFER_GETTER, value, []) as ArrayBufferLike;
+  if (!(buffer instanceof ArrayBuffer)) {
+    throw new TypeError('shared or foreign byte buffers are unsupported');
+  }
+  const byteLength = Reflect.apply(TYPED_ARRAY_BYTE_LENGTH_GETTER, value, []) as number;
+  if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+    throw new TypeError('byte length is invalid');
+  }
+  return { byteLength, value };
+}
+
+function copyExactUint8Array(source: ExactUint8ArraySnapshotSource): Uint8Array {
+  const snapshot = new Uint8Array(source.byteLength);
+  Reflect.apply(TYPED_ARRAY_SET, snapshot, [source.value]);
+  return snapshot;
+}
+
+function snapshotArtifactSource(
+  value: unknown,
+  findings: KovoCertificateFinding[],
+): ArtifactSourceSnapshot | undefined {
+  try {
+    if (typeof value !== 'object' || value === null) {
+      throw new TypeError('artifact source must be an object');
+    }
+    const listArtifactPaths = (value as KovoCertificateArtifactSource).listArtifactPaths;
+    const readArtifact = (value as KovoCertificateArtifactSource).readArtifact;
+    if (typeof listArtifactPaths !== 'function' || typeof readArtifact !== 'function') {
+      throw new TypeError('artifact source methods are missing');
+    }
+    return {
+      listArtifactPaths: () => Reflect.apply(listArtifactPaths, value, []),
+      readArtifact: (artifactPath) => Reflect.apply(readArtifact, value, [artifactPath]),
+    };
+  } catch {
+    findings.push(
+      finding('coverage', 'artifact-source', 'artifact source methods could not be snapshotted'),
+    );
+    return undefined;
+  }
+}
+
 /** Verify a certificate without importing Kovo's analyzer or runtime. */
 export async function verifyCertificate(
   certificateInput: unknown,
   policyBytes: Uint8Array,
   artifacts: KovoCertificateArtifactSource,
 ): Promise<KovoCertificateVerificationResult> {
-  if (!(policyBytes instanceof Uint8Array) || policyBytes.byteLength > MAX_POLICY_BYTES) {
+  const policySnapshot = snapshotPolicyBytes(policyBytes);
+  if (policySnapshot === undefined) {
     return verificationResult([
       finding('schema', 'policy-size', 'policy must be exact bytes no larger than 1 MiB'),
     ]);
   }
-  const policySnapshot = Uint8Array.from(policyBytes);
   return await verifyCertificateSnapshot(certificateInput, policySnapshot, artifacts);
 }
 
@@ -157,15 +238,25 @@ async function verifyCertificateSnapshot(
   if (policyFindings.length > 0) return verificationResult(policyFindings, certificate);
 
   const coverageFindings: KovoCertificateFinding[] = [];
-  const artifactPaths = snapshotArtifactPaths(artifacts, coverageFindings);
+  const artifactSource = snapshotArtifactSource(artifacts, coverageFindings);
+  if (artifactSource === undefined) {
+    return verificationResult(coverageFindings, certificate);
+  }
+  const artifactPaths = snapshotArtifactPaths(artifactSource, coverageFindings);
   const expectedPaths = policy.artifacts.map((entry) => entry.path);
   compareArtifactCoverage(expectedPaths, artifactPaths, coverageFindings);
   compareCapabilityCoverage(certificate, expectedPaths, coverageFindings);
   compareReferencedModuleCoverage(certificate, new Set(expectedPaths), coverageFindings);
 
   const bytesByPath = new Map<string, Uint8Array>();
+  const artifactBudget: ArtifactByteBudget = { exhausted: false, total: 0 };
   for (const artifact of policy.artifacts) {
-    const bytes = snapshotArtifactBytes(artifacts, artifact.path, coverageFindings);
+    const bytes = snapshotArtifactBytes(
+      artifactSource,
+      artifact.path,
+      coverageFindings,
+      artifactBudget,
+    );
     if (bytes === undefined) continue;
     bytesByPath.set(artifact.path, bytes);
     const actual = sha512(bytes);
@@ -196,7 +287,7 @@ async function verifyCertificateSnapshot(
       module,
       bytes,
       artifactSet,
-      artifacts,
+      policy,
       declaredOpaque,
       coverageFindings,
     );
@@ -229,12 +320,12 @@ export async function verifyCertificateDirectory(
   policyBytes: Uint8Array,
   artifactRoot: string,
 ): Promise<KovoCertificateVerificationResult> {
-  if (!(policyBytes instanceof Uint8Array) || policyBytes.byteLength > MAX_POLICY_BYTES) {
+  const policySnapshot = snapshotPolicyBytes(policyBytes);
+  if (policySnapshot === undefined) {
     return verificationResult([
       finding('schema', 'policy-size', 'policy must be exact bytes no larger than 1 MiB'),
     ]);
   }
-  const policySnapshot = Uint8Array.from(policyBytes);
   const findings: KovoCertificateFinding[] = [];
   const budget = jsonValidationBudget();
   const certificateSnapshot = snapshotJsonValue(
@@ -403,7 +494,7 @@ function validatePolicyBytes(
   }
   let text: string;
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(input));
+    text = new TextDecoder('utf-8', { fatal: true }).decode(input);
   } catch {
     findings.push(finding('schema', 'policy-utf8', 'policy bytes must be valid UTF-8'));
     return undefined;
@@ -499,6 +590,16 @@ function validatePolicyArtifacts(
 ): KovoCertificatePolicyV1['artifacts'] | undefined {
   const values = denseArray(value, 'policy.artifacts', findings);
   if (values === undefined) return undefined;
+  if (values.length > MAX_PACKAGE_ENTRIES) {
+    findings.push(
+      finding(
+        'schema',
+        'policy-artifacts',
+        `policy.artifacts may contain at most ${MAX_PACKAGE_ENTRIES} entries`,
+      ),
+    );
+    return undefined;
+  }
   const artifacts: { path: string; sha512: string }[] = [];
   for (const [index, item] of values.entries()) {
     const row = exactRecord(item, `policy.artifacts[${index}]`, ['path', 'sha512'], findings);
@@ -1138,9 +1239,6 @@ function directoryArtifactSource(
         const bytes = moduleBytes.get(artifactPath);
         return bytes === undefined ? undefined : Uint8Array.from(bytes);
       },
-      resolveArtifactSpecifier(from, specifier) {
-        return resolvePolicyPackageSpecifier(policy, from, specifier);
-      },
     },
   };
 }
@@ -1655,13 +1753,42 @@ function isCanonicalRelativePath(value: string): boolean {
 }
 
 function snapshotArtifactPaths(
-  artifacts: KovoCertificateArtifactSource,
+  artifacts: ArtifactSourceSnapshot,
   findings: KovoCertificateFinding[],
 ): readonly string[] {
   try {
     const listed = artifacts.listArtifactPaths();
     if (!Array.isArray(listed)) throw new TypeError('artifact list is not an array');
-    const output = [...listed];
+    if (Object.getPrototypeOf(listed) !== Array.prototype) {
+      throw new TypeError('artifact list does not use Array.prototype');
+    }
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(listed, 'length');
+    const length = lengthDescriptor?.value;
+    if (
+      lengthDescriptor === undefined ||
+      !('value' in lengthDescriptor) ||
+      typeof length !== 'number' ||
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      length > MAX_PACKAGE_ENTRIES
+    ) {
+      findings.push(
+        finding(
+          'coverage',
+          'artifact-list-size',
+          `artifact source may list at most ${MAX_PACKAGE_ENTRIES} paths`,
+        ),
+      );
+      return [];
+    }
+    const output: string[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(listed, String(index));
+      if (descriptor === undefined || !('value' in descriptor)) {
+        throw new TypeError(`artifact list index ${index} is not own data`);
+      }
+      output.push(descriptor.value as string);
+    }
     if (output.some((entry) => !isCanonicalArtifactPath(entry))) {
       findings.push(
         finding('coverage', 'artifact-list-path', 'artifact source returned a non-canonical path'),
@@ -1680,17 +1807,42 @@ function snapshotArtifactPaths(
 }
 
 function snapshotArtifactBytes(
-  artifacts: KovoCertificateArtifactSource,
+  artifacts: ArtifactSourceSnapshot,
   artifactPath: string,
   findings: KovoCertificateFinding[],
+  budget: ArtifactByteBudget,
 ): Uint8Array | undefined {
+  if (budget.exhausted) return undefined;
   try {
     const value = artifacts.readArtifact(artifactPath);
-    if (!(value instanceof Uint8Array)) {
+    if (value === undefined) {
       findings.push(finding('coverage', 'artifact-missing', `${artifactPath} bytes are missing`));
       return undefined;
     }
-    return Uint8Array.from(value);
+    const inspected = inspectExactUint8Array(value);
+    if (inspected.byteLength > MAX_ARTIFACT_BYTES) {
+      findings.push(
+        finding(
+          'coverage',
+          'artifact-size',
+          `${artifactPath} exceeds the 4 MiB per-module byte limit`,
+        ),
+      );
+      return undefined;
+    }
+    if (budget.total > MAX_TOTAL_ARTIFACT_BYTES - inspected.byteLength) {
+      budget.exhausted = true;
+      findings.push(
+        finding(
+          'coverage',
+          'artifact-total-size',
+          'artifact source exceeds the 32 MiB total module-byte limit',
+        ),
+      );
+      return undefined;
+    }
+    budget.total += inspected.byteLength;
+    return copyExactUint8Array(inspected);
   } catch {
     findings.push(finding('coverage', 'artifact-read', `${artifactPath} bytes could not be read`));
     return undefined;
@@ -1770,7 +1922,7 @@ function parseArtifact(
   module: string,
   bytes: Uint8Array,
   artifacts: ReadonlySet<string>,
-  artifactSource: KovoCertificateArtifactSource,
+  policy: KovoCertificatePolicyV1,
   declaredOpaque: ReadonlySet<string>,
   findings: KovoCertificateFinding[],
 ): {
@@ -1866,7 +2018,7 @@ function parseArtifact(
       );
       continue;
     }
-    const target = resolveArtifactSpecifier(module, specifier, artifactSource);
+    const target = resolveArtifactSpecifier(module, specifier, policy);
     if (target === undefined) {
       if (specifier.startsWith('@kovojs/') || specifier.startsWith('#')) {
         findings.push(
@@ -1930,7 +2082,7 @@ function isNoSubstitutionTemplateDynamicImport(
 function resolveArtifactSpecifier(
   module: string,
   specifier: string,
-  artifacts: KovoCertificateArtifactSource,
+  policy: KovoCertificatePolicyV1,
 ): string | undefined {
   if (specifier.startsWith('.')) {
     if (
@@ -1944,21 +2096,10 @@ function resolveArtifactSpecifier(
     return path.posix.normalize(path.posix.join(path.posix.dirname(module), specifier));
   }
   if (specifier.startsWith('@kovojs/')) {
-    if (artifacts.resolveArtifactSpecifier !== undefined) {
-      const resolved = artifacts.resolveArtifactSpecifier(module, specifier);
-      return resolved !== undefined && isCanonicalArtifactPath(resolved) ? resolved : undefined;
-    }
-    const parts = specifier.split('/');
-    if (parts.length < 2) return undefined;
-    const packageName = `${parts[0]}/${parts[1]}`;
-    const subpath = parts.slice(2);
-    return subpath.length === 0
-      ? `${packageName}/dist/index.mjs`
-      : `${packageName}/dist/${subpath.join('/')}.mjs`;
+    return resolvePolicyPackageSpecifier(policy, module, specifier);
   }
-  if (specifier.startsWith('#') && artifacts.resolveArtifactSpecifier !== undefined) {
-    const resolved = artifacts.resolveArtifactSpecifier(module, specifier);
-    return resolved !== undefined && isCanonicalArtifactPath(resolved) ? resolved : undefined;
+  if (specifier.startsWith('#')) {
+    return resolvePolicyPackageSpecifier(policy, module, specifier);
   }
   return undefined;
 }

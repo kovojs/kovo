@@ -551,6 +551,31 @@ describe('filesystem certificate artifacts', () => {
     });
   });
 
+  it('rejects publish and postpublish lifecycle authority', async () => {
+    for (const lifecycle of ['publish', 'postpublish']) {
+      const fixture = createDirectoryFixture({
+        '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+      });
+      writeFileSync(
+        path.join(fixture.root, '@kovojs/server/package.json'),
+        JSON.stringify({
+          exports: { '.': './dist/index.mjs' },
+          name: '@kovojs/server',
+          scripts: { [lifecycle]: 'node ./dist/index.mjs' },
+        }),
+      );
+      const policy = policyBytes(fixture.sources, fixture.root);
+      await expect(
+        verifyCertificateDirectory(certificate(fixture.sources, policy), policy, fixture.root),
+      ).resolves.toMatchObject({
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'policy-manifest-entrypoint' }),
+        ]),
+        ok: false,
+      });
+    }
+  });
+
   it('binds the complete installed dependency and lifecycle manifest surface', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',

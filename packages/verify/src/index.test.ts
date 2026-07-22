@@ -227,6 +227,134 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     }
   });
 
+  it('derives first-party package edges from reviewer policy instead of filename conventions', async () => {
+    const helperEvil = '@kovojs/helper/dist/evil.mjs';
+    const helperIndex = '@kovojs/helper/dist/index.mjs';
+    const artifacts = artifactSource({
+      [helperEvil]: "import 'node:child_process';",
+      [helperIndex]: 'export const harmless = true;',
+      [rootModule]: "import '@kovojs/helper';",
+    });
+    const certificate = certificateFor(artifacts, {
+      cap: {
+        [helperEvil]: ['process'],
+        [helperIndex]: [],
+        [rootModule]: [],
+      },
+      edges: [[rootModule, helperIndex]],
+    });
+
+    const result = await verifyBound(certificate, artifacts, {
+      packages: [
+        {
+          manifest: { exports: { '.': './dist/evil.mjs' }, name: '@kovojs/helper' },
+          name: '@kovojs/helper',
+        },
+        {
+          manifest: { exports: { '.': './dist/root.mjs' }, name: '@kovojs/server' },
+          name: '@kovojs/server',
+        },
+      ],
+    });
+
+    expect(result.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'edge-missing', message: expect.stringContaining(helperEvil) }),
+        expect.objectContaining({ code: 'edge-extra', message: expect.stringContaining(helperIndex) }),
+      ]),
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('bounds generic artifact lists and byte carriers before iterable-sensitive copies', async () => {
+    const ordinary = artifactSource({ [rootModule]: 'export {};' });
+    const certificate = certificateFor(ordinary);
+    const policy = policyBytesFor(certificate, ordinary);
+    const tooManyPaths = Array.from(
+      { length: 4_097 },
+      (_, index) => `@kovojs/server/dist/list-${String(index).padStart(4, '0')}.mjs`,
+    );
+    await expect(
+      verifyCertificate(certificate, policy, {
+        listArtifactPaths: () => tooManyPaths,
+        readArtifact: ordinary.readArtifact,
+      }),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list-size' })]),
+      ok: false,
+    });
+
+    let accessorRead = false;
+    const accessorPaths = [rootModule];
+    Object.defineProperty(accessorPaths, '0', {
+      get() {
+        accessorRead = true;
+        return rootModule;
+      },
+    });
+    await expect(
+      verifyCertificate(certificate, policy, {
+        listArtifactPaths: () => accessorPaths,
+        readArtifact: ordinary.readArtifact,
+      }),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+      ok: false,
+    });
+    expect(accessorRead).toBe(false);
+
+    const oversizedBytes = Buffer.alloc(4 * 1024 * 1024 + 1, 0x20);
+    const oversized = {
+      listArtifactPaths: () => [rootModule],
+      readArtifact: () => oversizedBytes,
+    } satisfies KovoCertificateArtifactSource;
+    await expect(verifyBound(certificateFor(oversized), oversized)).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-size' })]),
+      ok: false,
+    });
+
+    const sharedFourMiB = Buffer.alloc(4 * 1024 * 1024, 0x20);
+    const aggregatePaths = Array.from(
+      { length: 9 },
+      (_, index) => `@kovojs/server/dist/aggregate-${index}.mjs`,
+    );
+    const aggregate = {
+      listArtifactPaths: () => aggregatePaths,
+      readArtifact: () => sharedFourMiB,
+    } satisfies KovoCertificateArtifactSource;
+    await expect(verifyBound(certificateFor(aggregate), aggregate)).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'artifact-total-size' }),
+      ]),
+      ok: false,
+    });
+  });
+
+  it('copies policy and artifact bytes without consulting caller-owned iterators', async () => {
+    const bytes = Buffer.from('export {};');
+    Object.defineProperty(bytes, Symbol.iterator, {
+      value() {
+        throw new Error('artifact iterator must not run');
+      },
+    });
+    const artifacts = {
+      listArtifactPaths: () => [rootModule],
+      readArtifact: () => bytes,
+    } satisfies KovoCertificateArtifactSource;
+    const certificate = certificateFor(artifacts);
+    const policy = policyBytesFor(certificate, artifacts);
+    Object.defineProperty(policy, Symbol.iterator, {
+      value() {
+        throw new Error('policy iterator must not run');
+      },
+    });
+
+    await expect(verifyCertificate(certificate, policy, artifacts)).resolves.toMatchObject({
+      findings: [],
+      ok: true,
+    });
+  });
+
   it('requires an exact opaque row for every external import outside the nine-kind domain', async () => {
     const artifacts = artifactSource({
       [rootModule]: "import 'third-party-parser'; export const root = true;",

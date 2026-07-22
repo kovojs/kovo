@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 340,
+    "historicalWitnesses": 344,
     "productions": 12
   },
   "productions": [
@@ -2090,6 +2090,30 @@
       "corpus": "certificate-verifier",
       "production": "platform-differential",
       "reason": "Every ASCII case spelling of node_modules is rejected so a package accepted on a case-sensitive host cannot gain a nearer resolver scope on case-insensitive macOS or Windows filesystems."
+    },
+    {
+      "anchor": "certificate-policy-owned-package-resolution",
+      "corpus": "certificate-verifier",
+      "production": "module-boundary",
+      "reason": "The generic checker derives first-party package and import edges from the exact reviewer-owned manifests instead of a conventional dist filename guess or caller resolver."
+    },
+    {
+      "anchor": "certificate-generic-artifact-budgets",
+      "corpus": "certificate-verifier",
+      "production": "budget-edge",
+      "reason": "Generic artifact path count, per-module bytes, and aggregate module bytes reach the same finite closed budgets as directory verification before allocation or parsing."
+    },
+    {
+      "anchor": "certificate-internal-slot-byte-copy",
+      "corpus": "certificate-verifier",
+      "production": "carrier-container",
+      "reason": "Policy and artifact bytes are inspected and copied through typed-array internal slots without invoking caller-owned iteration or forwarding mutable byte carriers."
+    },
+    {
+      "anchor": "certificate-publish-lifecycle-closure",
+      "corpus": "certificate-verifier",
+      "production": "module-boundary",
+      "reason": "Reviewer and installed manifests reject publish and postpublish scripts so certified package installation and release lifecycles cannot acquire unreviewed process authority."
     },
     {
       "anchor": "certificate-template-import-no-downgrade",

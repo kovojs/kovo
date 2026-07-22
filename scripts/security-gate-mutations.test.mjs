@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(466);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(472);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -844,8 +844,14 @@ describe('security-gate-mutations', () => {
       'certificate-verifier/allow-executable-types-condition',
       'certificate-verifier/allow-nested-package-manifest',
       'certificate-verifier/allow-percent-encoded-artifact-path',
+      'certificate-verifier/allow-publish-lifecycle',
+      'certificate-verifier/drop-artifact-byte-bound',
       'certificate-verifier/drop-directory-entry-bound',
+      'certificate-verifier/drop-artifact-list-bound',
+      'certificate-verifier/drop-artifact-total-byte-bound',
       'certificate-verifier/downgrade-template-import-to-opaque',
+      'certificate-verifier/restore-conventional-package-resolution',
+      'certificate-verifier/restore-iterable-byte-copy',
       'generated-client/drop-security-operation-own-data-boundary',
       'better-auth-credential-gate/drop-source-identity',
       'drizzle-egress/allow-inexact-context-fetch-call',
