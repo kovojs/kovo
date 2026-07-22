@@ -3,16 +3,17 @@
 <!-- kovo-security-ledger: transient -->
 
 **Date:** 2026-07-21
-**Status:** CLOSED — remediation complete; publication and required CI pending
+**Status:** OPEN — one browser metadata root remains under remediation
 **Baseline:** `11ba9ce4fbb0da08a458ce25ba575851efbc9082`
-**Lifecycle:** `closed-pending-publication`; archive by 2026-08-18 to
-`plans/history/bugz-36.md` after the verified closing tip is published and required CI is green.
+**Lifecycle:** `active`; archive after the verified closing tip is published and required CI is
+green.
 
 **Scope:** Distinct security and security-evidence defects found while completing the three 10x
 security roadmaps after `bugz-35`. Every root below was reproduced before closure and deduplicated
 against prior active and historical ledgers under `plans/`. Decorative/self-referential SHA cleanup
-is intentionally excluded: `bugz-35` L2 already owns that evidence-integrity root, and the later
-changes only removed redundant ceremony.
+is intentionally excluded: `bugz-35` L2 already owns acceptance of unbound hex, and repeated stamps
+add no new root. L3 below is distinct because a load-bearing analyzer identity hashed real bytes but
+trusted the expected identity supplied by the same subject.
 
 ## Severity summary
 
@@ -20,8 +21,8 @@ changes only removed redundant ceremony.
 | -------- | ---: | -----: |
 | Critical |    0 |      3 |
 | High     |    0 |     10 |
-| Medium   |    0 |      8 |
-| Low      |    0 |      1 |
+| Medium   |    2 |     10 |
+| Low      |    1 |      2 |
 
 ## Critical
 
@@ -226,6 +227,56 @@ changes only removed redundant ceremony.
   - **Closure:** `dd4e5bf52` snapshots the manifest through the fixed byte limit before JSON parsing.
   - **Evidence:** `scripts/publish-packed-packages.test.mjs` passes its sparse max-plus-one control.
 
+- [x] **M9 — In-process parser reconciliation retained mutable Acorn controls after bootstrap.**
+  - Mutating reviewed ambient, boot-reachable, or fixed-mode parser controls after import could make
+    an in-process reconciliation parse omit an executable edge and preserve a false-green verdict.
+  - **Dedup:** H7 owns complete parsing and H8 owns the authenticated parser bytes; this root was
+    post-bootstrap mutable control state in the optional same-realm defense-in-depth path.
+  - **Closure:** `1437c5014`, `c73b7f8bc`, `479312e63`, and `97d8b8f34` capture and census the reviewed
+    controls and private fixed-mode instance families. `22732c9f0` makes the boundary explicit: the
+    independent verdict is the fresh standalone CLI, while deliberately instrumenting dependency
+    internals to discover previously unreachable closure objects is privileged same-realm compromise.
+  - **Evidence:** all 86 verifier tests pass and the private-parser-family forcing mutant is killed;
+    read-only CLI review confirms the standalone verifier never evaluates the app module graph.
+
+- [x] **M10 — Packed Better Auth roots initialized secret-dependent code before runtime lockout.**
+  - Some supported packed entrypoints could import the adapter before installing the runtime lock,
+    permitting early environment-dependent initialization under an unsupported preload/import order.
+  - **Dedup:** distinct from earlier runtime-lock completeness roots: the guard existed, but packed
+    root ordering did not consistently install it first.
+  - **Closure:** `3d5d91fbb`, `981404c59`, and `ba0562452` make the generated standalone lock private
+    and require every supported packed root to import it before adapter initialization.
+  - **Evidence:** the packed-root ordering regression covers the public, internal, and mount-adapter
+    entries. A privileged host preload remains outside the framework boundary and can already read
+    the host environment directly.
+
+- [ ] **M11 — Query names and instance keys collapsed into one ambiguous runtime string.**
+  - An unkeyed query name could equal another query's full instance key. Refetch hooks, visible-return
+    ledgers, optimistic key derivation, and instance-specific update-plan lookup reused that display
+    string as decision identity; a response for `{ name: "foo", key: "bar" }` could therefore select
+    the DOM update plan registered for the unrelated query named `bar`.
+  - **Dedup:** distinct from wire framing and query-store storage collisions: the wire already carried
+    separate `name`/`key` attributes and the store used a NUL-framed composite, but downstream
+    decision APIs collapsed those exact facts again.
+  - **Open work:** use one readonly structured query identity through apply, hydration, events,
+    refetch, focus return, and public callbacks; key instance-specific plans by the collision-free
+    store identity; keep full-domain string keys exact and prefix only explicitly value-derived
+    optimistic keys. Add colon-name, foreign-domain, plan-selection, and modular/inline parity tests.
+
+- [ ] **M12 — Handler capture analysis treated opaque helper and container uses as scalar-safe.**
+  - A server component could capture `item.fn`, pass it through a local helper, and invoke it there;
+    the compiler emitted the capture as a serialized handler parameter even though its finite
+    handler language had not proved that every use was scalar-only. Object, array, destructuring,
+    computed-key, and same-name shadowing variants exposed the same deny-enumeration and lexical
+    identity gap (SPEC §5.2).
+  - **Dedup:** distinct from H2's capability-root reachability and the historical handler-call
+    fixtures: this root is the positive proof required before an arbitrary captured value may cross
+    the server-to-browser serialization boundary.
+  - **Open work:** make the parser own a scope-aware true/false scalar-use fact, reject every opaque
+    helper argument and container/callee escape unless a finite local summary proves it safe, and
+    require an explicit `true` fact before lowering. Cover the executable helper repro, containers,
+    property keys, mutation, destructuring, prototype paths, and unrelated same-name bindings.
+
 ## Low
 
 - [x] **L1 — Dry-run release dispatch still exercised attestation authority.**
@@ -234,10 +285,35 @@ changes only removed redundant ceremony.
   - **Closure:** `6044df10d` conditions both attestation jobs and publication on non-dry-run input.
   - **Evidence:** `scripts/release-workflow-security.test.mjs` passes.
 
+- [ ] **L2 — Live browser target metadata could be substituted during serialization.**
+  - Late collection mutation, inherited optional fields, hostile DOM accessors, and inherited
+    `toJSON` hooks could change the framework-emitted descriptor metadata between discovery and wire
+    encoding.
+  - **Dedup:** distinct from server authorization defects: canonical server attestation rejects a
+    substituted app/build/principal/source/descriptor tuple, so no authority bypass was reproduced.
+  - **Open work:** `17ea432f8`, `389fcd68d`, and `664e81803` close inherited metadata and `toJSON`
+    substitution, but independent review found the replacement encoder orders integer-index keys
+    differently from the server canonicalizer and the HMR collector still performs late mutable
+    dispatch. Close both residuals and rerun Node plus real-browser parity evidence.
+
+- [x] **L3 — The compiler posture gate circularly authenticated its own implementation digest.**
+  - The analyzer hashed its real source bytes but also supplied the expected digest, so an edit plus
+    restamp could satisfy the supposedly independent identity check.
+  - **Dedup:** `bugz-35` L2 owns arbitrary digest-shaped strings; this digest was computed over real
+    bytes but lacked an independently controlled expectation.
+  - **Closure:** `e0b7645a6` removes the compiler self-digest while retaining independent metadata,
+    version, fingerprint, export-status, and noncompiler package checks; `8e14673cd` refreshes the
+    separately reviewed CLI posture subject.
+  - **Evidence:** the focused compiler posture suite passes 94/94, and review finds no self/fixed-point
+    identity marker in the remaining compiler root.
+
 ## Latest verification
 
 - `pnpm exec vitest run scripts/release-workflow-security.test.mjs scripts/reproducible-pack.test.mjs scripts/verify-packed-release-payload.test.mjs scripts/npm-registry-state.test.mjs scripts/publish-packed-packages.test.mjs scripts/supply-chain-gates.test.mjs scripts/security-fuzz-campaign.test.mjs scripts/verify-packed-release-certificate.test.mjs` (63/63)
-- `node scripts/security-fuzz-campaign.mjs --check` (492/492 forcing mutants enrolled)
+- `pnpm exec vitest run packages/verify/src --reporter=dot` (86/86); selected private-parser-family
+  forcing mutant killed (495-mutant final-tip campaign remains a Phase 6 gate)
+- focused live-target/core suite (100/100); Chromium live-mutation suite (2/2)
+- `pnpm run check:runtime-tier-door-parity` (1 production door, 5 development doors; 8/8 tests)
 - `node scripts/supply-chain-gates.mjs`
 - YAML parse of both workflows and both release composite actions
 - `git diff --check`

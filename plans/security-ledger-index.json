@@ -81,12 +81,11 @@
     {
       "path": "plans/bugz-36.md",
       "kind": "bugz",
-      "state": "closed-pending-publication",
+      "state": "open",
       "openedOn": "2026-07-21",
-      "closedOn": "2026-07-21",
       "archiveBy": "2026-08-18",
       "archivePath": "plans/history/bugz-36.md",
-      "summary": "All 22 distinct security and evidence defects are remediated; publish the exact verified tip, observe required CI, then archive."
+      "summary": "Follow-up review reopened the ledger while browser identity and compiler handler-capture findings are remediated."
     }
   ],
   "history": {
