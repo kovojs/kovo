@@ -313,10 +313,10 @@ trusted the expected identity supplied by the same subject.
     canonical content type plus exact final well-formed UTF-8 bytes after every browser-import
     rewrite, names each immutable module URL; (2) a full render-plan fingerprint covers render,
     wire, and query grammar/shape; and (3) one full app-build token is a domain-separated,
-    byte-length-framed hash of the render-plan
-    fingerprint plus the exact current active-module manifest fingerprint. The active manifest is
-    an exact href set (including simultaneous versions of one logical path), not retained resolver
-    history. Build finalization seals the manifest and freezes the scalar app token once for
+    byte-length-framed hash of the render-plan fingerprint plus the sorted exact current active-module
+    href set. The manifest is an input collection, not a separately stamped or nested graph identity;
+    it includes simultaneous versions of one logical path and excludes retained resolver history.
+    Build finalization seals that href set and freezes the scalar app token once for
     production requests; development HMR replaces an explicit atomic snapshot. Remove
     author-supplied module identity, truncated digests, request-time token callbacks, and a custom
     registry's ability to supply or mutate compatibility identity; wrap resolution so a sealed URL
