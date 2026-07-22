@@ -1,4 +1,4 @@
-import { parse, type Node, type Program } from 'acorn';
+import type { Node, Program } from 'acorn';
 
 import {
   translationArrayAppend,
@@ -9,10 +9,10 @@ import {
   translationNumberIsSafeInteger,
   translationObjectKeys,
   translationOwnDataValue,
+  translationParseJavaScriptSource,
   translationSetAdd,
   translationSetHas,
   translationTypeError,
-  translationWithParserControls,
 } from './translation-intrinsics.js';
 
 export type JavaScriptAstNode = Node & Record<string, unknown>;
@@ -40,13 +40,7 @@ interface JavaScriptImportedNames {
 
 /** Parse the complete emitted module with one standards-oriented ESTree parser. */
 export function parseJavaScriptModule(source: string): JavaScriptAstNode {
-  const program = translationWithParserControls(() =>
-    parse(source, {
-      allowHashBang: true,
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-    }),
-  ) as Program;
+  const program = translationParseJavaScriptSource(source) as Program;
   return program as unknown as JavaScriptAstNode;
 }
 

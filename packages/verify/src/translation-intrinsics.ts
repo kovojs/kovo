@@ -1,4 +1,8 @@
-import { Parser as AcornParser } from 'acorn';
+import {
+  type Options as AcornOptions,
+  Parser as AcornParser,
+  version as acornVersion,
+} from 'acorn';
 
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls use pinned Reflect.apply. */
 
@@ -56,6 +60,7 @@ const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectGetOwnPropertyDescriptors = NativeObject.getOwnPropertyDescriptors;
 const nativeObjectGetPrototypeOf = NativeObject.getPrototypeOf;
+const nativeObjectIsExtensible = NativeObject.isExtensible;
 const nativeObjectIs = NativeObject.is;
 const nativeObjectKeys = NativeObject.keys;
 const nativeReflectApply = NativeReflect.apply;
@@ -92,8 +97,204 @@ interface TranslationParserSurfaceDefinition {
 interface TranslationParserSurfaceState {
   definition: TranslationParserSurfaceDefinition;
   descriptors: Map<PropertyKey, PropertyDescriptor>;
+  extensible: boolean;
   keys: readonly PropertyKey[];
   prototype: object | null | undefined;
+}
+
+const REVIEWED_TRANSLATION_ACORN_VERSION = '8.17.0';
+const MAX_TRANSLATION_PARSER_SURFACES = 2_048;
+const MAX_TRANSLATION_PARSER_PENDING_OBJECTS = 2_048;
+const MAX_TRANSLATION_PARSER_KEYS_PER_SURFACE = 1_024;
+const MAX_TRANSLATION_PARSER_DESCRIPTORS = 8_192;
+const translationParserOptionInput = {
+  allowHashBang: true,
+  ecmaVersion: 'latest',
+  sourceType: 'module',
+} as const;
+const translationParserOptions = NativeObject.freeze(translationParserOptionInput);
+const acornParserParse = AcornParser.parse;
+const ConstructableAcornParser = AcornParser as unknown as new (
+  options: AcornOptions,
+  input: string,
+  startPos?: number,
+) => AcornParser;
+
+/**
+ * Acorn's public `Parser` graph does not expose every mutable control used by a later parse.
+ * Constructing this fixed-mode parser creates the four shared word-cache RegExps. The deliberate
+ * invalid RegExp reaches `RegExpValidationState`, `Scope`, and `BranchID`, then rejects before
+ * unwinding the branch pointer so those otherwise-private prototypes remain reachable. Acorn's
+ * exact version and the retained shape below are a review gate: an upgrade must re-audit the fixed
+ * option mode and all lazy controls before this bootstrap census can change.
+ */
+const translationWarmParser = createTranslationWarmParser();
+
+function createTranslationWarmParser(): AcornParser {
+  if (acornVersion !== REVIEWED_TRANSLATION_ACORN_VERSION) {
+    throw new NativeTypeError(
+      `Translation parser ${acornVersion} has not passed the fixed-mode control census.`,
+    );
+  }
+
+  const parser = new ConstructableAcornParser(
+    translationParserOptions,
+    'const __kovoTranslationParserWarmGraph = /(/;',
+  );
+  let rejected = false;
+  try {
+    parser.parse();
+  } catch {
+    rejected = true;
+  }
+  if (!rejected) {
+    throw new NativeTypeError(
+      'Translation parser warm graph did not reach its rejection sentinel.',
+    );
+  }
+
+  const options = parserRequiredOwnObject(parser, 'options');
+  assertExactParserStringKeys(options, [
+    'ecmaVersion',
+    'sourceType',
+    'strict',
+    'onInsertedSemicolon',
+    'onTrailingComma',
+    'allowReserved',
+    'allowReturnOutsideFunction',
+    'allowImportExportEverywhere',
+    'allowAwaitOutsideFunction',
+    'allowSuperOutsideMethod',
+    'allowHashBang',
+    'checkPrivateFields',
+    'locations',
+    'onToken',
+    'onComment',
+    'ranges',
+    'program',
+    'sourceFile',
+    'directSourceFile',
+    'preserveParens',
+  ]);
+  if (
+    parserRequiredOwnValue(options, 'ecmaVersion') !== 100_000_000 ||
+    parserRequiredOwnValue(options, 'sourceType') !== 'module' ||
+    parserRequiredOwnValue(options, 'allowHashBang') !== true ||
+    parserRequiredOwnValue(options, 'onInsertedSemicolon') !== null ||
+    parserRequiredOwnValue(options, 'onTrailingComma') !== null ||
+    parserRequiredOwnValue(options, 'onToken') !== null ||
+    parserRequiredOwnValue(options, 'onComment') !== null ||
+    parserRequiredOwnValue(options, 'program') !== null
+  ) {
+    throw new NativeTypeError('Translation parser fixed options drifted from the reviewed mode.');
+  }
+
+  const cachedWordExpressions = new NativeSet<object>();
+  for (const key of [
+    'keywords',
+    'reservedWords',
+    'reservedWordsStrict',
+    'reservedWordsStrictBind',
+  ] as const) {
+    const expression = parserRequiredOwnObject(parser, key);
+    if (
+      apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [expression]) !==
+        NativeRegExpPrototype ||
+      apply<boolean>(nativeSetHas, cachedWordExpressions, [expression])
+    ) {
+      throw new NativeTypeError('Translation parser lazy word-cache census drifted.');
+    }
+    apply(nativeSetAdd, cachedWordExpressions, [expression]);
+  }
+
+  const regexpState = parserRequiredOwnObject(parser, 'regexpState');
+  assertExactParserStringKeys(regexpState, [
+    'parser',
+    'validFlags',
+    'unicodeProperties',
+    'source',
+    'flags',
+    'start',
+    'switchU',
+    'switchV',
+    'switchN',
+    'pos',
+    'lastIntValue',
+    'lastStringValue',
+    'lastAssertionIsQuantifiable',
+    'numCapturingParens',
+    'maxBackReference',
+    'groupNames',
+    'backReferenceNames',
+    'branchID',
+  ]);
+  if (parserRequiredOwnValue(regexpState, 'parser') !== parser) {
+    throw new NativeTypeError('Translation parser RegExp state lost its parser identity.');
+  }
+  const regexpStatePrototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [
+    regexpState,
+  ]);
+  if (regexpStatePrototype === null) {
+    throw new NativeTypeError('Translation parser RegExp state prototype is unavailable.');
+  }
+  assertExactParserStringKeys(regexpStatePrototype, [
+    'constructor',
+    'reset',
+    'raise',
+    'at',
+    'nextIndex',
+    'current',
+    'lookahead',
+    'advance',
+    'eat',
+    'eatChars',
+  ]);
+
+  const branch = parserRequiredOwnObject(regexpState, 'branchID');
+  const branchPrototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [branch]);
+  if (branchPrototype === null || parserRequiredOwnValue(branch, 'base') !== branch) {
+    throw new NativeTypeError('Translation parser RegExp branch census is unavailable.');
+  }
+  assertExactParserStringKeys(branch, ['parent', 'base']);
+  assertExactParserStringKeys(branchPrototype, ['constructor', 'separatedFrom', 'sibling']);
+  return parser;
+}
+
+function parserRequiredOwnObject(owner: object, key: PropertyKey): object {
+  const value = parserRequiredOwnValue(owner, key);
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') {
+    throw new NativeTypeError('Translation parser warm graph omitted a required object control.');
+  }
+  return value;
+}
+
+function parserRequiredOwnValue(owner: object, key: PropertyKey): unknown {
+  const descriptor = apply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [owner, key],
+  );
+  if (descriptor === undefined || !descriptorIsData(descriptor)) {
+    throw new NativeTypeError('Translation parser warm graph omitted a required data control.');
+  }
+  return descriptor.value;
+}
+
+function assertExactParserStringKeys(owner: object, expected: readonly string[]): void {
+  const actual = apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [owner]);
+  if (translationArrayLength(actual) !== translationArrayLength(expected)) {
+    throw new NativeTypeError('Translation parser warm control shape drifted.');
+  }
+  const remaining = new NativeSet<string>();
+  for (let index = 0; index < translationArrayLength(expected); index += 1) {
+    apply(nativeSetAdd, remaining, [expected[index]!]);
+  }
+  for (let index = 0; index < translationArrayLength(actual); index += 1) {
+    const key = actual[index]!;
+    if (typeof key !== 'string' || !apply<boolean>(nativeSetHas, remaining, [key])) {
+      throw new NativeTypeError('Translation parser warm control key drifted.');
+    }
+  }
 }
 
 const parserGlobalKeys: readonly PropertyKey[] = [
@@ -125,12 +326,13 @@ const parserGlobalKeys: readonly PropertyKey[] = [
 /**
  * Mutable objects reachable by the pinned Acorn 8.17.0 parser.
  *
- * Acorn exposes its complete mutable parser graph from `Parser`/`Parser.acorn`: the parser
- * prototype and statics, defaultOptions, token/context tables and constructors, identifier/newline
- * helpers, and exported RegExp instances. Recursively following own data/accessor descriptors also
- * captures RegExp `lastIndex` and source-mode mutations that cannot reach the private bundled graph.
- * Explicit intrinsic roots cover every late host lookup made by that graph. `globalThis` is limited
- * to the reviewed names above because unrelated application globals are not parser controls.
+ * The public `Parser`/`Parser.acorn` graph covers parser statics, token/context tables, exported
+ * constructors, identifier/newline helpers, and eager RegExps. The retained fixed-mode warm parser
+ * additionally covers Acorn's private lazy cache, state instances, and hidden prototypes. Following
+ * every own data/accessor descriptor captures symbol controls and RegExp `lastIndex` without running
+ * getters. Explicit intrinsic roots cover the late host lookups made by Acorn 8.17.0. `globalThis`
+ * is limited to the reviewed names above because unrelated application globals are not parser
+ * controls.
  */
 const parserExactRoots: readonly object[] = [
   NativeObjectPrototype,
@@ -171,6 +373,8 @@ const parserExactRoots: readonly object[] = [
   NativeTypeError,
   NativeURIError,
   AcornParser,
+  translationParserOptions,
+  translationWarmParser,
 ];
 
 const translationParserSurfaceDefinitions = parserSurfaceDefinitions();
@@ -201,6 +405,13 @@ export function translationWithParserControls<Value>(parse: () => Value): Value 
   }
 }
 
+/** Parse only in the fixed Acorn mode whose complete lazy control graph was warmed at bootstrap. */
+export function translationParseJavaScriptSource(source: string): unknown {
+  return translationWithParserControls(() =>
+    apply(acornParserParse, AcornParser, [source, translationParserOptions]),
+  );
+}
+
 function parserSurfaceDefinitions(): readonly TranslationParserSurfaceDefinition[] {
   const definitions: TranslationParserSurfaceDefinition[] = [
     { exact: true, owner: NativeObjectPrototype },
@@ -213,6 +424,7 @@ function parserSurfaceDefinitions(): readonly TranslationParserSurfaceDefinition
     }
     translationArrayAppend(definitions, { exact: true, owner: owners[index]! });
   }
+  assertParserCensusLimit(translationArrayLength(definitions) <= MAX_TRANSLATION_PARSER_SURFACES);
   return definitions;
 }
 
@@ -220,14 +432,24 @@ function parserReachableObjects(roots: readonly object[]): object[] {
   const owners: object[] = [];
   const pending = translationArrayCopy(roots);
   const seen = new NativeSet<object>();
+  let descriptorCount = 0;
   while (translationArrayLength(pending) > 0) {
+    assertParserCensusLimit(
+      translationArrayLength(pending) <= MAX_TRANSLATION_PARSER_PENDING_OBJECTS,
+    );
     const owner = translationArrayPop(pending)!;
     if (apply<boolean>(nativeSetHas, seen, [owner])) continue;
     apply(nativeSetAdd, seen, [owner]);
     translationArrayAppend(owners, owner);
+    assertParserCensusLimit(translationArrayLength(owners) <= MAX_TRANSLATION_PARSER_SURFACES);
     const prototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [owner]);
     if (prototype !== null) translationArrayAppend(pending, prototype);
     const keys = apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [owner]);
+    assertParserCensusLimit(
+      translationArrayLength(keys) <= MAX_TRANSLATION_PARSER_KEYS_PER_SURFACE,
+    );
+    descriptorCount += translationArrayLength(keys);
+    assertParserCensusLimit(descriptorCount <= MAX_TRANSLATION_PARSER_DESCRIPTORS);
     for (let index = 0; index < translationArrayLength(keys); index += 1) {
       const descriptor = apply<PropertyDescriptor | undefined>(
         nativeObjectGetOwnPropertyDescriptor,
@@ -256,11 +478,16 @@ function captureParserState(
   definitions: readonly TranslationParserSurfaceDefinition[],
 ): TranslationParserSurfaceState[] {
   const states: TranslationParserSurfaceState[] = [];
+  let descriptorCount = 0;
+  assertParserCensusLimit(translationArrayLength(definitions) <= MAX_TRANSLATION_PARSER_SURFACES);
   for (let index = 0; index < translationArrayLength(definitions); index += 1) {
     const definition = definitions[index]!;
     const keys = definition.exact
       ? apply<(string | symbol)[]>(nativeReflectOwnKeys, NativeReflect, [definition.owner])
       : translationArrayCopy(definition.selectedKeys ?? []);
+    assertParserCensusLimit(
+      translationArrayLength(keys) <= MAX_TRANSLATION_PARSER_KEYS_PER_SURFACE,
+    );
     const descriptors = new NativeMap<PropertyKey, PropertyDescriptor>();
     for (let keyIndex = 0; keyIndex < translationArrayLength(keys); keyIndex += 1) {
       const key = keys[keyIndex]!;
@@ -269,11 +496,16 @@ function captureParserState(
         NativeObject,
         [definition.owner, key],
       );
-      if (descriptor !== undefined) apply(nativeMapSet, descriptors, [key, descriptor]);
+      if (descriptor !== undefined) {
+        descriptorCount += 1;
+        assertParserCensusLimit(descriptorCount <= MAX_TRANSLATION_PARSER_DESCRIPTORS);
+        apply(nativeMapSet, descriptors, [key, descriptor]);
+      }
     }
     translationArrayAppend(states, {
       definition,
       descriptors,
+      extensible: apply<boolean>(nativeObjectIsExtensible, NativeObject, [definition.owner]),
       keys,
       prototype: definition.exact
         ? apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [definition.owner])
@@ -281,6 +513,10 @@ function captureParserState(
     });
   }
   return states;
+}
+
+function assertParserCensusLimit(condition: boolean): void {
+  if (!condition) throw new NativeTypeError('Translation parser control census exceeds its bound.');
 }
 
 function reconcileParserState(
@@ -299,6 +535,13 @@ function reconcileParserSurface(target: TranslationParserSurfaceState): boolean 
   const { definition } = target;
   const { owner } = definition;
   let complete = true;
+  try {
+    if (apply<boolean>(nativeObjectIsExtensible, NativeObject, [owner]) !== target.extensible) {
+      complete = false;
+    }
+  } catch {
+    complete = false;
+  }
   if (definition.exact) {
     try {
       const currentPrototype = apply<object | null>(nativeObjectGetPrototypeOf, NativeObject, [
@@ -385,6 +628,9 @@ function parserSurfaceMatches(target: TranslationParserSurfaceState): boolean {
   const { definition } = target;
   const { owner } = definition;
   try {
+    if (apply<boolean>(nativeObjectIsExtensible, NativeObject, [owner]) !== target.extensible) {
+      return false;
+    }
     if (
       definition.exact &&
       !apply<boolean>(nativeObjectIs, NativeObject, [

@@ -2484,6 +2484,46 @@ const verifyTranslationExactParserCensusBranch =
   '    { exact: true, owner: NativeObjectPrototype },';
 const weakenedVerifyTranslationExactParserCensusBranch =
   '    { exact: false, owner: NativeObjectPrototype, selectedKeys: [] },';
+const verifyTranslationWarmParserGraphBranch = '  translationWarmParser,';
+const removedVerifyTranslationWarmParserGraphBranch = '';
+const translationParserWarmGraphBehavioralInstrumentation = `
+export function __securityMutationPoisonTranslationParserWordCache() {
+  const seed = new AcornParser(translationParserOptions, '') as AcornParser & {
+    keywords: RegExp;
+  };
+  const expression = seed.keywords;
+  const original = NativeObject.getOwnPropertyDescriptor(expression, 'test');
+  const exactArrayPush = NativeArrayPrototype.push;
+  const exactRegExpTest = NativeRegExpPrototype.test;
+  let callbackCalls = 0;
+  function poisonParserPush<T>(this: T[], ...values: T[]): number {
+    if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+      return this.length;
+    }
+    return apply<number>(exactArrayPush, this, values);
+  }
+  function poisonedWordTest(this: RegExp, value: string): boolean {
+    callbackCalls += 1;
+    NativeArrayPrototype.push = poisonParserPush;
+    return apply<boolean>(exactRegExpTest, this, [value]);
+  }
+  NativeObject.defineProperty(expression, 'test', {
+    configurable: true,
+    value: poisonedWordTest,
+    writable: true,
+  });
+  return {
+    callbackCalls: () => callbackCalls,
+    cleanup() {
+      NativeArrayPrototype.push = exactArrayPush;
+      if (original === undefined) NativeReflect.deleteProperty(expression, 'test');
+      else NativeObject.defineProperty(expression, 'test', original);
+    },
+    expression,
+    poisonedWordTest,
+  };
+}
+`;
 const installedUpdateDocsSnapshotBranch = '  const resolved = bundledDocs(version);';
 const restoredLiveUpdateDocsFetchBranch = [
   '  const remoteFetch = (options as UpdateDocsOptions & {',
@@ -8493,6 +8533,19 @@ export const SECURITY_GATE_MUTANTS = [
     test: assertTranslationExactParserCensusBehavior,
   },
   {
+    behavioralInstrumentation: translationParserWarmGraphBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Drops the fixed-mode warm parser whose graph closes Acorn private lazy callbacks.',
+    expectedKiller:
+      'translation parsing must census the shared word cache and private fixed-mode parser controls',
+    name: 'translation-verifier/drop-warm-parser-control-graph',
+    replacement: removedVerifyTranslationWarmParserGraphBranch,
+    search: verifyTranslationWarmParserGraphBranch,
+    sourceFile: verifyTranslationIntrinsicsPath,
+    test: assertTranslationWarmParserGraphBehavior,
+  },
+  {
     behavioralTypeScript: true,
     description:
       'Lets a tools request execute after initialize but before the required initialized notification.',
@@ -8566,6 +8619,36 @@ function assertTranslationExactParserCensusBehavior(moduleUnderTest) {
   } finally {
     Array.prototype.push = nativePush;
     Reflect.deleteProperty(Object.prototype, probe);
+  }
+}
+
+function assertTranslationWarmParserGraphBehavior(moduleUnderTest) {
+  const nativePush = Array.prototype.push;
+  const fixture = moduleUnderTest.__securityMutationPoisonTranslationParserWordCache();
+  let program;
+  let pushRestored = false;
+  let callerMutationRestored = false;
+  try {
+    program = moduleUnderTest.translationParseJavaScriptSource(
+      "import { unreviewed } from 'attacker-controlled';",
+    );
+    pushRestored = Array.prototype.push === nativePush;
+    callerMutationRestored = fixture.expression.test === fixture.poisonedWordTest;
+  } finally {
+    fixture.cleanup();
+    Array.prototype.push = nativePush;
+  }
+  if (
+    fixture.callbackCalls() !== 0 ||
+    !pushRestored ||
+    !callerMutationRestored ||
+    !Array.isArray(program?.body) ||
+    program.body.length !== 1 ||
+    program.body[0]?.type !== 'ImportDeclaration'
+  ) {
+    throw new Error(
+      'translation parser omitted an import through an uncensused Acorn lazy callback',
+    );
   }
 }
 

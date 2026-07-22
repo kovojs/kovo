@@ -1,10 +1,16 @@
 import { spawnSync } from 'node:child_process';
 
-import { Parser } from 'acorn';
+import { type Options as AcornOptions, Parser, version as acornVersion } from 'acorn';
 import { describe, expect, it } from 'vitest';
 
 import { MAX_JAVASCRIPT_MODULE_REFERENCES } from './javascript-ast.js';
 import { type KovoEmittedTranslationInput, verifyEmittedTranslation } from './translation.js';
+
+const ConstructableParser = Parser as unknown as new (
+  options: AcornOptions,
+  input: string,
+  startPos?: number,
+) => Parser;
 
 // @kovo-security-classifier-corpus finite-security-operation-ir
 // @kovo-security-certifies C13 independently-reparsed-emitted-translation
@@ -198,6 +204,165 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     );
   });
 
+  it('removes callbacks from the fixed-mode shared Acorn word cache', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    );
+    const seed = new ConstructableParser(
+      { allowHashBang: true, ecmaVersion: 'latest', sourceType: 'module' },
+      '',
+    ) as Parser & { keywords: RegExp };
+    const expression = seed.keywords;
+    const original = Object.getOwnPropertyDescriptor(expression, 'test');
+    const nativePush = Array.prototype.push;
+    const nativeTest = RegExp.prototype.test;
+    const nativeApply = Reflect.apply;
+    let callbackCalls = 0;
+    function poisonParserPush<T>(this: T[], ...values: T[]): number {
+      if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+        return this.length;
+      }
+      return nativeApply(nativePush, this, values);
+    }
+    function poisonedWordTest(this: RegExp, value: string): boolean {
+      callbackCalls += 1;
+      Array.prototype.push = poisonParserPush;
+      return nativeApply(nativeTest, this, [value]);
+    }
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    let callerMutationRestored = false;
+    let parserPushRestored = false;
+    try {
+      Object.defineProperty(expression, 'test', {
+        configurable: true,
+        enumerable: false,
+        value: poisonedWordTest,
+        writable: true,
+      });
+      findings = verifyEmittedTranslation(input).findings;
+      callerMutationRestored = expression.test === poisonedWordTest;
+      parserPushRestored = Array.prototype.push === nativePush;
+    } finally {
+      Array.prototype.push = nativePush;
+      if (original === undefined) Reflect.deleteProperty(expression, 'test');
+      else Object.defineProperty(expression, 'test', original);
+    }
+
+    expect(callbackCalls).toBe(0);
+    expect(callerMutationRestored).toBe(true);
+    expect(parserPushRestored).toBe(true);
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
+  it('removes callbacks from Acorn private RegExp state reached by the fixed warm parser', () => {
+    const input = validTranslation();
+    const client = artifact(input, 'client');
+    client.source = `const __kovoParserStateTrigger = /a/;\n${client.source.replace(
+      'safeCall as call',
+      'safeCall as call, STRIPE_SECRET_KEY',
+    )}`;
+    const seed = new ConstructableParser(
+      { allowHashBang: true, ecmaVersion: 'latest', sourceType: 'module' },
+      'const seed = /a/;',
+    ) as Parser & { regexpState: object | null };
+    seed.parse();
+    const state = seed.regexpState;
+    expect(state).not.toBeNull();
+    const statePrototype = Object.getPrototypeOf(state!) as { reset: (...args: unknown[]) => void };
+    const original = Object.getOwnPropertyDescriptor(statePrototype, 'reset');
+    expect(original).toBeDefined();
+    const nativeReset = statePrototype.reset;
+    const nativePush = Array.prototype.push;
+    const nativeApply = Reflect.apply;
+    let callbackCalls = 0;
+    function poisonParserPush<T>(this: T[], ...values: T[]): number {
+      if ((values[0] as { type?: unknown } | undefined)?.type === 'ImportDeclaration') {
+        return this.length;
+      }
+      return nativeApply(nativePush, this, values);
+    }
+    function poisonedReset(this: object, ...args: unknown[]): void {
+      callbackCalls += 1;
+      Array.prototype.push = poisonParserPush;
+      nativeApply(nativeReset, this, args);
+    }
+    let findings: ReturnType<typeof verifyEmittedTranslation>['findings'] | undefined;
+    let callerMutationRestored = false;
+    let parserPushRestored = false;
+    try {
+      Object.defineProperty(statePrototype, 'reset', { ...original, value: poisonedReset });
+      findings = verifyEmittedTranslation(input).findings;
+      callerMutationRestored = statePrototype.reset === poisonedReset;
+      parserPushRestored = Array.prototype.push === nativePush;
+    } finally {
+      Array.prototype.push = nativePush;
+      Object.defineProperty(statePrototype, 'reset', original!);
+    }
+
+    expect(callbackCalls).toBe(0);
+    expect(callerMutationRestored).toBe(true);
+    expect(parserPushRestored).toBe(true);
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-unreviewed',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
+  it('pins the exact Acorn version and fixed-mode lazy control census', () => {
+    expect(acornVersion).toBe('8.17.0');
+    const options = { allowHashBang: true, ecmaVersion: 'latest', sourceType: 'module' } as const;
+    const warm = new ConstructableParser(options, 'const __kovoWarmCensus = /(/;') as Parser & {
+      keywords: RegExp;
+      regexpState: { branchID: object; parser: Parser } | null;
+      reservedWords: RegExp;
+      reservedWordsStrict: RegExp;
+      reservedWordsStrictBind: RegExp;
+    };
+    expect(() => warm.parse()).toThrow(/Unterminated group/u);
+    expect(
+      new Set([
+        warm.keywords,
+        warm.reservedWords,
+        warm.reservedWordsStrict,
+        warm.reservedWordsStrictBind,
+      ]).size,
+    ).toBe(4);
+    expect(warm.regexpState?.parser).toBe(warm);
+    expect(Reflect.ownKeys(Object.getPrototypeOf(warm.regexpState!))).toEqual([
+      'constructor',
+      'reset',
+      'raise',
+      'at',
+      'nextIndex',
+      'current',
+      'lookahead',
+      'advance',
+      'eat',
+      'eatChars',
+    ]);
+    expect(Reflect.ownKeys(Object.getPrototypeOf(warm.regexpState!.branchID))).toEqual([
+      'constructor',
+      'separatedFrom',
+      'sibling',
+    ]);
+    const second = new ConstructableParser(options, '') as Parser & { keywords: RegExp };
+    expect(second.keywords).toBe(warm.keywords);
+  });
+
   it('fails closed on non-restorable parser drift and continues cleanup after a restore failure', () => {
     const moduleUrl = new URL('./translation-intrinsics.ts', import.meta.url).href;
     const entryDrift = spawnIsolatedParserControlProbe(`
@@ -250,6 +415,50 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
         }
       `);
     expect(restoreFailure.status, restoreFailure.stderr).toBe(0);
+
+    const extensibilityDrift = spawnIsolatedParserControlProbe(`
+        const { translationWithParserControls } = await import(${JSON.stringify(moduleUrl)});
+        let callbackRan = false;
+        Object.preventExtensions(Object.prototype);
+        let threw = false;
+        try {
+          translationWithParserControls(() => { callbackRan = true; });
+        } catch (error) {
+          threw = error instanceof TypeError && /could not be installed/u.test(error.message);
+        }
+        if (!threw || callbackRan) throw new Error(JSON.stringify({ callbackRan, threw }));
+      `);
+    expect(extensibilityDrift.status, extensibilityDrift.stderr).toBe(0);
+
+    const censusBound = spawnIsolatedParserControlProbe(`
+        const { translationWithParserControls } = await import(${JSON.stringify(moduleUrl)});
+        let callbackRan = false;
+        for (let index = 0; index < 1_024; index += 1) {
+          Object.defineProperty(Object.prototype, '__kovoParserBound' + index, {
+            configurable: true,
+            value: index
+          });
+        }
+        let threw = false;
+        try {
+          translationWithParserControls(() => { callbackRan = true; });
+        } catch (error) {
+          threw = error instanceof TypeError && /census exceeds its bound/u.test(error.message);
+        }
+        if (!threw || callbackRan) throw new Error(JSON.stringify({ callbackRan, threw }));
+      `);
+    expect(censusBound.status, censusBound.stderr).toBe(0);
+  });
+
+  it('keeps the fixed-mode parser census inside its per-translation performance budget', () => {
+    const input = validTranslation();
+    for (let index = 0; index < 5; index += 1)
+      expect(verifyEmittedTranslation(input).ok).toBe(true);
+    const start = performance.now();
+    for (let index = 0; index < 100; index += 1) {
+      expect(verifyEmittedTranslation(input).ok).toBe(true);
+    }
+    expect(performance.now() - start).toBeLessThan(2_500);
   });
 
   it('does not hide an escaped exact secret token through late Array.some', () => {

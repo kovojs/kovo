@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(494);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(495);
   });
 
   it('enrolls the emitted-translation intrinsic forcing mutant', () => {
@@ -26,15 +26,19 @@ describe('security-gate-mutations', () => {
   });
 
   it('enrolls the emitted-translation parser census forcing mutant', () => {
-    const mutant = SECURITY_GATE_MUTANTS.find(
-      (candidate) => candidate.name === 'translation-verifier/drop-exact-parser-census',
+    const mutants = SECURITY_GATE_MUTANTS.filter((candidate) =>
+      [
+        'translation-verifier/drop-exact-parser-census',
+        'translation-verifier/drop-warm-parser-control-graph',
+      ].includes(candidate.name),
     );
 
-    expect(mutant).toMatchObject({
-      behavioralTypeScript: true,
-      expectedKiller:
-        'translation parser scope must suppress arbitrary inherited callbacks and restore reentrant drift',
-    });
+    expect(mutants).toHaveLength(2);
+    expect(mutants.every((mutant) => mutant.behavioralTypeScript === true)).toBe(true);
+    expect(mutants.map((mutant) => mutant.name).sort()).toEqual([
+      'translation-verifier/drop-exact-parser-census',
+      'translation-verifier/drop-warm-parser-control-graph',
+    ]);
   });
 
   it('enrolls the self-contained verifier parser pack forcing mutant', () => {
