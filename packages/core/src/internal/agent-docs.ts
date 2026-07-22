@@ -11,7 +11,7 @@ export interface KovoDocsMirrorFile {
   source: string;
 }
 
-/** @internal One remote docs mirror source fetched by `kovo update-docs`. */
+/** @internal One canonical public-doc URL recorded in local mirror metadata. */
 export interface KovoDocsMirrorRemote {
   path: string;
   url: string;
@@ -157,7 +157,7 @@ const additionalMirrorDocs: readonly KovoDocsMirrorRemote[] = [
   { path: 'spec.md', url: 'https://kovo.sh/spec.md' },
 ];
 
-/** @internal Remote docs mirror index fetched by `kovo update-docs`. */
+/** @internal Canonical public-doc index recorded by `kovo update-docs` without fetching it. */
 export const kovoDocsMirrorRemotes: readonly KovoDocsMirrorRemote[] = [
   { path: 'kovo-rules.md', url: 'https://kovo.sh/kovo-rules.md' },
   ...additionalMirrorDocs,
@@ -240,14 +240,8 @@ export function replaceKovoRulesBlock(documentSource: string, rulesBlock: string
   return `${documentSource.slice(0, begin)}${rulesBlock.trimEnd()}${documentSource.slice(afterEnd)}`;
 }
 
-/** @internal Build the bundled local-docs mirror files used when remote fetches fail. */
-export function bundledKovoDocsMirrorFiles({
-  source = 'bundled',
-  version,
-}: {
-  source?: 'bundled' | 'fetched';
-  version: string;
-}): KovoDocsMirrorFile[] {
+/** @internal Build the versioned local-docs mirror shipped with the installed Kovo package. */
+export function bundledKovoDocsMirrorFiles({ version }: { version: string }): KovoDocsMirrorFile[] {
   const files = new Map<string, string>();
   files.set('kovo-rules.md', bundledKovoRulesSource());
   files.set(
@@ -271,7 +265,7 @@ export function bundledKovoDocsMirrorFiles({
     [
       '# Kovo Full Docs',
       '',
-      'Bundled starter snapshot. Run `kovo update-docs` to fetch the latest public docs.',
+      'Installed CLI snapshot. Upgrade Kovo, then run `kovo update-docs` to refresh it.',
       '',
       bundledKovoRulesSource().trim(),
       '',
@@ -289,7 +283,7 @@ export function bundledKovoDocsMirrorFiles({
       {
         docs: [...kovoDocsMirrorRemotes],
         generatedBy: 'kovo update-docs',
-        source,
+        source: 'installed-package',
         version,
       },
       null,
@@ -313,7 +307,7 @@ function fallbackDoc(title: string, url: string): string {
     '',
     `Bundled starter placeholder for ${url}.`,
     '',
-    'Run `kovo update-docs` to fetch the latest local copy.',
+    'Upgrade Kovo, then run `kovo update-docs` to refresh the installed local snapshot.',
     '',
   ].join('\n');
 }

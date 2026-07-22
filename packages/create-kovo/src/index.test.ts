@@ -148,7 +148,10 @@ describe('create-kovo starter (metadata)', () => {
         source?: string;
         version?: string;
       };
-      expect(metadata).toMatchObject({ source: 'bundled', version: createKovoPackage.version });
+      expect(metadata).toMatchObject({
+        source: 'installed-package',
+        version: createKovoPackage.version,
+      });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

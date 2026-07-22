@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import {
   bundledKovoDocsMirrorFiles,
   defaultKovoRulesSource,
-  kovoDocsMirrorRemotes,
   renderKovoRulesBlock,
   replaceKovoRulesBlock,
 } from '@kovojs/core/internal/agent-docs';
@@ -15,13 +14,11 @@ import type { KovoCheckResult } from '../shared.js';
 
 export interface UpdateDocsOptions {
   cwd?: string;
-  fetchImpl?: typeof fetch;
   version?: string;
 }
 
 interface ResolvedDocs {
   files: Map<string, string>;
-  source: 'bundled' | 'fetched';
 }
 
 const nativeBufferFrom = NativeBuffer.from;
@@ -35,7 +32,10 @@ export async function runUpdateDocsCommand(
   const cwd = resolve(options.cwd ?? process.cwd());
   const output = createFrameworkOutputFileSystemBoundary(cwd);
   const version = options.version ?? readCliPackageVersion();
-  const resolved = await resolveDocs(options.fetchImpl ?? globalThis.fetch, version);
+  // Agent instructions are executable authority for coding agents. Refresh only from the exact
+  // versioned CLI package the user installed; accepting live website bytes here would create an
+  // unpinned second software supply chain inside AGENTS.md.
+  const resolved = bundledDocs(version);
   const kovoRulesSource =
     resolved.files.get('kovo-rules.md') ??
     bundledKovoDocsMirrorFiles({ version }).find((file) => file.path === 'kovo-rules.md')?.source ??
@@ -59,10 +59,8 @@ export async function runUpdateDocsCommand(
       exitCode: 0,
       output: [
         'kovo-update-docs/v1',
-        `OK source=${resolved.source} files=${resolved.files.size}`,
-        resolved.source === 'bundled'
-          ? 'WARN fetch failed; used bundled docs snapshot'
-          : 'OK fetched latest docs',
+        `OK source=installed-package files=${resolved.files.size}`,
+        'OK refreshed from versioned CLI snapshot',
         '',
       ].join('\n'),
     };
@@ -76,49 +74,10 @@ export async function runUpdateDocsCommand(
   }
 }
 
-async function resolveDocs(
-  fetchImpl: typeof fetch | undefined,
-  version: string,
-): Promise<ResolvedDocs> {
-  if (!fetchImpl) return bundledDocs(version);
-
-  try {
-    const fetched = new Map<string, string>();
-    for (const remote of kovoDocsMirrorRemotes) {
-      const response = await fetchImpl(remote.url);
-      if (!response.ok) throw new Error(`GET ${remote.url} returned ${response.status}`);
-      fetched.set(remote.path, await response.text());
-    }
-    fetched.set('metadata.json', metadataSource(version, 'fetched'));
-    return { files: fetched, source: 'fetched' };
-  } catch {
-    return bundledDocs(version);
-  }
-}
-
 function bundledDocs(version: string): ResolvedDocs {
   return {
-    files: new Map(
-      bundledKovoDocsMirrorFiles({ source: 'bundled', version }).map((file) => [
-        file.path,
-        file.source,
-      ]),
-    ),
-    source: 'bundled',
+    files: new Map(bundledKovoDocsMirrorFiles({ version }).map((file) => [file.path, file.source])),
   };
-}
-
-function metadataSource(version: string, source: 'bundled' | 'fetched'): string {
-  return `${JSON.stringify(
-    {
-      docs: [...kovoDocsMirrorRemotes],
-      generatedBy: 'kovo update-docs',
-      source,
-      version,
-    },
-    null,
-    2,
-  )}\n`;
 }
 
 function utf8Text(bytes: Uint8Array): string {

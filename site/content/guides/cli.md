@@ -337,10 +337,10 @@ Refreshes the generated Kovo section in `AGENTS.md` and mirrors agent-readable d
 kovo update-docs
 ```
 
-The command fetches the latest docs from kovo.sh when available. If the fetch fails, it falls back to
-the bundled docs snapshot and says so in its output. The embedded `kovo-rules-version` is package
-version provenance only; docs may still be refreshed within the same package version, so run
-`kovo update-docs` when you want the newest local agent docs.
+The command copies docs from the exact installed CLI package; it never inserts live website bytes
+into `AGENTS.md` or the agent-readable mirror. The embedded `kovo-rules-version` therefore identifies
+the software supply-chain version that supplied those instructions. Upgrade Kovo first, then run
+`kovo update-docs` to refresh the local snapshot.
 
 ### `kovo mcp` — Model Context Protocol server
 
