@@ -255,11 +255,11 @@ export interface CreateAppOptions<
   appId?: string;
   /**
    * Client-module representation store to inject (SPEC §5.2.1/§9.5). Apps that emit
-   * interactive client modules pass their store here (e.g. via
-   * `createMemoryVersionedClientModuleRegistry`); when omitted, `createApp`
-   * provisions a fresh in-memory registry.
+   * interactive client modules may pass a custom store or a framework-owned registry created by
+   * `createMemoryVersionedClientModuleRegistry`; when omitted, `createApp` provisions a fresh
+   * in-memory registry. Structurally forged registries still fail the runtime ownership gate.
    */
-  clientModules?: VersionedClientModuleStore;
+  clientModules?: VersionedClientModuleStore | VersionedClientModuleRegistry;
   csrf?: CsrfOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions | DocumentDeclaration;

@@ -251,6 +251,12 @@ if (false) {
   // @ts-expect-error - SPEC.md §9.5 document customization uses structured primitives, not string templates.
   publicApi.createApp({ document: { template: () => '<html></html>' } });
 
+  // SPEC §5.2.1: the public helper returns a framework-owned registry whose private witness lets
+  // createApp safely reuse its closed store; a structurally forged facade still fails at runtime.
+  publicApi.createApp({
+    clientModules: publicApi.createMemoryVersionedClientModuleRegistry(),
+  });
+
   const closedApp = publicApi.createApp();
   // @ts-expect-error - SPEC.md §9.5 closes the app aggregate after construction.
   closedApp.routes = [];

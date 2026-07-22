@@ -174,7 +174,7 @@ export function createApp<
       ? undefined
       : snapshotPrincipalEpochStore(configuredPrincipalEpochStore);
   const configuredClientModules = appOptionOwnDataValue(options, 'clientModules') as
-    | KovoApp['clientModules']
+    | AppOptions['clientModules']
     | undefined;
   const clientModules = snapshotVersionedClientModuleRegistry(
     configuredClientModules ?? createMemoryVersionedClientModuleRegistry(),
