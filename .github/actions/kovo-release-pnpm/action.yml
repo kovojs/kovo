@@ -1,0 +1,29 @@
+name: Kovo integrity-bound release pnpm
+description: Install the exact reviewed Node archive and integrity-bound pnpm producer tool.
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/kovo-release-node
+    - shell: bash
+      run: |
+        set -euo pipefail
+        node_root="$RUNNER_TEMP/node-v24.18.0-linux-x64"
+        corepack_home="$RUNNER_TEMP/kovo-corepack-pnpm-10.12.1"
+        pnpm_cli="$corepack_home/v1/pnpm/10.12.1/bin/pnpm.cjs"
+        if [ -e "$corepack_home" ]; then
+          printf 'refusing pre-existing Corepack cache: %s\n' "$corepack_home" >&2
+          exit 1
+        fi
+        /usr/bin/mkdir --mode=0700 "$corepack_home"
+        COREPACK_HOME="$corepack_home" \
+          "$node_root/bin/node" "$node_root/lib/node_modules/corepack/dist/corepack.js" prepare \
+          'pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac' \
+            --activate
+        test -f "$pnpm_cli"
+        COREPACK_HOME="$corepack_home" \
+          "$node_root/bin/node" "$node_root/lib/node_modules/corepack/dist/corepack.js" enable \
+          --install-directory "$node_root/bin"
+        printf 'COREPACK_ENABLE_NETWORK=0\n' >> "$GITHUB_ENV"
+        printf 'COREPACK_ENABLE_PROJECT_SPEC=0\n' >> "$GITHUB_ENV"
+        printf 'COREPACK_HOME=%s\n' "$corepack_home" >> "$GITHUB_ENV"
+        printf 'KOVO_RELEASE_PNPM_CLI=%s\n' "$pnpm_cli" >> "$GITHUB_ENV"

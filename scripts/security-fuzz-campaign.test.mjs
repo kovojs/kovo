@@ -314,13 +314,13 @@ describe('deterministic security fuzz campaign contract', () => {
 
     for (const [needle, replacement, finding] of [
       [
-        'run: vp exec pnpm run check:grammar-containment',
-        'run: vp exec pnpm run check:grammar-containment-disabled',
+        '"$KOVO_RELEASE_PNPM_CLI" run check:grammar-containment',
+        '"$KOVO_RELEASE_PNPM_CLI" run check:grammar-containment-disabled',
         'check:grammar-containment',
       ],
       [
-        'run: vp exec pnpm run test:security-fuzz-release',
-        'run: vp exec pnpm run test:security-fuzz-nightly',
+        '"$KOVO_RELEASE_PNPM_CLI" run test:security-fuzz-release',
+        '"$KOVO_RELEASE_PNPM_CLI" run test:security-fuzz-nightly',
         'release fuzz command',
       ],
       ['timeout-minutes: 240', 'timeout-minutes: 120', 'timeout-minutes: 240'],

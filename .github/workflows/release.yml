@@ -106,7 +106,7 @@ jobs:
       checks: read
       contents: read
     outputs:
-      release-artifact-id: ${{ steps.upload-release.outputs.artifact-id }}
+      unverified-artifact-id: ${{ steps.upload-unverified-release.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -114,28 +114,43 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
 
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 24.18.0
+      - uses: ./.github/actions/kovo-release-pnpm
 
       - name: Verify release input
         # The no-checkout authorize job already bound this release to the
         # exact successful main CI run. This repository validator independently
         # checks package versions, the trusted check app, and public-registry
         # state before install/build code runs (SPEC §2 default-deny).
-        run: vp exec node scripts/verify-release-input.mjs "$VERSION"
+        run: node scripts/verify-release-input.mjs "$VERSION"
         env:
           GH_TOKEN: ${{ github.token }}
+          KOVO_NPM_EXECUTABLE: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin/npm
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
           REQUIRED_RELEASE_CHECKS: check
           VERSION: ${{ inputs.version }}
 
-      - run: vp install --frozen-lockfile
+      - run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" install --frozen-lockfile
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
 
       - name: Prove declared grammar containment model
-        run: vp exec pnpm run check:grammar-containment
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run check:grammar-containment
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
 
       - name: Run deterministic release security fuzz campaign
-        run: vp exec pnpm run test:security-fuzz-release
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run test:security-fuzz-release
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
 
       - name: Archive release security fuzz counterexamples
         if: failure()
@@ -147,27 +162,94 @@ jobs:
           retention-days: 30
 
       - name: Supply-chain policy gates
-        run: vp exec pnpm run check:supply-chain
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run check:supply-chain
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
 
       - name: Build and verify packed publish artifacts
-        run: vp exec pnpm run check:publish
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run check:publish
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
 
-      - name: Verify release metadata did not drift
+      - name: Upload bounded untrusted release producer files
+        id: upload-unverified-release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kovo-release-unverified-${{ github.sha }}
+          path: |
+            .release/packed-packages.json
+            .release/tarballs/*.tgz
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  seal-release:
+    needs:
+      - authorize
+      - prepare
+    runs-on: ubuntu-latest
+    env:
+      BASH_ENV: ''
+      ENV: ''
+      NODE_OPTIONS: ''
+      PATH: /usr/bin:/bin
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      release-artifact-id: ${{ steps.upload-release.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: ./.github/actions/kovo-release-node
+      - name: Verify fresh exact release checkout
+        env:
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_CONFIG_NOSYSTEM: '1'
         run: |
           set -euo pipefail
-          test "$(git --no-replace-objects rev-parse HEAD)" = "$GITHUB_SHA"
-          git -c core.filemode=true -c core.symlinks=true -c core.trustctime=true -c core.checkStat=default -c core.fsmonitor=false update-index --really-refresh
-          git ls-files -v | awk 'substr($0, 1, 1) != "H" { exit 1 }'
-          git diff --no-ext-diff --no-textconv --ignore-submodules=none --check
-          git diff --cached --no-ext-diff --no-textconv --ignore-submodules=none --check "$GITHUB_SHA" --
-          git diff --no-ext-diff --no-textconv --ignore-submodules=none --exit-code
-          git diff --cached --no-ext-diff --no-textconv --ignore-submodules=none --exit-code "$GITHUB_SHA" --
-
+          test "$(/usr/bin/git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(/usr/bin/git status --porcelain --untracked-files=all)"
+          test ! -e "$GITHUB_WORKSPACE/.release"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.unverified-artifact-id }}
+          path: ${{ runner.temp }}/kovo-release-unverified
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-reproducible-pack-attestation
+          path: ${{ runner.temp }}/kovo-reproducible-pack
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.authorize.outputs.ci-run-id }}
+      - name: Seal bounded producer files into an exact release payload
+        env:
+          UNVERIFIED_RELEASE_ROOT: ${{ runner.temp }}/kovo-release-unverified/kovo-release-unverified-${{ github.sha }}
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          scripts/verify-packed-release-payload.mjs
+          --input "$UNVERIFIED_RELEASE_ROOT"
+      - name: Bind producer payload to exact source and two-build CI subjects
+        env:
+          REPRODUCIBLE_PACK_ATTESTATION: ${{ runner.temp }}/kovo-reproducible-pack/reproducible-pack-attestation.json
+        run: |
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node" \
+            scripts/verify-reproducible-release-subjects.mjs \
+            --attestation "$REPRODUCIBLE_PACK_ATTESTATION" \
+            --source "$GITHUB_SHA"
       - name: Archive exact verified release payload
         env:
           RELEASE_ARCHIVE: ${{ runner.temp }}/kovo-release-${{ github.sha }}.tgz
-        run: tar --create --gzip --file "$RELEASE_ARCHIVE" --directory "$GITHUB_WORKSPACE" .release
-
+        run: /usr/bin/tar --create --gzip --file "$RELEASE_ARCHIVE" --directory "$GITHUB_WORKSPACE" .release
       - name: Upload exact verified release archive
         id: upload-release
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -180,8 +262,13 @@ jobs:
 
   attest-release-archive:
     if: ${{ !inputs.dry_run }}
-    needs: prepare
+    needs: seal-release
     runs-on: ubuntu-latest
+    env:
+      BASH_ENV: ''
+      ENV: ''
+      NODE_OPTIONS: ''
+      PATH: /usr/bin:/bin
     permissions:
       artifact-metadata: write
       attestations: write
@@ -191,7 +278,7 @@ jobs:
       - name: Download exact verified release archive
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          artifact-ids: ${{ needs.prepare.outputs.release-artifact-id }}
+          artifact-ids: ${{ needs.seal-release.outputs.release-artifact-id }}
           path: ${{ runner.temp }}/kovo-release-attestation
 
       - name: Attest exact verified release archive
@@ -205,8 +292,13 @@ jobs:
 
   attest-committed-evidence:
     if: ${{ !inputs.dry_run }}
-    needs: prepare
+    needs: seal-release
     runs-on: ubuntu-latest
+    env:
+      BASH_ENV: ''
+      ENV: ''
+      NODE_OPTIONS: ''
+      PATH: /usr/bin:/bin
     permissions:
       artifact-metadata: write
       attestations: write
@@ -243,10 +335,15 @@ jobs:
     if: ${{ !inputs.dry_run }}
     needs:
       - authorize
-      - prepare
+      - seal-release
       - attest-release-archive
       - attest-committed-evidence
     runs-on: ubuntu-latest
+    env:
+      BASH_ENV: ''
+      ENV: ''
+      NODE_OPTIONS: ''
+      PATH: /usr/bin:/bin
     environment: release
     permissions:
       actions: read
@@ -259,28 +356,17 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
 
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 24.18.0
+      - uses: ./.github/actions/kovo-release-node
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          artifact-ids: ${{ needs.prepare.outputs.release-artifact-id }}
+          artifact-ids: ${{ needs.seal-release.outputs.release-artifact-id }}
           path: ${{ runner.temp }}/kovo-release-artifact
-
-      - name: Download exact two-build CI subjects
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: kovo-reproducible-pack-attestation
-          path: ${{ runner.temp }}/kovo-reproducible-pack
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.authorize.outputs.ci-run-id }}
 
       - name: Verify trusted-publishing npm CLI
         run: |
-          npm_version="$(vp exec npm --version)"
-          vp exec node -e '
+          npm_version="$("$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/npm" --version)"
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node" -e '
             const actual = process.argv[1].split(".").map(Number);
             const [major = 0, minor = 0, patch = 0] = actual;
             const supported = actual.length >= 3 && actual.every(Number.isInteger) &&
@@ -313,19 +399,13 @@ jobs:
             awk 'substr($1, 1, 1) != "-" && substr($1, 1, 1) != "d" { exit 1 }'
           tar --extract --gzip --file "$RELEASE_ARCHIVE" --directory "$GITHUB_WORKSPACE"
 
-      - name: Bind packed tarballs to exact two-build CI subjects
-        env:
-          REPRODUCIBLE_PACK_ATTESTATION: ${{ runner.temp }}/kovo-reproducible-pack/reproducible-pack-attestation.json
-        run: >-
-          vp exec node scripts/verify-reproducible-release-subjects.mjs
-          --attestation "$REPRODUCIBLE_PACK_ATTESTATION"
-          --source "$GITHUB_SHA"
-
       - name: Publish packed packages
         # This job has OIDC authority, so it deliberately performs no dependency
         # install, repository build, or package lifecycle step. The publisher
         # revalidates the prepared manifest, tarball identities, and sha512 bytes.
-        run: vp exec node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"
+        run: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin/node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"
         env:
           DIST_TAG: ${{ inputs.dist_tag }}
+          KOVO_NPM_EXECUTABLE: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin/npm
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
           NPM_CONFIG_PROVENANCE: 'true'

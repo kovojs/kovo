@@ -1,21 +1,13 @@
 import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 
 export const npmPublicRegistry = 'https://registry.npmjs.org/';
 
 export function readNpmPublishedState(name, version, { exec = execFileSync } = {}) {
   try {
     const output = exec(
-      'vp',
-      [
-        'exec',
-        'npm',
-        'view',
-        `${name}@${version}`,
-        'dist.integrity',
-        '--json',
-        '--registry',
-        npmPublicRegistry,
-      ],
+      releaseNpmExecutable(),
+      ['view', `${name}@${version}`, 'dist.integrity', '--json', '--registry', npmPublicRegistry],
       {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -29,6 +21,19 @@ export function readNpmPublishedState(name, version, { exec = execFileSync } = {
     }
     return { state: 'error', detail: formatNpmRegistryError(error) };
   }
+}
+
+export function releaseNpmExecutable(env = process.env) {
+  const configured = env.KOVO_NPM_EXECUTABLE;
+  if (configured === undefined) return 'npm';
+  if (typeof env.RUNNER_TEMP !== 'string' || env.RUNNER_TEMP.length === 0) {
+    throw new TypeError('RUNNER_TEMP is required with KOVO_NPM_EXECUTABLE');
+  }
+  const expected = path.join(env.RUNNER_TEMP, 'node-v24.18.0-linux-x64', 'bin', 'npm');
+  if (configured !== expected || !path.isAbsolute(configured)) {
+    throw new TypeError('KOVO_NPM_EXECUTABLE must name the checksum-bound release npm');
+  }
+  return configured;
 }
 
 export function parsePublishedIntegrity(output, name = 'package', version = 'version') {

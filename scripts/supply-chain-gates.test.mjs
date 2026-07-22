@@ -159,7 +159,7 @@ describe('supply-chain gates', () => {
   it('keeps npm mutation authority confined to the attested publisher', () => {
     const publisher = {
       path: 'scripts/publish-packed-packages.mjs',
-      text: `exec('vp', ['exec', 'npm', 'publish', tarball])`,
+      text: `exec(releaseNpmExecutable(), ['publish', tarball])`,
     };
     expect(() => verifyNpmPublishAuthority([publisher])).not.toThrow();
     expect(() =>
@@ -171,6 +171,23 @@ describe('supply-chain gates', () => {
         },
       ]),
     ).toThrow('npm publish authority must be exactly');
+    expect(() =>
+      verifyNpmPublishAuthority([
+        publisher,
+        {
+          path: '.github/actions/kovo-release-node/action.yml',
+          text: `run: npm publish attacker.tgz`,
+        },
+      ]),
+    ).toThrow('npm publish authority must be exactly');
     expect(() => verifyNpmPublishAuthority([])).toThrow('npm publish authority must be exactly');
+    expect(() =>
+      verifyNpmPublishAuthority([
+        {
+          path: 'scripts/publish-packed-packages.mjs',
+          text: `exec(process.env.NPM, ['publish', tarball])`,
+        },
+      ]),
+    ).toThrow('checksum-bound npm authority');
   });
 });

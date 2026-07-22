@@ -187,50 +187,100 @@ jobs:
           path: ${{ runner.temp }}/kovo-package-dist.tgz
           retention-days: 1
 
-  reproducible-pack:
+  reproducible-pack-a:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: checkout-a
           persist-credentials: false
+      - uses: ./.github/actions/kovo-release-pnpm
+      - name: Install first clean checkout
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" install --frozen-lockfile
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+      - name: Build public packages in first clean checkout
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          KOVO_REPRODUCIBLE_BUILD_ID: clean-checkout-a
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run check:publish
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-reproducible-pack-a
+          path: |
+            .release/packed-packages.json
+            .release/tarballs/*.tgz
+          include-hidden-files: true
+          retention-days: 1
+
+  reproducible-pack-b:
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          path: checkout-b
           persist-credentials: false
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 24.18.0
-          version: 0.1.24
-      - name: Install first clean checkout
-        working-directory: checkout-a
-        run: vp install --frozen-lockfile
+      - uses: ./.github/actions/kovo-release-pnpm
       - name: Install second clean checkout
-        working-directory: checkout-b
-        run: vp install --frozen-lockfile
-      - name: Build public packages in first clean checkout
-        working-directory: checkout-a
-        env:
-          KOVO_REPRODUCIBLE_BUILD_ID: clean-checkout-a
-        run: vp exec pnpm run check:publish
-      - name: Build public packages in second clean checkout
-        working-directory: checkout-b
-        env:
-          KOVO_REPRODUCIBLE_BUILD_ID: clean-checkout-b
-        run: vp exec pnpm run check:publish
-      - name: Compare public tarball subjects
-        working-directory: checkout-a
         run: >-
-          vp exec node scripts/reproducible-pack.mjs
-          --first .release/packed-packages.json
-          --second ../checkout-b/.release/packed-packages.json
-          --out .release/reproducible-pack-attestation.json
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" install --frozen-lockfile
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+      - name: Build public packages in second clean checkout
+        env:
+          COREPACK_HOME: ${{ runner.temp }}/kovo-corepack-pnpm-10.12.1
+          KOVO_REPRODUCIBLE_BUILD_ID: clean-checkout-b
+          PATH: ${{ runner.temp }}/node-v24.18.0-linux-x64/bin:/usr/bin:/bin
+        run: >-
+          "$RUNNER_TEMP/node-v24.18.0-linux-x64/bin/node"
+          "$KOVO_RELEASE_PNPM_CLI" run check:publish
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-reproducible-pack-b
+          path: |
+            .release/packed-packages.json
+            .release/tarballs/*.tgz
+          include-hidden-files: true
+          retention-days: 1
+
+  reproducible-pack:
+    needs:
+      - reproducible-pack-a
+      - reproducible-pack-b
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-release-node
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-reproducible-pack-a
+          path: ${{ runner.temp }}/kovo-reproducible-pack-a
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-reproducible-pack-b
+          path: ${{ runner.temp }}/kovo-reproducible-pack-b
+      - name: Compare public tarball subjects without build dependencies
+        run: >-
+          ${{ runner.temp }}/node-v24.18.0-linux-x64/bin/node scripts/reproducible-pack.mjs
+          --first "${{ runner.temp }}/kovo-reproducible-pack-a/packed-packages.json"
+          --second "${{ runner.temp }}/kovo-reproducible-pack-b/packed-packages.json"
+          --out "$RUNNER_TEMP/reproducible-pack-attestation.json"
           --source "$GITHUB_SHA"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           if-no-files-found: error
           name: kovo-reproducible-pack-attestation
-          path: checkout-a/.release/reproducible-pack-attestation.json
+          path: ${{ runner.temp }}/reproducible-pack-attestation.json
           retention-days: 7
 
   test:

@@ -31,11 +31,15 @@ classification), `better-auth` (password hashing and session/cookie integrity), 
 ## Frozen lockfile in CI
 
 Every CI install path MUST use `--frozen-lockfile` so a run fails rather than
-silently resolving a new dependency graph. In this repository installs go through
-`vp install`; the shared `.github/actions/kovo-setup` composite action and the
-`release.yml` install both run `vp install --frozen-lockfile`. See
-[`rules/github-workflows.md`](github-workflows.md) for the `vp`/`pnpm` command
-resolution rules.
+silently resolving a new dependency graph. Ordinary CI installs go through
+`vp install`; the shared `.github/actions/kovo-setup` composite action runs
+`vp install --frozen-lockfile`. Release and reproducibility producers instead use
+the checksum-bound Node and integrity-qualified pnpm CLI installed by
+`.github/actions/kovo-release-pnpm`, then run that exact cached CLI with
+`install --frozen-lockfile`. Fresh seal, attestation, and OIDC publish jobs perform
+no dependency install and expose no package-manager setup branch. See
+[`rules/github-workflows.md`](github-workflows.md) for the command-resolution and
+release trust-boundary rules.
 
 ## A TCB-surface review is required on any bump
 

@@ -1,0 +1,24 @@
+name: Kovo checksum-bound release Node
+description: Install only the exact reviewed Node archive for no-install release jobs.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        NODE_ARCHIVE_SHA256: 55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742
+      run: |
+        set -euo pipefail
+        node_archive="$RUNNER_TEMP/node-v24.18.0-linux-x64.tar.xz"
+        node_root="$RUNNER_TEMP/node-v24.18.0-linux-x64"
+        if [ -e "$node_archive" ] || [ -e "$node_root" ]; then
+          printf 'refusing pre-existing release Node path\n' >&2
+          exit 1
+        fi
+        /usr/bin/curl --disable --fail --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+          --output "$node_archive" \
+          https://nodejs.org/dist/v24.18.0/node-v24.18.0-linux-x64.tar.xz
+        printf '%s  %s\n' "$NODE_ARCHIVE_SHA256" "$node_archive" | /usr/bin/sha256sum --check --strict
+        /usr/bin/mkdir --mode=0700 "$node_root"
+        /usr/bin/tar --extract --xz --file "$node_archive" --directory "$node_root" \
+          --strip-components=1 --no-same-owner
+        printf '%s\n' "$node_root/bin" >> "$GITHUB_PATH"

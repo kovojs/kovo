@@ -79,10 +79,8 @@ describe('publish-packed-packages', () => {
     expect(log).toHaveBeenCalledWith('Skipping @kovojs/a@1.2.3; version is already published.');
     expect(log).toHaveBeenCalledWith('Publishing @kovojs/b@1.2.3 with dist-tag next');
     expect(exec).toHaveBeenCalledTimes(1);
-    expect(exec.mock.calls[0][0]).toBe('vp');
+    expect(exec.mock.calls[0][0]).toBe('npm');
     expect(exec.mock.calls[0][1]).toEqual([
-      'exec',
-      'npm',
       'publish',
       expect.stringContaining('.release/tarballs/b-1.2.3.tgz'),
       '--tag',

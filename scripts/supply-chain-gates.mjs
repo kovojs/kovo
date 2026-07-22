@@ -35,7 +35,9 @@ const auditMetadataKeys = Object.freeze([
   'vulnerabilities',
 ]);
 const programmaticPublishPattern =
-  /\b(?:exec|execFile|execFileSync|spawn|spawnSync)\s*\(\s*['"](?:npm|pnpm|vp)['"][\s\S]{0,800}?['"]publish['"]/u;
+  /\b(?:exec|execFile|execFileSync|spawn|spawnSync)\s*\([\s\S]{0,800}?['"]publish['"]/u;
+const approvedPublisherCallPattern =
+  /\bexec\s*\(\s*releaseNpmExecutable\(\)\s*,\s*\[\s*['"]publish['"]/gu;
 const shellPublishPattern = /(?:^|\s)(?:vp\s+exec\s+)?(?:npm|pnpm)\s+publish(?:\s|$)/mu;
 
 export function verifyBuildScriptPolicy(rootPackageJson, packageManifests) {
@@ -69,6 +71,20 @@ export function verifyNpmPublishAuthority(sources) {
     throw new Error(
       `npm publish authority must be exactly ${JSON.stringify(approvedNpmPublishAuthorities)}; got ${JSON.stringify(actual)}`,
     );
+  }
+  const publisher = sources.find(
+    ({ path: filePath }) => filePath === approvedNpmPublishAuthorities[0],
+  );
+  const approvedCalls = publisher ? [...publisher.text.matchAll(approvedPublisherCallPattern)] : [];
+  const programmaticCalls = publisher
+    ? [
+        ...publisher.text.matchAll(
+          /\b(?:exec|execFile|execFileSync|spawn|spawnSync)\s*\([\s\S]{0,800}?['"]publish['"]/gu,
+        ),
+      ]
+    : [];
+  if (approvedCalls.length !== 1 || programmaticCalls.length !== 1) {
+    throw new Error('approved npm publisher must use one exact checksum-bound npm authority call');
   }
 }
 
@@ -234,7 +250,8 @@ function main() {
     JSON.parse(readFileSync(path.join(repoRoot, 'packages', pkg.dir, 'package.json'), 'utf8')),
   );
   verifyBuildScriptPolicy(rootPackageJson, packageManifests);
-  verifyNpmPublishAuthority(readPublishAuthoritySources());
+  const authoritySources = readPublishAuthoritySources();
+  verifyNpmPublishAuthority(authoritySources);
 
   const audit = readAuditReport();
   const findings = parseAuditFindings(audit, process.env.KOVO_AUDIT_LEVEL ?? 'moderate');
@@ -254,14 +271,18 @@ function main() {
 }
 
 function readPublishAuthoritySources() {
-  const files = collectFiles(repoRoot, ['scripts', '.github/workflows', 'packages'], {
-    includeFile: ({ relativePath }) =>
-      (/\.[cm]?[jt]s$/u.test(relativePath) &&
-        !/\.(?:test|spec)\.[cm]?[jt]s$/u.test(relativePath)) ||
-      /\.ya?ml$/u.test(relativePath) ||
-      relativePath.endsWith('/package.json'),
-    skipDirectory: ({ name }) => name === 'dist' || name === 'node_modules',
-  });
+  const files = collectFiles(
+    repoRoot,
+    ['scripts', '.github/actions', '.github/workflows', 'packages'],
+    {
+      includeFile: ({ relativePath }) =>
+        (/\.[cm]?[jt]s$/u.test(relativePath) &&
+          !/\.(?:test|spec)\.[cm]?[jt]s$/u.test(relativePath)) ||
+        /\.ya?ml$/u.test(relativePath) ||
+        relativePath.endsWith('/package.json'),
+      skipDirectory: ({ name }) => name === 'dist' || name === 'node_modules',
+    },
+  );
   files.push('package.json');
   files.sort(compareStrings);
   return files.map((filePath) => ({

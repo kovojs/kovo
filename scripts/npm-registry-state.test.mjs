@@ -4,6 +4,7 @@ import {
   formatNpmRegistryError,
   parsePublishedIntegrity,
   readNpmPublishedState,
+  releaseNpmExecutable,
 } from './npm-registry-state.mjs';
 
 const integrity = `sha512-${'A'.repeat(86)}==`;
@@ -16,10 +17,8 @@ describe('npm-registry-state', () => {
     });
     expect(result).toEqual({ state: 'published', integrity });
     expect(exec).toHaveBeenCalledWith(
-      'vp',
+      'npm',
       [
-        'exec',
-        'npm',
         'view',
         '@kovojs/core@1.2.3',
         'dist.integrity',
@@ -70,5 +69,18 @@ describe('npm-registry-state', () => {
     expect(() => parsePublishedIntegrity('not-json', '@kovojs/core', '1.2.3')).toThrow(
       'invalid JSON',
     );
+  });
+
+  it('admits only the checksum-bound npm path in the release runner', () => {
+    expect(releaseNpmExecutable({})).toBe('npm');
+    expect(
+      releaseNpmExecutable({
+        KOVO_NPM_EXECUTABLE: '/runner/node-v24.18.0-linux-x64/bin/npm',
+        RUNNER_TEMP: '/runner',
+      }),
+    ).toBe('/runner/node-v24.18.0-linux-x64/bin/npm');
+    expect(() =>
+      releaseNpmExecutable({ KOVO_NPM_EXECUTABLE: '/tmp/attacker/npm', RUNNER_TEMP: '/runner' }),
+    ).toThrow('checksum-bound release npm');
   });
 });

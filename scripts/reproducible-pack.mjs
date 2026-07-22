@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { lstatSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { readBoundedRegularFile } from './lib/bounded-regular-file.mjs';
+import { readPackageTarballSnapshot } from './lib/deterministic-tarball.mjs';
+import { packedManifestMaxBytes } from './release-packages.mjs';
 
 export const reproduciblePackAttestationSchema = 'kovo.reproducible-pack-attestation/v1';
 export const reproduciblePackAttestationClaim =
@@ -96,8 +100,8 @@ export function parseReproduciblePackArgs(argv) {
 export function main({ argv = process.argv.slice(2) } = {}) {
   const options = parseReproduciblePackArgs(argv);
   const comparison = comparePackedPackageManifests({
-    first: readJson(options.first),
-    second: readJson(options.second),
+    first: readAuthenticatedPackedPackageManifest(options.first),
+    second: readAuthenticatedPackedPackageManifest(options.second),
     source: options.source,
   });
   for (const finding of comparison.findings) process.stderr.write(`${finding}\n`);
@@ -109,8 +113,90 @@ export function main({ argv = process.argv.slice(2) } = {}) {
   return true;
 }
 
-function readJson(file) {
-  return JSON.parse(readFileSync(path.resolve(file), 'utf8'));
+export function readAuthenticatedPackedPackageManifest(file) {
+  const manifestPath = path.resolve(file);
+  if (path.basename(manifestPath) !== 'packed-packages.json') {
+    throw new TypeError('reproducible-pack manifest filename must be packed-packages.json');
+  }
+  const artifactRoot = path.dirname(manifestPath);
+  assertNonSymlinkDirectory(artifactRoot, 'reproducible-pack artifact root');
+  const manifest = JSON.parse(
+    readBoundedRegularFile(
+      manifestPath,
+      packedManifestMaxBytes,
+      'reproducible-pack manifest',
+    ).toString('utf8'),
+  );
+  if (!Array.isArray(manifest?.packages) || manifest.packages.length === 0) {
+    throw new TypeError('reproducible-pack manifest has no package subjects');
+  }
+  const seenTarballs = new Set();
+  const expectedTarballNames = [];
+  const tarballSubjects = [];
+  for (const entry of manifest.packages) {
+    if (
+      typeof entry?.tarball !== 'string' ||
+      !entry.tarball.startsWith('.release/tarballs/') ||
+      path.posix.normalize(entry.tarball) !== entry.tarball ||
+      entry.tarball.slice('.release/tarballs/'.length).includes('/') ||
+      !/^sha512-[A-Za-z0-9+/]{86}==$/u.test(entry.sha512 ?? '')
+    ) {
+      throw new TypeError('reproducible-pack manifest contains an invalid tarball subject');
+    }
+    const relativeTarball = entry.tarball.slice('.release/'.length);
+    const tarball = path.resolve(artifactRoot, ...relativeTarball.split('/'));
+    const relativeToRoot = path.relative(artifactRoot, tarball);
+    if (
+      relativeToRoot.startsWith(`..${path.sep}`) ||
+      relativeToRoot === '..' ||
+      path.isAbsolute(relativeToRoot) ||
+      seenTarballs.has(tarball)
+    ) {
+      throw new TypeError('reproducible-pack manifest contains an ambiguous tarball path');
+    }
+    seenTarballs.add(tarball);
+    expectedTarballNames.push(path.basename(tarball));
+    tarballSubjects.push({ entry, tarball });
+  }
+  assertExactDirectoryEntries(
+    artifactRoot,
+    ['packed-packages.json', 'tarballs'],
+    'reproducible-pack artifact root',
+  );
+  const tarballsRoot = path.join(artifactRoot, 'tarballs');
+  assertNonSymlinkDirectory(tarballsRoot, 'reproducible-pack tarball directory');
+  assertExactDirectoryEntries(
+    tarballsRoot,
+    expectedTarballNames,
+    'reproducible-pack tarball directory',
+  );
+  for (const { entry, tarball } of tarballSubjects) {
+    const observed = `sha512-${createHash('sha512')
+      .update(readPackageTarballSnapshot(tarball))
+      .digest('base64')}`;
+    if (observed !== entry.sha512) {
+      throw new TypeError(`${String(entry.name)} tarball bytes do not match the declared sha512`);
+    }
+  }
+  return manifest;
+}
+
+function assertNonSymlinkDirectory(directory, label) {
+  const stat = lstatSync(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new TypeError(`${label} must be a non-symlink directory`);
+  }
+}
+
+function assertExactDirectoryEntries(directory, expectedNames, label) {
+  const expected = [...expectedNames].map((name) => Buffer.from(name)).sort(Buffer.compare);
+  const observed = readdirSync(directory, { encoding: 'buffer' }).sort(Buffer.compare);
+  if (
+    expected.length !== observed.length ||
+    observed.some((name, index) => !name.equals(expected[index]))
+  ) {
+    throw new TypeError(`${label} does not have the exact expected entry census`);
+  }
 }
 
 function packageSubjects(packages, label, findings) {

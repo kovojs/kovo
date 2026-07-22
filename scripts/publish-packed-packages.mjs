@@ -9,7 +9,11 @@ import {
   readPackageTarballSnapshot,
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
-import { npmPublicRegistry, readNpmPublishedState } from './npm-registry-state.mjs';
+import {
+  npmPublicRegistry,
+  readNpmPublishedState,
+  releaseNpmExecutable,
+} from './npm-registry-state.mjs';
 import {
   assertPackedManifestMatchesSource,
   manifestPath,
@@ -69,10 +73,8 @@ export function publishPackedPackages(
       continue;
     }
     exec(
-      'vp',
+      releaseNpmExecutable(),
       [
-        'exec',
-        'npm',
         'publish',
         tarball,
         '--tag',
@@ -186,7 +188,13 @@ export function verifyPackedAttestation(pkg, tarball) {
   ) {
     throw new Error(`${pkg.name} tarball resolves outside ${tarballDir}`);
   }
-  const tarballBytes = readPackageTarballSnapshot(tarball);
+  return verifyPackedAttestationBytes(pkg, readPackageTarballSnapshot(tarball));
+}
+
+export function verifyPackedAttestationBytes(pkg, tarballBytes) {
+  if (!Buffer.isBuffer(tarballBytes)) {
+    throw new TypeError(`${String(pkg?.name)} tarball snapshot must be a Buffer`);
+  }
   const expectedSha512 = `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`;
   if (pkg.sha512 !== expectedSha512) {
     throw new Error(`${pkg.name} tarball sha512 attestation mismatch`);
