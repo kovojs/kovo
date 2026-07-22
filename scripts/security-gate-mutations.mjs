@@ -83,6 +83,7 @@ const compilerStructuralJsxPath = path.join(
 );
 const coreSinkPolicyPath = path.join(repoRoot, 'packages/core/src/internal/sink-policy.ts');
 const coreScopedKeyPath = path.join(repoRoot, 'packages/core/src/scoped-key.ts');
+const coreFiniteMcpStdioPath = path.join(repoRoot, 'packages/core/src/internal/mcp-stdio.ts');
 const semanticAttributeManifestPath = path.join(
   repoRoot,
   'packages/core/src/internal/semantic-attribute-manifest.ts',
@@ -1299,6 +1300,11 @@ const removedCompilerIframeSandboxBoundaryBranch = '    [],';
 const inlineIframeSandboxTokenVocabulary =
   "const inlineSafeIframeSandboxTokens = readSinkPolicyStringArray('SAFE_IFRAME_SANDBOX_TOKENS');";
 const removedInlineIframeSandboxTokenVocabulary = 'const inlineSafeIframeSandboxTokens = [];';
+
+const finiteMcpReadyLifecycleBranch =
+  "    if (phase !== 'ready') return jsonRpcError(id, -32002, 'server is not initialized');";
+const removedFiniteMcpReadyLifecycleBranch =
+  "    if (false && phase !== 'ready') return jsonRpcError(id, -32002, 'server is not initialized');";
 
 function finiteBrowserControlTupleDeletionMutants() {
   const source = readFileSync(coreSinkPolicyPath, 'utf8');
@@ -7598,7 +7604,69 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: webhookPath,
     test: assertWebhookEgressContextKeepsCapabilitySeal,
   },
+  {
+    behavioralTypeScript: true,
+    description:
+      'Lets a tools request execute after initialize but before the required initialized notification.',
+    expectedKiller:
+      'the finite MCP stdio lifecycle must reject tools before the initialized notification',
+    name: 'finite-mcp/drop-ready-lifecycle-closure',
+    replacement: removedFiniteMcpReadyLifecycleBranch,
+    search: finiteMcpReadyLifecycleBranch,
+    sourceFile: coreFiniteMcpStdioPath,
+    test: assertFiniteMcpReadyLifecycleBehavior,
+  },
 ];
+
+async function assertFiniteMcpReadyLifecycleBehavior(moduleUnderTest) {
+  let toolCalls = 0;
+  const server = moduleUnderTest.createFiniteMcpStdioServer({
+    async callTool() {
+      toolCalls += 1;
+      return { content: [{ text: 'unexpected', type: 'text' }] };
+    },
+    maxLineBytes: 4096,
+    serverInfo: { name: 'security-mutant', version: '1.0.0' },
+    tools: [
+      {
+        description: 'One finite test tool.',
+        inputSchema: { additionalProperties: false, properties: {}, type: 'object' },
+        name: 'probe',
+      },
+    ],
+  });
+  const requests = [
+    {
+      id: 1,
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        capabilities: {},
+        clientInfo: { name: 'security-mutant', version: '1.0.0' },
+        protocolVersion: '2025-11-25',
+      },
+    },
+    { id: 2, jsonrpc: '2.0', method: 'tools/list' },
+  ];
+  const output = [];
+  async function* input() {
+    yield `${requests.map((request) => JSON.stringify(request)).join('\n')}\n`;
+  }
+  await server.serveStdio(input(), {
+    write(chunk) {
+      output.push(chunk);
+      return true;
+    },
+  });
+  const responses = output
+    .join('')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  if (responses.length !== 2 || responses[1]?.error?.code !== -32002 || toolCalls !== 0) {
+    throw new Error('finite MCP admitted a tools request before lifecycle readiness');
+  }
+}
 
 function machineReplayPolicyRequest(store, idem, streaming = false) {
   return {

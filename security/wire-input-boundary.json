@@ -111,6 +111,16 @@
       "registryId": "response-header.kovo-build"
     },
     {
+      "allowedCarriers": ["stdio-line"],
+      "api": "finiteMcpStdioJsonLine",
+      "file": "packages/core/src/internal/mcp-stdio.ts",
+      "id": "packages/core/src/internal/mcp-stdio.ts#parsed",
+      "inputName": "json-rpc",
+      "symbol": "packages/core/src/internal/mcp-stdio.ts#parseFiniteMcpJsonLine",
+      "reason": "The finite MCP transport parses only one bounded UTF-8 NDJSON request line before its closed JSON-RPC envelope and lifecycle validation.",
+      "registryId": "stdio-line.json-rpc"
+    },
+    {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-document.ts",
@@ -563,8 +573,8 @@
   ],
   "schema": "kovo-wire-input-boundary/v1",
   "summary": {
-    "classified": 56,
+    "classified": 57,
     "dynamicNames": 5,
-    "sites": 56
+    "sites": 57
   }
 }

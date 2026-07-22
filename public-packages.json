@@ -23,6 +23,7 @@
           "./internal/framework-identity",
           "./internal/graph",
           "./internal/json",
+          "./internal/mcp-stdio",
           "./internal/module-ref",
           "./internal/package-prefix",
           "./internal/query-delta",

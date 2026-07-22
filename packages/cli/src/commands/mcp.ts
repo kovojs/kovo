@@ -1,12 +1,11 @@
-import { Buffer as NativeBuffer } from 'node:buffer';
-import { Transform, type TransformCallback } from 'node:stream';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { CompileComponentOptions, CompileResult } from '@kovojs/compiler';
 import {
   compileComponentModuleForFramework,
   snapshotCompileComponentOptions,
 } from '@kovojs/compiler/internal';
-import type * as CompilerInternal from '@kovojs/compiler/internal';
+import * as CompilerInternal from '@kovojs/compiler/internal';
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import {
   assertRegisteredDiagnostic,
@@ -14,19 +13,21 @@ import {
 } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import { createFiniteMcpStdioServer } from '@kovojs/core/internal/mcp-stdio';
+import type {
+  FiniteMcpOutput,
+  FiniteMcpStdioServer,
+  FiniteMcpToolResult,
+} from '@kovojs/core/internal/mcp-stdio';
 
 import { MCP_USAGE } from '../commands-manifest.js';
 import {
   checkFamilyArg,
   explainOutputVersion,
-  inputErrorMessage,
   isExplainKind,
   kovoCheck,
   kovoExplain,
   outputVersion,
-  readGraphInput,
   type KovoExplainOptions,
 } from '../graph-output.js';
 import {
@@ -40,19 +41,25 @@ import {
 } from '../shared.js';
 import { buildByteLength } from './build-security-intrinsics.js';
 
-const MCP_MAX_REQUEST_BYTES = 4 * 1024 * 1024;
-const MCP_MAX_COMPILE_SOURCE_BYTES = 2 * 1024 * 1024;
+const MCP_MAX_LINE_BYTES = 4 * 1024 * 1024;
+const MCP_MAX_COMPILE_SOURCE_BYTES = 256 * 1024;
+const MCP_MAX_COMPILE_PREPARSE_TOKENS = 32_768;
+const MCP_MAX_COMPILE_STRUCTURAL_TOKENS = 512;
+const MCP_MAX_COMPILE_SYNTAX_DEPTH = 256;
+const MCP_MAX_COMPILE_SYNTAX_NODES = 20_000;
+const MCP_MAX_COMPILE_PATH_SEGMENTS = 64;
+const MCP_MAX_GRAPH_WORK_UNITS = 65_536;
+const MCP_MAX_GRAPH_OUTPUT_ROWS = 2_048;
+const MCP_MAX_GRAPH_AMPLIFIED_TEXT_BYTES = 2 * 1024 * 1024;
+const MCP_MAX_GRAPH_STRING_BYTES = 4_096;
+const MCP_MAX_TOOL_CALLS_PER_SESSION = 256;
+
+type McpWorkspaceRoot = CompilerInternal.CompilerSourceRootWitness;
 
 /** @internal Input shape for the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Input {
   fileName: string;
-  packageComponentPrefixes?: CompileComponentOptions['packageComponentPrefixes'];
-  packagePrefixDiscoveryRoot?: CompileComponentOptions['packagePrefixDiscoveryRoot'];
-  queryShapeFacts?: readonly CompilerInternal.QueryShapeFact[];
-  queryShapes?: Record<string, CompilerInternal.QueryShape>;
-  registryFacts?: CompileComponentOptions['registryFacts'];
   source: string;
-  sourceProvenance?: CompileComponentOptions['sourceProvenance'];
 }
 
 /** @internal Diagnostic shape returned by the internal `compile_component` MCP tool. */
@@ -94,42 +101,21 @@ export type KovoMcpToolName =
   | 'kovo_explain'
   | 'list_diagnostics';
 
-/** @internal JSON-RPC request shape handled by the internal `kovo mcp` transport. */
-export type KovoMcpRequest =
-  | {
-      id?: string | number | null;
-      jsonrpc?: '2.0';
-      method: 'tools/list';
-    }
-  | {
-      id?: string | number | null;
-      jsonrpc?: '2.0';
-      method: 'tools/call';
-      params: { arguments?: unknown; name: string };
-    };
-
-/** @internal JSON-RPC response shape emitted by the internal `kovo mcp` transport. */
-export type KovoMcpResponse =
-  | {
-      id: string | number | null;
-      jsonrpc: '2.0';
-      result: {
-        content: readonly { text: string; type: 'text' }[];
-        structuredContent: unknown;
-        version: typeof mcpOutputVersion;
-      };
-    }
-  | {
-      error: { code: number; message: string };
-      id: string | number | null;
-      jsonrpc: '2.0';
-    };
-
 /** @internal Backs the internal `compile_component` MCP tool; not a public API. */
 export async function compileComponentV1(
   input: CompileComponentV1Input,
+  workspaceRoot: string,
 ): Promise<CompileComponentV1Result> {
-  const result = await compileFrameworkComponentModule(compileComponentOptions(input));
+  const rootWitness = CompilerInternal.createCompilerSourceRootWitness(workspaceRoot);
+  if (rootWitness === null) throw new TypeError('MCP launch workspace must be a directory');
+  return compileComponentV1WithWorkspace(input, rootWitness);
+}
+
+async function compileComponentV1WithWorkspace(
+  input: CompileComponentV1Input,
+  rootWitness: McpWorkspaceRoot,
+): Promise<CompileComponentV1Result> {
+  const result = await compileFrameworkComponentModule(compileComponentOptions(input, rootWitness));
   for (let index = 0; index < result.diagnostics.length; index += 1) {
     assertRegisteredDiagnostic(result.diagnostics[index], `MCP compiler diagnostics[${index}]`);
   }
@@ -186,55 +172,29 @@ export async function compileFrameworkComponentModule(
   return compileComponentModuleForFramework(options);
 }
 
-function compileComponentOptions(input: CompileComponentV1Input): CompileComponentOptions {
+function compileComponentOptions(
+  input: CompileComponentV1Input,
+  workspaceRoot: McpWorkspaceRoot,
+): CompileComponentOptions & {
+  packagePrefixDiscoveryBoundary: string;
+  packagePrefixDiscoveryRootWitness: McpWorkspaceRoot;
+} {
   return {
     fileName: input.fileName,
-    ...(input.packageComponentPrefixes === undefined
-      ? {}
-      : { packageComponentPrefixes: input.packageComponentPrefixes }),
-    ...(input.packagePrefixDiscoveryRoot === undefined
-      ? {}
-      : { packagePrefixDiscoveryRoot: input.packagePrefixDiscoveryRoot }),
-    ...(input.queryShapeFacts === undefined ? {} : { queryShapeFacts: input.queryShapeFacts }),
-    ...(input.queryShapes === undefined ? {} : { queryShapes: input.queryShapes }),
-    ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
+    // The adapter, not protocol input, owns both the starting root and hard stop. The internal
+    // boundary field survives the compiler snapshot without becoming a public compiler option.
+    packagePrefixDiscoveryBoundary: workspaceRoot.canonicalRoot,
+    packagePrefixDiscoveryRoot: workspaceRoot.canonicalRoot,
+    packagePrefixDiscoveryRootWitness: workspaceRoot,
     source: input.source,
-    ...(input.sourceProvenance === undefined ? {} : { sourceProvenance: input.sourceProvenance }),
+    sourceProvenance: 'app',
   };
 }
 
-/** @internal Dispatches a single `kovo mcp` JSON-RPC request; not a public API. */
-export async function handleKovoMcpRequest(request: unknown): Promise<KovoMcpResponse> {
-  if (!isRecord(request)) return mcpError(null, -32600, 'request must be an object');
-  const id = mcpRequestId(request.id);
-  const method = request.method;
-
-  if (method === 'tools/list') return mcpResult(id, listMcpTools());
-  if (method !== 'tools/call') return mcpError(id, -32601, 'unknown method');
-
-  const params = request.params;
-  if (!isRecord(params) || typeof params.name !== 'string') {
-    return mcpError(id, -32602, 'tools/call requires params.name');
-  }
-
-  try {
-    const result = await callMcpTool(params.name, params.arguments);
-    return mcpResult(id, result);
-  } catch (error) {
-    return mcpError(id, -32000, error instanceof Error ? error.message : String(error));
-  }
-}
-
-function runGraphCommand(
-  inputPath: string | undefined,
-  run: (input: CoreGraph.KovoExplainInput) => KovoCheckResult,
-): CliCommandResult {
-  const input = readGraphInput(inputPath);
-  if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
-  return run(input.value);
-}
-
-export async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
+export async function runMcpCommand(
+  args: readonly string[],
+  invocationCwd: string,
+): Promise<0 | 1> {
   if (args.length > 0) {
     const [first] = args;
     const message =
@@ -244,7 +204,7 @@ export async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
     return writeUsageError(message);
   }
 
-  await runMcpSdkServer();
+  await runMcpStdioServer(process.stdin, process.stdout, invocationCwd);
   return 0;
 }
 
@@ -256,207 +216,37 @@ function mcpUsage(): string {
   ].join('\n');
 }
 
-/** @internal Newline-delimited JSON-RPC stdio fallback for `kovo mcp`; not a public API. */
-export async function runMcpFallbackStdio(
+/** @internal Runs the finite SPEC §11.5 `kovo mcp` stdio server; not a public API. */
+export async function runMcpStdioServer(
   input: AsyncIterable<Buffer | string>,
-  output: { write(chunk: string): unknown },
+  output: FiniteMcpOutput,
+  invocationCwd: string,
 ): Promise<void> {
-  let pending = '';
-  let discardingOversizedLine = false;
-
-  for await (const chunk of input) {
-    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    const lines = text.split(/\r?\n/);
-    const tail = lines.pop() ?? '';
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index] ?? '';
-      if (discardingOversizedLine) {
-        discardingOversizedLine = false;
-        pending = '';
-        continue;
-      }
-      const completeBytes = buildByteLength(pending) + buildByteLength(line);
-      if (completeBytes > MCP_MAX_REQUEST_BYTES) {
-        pending = '';
-        writeMcpInputLimitError(output);
-        continue;
-      }
-      const complete = pending + line;
-      pending = '';
-      await writeMcpLine(complete, output);
-    }
-
-    if (!discardingOversizedLine) {
-      const pendingBytes = buildByteLength(pending) + buildByteLength(tail);
-      if (pendingBytes > MCP_MAX_REQUEST_BYTES) {
-        pending = '';
-        discardingOversizedLine = true;
-        writeMcpInputLimitError(output);
-      } else {
-        pending += tail;
-      }
-    }
-  }
-
-  if (!discardingOversizedLine && pending.trim()) await writeMcpLine(pending, output);
+  await createKovoMcpServer(invocationCwd).serveStdio(input, output);
 }
 
-function writeMcpInputLimitError(output: { write(chunk: string): unknown }): void {
-  output.write(
-    `${JSON.stringify(mcpError(null, -32001, `request exceeds ${MCP_MAX_REQUEST_BYTES} bytes`))}\n`,
-  );
-}
-
-async function writeMcpLine(
-  line: string,
-  output: { write(chunk: string): unknown },
-): Promise<void> {
-  if (!line.trim()) return;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(line);
-  } catch {
-    output.write(`${JSON.stringify(mcpError(null, -32700, 'parse error'))}\n`);
-    return;
-  }
-
-  output.write(`${JSON.stringify(await handleKovoMcpRequest(parsed))}\n`);
-}
-
-/** @internal Connects the internal `kovo mcp` SDK server to a transport; not a public API. */
-export async function runMcpSdkServer(transport?: Transport): Promise<void> {
-  const [{ StdioServerTransport }, server] = await Promise.all([
-    import('@modelcontextprotocol/sdk/server/stdio.js'),
-    createMcpSdkServer(),
-  ]);
-  await server.connect(
-    transport ?? new StdioServerTransport(new BoundedMcpStdin(process.stdin), process.stdout),
-  );
-}
-
-/** @internal Bounds the third-party SDK's otherwise unbounded newline buffer. */
-export class BoundedMcpStdin extends Transform {
-  private buffered: Buffer[] = [];
-  private bufferedBytes = 0;
-  private discarding = false;
-
-  constructor(input: NodeJS.ReadableStream) {
-    super();
-    input.pipe(this);
-  }
-
-  override _transform(
-    chunk: Buffer | string,
-    encoding: BufferEncoding,
-    callback: TransformCallback,
-  ): void {
-    try {
-      const bytes = typeof chunk === 'string' ? NativeBuffer.from(chunk, encoding) : chunk;
-      let start = 0;
-      const length = buildByteLength(bytes);
-      for (let index = 0; index < length; index += 1) {
-        if (bytes[index] !== 0x0a) continue;
-        this.appendLineSegment(bytes.subarray(start, index), true);
-        start = index + 1;
+/** @internal Creates Kovo's closed tool adapter over the shared finite stdio engine. */
+export function createKovoMcpServer(invocationCwd: string): FiniteMcpStdioServer {
+  const workspaceRoot = canonicalMcpWorkspaceRoot(invocationCwd);
+  const listing = listMcpTools();
+  let toolCallCount = 0;
+  return createFiniteMcpStdioServer({
+    callTool: async (name, args) => {
+      toolCallCount += 1;
+      if (toolCallCount > MCP_MAX_TOOL_CALLS_PER_SESSION) {
+        throw new Error(`MCP session exceeds ${MCP_MAX_TOOL_CALLS_PER_SESSION} tool calls`);
       }
-      this.appendLineSegment(bytes.subarray(start), false);
-      callback();
-    } catch (error) {
-      callback(error as Error);
-    }
-  }
-
-  override _flush(callback: TransformCallback): void {
-    try {
-      if (this.discarding || this.bufferedBytes > 0) this.emitBufferedLine();
-      callback();
-    } catch (error) {
-      callback(error as Error);
-    }
-  }
-
-  private appendLineSegment(segment: Buffer, complete: boolean): void {
-    if (!this.discarding) {
-      const segmentBytes = buildByteLength(segment);
-      if (this.bufferedBytes + segmentBytes > MCP_MAX_REQUEST_BYTES) {
-        this.buffered = [];
-        this.bufferedBytes = 0;
-        this.discarding = true;
-      } else if (segmentBytes > 0) {
-        this.buffered.push(segment);
-        this.bufferedBytes += segmentBytes;
-      }
-    }
-    if (complete) this.emitBufferedLine();
-  }
-
-  private emitBufferedLine(): void {
-    if (this.discarding) {
-      this.push(
-        `${JSON.stringify({
-          id: 'kovo-input-limit',
-          jsonrpc: '2.0',
-          method: '__kovo_input_limit__',
-        })}\n`,
-      );
-    } else {
-      if (this.bufferedBytes > 0) {
-        this.push(NativeBuffer.concat(this.buffered, this.bufferedBytes));
-      }
-      this.push('\n');
-    }
-    this.buffered = [];
-    this.bufferedBytes = 0;
-    this.discarding = false;
-  }
-}
-
-async function createMcpSdkServer(): Promise<
-  InstanceType<typeof import('@modelcontextprotocol/sdk/server/index.js').Server>
-> {
-  const [{ Server: McpSdkServer }, { CallToolRequestSchema, ListToolsRequestSchema }] =
-    await Promise.all([
-      import('@modelcontextprotocol/sdk/server/index.js'),
-      import('@modelcontextprotocol/sdk/types.js'),
-    ]);
-  const server = new McpSdkServer(
-    { name: 'kovo', version: mcpOutputVersion },
-    {
-      capabilities: { tools: {} },
-      instructions:
-        'Kovo diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
+      return mcpToolResult(asMcpStructuredContent(await callMcpTool(name, args, workspaceRoot)));
     },
-  );
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: listMcpTools().tools.map((tool) => ({ ...tool })) as Tool[],
-  }));
-
-  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
-    try {
-      const structuredContent = asMcpStructuredContent(
-        await callMcpTool(request.params.name, request.params.arguments),
-      );
-      return mcpToolResult(structuredContent);
-    } catch (error) {
-      return {
-        content: [
-          {
-            text: error instanceof Error ? error.message : String(error),
-            type: 'text',
-          },
-        ],
-        isError: true,
-      };
-    }
+    instructions:
+      'Kovo diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
+    maxLineBytes: MCP_MAX_LINE_BYTES,
+    serverInfo: { name: 'kovo', version: mcpOutputVersion },
+    tools: listing.tools,
   });
-
-  return server;
 }
 
-function mcpToolResult(structuredContent: Record<string, unknown>): CallToolResult {
+function mcpToolResult(structuredContent: Record<string, unknown>): FiniteMcpToolResult {
   return {
     content: [{ text: mcpContentText(structuredContent), type: 'text' }],
     structuredContent,
@@ -479,11 +269,23 @@ function writeCommandResult(result: CliCommandResult): 0 | 1 {
   return result.exitCode;
 }
 
-async function callMcpTool(name: string, args: unknown): Promise<unknown> {
-  if (name === 'compile_component') return compileComponentV1(assertCompileComponentV1Input(args));
+async function callMcpTool(
+  name: string,
+  args: unknown,
+  workspaceRoot: McpWorkspaceRoot,
+): Promise<unknown> {
+  if (name === 'compile_component') {
+    return compileComponentV1WithWorkspace(
+      assertCompileComponentV1Input(args, workspaceRoot),
+      workspaceRoot,
+    );
+  }
   if (name === 'kovo_check') return runKovoCheckTool(args);
   if (name === 'kovo_explain') return runKovoExplainTool(args);
-  if (name === 'list_diagnostics') return listDiagnosticsV1();
+  if (name === 'list_diagnostics') {
+    assertExactKeys(assertToolArgs(args, 'list_diagnostics'), [], 'list_diagnostics arguments');
+    return listDiagnosticsV1();
+  }
 
   throw new Error(`unknown tool ${stableValue(name)}`);
 }
@@ -502,16 +304,10 @@ function listMcpTools(): {
         description:
           'Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.',
         inputSchema: {
-          additionalProperties: true,
+          additionalProperties: false,
           properties: {
             fileName: { maxLength: 4096, type: 'string' },
-            packageComponentPrefixes: { type: 'array' },
-            packagePrefixDiscoveryRoot: { type: 'string' },
-            queryShapeFacts: { type: 'array' },
-            queryShapes: { type: 'object' },
-            registryFacts: { type: 'object' },
             source: { maxLength: MCP_MAX_COMPILE_SOURCE_BYTES, type: 'string' },
-            sourceProvenance: { enum: ['app'] },
           },
           required: ['fileName', 'source'],
           type: 'object',
@@ -519,13 +315,13 @@ function listMcpTools(): {
         name: 'compile_component',
       },
       {
-        description: 'Run kovoCheck against an inline graph or graphPath.',
+        description: 'Run kovoCheck against a bounded inline graph.',
         inputSchema: graphToolSchema({ family: { enum: ['all', 'coverage', 'optimistic'] } }),
         name: 'kovo_check',
       },
       {
-        description: 'Run kovoExplain against an inline graph or graphPath.',
-        inputSchema: graphToolSchema({ options: { type: 'object' } }, ['options']),
+        description: 'Run kovoExplain against a bounded inline graph.',
+        inputSchema: graphToolSchema({ options: explainOptionsSchema() }, ['options']),
         name: 'kovo_explain',
       },
       {
@@ -546,7 +342,6 @@ function graphToolSchema(
     additionalProperties: false,
     properties: {
       graph: { type: 'object' },
-      graphPath: { type: 'string' },
       ...properties,
     },
     required,
@@ -554,10 +349,43 @@ function graphToolSchema(
   };
 }
 
+function explainOptionsSchema(): Record<string, unknown> {
+  const exactMode = (
+    properties: Record<string, unknown>,
+    required: readonly string[],
+  ): Record<string, unknown> => ({
+    additionalProperties: false,
+    properties,
+    required,
+    type: 'object',
+  });
+  const auditMode = (name: 'access' | 'unguarded' | 'unscoped') =>
+    exactMode({ failOnFindings: { type: 'boolean' }, [name]: { const: true } }, [name]);
+  return {
+    oneOf: [
+      exactMode({ agent: { const: true } }, ['agent']),
+      auditMode('access'),
+      exactMode({ endpoints: { const: true } }, ['endpoints']),
+      auditMode('unguarded'),
+      auditMode('unscoped'),
+      exactMode(
+        {
+          kind: { enum: ['component', 'context', 'mutation', 'page', 'query', 'task'] },
+          optimistic: { type: 'boolean' },
+          target: { minLength: 1, type: 'string' },
+        },
+        ['kind', 'target'],
+      ),
+    ],
+    type: 'object',
+  };
+}
+
 function runKovoCheckTool(args: unknown): KovoCheckResult & { version: typeof outputVersion } {
-  const options = assertGraphToolArgs(args);
+  const options = assertToolArgs(args, 'kovo_check');
+  assertExactKeys(options, ['family', 'graph'], 'kovo_check arguments');
   const graph = graphToolInput(options);
-  const family = typeof options.family === 'string' ? checkFamilyArg(options.family) : 'all';
+  const family = assertKovoCheckFamily(options.family);
   const result = kovoCheck(graph, { family });
   return { ...result, version: outputVersion };
 }
@@ -565,26 +393,20 @@ function runKovoCheckTool(args: unknown): KovoCheckResult & { version: typeof ou
 function runKovoExplainTool(
   args: unknown,
 ): KovoCheckResult & { version: typeof explainOutputVersion } {
-  const options = assertGraphToolArgs(args);
+  const options = assertToolArgs(args, 'kovo_explain');
+  assertExactKeys(options, ['graph', 'options'], 'kovo_explain arguments');
   const explainOptions = assertKovoExplainOptions(options.options);
-  const result = kovoExplain(graphToolInput(options), explainOptions);
+  const graph = graphToolInput(options);
+  const result = kovoExplain(graph, explainOptions);
   return { ...result, version: explainOutputVersion };
 }
 
 function graphToolInput(args: Record<string, unknown>): CoreGraph.KovoExplainInput {
-  if ('graph' in args && 'graphPath' in args) {
-    throw new Error('graph tools accept graph or graphPath, not both');
-  }
-
-  if ('graphPath' in args) {
-    if (typeof args.graphPath !== 'string') throw new Error('graphPath must be a string');
-    const read = readGraphInput(args.graphPath);
-    if (!read.ok) throw new Error(inputErrorMessage(read.error));
-    return read.value;
-  }
-
-  if ('graph' in args) {
+  if (Object.hasOwn(args, 'graph')) {
     if (!isRecord(args.graph)) throw new Error('graph must be an object');
+    // The shape/work pass is linear over the finite transport snapshot and runs before graph
+    // validation or any verifier helper can perform a join.
+    assertMcpGraphWorkBudget(args.graph as CoreGraph.KovoExplainInput);
     const validationErrors = validateKovoExplainInput(args.graph);
     if (validationErrors.length > 0)
       throw new Error(validationErrors[0]?.message ?? 'invalid graph');
@@ -594,73 +416,351 @@ function graphToolInput(args: Record<string, unknown>): CoreGraph.KovoExplainInp
   return {};
 }
 
-function assertGraphToolArgs(args: unknown): Record<string, unknown> {
-  if (args === undefined) return {};
-  if (!isRecord(args)) throw new Error('tool arguments must be an object');
+function assertKovoCheckFamily(value: unknown): ReturnType<typeof checkFamilyArg> {
+  if (value === undefined) return 'all';
+  if (value !== 'all' && value !== 'coverage' && value !== 'optimistic') {
+    throw new Error('kovo_check family must be all, coverage, or optimistic');
+  }
+  return checkFamilyArg(value);
+}
+
+function assertMcpGraphWorkBudget(graph: CoreGraph.KovoExplainInput): void {
+  const mutations = Array.isArray(graph.mutations) ? graph.mutations : [];
+  const queries = Array.isArray(graph.queries) ? graph.queries : [];
+  const updateCoverage = Array.isArray(graph.updateCoverage) ? graph.updateCoverage : [];
+  const touchGraph = isRecord(graph.touchGraph) ? graph.touchGraph : {};
+  const touchEntries = Object.values(touchGraph).filter(isRecord);
+
+  let mutationDomainEntries = 0;
+  for (const mutation of mutations) {
+    if (!isRecord(mutation)) continue;
+    const ownDomainCount =
+      arrayLength(mutation.writes) +
+      arrayLength(mutation.invalidates) +
+      arrayLength(mutation.manualInvalidates);
+    mutationDomainEntries += ownDomainCount;
+  }
+
+  let queryDomainEntries = 0;
+  for (const query of queries) {
+    if (isRecord(query)) queryDomainEntries += arrayLength(query.domains);
+  }
+  let touchDomainEntries = 0;
+  for (const entry of touchEntries) touchDomainEntries += arrayLength(entry.touches);
+  const renderOnceCount = updateCoverage.filter(
+    (fact) => isRecord(fact) && fact.status === 'renderOnce' && fact.source !== 'state',
+  ).length;
+
+  // Every graph array entry and touch-map row participates in a single conservative pair envelope.
+  // That bounds mutation x query, query x component/page consumer, endpoint runMutation x
+  // mutation, scope x ownership, session-authority, event/query, and endpoint-posture joins even
+  // when a newly added verifier path is not separately instrumented. The only known cubic path is
+  // render-once invalidation, which is charged explicitly below including nested domain scans.
+  const shape = graphShapeStats(graph as Record<string, unknown>);
+  if (shape.maxStringBytes > MCP_MAX_GRAPH_STRING_BYTES) {
+    throw new Error(`MCP graph string exceeds ${MCP_MAX_GRAPH_STRING_BYTES} bytes`);
+  }
+  const shapeEntries = saturatingAdd(
+    MCP_MAX_GRAPH_WORK_UNITS,
+    shape.arrayEntries,
+    shape.objectProperties,
+  );
+  const pairWorkEnvelope = saturatingMultiply(MCP_MAX_GRAPH_WORK_UNITS, shapeEntries, shapeEntries);
+  const invalidatorCount = saturatingAdd(
+    MCP_MAX_GRAPH_WORK_UNITS,
+    mutations.length,
+    touchEntries.length,
+  );
+  const invalidatorDomainEntries = saturatingAdd(
+    MCP_MAX_GRAPH_WORK_UNITS,
+    mutationDomainEntries,
+    touchDomainEntries,
+  );
+  const workForAllInvalidatorsPerQuery = saturatingAdd(
+    MCP_MAX_GRAPH_WORK_UNITS,
+    invalidatorCount,
+    invalidatorDomainEntries,
+  );
+  const renderOnceWorkPerCoverage = saturatingAdd(
+    MCP_MAX_GRAPH_WORK_UNITS,
+    queries.length,
+    saturatingMultiply(MCP_MAX_GRAPH_WORK_UNITS, queries.length, workForAllInvalidatorsPerQuery),
+    saturatingMultiply(MCP_MAX_GRAPH_WORK_UNITS, invalidatorCount, queryDomainEntries),
+  );
+  const renderOnceWork = saturatingMultiply(
+    MCP_MAX_GRAPH_WORK_UNITS,
+    renderOnceCount,
+    renderOnceWorkPerCoverage,
+  );
+  const aggregateWork = saturatingAdd(MCP_MAX_GRAPH_WORK_UNITS, pairWorkEnvelope, renderOnceWork);
+  if (aggregateWork > MCP_MAX_GRAPH_WORK_UNITS) {
+    throw new Error(
+      `MCP graph work exceeds ${MCP_MAX_GRAPH_WORK_UNITS} aggregate comparison units`,
+    );
+  }
+
+  // Bound materialized findings separately from CPU. The finite transport independently rejects
+  // any response above 4 MiB; this pre-verifier estimate keeps us from first allocating an
+  // attacker-amplified warning buffer only to have the transport discard it.
+  const estimatedOutputRows = saturatingAdd(
+    MCP_MAX_GRAPH_OUTPUT_ROWS,
+    shapeEntries,
+    saturatingMultiply(MCP_MAX_GRAPH_OUTPUT_ROWS, mutations.length, queries.length),
+    updateCoverage.length,
+  );
+  if (estimatedOutputRows > MCP_MAX_GRAPH_OUTPUT_ROWS) {
+    throw new Error(`MCP graph output exceeds ${MCP_MAX_GRAPH_OUTPUT_ROWS} estimated rows`);
+  }
+  const amplifiedTextBytes = saturatingMultiply(
+    MCP_MAX_GRAPH_AMPLIFIED_TEXT_BYTES,
+    shape.textBytes,
+    Math.max(1, estimatedOutputRows),
+  );
+  if (amplifiedTextBytes > MCP_MAX_GRAPH_AMPLIFIED_TEXT_BYTES) {
+    throw new Error(
+      `MCP graph output exceeds ${MCP_MAX_GRAPH_AMPLIFIED_TEXT_BYTES} estimated bytes`,
+    );
+  }
+}
+
+function arrayLength(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function graphShapeStats(root: Record<string, unknown>): {
+  arrayEntries: number;
+  maxStringBytes: number;
+  objectProperties: number;
+  textBytes: number;
+} {
+  const pending: unknown[] = [root];
+  let arrayEntries = 0;
+  let maxStringBytes = 0;
+  let objectProperties = 0;
+  let textBytes = 0;
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      const bytes = buildByteLength(value);
+      if (bytes > maxStringBytes) maxStringBytes = bytes;
+      textBytes = saturatingAdd(MCP_MAX_GRAPH_AMPLIFIED_TEXT_BYTES, textBytes, bytes);
+      continue;
+    }
+    if (Array.isArray(value)) {
+      arrayEntries = saturatingAdd(MCP_MAX_GRAPH_WORK_UNITS, arrayEntries, value.length);
+      for (let index = 0; index < value.length; index += 1) pending.push(value[index]);
+      continue;
+    }
+    if (!isRecord(value)) continue;
+    const children = Object.values(value);
+    objectProperties = saturatingAdd(MCP_MAX_GRAPH_WORK_UNITS, objectProperties, children.length);
+    for (const child of children) pending.push(child);
+  }
+  return { arrayEntries, maxStringBytes, objectProperties, textBytes };
+}
+
+function saturatingAdd(limit: number, ...values: readonly number[]): number {
+  let total = 0;
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value < 0 || value > limit - total) return limit + 1;
+    total += value;
+  }
+  return total;
+}
+
+function saturatingMultiply(limit: number, left: number, right: number): number {
+  if (
+    !Number.isSafeInteger(left) ||
+    !Number.isSafeInteger(right) ||
+    left < 0 ||
+    right < 0 ||
+    (left !== 0 && right > Math.floor(limit / left))
+  ) {
+    return limit + 1;
+  }
+  return left * right;
+}
+
+function assertToolArgs(args: unknown, tool: KovoMcpToolName): Record<string, unknown> {
+  if (!isRecord(args)) throw new Error(`${tool} arguments must be an object`);
   return args;
 }
 
-function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
-  if (!isRecord(args)) throw new Error('compile_component arguments must be an object');
-  if (typeof args.fileName !== 'string') {
+function assertExactKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  label: string,
+): void {
+  const allowedKeys = new Set(allowed);
+  const unsupported = Object.keys(value)
+    .filter((key) => !allowedKeys.has(key))
+    .sort();
+  if (unsupported.length > 0) {
+    throw new Error(`${label} contain unsupported field ${unsupported[0]}`);
+  }
+}
+
+function assertOptionalBoolean(
+  value: Record<string, unknown>,
+  key: string,
+  label: string,
+): { failOnFindings?: boolean } {
+  if (!Object.hasOwn(value, key)) return {};
+  if (typeof value[key] !== 'boolean') throw new Error(`${label} ${key} must be a boolean`);
+  return { failOnFindings: value[key] };
+}
+
+function assertMcpCompileFileName(fileName: string, workspaceRoot: McpWorkspaceRoot): void {
+  const segments = fileName.split('/');
+  const resolved = resolve(workspaceRoot.canonicalRoot, fileName);
+  const relativePath = relative(workspaceRoot.canonicalRoot, resolved);
+  if (
+    fileName.length === 0 ||
+    fileName.includes('\\') ||
+    fileName.includes('\0') ||
+    isAbsolute(fileName) ||
+    segments.some((segment) => segment === '' || segment === '.' || segment === '..') ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  ) {
+    throw new Error(
+      'compile_component fileName must be a relative path confined to the MCP launch workspace',
+    );
+  }
+  if (segments.length > MCP_MAX_COMPILE_PATH_SEGMENTS) {
+    throw new Error(
+      `compile_component fileName exceeds ${MCP_MAX_COMPILE_PATH_SEGMENTS} path segments`,
+    );
+  }
+}
+
+function canonicalMcpWorkspaceRoot(invocationCwd: string): McpWorkspaceRoot {
+  if (typeof invocationCwd !== 'string' || invocationCwd.length === 0) {
+    throw new TypeError('MCP launch workspace must be a nonempty path');
+  }
+  const workspaceRoot = CompilerInternal.createCompilerSourceRootWitness(invocationCwd);
+  if (workspaceRoot === null) throw new TypeError('MCP launch workspace must be a directory');
+  return workspaceRoot;
+}
+
+function assertCompileComponentV1Input(
+  args: unknown,
+  workspaceRoot: McpWorkspaceRoot,
+): CompileComponentV1Input {
+  const inputArgs = assertToolArgs(args, 'compile_component');
+  assertExactKeys(inputArgs, ['fileName', 'source'], 'compile_component arguments');
+  if (typeof inputArgs.fileName !== 'string') {
     throw new Error('compile_component fileName must be a string');
   }
-  if (typeof args.source !== 'string') throw new Error('compile_component source must be a string');
-  if (buildByteLength(args.source) > MCP_MAX_COMPILE_SOURCE_BYTES) {
+  if (typeof inputArgs.source !== 'string') {
+    throw new Error('compile_component source must be a string');
+  }
+  if (buildByteLength(inputArgs.source) > MCP_MAX_COMPILE_SOURCE_BYTES) {
     throw new Error(`compile_component source exceeds ${MCP_MAX_COMPILE_SOURCE_BYTES} bytes`);
   }
-  if (args.fileName.length > 4096) {
+  if (inputArgs.fileName.length > 4096) {
     throw new Error('compile_component fileName exceeds 4096 characters');
   }
-
+  assertMcpCompileFileName(inputArgs.fileName, workspaceRoot);
+  assertMcpCompilePreparseBudget(inputArgs.source);
+  const syntaxBudget = CompilerInternal.compilerSourceSyntaxBudget(
+    inputArgs.fileName,
+    inputArgs.source,
+    {
+      maxDepth: MCP_MAX_COMPILE_SYNTAX_DEPTH,
+      maxNodes: MCP_MAX_COMPILE_SYNTAX_NODES,
+    },
+  );
+  if (!syntaxBudget.ok) {
+    throw new Error(
+      syntaxBudget.reason === 'depth'
+        ? `compile_component source exceeds ${MCP_MAX_COMPILE_SYNTAX_DEPTH} syntax depth`
+        : syntaxBudget.reason === 'parser'
+          ? 'compile_component source exceeds the finite parser recursion budget'
+          : `compile_component source exceeds ${MCP_MAX_COMPILE_SYNTAX_NODES} syntax nodes`,
+    );
+  }
   const input: CompileComponentV1Input = {
-    fileName: args.fileName,
-    source: args.source,
+    fileName: inputArgs.fileName,
+    source: inputArgs.source,
   };
-
-  if (Array.isArray(args.packageComponentPrefixes)) {
-    input.packageComponentPrefixes =
-      args.packageComponentPrefixes as CompileComponentV1Input['packageComponentPrefixes'];
-  }
-  if (typeof args.packagePrefixDiscoveryRoot === 'string') {
-    input.packagePrefixDiscoveryRoot = args.packagePrefixDiscoveryRoot;
-  }
-  if (Array.isArray(args.queryShapeFacts)) {
-    input.queryShapeFacts = args.queryShapeFacts as readonly CompilerInternal.QueryShapeFact[];
-  }
-  if (isRecord(args.queryShapes)) {
-    input.queryShapes = args.queryShapes as Record<string, CompilerInternal.QueryShape>;
-  }
-  if (isRecord(args.registryFacts)) {
-    input.registryFacts = args.registryFacts as CompileComponentV1Input['registryFacts'];
-  }
-  if (args.sourceProvenance === 'app') {
-    input.sourceProvenance = args.sourceProvenance;
-  }
 
   return input;
 }
 
+function assertMcpCompilePreparseBudget(source: string): void {
+  let inToken = false;
+  let structuralTokens = 0;
+  let tokens = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    const isWord =
+      (code >= 0x30 && code <= 0x39) ||
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      code === 0x24 ||
+      code === 0x5f;
+    if (isWord) {
+      if (!inToken) tokens += 1;
+      inToken = true;
+    } else {
+      inToken = false;
+      if (code > 0x20) tokens += 1;
+    }
+    // Raw source is deliberately conservative: every potential parsed opener is charged even
+    // inside a literal/comment. Parsed nesting therefore cannot exceed this pre-parse ceiling.
+    if (code === 0x28 || code === 0x3c || code === 0x5b || code === 0x7b) {
+      structuralTokens += 1;
+    }
+    if (tokens > MCP_MAX_COMPILE_PREPARSE_TOKENS) {
+      throw new Error(
+        `compile_component source exceeds ${MCP_MAX_COMPILE_PREPARSE_TOKENS} pre-parse tokens`,
+      );
+    }
+    if (structuralTokens > MCP_MAX_COMPILE_STRUCTURAL_TOKENS) {
+      throw new Error(
+        `compile_component source exceeds ${MCP_MAX_COMPILE_STRUCTURAL_TOKENS} structural tokens`,
+      );
+    }
+  }
+}
+
 function assertKovoExplainOptions(value: unknown): KovoExplainOptions {
   if (!isRecord(value)) throw new Error('kovo_explain options must be an object');
+  const modeFields = ['access', 'agent', 'endpoints', 'unguarded', 'unscoped'] as const;
+  const selectedModes = modeFields.filter((field) => value[field] === true);
+  const targeted = Object.hasOwn(value, 'kind') || Object.hasOwn(value, 'target');
+  if (selectedModes.length + (targeted ? 1 : 0) > 1) {
+    throw new Error('kovo_explain options select multiple modes');
+  }
 
-  if (value.agent === true) return { agent: true };
+  if (value.agent === true) {
+    assertExactKeys(value, ['agent'], 'kovo_explain options');
+    return { agent: true };
+  }
   if (value.access === true) {
+    assertExactKeys(value, ['access', 'failOnFindings'], 'kovo_explain options');
     return {
-      ...(value.failOnFindings === true ? { failOnFindings: true } : {}),
+      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
       access: true,
     };
   }
-  if (value.endpoints === true) return { endpoints: true };
+  if (value.endpoints === true) {
+    assertExactKeys(value, ['endpoints'], 'kovo_explain options');
+    return { endpoints: true };
+  }
   if (value.unguarded === true) {
+    assertExactKeys(value, ['failOnFindings', 'unguarded'], 'kovo_explain options');
     return {
-      ...(value.failOnFindings === true ? { failOnFindings: true } : {}),
+      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
       unguarded: true,
     };
   }
   if (value.unscoped === true) {
+    assertExactKeys(value, ['failOnFindings', 'unscoped'], 'kovo_explain options');
     return {
-      ...(value.failOnFindings === true ? { failOnFindings: true } : {}),
+      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
       unscoped: true,
     };
   }
@@ -669,10 +769,15 @@ function assertKovoExplainOptions(value: unknown): KovoExplainOptions {
   if (!isExplainKind(kind) || typeof value.target !== 'string') {
     throw new Error('kovo_explain options require kind and target, or a supported audit flag');
   }
+  assertExactKeys(value, ['kind', 'optimistic', 'target'], 'kovo_explain options');
+  if (value.target.length === 0) throw new Error('kovo_explain options target must be nonempty');
+  if (Object.hasOwn(value, 'optimistic') && typeof value.optimistic !== 'boolean') {
+    throw new Error('kovo_explain options optimistic must be a boolean');
+  }
 
   return {
     kind,
-    ...(value.optimistic === true ? { optimistic: true } : {}),
+    ...(typeof value.optimistic === 'boolean' ? { optimistic: value.optimistic } : {}),
     target: value.target,
   };
 }
@@ -705,39 +810,12 @@ function listDiagnosticsV1(): {
   };
 }
 
-function mcpResult(
-  id: string | number | null,
-  structuredContent: unknown,
-): Extract<KovoMcpResponse, { result: unknown }> {
-  return {
-    id,
-    jsonrpc: '2.0',
-    result: {
-      content: [{ text: mcpContentText(structuredContent), type: 'text' }],
-      structuredContent,
-      version: mcpOutputVersion,
-    },
-  };
-}
-
 function mcpContentText(structuredContent: unknown): string {
   if (isRecord(structuredContent) && typeof structuredContent.version === 'string') {
     return structuredContent.version;
   }
 
   return mcpOutputVersion;
-}
-
-function mcpError(
-  id: string | number | null,
-  code: number,
-  message: string,
-): Extract<KovoMcpResponse, { error: unknown }> {
-  return { error: { code, message }, id, jsonrpc: '2.0' };
-}
-
-function mcpRequestId(value: unknown): string | number | null {
-  return typeof value === 'string' || typeof value === 'number' ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

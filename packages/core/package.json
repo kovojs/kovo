@@ -50,6 +50,7 @@
     "./internal/framework-identity": "./src/internal/framework-identity.ts",
     "./internal/graph": "./src/internal/graph.ts",
     "./internal/json": "./src/internal/json.ts",
+    "./internal/mcp-stdio": "./src/internal/mcp-stdio.ts",
     "./internal/module-ref": "./src/internal/module-ref.ts",
     "./internal/package-prefix": "./src/internal/package-prefix.ts",
     "./internal/query-delta": "./src/internal/query-delta.ts",
@@ -138,6 +139,10 @@
         "types": "./dist/internal/json.d.mts",
         "default": "./dist/internal/json.mjs"
       },
+      "./internal/mcp-stdio": {
+        "types": "./dist/internal/mcp-stdio.d.mts",
+        "default": "./dist/internal/mcp-stdio.mjs"
+      },
       "./internal/module-ref": {
         "types": "./dist/internal/module-ref.d.mts",
         "default": "./dist/internal/module-ref.mjs"
@@ -209,7 +214,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

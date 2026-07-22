@@ -1,62 +1,50 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
-
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { BoundedMcpStdin } from './commands/mcp.js';
-import {
-  compileComponentV1,
-  handleKovoMcpRequest,
-  runMcpFallbackStdio,
-  runMcpSdkServer,
-} from './index.js';
+import { compileComponentV1, runMcpStdioServer } from './index.js';
 
 const browserAlertKv449Message =
   'Security-critical operation is outside the compiler-owned finite IR. semantic root=serialized-browser-handler:onClick@8; transfers=<direct>; sink=browser capability call window.alert is outside the finite handler IR; verdict=closed:opaque-transfer.';
 
-class MemoryMcpTransport implements Transport {
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  onmessage?: (message: JSONRPCMessage) => void;
-  readonly sent: JSONRPCMessage[] = [];
-  started = false;
-
-  async close(): Promise<void> {
-    this.onclose?.();
-  }
-
-  receive(message: JSONRPCMessage): void {
-    this.onmessage?.(message);
-  }
-
-  async send(message: JSONRPCMessage): Promise<void> {
-    this.sent.push(message);
-  }
-
-  async start(): Promise<void> {
-    this.started = true;
-  }
-}
-
-async function waitForMcpMessage(
-  transport: MemoryMcpTransport,
-  predicate: (message: JSONRPCMessage) => boolean,
-): Promise<JSONRPCMessage> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const message = transport.sent.find(predicate);
-    if (message) return message;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error(`MCP message was not sent. Sent: ${JSON.stringify(transport.sent)}`);
-}
-
 async function* mcpInputChunks(...chunks: string[]): AsyncIterable<string> {
   yield* chunks;
+}
+
+async function finiteMcpRequest(
+  request: Record<string, unknown>,
+  invocationCwd = process.cwd(),
+): Promise<Record<string, unknown>> {
+  const messages = [
+    {
+      id: 'test-initialize',
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1' },
+        protocolVersion: '2025-06-18',
+      },
+    },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    request,
+  ];
+  const chunks: string[] = [];
+  await runMcpStdioServer(
+    mcpInputChunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
+    { write: (chunk) => chunks.push(chunk) },
+    invocationCwd,
+  );
+  const responses = chunks
+    .join('')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  return responses.at(-1)!;
 }
 
 function writePackageManifest(
@@ -72,10 +60,13 @@ function writePackageManifest(
 describe('compile/v1 and kovo mcp', () => {
   it('returns a snapshot-stable compile/v1 contract for in-memory component source', async () => {
     await expect(
-      compileComponentV1({
-        fileName: 'cart-badge.tsx',
-        source: '<button>x</button>',
-      }),
+      compileComponentV1(
+        {
+          fileName: 'cart-badge.tsx',
+          source: '<button>x</button>',
+        },
+        process.cwd(),
+      ),
     ).resolves.toMatchInlineSnapshot(`
       {
         "componentGraphFacts": [
@@ -120,10 +111,13 @@ describe('compile/v1 and kovo mcp', () => {
   });
 
   it('proves the in-memory repair loop with shared KV201 diagnostics', async () => {
-    const adversarial = await compileComponentV1({
-      fileName: 'cart-badge.tsx',
-      source: '<button onClick={() => window.alert("x")}>x</button>',
-    });
+    const adversarial = await compileComponentV1(
+      {
+        fileName: 'cart-badge.tsx',
+        source: '<button onClick={() => window.alert("x")}>x</button>',
+      },
+      process.cwd(),
+    );
 
     expect(adversarial.ok).toBe(false);
     expect(adversarial.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
@@ -163,10 +157,13 @@ describe('compile/v1 and kovo mcp', () => {
       start: { column: 24, line: 1 },
     });
 
-    const corrected = await compileComponentV1({
-      fileName: 'cart-badge.tsx',
-      source: '<button>x</button>',
-    });
+    const corrected = await compileComponentV1(
+      {
+        fileName: 'cart-badge.tsx',
+        source: '<button>x</button>',
+      },
+      process.cwd(),
+    );
 
     expect(corrected.ok).toBe(true);
     expect(corrected.diagnostics).toEqual([]);
@@ -186,10 +183,10 @@ describe('compile/v1 and kovo mcp', () => {
       });
 
       await expect(
-        compileComponentV1({
-          fileName: 'src/shell.tsx',
-          packagePrefixDiscoveryRoot: root,
-          source: `
+        compileComponentV1(
+          {
+            fileName: 'src/shell.tsx',
+            source: `
 import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets';
@@ -198,7 +195,9 @@ export const Shell = component({
   render: () => <section></section>,
 });
 `,
-        }),
+          },
+          root,
+        ),
       ).resolves.toMatchObject({
         diagnostics: [
           {
@@ -217,126 +216,188 @@ export const Shell = component({
   });
 
   it('exposes MCP-style tool listing and structured compile results over JSON-RPC objects', async () => {
-    await expect(handleKovoMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
+    await expect(finiteMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
       .toMatchInlineSnapshot(`
       {
         "id": 1,
         "jsonrpc": "2.0",
         "result": {
-          "content": [
+          "tools": [
             {
-              "text": "kovo-mcp/v1",
-              "type": "text",
+              "description": "Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "fileName": {
+                    "maxLength": 4096,
+                    "type": "string",
+                  },
+                  "source": {
+                    "maxLength": 262144,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "fileName",
+                  "source",
+                ],
+                "type": "object",
+              },
+              "name": "compile_component",
+            },
+            {
+              "description": "Run kovoCheck against a bounded inline graph.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "family": {
+                    "enum": [
+                      "all",
+                      "coverage",
+                      "optimistic",
+                    ],
+                  },
+                  "graph": {
+                    "type": "object",
+                  },
+                },
+                "required": [],
+                "type": "object",
+              },
+              "name": "kovo_check",
+            },
+            {
+              "description": "Run kovoExplain against a bounded inline graph.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "graph": {
+                    "type": "object",
+                  },
+                  "options": {
+                    "oneOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "agent": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "agent",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "access": {
+                            "const": true,
+                          },
+                          "failOnFindings": {
+                            "type": "boolean",
+                          },
+                        },
+                        "required": [
+                          "access",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "endpoints": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "endpoints",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "failOnFindings": {
+                            "type": "boolean",
+                          },
+                          "unguarded": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "unguarded",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "failOnFindings": {
+                            "type": "boolean",
+                          },
+                          "unscoped": {
+                            "const": true,
+                          },
+                        },
+                        "required": [
+                          "unscoped",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "component",
+                              "context",
+                              "mutation",
+                              "page",
+                              "query",
+                              "task",
+                            ],
+                          },
+                          "optimistic": {
+                            "type": "boolean",
+                          },
+                          "target": {
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "kind",
+                          "target",
+                        ],
+                        "type": "object",
+                      },
+                    ],
+                    "type": "object",
+                  },
+                },
+                "required": [
+                  "options",
+                ],
+                "type": "object",
+              },
+              "name": "kovo_explain",
+            },
+            {
+              "description": "List shared diagnostic definitions from the @kovojs/core registry.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object",
+              },
+              "name": "list_diagnostics",
             },
           ],
-          "structuredContent": {
-            "tools": [
-              {
-                "description": "Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.",
-                "inputSchema": {
-                  "additionalProperties": true,
-                  "properties": {
-                    "fileName": {
-                      "maxLength": 4096,
-                      "type": "string",
-                    },
-                    "packageComponentPrefixes": {
-                      "type": "array",
-                    },
-                    "packagePrefixDiscoveryRoot": {
-                      "type": "string",
-                    },
-                    "queryShapeFacts": {
-                      "type": "array",
-                    },
-                    "queryShapes": {
-                      "type": "object",
-                    },
-                    "registryFacts": {
-                      "type": "object",
-                    },
-                    "source": {
-                      "maxLength": 2097152,
-                      "type": "string",
-                    },
-                    "sourceProvenance": {
-                      "enum": [
-                        "app",
-                      ],
-                    },
-                  },
-                  "required": [
-                    "fileName",
-                    "source",
-                  ],
-                  "type": "object",
-                },
-                "name": "compile_component",
-              },
-              {
-                "description": "Run kovoCheck against an inline graph or graphPath.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "family": {
-                      "enum": [
-                        "all",
-                        "coverage",
-                        "optimistic",
-                      ],
-                    },
-                    "graph": {
-                      "type": "object",
-                    },
-                    "graphPath": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [],
-                  "type": "object",
-                },
-                "name": "kovo_check",
-              },
-              {
-                "description": "Run kovoExplain against an inline graph or graphPath.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "graph": {
-                      "type": "object",
-                    },
-                    "graphPath": {
-                      "type": "string",
-                    },
-                    "options": {
-                      "type": "object",
-                    },
-                  },
-                  "required": [
-                    "options",
-                  ],
-                  "type": "object",
-                },
-                "name": "kovo_explain",
-              },
-              {
-                "description": "List shared diagnostic definitions from the @kovojs/core registry.",
-                "inputSchema": {
-                  "additionalProperties": false,
-                  "properties": {},
-                  "type": "object",
-                },
-                "name": "list_diagnostics",
-              },
-            ],
-            "version": "kovo-mcp/v1",
-          },
-          "version": "kovo-mcp/v1",
         },
       }
     `);
 
-    const response = await handleKovoMcpRequest({
+    const response = await finiteMcpRequest({
       id: 'compile-1',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -383,13 +444,12 @@ export const Shell = component({
           ok: false,
           version: 'compile/v1',
         },
-        version: 'kovo-mcp/v1',
       },
     });
   });
 
   it('does not let MCP callers spoof compiler-emitted source provenance', async () => {
-    const response = await handleKovoMcpRequest({
+    const response = await finiteMcpRequest({
       id: 'compile-spoof',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -409,24 +469,20 @@ export const Shell = component({
 
     expect(response).toMatchObject({
       result: {
-        structuredContent: {
-          diagnostics: [
-            {
-              code: 'KV235',
-              help: expect.stringContaining(
-                'Blocked reason: app source imports non-public Kovo subpath `@kovojs/browser/generated`.',
-              ),
-            },
-          ],
-          ok: false,
-        },
+        content: [
+          {
+            text: 'compile_component arguments contain unsupported field sourceProvenance',
+            type: 'text',
+          },
+        ],
+        isError: true,
       },
     });
   });
 
   it('wraps kovo_check, kovo_explain, and diagnostic definitions without a second policy', async () => {
     await expect(
-      handleKovoMcpRequest({
+      finiteMcpRequest({
         id: 'check-1',
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -443,7 +499,7 @@ export const Shell = component({
     });
 
     await expect(
-      handleKovoMcpRequest({
+      finiteMcpRequest({
         id: 'explain-1',
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -466,7 +522,7 @@ export const Shell = component({
       },
     });
 
-    const diagnostics = await handleKovoMcpRequest({
+    const diagnostics = await finiteMcpRequest({
       id: 'definitions-1',
       jsonrpc: '2.0',
       method: 'tools/call',
@@ -488,40 +544,29 @@ export const Shell = component({
     });
   });
 
-  it('preserves the newline-delimited JSON-RPC fallback stdio seam', async () => {
+  it('serves the finite newline-delimited JSON-RPC lifecycle', async () => {
     const chunks: string[] = [];
-    await runMcpFallbackStdio(
+    await runMcpStdioServer(
       mcpInputChunks(
         `${JSON.stringify({
-          id: 'list-fallback',
+          id: 'init',
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: {
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1' },
+            protocolVersion: '2025-06-18',
+          },
+        })}\n`,
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+        `${JSON.stringify({
+          id: 'list',
           jsonrpc: '2.0',
           method: 'tools/list',
         })}\n`,
       ),
       { write: (chunk) => chunks.push(chunk) },
-    );
-
-    expect(JSON.parse(chunks.join(''))).toMatchObject({
-      id: 'list-fallback',
-      jsonrpc: '2.0',
-      result: {
-        structuredContent: {
-          tools: expect.arrayContaining([expect.objectContaining({ name: 'compile_component' })]),
-          version: 'kovo-mcp/v1',
-        },
-        version: 'kovo-mcp/v1',
-      },
-    });
-  });
-
-  it('bounds fallback request lines and resumes at the next message', async () => {
-    const chunks: string[] = [];
-    await runMcpFallbackStdio(
-      mcpInputChunks(
-        'x'.repeat(4 * 1024 * 1024 + 1),
-        `\n${JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' })}\n`,
-      ),
-      { write: (chunk) => chunks.push(chunk) },
+      process.cwd(),
     );
 
     const responses = chunks
@@ -531,81 +576,124 @@ export const Shell = component({
       .map((line) => JSON.parse(line));
     expect(responses).toHaveLength(2);
     expect(responses[0]).toMatchObject({
+      id: 'init',
+      jsonrpc: '2.0',
+      result: {
+        protocolVersion: '2025-06-18',
+        serverInfo: { name: 'kovo', version: 'kovo-mcp/v1' },
+      },
+    });
+    expect(responses[1]).toMatchObject({
+      id: 'list',
+      result: {
+        tools: expect.arrayContaining([expect.objectContaining({ name: 'compile_component' })]),
+      },
+    });
+  });
+
+  it('bounds request lines and resumes with a fresh finite lifecycle', async () => {
+    const chunks: string[] = [];
+    await runMcpStdioServer(
+      mcpInputChunks(
+        'x'.repeat(4 * 1024 * 1024 + 1),
+        `\n${JSON.stringify({
+          id: 'init-after-limit',
+          jsonrpc: '2.0',
+          method: 'initialize',
+          params: {
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1' },
+            protocolVersion: '2025-06-18',
+          },
+        })}\n`,
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+        `${JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' })}\n`,
+      ),
+      { write: (chunk) => chunks.push(chunk) },
+      process.cwd(),
+    );
+
+    const responses = chunks
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(responses).toHaveLength(3);
+    expect(responses[0]).toMatchObject({
       error: { code: -32001, message: 'request exceeds 4194304 bytes' },
       id: null,
       jsonrpc: '2.0',
     });
-    expect(responses[1]).toMatchObject({
+    expect(responses[1]).toMatchObject({ id: 'init-after-limit' });
+    expect(responses[2]).toMatchObject({
       id: 'after-limit',
-      result: { structuredContent: { version: 'kovo-mcp/v1' } },
+      result: { tools: expect.arrayContaining([expect.objectContaining({ name: 'kovo_check' })]) },
     });
-  });
-
-  it('bounds the SDK transport before its unbounded newline buffer', async () => {
-    const next = JSON.stringify({ id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' });
-    const bounded = new BoundedMcpStdin(
-      Readable.from([Buffer.alloc(4 * 1024 * 1024 + 1, 0x78), Buffer.from(`\n${next}\n`, 'utf8')]),
-    );
-    let output = '';
-    for await (const chunk of bounded) output += Buffer.from(chunk).toString('utf8');
-
-    const messages = output
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line));
-    expect(messages).toEqual([
-      {
-        id: 'kovo-input-limit',
-        jsonrpc: '2.0',
-        method: '__kovo_input_limit__',
-      },
-      { id: 'after-limit', jsonrpc: '2.0', method: 'tools/list' },
-    ]);
-    expect(Buffer.byteLength(output)).toBeLessThan(1024);
   });
 
   it('rejects oversized compile sources before invoking the compiler', async () => {
     await expect(
-      handleKovoMcpRequest({
+      finiteMcpRequest({
         id: 'compile-limit',
         jsonrpc: '2.0',
         method: 'tools/call',
         params: {
           arguments: {
             fileName: 'oversized.tsx',
-            source: 'x'.repeat(2 * 1024 * 1024 + 1),
+            source: 'x'.repeat(256 * 1024 + 1),
           },
           name: 'compile_component',
         },
       }),
     ).resolves.toMatchObject({
-      error: { code: -32000, message: 'compile_component source exceeds 2097152 bytes' },
       id: 'compile-limit',
       jsonrpc: '2.0',
+      result: {
+        content: [{ text: 'compile_component source exceeds 262144 bytes', type: 'text' }],
+        isError: true,
+      },
     });
   });
 
-  it('serves initialize, tool listing, and tool calls through the SDK MCP lifecycle', async () => {
-    const transport = new MemoryMcpTransport();
-    await runMcpSdkServer(transport);
-
-    expect(transport.started).toBe(true);
-
-    transport.receive({
-      id: 'init-1',
-      jsonrpc: '2.0',
-      method: 'initialize',
-      params: {
-        capabilities: {},
-        clientInfo: { name: 'kovo-test-client', version: '0.0.0' },
-        protocolVersion: '2025-06-18',
+  it('serves initialize, tool listing, and tool calls through the finite MCP lifecycle', async () => {
+    const messages = [
+      {
+        id: 'init-1',
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: {
+          capabilities: {},
+          clientInfo: { name: 'kovo-test-client', version: '0.0.0' },
+          protocolVersion: '2025-06-18',
+        },
       },
-    });
-
-    const initialize = await waitForMcpMessage(
-      transport,
-      (message) => 'id' in message && message.id === 'init-1',
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { id: 'list-1', jsonrpc: '2.0', method: 'tools/list', params: {} },
+      {
+        id: 'compile-1',
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: {
+            fileName: 'cart-badge.tsx',
+            source: '<button onClick={() => window.alert("x")}>x</button>',
+          },
+          name: 'compile_component',
+        },
+      },
+    ];
+    const chunks: string[] = [];
+    await runMcpStdioServer(
+      mcpInputChunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
+      { write: (chunk) => chunks.push(chunk) },
+      process.cwd(),
     );
+    const [initialize, list, compile] = chunks
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
     expect(initialize).toMatchObject({
       id: 'init-1',
       jsonrpc: '2.0',
@@ -615,13 +703,6 @@ export const Shell = component({
       },
     });
 
-    transport.receive({ jsonrpc: '2.0', method: 'notifications/initialized' });
-    transport.receive({ id: 'list-1', jsonrpc: '2.0', method: 'tools/list', params: {} });
-
-    const list = await waitForMcpMessage(
-      transport,
-      (message) => 'id' in message && message.id === 'list-1',
-    );
     expect(list).toMatchObject({
       id: 'list-1',
       jsonrpc: '2.0',
@@ -635,23 +716,6 @@ export const Shell = component({
       },
     });
 
-    transport.receive({
-      id: 'compile-1',
-      jsonrpc: '2.0',
-      method: 'tools/call',
-      params: {
-        arguments: {
-          fileName: 'cart-badge.tsx',
-          source: '<button onClick={() => window.alert("x")}>x</button>',
-        },
-        name: 'compile_component',
-      },
-    });
-
-    const compile = await waitForMcpMessage(
-      transport,
-      (message) => 'id' in message && message.id === 'compile-1',
-    );
     expect(compile).toMatchObject({
       id: 'compile-1',
       jsonrpc: '2.0',
@@ -689,5 +753,43 @@ export const Shell = component({
         },
       },
     });
+  });
+
+  it('serves and exits cleanly through the spawned kovo mcp command', () => {
+    const input = [
+      {
+        id: 'init',
+        jsonrpc: '2.0',
+        method: 'initialize',
+        params: {
+          capabilities: {},
+          clientInfo: { name: 'spawned-test', version: '1' },
+          protocolVersion: '2025-06-18',
+        },
+      },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { id: 'ping', jsonrpc: '2.0', method: 'ping' },
+    ]
+      .map((message) => JSON.stringify(message))
+      .join('\n');
+    const result = spawnSync(fileURLToPath(new URL('./bin.ts', import.meta.url)), ['mcp'], {
+      encoding: 'utf8',
+      input: `${input}\n`,
+      timeout: 15_000,
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(
+      result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line)),
+    ).toEqual([
+      expect.objectContaining({
+        id: 'init',
+        result: expect.objectContaining({ protocolVersion: '2025-06-18' }),
+      }),
+      { id: 'ping', jsonrpc: '2.0', result: {} },
+    ]);
   });
 });

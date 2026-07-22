@@ -821,7 +821,6 @@ describe('@kovojs/test package subpath exports', () => {
               ok: false,
               version: 'compile/v1',
             },
-            version: 'kovo-mcp/v1',
           },
         }),
       ),
@@ -831,7 +830,6 @@ describe('@kovojs/test package subpath exports', () => {
         diagnostics: [{ code: 'KV201', severity: 'error' }],
         id: 'compile',
         ok: false,
-        version: 'kovo-mcp/v1',
       },
     ]);
     expect(mcpJsonRpcResponseFacts).toBeTypeOf('function');

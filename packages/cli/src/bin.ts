@@ -71,8 +71,7 @@ if (
   lockCompilerSecurityRealm();
 }
 
-// `kovo mcp` is a long-lived stdio server: its `mainAsync` resolves as soon as the
-// transport is wired up, while the process must stay alive to serve requests. Every
+// `kovo mcp` is a long-lived stdio server: its `mainAsync` reads until stdin reaches EOF. Every
 // other `kovo` command is one-shot — once `mainAsync` resolves the command result is
 // fully written, so exit promptly instead of waiting out a multi-second event-loop
 // drain on handles the run can't reach (a loaded app module's top-level resources such

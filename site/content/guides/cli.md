@@ -354,6 +354,13 @@ kovo mcp
 MCP is a rendering/query surface over the existing diagnostics, not a second diagnostic channel — an
 agent gets the identical codes, severities, and help text a human sees.
 
+The surface is deliberately finite. `kovo_check` and `kovo_explain` accept bounded inline graphs,
+not graph paths. `compile_component` accepts only a launch-workspace-relative `fileName` plus inline
+app source; protocol callers cannot select package-discovery roots or inject registry/query/package
+facts. Requests, compiler source/AST work, graph joins, output size, and calls per session all have
+fail-closed limits. Start `kovo mcp` from the workspace whose package manifests compilation may
+inspect; that canonical directory is pinned before the first request.
+
 ## How they compose
 
 ```

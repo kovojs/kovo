@@ -1,10 +1,13 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked directly. */
+import { Buffer as BuiltinBuffer } from 'node:buffer';
 import {
   closeSync as builtinCloseSync,
+  constants as builtinFsConstants,
   fstatSync as builtinFstatSync,
   lstatSync as builtinLstatSync,
   openSync as builtinOpenSync,
   readFileSync as builtinReadFileSync,
+  readSync as builtinReadSync,
   readdirSync as builtinReaddirSync,
   realpathSync as builtinRealpathSync,
   statSync as builtinStatSync,
@@ -26,6 +29,7 @@ import {
   compilerFailClosed,
   compilerFreeze,
   compilerNumberIsFinite,
+  compilerNumberIsSafeInteger,
   compilerOwnDataValue,
   compilerSnapshotDenseArray,
   compilerStatsIsDirectory,
@@ -33,8 +37,10 @@ import {
   compilerStatsIsSymbolicLink,
   compilerStringIncludes,
   compilerStringStartsWith,
+  compilerUtf8Text,
 } from './compiler-security-intrinsics.ts';
 
+const nativeBufferAllocUnsafe = BuiltinBuffer.allocUnsafe;
 const nativeCloseSync = builtinCloseSync;
 const nativeFstatSync = builtinFstatSync;
 const nativeLstatSync = builtinLstatSync;
@@ -43,16 +49,30 @@ const nativePathIsAbsolute = builtinPathIsAbsolute;
 const nativePathRelative = builtinPathRelative;
 const nativePathResolve = builtinPathResolve;
 const nativeReadFileSync = builtinReadFileSync;
+const nativeReadSync = builtinReadSync;
 const nativeReaddirSync = builtinReaddirSync;
 const nativeRealpathSync = builtinRealpathSync;
 const nativeStatSync = builtinStatSync;
 const nativePreProcessFile = typescript.preProcessFile;
+const compilerSourceOpenFlags =
+  builtinFsConstants.O_RDONLY | builtinFsConstants.O_NOFOLLOW | builtinFsConstants.O_NONBLOCK;
 
 type CompilerSourceEntryKind = 'directory' | 'file' | 'other';
 
 interface FileSystemIdentity {
   readonly device: number;
   readonly inode: number;
+}
+
+interface FileSystemVersion {
+  readonly ctimeMs: number;
+  readonly mtimeMs: number;
+  readonly size: number;
+}
+
+/** @internal Immutable launch-root identity for ambient compiler discovery. */
+export interface CompilerSourceRootWitness extends FileSystemIdentity {
+  readonly canonicalRoot: string;
 }
 
 interface CompilerSourceRootState {
@@ -66,6 +86,7 @@ interface CompilerSourceEntryFacts {
   readonly identity: FileSystemIdentity;
   readonly kind: Exclude<CompilerSourceEntryKind, 'other'>;
   readonly lexicalPath: string;
+  readonly version: FileSystemVersion;
 }
 
 /** @internal Synchronous source-tree capability used by compiler build discovery. */
@@ -75,6 +96,7 @@ export interface CompilerSourceFileSystem {
   kind(fileName: string): CompilerSourceEntryKind;
   readDirectory(directory: string): readonly string[] | null;
   readFile(fileName: string): string | null;
+  readFileBounded(fileName: string, maxBytes: number): string | null;
 }
 
 /** @internal Extract the module specifiers TypeScript recognizes without evaluating source. */
@@ -122,16 +144,41 @@ export function compilerSourceModuleSpecifiers(source: string): readonly string[
  *
  * @internal
  */
-export function createCompilerSourceFileSystem(rootDir: string): CompilerSourceFileSystem | null {
+export function createCompilerSourceRootWitness(rootDir: string): CompilerSourceRootWitness | null {
+  try {
+    const canonicalRoot = nativeRealpathSync(nativePathResolve(rootDir));
+    const rootStat = nativeLstatSync(canonicalRoot);
+    if (!compilerStatsIsDirectory(rootStat)) return null;
+    if (nativeRealpathSync(canonicalRoot) !== canonicalRoot) return null;
+    const identity = fileSystemIdentity(rootStat, 'Compiler source root witness');
+    return compilerFreeze({ canonicalRoot, ...identity });
+  } catch {
+    return null;
+  }
+}
+
+/** @internal Create a realpath-confined filesystem capability for compiler discovery. */
+export function createCompilerSourceFileSystem(
+  rootDir: string,
+  expectedRoot?: CompilerSourceRootWitness,
+): CompilerSourceFileSystem | null {
   let state: CompilerSourceRootState;
   try {
     const lexicalRoot = nativePathResolve(rootDir);
     const canonicalRoot = nativeRealpathSync(lexicalRoot);
     const rootStat = nativeStatSync(canonicalRoot);
     if (!compilerStatsIsDirectory(rootStat)) return null;
+    const identity = fileSystemIdentity(rootStat, 'Compiler source root');
+    if (
+      expectedRoot !== undefined &&
+      (canonicalRoot !== expectedRoot.canonicalRoot ||
+        !sameFileSystemIdentity(identity, expectedRoot))
+    ) {
+      return null;
+    }
     state = {
       canonicalRoot,
-      identity: fileSystemIdentity(rootStat, 'Compiler source root'),
+      identity,
       lexicalRoot,
     };
     if (!compilerSourceRootIsStable(state)) return null;
@@ -145,6 +192,8 @@ export function createCompilerSourceFileSystem(rootDir: string): CompilerSourceF
     kind: (fileName: string) => compilerSourceEntryKind(state, fileName),
     readDirectory: (directory: string) => compilerSourceDirectoryEntries(state, directory),
     readFile: (fileName: string) => readCompilerSourceFile(state, fileName),
+    readFileBounded: (fileName: string, maxBytes: number) =>
+      readCompilerSourceFile(state, fileName, maxBytes),
   });
 }
 
@@ -192,27 +241,54 @@ function compilerSourceEntryKind(
   }
 }
 
-function readCompilerSourceFile(state: CompilerSourceRootState, fileName: string): string | null {
+function readCompilerSourceFile(
+  state: CompilerSourceRootState,
+  fileName: string,
+  maxBytes?: number,
+): string | null {
   let fileDescriptor: number | undefined;
   try {
+    if (maxBytes !== undefined && (!compilerNumberIsSafeInteger(maxBytes) || maxBytes < 0)) {
+      return null;
+    }
     const before = compilerSourceEntryFacts(state, fileName);
     if (before === null || before.kind !== 'file') return null;
 
-    fileDescriptor = nativeOpenSync(before.canonicalPath, 'r');
+    // O_NOFOLLOW closes the final-component swap window; O_NONBLOCK ensures a raced FIFO cannot
+    // stall the compiler before fstat rejects it as non-regular.
+    fileDescriptor = nativeOpenSync(before.canonicalPath, compilerSourceOpenFlags);
     const openedBefore = nativeFstatSync(fileDescriptor);
+    const openedSize = compilerSourceFileSize(openedBefore);
+    const openedBeforeVersion = fileSystemVersion(openedBefore, 'Compiler source');
     if (
       !compilerStatsIsFile(openedBefore) ||
-      !sameFileSystemIdentity(before.identity, fileSystemIdentity(openedBefore, 'Compiler source'))
+      (maxBytes !== undefined && openedSize > maxBytes) ||
+      !sameFileSystemIdentity(
+        before.identity,
+        fileSystemIdentity(openedBefore, 'Compiler source'),
+      ) ||
+      !sameFileSystemVersion(before.version, openedBeforeVersion)
     ) {
       return null;
     }
 
-    const source = nativeReadFileSync(fileDescriptor, 'utf8');
+    // A size check followed by readFileSync(fd) is not a memory bound: the same inode can grow
+    // between those operations. The bounded path allocates only the observed size plus a one-byte
+    // growth probe and reads from the already-validated descriptor.
+    const source =
+      maxBytes === undefined
+        ? nativeReadFileSync(fileDescriptor, 'utf8')
+        : readBoundedCompilerSourceText(fileDescriptor, openedSize);
+    if (source === null) return null;
     const openedAfter = nativeFstatSync(fileDescriptor);
+    const openedAfterVersion = fileSystemVersion(openedAfter, 'Compiler source');
     const after = compilerSourceEntryFacts(state, fileName);
     if (
       typeof source !== 'string' ||
       !compilerStatsIsFile(openedAfter) ||
+      (maxBytes !== undefined && compilerSourceFileSize(openedAfter) > maxBytes) ||
+      compilerSourceFileSize(openedAfter) !== compilerSourceFileSize(openedBefore) ||
+      !sameFileSystemVersion(openedBeforeVersion, openedAfterVersion) ||
       !sameFileSystemIdentity(
         before.identity,
         fileSystemIdentity(openedAfter, 'Compiler source'),
@@ -236,6 +312,54 @@ function readCompilerSourceFile(state: CompilerSourceRootState, fileName: string
   }
 }
 
+function readBoundedCompilerSourceText(
+  fileDescriptor: number,
+  expectedBytes: number,
+): string | null {
+  const bytes = nativeBufferAllocUnsafe(expectedBytes);
+  let offset = 0;
+  while (offset < expectedBytes) {
+    const read = nativeReadSync(fileDescriptor, bytes, offset, expectedBytes - offset, null);
+    if (!compilerNumberIsSafeInteger(read) || read < 0 || read > expectedBytes - offset)
+      return null;
+    if (read === 0) return null;
+    offset += read;
+  }
+
+  const growthProbe = nativeBufferAllocUnsafe(1);
+  const extra = nativeReadSync(fileDescriptor, growthProbe, 0, 1, null);
+  if (!compilerNumberIsSafeInteger(extra) || extra !== 0) return null;
+  return compilerUtf8Text(bytes);
+}
+
+function compilerSourceFileSize(value: Stats): number {
+  const size = compilerOwnDataValue(value, 'size', 'Compiler source file');
+  if (
+    typeof size !== 'number' ||
+    !compilerNumberIsFinite(size) ||
+    !compilerNumberIsSafeInteger(size) ||
+    size < 0
+  ) {
+    return compilerFailClosed('Compiler source file has an invalid size.');
+  }
+  return size;
+}
+
+function fileSystemVersion(value: Stats, label: string): FileSystemVersion {
+  const ctimeMs = compilerOwnDataValue(value, 'ctimeMs', label);
+  const mtimeMs = compilerOwnDataValue(value, 'mtimeMs', label);
+  const size = compilerSourceFileSize(value);
+  if (
+    typeof ctimeMs !== 'number' ||
+    !compilerNumberIsFinite(ctimeMs) ||
+    typeof mtimeMs !== 'number' ||
+    !compilerNumberIsFinite(mtimeMs)
+  ) {
+    return compilerFailClosed(`${label} has an invalid filesystem version.`);
+  }
+  return { ctimeMs, mtimeMs, size };
+}
+
 function compilerSourceEntryFacts(
   state: CompilerSourceRootState,
   fileName: string,
@@ -244,11 +368,13 @@ function compilerSourceEntryFacts(
   const lexicalPath = nativePathResolve(fileName);
   if (!containsResolvedPath(state.lexicalRoot, lexicalPath)) return null;
   if (lexicalPath === state.lexicalRoot) {
+    const rootStat = nativeStatSync(state.canonicalRoot);
     return {
       canonicalPath: state.canonicalRoot,
       identity: state.identity,
       kind: 'directory',
       lexicalPath,
+      version: fileSystemVersion(rootStat, 'Compiler source root'),
     };
   }
 
@@ -266,6 +392,7 @@ function compilerSourceEntryFacts(
   if (!containsResolvedPath(state.canonicalRoot, canonicalPath)) return null;
   const canonicalStat = nativeStatSync(canonicalPath);
   const canonicalIdentity = fileSystemIdentity(canonicalStat, 'Compiler source entry');
+  const canonicalVersion = fileSystemVersion(canonicalStat, 'Compiler source entry');
   let identity: FileSystemIdentity;
   let kind: Exclude<CompilerSourceEntryKind, 'other'>;
   if (lexicalKind === 'symbolic-link') {
@@ -279,14 +406,18 @@ function compilerSourceEntryFacts(
       (kind === 'directory'
         ? !compilerStatsIsDirectory(canonicalStat)
         : !compilerStatsIsFile(canonicalStat)) ||
-      !sameFileSystemIdentity(identity, canonicalIdentity)
+      !sameFileSystemIdentity(identity, canonicalIdentity) ||
+      !sameFileSystemVersion(
+        fileSystemVersion(lexicalStat, 'Compiler lexical source entry'),
+        canonicalVersion,
+      )
     ) {
       return null;
     }
   }
   if (!compilerSourceRootIsStable(state)) return null;
 
-  return { canonicalPath, identity, kind, lexicalPath };
+  return { canonicalPath, identity, kind, lexicalPath, version: canonicalVersion };
 }
 
 function compilerSourceRootIsStable(state: CompilerSourceRootState): boolean {
@@ -331,11 +462,18 @@ function sameFileSystemIdentity(left: FileSystemIdentity, right: FileSystemIdent
   return left.device === right.device && left.inode === right.inode;
 }
 
+function sameFileSystemVersion(left: FileSystemVersion, right: FileSystemVersion): boolean {
+  return (
+    left.ctimeMs === right.ctimeMs && left.mtimeMs === right.mtimeMs && left.size === right.size
+  );
+}
+
 function sameEntryFacts(left: CompilerSourceEntryFacts, right: CompilerSourceEntryFacts): boolean {
   return (
     left.canonicalPath === right.canonicalPath &&
     left.kind === right.kind &&
     left.lexicalPath === right.lexicalPath &&
-    sameFileSystemIdentity(left.identity, right.identity)
+    sameFileSystemIdentity(left.identity, right.identity) &&
+    sameFileSystemVersion(left.version, right.version)
   );
 }

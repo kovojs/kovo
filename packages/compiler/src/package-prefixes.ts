@@ -2,7 +2,9 @@ import {
   dirname as builtinPathDirname,
   isAbsolute as builtinPathIsAbsolute,
   join as builtinPathJoin,
+  relative as builtinPathRelative,
   resolve as builtinPathResolve,
+  sep as pathSeparator,
 } from 'node:path';
 
 import { packageComponentPrefixFactFromPackageManifest } from '@kovojs/core/internal/package-prefix';
@@ -20,6 +22,7 @@ import {
   compilerRegExpTest,
   compilerSetAdd,
   compilerSetForEach,
+  compilerSetSize,
   compilerSnapshotDenseArray,
   compilerStringIncludes,
   compilerStringIndexOf,
@@ -29,18 +32,26 @@ import {
   compilerStringStartsWith,
 } from './compiler-security-intrinsics.js';
 import type { ComponentModuleModel } from './scan/parse.js';
-import { createCompilerSourceFileSystem } from './source-filesystem.js';
+import {
+  createCompilerSourceFileSystem,
+  type CompilerSourceRootWitness,
+} from './source-filesystem.js';
 import type { PackageComponentPrefixFact } from './types.js';
 
 const nativePathDirname = builtinPathDirname;
 const nativePathIsAbsolute = builtinPathIsAbsolute;
 const nativePathJoin = builtinPathJoin;
+const nativePathRelative = builtinPathRelative;
 const nativePathResolve = builtinPathResolve;
 const packagePrefixBootCwd = process.cwd();
+const MAX_BOUNDED_PACKAGE_NAMES = 128;
+const MAX_PACKAGE_MANIFEST_BYTES = 256 * 1024;
 
 export interface PackageComponentPrefixDiscoveryOptions {
   fileName: string;
+  packagePrefixDiscoveryBoundary?: string;
   packagePrefixDiscoveryRoot?: string;
+  packagePrefixDiscoveryRootWitness?: CompilerSourceRootWitness;
   source: string;
 }
 
@@ -50,7 +61,10 @@ export function packageComponentPrefixesForModule(
 ): PackageComponentPrefixFact[] {
   // SPEC §6.1.1 makes package.json kovo.prefix the source of package wire names.
   const packageNames = compilerSnapshotDenseArray(
-    staticImportPackageNames(model),
+    staticImportPackageNames(
+      model,
+      options.packagePrefixDiscoveryBoundary === undefined ? undefined : MAX_BOUNDED_PACKAGE_NAMES,
+    ),
     'Compiler static import package names',
   );
   const facts: PackageComponentPrefixFact[] = [];
@@ -142,9 +156,15 @@ function readPackageManifest(
   const manifestPath = findPackageManifestPath(packageName, options);
   if (!manifestPath) return null;
 
+  const fileSystem = createCompilerSourceFileSystem(
+    options.packagePrefixDiscoveryBoundary ?? nativePathDirname(manifestPath),
+    options.packagePrefixDiscoveryRootWitness,
+  );
+  if (fileSystem === null && options.packagePrefixDiscoveryRootWitness !== undefined) {
+    throw new TypeError('Compiler package discovery root identity changed.');
+  }
   try {
-    const fileSystem = createCompilerSourceFileSystem(nativePathDirname(manifestPath));
-    const source = fileSystem?.readFile(manifestPath);
+    const source = fileSystem?.readFileBounded(manifestPath, MAX_PACKAGE_MANIFEST_BYTES);
     return source === null || source === undefined ? null : compilerJsonParse(source);
   } catch {
     return null;
@@ -158,16 +178,35 @@ function findPackageManifestPath(
   const packageNameParts = safePackageNameParts(packageName);
   if (packageNameParts === null) return null;
   const start = moduleContainingDirectory(options.fileName, options.packagePrefixDiscoveryRoot);
+  const boundary =
+    options.packagePrefixDiscoveryBoundary === undefined
+      ? undefined
+      : nativePathResolve(options.packagePrefixDiscoveryBoundary);
+  const boundaryFileSystem =
+    boundary === undefined
+      ? undefined
+      : createCompilerSourceFileSystem(boundary, options.packagePrefixDiscoveryRootWitness);
+  if (boundaryFileSystem === null && options.packagePrefixDiscoveryRootWitness !== undefined) {
+    throw new TypeError('Compiler package discovery root identity changed.');
+  }
+  if (
+    boundary !== undefined &&
+    (boundaryFileSystem === null || !containsResolvedPath(boundary, start))
+  ) {
+    return null;
+  }
   for (let dir = start; ; dir = nativePathDirname(dir)) {
     let packageDir = nativePathJoin(dir, 'node_modules');
     for (let index = 0; index < packageNameParts.length; index += 1) {
       packageDir = nativePathJoin(packageDir, packageNameParts[index]!);
     }
     const candidate = nativePathJoin(packageDir, 'package.json');
-    if (createCompilerSourceFileSystem(packageDir)?.kind(candidate) === 'file') return candidate;
+    const fileSystem = boundaryFileSystem ?? createCompilerSourceFileSystem(packageDir);
+    if (fileSystem?.kind(candidate) === 'file') return candidate;
 
     const parent = nativePathDirname(dir);
-    if (parent === dir) return null;
+    if (parent === dir || dir === boundary) return null;
+    if (boundary !== undefined && !containsResolvedPath(boundary, parent)) return null;
   }
 }
 
@@ -178,7 +217,20 @@ function moduleContainingDirectory(fileName: string, root: string | undefined): 
   return nativePathDirname(absoluteFileName);
 }
 
-function staticImportPackageNames(model: ComponentModuleModel): string[] {
+function containsResolvedPath(root: string, target: string): boolean {
+  const relativePath = nativePathRelative(root, target);
+  return (
+    relativePath === '' ||
+    (relativePath !== '..' &&
+      !compilerStringStartsWith(relativePath, `..${pathSeparator}`) &&
+      !nativePathIsAbsolute(relativePath))
+  );
+}
+
+function staticImportPackageNames(
+  model: ComponentModuleModel,
+  maxPackageNames: number | undefined,
+): string[] {
   const packageNames = compilerCreateSet<string>();
   const moduleSpecifiers = compilerSnapshotDenseArray(
     model.moduleSpecifiers,
@@ -192,7 +244,14 @@ function staticImportPackageNames(model: ComponentModuleModel): string[] {
     );
     if (typeof specifier !== 'string') continue;
     const packageName = packageNameFromSpecifier(specifier);
-    if (packageName) compilerSetAdd(packageNames, packageName);
+    if (packageName) {
+      compilerSetAdd(packageNames, packageName);
+      if (maxPackageNames !== undefined && compilerSetSize(packageNames) > maxPackageNames) {
+        throw new TypeError(
+          `Compiler bounded package discovery exceeds ${maxPackageNames} unique packages.`,
+        );
+      }
+    }
   }
   const names: string[] = [];
   compilerSetForEach(packageNames, (packageName) => {

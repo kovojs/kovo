@@ -10,6 +10,7 @@ export const repoRoot = findRepoRoot();
 
 export const defaultSourceRoots = ['packages/server/src'];
 export const wireChokeFile = 'packages/server/src/response-posture.ts';
+export const finiteMcpStdioOutputFile = 'packages/core/src/internal/mcp-stdio.ts';
 export const wireBodyProvenanceFile = 'packages/compiler/src/scan/security-operation-ir.ts';
 export const wireBodyProvenanceRelationFile =
   'packages/compiler/src/scan/security-provenance-relation.ts';
@@ -61,6 +62,7 @@ export function checkWireOutputBoundary(options = {}) {
     }
   }
   checkWireBodyProvenanceClosure({ exists, findings, readText });
+  checkFiniteMcpStdioOutputClosure({ exists, findings, readText });
 
   for (const filePath of sourceFiles) {
     const sourceText = readText(filePath);
@@ -90,9 +92,52 @@ export function checkWireOutputBoundary(options = {}) {
     ok: findings.length === 0,
     summary:
       findings.length === 0
-        ? 'OK framework response constructors route through DEC5 and Layer-3 body provenance closes'
+        ? 'OK HTTP responses route through DEC5, Layer-3 body provenance closes, and finite MCP stdout is bounded'
         : `${findings.length} wire-output boundary violation(s)`,
   };
+}
+
+function checkFiniteMcpStdioOutputClosure({ exists, findings, readText }) {
+  if (!exists(finiteMcpStdioOutputFile)) {
+    findings.push(`${finiteMcpStdioOutputFile}: finite MCP stdio output choke is missing`);
+    return;
+  }
+
+  const sourceText = readText(finiteMcpStdioOutputFile);
+  const scanText = stripCommentsAndStrings(sourceText);
+  const serializerUses = countMatches(scanText, /\bserializeFiniteMcpJsonLine\s*\(/gu);
+  if (serializerUses !== 2) {
+    findings.push(
+      `${finiteMcpStdioOutputFile}: serializeFiniteMcpJsonLine must have one declaration and one output call; found ${serializerUses}`,
+    );
+  }
+  if (
+    !/\bwriteWithBackpressure\s*\(\s*output\s*,\s*serializeFiniteMcpJsonLine\s*\(\s*response\s*,\s*maxLineBytes\s*\)\s*\)/u.test(
+      scanText,
+    )
+  ) {
+    findings.push(
+      `${finiteMcpStdioOutputFile}: MCP responses must route through serializeFiniteMcpJsonLine before backpressured stdout`,
+    );
+  }
+  const rawOutputWrites = countMatches(scanText, /\boutput\.write\s*\(/gu);
+  if (rawOutputWrites !== 1) {
+    findings.push(
+      `${finiteMcpStdioOutputFile}: the finite MCP transport must have exactly one raw output.write sink; found ${rawOutputWrites}`,
+    );
+  }
+  for (const anchor of [
+    "Buffer.byteLength(encoded, 'utf8') > maxLineBytes",
+    'jsonRpcError(responseId, -32603, `response exceeds ${maxLineBytes} bytes`)',
+    "throw new TypeError('bounded MCP error response exceeds maxLineBytes')",
+    'return `${encoded}\\n`',
+  ]) {
+    if (!sourceText.includes(anchor)) {
+      findings.push(
+        `${finiteMcpStdioOutputFile}: bounded MCP output anchor is missing: ${JSON.stringify(anchor)}`,
+      );
+    }
+  }
 }
 
 function checkWireBodyProvenanceClosure({ exists, findings, readText }) {
@@ -161,6 +206,11 @@ function* patternUses(sourceText, patterns) {
     pattern.lastIndex = 0;
     for (const match of sourceText.matchAll(pattern)) yield { index: match.index ?? 0, label };
   }
+}
+
+function countMatches(sourceText, pattern) {
+  pattern.lastIndex = 0;
+  return [...sourceText.matchAll(pattern)].length;
 }
 
 function stripCommentsAndStrings(sourceText) {

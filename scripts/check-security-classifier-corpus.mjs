@@ -2802,6 +2802,27 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'finite-mcp-stdio-wire-input-census',
+        file: 'scripts/wire-input-boundary-gate.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 finite-mcp-stdio-wire-input-census',
+          'binds the finite MCP NDJSON parser to the exact stdio carrier and rejects carrier drift',
+          "allowedCarriers: ['stdio-line']",
+          "symbol: 'packages/core/src/internal/mcp-stdio.ts#parseFiniteMcpJsonLine'",
+          'request-header is not allowed for finiteMcpStdioJsonLine',
+        ],
+      },
+      {
+        id: 'finite-mcp-stdio-wire-output-census',
+        file: 'scripts/check-wire-output-boundary.test.mjs',
+        snippets: [
+          '@kovo-security-certifies C13 finite-mcp-stdio-wire-output-census',
+          'binds finite MCP responses to one bounded serializer and raw stdout sink',
+          'the finite MCP transport must have exactly one raw output.write sink; found 2',
+          'bounded MCP output anchor is missing',
+        ],
+      },
+      {
         id: 'request-deadline-effect-door-census',
         file: 'scripts/capability-surface-census-gate.test.mjs',
         snippets: [

@@ -24,7 +24,7 @@
     }
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.29.0"
+    "@kovojs/core": "workspace:*"
   },
   "devDependencies": {
     "@kovojs/server": "workspace:*"

@@ -2,12 +2,34 @@ import { describe, expect, it } from 'vitest';
 
 import {
   checkWireOutputBoundary,
+  finiteMcpStdioOutputFile,
   wireBodyProvenanceFile,
   wireBodyProvenanceOracleFile,
   wireBodyProvenanceRelationFile,
 } from './check-wire-output-boundary.mjs';
 
 const baseFiles = {
+  [finiteMcpStdioOutputFile]: `
+function serializeFiniteMcpJsonLine(response, maxLineBytes) {
+  let encoded = JSON.stringify(response);
+  if (Buffer.byteLength(encoded, 'utf8') > maxLineBytes) {
+    const responseId = isJsonRpcId(response.id) ? response.id : null;
+    encoded = JSON.stringify(
+      jsonRpcError(responseId, -32603, \`response exceeds \${maxLineBytes} bytes\`),
+    );
+  }
+  if (Buffer.byteLength(encoded, 'utf8') > maxLineBytes) {
+    throw new TypeError('bounded MCP error response exceeds maxLineBytes');
+  }
+  return \`\${encoded}\\n\`;
+}
+async function writeResponse(response) {
+  await writeWithBackpressure(output, serializeFiniteMcpJsonLine(response, maxLineBytes));
+}
+async function writeWithBackpressure(output, chunk) {
+  output.write(chunk);
+}
+`,
   [wireBodyProvenanceFile]: `
 setServerAliasPattern(node.variableDeclaration.name, 'unsafe-wire-data', aliases);
 setServerAliasPattern(parameterSnapshot[0]!.name, 'unsafe-wire-data', aliases);
@@ -122,5 +144,25 @@ const example = "Response.json({})";`,
     });
     expect(missingOracle.ok).toBe(false);
     expect(missingOracle.findings.join('\n')).toContain('hostile response-body oracle anchor');
+  });
+
+  // @kovo-security-certifies C13 finite-mcp-stdio-wire-output-census
+  it('binds finite MCP responses to one bounded serializer and raw stdout sink', () => {
+    const directWrite = run({
+      [finiteMcpStdioOutputFile]: `${baseFiles[finiteMcpStdioOutputFile]}\noutput.write('bypass\\n');`,
+    });
+    expect(directWrite.ok).toBe(false);
+    expect(directWrite.findings.join('\n')).toContain(
+      'the finite MCP transport must have exactly one raw output.write sink; found 2',
+    );
+
+    const unbounded = run({
+      [finiteMcpStdioOutputFile]: baseFiles[finiteMcpStdioOutputFile].replace(
+        "throw new TypeError('bounded MCP error response exceeds maxLineBytes');",
+        '',
+      ),
+    });
+    expect(unbounded.ok).toBe(false);
+    expect(unbounded.findings.join('\n')).toContain('bounded MCP output anchor is missing');
   });
 });

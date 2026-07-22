@@ -124,6 +124,51 @@ it('discovers framework wire reads by TypeScript symbol identity and ignores loo
 });
 
 describe('closed wire-input classifications', () => {
+  // @kovo-security-certifies C13 finite-mcp-stdio-wire-input-census
+  it('binds the finite MCP NDJSON parser to the exact stdio carrier and rejects carrier drift', () => {
+    const [site] = discoverWireInputReads().filter(
+      (candidate) => candidate.file === 'packages/core/src/internal/mcp-stdio.ts',
+    );
+    expect(site).toEqual({
+      allowedCarriers: ['stdio-line'],
+      api: 'finiteMcpStdioJsonLine',
+      file: 'packages/core/src/internal/mcp-stdio.ts',
+      id: 'packages/core/src/internal/mcp-stdio.ts#parsed',
+      inputName: 'json-rpc',
+      symbol: 'packages/core/src/internal/mcp-stdio.ts#parseFiniteMcpJsonLine',
+    });
+
+    const result = evaluateWireInputBoundary({
+      discovered: [site],
+      manifest: {
+        rows: [
+          {
+            ...site,
+            reason: 'This intentionally wrong row proves the carrier cannot drift to HTTP.',
+            registryId: 'request-header.json-rpc',
+          },
+        ],
+        schema: 'kovo-wire-input-boundary/v1',
+        summary: { classified: 1, dynamicNames: 0, sites: 1 },
+      },
+      registry: {
+        inputs: [
+          {
+            carrier: 'request-header',
+            grammar: 'json',
+            id: 'request-header.json-rpc',
+            name: 'json-rpc',
+          },
+        ],
+        schema: 'kovo.wire-input-registry/v1',
+      },
+    });
+
+    expect(result.findings).toContain(
+      'packages/core/src/internal/mcp-stdio.ts#parsed: request-header is not allowed for finiteMcpStdioJsonLine',
+    );
+  });
+
   // @kovo-security-certifies C13 cache-credential-reader-exact-names
   it('keeps cache-credential helper reads bound to exact field names', () => {
     const reads = discoverWireInputReads()

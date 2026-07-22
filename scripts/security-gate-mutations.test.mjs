@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(443);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(444);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -828,6 +828,7 @@ describe('security-gate-mutations', () => {
       'generated-client/drop-security-operation-own-data-boundary',
       'better-auth-credential-gate/drop-source-identity',
       'drizzle-egress/allow-inexact-context-fetch-call',
+      'finite-mcp/drop-ready-lifecycle-closure',
       'postgres-authorization-correspondence/allow-null-owner-via-edge',
       'request-ingress/recompute-vercel-prepared-verdict',
       'server-response-posture/drop-endpoint-verification-choke',

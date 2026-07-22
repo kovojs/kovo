@@ -13,13 +13,7 @@ const nullPrototypeRecord = (value) => Object.assign(Object.create(null), value)
 
 import { missingBuildMessage } from '../scripts/kovo-check.mjs';
 import { readTempCommerceGraph } from '../scripts/commerce-graph.mjs';
-import {
-  kovoCheck,
-  kovoExplain,
-  handleKovoMcpRequest,
-  mainAsync,
-  runMcpFallbackStdio,
-} from '../dist/cli/src/index.mjs';
+import { kovoCheck, kovoExplain, mainAsync, runMcpStdioServer } from '../dist/cli/src/index.mjs';
 import {
   assertFixpoint,
   assertRenderEquivalence,

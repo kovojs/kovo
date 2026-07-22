@@ -126,3 +126,88 @@ emit a bounded own-data diagnostic wire record; the receiving realm MUST validat
 reconstruct it through its own generated diagnostic constructor before collection or rendering.
 Copying a diagnostic object, sharing a public symbol brand, or accepting a wire record without the
 originating registry check cannot transfer framework diagnostic authority.
+
+### 11.5 Finite MCP stdio transport
+
+Kovo's CLI and devtool MCP surfaces use newline-delimited JSON over stdio only. The closed method
+set is `initialize`, `ping`, `tools/list`, and `tools/call`; the only lifecycle notification with
+state is `notifications/initialized`. The server has three ordered phases: it first accepts one
+valid `initialize` request, then waits for `notifications/initialized`, then serves `ping` and tool
+requests. Duplicate initialization, or a request before the ready phase, fails closed. Other
+notification-shaped messages receive no response and cannot change lifecycle state.
+Initialization changes phase only after the exact id-bound success response is proven to fit; an
+oversized success returns a bounded error and leaves the server able to accept a shorter retry.
+
+Every request MUST be a JSON-RPC 2.0 own-data object with the exact request envelope and a string or
+safe-integer id whose echo fits the bounded error envelope. Each method has a closed top-level
+parameter grammar: initialize requires
+`protocolVersion`, `capabilities`, and name/version `clientInfo`; ping permits only optional `_meta`;
+list permits only optional string `cursor` and `_meta`; call requires `name` and permits only object
+`arguments` and `_meta`. `_meta`, capabilities, and arguments remain inert JSON data. Surplus fields,
+accessor-bearing direct inputs, invalid ids, and malformed params are rejected. Supported protocol
+versions are `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`, and `2024-10-07`; an unknown
+requested version negotiates to `2025-11-25` so the client can decide whether to continue.
+
+Each input or output payload is at most 4 MiB of UTF-8 bytes; the finite engine accepts configured
+ceilings from 256 bytes through that maximum. LF and CRLF are equivalent delimiters, and their bytes
+do not consume the payload ceiling. The parser preserves code points split across byte or string
+chunks, rejects malformed UTF-8, malformed JSON, and duplicate object members (including escaped
+key aliases), processes a final nonempty EOF segment as one line, discards an oversized line through
+its next delimiter, and then resumes. Direct and tool-provided JSON is snapshotted through own data
+descriptors before field reads and is limited to 128 container levels, 65,536 value/member nodes,
+and an exact non-allocating estimate no larger than the applicable serialized line ceiling.
+
+The CLI adapter has four tools and an exact, non-extensible argument language:
+
+- `compile_component` accepts only `fileName` and inline `source`. `sourceProvenance` is implicitly
+  `app`; package-prefix, query-shape, and registry fact carriers are not protocol inputs.
+- `kovo_check` accepts only an optional `family` (`all`, `coverage`, or `optimistic`) and an optional
+  inline `graph`.
+- `kovo_explain` accepts only an optional inline `graph` plus one exact options mode: agent,
+  endpoints, access/unguarded/unscoped audit, or a `kind`/`target` lookup. Surplus option fields and
+  multiple modes are errors.
+- `list_diagnostics` accepts the empty object only.
+
+The protocol has no `graphPath` or other caller-selected filesystem input. Human `kovo check` and
+`kovo explain` argv commands may still read an operator-selected graph file; that authority is not
+part of MCP. At server construction the CLI canonicalizes the launch working directory once.
+It retains that directory's device/inode witness; a rename, replacement directory, or symlink at
+the original canonical path cannot become new authority for a later compile.
+Compiler `fileName` is a slash-separated relative path with no absolute, empty, dot, dot-dot,
+backslash, or NUL segment, and has at most 64 path segments. Both package discovery's root and its
+hard canonical boundary are the pinned launch directory. Bounded discovery admits at most 128
+unique bare packages before sorting or filesystem probes. Directory and manifest symlinks cannot
+escape that boundary; FIFO and other non-regular manifest candidates are ignored; and a package
+manifest above 256 KiB is ignored before JSON parsing. Bounded manifests are read from a no-follow,
+nonblocking descriptor with a fixed-size loop and one-byte growth probe, so a same-inode grow race
+cannot allocate past the cap. The accepted descriptor and pathname facts must retain device,
+inode, size, mtime, and ctime through the read, rejecting same-size in-place rewrites as well as
+path swaps. Changing process cwd after construction cannot move this capability.
+
+One inline compiler source is at most 256 KiB UTF-8. Before TypeScript parsing, the adapter performs
+a linear scan capped at 32,768 token starts/punctuation units and 512 potential structural opener
+tokens. After parsing and before lowering, an iterative whole-AST walk admits at most 20,000 nodes
+and depth 256. Recursive parser exhaustion is normalized to one closed parser-budget error rather
+than exposing the host runtime failure text. These are transport work limits, not substitutes for
+the compiler's semantic fail-closed budgets. They keep flat, deeply nested, alias-heavy, and
+malformed boundary inputs local to one bounded call.
+
+Graph admission is also a pre-verifier resource proof. A linear walk counts every traversed object
+property and array entry, then charges their conservative pair envelope plus the explicit
+render-once `updateCoverage × queries × (mutations + touchGraph)` domain work with overflow-safe
+saturating arithmetic. The aggregate ceiling is 65,536 comparison units. It applies before the
+linear graph validator and therefore bounds mutation/query, query/consumer, endpoint/runMutation,
+scope/ownership, session-authority, event/query, and endpoint-posture joins as well as the named
+cubic path. A graph string is at most 4,096 bytes; materialized output is preflighted at 2,048
+estimated rows and 2 MiB of amplified graph text before the transport's independent 4 MiB response
+ceiling. One stdio session admits at most 256 tool calls.
+
+Dispatch and output are sequential and backpressure-aware. A false output write MUST wait for a
+provided drain capability or fail explicitly; it cannot be treated as successful delivery.
+Protocol failures use JSON-RPC errors; a tool-domain failure is a successful JSON-RPC result with
+`isError: true`, with id-aware text truncation when necessary. Static tool descriptors or
+instructions that cannot fit the output ceiling are rejected at construction. An oversized or
+unserializable tool result emits one bounded protocol error and leaves the connection usable. The
+surface provides no HTTP, SSE, OAuth, resources, prompts, sampling, tasks, logging channel,
+server-to-client request, or extensible method router. MCP diagnostics remain the registry-owned
+diagnostics above, not a second diagnostic channel.

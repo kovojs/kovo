@@ -104,10 +104,15 @@ kovo explain mutation cart/add --optimistic   # transform coverage per query; de
 kovo explain query cart            # read set, consumers, every mutation that invalidates it
 kovo explain page /products/:id    # emitted modulepreloads, per-route prefetch config, param/search schemas, query payloads
 kovo explain --capabilities        # held capabilities plus untrusted roots, reviewed doors, exact package verdicts, and closed provenance paths
+kovo mcp                           # the same compile/check/explain results over the finite stdio protocol in §11.5
 ```
 
 The capability-closure rows are the stable rendering of the pre-evaluation proof from §6.6, not a
 runtime sandbox trace. Root, door, package-summary, and closed rows are sorted independently of
 source traversal order; a closed row retains the exact root-to-terminal path also emitted by KV448.
+
+`kovo mcp` is only a machine-readable command surface for these framework decisions. It MUST use
+the dependency-free, finite stdio protocol in §11.5; it is not a general MCP server or an extension
+point for application code.
 
 ---
