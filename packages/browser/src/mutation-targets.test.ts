@@ -35,7 +35,7 @@ class FakeTargetElement {
 }
 
 describe('mutation targets', () => {
-  it('collects live DOM Kovo-Targets in first-seen order with dedupe and nullish id fallback', () => {
+  it('collects live DOM Kovo-Targets in first-seen order with nullish id fallback', () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement(
         {
@@ -54,13 +54,6 @@ describe('mutation targets', () => {
         'kovo-props': '{"warehouseId":"w1"}',
       }),
       new FakeTargetElement({
-        'kovo-deps': 'inventory stock',
-        'kovo-fragment-target': 'inventory',
-        'kovo-live-component': 'components/inventory/duplicate',
-        'kovo-props': '{"warehouseId":"w2"}',
-      }),
-      new FakeTargetElement({ 'kovo-deps': 'debug', 'kovo-fragment-target': '' }, { id: 'debug' }),
-      new FakeTargetElement({
         'kovo-deps': '',
         'kovo-fragment-target': 'empty-deps',
         'kovo-live-token': 'tok_empty',
@@ -70,7 +63,6 @@ describe('mutation targets', () => {
         'kovo-deps': 'cart summary',
         'kovo-live-token': 'tok_summary',
       }),
-      new FakeTargetElement({ 'kovo-deps': 'ignored' }),
     ]);
 
     // SPEC.md §9.1: enhanced mutations send Kovo-Targets from live kovo-deps DOM
@@ -86,6 +78,37 @@ describe('mutation targets', () => {
     );
     expect(readLiveTargetSnapshot(root).liveHeader).toBe(
       'cart-badge#components%2Fcart%2Fcart-badge%2Fcart-badge@tok_cart:{}; inventory#components%2Finventory%2Finventory@tok_inventory:{"warehouseId":"w1"}; empty-deps#empty-deps@tok_empty:{}; cart-summary#cart-summary@tok_summary:{}',
+    );
+  });
+
+  it('rejects an explicit empty target instead of falling back to a different identity', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({ 'kovo-deps': 'debug', 'kovo-fragment-target': '' }, { id: 'debug' }),
+    ]);
+
+    expect(() => readLiveTargetSnapshot(root)).toThrow(
+      'Kovo target collection contains an invalid target identity.',
+    );
+  });
+
+  it('rejects duplicate target identities atomically instead of choosing one descriptor', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({
+        'kovo-deps': 'inventory',
+        'kovo-fragment-target': 'inventory',
+        'kovo-live-component': 'components/inventory/first',
+        'kovo-live-token': 'tok_first',
+      }),
+      new FakeTargetElement({
+        'kovo-deps': 'inventory',
+        'kovo-fragment-target': 'inventory',
+        'kovo-live-component': 'components/inventory/substituted',
+        'kovo-live-token': 'tok_second',
+      }),
+    ]);
+
+    expect(() => readLiveTargetSnapshot(root)).toThrow(
+      'Kovo target collection contains a duplicate target identity.',
     );
   });
 
@@ -116,8 +139,7 @@ describe('mutation targets', () => {
         { target: 'cart', wireEntry: 'cart#cart@tok_cart:{}' },
         {
           target: 'reviews:p1',
-          wireEntry:
-            'reviews%3Ap1#components%2Freviews%2Freviews@tok_reviews:{"productId":"p1"}',
+          wireEntry: 'reviews%3Ap1#components%2Freviews%2Freviews@tok_reviews:{"productId":"p1"}',
         },
       ],
       liveTargets: [
@@ -362,7 +384,9 @@ describe('mutation targets', () => {
     expect(readLiveTargetSnapshot(exactRoot).liveHeader).toBe(
       'exact-panel#exact-panel@tok_exact:{}',
     );
-    expect(readLiveTargetSnapshot(oversizedRoot).liveHeader).toBe('');
+    expect(() => readLiveTargetSnapshot(oversizedRoot)).toThrow(
+      'Kovo target props exceed the framework header budget.',
+    );
   });
 
   it('keeps target collection closed over boot controls after collection intrinsic poisoning', () => {

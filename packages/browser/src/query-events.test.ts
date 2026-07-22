@@ -14,7 +14,16 @@ describe('inline query events', () => {
     const store = createQueryStore();
     const binding = {
       textContent: '',
-      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
+      closest(selector: string) {
+        return selector === '[kovo-deps]' ? this : null;
+      },
+      getAttribute(name: string) {
+        if (name === 'data-bind') return 'cart.count';
+        // SPEC §5.2/§9.1: instance-specific bindings carry the exact structured dependency token;
+        // the query name and full key are never collapsed into one display string.
+        if (name === 'kovo-deps') return '!cart!cart%3Ac1';
+        return null;
+      },
     };
     const root = {
       querySelectorAll(selector: string) {

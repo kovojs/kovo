@@ -96,11 +96,12 @@ describe('delegated loader lifecycle', () => {
     );
     const loader = installKovoLoader({
       enhancedMutations: {
+        expectedBuildToken: 'build-test',
         fetch: vi.fn(async () =>
           mutationTestResponse('/_m/cart/filter', {
             headers: {
-              get() {
-                return null;
+              get(name: string) {
+                return name.toLowerCase() === 'content-disposition' ? 'inline' : null;
               },
             },
             async text() {

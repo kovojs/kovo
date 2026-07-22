@@ -162,12 +162,12 @@ describe('deferred stream response apply', () => {
       store,
     });
 
-    expect(applied.queries).toEqual([
-      { name: 'cart' },
-      { key: 'cart:primary', name: 'cart' },
-    ]);
+    expect(applied.queries).toEqual([{ name: 'cart' }, { key: 'cart:primary', name: 'cart' }]);
     expect(applied.appliedFragments).toEqual(['cart-badge', 'cart-total']);
-    expect(observed).toEqual(['11', '12']);
+    // SPEC §5.2/§9.1: a keyed query instance cannot update an unscoped name-level binding. The
+    // exact keyed value is retained in the store, while the visible name-level binding keeps the
+    // last unkeyed query truth instead of collapsing the two identities.
+    expect(observed).toEqual(['11', '11']);
     expect(store.get('cart')).toEqual({ count: 11 });
     expect(store.get('cart', 'cart:primary')).toEqual({ count: 12 });
     expect(beforeApplyQueries).toHaveBeenNthCalledWith(1, [{ name: 'cart', value: { count: 1 } }]);
