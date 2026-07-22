@@ -468,10 +468,11 @@ function packageManifestTarget(value, packageName) {
     typeof value !== 'string' ||
     !value.startsWith('./dist/') ||
     value.includes('\\') ||
+    value.includes('%') ||
     value.includes('?') ||
     value.includes('#') ||
     !value.endsWith('.mjs') ||
-    value.includes('/../')
+    path.posix.normalize(value) !== value.slice(2)
   ) {
     throw policyError(`${packageName} runtime target ${String(value)} must be ./dist/*.mjs`);
   }
@@ -483,6 +484,7 @@ function packageManifestRelativeTarget(value, packageName) {
     typeof value !== 'string' ||
     !value.startsWith('./') ||
     value.includes('\\') ||
+    value.includes('%') ||
     value.includes('?') ||
     value.includes('#') ||
     path.posix.normalize(value) !== value.slice(2)
@@ -498,7 +500,7 @@ function validExportSubpath(value) {
     (typeof value === 'string' &&
       /^\.\/[A-Za-z0-9_./-]+$/u.test(value) &&
       !value.includes('*') &&
-      !value.includes('/../'))
+      path.posix.normalize(value) === value.slice(2))
   );
 }
 
@@ -599,8 +601,9 @@ function sortCapabilities(values) {
 function validModuleId(value) {
   return (
     typeof value === 'string' &&
-    /^@kovojs\/[a-z0-9-]+\/dist\/[A-Za-z0-9_./-]+\.mjs$/u.test(value) &&
-    !value.includes('/../')
+    /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*\/dist\/[A-Za-z0-9_./-]+\.mjs$/u.test(value) &&
+    path.posix.normalize(value) === value &&
+    !value.split('/').some((segment) => segment === '.' || segment === '..')
   );
 }
 

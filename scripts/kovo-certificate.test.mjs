@@ -73,6 +73,15 @@ describe('kovo.certificate/v1 search-side generator', () => {
     expect(() => generateKovoCertificateFromAnalysis(widened, policyBytes)).toThrow(
       /analysis.*capability/iu,
     );
+
+    const encodedPolicy = JSON.parse(policyBytes.toString('utf8'));
+    encodedPolicy.packages[0].manifest.imports = { '#hidden': './dist/s%61fe.mjs' };
+    expect(() =>
+      generateKovoCertificateFromAnalysis(
+        analysis,
+        Buffer.from(stableKovoCertificatePolicyJson(encodedPolicy)),
+      ),
+    ).toThrow(/package import target.*not canonical/iu);
   });
 
   it('preserves crypto import bindings through production analysis and generation', () => {

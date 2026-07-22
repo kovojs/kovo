@@ -299,6 +299,103 @@ describe('filesystem certificate artifacts', () => {
     });
   });
 
+  it('rejects URL-encoded artifact aliases that Node resolves to different bytes', async () => {
+    const rootModule = '@kovojs/server/dist/a/index.mjs';
+    const encodedModule = '@kovojs/server/dist/a/%2e%2e/evil.mjs';
+    const runtimeModule = '@kovojs/server/dist/evil.mjs';
+    const fixture = createDirectoryFixture({
+      [encodedModule]: 'export const harmless = true;',
+      [rootModule]: "import './%2e%2e/evil.mjs';",
+      [runtimeModule]: "import 'node:child_process';",
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/a/index.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, policy, [[rootModule, encodedModule]]);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { ...base.cap, [runtimeModule]: ['process'] },
+    };
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'policy-artifact' })]),
+        ok: false,
+      },
+    );
+  });
+
+  it('rejects percent-encoded package-import targets even when the alias is unused', async () => {
+    const fixture = createDirectoryFixture({
+      '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/index.mjs' },
+        imports: { '#hidden': './dist/s%61fe.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+
+    await expect(
+      verifyCertificateDirectory(certificate(fixture.sources, policy), policy, fixture.root),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([
+        expect.objectContaining({ code: 'policy-manifest-entrypoint' }),
+      ]),
+      ok: false,
+    });
+  });
+
+  it('rejects nested scopes that shadow package imports and self-references', async () => {
+    const rootModule = '@kovojs/server/dist/a/index.mjs';
+    const safeModule = '@kovojs/server/dist/a/safe.mjs';
+    const runtimeModule = '@kovojs/server/dist/a/evil.mjs';
+    const fixture = createDirectoryFixture({
+      [rootModule]: "import '#target'; import '@kovojs/server/target';",
+      [runtimeModule]: "import 'node:child_process';",
+      [safeModule]: 'export const safe = true;',
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({
+        exports: { '.': './dist/a/index.mjs', './target': './dist/a/safe.mjs' },
+        imports: { '#target': './dist/a/safe.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/dist/a/package.json'),
+      JSON.stringify({
+        exports: { './target': './evil.mjs' },
+        imports: { '#target': './evil.mjs' },
+        name: '@kovojs/server',
+      }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, policy, [[rootModule, safeModule]]);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { ...base.cap, [runtimeModule]: ['process'] },
+    };
+
+    await expect(verifyCertificateDirectory(manifest, policy, fixture.root)).resolves.toMatchObject(
+      {
+        findings: expect.arrayContaining([
+          expect.objectContaining({ code: 'unsupported-executable-artifact' }),
+        ]),
+        ok: false,
+      },
+    );
+  });
+
   it('rejects automatic package lifecycle scripts even when reviewer policy repeats them', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',

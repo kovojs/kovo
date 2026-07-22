@@ -58,7 +58,13 @@ export function readBoundedRegularFileSnapshot(
   if (!pathStat.isFile() || pathStat.isSymbolicLink() || pathStat.size > BigInt(maxBytes)) {
     throw new TypeError(`${label} must be a regular non-symlink file no larger than ${maxBytes}`);
   }
-  const descriptor = openSync(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  // O_NONBLOCK is part of the race proof, not a performance hint. A regular path can be swapped
+  // for a FIFO after lstat and before open; without nonblocking open the verifier hangs before the
+  // descriptor fstat can reject the changed file kind.
+  const descriptor = openSync(
+    filePath,
+    fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+  );
   try {
     const before = fstatSync(descriptor, { bigint: true });
     if (

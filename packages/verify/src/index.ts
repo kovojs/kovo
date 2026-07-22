@@ -1280,6 +1280,7 @@ function packageManifestTarget(value: string, packageName: string): string {
   if (
     !value.startsWith('./dist/') ||
     value.includes('\\') ||
+    value.includes('%') ||
     value.includes('?') ||
     value.includes('#') ||
     path.posix.normalize(value) !== value.slice(2) ||
@@ -1296,6 +1297,7 @@ function packageManifestRelativeTarget(value: string, packageName: string): stri
   if (
     !value.startsWith('./') ||
     value.includes('\\') ||
+    value.includes('%') ||
     value.includes('?') ||
     value.includes('#') ||
     path.posix.normalize(value) !== value.slice(2)
@@ -1434,6 +1436,7 @@ function collectPackageFiles(
   },
   depth: number,
 ): void {
+  const packageName = relativeDirectory.split('/').slice(0, 2).join('/');
   if (depth > MAX_PACKAGE_DEPTH) {
     throw new TypeError(`artifact package exceeds the depth limit at ${relativeDirectory}`);
   }
@@ -1465,7 +1468,17 @@ function collectPackageFiles(
     }
     recordCensusIdentity(census.identityByPath, relativePath, stat);
     ensureInsideRoot(root, realpathSync(absolutePath), relativePath);
-    if (relativePath.endsWith('/package.json')) {
+    if (relativePath === `${packageName}/package.json`) {
+      continue;
+    }
+    if (path.posix.basename(relativePath) === 'package.json') {
+      findings.push(
+        finding(
+          'coverage',
+          'unsupported-executable-artifact',
+          `${relativePath} creates an unreviewed nested Node package scope`,
+        ),
+      );
       continue;
     }
     if (relativePath.endsWith('.mjs') && isCanonicalArtifactPath(relativePath)) {
@@ -1824,7 +1837,12 @@ function resolveArtifactSpecifier(
   artifacts: KovoCertificateArtifactSource,
 ): string | undefined {
   if (specifier.startsWith('.')) {
-    if (specifier.includes('\\') || specifier.includes('?') || specifier.includes('#')) {
+    if (
+      specifier.includes('\\') ||
+      specifier.includes('%') ||
+      specifier.includes('?') ||
+      specifier.includes('#')
+    ) {
       return undefined;
     }
     return path.posix.normalize(path.posix.join(path.posix.dirname(module), specifier));
@@ -1853,6 +1871,7 @@ function unsupportedModuleSpecifier(specifier: string): boolean {
   return (
     specifier === '' ||
     specifier.includes('\\') ||
+    specifier.includes('%') ||
     specifier.includes('?') ||
     (specifier.includes('#') && !specifier.startsWith('#')) ||
     specifier.startsWith('/') ||
@@ -2123,6 +2142,7 @@ function isCanonicalArtifactPath(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const parts = value.split('/');
   return (
+    /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*\/dist\/[A-Za-z0-9_./-]+\.mjs$/u.test(value) &&
     parts.length >= 4 &&
     parts[0] === '@kovojs' &&
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(parts[1] ?? '') &&
@@ -2154,6 +2174,7 @@ function isCanonicalExportSubpath(value: unknown): value is string {
   return (
     value.startsWith('./') &&
     !value.includes('\\') &&
+    !value.includes('%') &&
     !value.includes('*') &&
     !value.includes('?') &&
     !value.includes('#') &&
