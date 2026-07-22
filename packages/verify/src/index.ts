@@ -1687,10 +1687,15 @@ function readBoundedDirectoryEntries(
 }
 
 function isNodeModulesDirectoryName(value: string): boolean {
-  // Node's package resolver reaches ASCII case variants on the default case-insensitive macOS and
-  // Windows filesystems. Reject the complete finite spelling class on every host so a certificate
-  // accepted on Linux cannot gain a nearer package resolver scope after installation.
-  return /^[Nn][Oo][Dd][Ee]_[Mm][Oo][Dd][Uu][Ll][Ee][Ss]$/u.test(value);
+  // Package scope identity is filesystem identity, not source spelling. APFS folds compatibility
+  // characters such as U+017F LONG S, while Win32 strips trailing dots/spaces from path segments.
+  // Reject that conservative cross-platform closure on every host so a certificate accepted on
+  // POSIX cannot gain a nearer package resolver scope after installation on another platform.
+  return portableFilesystemName(value).replace(/[ .]+$/u, '') === 'node_modules';
+}
+
+function portableFilesystemName(value: string): string {
+  return value.normalize('NFKC').toLowerCase().toUpperCase().toLowerCase().normalize('NFKC');
 }
 
 function recordCensusIdentity(

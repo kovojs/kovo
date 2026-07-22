@@ -219,6 +219,82 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
     ]);
   });
 
+  it('bounds post-fixpoint and closure report fan-out after artifact extraction', async () => {
+    const targetSources = Object.fromEntries(
+      Array.from({ length: 115 }, (_, index) => [
+        `@kovojs/server/dist/target-${String(index).padStart(3, '0')}.mjs`,
+        'export {};',
+      ]),
+    );
+    const targetModules = Object.keys(targetSources).sort();
+    const stabilityArtifacts = artifactSource({
+      [rootModule]: targetModules
+        .map((module) => `import './${module.split('/').at(-1)}';`)
+        .join('\n'),
+      ...targetSources,
+    });
+    const stabilityPaths = stabilityArtifacts.listArtifactPaths();
+    const stabilityCertificate = certificateFor(stabilityArtifacts, {
+      cap: Object.fromEntries(
+        stabilityPaths.map((module) => [
+          module,
+          module === rootModule ? [] : KOVO_CERTIFICATE_CAPABILITY_DOMAIN,
+        ]),
+      ),
+      edges: targetModules.map((module) => [rootModule, module]),
+    });
+
+    const rootKinds: KovoCertificateV1['roots'][number]['rootKind'][] = [
+      'agent-tool-callback',
+      'application',
+      'durable-task',
+      'endpoint',
+      'layout',
+      'mutation',
+      'query',
+      'route',
+      'scheduled-task',
+      'serialized-browser-handler',
+      'webhook',
+    ];
+    const closureSources = Object.fromEntries(
+      Array.from({ length: 11 }, (_, index) => [
+        `@kovojs/server/dist/root-${String(index).padStart(2, '0')}.mjs`,
+        'export {};',
+      ]),
+    );
+    const closureArtifacts = artifactSource(closureSources);
+    const closurePaths = closureArtifacts.listArtifactPaths();
+    const roots = closurePaths
+      .flatMap((module) => rootKinds.map((rootKind) => ({ module, rootKind })))
+      .sort((left, right) => {
+        const leftKey = `${left.module}\0${left.rootKind}`;
+        const rightKey = `${right.module}\0${right.rootKind}`;
+        return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+      });
+    const closureCertificate = certificateFor(closureArtifacts, {
+      cap: Object.fromEntries(
+        closurePaths.map((module) => [module, KOVO_CERTIFICATE_CAPABILITY_DOMAIN]),
+      ),
+      roots,
+    });
+
+    for (const [certificate, artifacts] of [
+      [stabilityCertificate, stabilityArtifacts],
+      [closureCertificate, closureArtifacts],
+    ] as const) {
+      const result = await verifyBound(certificate, artifacts);
+      expect(result.findings).toEqual([
+        {
+          code: 'finding-budget',
+          message: 'certificate verification exceeds the finite finding budget',
+          obligation: 'schema',
+        },
+      ]);
+      expect(formatCertificateVerification(result).length).toBeLessThan(256);
+    }
+  });
+
   it('checks imported post-fixpoint summaries and root-door closure as separate obligations', async () => {
     const artifacts = artifactSource({
       [rootModule]: "import './worker.mjs';",

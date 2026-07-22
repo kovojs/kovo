@@ -254,6 +254,61 @@ describe('filesystem certificate artifacts', () => {
     });
   });
 
+  it('rejects Windows trailing-dot node_modules aliases before package resolution', async () => {
+    const rootModule = '@kovojs/server/dist/root.mjs';
+    const hiddenModule = '@kovojs/server/dist/node_modules./evil/index.mjs';
+    const fixture = createDirectoryFixture({
+      [hiddenModule]: "import 'node:child_process';",
+      [rootModule]: "import 'evil/index.mjs';",
+    });
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/package.json'),
+      JSON.stringify({ exports: { '.': './dist/root.mjs' }, name: '@kovojs/server' }),
+    );
+    const policy = policyBytes(fixture.sources, fixture.root);
+    const base = certificate(fixture.sources, policy);
+    const manifest: KovoCertificateV1 = {
+      ...base,
+      cap: { ...base.cap, [hiddenModule]: ['process'] },
+      opaque: [
+        {
+          module: rootModule,
+          reason:
+            'imports external module "evil/index.mjs" outside the nine-kind lexical capability domain',
+        },
+      ],
+      roots: [{ module: rootModule, rootKind: 'application' }],
+    };
+    const boundPolicy = policyBytesForCertificate(fixture.sources, fixture.root, manifest);
+    const boundManifest = { ...manifest, policySha512: integrity(boundPolicy) };
+
+    await expect(
+      verifyCertificateDirectory(boundManifest, boundPolicy, fixture.root),
+    ).resolves.toMatchObject({
+      findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+      ok: false,
+    });
+  });
+
+  it.each(['NoDe_MoDuLeS...', 'node_modules ', 'node_moduleſ', 'ｎｏｄｅ＿ｍｏｄｕｌｅｓ'])(
+    'rejects the portable filesystem-equivalent resolver scope %j',
+    async (resolverScope) => {
+      const fixture = createDirectoryFixture({
+        '@kovojs/server/dist/index.mjs': 'export const safe = true;',
+      });
+      const policy = policyBytes(fixture.sources, fixture.root);
+      const manifest = certificate(fixture.sources, policy);
+      mkdirSync(path.join(fixture.root, '@kovojs/server/dist', resolverScope));
+
+      await expect(
+        verifyCertificateDirectory(manifest, policy, fixture.root),
+      ).resolves.toMatchObject({
+        findings: expect.arrayContaining([expect.objectContaining({ code: 'artifact-list' })]),
+        ok: false,
+      });
+    },
+  );
+
   it('rejects insertion-ordered conditional exports that can select another listed module', async () => {
     const fixture = createDirectoryFixture({
       '@kovojs/server/dist/index.mjs': 'export const safe = true;',
