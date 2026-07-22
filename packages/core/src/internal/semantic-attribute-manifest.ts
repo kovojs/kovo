@@ -18,6 +18,9 @@ const generatedOnlyAttributes = [
   'data-kovo-deferred-style', // fixed high-impact denominator witness
   'data-kovo-module-allowlist',
   'data-kovo-native-fallback',
+  // SPEC §4.8/§5.2: the server owns the immutable typed-read refetch target carried by a
+  // rendered query script. App TSX and live bindings must not mint or retarget it.
+  'data-kovo-query-href',
   'data-kovo-region-priority',
   'data-kovo-run',
   'data-kovo-stream',
@@ -75,6 +78,7 @@ const compilerOwnedResidualAttributes = [
   'data-kovo-deferred-style',
   'data-kovo-module-allowlist',
   'data-kovo-native-fallback',
+  'data-kovo-query-href',
   'data-kovo-region-priority',
   'data-kovo-run',
   'data-kovo-stream',

@@ -26,6 +26,7 @@ const generatedControlAttributes = [
   'data-kovo-deferred-style',
   'data-kovo-module-allowlist',
   'data-kovo-native-fallback',
+  'data-kovo-query-href',
   'data-kovo-region-priority',
   'data-kovo-run',
   'data-kovo-stream',
@@ -217,15 +218,18 @@ export const NestedAuthoredControlPlane = component({
         ],
       },
       {
-        anchors: ["queryAll(doc, 'script[kovo-query]')"],
+        anchors: [
+          "queryAll(doc, 'script[kovo-query]')",
+          "readDomAttribute(script, 'data-kovo-query-href')",
+        ],
         file: 'packages/browser/src/document-lifecycle.ts',
-        names: ['kovo-query'],
+        names: ['kovo-query', 'data-kovo-query-href'],
       },
       {
         anchors: [
           "security.queryOne(host, 'template[kovo-stamp]')",
           "security.readAttribute(child, 'kovo-key')",
-          "readRuntimeElementAttribute(element, 'data-bind')",
+          "readBindingAttribute(element, 'data-bind')",
           "readRuntimeElementAttribute(closestQueryHost, 'kovo-deps')",
           '`[data-derive="${queryName}.${name}"]`',
         ],
@@ -244,12 +248,12 @@ export const NestedAuthoredControlPlane = component({
       },
       {
         anchors: [
-          "security.readAttribute(element, 'data-key')",
+          "security.readAttribute(element, 'kovo-key')",
           "security.readAttribute(current, 'kovo-state')",
-          "'[kovo-key], [data-key]'",
+          "queryAllElements(root, '[kovo-key]')",
         ],
         file: 'packages/browser/src/morph.ts',
-        names: ['data-key', 'kovo-key', 'kovo-state'],
+        names: ['kovo-key', 'kovo-state'],
       },
       {
         anchors: [
@@ -279,9 +283,12 @@ export const NestedAuthoredControlPlane = component({
         names: ['kovo-deps', 'kovo-pending'],
       },
       {
-        anchors: ["readRuntimeElementAttribute(script, 'kovo-query')"],
+        anchors: [
+          "readRuntimeElementAttribute(script, 'kovo-query')",
+          "readRuntimeElementAttribute(script, 'data-kovo-query-href')",
+        ],
         file: 'packages/browser/src/wire-parser.ts',
-        names: ['kovo-query'],
+        names: ['kovo-query', 'data-kovo-query-href'],
       },
       {
         anchors: ["queryAllElements(root, 'script[kovo-query]')"],
@@ -309,13 +316,13 @@ export const NestedAuthoredControlPlane = component({
       },
       {
         anchors: [
-          'el.getAttribute("kovo-fragment-target")',
-          'el.getAttribute("kovo-live-component")',
-          'el.getAttribute("kovo-props")',
-          'el.getAttribute("kovo-live-token")',
-          'el.getAttribute("kovo-deps")',
+          "readAttribute(element, 'kovo-fragment-target')",
+          "readAttribute(element, 'kovo-live-component')",
+          "readAttribute(element, 'kovo-props')",
+          "readAttribute(element, 'kovo-live-token')",
+          "queryElements(root, '[kovo-deps]')",
         ],
-        file: 'packages/server/src/vite-dev.ts',
+        file: 'packages/browser/src/hmr-target-snapshot.ts',
         names: [
           'kovo-fragment-target',
           'kovo-c',
@@ -324,6 +331,16 @@ export const NestedAuthoredControlPlane = component({
           'kovo-live-token',
           'kovo-deps',
         ],
+      },
+      {
+        anchors: ["'script[kovo-query][data-kovo-query-href]'"],
+        file: 'packages/server/src/document-core.ts',
+        names: ['data-kovo-query-href'],
+      },
+      {
+        anchors: ["'script[kovo-query][data-kovo-query-href]'"],
+        file: 'packages/server/src/wire-html.ts',
+        names: ['data-kovo-query-href'],
       },
     ] as const;
 
@@ -381,6 +398,7 @@ export const NestedAuthoredControlPlane = component({
     expect([...discovered.keys()]).toEqual(
       expect.arrayContaining([
         'data-kovo-csp-hash',
+        'data-kovo-query-href',
         'data-mutation',
         'data-stream-text',
         'kovo-error',
