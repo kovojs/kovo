@@ -24,6 +24,16 @@
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
       "file": "packages/browser/src/mutation-fetch.ts",
+      "id": "packages/browser/src/mutation-fetch.ts#buildToken",
+      "inputName": "kovo-build",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Mutation handling compares the registered deployment build token.",
+      "registryId": "response-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/mutation-fetch.ts",
       "id": "packages/browser/src/mutation-fetch.ts#reauth",
       "inputName": "kovo-reauth",
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
@@ -34,21 +44,21 @@
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
       "file": "packages/browser/src/mutation-fetch.ts",
-      "id": "packages/browser/src/mutation-fetch.ts#changesHeader",
-      "inputName": "kovo-changes",
+      "id": "packages/browser/src/mutation-fetch.ts#markedBuildSkew",
+      "inputName": "kovo-build-skew",
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
-      "reason": "Mutation handling parses the registered finite change-envelope JSON field.",
-      "registryId": "response-header.kovo-changes"
+      "reason": "Mutation recovery trusts the registered build-skew marker only after exact final-URL, build, and fragment-envelope admission.",
+      "registryId": "response-header.kovo-build-skew"
     },
     {
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
       "file": "packages/browser/src/mutation-fetch.ts",
-      "id": "packages/browser/src/mutation-fetch.ts#buildToken",
-      "inputName": "kovo-build",
+      "id": "packages/browser/src/mutation-fetch.ts#changesHeader",
+      "inputName": "kovo-changes",
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
-      "reason": "Mutation handling compares the registered deployment build token.",
-      "registryId": "response-header.kovo-build"
+      "reason": "Mutation handling parses the registered finite change-envelope JSON field.",
+      "registryId": "response-header.kovo-changes"
     },
     {
       "allowedCarriers": ["response-header"],
@@ -83,16 +93,6 @@
     {
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
-      "file": "packages/browser/src/mutation-fetch.ts",
-      "id": "packages/browser/src/mutation-fetch.ts#headerLocation",
-      "inputName": "location",
-      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
-      "reason": "Mutation redirect handling validates the registered response location.",
-      "registryId": "response-header.location"
-    },
-    {
-      "allowedCarriers": ["response-header"],
-      "api": "browserReadHeader",
       "file": "packages/browser/src/query-refetch.ts",
       "id": "packages/browser/src/query-refetch.ts#responseBuildToken",
       "inputName": "kovo-build",
@@ -104,10 +104,30 @@
       "allowedCarriers": ["response-header"],
       "api": "browserReadHeader",
       "file": "packages/browser/src/query-refetch.ts",
-      "id": "packages/browser/src/query-refetch.ts#refetchQueries.call",
+      "id": "packages/browser/src/query-refetch.ts#markedBuildSkew",
+      "inputName": "kovo-build-skew",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Typed query recovery trusts the registered build-skew marker only after exact final-URL, build, and reserved fragment-envelope admission.",
+      "registryId": "response-header.kovo-build-skew"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/query-refetch.ts",
+      "id": "packages/browser/src/query-refetch.ts#contentType",
+      "inputName": "content-type",
+      "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
+      "reason": "Typed query refetch accepts only the registered response media-type field after exact final-URL admission.",
+      "registryId": "response-header.content-type"
+    },
+    {
+      "allowedCarriers": ["response-header"],
+      "api": "browserReadHeader",
+      "file": "packages/browser/src/query-refetch.ts",
+      "id": "packages/browser/src/query-refetch.ts#queryResponseEnvelopeHasMediaType.return",
       "inputName": "content-disposition",
       "symbol": "packages/browser/src/navigation-security-intrinsics.ts#createBrowserNavigationSecurityControls.readHeader",
-      "reason": "Typed query refetch materializes response bytes only when the registered disposition grammar is absent or an unambiguous inline value.",
+      "reason": "Typed query refetch materializes response bytes only when the registered disposition grammar is unambiguously inline.",
       "registryId": "response-header.content-disposition"
     },
     {
@@ -124,80 +144,90 @@
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return",
+      "inputName": "kovo-build",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Enhanced-request classification recognizes the registered immutable document-build proof before selecting a decoder.",
+      "registryId": "request-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~2",
+      "inputName": "kovo-current-url",
+      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
+      "reason": "Enhanced-request classification recognizes the registered current-document carrier before decoder or handler work.",
+      "registryId": "request-header.kovo-current-url"
+    },
+    {
+      "allowedCarriers": ["request-header"],
+      "api": "requestBodyHeader",
+      "file": "packages/server/src/app-dispatch.ts",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~3",
       "inputName": "kovo-fragment",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Query dispatch recognizes the registered enhanced-fragment carrier before selecting a build-bound decoder.",
+      "reason": "Enhanced-request classification recognizes the registered fragment carrier before selecting a build-bound decoder.",
       "registryId": "request-header.kovo-fragment"
     },
     {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced~2",
-      "inputName": "kovo-fragment",
-      "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Mutation dispatch recognizes the registered enhanced-fragment carrier before selecting a build-bound decoder.",
-      "registryId": "request-header.kovo-fragment"
-    },
-    {
-      "allowedCarriers": ["request-header"],
-      "api": "requestBodyHeader",
-      "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced~3",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~4",
       "inputName": "kovo-targets",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Mutation dispatch detects the registered target-list carrier before decoder or handler work so build skew fails closed.",
+      "reason": "Enhanced-request classification recognizes the registered target-list carrier before decoder or handler work.",
       "registryId": "request-header.kovo-targets"
     },
     {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced~4",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~5",
       "inputName": "kovo-live-targets",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Mutation dispatch detects the registered live-target carrier before decoder or handler work so build skew fails closed.",
+      "reason": "Enhanced-request classification recognizes the registered live-target carrier before decoder or handler work.",
       "registryId": "request-header.kovo-live-targets"
     },
     {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced~5",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~6",
       "inputName": "kovo-form-target",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Mutation dispatch recognizes the registered submitted-form target as build-bound enhanced traffic before handler work.",
+      "reason": "Enhanced-request classification recognizes the registered submitted-form target before decoder or handler work.",
       "registryId": "request-header.kovo-form-target"
     },
     {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced~6",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~7",
       "inputName": "kovo-idem",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Mutation dispatch recognizes the registered enhanced idempotency carrier before selecting a build-bound decoder.",
+      "reason": "Enhanced-request classification recognizes the registered idempotency carrier before selecting a build-bound decoder.",
       "registryId": "request-header.kovo-idem"
     },
     {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhanced~7",
+      "id": "packages/server/src/app-dispatch.ts#isEnhancedBuildBoundRequest.return~8",
       "inputName": "kovo-stream",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Mutation dispatch recognizes the registered streaming marker before selecting a build-bound decoder.",
+      "reason": "Enhanced-request classification recognizes the registered streaming marker before selecting a build-bound decoder.",
       "registryId": "request-header.kovo-stream"
     },
     {
       "allowedCarriers": ["request-header"],
       "api": "requestBodyHeader",
       "file": "packages/server/src/app-dispatch.ts",
-      "id": "packages/server/src/app-dispatch.ts#enhancedRequestBuildSkewResponse.call",
+      "id": "packages/server/src/app-dispatch.ts#enhancedRequestBuildSkewResponseForToken.call",
       "inputName": "kovo-build",
       "symbol": "packages/server/src/request-body-intrinsics.ts#requestHeader",
-      "reason": "Enhanced dispatch compares the registered document build identity before query-key decoding, wire parsing, or handler execution.",
+      "reason": "Enhanced dispatch compares the registered document-build identity before query-key decoding, wire parsing, or handler execution.",
       "registryId": "request-header.kovo-build"
     },
     {
@@ -561,34 +591,24 @@
       "registryId": "request-header.referer"
     },
     {
-      "allowedCarriers": ["search-param"],
-      "api": "viteDevUrlSearchParam",
-      "file": "packages/server/src/vite-dev.ts",
-      "id": "packages/server/src/vite-dev.ts#previousHmrBuildToken.return",
-      "inputName": "oldBuild",
-      "symbol": "packages/server/src/vite-dev.ts#viteDevUrlSearchParam",
-      "reason": "The dev refresh endpoint reads its registered previous-build parameter.",
-      "registryId": "search-param.old-build"
-    },
-    {
-      "allowedCarriers": ["search-param"],
-      "api": "viteDevUrlSearchParam",
-      "file": "packages/server/src/vite-dev.ts",
-      "id": "packages/server/src/vite-dev.ts#previousHmrBuildToken.return~2",
-      "inputName": "build",
-      "symbol": "packages/server/src/vite-dev.ts#viteDevUrlSearchParam",
-      "reason": "The dev refresh endpoint reads its registered build parameter fallback.",
-      "registryId": "search-param.build"
-    },
-    {
       "allowedCarriers": ["header", "request-header", "response-header"],
       "api": "serverReadHeader",
       "file": "packages/server/src/vite-dev.ts",
-      "id": "packages/server/src/vite-dev.ts#previousHmrBuildToken.return~3",
+      "id": "packages/server/src/vite-dev.ts#requestBuildToken",
       "inputName": "kovo-build",
       "symbol": "packages/server/src/response.ts#readHeader",
-      "reason": "The dev refresh endpoint reads the registered build request field fallback.",
+      "reason": "The dev refresh endpoint compares the registered request build field with the exact previous-build parameter before refresh work.",
       "registryId": "request-header.kovo-build"
+    },
+    {
+      "allowedCarriers": ["search-param"],
+      "api": "singleNonEmptyViteDevUrlSearchParam",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#oldBuild",
+      "inputName": "oldBuild",
+      "symbol": "packages/server/src/vite-dev.ts#singleNonEmptyViteDevUrlSearchParam",
+      "reason": "The dev refresh endpoint requires one non-empty registered previous-build parameter before refresh work.",
+      "registryId": "search-param.old-build"
     },
     {
       "allowedCarriers": ["header", "request-header", "response-header"],
@@ -653,8 +673,8 @@
   ],
   "schema": "kovo-wire-input-boundary/v1",
   "summary": {
-    "classified": 65,
+    "classified": 67,
     "dynamicNames": 5,
-    "sites": 65
+    "sites": 67
   }
 }

@@ -99,6 +99,14 @@ const defaultCanonicalReaders = Object.freeze([
     name: 'viteDevUrlSearchParam',
     nameArgument: 1,
   },
+  {
+    allowedCarriers: ['search-param'],
+    api: 'singleNonEmptyViteDevUrlSearchParam',
+    declaration: 'function',
+    file: 'packages/server/src/vite-dev.ts',
+    name: 'singleNonEmptyViteDevUrlSearchParam',
+    nameArgument: 1,
+  },
 ]);
 
 /**
