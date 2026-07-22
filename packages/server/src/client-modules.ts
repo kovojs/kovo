@@ -242,10 +242,13 @@ export function replaceVersionedClientModuleBuildSnapshot(
 /** @internal Seal one production build snapshot. Repeating the exact finalization is idempotent. */
 export function finalizeVersionedClientModuleBuild(
   registry: VersionedClientModuleRegistry,
-  renderPlanFingerprintValue: string = DEFAULT_RENDER_PLAN_FINGERPRINT,
+  renderPlanFingerprintValue?: string,
 ): string {
   const control = registryControl(registry);
-  const fingerprint = renderPlanFingerprint(renderPlanFingerprintValue);
+  const fingerprint =
+    renderPlanFingerprintValue === undefined
+      ? control.renderPlanFingerprint
+      : renderPlanFingerprint(renderPlanFingerprintValue);
   if (control.sealed) {
     if (control.renderPlanFingerprint !== fingerprint) {
       throw new Error(

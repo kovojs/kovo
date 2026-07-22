@@ -156,6 +156,7 @@ describe('render-plan and app-build identities', () => {
     expect(registry.buildToken()).toBe(token);
     expect(attackerToken).not.toHaveBeenCalled();
     expect(attackerSetter).not.toHaveBeenCalled();
+    expect(finalizeVersionedClientModuleBuild(registry)).toBe(token);
     expect(() => registry.put({ path: '/c/b.client.js', source: 'export {}' })).toThrow(/KV417/);
     expect(registry.buildToken()).toBe(token);
   });
