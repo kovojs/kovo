@@ -3507,6 +3507,20 @@ function classifyBrowserCall(
 
   const localArrayMethod = browserReviewedLocalArrayMethodCall(sourceFile, callee, body, aliases);
   if (localArrayMethod !== undefined) {
+    const stateDerivedBindings = browserStateDerivedBindingNames(body, aliases);
+    if (
+      browserExpressionMayCarryStateOrDerived(member.receiver, stateDerivedBindings, aliases, body)
+    ) {
+      // SPEC §4.3/§5.2: a reviewed local-array callback receives each element as a new
+      // binding. Do not let that binding erase a carrier's state origin before executable or
+      // deferred use; the callback vocabulary has no parameter-level provenance transfer.
+      appendViolation(
+        member.receiver,
+        'computed-security-operation',
+        `local array ${localArrayMethod} receivers cannot carry state-derived handler data`,
+      );
+      return;
+    }
     const callback = call.arguments[0];
     if (
       call.arguments.length !== 1 ||

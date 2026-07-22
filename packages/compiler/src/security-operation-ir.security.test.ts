@@ -1518,6 +1518,24 @@ export const Demo = component({
   });
 
   it.each([
+    `const box = {}; Object.assign(box, { value: String(state.value) });
+     [box].map((entry) => { setTimeout(() => { void entry.value; }, 0); });`,
+    `const box = {}; const leaked = {};
+     Object.assign(box, { value: String(state.value) });
+     [box].map((entry) => { leaked.value = entry.value; });
+     setTimeout(() => { void leaked.value; }, 0);`,
+    `const box = {}; const values = [box];
+     Object.assign(box, { value: String(state.value) });
+     values.map((entry) => { setTimeout(() => { void entry.value; }, 0); });`,
+  ])('closes Object.assign carriers across reviewed local-array parameters: %s', (operation) => {
+    const diagnostics = browserHandlerBoundaryDiagnostics(operation);
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'local array map receivers cannot carry state-derived handler data',
+    );
+  });
+
+  it.each([
     `const box = [() => { state.count += 1; }]; box[0]();`,
     `const box = [() => { state.count += 1; }]; const key = 0; box[key]();`,
     `([() => { state.count += 1; }][0])();`,
