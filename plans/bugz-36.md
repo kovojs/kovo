@@ -3,17 +3,19 @@
 <!-- kovo-security-ledger: transient -->
 
 **Date:** 2026-07-21
-**Status:** OPEN — eight compiler/browser/deploy roots remain under remediation
+**Status:** CLOSED — remediation complete; publication and required CI pending
 **Baseline:** `11ba9ce4fbb0da08a458ce25ba575851efbc9082`
-**Lifecycle:** `active`; archive after the verified closing tip is published and required CI is
-green.
+**Lifecycle:** `closed-pending-publication`; archive by 2026-08-18 to
+`plans/history/bugz-36.md` after the verified closing tip is published and required CI is green.
 
 **Scope:** Distinct security and security-evidence defects found while completing the three 10x
 security roadmaps after `bugz-35`. Every root below was reproduced before closure and deduplicated
 against prior active and historical ledgers under `plans/`. Decorative/self-referential SHA cleanup
 is intentionally excluded: `bugz-35` L2 already owns acceptance of unbound hex, and repeated stamps
-add no new root. L3 below is distinct because a load-bearing analyzer identity hashed real bytes but
-trusted the expected identity supplied by the same subject.
+add no new root. L3 is distinct because a load-bearing analyzer identity hashed real bytes but
+trusted the expected identity supplied by the same subject; L5 is distinct because ordinary tests
+required a deferred final record to follow moving source while the two final writers could not
+produce one clean, coherent evidence subject.
 
 ## Severity summary
 
@@ -21,8 +23,8 @@ trusted the expected identity supplied by the same subject.
 | -------- | ---: | -----: |
 | Critical |    0 |      3 |
 | High     |    0 |     10 |
-| Medium   |    6 |     10 |
-| Low      |    2 |      2 |
+| Medium   |    0 |     18 |
+| Low      |    0 |      6 |
 
 ## Critical
 
@@ -250,7 +252,7 @@ trusted the expected identity supplied by the same subject.
     entries. A privileged host preload remains outside the framework boundary and can already read
     the host environment directly.
 
-- [ ] **M11 — Query names and instance keys collapsed into one ambiguous runtime string.**
+- [x] **M11 — Query names and instance keys collapsed into one ambiguous runtime string.**
   - An unkeyed query name could equal another query's full instance key. Refetch hooks, visible-return
     ledgers, optimistic key derivation, and instance-specific update-plan lookup reused that display
     string as decision identity; a response for `{ name: "foo", key: "bar" }` could therefore select
@@ -258,12 +260,13 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from wire framing and query-store storage collisions: the wire already carried
     separate `name`/`key` attributes and the store used a NUL-framed composite, but downstream
     decision APIs collapsed those exact facts again.
-  - **Open work:** use one readonly structured query identity through apply, hydration, events,
-    refetch, focus return, and public callbacks; key instance-specific plans by the collision-free
-    store identity; keep full-domain string keys exact and prefix only explicitly value-derived
-    optimistic keys. Add colon-name, foreign-domain, plan-selection, and modular/inline parity tests.
+  - **Closure:** `02a4df25a`, `895b783ce`, and `6181323a4` carry frozen `{ name, key }` facts through
+    hydration, refetch, events, visible return, and apply; plan lookup uses collision-free framed
+    identity, while full-domain optimistic keys remain exact.
+  - **Evidence:** the focused query identity/typed-read suite passes 126/126, including colon-name,
+    foreign-domain, plan-selection, and keyed/unkeyed collision controls.
 
-- [ ] **M12 — Handler capture analysis treated opaque helper and container uses as scalar-safe.**
+- [x] **M12 — Handler capture analysis treated opaque helper and container uses as scalar-safe.**
   - A server component could capture `item.fn`, pass it through a local helper, and invoke it there;
     the compiler emitted the capture as a serialized handler parameter even though its finite
     handler language had not proved that every use was scalar-only. Object, array, destructuring,
@@ -272,22 +275,15 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from H2's capability-root reachability and the historical handler-call
     fixtures: this root is the positive proof required before an arbitrary captured value may cross
     the server-to-browser serialization boundary.
-  - **Open work:** make the parser own a scope-aware true/false scalar-use fact, reject every opaque
-    helper argument and container/callee escape unless a finite local summary proves it safe, and
-    require an explicit `true` fact before lowering. Reject laundering through mutable handler state
-    (`state.saved = item.fn; state.saved()`) and every dynamic state callee/constructor/tag variant.
-    Use a deliberately small closed state-expression/method vocabulary: unknown call results,
-    callback returns, implicit coercion/iterator/then protocols, spread arguments, computed or
-    destructuring writes, and arbitrary event payloads are rejected unless an exact summary proves
-    recursive JSON before the next same-handler use. A post-handler snapshot is only the
-    cross-handler/serialization pin; it cannot justify execution that already happened. Snapshot
-    initial and chained state into fresh null-prototype JSON data, and never blindly await a sync
-    handler return or assimilate an unproved thenable. Cover executable helpers and event detail,
-    containers, state-method impersonation, callback returns, property keys, mutation,
-    destructuring, spread/protocol paths, callable state writes, lexical shadowing, and modular/
-    generated-inline parity.
+  - **Closure:** `8326bbfe0` requires parser-owned positive scalar-use proof; `5a9b49954`,
+    `ee677d596`, `704247092`, `2e16f4409`, and `10c738a99` close recursive state snapshots, delayed
+    aliases, local maps, `Object.assign`, retained state-object writes, and state callee/constructor/
+    tag paths. `20fdbb9c3` and `a723de4d7` make handler/binding publication transactional.
+  - **Evidence:** the focused compiler handler/IR suite passes 783/783 and the modular browser
+    handler/binding suite passes 224/224, covering opaque helpers, containers, protocols, callable
+    state, shadowing, rollback, and safe scalar controls.
 
-- [ ] **M13 — The live-target emitter reparsed executable query text after parser analysis.**
+- [x] **M13 — The live-target emitter reparsed executable query text after parser analysis.**
   - The emitter reconstructed a TypeScript source file from a raw query-expression string to decide
     executable imports and identifiers, while generated helper aliases were chosen without the
     parser's complete authored-name set. This created a second, source-text decision layer after the
@@ -296,12 +292,13 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from M11's runtime query identity and earlier parser-completeness findings:
     the authoritative parse had already completed, but emission discarded its typed facts and made a
     new executable decision from text.
-  - **Open work:** carry parser-owned import, identifier, executable-use, and complete-name facts into
-    emission; derive collision-free helper aliases and generated export bindings from those facts;
-    delete the emitter reparse; prove a fixpoint plus authored import/local/export collision and
-    suffix-chain matrix.
+  - **Closure:** `fdc65aca4` carries parser-owned query imports, identifiers, executable-use facts,
+    and the complete authored-name set into emission; `8371478ce` preserves the proved import order
+    while deriving collision-free helper/export bindings without an emitter reparse.
+  - **Evidence:** the focused compiler suite passes 783/783, including helper suffix-chain,
+    authored import/local/export collision, generated binding, and import-order controls.
 
-- [ ] **M14 — Versioned enhanced requests were decoded by the current build without document-build
+- [x] **M14 — Versioned enhanced requests were decoded by the current build without document-build
       selection.**
   - A browser retained across deploys did not send its immutable document build on query and mutation
     target requests. The current app therefore decoded old target bytes under the new wire grammar;
@@ -309,36 +306,18 @@ trusted the expected identity supplied by the same subject.
     (SPEC §9 and §14 deploy skew).
   - **Dedup:** distinct from M11's same-version identity collapse and previous response-only build
     mismatch checks: this root occurred before the server selected a grammar and registry.
-  - **Open work:** carry `Kovo-Build` on every enhanced query, mutation, and HMR request, route to a
-    retained exact build when the deployment owns one, and make the current app reject
-    missing/mismatched builds after mandatory coarse admission but before target decode or handler
-    work. Give stripped-header rejection an unambiguous typed response marker so it cannot be
-    confused with an app 409; require exact dev-only `oldBuild` HMR continuity. Use exactly three
-    non-nested identities: (1) a full SHA-256 representation digest, derived internally from the
-    canonical content type plus exact final well-formed UTF-8 bytes after every browser-import
-    rewrite, names each immutable module URL; (2) a full render-plan fingerprint covers render,
-    wire, and query grammar/shape; and (3) one full app-build token is a domain-separated,
-    byte-length-framed hash of the render-plan fingerprint plus the sorted exact current active-module
-    href set. The manifest is an input collection, not a separately stamped or nested graph identity;
-    it includes simultaneous versions of one logical path and excludes retained resolver history.
-    Build finalization seals that href set and freezes the scalar app token once for
-    production requests; development HMR replaces an explicit atomic snapshot. Remove
-    author-supplied module identity, truncated digests, request-time token callbacks, and a custom
-    registry's ability to supply or mutate compatibility identity; wrap resolution so a sealed URL
-    cannot later serve different bytes or metadata. Prove UTF-8/lone-surrogate framing,
-    delimiter-collision, conflicting overwrite, full-digest shape, multi-version active graphs,
-    replica-history/order invariance, ignored custom setters/tokens, token freeze, module-less
-    grammar rotation, and that old/current grammars never use heuristic dual decoding. HMR fact
-    hashes remain dev-only and Git SHAs remain evidence references. None of these public
-    compatibility/cache identities are authentication or authorization.
-    Production must additionally prove a retention-capable artifact/app-snapshot store for the
-    SPEC §14 prior-build window or fail boot with KV417; an in-process memory map and rejection of a
-    count-based eviction option do not prove restart/replica retention. A deployment without the
-    exact retained decoder may return the typed skew outcome, but it may not advertise year-immutable
-    module URLs that disappear on restart. Remove the currently unused HMR `oldFactHash` carrier
-    unless it becomes an input to an explicit closed verdict.
+  - **Closure:** `895b783ce` binds every enhanced request to the document build and exact retained
+    decoder; `d103de2bf`, `259a68683`, `8046b9527`, `37abd9bb6`, and `24f869a47` derive and atomically
+    publish the exact module representation, render-plan, and app-build values. Only the immutable
+    module URL and `Kovo-Build` are external carriers; the render fingerprint remains an internal
+    app-token input. `3bb3026c4` keeps one admitted build coherent through route, mutation, document,
+    and error rendering. Production presets fail KV417 without the SPEC §14 retention proof.
+  - **Evidence:** the focused build/client-module/Vite/request-coherence suite passes as part of the
+    276/276 server/browser/wire run, covering full representation digests, atomic snapshots, exact
+    retained selection, token freeze, served-byte pinning, module-less grammar rotation, and the
+    retention floor.
 
-- [ ] **M15 — Typed-read refetch trusted foreign final responses as query truth.**
+- [x] **M15 — Typed-read refetch trusted foreign final responses as query truth.**
   - The modular and inline lifecycle `/_q/` refetch paths validated fragment media and a public
     compatibility token but did not prove the final response URL. A same-origin request that followed
     a CORS-readable cross-origin redirect could therefore accept a foreign `Kovo-Build` /
@@ -347,14 +326,14 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from M14's request-side decoder selection: this root is response-origin
     authority after fetch redirect handling, and the build token is deliberately not an
     authenticator.
-  - **Open work:** snapshot a canonical same-origin `/_q/` request URL before fetch, then require a
-    non-redirected, nonempty final response URL with exact canonical href/origin identity before
-    reading build/skew headers or body. Preserve SPEC §9.4's `text/html` inline envelope for a
-    successful typed read; require the reserved fragment envelope plus exact marker for the
-    framework's skew 409. Cover foreign/cross-origin redirects and forged public tokens in modular,
-    lifecycle, HMR, and generated-inline paths.
+  - **Closure:** `facf1b866`, `e4e8235b1`, and `b07a68e62` snapshot the canonical `/_q/` URL and
+    require an unredirected exact final href/origin before reading framework headers or body; they
+    also make status, media, body grammar, JSON admission, and build-skew markers exact.
+  - **Evidence:** the focused typed-read suite passes 126/126 and Chromium recovery/response parity
+    passes 68/68, including foreign redirects, forged public tokens, stale bodies, and modular/
+    generated-inline paths.
 
-- [ ] **M16 — Enhanced mutation responses trusted the wrong same-origin endpoint.**
+- [x] **M16 — Enhanced mutation responses trusted the wrong same-origin endpoint.**
   - The modular and inline mutation paths admitted any final same-origin response before reading
     framework build, session-transition, reauthentication, change, and fragment truth. An
     unredirected response whose final URL named another same-origin endpoint could therefore apply
@@ -362,15 +341,14 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from M15's credential-bearing typed-read redirect and M14's request-side
     decoder selection. Mutation transport already rejected cross-origin results; it failed to bind
     an unredirected response to the exact mutation action URL.
-  - **Open work:** snapshot the absolute action URL before transport and set enhanced Fetch redirect
-    handling to `error`. Before reading any `Kovo-*` header or body, require `redirected === false`
-    plus the exact final action URL; no followed or manual redirect response is eligible for
-    fragment or navigation authority. Enhanced Kovo mutations already use the fragment/reauth
-    vocabulary, while the native no-JavaScript path retains ordinary 303 PRG. Fail closed on
-    absent/ambiguous redirect facts, and prove modular and generated-inline wrong-endpoint, every
-    3xx/followed-redirect shape, session, and fragment case.
+  - **Closure:** `895b783ce` and `ccfeac4ee` snapshot the exact action URL, use Fetch redirect-error
+    mode, and reject missing, redirected, manual, or wrong-endpoint final facts before any `Kovo-*`
+    header/body authority. Native no-JavaScript 303 PRG remains separate.
+  - **Evidence:** the mutation/navigation slice of the 276/276 focused run and Chromium response
+    parity (68/68) cover wrong endpoints, redirect shapes, session transitions, fragments, and the
+    generated inline loader.
 
-- [ ] **M17 — Typed-read authorization failures preserved previously authorized browser truth.**
+- [x] **M17 — Typed-read authorization failures preserved previously authorized browser truth.**
   - The visible-return/delta-miss typed-read client reported and skipped an exact same-build 403,
     and reported a followed unauthenticated redirect as a generic fetch error. In both cases the
     prior query-store value and dependent DOM remained authoritative-looking after the server had
@@ -378,13 +356,25 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from M15's foreign-final-response authority and M14's build selection: this
     root is the same-origin exact typed-read endpoint's negative authorization outcome after URL
     and build admission.
-  - **Open work:** make typed reads reject redirects at Fetch. For enhanced typed reads, return an
-    exact non-redirecting 401/403 authorization outcome; retain 303 only for native navigation.
-    Turn the admitted denial into full-document recovery before any later query response is
-    applied. Preserve ordinary diagnostics for indistinguishable network failures, but never retain
-    a denied query as fresh truth. Prove seeded-private-value 403, enhanced unauthenticated denial,
-    native 303, multi-query atomicity, visible-return, delta-miss, lifecycle, and generated-inline
-    parity.
+  - **Closure:** `ccfeac4ee`, `facf1b866`, `e4e8235b1`, and `b07a68e62` reject typed-read redirects,
+    classify exact 401/403 denial as terminal document recovery, cancel stale bodies, and preflight
+    the whole response batch before applying any query value.
+  - **Evidence:** the focused typed-read/lifecycle suite passes 126/126 and Chromium recovery parity
+    passes 68/68, including seeded-private 403, enhanced unauthenticated denial, native 303,
+    multi-query atomicity, visible return, delta miss, and terminal reentrancy.
+
+- [x] **M18 — Browser response-media classifiers accepted ambiguous combined fields.**
+  - A mutation fragment or enhanced-navigation response was admitted when a safe media type appeared
+    before a comma or line break, so an ambiguous field such as fragment media followed by
+    `text/html` could still reach DOM or navigation authority (SPEC §7 and §9).
+  - **Dedup:** H10 owns server endpoint posture, while M15/M16 bind response URL and redirect facts;
+    this root was the browser's media-field parser after those checks.
+  - **Closure:** `3435f78f9` rejects comma, CR, LF, and NUL ambiguity before parsing parameters in
+    every remaining mutation and enhanced-navigation media classifier, including generated inline
+    output.
+  - **Evidence:** the mutation/navigation slice of the 276/276 focused run and Chromium recovery/
+    navigation parity (68/68) cover combined-field, line-break, valid-parameter, and exact-media
+    controls.
 
 ## Low
 
@@ -394,18 +384,19 @@ trusted the expected identity supplied by the same subject.
   - **Closure:** `6044df10d` conditions both attestation jobs and publication on non-dry-run input.
   - **Evidence:** `scripts/release-workflow-security.test.mjs` passes.
 
-- [ ] **L2 — Live browser target metadata could be substituted during serialization.**
+- [x] **L2 — Live browser target metadata could be substituted during serialization.**
   - Late collection mutation, inherited optional fields, hostile DOM accessors, and inherited
     `toJSON` hooks could change the framework-emitted descriptor metadata between discovery and wire
     encoding.
   - **Dedup:** distinct from server authorization defects: canonical server attestation rejects a
     substituted app/build/principal/source/descriptor tuple, so no authority bypass was reproduced.
-  - **Open work:** `17ea432f8`, `389fcd68d`, and `664e81803` close inherited metadata and `toJSON`
-    substitution, but independent review found the replacement encoder orders integer-index keys
-    differently from the server canonicalizer and the HMR collector still performs late mutable
-    dispatch. Snapshot once, reject an entire mixed-valid/malformed collection atomically, validate
-    fragment media type and disposition before applying a body, and rerun Node plus real-browser
-    parity evidence.
+  - **Closure:** `17ea432f8`, `389fcd68d`, `664e81803`, `81614f81b`, `14c2f1795`, and `b3561991c`
+    snapshot own-data metadata once, canonically serialize integer-index keys without inherited
+    callbacks, reject mixed collections atomically, and pin HMR/live-target dispatch plus bounded
+    header-safe bytes. `7cb63e1d3` refreshes the exact browser wire fixture after the identity
+    migration.
+  - **Evidence:** the mutation-target/wire slice of the 276/276 focused run passes, and the exact
+    Chromium mutation-target parity suite passes 2/2.
 
 - [x] **L3 — The compiler posture gate circularly authenticated its own implementation digest.**
   - The analyzer hashed its real source bytes but also supplied the expected digest, so an edit plus
@@ -418,22 +409,57 @@ trusted the expected identity supplied by the same subject.
   - **Evidence:** the focused compiler posture suite passes 94/94, and review finds no self/fixed-point
     identity marker in the remaining compiler root.
 
-- [ ] **L4 — An absent optional live-target header consumed budget at the exact transport limit.**
+- [x] **L4 — An absent optional live-target header consumed budget at the exact transport limit.**
   - When required mutation headers plus `Kovo-Targets` used exactly the 9,216-byte application-header
     budget, the planner still reserved line overhead for an empty `Kovo-Live-Targets` value and
     rejected a request that the emitted transport would safely omit.
   - **Dedup:** distinct from earlier oversized-header and sparse-array work bounds: this was a
     conservative-accounting false rejection at the documented inclusive boundary.
-  - **Open work:** omit empty optional fields before accounting, retain strict over-budget rejection,
-    and cover exact-limit, one-byte-over, and required-plus-optional cases through the real planner.
+  - **Closure:** `b3561991c` and `895b783ce` bound the real target transport and account only emitted
+    header lines, omitting empty optional fields while retaining strict aggregate overflow rejection.
+  - **Evidence:** `packages/core/src/internal/wire-input-grammar.test.ts` passes within the 276/276
+    focused run, including exact-limit, omitted-empty, one-byte-over, and required-plus-optional
+    planner controls.
+
+- [x] **L5 — Deferred final evidence required perpetual restamping and could not be written
+      coherently.**
+  - Ordinary `pnpm test` required the retained convergence record to equal the moving live compiler
+    census, despite final evidence being deferred. Separately, each standalone final writer required
+    a clean worktree, so the first artifact necessarily made the second writer reject the subject.
+  - **Dedup:** unlike `bugz-35` L2's unbound digest-shaped strings and L3's self-authenticating
+    analyzer identity, these checks bound real facts but imposed the wrong lifecycle and an
+    unexecutable two-file transaction.
+  - **Closure:** `a55b5ec5f` separates retained-history validation from explicit `--artifact` live
+    equality, and adds one final-evidence orchestrator that asserts cleanliness once, validates both
+    documents against the same subject before writing, and rolls back the file set on write failure.
+    The standalone artifact writers remain strict.
+  - **Evidence:** the convergence/orchestrator suite passes 18/18, the integrated evidence/server
+    suite passes 94/94, and the retained command is green; controls cover live drift, one cleanliness
+    assertion, prevalidation, subject mismatch, and second-write rollback.
+
+- [x] **L6 — Stateless delegated handlers created layout drift that aborted private islands.**
+  - Every stateless handler committed fallback `{}` as a new `kovo-state="{}"` attribute. Enhanced
+    navigation then judged an unchanged compiler-stamped layout shell as changed, replaced it, and
+    aborted the private island's `AbortSignal`. No remote security bypass was reproduced.
+  - **Dedup:** distinct from handler-state serialization authority (M12) and target metadata (L2):
+    the state bytes were safe, but their framework-created presence changed lifecycle identity.
+  - **Closure:** `df349d4ec` makes modular and generated-inline dispatch omit only an absent empty
+    state snapshot while retaining explicit state hosts and newly nonempty state.
+  - **Evidence:** the focused modular/generated-inline handler slice passes 105/105, full Chromium
+    inline navigation passes 36/36 (including the exact layout repro), and inline-loader freshness
+    passes.
 
 ## Latest verification
 
-- `pnpm exec vitest run scripts/release-workflow-security.test.mjs scripts/reproducible-pack.test.mjs scripts/verify-packed-release-payload.test.mjs scripts/npm-registry-state.test.mjs scripts/publish-packed-packages.test.mjs scripts/supply-chain-gates.test.mjs scripts/security-fuzz-campaign.test.mjs scripts/verify-packed-release-certificate.test.mjs` (63/63)
-- `pnpm exec vitest run packages/verify/src --reporter=dot` (86/86); selected private-parser-family
-  forcing mutant killed (495-mutant final-tip campaign remains a Phase 6 gate)
-- focused live-target/core suite (100/100); Chromium live-mutation suite (2/2)
-- `pnpm run check:runtime-tier-door-parity` (1 production door, 5 development doors; 8/8 tests)
-- `node scripts/supply-chain-gates.mjs`
-- YAML parse of both workflows and both release composite actions
-- `git diff --check`
+- Release/supply-chain focused suites (63/63) and verifier suite (86/86); selected private-parser
+  forcing mutant killed (the final-tip campaign remains a Phase 6 gate).
+- Query identity, typed-read, lifecycle, and scanner suites (126/126).
+- Compiler handler/IR/emission suites (783/783); modular handler/binding suites (224/224).
+- Build, client-module, Vite, request-coherence, mutation, navigation, target, and wire suites
+  (276/276).
+- Chromium recovery/response/navigation parity (68/68), mutation-target parity (2/2), and full
+  inline-navigation layout parity (36/36); inline-loader freshness passes.
+- Convergence/final-evidence transaction suite (18/18), integrated evidence/server suite (94/94),
+  and retained-history check.
+- `pnpm run check:runtime-tier-door-parity` (8/8), `node scripts/supply-chain-gates.mjs`, and YAML
+  parse of both workflows plus both release composite actions.
