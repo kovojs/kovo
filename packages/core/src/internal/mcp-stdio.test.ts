@@ -124,6 +124,51 @@ describe('finite MCP stdio protocol', () => {
     });
   });
 
+  it('does not commit initialization until the exact id-bound success fits', async () => {
+    const maxLineBytes = 512;
+    const instructions = 'x'.repeat(250);
+    const finite = createFiniteMcpStdioServer({
+      callTool: async () => ({ content: [] }),
+      instructions,
+      maxLineBytes,
+      serverInfo: { name: 'finite-test', version: '1.0.0' },
+      tools: [],
+    });
+    const longId = 'i'.repeat(110);
+    const oversizedSuccess = {
+      id: longId,
+      jsonrpc: '2.0',
+      result: {
+        capabilities: { tools: {} },
+        instructions,
+        protocolVersion: '2025-06-18',
+        serverInfo: { name: 'finite-test', version: '1.0.0' },
+      },
+    };
+    expect(Buffer.byteLength(JSON.stringify(initialize(longId)), 'utf8')).toBeLessThanOrEqual(
+      maxLineBytes,
+    );
+    expect(Buffer.byteLength(JSON.stringify(oversizedSuccess), 'utf8')).toBeGreaterThan(
+      maxLineBytes,
+    );
+
+    await expect(finite.handleMessage(initialize(longId))).resolves.toEqual({
+      error: { code: -32603, message: `response exceeds ${maxLineBytes} bytes` },
+      id: longId,
+      jsonrpc: '2.0',
+    });
+    await expect(finite.handleMessage(initialize(1))).resolves.toMatchObject({
+      id: 1,
+      result: { protocolVersion: '2025-06-18' },
+    });
+    await finite.handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    await expect(finite.handleMessage({ id: 2, jsonrpc: '2.0', method: 'ping' })).resolves.toEqual({
+      id: 2,
+      jsonrpc: '2.0',
+      result: {},
+    });
+  });
+
   it('requires the ordered initialized notification before ping or tool dispatch', async () => {
     const finite = server();
     await finite.handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
@@ -272,8 +317,32 @@ describe('finite MCP stdio protocol', () => {
         method: 'ping',
         params: { _meta: accessorMeta },
       }),
-    ).resolves.toMatchObject({ error: { code: -32602 } });
+    ).resolves.toMatchObject({ error: { code: -32600 } });
     expect(getterCalled).toBe(false);
+  });
+
+  it('snapshots proxy-backed direct messages before reading request fields', async () => {
+    const finite = server();
+    let getCalls = 0;
+    const proxied = new Proxy(initialize(1), {
+      get() {
+        getCalls += 1;
+        throw new Error('request field getter escaped');
+      },
+    });
+    await expect(finite.handleMessage(proxied)).resolves.toMatchObject({
+      id: 1,
+      result: { protocolVersion: '2025-06-18' },
+    });
+    expect(getCalls).toBe(0);
+
+    const revoked = Proxy.revocable(initialize(2), {});
+    revoked.revoke();
+    await expect(finite.handleMessage(revoked.proxy)).resolves.toEqual({
+      error: { code: -32600, message: 'Invalid Request' },
+      id: null,
+      jsonrpc: '2.0',
+    });
   });
 
   it('does not respond to notifications and ignores response-shaped client messages', async () => {
@@ -309,6 +378,29 @@ describe('finite MCP stdio protocol', () => {
     });
   });
 
+  it('preserves one code point split between string chunks', async () => {
+    const source = [
+      initialize(1),
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      {
+        id: 2,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: { arguments: { value: 'ready 😀 now' }, name: 'echo' },
+      },
+    ]
+      .map((message) => JSON.stringify(message))
+      .join('\n');
+    const emojiIndex = source.indexOf('😀');
+    expect(emojiIndex).toBeGreaterThan(0);
+    const responses = await stdio([source.slice(0, emojiIndex + 1), source.slice(emojiIndex + 1)]);
+
+    expect(responses.at(-1)).toMatchObject({
+      id: 2,
+      result: { structuredContent: { echoed: 'ready 😀 now' } },
+    });
+  });
+
   it('rejects invalid UTF-8, parse errors, and oversized lines, then resumes', async () => {
     const init = `${JSON.stringify(initialize(1))}\n`;
     const initialized = `${JSON.stringify({
@@ -340,6 +432,121 @@ describe('finite MCP stdio protocol', () => {
       },
     ]);
     expect(responses.at(-1)).toEqual({ id: 2, jsonrpc: '2.0', result: {} });
+  });
+
+  it('rejects duplicate JSON members and then resumes with an unambiguous request', async () => {
+    const escapedTopLevelAlias = `${JSON.stringify(initialize(1)).replace(
+      '"id":1',
+      '"id":1,"\\u0069d":2',
+    )}\n`;
+    const nestedDuplicate = `${JSON.stringify(initialize(2)).replace(
+      '"name":"test-client"',
+      '"name":"test-client","name":"ambiguous-client"',
+    )}\n`;
+    const responses = await stdio([
+      escapedTopLevelAlias,
+      nestedDuplicate,
+      `${JSON.stringify(initialize(3))}\n`,
+    ]);
+
+    expect(responses).toEqual([
+      { error: { code: -32700, message: 'parse error' }, id: null, jsonrpc: '2.0' },
+      { error: { code: -32700, message: 'parse error' }, id: null, jsonrpc: '2.0' },
+      expect.objectContaining({ id: 3, result: expect.any(Object) }),
+    ]);
+  });
+
+  it('bounds split CRLF framing independently from the exact payload ceiling', async () => {
+    const maxLineBytes = 256;
+    const exactPing = {
+      id: 2,
+      jsonrpc: '2.0',
+      method: 'ping',
+      params: { _meta: { padding: '' } },
+    };
+    const emptyBytes = Buffer.byteLength(JSON.stringify(exactPing), 'utf8');
+    exactPing.params._meta.padding = 'x'.repeat(maxLineBytes - emptyBytes);
+    const encodedPing = JSON.stringify(exactPing);
+    exactPing.params._meta.padding += 'x';
+    const oversizedPing = JSON.stringify(exactPing);
+    expect(Buffer.byteLength(encodedPing, 'utf8')).toBe(maxLineBytes);
+    expect(Buffer.byteLength(oversizedPing, 'utf8')).toBe(maxLineBytes + 1);
+
+    const responses = await stdio(
+      [
+        `${JSON.stringify(initialize(1))}\n`,
+        `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+        `${encodedPing}\r`,
+        '\n',
+        `${oversizedPing}\r`,
+        '\n',
+        JSON.stringify({ id: 3, jsonrpc: '2.0', method: 'ping' }),
+      ],
+      maxLineBytes,
+    );
+    expect(responses.at(-3)).toEqual({ id: 2, jsonrpc: '2.0', result: {} });
+    expect(responses.at(-2)).toEqual({
+      error: { code: -32001, message: 'request exceeds 256 bytes' },
+      id: null,
+      jsonrpc: '2.0',
+    });
+    expect(responses.at(-1)).toEqual({ id: 3, jsonrpc: '2.0', result: {} });
+  });
+
+  it('accepts JSON depth 128, rejects depth 129, and keeps serving', async () => {
+    const finite = server();
+    await finite.handleMessage(initialize(1));
+    await finite.handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
+
+    const pingAtDepth = (id: number, depth: number) => {
+      // The request and params records occupy depths 1 and 2. The _meta chain owns the rest.
+      let meta: Record<string, unknown> = { leaf: true };
+      for (let currentDepth = 3; currentDepth < depth; currentDepth += 1) {
+        meta = { next: meta };
+      }
+      return { id, jsonrpc: '2.0', method: 'ping', params: { _meta: meta } };
+    };
+
+    await expect(finite.handleMessage(pingAtDepth(2, 128))).resolves.toEqual({
+      id: 2,
+      jsonrpc: '2.0',
+      result: {},
+    });
+    await expect(finite.handleMessage(pingAtDepth(3, 129))).resolves.toEqual({
+      error: { code: -32600, message: 'Invalid Request' },
+      id: null,
+      jsonrpc: '2.0',
+    });
+    await expect(finite.handleMessage({ id: 4, jsonrpc: '2.0', method: 'ping' })).resolves.toEqual({
+      id: 4,
+      jsonrpc: '2.0',
+      result: {},
+    });
+  });
+
+  it('accepts 65,536 JSON value/member nodes and rejects node 65,537', async () => {
+    const finite = server();
+    await finite.handleMessage(initialize(1));
+    await finite.handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
+
+    const pingWithNodeCount = (id: number, nodeCount: number) => ({
+      id,
+      jsonrpc: '2.0',
+      method: 'ping',
+      // Fixed request shape contributes 13 nodes: four containers, six members, three values.
+      params: { _meta: { values: Array.from({ length: nodeCount - 13 }, () => null) } },
+    });
+
+    await expect(finite.handleMessage(pingWithNodeCount(2, 65_536))).resolves.toEqual({
+      id: 2,
+      jsonrpc: '2.0',
+      result: {},
+    });
+    await expect(finite.handleMessage(pingWithNodeCount(3, 65_537))).resolves.toEqual({
+      error: { code: -32600, message: 'Invalid Request' },
+      id: null,
+      jsonrpc: '2.0',
+    });
   });
 
   it('allows an exact-boundary result, bounds one byte over, and keeps serving', async () => {
@@ -402,6 +609,140 @@ describe('finite MCP stdio protocol', () => {
     expect(responses[3]).toEqual({ id: 4, jsonrpc: '2.0', result: {} });
   });
 
+  it('rejects over-deep and aggregate-large tool JSON without aborting queued requests', async () => {
+    const deep: Record<string, unknown> = {};
+    let cursor = deep;
+    for (let index = 0; index < 20_000; index += 1) {
+      const next: Record<string, unknown> = {};
+      cursor.next = next;
+      cursor = next;
+    }
+    const large = Array.from({ length: 1_000 }, () => 'x'.repeat(5_000));
+    const controls = '\0'.repeat(1_000_000);
+    let calls = 0;
+    const finite = createFiniteMcpStdioServer({
+      callTool: async () => {
+        calls += 1;
+        return {
+          content: [],
+          structuredContent: calls === 1 ? deep : calls === 2 ? { large } : { controls },
+        };
+      },
+      maxLineBytes: 4 * 1024 * 1024,
+      serverInfo: { name: 'bounded-json', version: '1' },
+      tools: [
+        {
+          description: 'Return hostile JSON shapes.',
+          inputSchema: { type: 'object' },
+          name: 'hostile',
+        },
+      ],
+    });
+    const messages = [
+      initialize(1),
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { id: 2, jsonrpc: '2.0', method: 'tools/call', params: { name: 'hostile' } },
+      { id: 3, jsonrpc: '2.0', method: 'tools/call', params: { name: 'hostile' } },
+      { id: 4, jsonrpc: '2.0', method: 'tools/call', params: { name: 'hostile' } },
+      { id: 5, jsonrpc: '2.0', method: 'ping' },
+    ];
+    let output = '';
+    await finite.serveStdio(
+      chunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
+      {
+        write(value) {
+          output += value;
+          return true;
+        },
+      },
+    );
+    const responses = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+
+    expect(responses.slice(1, 4)).toEqual([
+      {
+        error: { code: -32603, message: 'tool returned an invalid result' },
+        id: 2,
+        jsonrpc: '2.0',
+      },
+      {
+        error: { code: -32603, message: 'tool returned an invalid result' },
+        id: 3,
+        jsonrpc: '2.0',
+      },
+      {
+        error: { code: -32603, message: 'tool returned an invalid result' },
+        id: 4,
+        jsonrpc: '2.0',
+      },
+    ]);
+    expect(responses.at(-1)).toEqual({ id: 5, jsonrpc: '2.0', result: {} });
+  });
+
+  it('normalizes hostile thrown values and keeps the immutable tool vocabulary', async () => {
+    let calls = 0;
+    const finite = createFiniteMcpStdioServer({
+      callTool: async () => {
+        calls += 1;
+        if (calls > 1) throw new Error('\0'.repeat(1_000));
+        throw {
+          toString() {
+            throw new Error('coercion escaped');
+          },
+        };
+      },
+      maxLineBytes: 256,
+      serverInfo: { name: 'hostile-error', version: '1' },
+      tools: [tool],
+    });
+    await finite.handleMessage(initialize(1));
+    await finite.handleMessage({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    await expect(
+      finite.handleMessage({
+        id: 2,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: { arguments: { value: 'unused' }, name: 'echo' },
+      }),
+    ).resolves.toEqual({
+      id: 2,
+      jsonrpc: '2.0',
+      result: { content: [{ text: 'tool failed', type: 'text' }], isError: true },
+    });
+
+    const bounded = await finite.handleMessage({
+      id: 22,
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { arguments: { value: 'unused' }, name: 'echo' },
+    });
+    expect(bounded).toMatchObject({ id: 22, result: { isError: true } });
+    expect(Buffer.byteLength(JSON.stringify(bounded), 'utf8')).toBeLessThanOrEqual(256);
+
+    const first = (await finite.handleMessage({
+      id: 3,
+      jsonrpc: '2.0',
+      method: 'tools/list',
+    })) as { result: { tools: FiniteMcpTool[] } };
+    expect(Object.isFrozen(first.result.tools)).toBe(true);
+    expect(() => first.result.tools.push(tool)).toThrow();
+    await expect(
+      finite.handleMessage({ id: 4, jsonrpc: '2.0', method: 'tools/list' }),
+    ).resolves.toMatchObject({ result: { tools: [tool] } });
+  });
+
+  it('rejects a false output write when no drain capability exists', async () => {
+    await expect(
+      server().serveStdio(chunks(`${JSON.stringify(initialize(1))}\n`), {
+        write() {
+          return false;
+        },
+      }),
+    ).rejects.toThrow('finite MCP output returned false without a drain listener');
+  });
+
   it('rejects static tool descriptors that cannot fit the output ceiling', () => {
     expect(() =>
       createFiniteMcpStdioServer({
@@ -410,13 +751,29 @@ describe('finite MCP stdio protocol', () => {
         serverInfo: { name: 'bounded', version: '1' },
         tools: [
           {
-            description: 'x'.repeat(256),
+            description: 'x'.repeat(180),
             inputSchema: { type: 'object' },
             name: 'oversized',
           },
         ],
       }),
     ).toThrow('tools/list response exceeds maxLineBytes');
+    expect(() => server(255)).toThrow(
+      'maxLineBytes must be a safe integer from 256 through 4194304',
+    );
+    expect(() => server(256)).not.toThrow();
+    expect(() => server(4 * 1024 * 1024 + 1)).toThrow(
+      'maxLineBytes must be a safe integer from 256 through 4194304',
+    );
+    expect(() =>
+      createFiniteMcpStdioServer({
+        callTool: async () => ({ content: [] }),
+        instructions: '\0'.repeat(1_000_000),
+        maxLineBytes: 256,
+        serverInfo: { name: 'bounded', version: '1' },
+        tools: [],
+      }),
+    ).toThrow('instructions exceeds maxLineBytes');
   });
 
   it('rejects descriptor and result hooks without invoking them', async () => {

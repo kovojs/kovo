@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 329,
+    "historicalWitnesses": 331,
     "productions": 12
   },
   "productions": [
@@ -1130,6 +1130,18 @@
       "corpus": "capability-closure",
       "production": "structural-closure",
       "reason": "This witness closes framework input reads over exact reader symbols and a finite carrier grammar."
+    },
+    {
+      "anchor": "finite-mcp-stdio-wire-input-census",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "This witness binds the bounded MCP NDJSON parser to its exact stdio-line symbol and rejects drift into an HTTP carrier."
+    },
+    {
+      "anchor": "finite-mcp-stdio-wire-output-census",
+      "corpus": "capability-closure",
+      "production": "structural-closure",
+      "reason": "This witness binds every finite MCP response to one byte-bounded NDJSON serializer and one backpressured stdout sink."
     },
     {
       "anchor": "request-deadline-effect-door-census",

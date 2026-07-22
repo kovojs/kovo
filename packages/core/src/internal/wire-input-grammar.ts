@@ -31,7 +31,8 @@ export type FrameworkWireInputCarrier =
   | 'request-header'
   | 'response-header'
   | 'search-param'
-  | 'search-params';
+  | 'search-params'
+  | 'stdio-line';
 
 /** @internal */
 export type FrameworkWireInputGrammarKind =
@@ -267,6 +268,12 @@ export const FRAMEWORK_WIRE_INPUT_REGISTRY = Object.freeze({
       grammar: 'schema-validated-record',
       id: 'search-params.query-input',
       name: '*',
+    },
+    {
+      carrier: 'stdio-line',
+      grammar: 'json',
+      id: 'stdio-line.json-rpc',
+      name: 'json-rpc',
     },
   ] satisfies readonly FrameworkWireInputRegistryEntry[]),
   schema: 'kovo.wire-input-registry/v1',

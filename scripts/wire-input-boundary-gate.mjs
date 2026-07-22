@@ -14,6 +14,14 @@ export const repoRoot = findRepoRoot();
 
 const defaultCanonicalReaders = Object.freeze([
   {
+    allowedCarriers: ['stdio-line'],
+    api: 'finiteMcpStdioJsonLine',
+    declaration: 'function',
+    file: 'packages/core/src/internal/mcp-stdio.ts',
+    fixedName: 'json-rpc',
+    name: 'parseFiniteMcpJsonLine',
+  },
+  {
     allowedCarriers: ['header', 'request-header', 'response-header'],
     api: 'serverReadHeader',
     declaration: 'function',

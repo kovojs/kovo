@@ -135,6 +135,8 @@ state is `notifications/initialized`. The server has three ordered phases: it fi
 valid `initialize` request, then waits for `notifications/initialized`, then serves `ping` and tool
 requests. Duplicate initialization, or a request before the ready phase, fails closed. Other
 notification-shaped messages receive no response and cannot change lifecycle state.
+Initialization changes phase only after the exact id-bound success response is proven to fit; an
+oversized success returns a bounded error and leaves the server able to accept a shorter retry.
 
 Every request MUST be a JSON-RPC 2.0 own-data object with the exact request envelope and a string or
 safe-integer id whose echo fits the bounded error envelope. Each method has a closed top-level
@@ -146,13 +148,21 @@ accessor-bearing direct inputs, invalid ids, and malformed params are rejected. 
 versions are `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`, and `2024-10-07`; an unknown
 requested version negotiates to `2025-11-25` so the client can decide whether to continue.
 
-Each input or output line is at most 4 MiB of UTF-8 bytes. The parser preserves code points split
-across chunks, rejects malformed UTF-8 and malformed JSON, processes a final nonempty EOF segment as
-one line, discards an oversized line through its next delimiter, and then resumes. Dispatch and
-output are sequential and backpressure-aware. Protocol failures use JSON-RPC errors; a tool-domain
-failure is a successful JSON-RPC result with `isError: true`. Static tool descriptors that cannot
-fit the output ceiling are rejected at construction. An oversized tool result emits one bounded
-protocol error and leaves the connection usable. The surface provides no HTTP, SSE, OAuth,
-resources, prompts, sampling, tasks, logging channel, server-to-client request, or extensible method
-router. MCP diagnostics remain the registry-owned diagnostics above, not a second diagnostic
-channel.
+Each input or output payload is at most 4 MiB of UTF-8 bytes; the finite engine accepts configured
+ceilings from 256 bytes through that maximum. LF and CRLF are equivalent delimiters, and their bytes
+do not consume the payload ceiling. The parser preserves code points split across byte or string
+chunks, rejects malformed UTF-8, malformed JSON, and duplicate object members (including escaped
+key aliases), processes a final nonempty EOF segment as one line, discards an oversized line through
+its next delimiter, and then resumes. Direct and tool-provided JSON is snapshotted through own data
+descriptors before field reads and is limited to 128 container levels, 65,536 value/member nodes,
+and an exact non-allocating estimate no larger than the applicable serialized line ceiling.
+
+Dispatch and output are sequential and backpressure-aware. A false output write MUST wait for a
+provided drain capability or fail explicitly; it cannot be treated as successful delivery.
+Protocol failures use JSON-RPC errors; a tool-domain failure is a successful JSON-RPC result with
+`isError: true`, with id-aware text truncation when necessary. Static tool descriptors or
+instructions that cannot fit the output ceiling are rejected at construction. An oversized or
+unserializable tool result emits one bounded protocol error and leaves the connection usable. The
+surface provides no HTTP, SSE, OAuth, resources, prompts, sampling, tasks, logging channel,
+server-to-client request, or extensible method router. MCP diagnostics remain the registry-owned
+diagnostics above, not a second diagnostic channel.
