@@ -274,8 +274,10 @@ trusted the expected identity supplied by the same subject.
     the server-to-browser serialization boundary.
   - **Open work:** make the parser own a scope-aware true/false scalar-use fact, reject every opaque
     helper argument and container/callee escape unless a finite local summary proves it safe, and
-    require an explicit `true` fact before lowering. Cover the executable helper repro, containers,
-    property keys, mutation, destructuring, prototype paths, and unrelated same-name bindings.
+    require an explicit `true` fact before lowering. Reject laundering through mutable handler state
+    (`state.saved = item.fn; state.saved()`) and every dynamic state callee/constructor/tag variant.
+    Cover the executable helper repro, containers, property keys, mutation, destructuring, prototype
+    paths, and unrelated same-name bindings.
 
 - [ ] **M13 — The live-target emitter reparsed executable query text after parser analysis.**
   - The emitter reconstructed a TypeScript source file from a raw query-expression string to decide
