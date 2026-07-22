@@ -60,7 +60,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
   it('derives target encoders and decoders from one finite grammar with seeded round trips', () => {
     expect(FRAMEWORK_WIRE_INPUT_GRAMMAR).toMatchObject({
       maxEntries: 64,
-      maxHeaderCharacters: 6 * 1024,
+      maxHeaderCharacters: 4 * 1024,
       schema: 'kovo.wire-input-grammar/v1',
     });
 
@@ -118,7 +118,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       { deps: ['one'], target: 'safe' },
     ]);
     expect(decodeFrameworkLiveTargetHeader('safe#component@token:{bad', JSON.parse)).toEqual([]);
-    expect(decodeFrameworkTargetHeader('x'.repeat(6 * 1024 + 1))).toEqual([]);
+    expect(decodeFrameworkTargetHeader('x'.repeat(4 * 1024 + 1))).toEqual([]);
     expect(
       decodeFrameworkTargetHeader(
         Array.from({ length: 65 }, (_, index) => `target-${index}`).join(';'),
@@ -261,7 +261,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
     expect(() => new Headers({ 'Kovo-Live-Targets': unicode })).not.toThrow();
   });
 
-  it('keeps both maximum framework headers inside the default Node transport door', async () => {
+  it('keeps both maximum framework headers and a maximum cookie inside Node transport', async () => {
     const maximum = FRAMEWORK_WIRE_INPUT_GRAMMAR.maxHeaderCharacters;
     const livePrefix = 'card#components/card@token:';
     const propsPrefix = '{"payload":"';
@@ -313,6 +313,29 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       if (address === null || typeof address === 'string') {
         throw new Error('Node HTTP test server address unavailable');
       }
+      const currentUrl = `http://127.0.0.1:${address.port}/catalog?page=1`;
+      const csrfCookiePrefix = '__Host-kovo_csrf=';
+      const cookie = csrfCookiePrefix + 'x'.repeat(4_096 - csrfCookiePrefix.length);
+      expect(cookie).toHaveLength(4_096);
+      const representativeMutationHeaders = (
+        liveTargets: string,
+        targets: string,
+      ): Readonly<Record<string, string>> => ({
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Length': '0',
+        'Content-Type': 'multipart/form-data; boundary=----kovo-transport-boundary',
+        Cookie: cookie,
+        'Kovo-Current-Url': currentUrl,
+        'Kovo-Form-Target': 'catalog-panel',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'v1_1750000000000_000102030405060708090a0b0c0d0e0f',
+        'Kovo-Live-Targets': liveTargets,
+        'Kovo-Targets': targets,
+        Origin: `http://127.0.0.1:${address.port}`,
+        Referer: currentUrl,
+        'User-Agent': 'Kovo transport-boundary regression',
+      });
       const requestStatus = (headers: Readonly<Record<string, string>>): Promise<number> =>
         new Promise((resolve, reject) => {
           const outgoing = request(
@@ -320,7 +343,7 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
               headers,
               host: '127.0.0.1',
               method: 'POST',
-              path: '/',
+              path: '/_m/catalog/select',
               port: address.port,
             },
             (response) => {
@@ -333,11 +356,13 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
         });
 
       await expect(
-        requestStatus({
-          'Kovo-Live-Targets': liveHeader,
-          'Kovo-Targets': targetHeader,
-        }),
+        requestStatus(representativeMutationHeaders(liveHeader, targetHeader)),
       ).resolves.toBe(204);
+      expect(handlerHits).toBe(1);
+
+      await expect(
+        requestStatus(representativeMutationHeaders('x'.repeat(6 * 1024), 'x'.repeat(6 * 1024))),
+      ).resolves.toBe(431);
       expect(handlerHits).toBe(1);
 
       await expect(
@@ -348,11 +373,6 @@ describe('framework wire-input grammar registry (SPEC §9.1)', () => {
       expect(handlerHits).toBe(1);
 
       await expect(requestStatus({ 'Kovo-Live-Targets': delHeader })).resolves.toBe(204);
-      expect(handlerHits).toBe(2);
-
-      await expect(requestStatus({ 'X-Transport-Control': 'x'.repeat(20 * 1024) })).resolves.toBe(
-        431,
-      );
       expect(handlerHits).toBe(2);
     } finally {
       await new Promise<void>((resolve, reject) => {

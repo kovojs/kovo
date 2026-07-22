@@ -18,9 +18,9 @@ export const FRAMEWORK_WIRE_INPUT_GRAMMAR = Object.freeze({
   entrySeparator: ';',
   maxEntries: 64,
   // Node's default HTTP parser accepts roughly 16 KiB across the entire request-header block.
-  // Two 6 KiB Kovo target headers leave about 4 KiB for names, origin/cookie/CSRF metadata, and
-  // ordinary transport headers while keeping the browser producer below the default server door.
-  maxHeaderCharacters: 6 * 1024,
+  // Two 4 KiB Kovo target headers plus a normal maximum-size cookie still leave room for the
+  // origin, content type, CSRF/idempotency metadata, names, and ordinary transport headers.
+  maxHeaderCharacters: 4 * 1024,
   presentationSeparator: '; ',
   schema: 'kovo.wire-input-grammar/v1',
   target: Object.freeze({

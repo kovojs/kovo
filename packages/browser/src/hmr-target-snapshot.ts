@@ -145,7 +145,7 @@ export function createHmrTargetSnapshotReader(
       typeof maxEntries !== 'number' ||
       maxEntries !== 64 ||
       typeof maxHeaderCharacters !== 'number' ||
-      maxHeaderCharacters !== 6_144
+      maxHeaderCharacters !== 4_096
     ) {
       return false;
     }
