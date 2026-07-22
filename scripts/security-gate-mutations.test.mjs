@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(442);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(443);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
@@ -832,6 +832,7 @@ describe('security-gate-mutations', () => {
       'request-ingress/recompute-vercel-prepared-verdict',
       'server-response-posture/drop-endpoint-verification-choke',
       'server-egress/drop-dispatcher-pin',
+      'server-egress/drop-framework-owned-connect-carrier-snapshot',
       'server-egress/drop-implicit-localhost-carrier-classification',
       'server-egress/drop-origin-before-dns',
       'server-egress/drop-task-context-fetch-seal',

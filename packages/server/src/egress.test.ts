@@ -1105,7 +1105,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     socket.destroy();
   });
 
-  it('fails closed on unstable, frozen, and non-configurable valid TCP carriers', () => {
+  it('fails closed on unstable, frozen, and non-configurable valid TCP carriers', async () => {
     uninstall = installNetConnectFloor(resolveEgressPolicy({ allowInternal: [] }, () => {}));
 
     let hostRead = 0;
@@ -1119,13 +1119,25 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     unstableSocket.destroy();
 
     const frozenSocket = new net.Socket();
-    expect(() => frozenSocket.connect(Object.freeze({ port }) as never)).toThrow(TypeError);
+    const frozenError = new Promise<Error>((resolve) => frozenSocket.once('error', resolve));
+    expect(() => frozenSocket.connect(Object.freeze({ port }) as never)).not.toThrow();
+    await expect(frozenError).resolves.toMatchObject({
+      classification: 'loopback',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
     frozenSocket.destroy();
 
     const nonConfigurable = { port };
     Object.defineProperty(nonConfigurable, 'host', { configurable: false, value: '' });
     const nonConfigurableSocket = new net.Socket();
-    expect(() => nonConfigurableSocket.connect(nonConfigurable as never)).toThrow(TypeError);
+    const nonConfigurableError = new Promise<Error>((resolve) =>
+      nonConfigurableSocket.once('error', resolve),
+    );
+    expect(() => nonConfigurableSocket.connect(nonConfigurable as never)).not.toThrow();
+    await expect(nonConfigurableError).resolves.toMatchObject({
+      classification: 'loopback',
+      name: EGRESS_BLOCKED_ERROR_NAME,
+    });
     nonConfigurableSocket.destroy();
   });
 
@@ -1337,7 +1349,7 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
 
   it('blocks IANA-special literals and DNS answers at the net.connect dial boundary', async () => {
     const connectDescriptor = Object.getOwnPropertyDescriptor(net.Socket.prototype, 'connect');
-    const fakeNativeConnect = vi.fn(function (this: net.Socket) {
+    const fakeNativeConnect = vi.fn(function (this: net.Socket, ..._args: unknown[]) {
       return this;
     });
     Object.defineProperty(net.Socket.prototype, 'connect', {
@@ -1367,21 +1379,31 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
       publicSocket.destroy();
       expect(fakeNativeConnect).toHaveBeenCalledOnce();
 
+      const rawLookup: NonNullable<net.NetConnectOpts['lookup']> = (
+        _hostname,
+        lookupOptions,
+        callback,
+      ) => {
+        const cb = (typeof lookupOptions === 'function' ? lookupOptions : callback) as (
+          error: Error | null,
+          address: string,
+          family: number,
+        ) => void;
+        cb(null, '2620:4f:8000::1', 6);
+      };
       const options: net.NetConnectOpts = {
         host: 'iana-special-dns.test',
         port: 443,
-        lookup(_hostname, lookupOptions, callback) {
-          const cb = (typeof lookupOptions === 'function' ? lookupOptions : callback) as (
-            error: Error | null,
-            address: string,
-            family: number,
-          ) => void;
-          cb(null, '2620:4f:8000::1', 6);
-        },
+        lookup: rawLookup,
       };
       const dnsSocket = new net.Socket();
       expect(() => dnsSocket.connect(options)).not.toThrow();
-      const pinnedLookup = options.lookup!;
+      const nativeOptions = fakeNativeConnect.mock.calls[1]?.[0] as net.NetConnectOpts | undefined;
+      expect(nativeOptions).toBeDefined();
+      expect(nativeOptions).not.toBe(options);
+      expect(Object.getPrototypeOf(nativeOptions!)).toBeNull();
+      expect(options.lookup).toBe(rawLookup);
+      const pinnedLookup = nativeOptions!.lookup!;
       const lookupError = await new Promise<Error | null>((resolve) => {
         pinnedLookup('iana-special-dns.test', {}, (error) => resolve(error));
       });

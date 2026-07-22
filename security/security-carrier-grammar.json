@@ -3,7 +3,7 @@
   "purpose": "coverage-metadata-only",
   "schema": "kovo-security-carrier-grammar/v1",
   "summary": {
-    "historicalWitnesses": 329,
+    "historicalWitnesses": 330,
     "productions": 12
   },
   "productions": [
@@ -122,6 +122,12 @@
       "corpus": "egress-ip",
       "production": "carrier-container",
       "reason": "This witness moves a reviewed value through a structured carrier or container."
+    },
+    {
+      "anchor": "proxy-connect-carrier-snapshot",
+      "corpus": "egress-ip",
+      "production": "runtime-floor",
+      "reason": "This witness exercises a runtime-owned reconstruction that prevents an app-controlled carrier from retaining dial authority."
     },
     {
       "anchor": "undeclared-origin-before-dns-dial",

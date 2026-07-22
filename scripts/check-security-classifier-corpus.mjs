@@ -239,6 +239,16 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         ],
       },
       {
+        id: 'proxy-connect-carrier-snapshot',
+        file: 'packages/server/src/egress.test.ts',
+        snippets: [
+          'does not let a Proxy ignore the classified lookup replacement before Node dials',
+          'new Proxy(target',
+          'defineProperty: () => true',
+          "classification: 'loopback'",
+        ],
+      },
+      {
         id: 'undeclared-origin-before-dns-dial',
         file: 'packages/server/src/egress-property-oracle.test.ts',
         snippets: [

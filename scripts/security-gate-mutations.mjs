@@ -2159,6 +2159,14 @@ const removedImplicitLocalhostConnectCarrierClassifier = [
   '    if (!hostValue) return egressApply(original, this, args);',
   '    let host: string;',
 ].join('\n');
+const frameworkOwnedConnectCarrierSnapshot = [
+  '      options = snapshotConnectOptions(options);',
+  '      normalized.replace(options);',
+].join('\n');
+const removedFrameworkOwnedConnectCarrierSnapshot = [
+  '      options = snapshotConnectOptions(options);',
+  '      void options;',
+].join('\n');
 const frameworkEgressDispatcherPin =
   '  request = egressRequestWithDispatcher(request, dispatcher);';
 const removedFrameworkEgressDispatcherPin = '  request = request;';
@@ -7257,6 +7265,19 @@ export const SECURITY_GATE_MUTANTS = [
     search: implicitLocalhostConnectCarrierClassifier,
     sourceFile: serverEgressPath,
     test: assertImplicitLocalhostConnectCarrierBehavior,
+  },
+  {
+    behavioralInstrumentation: serverEgressBehavioralInstrumentation,
+    behavioralTypeScript: true,
+    description:
+      'Classifies a framework-owned connect snapshot but lets Node dial the original app carrier.',
+    expectedKiller:
+      'hostile connect-option carriers must not retain resolver authority after classification',
+    name: 'server-egress/drop-framework-owned-connect-carrier-snapshot',
+    replacement: removedFrameworkOwnedConnectCarrierSnapshot,
+    search: frameworkOwnedConnectCarrierSnapshot,
+    sourceFile: serverEgressPath,
+    test: assertFrameworkOwnedConnectCarrierSnapshotBehavior,
   },
   {
     behavioralInstrumentation: serverEgressBehavioralInstrumentation,
@@ -14731,6 +14752,55 @@ async function assertImplicitLocalhostConnectCarrierBehavior(moduleUnderTest) {
       outcome.error.classification !== 'loopback'
     ) {
       throw new Error('implicit-localhost socket dial bypassed the egress classifier');
+    }
+  } finally {
+    socket?.destroy();
+    uninstall();
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+async function assertFrameworkOwnedConnectCarrierSnapshotBehavior(moduleUnderTest) {
+  const server = http.createServer((_request, response) => response.end('unexpected dial'));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    server.close();
+    throw new Error('behavioral connect-carrier server did not bind a TCP port');
+  }
+  const policy = moduleUnderTest.resolveEgressPolicy({ allowInternal: [] }, () => {});
+  const uninstall = moduleUnderTest.installNetConnectFloor(policy);
+  let socket;
+  try {
+    const target = {
+      host: 'public.test',
+      lookup(_hostname, options, callback) {
+        const cb = typeof options === 'function' ? options : callback;
+        if (typeof options !== 'function' && options.all) {
+          cb(null, [{ address: '127.0.0.1', family: 4 }]);
+        } else {
+          cb(null, '127.0.0.1', 4);
+        }
+      },
+      port: address.port,
+    };
+    const carrier = new Proxy(target, { defineProperty: () => true });
+    const outcome = await new Promise((resolve) => {
+      socket = new net.Socket();
+      socket.once('connect', () => resolve({ connected: true }));
+      socket.once('error', (error) => resolve({ error }));
+      try {
+        socket.connect(carrier);
+      } catch (error) {
+        resolve({ error });
+      }
+    });
+    if (
+      outcome.connected ||
+      !(outcome.error instanceof moduleUnderTest.EgressBlockedError) ||
+      outcome.error.classification !== 'loopback'
+    ) {
+      throw new Error('app-controlled connect carrier retained resolver authority');
     }
   } finally {
     socket?.destroy();

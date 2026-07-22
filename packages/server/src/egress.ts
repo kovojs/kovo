@@ -1996,6 +1996,28 @@ interface ConnectOptions {
   [key: string]: unknown;
 }
 
+interface NormalizedConnectOptions {
+  readonly options: ConnectOptions;
+  replace(snapshot: ConnectOptions): void;
+}
+
+// Exact `node:net` destination and lookup inputs consumed by Socket.prototype.connect. Snapshot
+// these onto a null-prototype carrier before the native sink sees them: mutating an app-owned
+// carrier in place is not a proof because a Proxy can acknowledge defineProperty without changing
+// the values Node later reads (SPEC §6.6 decision rule 7).
+const CONNECT_OPTION_PROPERTIES = witnessFreeze([
+  'autoSelectFamily',
+  'autoSelectFamilyAttemptTimeout',
+  'family',
+  'hints',
+  'host',
+  'localAddress',
+  'localPort',
+  'lookup',
+  'path',
+  'port',
+] as const);
+
 type ConnectFn = (...args: unknown[]) => net.Socket;
 
 interface NetConnectFloorState {
@@ -2070,8 +2092,11 @@ export function installNetConnectFloor(
   const patchedConnect = function patchedConnect(this: net.Socket, ...args: unknown[]): net.Socket {
     const activePolicy = state.policy;
 
-    const options = normalizeConnectOptions(args);
-    if (options !== null) {
+    const normalized = normalizeConnectOptions(args);
+    let options = normalized?.options ?? null;
+    if (options !== null && normalized !== null) {
+      options = snapshotConnectOptions(options);
+      normalized.replace(options);
       const path = stableConnectTargetValue(options, 'path');
       if (path != null) {
         // UDS remains ambient-default-denied. Only the exact path derived from a validated managed
@@ -2387,18 +2412,35 @@ function applyNetConnectHardening(
  *   - `connect(port[, host][, cb])` — synthesize an options object.
  *   - `connect(path[, cb])` — synthesize a path object so the sink can deny UDS.
  *
- * Mutating the returned options object in place propagates our injected `lookup`.
+ * The returned replacement installs a framework-owned snapshot into the actual native call.
  */
-function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
+function normalizeConnectOptions(args: unknown[]): NormalizedConnectOptions | null {
   let first = args[0];
   // Unwrap node's normalizeArgs array form: socket.connect([options, cb]).
   if (egressArrayIsArray(first)) {
-    const inner = first[0];
-    if (inner && typeof inner === 'object') return inner as ConnectOptions;
+    const inner = stableConnectCarrierValue(first, 0);
+    if (inner && typeof inner === 'object') {
+      const callback = stableConnectCarrierValue(first, 1);
+      return {
+        options: inner as ConnectOptions,
+        replace(snapshot) {
+          if (typeof callback === 'function') {
+            egressArraySplice(args, 0, args.length, snapshot, callback);
+          } else {
+            egressArraySplice(args, 0, args.length, snapshot);
+          }
+        },
+      };
+    }
     first = inner;
   }
   if (first && typeof first === 'object') {
-    return first as ConnectOptions;
+    return {
+      options: first as ConnectOptions,
+      replace(snapshot) {
+        egressArraySplice(args, 0, 1, snapshot);
+      },
+    };
   }
   if (
     typeof first === 'number' ||
@@ -2416,10 +2458,37 @@ function normalizeConnectOptions(args: unknown[]): ConnectOptions | null {
       args[1] !== undefined && typeof args[1] !== 'function' ? 2 : 1,
       synthesized,
     );
-    return synthesized;
+    return {
+      options: synthesized,
+      replace(snapshot) {
+        egressArraySplice(args, 0, 1, snapshot);
+      },
+    };
   }
   // (path, cb) — preserve a recognized UDS target for the default-deny sink above.
-  return typeof first === 'string' ? { path: first } : null;
+  if (typeof first !== 'string') return null;
+  return {
+    options: { path: first },
+    replace(snapshot) {
+      egressArraySplice(args, 0, 1, snapshot);
+    },
+  };
+}
+
+function snapshotConnectOptions(options: ConnectOptions): ConnectOptions {
+  const snapshot = { __proto__: null } as ConnectOptions;
+  for (let index = 0; index < CONNECT_OPTION_PROPERTIES.length; index += 1) {
+    const property = CONNECT_OPTION_PROPERTIES[index]!;
+    const value = stableConnectCarrierValue(options, property);
+    if (value === undefined) continue;
+    egressObjectDefineProperty(snapshot, property, {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    });
+  }
+  return snapshot;
 }
 
 function isNodeTcpPortValue(value: unknown): value is number | string {
@@ -2436,6 +2505,10 @@ function stableConnectTargetValue(
   options: object,
   property: 'host' | 'lookup' | 'path' | 'port' | 'socketPath',
 ): unknown {
+  return stableConnectCarrierValue(options, property);
+}
+
+function stableConnectCarrierValue(options: object, property: PropertyKey): unknown {
   const before = egressReflectGet(options, property, options);
   const after = egressReflectGet(options, property, options);
   if (!egressObjectIs(before, after)) throw unixDomainSocketBlocked();
