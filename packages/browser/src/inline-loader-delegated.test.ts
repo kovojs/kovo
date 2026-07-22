@@ -311,6 +311,37 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'rolls back failed handler state and post-commit effects through %s',
+    async (_name, installSource) => {
+      const deferredEffect = vi.fn();
+      const host = new FakeStatefulBindingElement({
+        'kovo-state': '{"count":0}',
+        'on:click': '/c/counter.js#fail',
+      });
+
+      await expect(
+        dispatchInlineDelegatedClick(
+          host,
+          async () => ({
+            fail(_event: unknown, ctx: { state: { count: number } }) {
+              ctx.state.count += 1;
+              (
+                globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void }
+              ).__kovo_postCommitSchedule?.(deferredEffect);
+              throw new Error('boom');
+            },
+          }),
+          installSource,
+          ['/c/counter.js'],
+        ),
+      ).rejects.toThrow('boom');
+
+      expect(host.getAttribute('kovo-state')).toBe('{"count":0}');
+      expect(deferredEffect).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'rejects inherited inline derive outputs through %s',
     async (_name, installSource) => {
       const host = new FakeStatefulBindingElement({

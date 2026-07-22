@@ -587,9 +587,13 @@ describe('delegated handler reference dispatch', () => {
     expect(firstElement.getAttribute('kovo-state')).toBe('{"count":1}');
   });
 
-  it('continues the delegated state queue after a handler rejects', async () => {
+  it('rolls back a failed handler state transaction before continuing the delegated queue', async () => {
+    const deferredEffect = vi.fn();
     const first = vi.fn((_event, ctx: { state: { count: number } }) => {
       ctx.state.count += 1;
+      (
+        globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void }
+      ).__kovo_postCommitSchedule?.(deferredEffect);
       throw new Error('boom');
     });
     const second = vi.fn((_event, ctx: { state: { count: number } }) => {
@@ -612,7 +616,8 @@ describe('delegated handler reference dispatch', () => {
     await failure;
     await passed;
 
-    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":1}');
+    expect(deferredEffect).not.toHaveBeenCalled();
   });
 
   it('hydrates serialized island state for delegated handlers', async () => {
@@ -646,7 +651,7 @@ describe('delegated handler reference dispatch', () => {
     expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
   });
 
-  it('persists delegated handler state before reporting a later handler failure', async () => {
+  it('rolls back the whole delegated chain when a later handler cannot resolve', async () => {
     const first = vi.fn((_event, ctx: { state: { count: number } }) => {
       ctx.state.count += 1;
     });
@@ -660,6 +665,6 @@ describe('delegated handler reference dispatch', () => {
       dispatchDelegatedEvent({ target: element, type: 'click' }, importModule),
     ).rejects.toThrow('Handler export not found: /c/b.js#missing');
 
-    expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
+    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
   });
 });

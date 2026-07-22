@@ -277,42 +277,43 @@ async function dispatchDelegatedEventForElement(
   // plan is flushed so focus targets are revealed first; SPEC §4.3/§4.8.
   const postCommitQueue: Array<() => void> = [];
 
-  try {
-    const references = parseHandlerReferences(
-      readRuntimeElementAttribute(element, 'on:' + eventType),
+  const references = parseHandlerReferences(
+    readRuntimeElementAttribute(element, 'on:' + eventType),
+  );
+  for (let index = 0; index < references.length; index += 1) {
+    const reference = references[index];
+    if (reference === undefined) continue;
+    const { ref, source } = reference;
+    assertAllowedKovoDynamicImportRefForModule(ref, importModule);
+    const mod = await importModule(ref.url);
+    const fn = ownHandlerModuleExport(mod, ref.exportName);
+
+    if (!isClientHandler(fn)) {
+      throw new Error(`Handler export not found: ${source}`);
+    }
+
+    // Install the post-commit scheduler only around the handler's synchronous
+    // call frame: primitives register deferred work synchronously, and a
+    // synchronous-scoped hook avoids leaking into concurrent dispatches.
+    withPostCommitQueue(postCommitQueue, () =>
+      applySecurityIntrinsic<ReturnType<ClientHandler>>(fn, undefined, [
+        event,
+        handlerContext.context,
+      ]),
     );
-    for (let index = 0; index < references.length; index += 1) {
-      const reference = references[index];
-      if (reference === undefined) continue;
-      const { ref, source } = reference;
-      assertAllowedKovoDynamicImportRefForModule(ref, importModule);
-      const mod = await importModule(ref.url);
-      const fn = ownHandlerModuleExport(mod, ref.exportName);
-
-      if (!isClientHandler(fn)) {
-        throw new Error(`Handler export not found: ${source}`);
-      }
-
-      // Install the post-commit scheduler only around the handler's synchronous
-      // call frame: primitives register deferred work synchronously, and a
-      // synchronous-scoped hook avoids leaking into concurrent dispatches.
-      withPostCommitQueue(postCommitQueue, () =>
-        applySecurityIntrinsic<ReturnType<ClientHandler>>(fn, undefined, [
-          event,
-          handlerContext.context,
-        ]),
-      );
-      // SPEC §4.3/§5.2: one handler may not hand executable/opaque state to the next handler in
-      // the same delegated chain. Replace it with a canonical own-data snapshot at every boundary.
-      handlerContext.context.state = snapshotHandlerStateJsonValue(handlerContext.context.state);
-    }
-  } finally {
-    handlerContext.commit();
-    if (supportsQueryBindings(stateHost)) {
-      await applyStateBindings(stateHost, handlerContext.context.state, { importModule });
-    }
-    drainPostCommitQueue(postCommitQueue);
+    // SPEC §4.3/§5.2: one handler may not hand executable/opaque state to the next handler in
+    // the same delegated chain. Replace it with a canonical own-data snapshot at every boundary.
+    handlerContext.context.state = snapshotHandlerStateJsonValue(handlerContext.context.state);
   }
+
+  // Exceptional import, lookup, invocation, or snapshot completion aborts the state transaction.
+  // In particular, do not serialize a partially mutated state graph or run effects queued by an
+  // otherwise-failed handler. This matches every generated inline-loader artifact.
+  handlerContext.commit();
+  if (supportsQueryBindings(stateHost)) {
+    await applyStateBindings(stateHost, handlerContext.context.state, { importModule });
+  }
+  drainPostCommitQueue(postCommitQueue);
 }
 
 function ownHandlerModuleExport(mod: object, exportName: string): unknown {

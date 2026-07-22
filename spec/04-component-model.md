@@ -210,6 +210,12 @@ bounds are 64 levels, 10,000 values, and 1,000,000 string/key code units. Non-en
 data is outside JSON and is discarded. This runtime check is defense-in-depth after the compiler's
 closed verdict, not a substitute for it.
 
+A delegated dispatch is one fail-closed state transaction. If module import/export resolution,
+handler invocation, or the post-handler state snapshot throws, the loader aborts the remaining
+chain, leaves the serialized state unchanged, and discards every post-commit callback collected by
+that dispatch. Modular and generated-inline runtimes use the same rollback rule. A later queued
+dispatch starts from the last successfully committed snapshot.
+
 ### 4.4 The loader
 
 A gzip-capped inline bootstrap is the only always-loaded JavaScript. Its enforced
