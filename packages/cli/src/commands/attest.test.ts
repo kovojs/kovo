@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { createRuntimeAttestationCryptoHandle } from '../../../server/src/crypto
 import { createEscapeCensusReviewEnvelope } from '../../../server/src/escape-census-review.js';
 import { createEscapeObligationReviewEnvelope } from '../../../server/src/escape-obligation-review.js';
 import { createRuntimePostureAttestor } from '../../../server/src/runtime-attestation.js';
-import { parseAttestArgs, runAttestCommand } from './attest.js';
+import { parseAttestArgs, readBoundedAttestationInput, runAttestCommand } from './attest.js';
 
 const roots: string[] = [];
 const escapeCensusCoverage = {
@@ -38,6 +38,28 @@ afterEach(() => {
 });
 
 describe('kovo explain --attest', () => {
+  it('reads local evidence through a bounded regular-file descriptor', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-attest-input-'));
+    roots.push(root);
+    const reviewed = join(root, 'reviewed.json');
+    const alias = join(root, 'reviewed-alias.json');
+    const oversized = join(root, 'oversized.json');
+    writeFileSync(reviewed, '{"reviewed":true}\n');
+    symlinkSync(reviewed, alias);
+    writeFileSync(oversized, '');
+    truncateSync(oversized, 32 * 1024 * 1024 + 1);
+
+    expect(readBoundedAttestationInput(reviewed, 'reviewed graph').toString('utf8')).toBe(
+      '{"reviewed":true}\n',
+    );
+    expect(() => readBoundedAttestationInput(alias, 'reviewed graph')).toThrow(
+      'reviewed graph must be a regular non-symlink file',
+    );
+    expect(() => readBoundedAttestationInput(oversized, 'reviewed graph')).toThrow(
+      'reviewed graph exceeds the artifact size limit',
+    );
+  });
+
   it('requires the reviewed artifact and out-of-band trust anchor', () => {
     expect(parseAttestArgs(['--attest', 'https://example.test'])).toMatchObject({ ok: false });
     expect(
