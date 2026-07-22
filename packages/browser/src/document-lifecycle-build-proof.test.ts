@@ -6,6 +6,7 @@ import {
   type DocumentLifecycleRecoveryOptions,
 } from './document-lifecycle.js';
 import { readExactTypedQueryResponseElement } from './wire-response-scanner.js';
+import { readAttribute, unescapeHtml } from './wire-html.js';
 
 function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = {}) {
   const applied: Array<{ body: string; build?: string }> = [];
@@ -45,8 +46,24 @@ function recoveryOptions(overrides: Partial<DocumentLifecycleRecoveryOptions> = 
     reload,
     snapshotElementHtml: () => '<section kovo-fragment-target="account">next</section>',
     targetHeader: () => [],
-    typedReadBodyIsExact: (body, identity) =>
-      readExactTypedQueryResponseElement(body, identity) !== undefined,
+    typedReadBodyIsExact: (body, identity, expectedUrl) => {
+      const element = readExactTypedQueryResponseElement(body, identity);
+      if (!element) return false;
+      const href = readAttribute(element.attrs, 'href');
+      if (href !== null) {
+        try {
+          if (!href || new URL(href, expectedUrl).href !== expectedUrl) return false;
+        } catch {
+          return false;
+        }
+      }
+      try {
+        JSON.parse(unescapeHtml(element.content));
+        return true;
+      } catch {
+        return false;
+      }
+    },
     wireKey: () => undefined,
     ...overrides,
   };
@@ -75,6 +92,27 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
     expect(queryUrl).not.toHaveBeenCalled();
     // The first malformed identity starts one terminal recovery. Later calls in the stale realm
     // are inert even when navigation is delayed.
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('stops adopting query metadata as soon as one carrier selects terminal recovery', () => {
+    const rememberQueryHref = vi.fn(() => {
+      throw new TypeError('conflicting query href');
+    });
+    const { options, reload } = recoveryOptions({
+      readAttribute: (attrs, name) => {
+        const match = new RegExp(`${name}="([^"]*)"`, 'u').exec(attrs);
+        return match?.[1] ?? null;
+      },
+      rememberQueryHref,
+      wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+
+    lifecycle.rememberQueryChunk({ attrs: ' name="cart" href="/_q/cart"' });
+    lifecycle.rememberQueryChunk({ attrs: ' name="reviews" href="/_q/reviews"' });
+
+    expect(rememberQueryHref).toHaveBeenCalledOnce();
     expect(reload).toHaveBeenCalledOnce();
   });
 
@@ -112,6 +150,74 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
 
     expect(reload).toHaveBeenCalledOnce();
     expect(readResponseText).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
+  it('rejects comma-combined query media and cancels before reading its body', async () => {
+    const response = { status: 200 };
+    const fetchValue = vi.fn(async () => response);
+    const discardResponseBody = vi.fn();
+    const readResponseText = vi.fn(async () => '<kovo-query name="cart">{}</kovo-query>');
+    const { applied, options, reload } = recoveryOptions({
+      discardResponseBody,
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseText,
+      responseContentType: () => 'text/html; charset=utf-8, application/json',
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+
+    expect(discardResponseBody).toHaveBeenCalledWith(response);
+    expect(readResponseText).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
+  it('cancels a typed-read response when its text reader fails before consumption', async () => {
+    const response = { status: 200 };
+    const fetchValue = vi.fn(async () => response);
+    const discardResponseBody = vi.fn();
+    const { applied, options, reload } = recoveryOptions({
+      discardResponseBody,
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseText: async () => {
+        throw new Error('body reader failed');
+      },
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(discardResponseBody).toHaveBeenCalledWith(response);
+    // A body-reader failure remains an ordinary transport error, not an inferred revocation.
+    expect(reload).not.toHaveBeenCalled();
+    expect(applied).toEqual([]);
+  });
+
+  it('admits lifecycle typed-read truth only under exact status 200', async () => {
+    const response = { status: 201 };
+    const fetchValue = vi.fn(async () => response);
+    const discardResponseBody = vi.fn();
+    const readResponseText = vi.fn(async () => '<kovo-query name="cart">{}</kovo-query>');
+    const { applied, options, reload } = recoveryOptions({
+      discardResponseBody,
+      fetchValue,
+      queryUrl: () => '/_q/cart',
+      readResponseStatus: () => 201,
+      readResponseText,
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(discardResponseBody).toHaveBeenCalledWith(response);
+    expect(readResponseText).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
     expect(applied).toEqual([]);
   });
 
@@ -177,6 +283,86 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
     await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
 
+    expect(applied).toEqual([]);
+  });
+
+  it('rejects malformed JSON atomically before applying another typed-read body', async () => {
+    const fetchValue = vi.fn(async (url: string) => ({ status: 200, url }));
+    const discardResponseBody = vi.fn();
+    const { applied, options, reload } = recoveryOptions({
+      discardResponseBody,
+      fetchValue,
+      liveTargets: () => [],
+      queryUrl: (identity) => `https://kovo.test/_q/${identity.name}`,
+      readAttribute: (attrs, name) => {
+        const match = new RegExp(`${name}="([^"]*)"`, 'u').exec(attrs);
+        return match?.[1] ?? null;
+      },
+      readResponseText: async (response) => {
+        const url = (response as { url: string }).url;
+        return url.endsWith('/cart')
+          ? '<kovo-query name="cart">{"count":2}</kovo-query>'
+          : '<kovo-query name="private">{"secret":</kovo-query>';
+      },
+      responseUrlIsExact: (response, expected) => (response as { url: string }).url === expected,
+      wireKey: (name, key) => (name ? (key ? { key, name } : { name }) : undefined),
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+    lifecycle.rememberQueryChunk({ attrs: ' name="cart" href="/_q/cart"' });
+    lifecycle.rememberQueryChunk({ attrs: ' name="private" href="/_q/private"' });
+
+    lifecycle.visibleReturnRefresh();
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(reload).toHaveBeenCalledOnce();
+    expect(discardResponseBody).toHaveBeenCalledOnce();
+    expect(applied).toEqual([]);
+  });
+
+  it.each(['/_q/cart?key=c1', 'https://kovo.test/_q/cart?key=c1'])(
+    'canonically binds a %s body href to the exact lifecycle request URL',
+    async (bodyHref) => {
+      const requestUrl = 'https://kovo.test/_q/cart?key=c1';
+      const fetchValue = vi.fn(async () => ({ status: 200 }));
+      const { applied, options, reload } = recoveryOptions({
+        canonicalRequestUrl: () => requestUrl,
+        fetchValue,
+        queryUrl: () => '/_q/cart?key=c1',
+        readResponseText: async () =>
+          `<kovo-query name="cart" href="${bodyHref.replace('&', '&amp;')}">{"count":2}</kovo-query>`,
+      });
+
+      createDocumentLifecycleRecovery(options).refreshQuery('cart');
+      await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(applied).toHaveLength(1));
+
+      expect(reload).not.toHaveBeenCalled();
+      expect(applied[0]).toEqual({
+        body: `<kovo-query name="cart" href="${bodyHref.replace('&', '&amp;')}">{"count":2}</kovo-query>`,
+        build: 'build-old',
+      });
+    },
+  );
+
+  it('rejects a typed-read body href that resolves away from the exact lifecycle request', async () => {
+    const requestUrl = 'https://kovo.test/_q/cart?key=c1';
+    const fetchValue = vi.fn(async () => ({ status: 200 }));
+    const discardResponseBody = vi.fn();
+    const { applied, options, reload } = recoveryOptions({
+      canonicalRequestUrl: () => requestUrl,
+      discardResponseBody,
+      fetchValue,
+      queryUrl: () => '/_q/cart?key=c1',
+      readResponseText: async () =>
+        '<kovo-query name="cart" href="/_q/cart?key=admin">{"count":2}</kovo-query>',
+    });
+
+    createDocumentLifecycleRecovery(options).refreshQuery('cart');
+    await vi.waitFor(() => expect(fetchValue).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+
+    expect(discardResponseBody).toHaveBeenCalledOnce();
     expect(applied).toEqual([]);
   });
 

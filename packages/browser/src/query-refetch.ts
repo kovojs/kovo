@@ -23,6 +23,7 @@ import {
   securityGetOwnPropertyDescriptor,
   securityMap,
   securityMapDelete,
+  securityMapGet,
   securityMapHas,
   securityMapSet,
   securityOwnArrayEntry,
@@ -194,6 +195,7 @@ export async function refetchQueries(
 ): Promise<RefetchedQueryResponse[]> {
   const queryRefetchSecurity = queryRefetchSecurityControls();
   const bodies: RefetchedQueryBody[] = [];
+  const stagedResponseHrefs = securityMap<string, string>();
   const fetchControl = options.fetch;
   const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
   const onBuildSkew = options.onBuildSkew ?? reloadSessionTransitionDocument;
@@ -325,34 +327,71 @@ export async function refetchQueries(
         // Fetch rejection remains an ordinary transport failure; never infer revocation from it.
         discardQueryResponseBody(response, queryRefetchSecurity);
         terminalRecovery = 'auth-denied';
-      } else if (ok !== false && (typeof status !== 'number' || status < 400)) {
-        const responseBody = await queryRefetchSecurity.readResponseTextOptionalSync(response);
-        if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
+      } else if (ok !== false && status === 200) {
+        let responseBody: string;
+        try {
+          responseBody = await queryRefetchSecurity.readResponseTextOptionalSync(response);
+        } catch (error) {
+          discardQueryResponseBody(response, queryRefetchSecurity);
+          throw error;
+        }
+        if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) {
+          discardQueryResponseBody(response, queryRefetchSecurity);
+          return [];
+        }
         const responseElement = readExactTypedQueryResponseElement(responseBody, query);
         let responseQuery: QueryChunk | undefined;
+        let responseDecodeError: unknown;
+        let responseDecodeFailed = false;
         try {
           responseQuery = responseElement
             ? readQueryElementChunk(responseElement, (error) => {
-                try {
-                  reportRuntimeError(onError, error);
-                } catch {}
+                if (responseDecodeFailed) return;
+                responseDecodeFailed = true;
+                responseDecodeError = error;
               })
             : undefined;
         } catch (error) {
+          discardQueryResponseBody(response, queryRefetchSecurity);
           selectInvalidResponseRecovery(error);
           continue;
         }
-        if (!responseQuery || responseQuery.delta === true) {
+        if (
+          responseDecodeFailed ||
+          !responseQuery ||
+          responseQuery.delta === true ||
+          !queryResponseHrefIsAdmitted(
+            responseQuery.href,
+            request.expectedUrl,
+            queryRefetchSecurity,
+          )
+        ) {
+          discardQueryResponseBody(response, queryRefetchSecurity);
           selectInvalidResponseRecovery(
-            new TypeError(
-              'Kovo refused typed-read truth outside the exact full-query response vocabulary.',
-            ),
+            responseDecodeFailed
+              ? responseDecodeError
+              : new TypeError(
+                  'Kovo refused typed-read truth outside the exact full-query response vocabulary.',
+                ),
+          );
+          continue;
+        }
+        const reconciledQuery = reconcileTypedReadResponseHref(
+          responseQuery,
+          request.expectedUrl,
+          stagedResponseHrefs,
+          queryRefetchSecurity,
+        );
+        if (!reconciledQuery) {
+          discardQueryResponseBody(response, queryRefetchSecurity);
+          selectInvalidResponseRecovery(
+            new TypeError('Kovo refused conflicting typed-read refetch metadata.'),
           );
           continue;
         }
         securityArrayAppend(
           bodies,
-          { queries: [responseQuery] },
+          { queries: [reconciledQuery] },
           'Browser typed-read response bodies',
         );
       } else {
@@ -515,6 +554,15 @@ function queryResponseEnvelopeHasMediaType(
   security: QueryRefetchSecurity,
 ): boolean {
   const contentType = security.readHeader(response, 'Content-Type');
+  if (
+    typeof contentType !== 'string' ||
+    security.indexOf(contentType, ',') >= 0 ||
+    security.indexOf(contentType, '\r') >= 0 ||
+    security.indexOf(contentType, '\n') >= 0 ||
+    security.indexOf(contentType, '\0') >= 0
+  ) {
+    return false;
+  }
   const separator = typeof contentType === 'string' ? security.indexOf(contentType, ';') : -1;
   const mediaType =
     typeof contentType === 'string'
@@ -526,6 +574,37 @@ function queryResponseEnvelopeHasMediaType(
     mediaType === expectedMediaType &&
     security.isInlineContentDisposition(security.readHeader(response, 'Content-Disposition'))
   );
+}
+
+function queryResponseHrefIsAdmitted(
+  href: string | undefined,
+  expectedUrl: string,
+  security: QueryRefetchSecurity,
+): boolean {
+  if (href === undefined) return true;
+  if (!frameworkWireIdentityIsValid(href) || href.length > 65_536) return false;
+  const expected = security.parseUrl(expectedUrl);
+  const parsed = expected ? security.parseUrl(href, expected.href) : undefined;
+  return parsed !== undefined && parsed.href === expected?.href;
+}
+
+function reconcileTypedReadResponseHref(
+  query: QueryChunk,
+  expectedUrl: string,
+  staged: Map<string, string>,
+  security: QueryRefetchSecurity,
+): QueryChunk | undefined {
+  const href = query.href;
+  if (href === undefined) return query;
+  const identity = queryStoreKey(query.name, query.key);
+  const retained = queryRefetchHref(query.name, query.key) ?? securityMapGet(staged, identity);
+  if (retained === undefined) {
+    securityMapSet(staged, identity, href);
+    return query;
+  }
+  if (!queryResponseHrefIsAdmitted(retained, expectedUrl, security)) return undefined;
+  securityMapSet(staged, identity, retained);
+  return retained === href ? query : { ...query, href: retained };
 }
 
 /**

@@ -152,6 +152,8 @@ export function readExactTypedQueryResponseElement(
     !typedQueryAttributesAreClosed(query.attrs) ||
     countWireElementAttributes(query, 'name') !== 1 ||
     countWireElementAttributes(query, 'key') > 1 ||
+    countWireElementAttributes(query, 'href') > 1 ||
+    countWireElementAttributes(query, 'version') > 1 ||
     countWireElementAttributes(query, 'delta') !== 0
   ) {
     return undefined;
@@ -192,7 +194,13 @@ function typedQueryAttributesAreClosed(source: string): boolean {
   let cursor = 0;
   for (let index = 0; index < attributes.length; index += 1) {
     const attribute = attributes[index];
-    if (attribute === undefined || attribute.start < cursor || attribute.end <= attribute.start) {
+    if (
+      attribute === undefined ||
+      attribute.start < cursor ||
+      attribute.end <= attribute.start ||
+      !attribute.hasValue ||
+      !typedQueryAttributeNameIsAllowed(attribute.name)
+    ) {
       return false;
     }
     for (; cursor < attribute.start; cursor += 1) {
@@ -202,6 +210,33 @@ function typedQueryAttributesAreClosed(source: string): boolean {
   }
   for (; cursor < source.length; cursor += 1) {
     if (!typedQueryEnvelopeWhitespace(source[cursor] ?? '')) return false;
+  }
+  return true;
+}
+
+function typedQueryAttributeNameIsAllowed(value: string): boolean {
+  return (
+    typedQueryAsciiNameEquals(value, 'name') ||
+    typedQueryAsciiNameEquals(value, 'key') ||
+    typedQueryAsciiNameEquals(value, 'href') ||
+    typedQueryAsciiNameEquals(value, 'version')
+  );
+}
+
+function typedQueryAsciiNameEquals(value: string, expected: string): boolean {
+  if (value.length !== expected.length) return false;
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lower = 'abcdefghijklmnopqrstuvwxyz';
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? '';
+    let normalized = character;
+    for (let letter = 0; letter < upper.length; letter += 1) {
+      if (character === upper[letter]) {
+        normalized = lower[letter] ?? character;
+        break;
+      }
+    }
+    if (normalized !== expected[index]) return false;
   }
   return true;
 }

@@ -64,8 +64,8 @@ export interface DocumentLifecycleRecoveryOptions {
   /** Boot-pinned serialization for fetched live-target truth (SPEC §6.6/§8). */
   snapshotElementHtml: (element: Element) => string | undefined;
   targetHeader: () => readonly FrameworkWireEntrySnapshot[];
-  /** Admit exactly one full-value query chunk for the requested structured identity. */
-  typedReadBodyIsExact: (body: string, identity: QueryIdentity) => boolean;
+  /** Admit exactly one decodable full-value query chunk for the requested identity and href. */
+  typedReadBodyIsExact: (body: string, identity: QueryIdentity, expectedUrl: string) => boolean;
   wireKey: (name: string | null, key: string | null) => QueryIdentity | undefined;
 }
 
@@ -305,7 +305,7 @@ export function createDocumentLifecycleRecovery(
             recoverQueryDocument(generation);
             return;
           }
-          if (status === undefined || status >= 400) {
+          if (status !== 200) {
             discardResponseBody(res);
             continue;
           }
@@ -314,9 +314,19 @@ export function createDocumentLifecycleRecovery(
             recoverQueryDocument(generation);
             return;
           }
-          const text = await readResponseText(res);
-          if (!queryGenerationIsCurrent(generation)) return;
-          if (!typedReadBodyIsExact(text, identity)) {
+          let text: string;
+          try {
+            text = await readResponseText(res);
+          } catch {
+            discardResponseBody(res);
+            continue;
+          }
+          if (!queryGenerationIsCurrent(generation)) {
+            discardResponseBody(res);
+            return;
+          }
+          if (!typedReadBodyIsExact(text, identity, u)) {
+            discardResponseBody(res);
             recoverQueryDocument(generation);
             return;
           }
@@ -480,6 +490,7 @@ export function createDocumentLifecycleRecovery(
     })();
   };
   const rememberQueryChunk = (query: { attrs: string; attributes?: readonly unknown[] }) => {
+    if (queryRecoveryTerminal) return;
     try {
       const w = wireKey(readAttribute(query.attrs, 'name'), readAttribute(query.attrs, 'key'));
       if (!w) {
@@ -493,11 +504,13 @@ export function createDocumentLifecycleRecovery(
     }
   };
   const rememberQueryScripts = () => {
+    if (queryRecoveryTerminal) return;
     const scripts = lifecycleSnapshotOwnArray<Element>(
       queryAll(doc, 'script[kovo-query]'),
       'Kovo lifecycle query scripts',
     );
     for (let index = 0; index < scripts.length; index += 1) {
+      if (queryRecoveryTerminal) return;
       const script = scripts[index];
       if (!script) continue;
       try {
@@ -516,6 +529,7 @@ export function createDocumentLifecycleRecovery(
   };
   const visibleReturnRefresh = () => {
     rememberQueryScripts();
+    if (queryRecoveryTerminal) return;
     let remembered: QueryIdentity[];
     try {
       remembered = lifecycleSnapshotQueryIdentities(fqs, 'Kovo lifecycle remembered queries');
@@ -697,6 +711,12 @@ function lifecycleRememberQueryIdentity(values: QueryIdentity[], value: QueryIde
 
 function lifecycleMediaTypeEquals(value: unknown, expected: string): boolean {
   if (typeof value !== 'string') return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === ',' || character === '\r' || character === '\n' || character === '\0') {
+      return false;
+    }
+  }
   let offset = 0;
   while (value[offset] === ' ' || value[offset] === '\t') offset += 1;
   for (let index = 0; index < expected.length; index += 1) {

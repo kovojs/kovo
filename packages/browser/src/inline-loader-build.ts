@@ -1195,14 +1195,27 @@ function installInlineKovoLoader(im) {
   const rememberQueryHref = (identity, href) => {
     if (href === null) return;
     const identityKey = qhrefKey(identity);
-    if (!identityKey || !hsaf(href) || href.length > 65_536) {
+    const current = bns.currentUrl();
+    const parsed = current && hsaf(href) && href.length <= 65_536
+      ? bns.parseUrl(href, current.href)
+      : undefined;
+    if (
+      !identityKey ||
+      !current ||
+      !parsed ||
+      current.origin === 'null' ||
+      parsed.origin !== current.origin ||
+      (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+      parsed.hash !== '' ||
+      bns.indexOf(parsed.pathname, '/_q/') !== 0
+    ) {
       throw new TypeError('Kovo query refetch metadata contains invalid identity or href facts.');
     }
     const existing = bns.getSecurityMapValue(qhrefs, identityKey);
-    if (existing !== undefined && existing !== href) {
+    if (existing !== undefined && existing !== parsed.href) {
       throw new TypeError('Kovo query refetch metadata conflicts for one exact query identity.');
     }
-    bns.setSecurityMapValue(qhrefs, identityKey, href);
+    bns.setSecurityMapValue(qhrefs, identityKey, parsed.href);
   };
   const qurl = (identity) => {
     const identityKey = qhrefKey(identity);
@@ -1528,8 +1541,22 @@ function installInlineKovoLoader(im) {
     reload: recoverDocument,
     snapshotElementHtml: (element) => bns.readElementOuterHtml(element),
     targetHeader: rt,
-    typedReadBodyIsExact: (body, identity) =>
-      readExactTypedQueryResponseElement(body, identity) !== undefined,
+    typedReadBodyIsExact: (body, identity, expectedUrl) => {
+      const element = readExactTypedQueryResponseElement(body, identity);
+      if (!element) return false;
+      const href = readAttribute(element.attrs, 'href');
+      if (href !== null) {
+        const expected = bns.parseUrl(expectedUrl);
+        const parsed = expected && href ? bns.parseUrl(href, expected.href) : undefined;
+        if (!parsed || parsed.href !== expected.href) return false;
+      }
+      try {
+        bns.call(intrinsicJsonParse, intrinsicJson, [unescapeHtml(element.content)]);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     wireKey: qwk,
   });
   const qd = dl.isDeltaQuery;
@@ -1546,9 +1573,11 @@ function installInlineKovoLoader(im) {
     return instance !== null ? component + '\0' + instance : component;
   };
   const aq = (queries, applyQueries) => {
+    if (responseRecoveryTerminal) return;
     for (let index = 0; index < queries.length; index += 1) {
       const q = queries[index];
       if (q) rememberQueryChunk(q);
+      if (responseRecoveryTerminal) return;
     }
     if (applyQueries) {
       const ok = [];

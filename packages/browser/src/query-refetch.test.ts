@@ -590,6 +590,35 @@ describe('query refetch', () => {
     expect(store.get('inventory')).toBeUndefined();
   });
 
+  it.each([201, 204, 299, 302])(
+    'admits typed-read truth only under exact status 200, not %i',
+    async (status) => {
+      const store = createQueryStore();
+      const cancel = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ cancel });
+      const text = vi.fn(async () => '<kovo-query name="cart">{"count":2}</kovo-query>');
+
+      await expect(
+        refetchQueries({
+          fetch: async (url) => ({
+            body,
+            headers: fragmentHeaders(),
+            redirected: false,
+            status,
+            text,
+            url: queryResponseUrl(url),
+          }),
+          queries: ['cart'],
+          queryStore: store,
+        }),
+      ).resolves.toEqual([]);
+
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(text).not.toHaveBeenCalled();
+      expect(store.get('cart')).toBeUndefined();
+    },
+  );
+
   it('terminally recovers when a requested query has no server-emitted href metadata', async () => {
     const store = createQueryStore();
     const onDocumentRecovery = vi.fn();
@@ -687,6 +716,225 @@ describe('query refetch', () => {
         message: expect.stringMatching(/full-query response vocabulary/u),
       }),
     );
+  });
+
+  it('rejects malformed JSON atomically and cancels its remaining response capability', async () => {
+    const store = createQueryStore();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const onDocumentRecovery = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      ...(queryRequestPath(url) === '/_q/cart' ? { body } : {}),
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () =>
+        queryRequestPath(url) === '/_q/reviews'
+          ? '<kovo-query name="reviews">{"total":2}</kovo-query>'
+          : '<kovo-query name="cart">{"count":</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+
+    await expect(
+      refetchQueries({
+        fetch,
+        onDocumentRecovery,
+        queries: ['reviews', 'cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(store.get('reviews')).toBeUndefined();
+  });
+
+  it('latches malformed-JSON recovery before notifying a reentrant error observer', async () => {
+    const store = createQueryStore();
+    const reentrantFetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () => '<kovo-query name="inventory">{"available":true}</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+    let reentrant: Promise<unknown> | undefined;
+    const onError = vi.fn(() => {
+      reentrant ??= refetchQueries({
+        fetch: reentrantFetch,
+        queries: ['inventory'],
+        queryStore: store,
+      });
+    });
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () =>
+        queryRequestPath(url) === '/_q/reviews'
+          ? '<kovo-query name="reviews">{"total":2}</kovo-query>'
+          : '<kovo-query name="cart">{"count":</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+
+    await expect(
+      refetchQueries({
+        fetch,
+        onError,
+        queries: ['reviews', 'cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+    await reentrant;
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(reentrantFetch).not.toHaveBeenCalled();
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('inventory')).toBeUndefined();
+  });
+
+  it('rejects a typed-read body href that does not name the exact fetched endpoint', async () => {
+    const store = createQueryStore();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const onDocumentRecovery = vi.fn();
+
+    await expect(
+      refetchQueries({
+        fetch: async (url) => ({
+          body,
+          headers: fragmentHeaders(),
+          redirected: false,
+          status: 200,
+          text: async () => '<kovo-query name="cart" href="/_q/inventory">{"count":2}</kovo-query>',
+          url: queryResponseUrl(url),
+        }),
+        onDocumentRecovery,
+        queries: ['cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(store.get('cart')).toBeUndefined();
+  });
+
+  it('accepts an absolute response href equivalent to the retained relative href', async () => {
+    const store = createQueryStore();
+
+    await expect(
+      refetchQueries({
+        fetch: async (url) => ({
+          headers: fragmentHeaders(),
+          redirected: false,
+          status: 200,
+          text: async () =>
+            `<kovo-query name="cart" href="${queryResponseUrl('/_q/cart')}">{"count":2}</kovo-query>`,
+          url: queryResponseUrl(url),
+        }),
+        queries: ['cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([{ fragments: [], queries: [{ name: 'cart' }] }]);
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+  });
+
+  it('rejects custom-URL metadata conflict before any query in the batch applies', async () => {
+    const store = createQueryStore();
+    const onDocumentRecovery = vi.fn();
+    const onError = vi.fn();
+    const fetch = vi.fn(async (url: string) => {
+      const path = queryRequestPath(url);
+      return {
+        headers: fragmentHeaders(),
+        redirected: false,
+        status: 200,
+        text: async () =>
+          path === '/_q/reviews'
+            ? '<kovo-query name="reviews" href="/_q/reviews">{"total":2}</kovo-query>'
+            : '<kovo-query name="cart" href="/_q/cart?view=alternate">{"count":2}</kovo-query>',
+        url: queryResponseUrl(url),
+      };
+    });
+
+    await expect(
+      refetchQueries({
+        fetch,
+        onDocumentRecovery,
+        onError,
+        queries: ['reviews', 'cart'],
+        queryStore: store,
+        urlForQuery: (query) => (query.name === 'cart' ? '/_q/cart?view=alternate' : '/_q/reviews'),
+      }),
+    ).resolves.toEqual([]);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringMatching(/conflicting typed-read/u) }),
+    );
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('cart')).toBeUndefined();
+  });
+
+  it('cancels an unread typed-read body when its text reader fails', async () => {
+    const store = createQueryStore();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const readError = new Error('response text reader failed before consumption');
+    const onError = vi.fn();
+
+    await expect(
+      refetchQueries({
+        fetch: async (url) => ({
+          body,
+          headers: fragmentHeaders(),
+          redirected: false,
+          status: 200,
+          text() {
+            throw readError;
+          },
+          url: queryResponseUrl(url),
+        }),
+        onError,
+        queries: ['cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(readError);
+    expect(store.get('cart')).toBeUndefined();
+  });
+
+  it('rejects a comma-combined typed-read media field before body access', async () => {
+    const store = createQueryStore();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const onDocumentRecovery = vi.fn();
+    const text = vi.fn(async () => '<kovo-query name="cart">{"count":2}</kovo-query>');
+
+    await expect(
+      refetchQueries({
+        fetch: async (url) => ({
+          body,
+          headers: fragmentHeaders(undefined, 'text/html; charset=utf-8, application/json'),
+          redirected: false,
+          status: 200,
+          text,
+          url: queryResponseUrl(url),
+        }),
+        onDocumentRecovery,
+        queries: ['cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(text).not.toHaveBeenCalled();
   });
 
   it('latches atomic document recovery before notifying a throwing invalid-body observer', async () => {

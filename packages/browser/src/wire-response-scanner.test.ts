@@ -62,6 +62,29 @@ describe('wire response scanner', () => {
     }
   });
 
+  it('rejects non-endpoint attributes and HTML-tokenizer differential spellings', () => {
+    const rejected = [
+      '<kovo-query name="cart"\0>{"count":2}</kovo-query>',
+      '<kovo-query name="cart" data-ignored="x">{"count":2}</kovo-query>',
+      '<kovo-query name="cart" settles="idem-1">{"count":2}</kovo-query>',
+      '<kovo-query name="cart" href="/_q/cart" HREF="/_q/other">{"count":2}</kovo-query>',
+      '<kovo-query name="cart" version="1" VERSION="2">{"count":2}</kovo-query>',
+      '<kovo-query name="cart" /NAME="cart">{"count":2}</kovo-query>',
+      '<kovo-query name="cart">{"count":2}</kovo-query data-ignored>',
+      '<kovo-query name="cart">{"x":"</kovo-query>"}</kovo-query>',
+    ];
+
+    for (const body of rejected) {
+      expect(readExactTypedQueryResponseElement(body, { name: 'cart' })).toBeUndefined();
+    }
+    expect(
+      readExactTypedQueryResponseElement(
+        '<KOVO-QUERY NAME="cart" HREF="/_q/cart" VERSION="1">{"count":2}</KOVO-QUERY>',
+        { name: 'cart' },
+      ),
+    ).toBeDefined();
+  });
+
   it('keeps low-level HTML scanner helpers behind the chunk-reader surface', async () => {
     const scannerModule = await import('./wire-response-scanner.js');
 

@@ -763,6 +763,92 @@ it('keeps generated query and live-target recovery on the captured response tran
   expect(attackFetch).not.toHaveBeenCalled();
 });
 
+it('rejects malformed generated typed-read JSON before dispatching an earlier batch body', async () => {
+  const harness = await createFrame(
+    [
+      '<script type="application/json" kovo-query="cart" data-kovo-query-href="/_q/cart">{"count":1}</script>',
+      '<script type="application/json" kovo-query="private" data-kovo-query-href="/_q/private">{"secret":false}</script>',
+    ].join(''),
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const origin = harness.window.location.origin;
+  const fetch = vi.fn(async (input: string) => ({
+    headers: responseHeaders('build-a', 'text/html; charset=utf-8'),
+    redirected: false,
+    status: 200,
+    async text() {
+      return input.endsWith('/_q/cart')
+        ? '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>'
+        : '<kovo-query name="private" href="/_q/private">{"secret":</kovo-query>';
+    },
+    url: input,
+  }));
+  (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+  let queryEvents = 0;
+  harness.window.addEventListener('kovo:query', () => {
+    queryEvents += 1;
+  });
+
+  await installGeneratedInlineLoader(harness.window);
+  harness.window.dispatchEvent(new harness.window.Event('visibilitychange'));
+
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(fetch.mock.calls.map(([input]) => input)).toEqual([
+    `${origin}/_q/cart`,
+    `${origin}/_q/private`,
+  ]);
+  await expectHardReload(harness);
+  expect(queryEvents).toBe(0);
+});
+
+it('treats equivalent relative and absolute generated query hrefs as one authority', async () => {
+  const harness = await createFrame(
+    '<script type="application/json" kovo-query="cart" data-kovo-query-href="/_q/cart">{"count":1}</script>',
+    '<meta name="kovo-build" content="build-a">',
+  );
+  const absoluteHref = `${harness.window.location.origin}/_q/cart`;
+  const fetch = vi.fn(async (input: string) => ({
+    headers: responseHeaders('build-a', 'text/html; charset=utf-8'),
+    redirected: false,
+    status: 200,
+    async text() {
+      return `<kovo-query name="cart" href="${absoluteHref}">{"count":2}</kovo-query>`;
+    },
+    url: input,
+  }));
+  (harness.window as unknown as Record<string, unknown>).fetch = fetch;
+  let queryEvents = 0;
+  harness.window.addEventListener('kovo:query', () => {
+    queryEvents += 1;
+  });
+
+  await installGeneratedInlineLoader(harness.window);
+  harness.window.dispatchEvent(new harness.window.Event('visibilitychange'));
+
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(queryEvents).toBe(1));
+  expect(harness.loadCount()).toBe(1);
+});
+
+it('does not dispatch a query carrier after conflicting metadata retires the generated realm', async () => {
+  const harness = await createFrame(
+    '<script type="application/json" kovo-query="cart" data-kovo-query-href="/_q/cart">{"count":1}</script>',
+    '<meta name="kovo-build" content="build-a">',
+  );
+  let queryEvents = 0;
+  harness.window.addEventListener('kovo:query', () => {
+    queryEvents += 1;
+  });
+  await installGeneratedInlineLoader(harness.window);
+  const apply = (harness.window as unknown as Record<string, unknown>).__kovo_a;
+  if (typeof apply !== 'function') throw new Error('generated query apply is unavailable');
+
+  apply('<kovo-query name="cart" href="/_q/other">{"count":2}</kovo-query>', 'build-a');
+
+  await expectHardReload(harness);
+  expect(queryEvents).toBe(0);
+});
+
 it('retires the old channel when mutable session meta is forged to match the next document', async () => {
   const harness = await createFrame(
     [
