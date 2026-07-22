@@ -222,6 +222,19 @@ export async function refetchQueries(
     | 'invalid-response'
     | 'missing-href'
     | undefined;
+  let terminalRecoveryLatched = false;
+  const selectInvalidResponseRecovery = (error: unknown): void => {
+    // Recovery selection is framework authority. An app/runtime diagnostic observer may throw,
+    // but it cannot prevent the batch from latching terminal recovery before any earlier decoded
+    // query becomes browser truth (SPEC §9.4/§14).
+    terminalRecovery = 'invalid-response';
+    if (!terminalRecoveryLatched) {
+      terminalRecoveryLatched = latchQueryRecovery(options.queryStore, recoveryGeneration);
+    }
+    try {
+      reportRuntimeError(onError, error);
+    } catch {}
+  };
 
   for (let index = 0; terminalRecovery === undefined && index < queryNames.length; index += 1) {
     if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
@@ -261,17 +274,18 @@ export async function refetchQueries(
           redirect: 'error',
         },
       )) as QueryRefetchResponse;
-      if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
+      if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) {
+        discardQueryResponseBody(response, queryRefetchSecurity);
+        return [];
+      }
 
       // SPEC §9.4/§14: response headers gain recovery authority only at the exact typed-read URL.
       // A readable redirect must not forge a build-skew reload or become query truth.
       if (!queryResponseUrlIsAdmitted(response, request.expectedUrl, queryRefetchSecurity)) {
         discardQueryResponseBody(response, queryRefetchSecurity);
-        reportRuntimeError(
-          onError,
+        selectInvalidResponseRecovery(
           new TypeError('Kovo refused a redirected or malformed typed-read response.'),
         );
-        terminalRecovery = 'invalid-response';
         continue;
       }
 
@@ -290,11 +304,9 @@ export async function refetchQueries(
       const expectedMediaType = markedBuildSkew ? 'text/vnd.kovo.fragment+html' : 'text/html';
       if (!queryResponseEnvelopeHasMediaType(response, expectedMediaType, queryRefetchSecurity)) {
         discardQueryResponseBody(response, queryRefetchSecurity);
-        reportRuntimeError(
-          onError,
+        selectInvalidResponseRecovery(
           new TypeError('Kovo refused an attachment or malformed typed-read response.'),
         );
-        terminalRecovery = 'invalid-response';
         continue;
       }
 
@@ -317,17 +329,25 @@ export async function refetchQueries(
         const responseBody = await queryRefetchSecurity.readResponseTextOptionalSync(response);
         if (!queryRecoveryGenerationIsCurrent(options.queryStore, recoveryGeneration)) return [];
         const responseElement = readExactTypedQueryResponseElement(responseBody, query);
-        const responseQuery = responseElement
-          ? readQueryElementChunk(responseElement, onError)
-          : undefined;
+        let responseQuery: QueryChunk | undefined;
+        try {
+          responseQuery = responseElement
+            ? readQueryElementChunk(responseElement, (error) => {
+                try {
+                  reportRuntimeError(onError, error);
+                } catch {}
+              })
+            : undefined;
+        } catch (error) {
+          selectInvalidResponseRecovery(error);
+          continue;
+        }
         if (!responseQuery || responseQuery.delta === true) {
-          reportRuntimeError(
-            onError,
+          selectInvalidResponseRecovery(
             new TypeError(
               'Kovo refused typed-read truth outside the exact full-query response vocabulary.',
             ),
           );
-          terminalRecovery = 'invalid-response';
           continue;
         }
         securityArrayAppend(
@@ -345,7 +365,7 @@ export async function refetchQueries(
   }
 
   if (terminalRecovery !== undefined) {
-    if (latchQueryRecovery(options.queryStore, recoveryGeneration)) {
+    if (terminalRecoveryLatched || latchQueryRecovery(options.queryStore, recoveryGeneration)) {
       try {
         if (terminalRecovery === 'build-skew') onBuildSkew();
         else if (terminalRecovery === 'auth-denied') onAuthDenied();

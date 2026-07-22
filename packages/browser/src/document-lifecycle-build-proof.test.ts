@@ -180,6 +180,28 @@ describe('document lifecycle build proof (SPEC §9.1.1/§14)', () => {
     expect(applied).toEqual([]);
   });
 
+  it('discards an older unread typed-read body after another refresh selects terminal recovery', async () => {
+    let releaseResponse: ((response: unknown) => void) | undefined;
+    const pendingResponse = new Promise<unknown>((resolve) => {
+      releaseResponse = resolve;
+    });
+    const discardResponseBody = vi.fn();
+    const { options, reload } = recoveryOptions({
+      discardResponseBody,
+      fetchValue: () => pendingResponse,
+      queryUrl: () => '/_q/cart',
+    });
+    const lifecycle = createDocumentLifecycleRecovery(options);
+
+    lifecycle.refreshQuery('cart');
+    lifecycle.refreshQuery({ attrs: '' });
+    expect(reload).toHaveBeenCalledOnce();
+
+    const response = { body: new ReadableStream<Uint8Array>() };
+    releaseResponse?.(response);
+    await vi.waitFor(() => expect(discardResponseBody).toHaveBeenCalledWith(response));
+  });
+
   it('stamps query refresh and reloads on a 409 build mismatch before reading the body', async () => {
     const fetchValue = vi.fn(async () => ({ status: 409 }));
     const readResponseText = vi.fn(async () => '<kovo-query name="cart">{}</kovo-query>');

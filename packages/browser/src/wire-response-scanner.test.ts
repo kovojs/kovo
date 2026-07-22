@@ -5,6 +5,7 @@ import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 import {
   readElementChunks,
+  readExactTypedQueryResponseElement,
   readFragmentChunksFromElements,
   readInlineMutationResponseBodyChunks,
   readMutationResponseBodyCore,
@@ -45,6 +46,22 @@ function bodySnapshot(chunks: InlineMutationResponseBodyChunks): {
 }
 
 describe('wire response scanner', () => {
+  it('admits only an exact typed-query envelope, not query-looking bytes in raw-text markup', () => {
+    const query = '<kovo-query name="cart">{"count":2}</kovo-query>';
+
+    expect(readExactTypedQueryResponseElement(`\n\t${query}\r\n`, { name: 'cart' })).toBeDefined();
+    for (const body of [
+      `prefix${query}`,
+      `${query}suffix`,
+      `<script type="application/json">${query}</script>`,
+      `<textarea>${query}</textarea>`,
+      `<!--${query}-->`,
+      `</kovo-query>${query}`,
+    ]) {
+      expect(readExactTypedQueryResponseElement(body, { name: 'cart' })).toBeUndefined();
+    }
+  });
+
   it('keeps low-level HTML scanner helpers behind the chunk-reader surface', async () => {
     const scannerModule = await import('./wire-response-scanner.js');
 

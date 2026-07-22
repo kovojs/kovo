@@ -570,7 +570,18 @@ describe('browser inline loader response apply', () => {
       '<script type="application/json" kovo-query="group:catalog" data-kovo-query-href="/_q/group%3Acatalog">{}</script>',
       '<script type="application/json" kovo-query="cart" key="cart:" data-kovo-query-href="/_q/cart?key=">{}</script>',
     ].join('');
-    const fetch = vi.fn(async (url: string) => exactQueryResponse('', url));
+    const fetch = vi.fn(async (url: string) => {
+      const request = new URL(url, location.href);
+      const body =
+        request.pathname === '/_q/product'
+          ? '<kovo-query name="product" key="product:p1">{}</kovo-query>'
+          : request.pathname === '/_q/productDetail'
+            ? '<kovo-query name="productDetail" key="inventory:p1">{}</kovo-query>'
+            : request.pathname === '/_q/group%3Acatalog'
+              ? '<kovo-query name="group:catalog">{}</kovo-query>'
+              : '<kovo-query name="cart" key="cart:">{}</kovo-query>';
+      return exactQueryResponse(body, url);
+    });
     vi.stubGlobal('fetch', fetch);
 
     installTestInlineKovoLoader(async () => ({}));

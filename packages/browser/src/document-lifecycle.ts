@@ -260,7 +260,10 @@ export function createDocumentLifecycleRecovery(
             method: 'GET',
             redirect: 'error',
           });
-          if (!queryGenerationIsCurrent(generation)) return;
+          if (!queryGenerationIsCurrent(generation)) {
+            discardResponseBody(res);
+            return;
+          }
           if (!responseUrlIsExact(res, u)) {
             discardResponseBody(res);
             recoverQueryDocument(generation);

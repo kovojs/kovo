@@ -49,6 +49,12 @@ describe('inline loader parser parity', () => {
     expect(inlineWireParserReadableSource).toContain(
       'function readInlineMutationResponseBodyChunks(',
     );
+    expect(inlineWireParserReadableSource).toContain(
+      'function readExactTypedQueryResponseElement(',
+    );
+    expect(inlineWireParserReadableSource).toContain('function typedQueryAttributesAreClosed(');
+    expect(inlineWireParserReadableSource).toContain('function typedQueryClosingTagIsClosed(');
+    expect(inlineWireParserReadableSource).toContain('function typedQueryEnvelopeOccupiesBody(');
     expect(inlineWireParserReadableSource).toContain('function readMutationResponseElementChunks(');
     expect(inlineWireParserReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableParser);

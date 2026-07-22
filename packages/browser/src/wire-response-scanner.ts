@@ -3,6 +3,7 @@ import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 import { readAttribute } from './wire-html.js';
 import {
   countWireElementAttributes,
+  readWireAttributes,
   readWireElementAttribute,
   readWireElementTokens,
   type WireAttribute,
@@ -146,6 +147,9 @@ export function readExactTypedQueryResponseElement(
   const query = chunks.queries[0];
   if (
     query === undefined ||
+    !typedQueryEnvelopeOccupiesBody(body, query) ||
+    !typedQueryClosingTagIsClosed(body, query) ||
+    !typedQueryAttributesAreClosed(query.attrs) ||
     countWireElementAttributes(query, 'name') !== 1 ||
     countWireElementAttributes(query, 'key') > 1 ||
     countWireElementAttributes(query, 'delta') !== 0
@@ -163,6 +167,62 @@ export function readExactTypedQueryResponseElement(
     return undefined;
   }
   return query;
+}
+
+function typedQueryClosingTagIsClosed(body: string, query: ElementChunk): boolean {
+  if (query.end <= query.start || body[query.end - 1] !== '>') return false;
+  let closeStart = query.end - 2;
+  while (closeStart > query.start && body[closeStart] !== '<') closeStart -= 1;
+  if (body[closeStart] !== '<' || body[closeStart + 1] !== '/') return false;
+
+  const lower = 'kovo-query';
+  const upper = 'KOVO-QUERY';
+  let cursor = closeStart + 2;
+  for (let index = 0; index < lower.length; index += 1) {
+    const character = body[cursor + index];
+    if (character !== lower[index] && character !== upper[index]) return false;
+  }
+  cursor += lower.length;
+  while (cursor < query.end - 1 && typedQueryEnvelopeWhitespace(body[cursor] ?? '')) cursor += 1;
+  return cursor === query.end - 1;
+}
+
+function typedQueryAttributesAreClosed(source: string): boolean {
+  const attributes = readWireAttributes(source);
+  let cursor = 0;
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index];
+    if (attribute === undefined || attribute.start < cursor || attribute.end <= attribute.start) {
+      return false;
+    }
+    for (; cursor < attribute.start; cursor += 1) {
+      if (!typedQueryEnvelopeWhitespace(source[cursor] ?? '')) return false;
+    }
+    cursor = attribute.end;
+  }
+  for (; cursor < source.length; cursor += 1) {
+    if (!typedQueryEnvelopeWhitespace(source[cursor] ?? '')) return false;
+  }
+  return true;
+}
+
+function typedQueryEnvelopeOccupiesBody(body: string, query: ElementChunk): boolean {
+  // The query scanner deliberately searches mutation bodies for interleaved wire chunks. A
+  // typed-read body is a narrower carrier: its one query element must be the whole envelope.
+  // Otherwise query-looking bytes inside <script>/raw text, comments, or unknown wrappers would
+  // be promoted to query authority even though those bytes are not a top-level query response
+  // (SPEC §9.4).
+  for (let index = 0; index < query.start; index += 1) {
+    if (!typedQueryEnvelopeWhitespace(body[index] ?? '')) return false;
+  }
+  for (let index = query.end; index < body.length; index += 1) {
+    if (!typedQueryEnvelopeWhitespace(body[index] ?? '')) return false;
+  }
+  return true;
+}
+
+function typedQueryEnvelopeWhitespace(value: string): boolean {
+  return value === ' ' || value === '\n' || value === '\r' || value === '\t' || value === '\f';
 }
 
 function readFragmentElementChunk(

@@ -689,6 +689,53 @@ describe('query refetch', () => {
     );
   });
 
+  it('latches atomic document recovery before notifying a throwing invalid-body observer', async () => {
+    const store = createQueryStore();
+    const observerError = new Error('runtime observer threw');
+    const reentrantFetch = vi.fn(async () => {
+      throw new Error('invalid-body observer reentered typed-read transport');
+    });
+    const onError = vi.fn(() => {
+      void refetchQueries({
+        fetch: reentrantFetch,
+        queries: ['reviews'],
+        queryStore: store,
+      });
+      throw observerError;
+    });
+    const onDocumentRecovery = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      headers: fragmentHeaders(),
+      redirected: false,
+      status: 200,
+      text: async () =>
+        queryRequestPath(url) === '/_q/reviews'
+          ? '<kovo-query name="reviews">{"total":2}</kovo-query>'
+          : 'prefix<kovo-query name="cart">{"count":2}</kovo-query>',
+      url: queryResponseUrl(url),
+    }));
+
+    await expect(
+      refetchQueries({
+        fetch,
+        onDocumentRecovery,
+        onError,
+        queries: ['reviews', 'cart'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(reentrantFetch).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalled();
+    expect(onDocumentRecovery).toHaveBeenCalledOnce();
+    expect(store.get('reviews')).toBeUndefined();
+    await expect(
+      refetchQueries({ fetch, queries: ['reviews'], queryStore: store }),
+    ).resolves.toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     [
       'fragment vocabulary',
@@ -701,14 +748,36 @@ describe('query refetch', () => {
         '<kovo-text target="cart">BAD</kovo-text>',
     ],
     ['delta vocabulary', '<kovo-query name="cart" delta>{"set":{"count":2}}</kovo-query>'],
+    [
+      'malformed slash-prefixed delta spelling',
+      '<kovo-query name="cart" /delta>{"set":{"count":2}}</kovo-query>',
+    ],
     ['foreign identity', '<kovo-query name="inventory">{"available":true}</kovo-query>'],
     [
       'duplicate identity attributes',
       '<kovo-query name="cart" NAME="inventory">{"count":2}</kovo-query>',
     ],
     [
+      'malformed slash-prefixed duplicate identity',
+      '<kovo-query name="cart" /NAME="inventory">{"count":2}</kovo-query>',
+    ],
+    [
       'malformed recognized vocabulary',
       '<kovo-fragment target="cart"><kovo-query name="cart">{"count":2}</kovo-query>',
+    ],
+    [
+      'malformed query closing-tag attributes',
+      '<kovo-query name="cart">{"count":2}</kovo-query data-ignored>',
+    ],
+    [
+      'query-looking bytes inside script raw text',
+      '<script type="application/json">' +
+        '<kovo-query name="cart">{"count":2}</kovo-query>' +
+        '</script>',
+    ],
+    [
+      'raw text outside the query envelope',
+      'prefix<kovo-query name="cart">{"count":2}</kovo-query>suffix',
     ],
   ])('rejects %s on the closed typed-read body carrier', async (_label, body) => {
     const store = createQueryStore();
@@ -1111,6 +1180,8 @@ describe('query refetch', () => {
 
   it('prevents an older in-flight refetch from applying after another batch selects denial', async () => {
     const store = createQueryStore();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
     let releaseOlder: ((response: unknown) => void) | undefined;
     const olderResponse = new Promise<unknown>((resolve) => {
       releaseOlder = resolve;
@@ -1144,6 +1215,7 @@ describe('query refetch', () => {
     });
 
     releaseOlder?.({
+      body,
       headers: fragmentHeaders(),
       redirected: false,
       status: 200,
@@ -1153,6 +1225,7 @@ describe('query refetch', () => {
     await older;
 
     expect(onAuthDenied).toHaveBeenCalledOnce();
+    expect(cancel).toHaveBeenCalledOnce();
     expect(store.get('race-older')).toBeUndefined();
   });
 
