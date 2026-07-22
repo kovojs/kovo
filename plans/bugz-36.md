@@ -325,6 +325,12 @@ trusted the expected identity supplied by the same subject.
     grammar rotation, and that old/current grammars never use heuristic dual decoding. HMR fact
     hashes remain dev-only and Git SHAs remain evidence references. None of these public
     compatibility/cache identities are authentication or authorization.
+    Production must additionally prove a retention-capable artifact/app-snapshot store for the
+    SPEC §14 prior-build window or fail boot with KV417; an in-process memory map and rejection of a
+    count-based eviction option do not prove restart/replica retention. A deployment without the
+    exact retained decoder may return the typed skew outcome, but it may not advertise year-immutable
+    module URLs that disappear on restart. Remove the currently unused HMR `oldFactHash` carrier
+    unless it becomes an input to an explicit closed verdict.
 
 - [ ] **M15 — Typed-read refetch trusted foreign final responses as query truth.**
   - The modular and inline lifecycle `/_q/` refetch paths validated fragment media and a public
