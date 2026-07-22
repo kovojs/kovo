@@ -112,6 +112,65 @@ export const CartButton = component({
     }
   });
 
+  it('passes the compiler exact final client-module snapshot to Vite dev dispatch', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-client-snapshot-'));
+    const appSource = `
+import { createApp } from '@kovojs/server';
+export default createApp();
+`;
+    const componentSource = `
+import { component } from '@kovojs/core';
+export const SnapshotButton = component({
+  render: () => <button onClick={() => null}>Snapshot</button>,
+});
+`;
+    let clientModules:
+      | (() => readonly {
+          path: string;
+          renderPlanFingerprint?: string;
+          source: string;
+        }[])
+      | undefined;
+
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(join(root, 'src/app-shell.tsx'), appSource, 'utf8');
+      const plugin = kovo({ app: '/src/app-shell.tsx' }) as unknown as KovoViteConfigureServer;
+      await plugin.configResolved?.({ command: 'serve', root });
+      await plugin.configureServer({
+        config: { root },
+        middlewares: { use() {} },
+        async ssrLoadModule(id) {
+          expect(id).toBe('@kovojs/server/internal/app-shell-vite');
+          return {
+            createKovoAppShellViteDevIntegration(options: {
+              clientModules?: typeof clientModules;
+            }) {
+              clientModules = options.clientModules;
+              return {
+                onModuleDiagnostics() {},
+                plugin: { configureServer() {} },
+              };
+            },
+          };
+        },
+      });
+
+      expect(clientModules?.()).toEqual([]);
+      await plugin.transform?.(componentSource, join(root, 'src/snapshot-button.tsx'));
+
+      expect(clientModules?.()).toEqual([
+        expect.objectContaining({
+          path: '/c/src/snapshot-button.client.js',
+          renderPlanFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/u),
+          source: expect.stringContaining('SnapshotButton$button_click'),
+        }),
+      ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('threads project-proven stock Better Auth mutation forms through dev transforms', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-dev-auth-forms-'));
     const runtimeSource = `

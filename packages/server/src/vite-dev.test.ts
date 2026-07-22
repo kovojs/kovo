@@ -4,13 +4,22 @@ import type { AddressInfo, Socket } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 
 import { publicAccess } from './access.js';
 import { createApp, createRequestHandler } from './app.js';
 import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import {
+  computeRenderPlanFingerprint,
+  createMemoryVersionedClientModuleRegistry,
+  createMemoryVersionedClientModuleStore,
+  versionedClientModuleHref,
+  type VersionedClientModuleActiveSnapshot,
+  type VersionedClientModuleInput,
+  type VersionedClientModuleStore,
+} from './client-modules.js';
 import { endpoint } from './endpoint.js';
 import { guard, resolveLifecycleRequest } from './guards.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
@@ -28,6 +37,7 @@ import {
   kovoAppShellViteDevPlugin,
   renderKovoAppShellViteDevDiagnosticResponse,
   type KovoAppShellViteMiddleware,
+  type KovoAppShellViteDevPluginOptions,
   shouldHandleKovoAppShellViteRequest,
 } from './vite-dev.js';
 import { renderedHtml } from './html.js';
@@ -433,6 +443,228 @@ describe('server app shell Vite dev seam', () => {
     await expect(invoke()).rejects.toThrow(
       '/src/app-shell.ts must export default as a Kovo app for Vite dev.',
     );
+  });
+
+  it('atomically replaces changed compiler snapshots once and retains removed representations', async () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    const replaceActiveSnapshot = vi.fn((snapshot: VersionedClientModuleActiveSnapshot) =>
+      backing.replaceActiveSnapshot(snapshot),
+    );
+    const store: VersionedClientModuleStore = {
+      readActiveSnapshot: () => backing.readActiveSnapshot(),
+      replaceActiveSnapshot,
+      retain: (module) => backing.retain(module),
+      resolve: (href) => backing.resolve(href),
+    };
+    const app = createApp({ clientModules: store });
+    const stable = {
+      path: '/c/manual.client.js',
+      source: 'export const manual = true;',
+    };
+    app.clientModules.put(stable);
+    const firstFingerprint = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    const secondFingerprint = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+    const first = {
+      path: '/c/cart.client.js',
+      renderPlanFingerprint: firstFingerprint,
+      source: 'export const generation = 1;',
+    };
+    const removed = {
+      path: '/c/removed.client.js',
+      renderPlanFingerprint: firstFingerprint,
+      source: 'export const removed = true;',
+    };
+    let compilerModules = [first, removed];
+    const clientModules = vi.fn(() =>
+      compilerModules.map((module) => ({
+        ...module,
+      })),
+    );
+
+    await dispatchViteDevSnapshot(app, clientModules);
+    const firstToken = app.clientModules.buildToken();
+    const removedHref = viteDevClientHref(removed);
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledOnce();
+    expect(new Set(app.clientModules.entries().map((module) => module.path))).toEqual(
+      new Set([
+        '/c/cart.client.js',
+        '/c/manual.client.js',
+        '/c/removed.client.js',
+        '/c/kovo-runtime.client.js',
+      ]),
+    );
+
+    await dispatchViteDevSnapshot(app, clientModules);
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledOnce();
+    expect(app.clientModules.buildToken()).toBe(firstToken);
+
+    compilerModules = [first];
+    await dispatchViteDevSnapshot(app, clientModules);
+    const removalToken = app.clientModules.buildToken();
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledTimes(2);
+    expect(removalToken).not.toBe(firstToken);
+    expect(app.clientModules.resolve(removedHref)).toMatchObject({
+      body: removed.source,
+      status: 200,
+    });
+    expect(app.clientModules.entries()).toContainEqual(stable);
+
+    compilerModules = [{ ...first, renderPlanFingerprint: secondFingerprint }];
+    await dispatchViteDevSnapshot(app, clientModules);
+    const fingerprintToken = app.clientModules.buildToken();
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledTimes(3);
+    expect(fingerprintToken).not.toBe(removalToken);
+
+    compilerModules = [
+      {
+        ...first,
+        renderPlanFingerprint: secondFingerprint,
+        source: 'export const generation = 2;',
+      },
+    ];
+    await dispatchViteDevSnapshot(app, clientModules);
+    const representationToken = app.clientModules.buildToken();
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledTimes(4);
+    expect(representationToken).not.toBe(fingerprintToken);
+    expect(
+      app.clientModules
+        .entries()
+        .filter(
+          (module) =>
+            module.path !== '/c/kovo-runtime.client.js' && module.path !== '/c/manual.client.js',
+        ),
+    ).toEqual([
+      {
+        path: '/c/cart.client.js',
+        source: 'export const generation = 2;',
+      },
+    ]);
+
+    await dispatchViteDevSnapshot(app, clientModules);
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledTimes(4);
+    expect(clientModules).toHaveBeenCalledTimes(6);
+  });
+
+  it('publishes a new module-less app with the framework render-plan fingerprint', async () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    const replaceActiveSnapshot = vi.fn((snapshot: VersionedClientModuleActiveSnapshot) =>
+      backing.replaceActiveSnapshot(snapshot),
+    );
+    const app = createApp({
+      clientModules: {
+        readActiveSnapshot: () => backing.readActiveSnapshot(),
+        replaceActiveSnapshot,
+        retain: (module) => backing.retain(module),
+        resolve: (href) => backing.resolve(href),
+      },
+    });
+    const clientModules = vi.fn(() => []);
+
+    await dispatchViteDevSnapshot(app, clientModules);
+    await dispatchViteDevSnapshot(app, clientModules);
+
+    expect(replaceActiveSnapshot).toHaveBeenCalledOnce();
+    expect(backing.readActiveSnapshot().renderPlanFingerprint).toBe(
+      computeRenderPlanFingerprint({}),
+    );
+    expect(app.clientModules.buildToken()).toMatch(/^[0-9a-f]{64}$/u);
+  });
+
+  it('rejects missing and mixed compiler render-plan fingerprints before publication', async () => {
+    const missingBacking = createMemoryVersionedClientModuleStore();
+    const missingReplace = vi.fn((snapshot: VersionedClientModuleActiveSnapshot) =>
+      missingBacking.replaceActiveSnapshot(snapshot),
+    );
+    const missingApp = createApp({
+      clientModules: {
+        readActiveSnapshot: () => missingBacking.readActiveSnapshot(),
+        replaceActiveSnapshot: missingReplace,
+        retain: (module) => missingBacking.retain(module),
+        resolve: (href) => missingBacking.resolve(href),
+      },
+    });
+
+    await expect(
+      dispatchViteDevSnapshot(missingApp, () => [
+        { path: '/c/missing.client.js', source: 'export {};' },
+      ]),
+    ).rejects.toThrow(/missing renderPlanFingerprint.*SPEC §5\.2\.1/);
+    expect(missingReplace).not.toHaveBeenCalled();
+
+    const mixedBacking = createMemoryVersionedClientModuleStore();
+    const mixedReplace = vi.fn((snapshot: VersionedClientModuleActiveSnapshot) =>
+      mixedBacking.replaceActiveSnapshot(snapshot),
+    );
+    const mixedApp = createApp({
+      clientModules: {
+        readActiveSnapshot: () => mixedBacking.readActiveSnapshot(),
+        replaceActiveSnapshot: mixedReplace,
+        retain: (module) => mixedBacking.retain(module),
+        resolve: (href) => mixedBacking.resolve(href),
+      },
+    });
+
+    await expect(
+      dispatchViteDevSnapshot(mixedApp, () => [
+        {
+          path: '/c/one.client.js',
+          renderPlanFingerprint: computeRenderPlanFingerprint({ one: 'field:id' }),
+          source: 'export const one = 1;',
+        },
+        {
+          path: '/c/two.client.js',
+          renderPlanFingerprint: computeRenderPlanFingerprint({ two: 'field:id' }),
+          source: 'export const two = 2;',
+        },
+      ]),
+    ).rejects.toThrow(/one coherent renderPlanFingerprint.*SPEC §5\.2\.1/);
+    expect(mixedReplace).not.toHaveBeenCalled();
+  });
+
+  it('permanently closes one app graph after a failed dev snapshot publication', async () => {
+    const backing = createMemoryVersionedClientModuleStore();
+    let rejectCompilerModule = true;
+    const retain = vi.fn((module: VersionedClientModuleInput) => {
+      if (rejectCompilerModule && module.path === '/c/rejected.client.js') {
+        throw new Error('retention backend unavailable');
+      }
+      backing.retain(module);
+    });
+    const replaceActiveSnapshot = vi.fn((snapshot: VersionedClientModuleActiveSnapshot) =>
+      backing.replaceActiveSnapshot(snapshot),
+    );
+    const app = createApp({
+      clientModules: {
+        readActiveSnapshot: () => backing.readActiveSnapshot(),
+        replaceActiveSnapshot,
+        retain,
+        resolve: (href) => backing.resolve(href),
+      },
+    });
+    const clientModules = vi.fn(() => [
+      {
+        path: '/c/rejected.client.js',
+        renderPlanFingerprint: computeRenderPlanFingerprint({ rejected: 'field:id' }),
+        source: 'export const rejected = true;',
+      },
+    ]);
+
+    await expect(dispatchViteDevSnapshot(app, clientModules)).rejects.toThrow(
+      /KV417: Vite dev client-module snapshot publication failed.*permanently closed/,
+    );
+    rejectCompilerModule = false;
+    await expect(dispatchViteDevSnapshot(app, clientModules)).rejects.toThrow(
+      /KV417: Vite dev client-module snapshot publication failed.*permanently closed/,
+    );
+
+    expect(clientModules).toHaveBeenCalledOnce();
+    expect(replaceActiveSnapshot).not.toHaveBeenCalled();
   });
 
   it('emits route-shell HMR events for app-shell module edits', async () => {
@@ -1748,4 +1980,26 @@ function viteDevSsrLoadModule(
       : id === '@kovojs/server'
         ? {}
         : await loadAppModule(id);
+}
+
+async function dispatchViteDevSnapshot(
+  app: ReturnType<typeof createApp>,
+  clientModules: NonNullable<KovoAppShellViteDevPluginOptions['clientModules']>,
+): Promise<void> {
+  const next = vi.fn();
+  await dispatchKovoAppShellViteDevRequest(
+    {
+      middlewares: { use() {} },
+      ssrLoadModule: viteDevSsrLoadModule(() => ({ default: app })),
+    },
+    { clientModules, moduleId: '/src/app-shell.ts' },
+    request('/c/unversioned.client.js'),
+    {} as Parameters<typeof dispatchKovoAppShellViteDevRequest>[3],
+    next,
+  );
+  expect(next).toHaveBeenCalledOnce();
+}
+
+function viteDevClientHref(module: VersionedClientModuleInput): string {
+  return versionedClientModuleHref(module.path, clientModuleRepresentationDigest(module.source));
 }

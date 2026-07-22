@@ -146,6 +146,11 @@ interface KovoViteHotUpdateContext {
 interface KovoCompilerVitePlugin {
   configResolved?(config: KovoViteResolvedConfig): void | Promise<void>;
   configureServer?(server: KovoViteDevServer): void | Promise<void>;
+  getClientModules?(): readonly {
+    path: string;
+    renderPlanFingerprint?: string;
+    source: string;
+  }[];
   getCssAssetManifest?(options?: CssAssetManifestOptions): CssAssetManifest;
   handleHotUpdate?(context: KovoViteHotUpdateContext): Promise<readonly unknown[]>;
   load?(id: string): null | Promise<null | string> | string;
@@ -427,6 +432,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
 
       const integration = createDevIntegration({
+        clientModules: () => compiler.getClientModules?.() ?? [],
         earlyHints: false,
         moduleId: app,
         stylesheetAssets: () =>

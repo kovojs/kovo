@@ -21,6 +21,11 @@ import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
 import type { KovoApp } from './app-types.js';
 import {
+  computeRenderPlanFingerprint,
+  replaceVersionedClientModuleBuildSnapshot,
+  type VersionedClientModuleInput,
+} from './client-modules.js';
+import {
   copyRequestServerBindings,
   pinRequestIngressSurface,
   resolveRequestClientIp,
@@ -133,6 +138,7 @@ const kovoHmrTargetSnapshotReaderSource = buildSecurityFunctionSource(
 );
 const kovoAppShellViteDevModuleId = '@kovojs/server/internal/app-shell-vite';
 const kovoServerRootModuleId = '@kovojs/server';
+const viteDevDefaultRenderPlanFingerprint = computeRenderPlanFingerprint({});
 const viteDevNodeResponseEnd = captureViteDevNodeResponseMethod('end');
 const viteDevNodeResponseGetHeader = captureViteDevNodeResponseMethod('getHeader');
 const viteDevNodeResponseRemoveHeader = captureViteDevNodeResponseMethod('removeHeader');
@@ -224,6 +230,15 @@ export interface KovoAppShellViteHotUpdateContext {
 export interface KovoAppShellViteDevPluginOptions {
   appExportName?: string;
   /**
+   * @internal Compiler-owned exact final client representations. The supported `kovo()` wrapper
+   * supplies this live getter so dev/HMR can atomically publish the current SPEC §5.2.1 snapshot.
+   */
+  clientModules?: () => readonly {
+    path: string;
+    renderPlanFingerprint?: string;
+    source: string;
+  }[];
+  /**
    * Dev diagnostic ledger shared with the compiler Vite plugin. When present,
    * requests depending on failed component modules render the same teaching
    * diagnostic document as direct dev diagnostic requests (SPEC.md §9.5.1).
@@ -303,6 +318,17 @@ interface KovoAppShellDevRequestDiagnostics {
 interface KovoAppShellDevRequestDiagnosticStore {
   requestRecords: Map<string, KovoAppShellDevDiagnosticRecord>;
 }
+
+interface KovoAppShellViteDevClientModuleSnapshot {
+  modules: readonly Readonly<VersionedClientModuleInput>[];
+  renderPlanFingerprint: string;
+}
+
+const publishedViteDevClientModuleSnapshots = createWitnessWeakMap<
+  KovoApp,
+  KovoAppShellViteDevClientModuleSnapshot
+>();
+const failedViteDevClientModulePublications = createWitnessWeakMap<KovoApp, Error>();
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Stored diagnostic record
@@ -466,11 +492,10 @@ export async function dispatchKovoAppShellViteDevRequest(
     return;
   }
 
+  const baseApp = readKovoAppShellViteDevApp(module, appExportName, moduleId);
+  publishKovoAppShellViteDevClientModuleSnapshot(baseApp, options);
   const app = appWithDevDiagnostics(
-    appWithDevStylesheetAssets(
-      readKovoAppShellViteDevApp(module, appExportName, moduleId),
-      stylesheetAssets,
-    ),
+    appWithDevStylesheetAssets(baseApp, stylesheetAssets),
     options.devDiagnostics,
   );
   const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
@@ -511,6 +536,123 @@ export async function dispatchKovoAppShellViteDevRequest(
     options.nodeHandlerExportName,
     moduleId,
   )(request, devResponse, next);
+}
+
+/**
+ * Publish the compiler's complete development representation set before HMR or app dispatch.
+ * Cache comparison is over the exact raw ordered values; it is only an optimization and introduces
+ * no graph identity. The registry remains the sole owner of representation hrefs and the app token
+ * (SPEC §5.2.1).
+ */
+function publishKovoAppShellViteDevClientModuleSnapshot(
+  app: KovoApp,
+  options: KovoAppShellViteDevPluginOptions,
+): void {
+  const priorFailure = witnessWeakMapGet(failedViteDevClientModulePublications, app);
+  if (priorFailure !== undefined) throw priorFailure;
+
+  const getter = viteDevOwnDataValue(
+    options,
+    'clientModules',
+    'Vite dev compiler client-module getter',
+  );
+  if (getter === undefined) return;
+  if (typeof getter !== 'function') {
+    throw new TypeError('Vite dev compiler client-module getter must be a function.');
+  }
+
+  const snapshot = snapshotKovoAppShellViteDevClientModules(
+    witnessReflectApply<unknown>(getter, undefined, []),
+  );
+  const published = witnessWeakMapGet(publishedViteDevClientModuleSnapshots, app);
+  if (published !== undefined && sameKovoAppShellViteDevClientModuleSnapshot(published, snapshot)) {
+    return;
+  }
+
+  try {
+    replaceVersionedClientModuleBuildSnapshot(app.clientModules, snapshot);
+  } catch (cause) {
+    const failure = new Error(
+      'KV417: Vite dev client-module snapshot publication failed; this app graph is permanently closed.',
+      { cause },
+    );
+    witnessWeakMapSet(failedViteDevClientModulePublications, app, failure);
+    throw failure;
+  }
+  witnessWeakMapSet(publishedViteDevClientModuleSnapshots, app, snapshot);
+}
+
+function snapshotKovoAppShellViteDevClientModules(
+  source: unknown,
+): KovoAppShellViteDevClientModuleSnapshot {
+  const values = viteDevDenseArrayValues<unknown>(source, 'Vite dev compiler client modules');
+  const modules: Readonly<VersionedClientModuleInput>[] = [];
+  let renderPlanFingerprint: string | undefined;
+
+  for (let index = 0; index < values.length; index += 1) {
+    const module = values[index];
+    if (typeof module !== 'object' || module === null || securityArrayIsArray(module)) {
+      throw new TypeError(`Vite dev compiler client modules[${index}] must be an own-data object.`);
+    }
+    const path = viteDevOwnDataValue(
+      module,
+      'path',
+      `Vite dev compiler client modules[${index}].path`,
+    );
+    const sourceText = viteDevOwnDataValue(
+      module,
+      'source',
+      `Vite dev compiler client modules[${index}].source`,
+    );
+    const fingerprint = viteDevOwnDataValue(
+      module,
+      'renderPlanFingerprint',
+      `Vite dev compiler client modules[${index}].renderPlanFingerprint`,
+    );
+    if (typeof path !== 'string') {
+      throw new TypeError(`Vite dev compiler client modules[${index}].path must be a string.`);
+    }
+    if (typeof sourceText !== 'string') {
+      throw new TypeError(`Vite dev compiler client modules[${index}].source must be a string.`);
+    }
+    if (typeof fingerprint !== 'string') {
+      throw new TypeError(
+        `Vite dev compiler client modules[${index}] is missing renderPlanFingerprint (SPEC §5.2.1).`,
+      );
+    }
+    if (renderPlanFingerprint !== undefined && fingerprint !== renderPlanFingerprint) {
+      throw new TypeError(
+        'Vite dev compiler client modules must carry one coherent renderPlanFingerprint (SPEC §5.2.1).',
+      );
+    }
+    renderPlanFingerprint = fingerprint;
+    securityArrayPush(modules, witnessFreeze({ path, source: sourceText }));
+  }
+
+  return witnessFreeze({
+    modules: witnessFreeze(modules),
+    renderPlanFingerprint: renderPlanFingerprint ?? viteDevDefaultRenderPlanFingerprint,
+  });
+}
+
+function sameKovoAppShellViteDevClientModuleSnapshot(
+  left: KovoAppShellViteDevClientModuleSnapshot,
+  right: KovoAppShellViteDevClientModuleSnapshot,
+): boolean {
+  if (
+    left.renderPlanFingerprint !== right.renderPlanFingerprint ||
+    left.modules.length !== right.modules.length
+  ) {
+    return false;
+  }
+  for (let index = 0; index < left.modules.length; index += 1) {
+    const leftModule = left.modules[index]!;
+    const rightModule = right.modules[index]!;
+    if (leftModule.path !== rightModule.path || leftModule.source !== rightModule.source) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
