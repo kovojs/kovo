@@ -145,6 +145,33 @@ export interface ApplyStateBindingsOptions extends ApplyQueryBindingsOptions {
   importModule?: (url: string) => Promise<Record<string, unknown>>;
 }
 
+type PreparedStateBindingOperation =
+  | {
+      element: QueryBindingElement;
+      kind: 'attribute';
+      name: string;
+      refValue: string;
+      value: unknown;
+    }
+  | {
+      element: QueryBindingElement;
+      kind: 'property';
+      name: string;
+      refValue: string;
+      value: unknown;
+    }
+  | {
+      element: QueryBindingElement;
+      kind: 'text';
+      refValue: string;
+      rendered: string;
+    };
+
+/** @internal Prepared, framework-owned state-binding transaction. */
+export interface PreparedStateBindings {
+  readonly operations: readonly PreparedStateBindingOperation[];
+}
+
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {
   queryStore?: QueryStore;
@@ -173,13 +200,96 @@ export function applyQueryBindings(
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
-export function applyStateBindings(
+export async function applyStateBindings(
   root: QueryBindingRoot,
   state: unknown,
   options: ApplyStateBindingsOptions = {},
 ): Promise<string[]> {
-  const applied = applyRootBindings(root, 'state', state, { ...options, scopeRoot: root });
-  return applyStateDeriveBindings(root, state, applied, options);
+  const prepared = await prepareStateBindings(root, state, options);
+  return applyPreparedStateBindings(prepared);
+}
+
+/**
+ * Snapshot and evaluate one state update without writing any binding sink.
+ *
+ * @internal Handler dispatch uses this preparation boundary so a late import/export/derive
+ * failure cannot partially apply an earlier binding (SPEC §4.3/§4.8).
+ */
+export async function prepareStateBindings(
+  root: QueryBindingRoot,
+  state: unknown,
+  options: ApplyStateBindingsOptions = {},
+): Promise<PreparedStateBindings> {
+  const directOperations: PreparedStateBindingOperation[] = [];
+  const deriveBindings: StateDeriveBinding[] = [];
+  snapshotStateBindingTargets(root, state, options, directOperations, deriveBindings);
+
+  if (deriveBindings.length === 0) return { operations: directOperations };
+  const importModule = options.importModule;
+  if (!importModule) {
+    throw new TypeError('Kovo state derive bindings require a client-module importer.');
+  }
+
+  const preparedDerives: PreparedStateDerive[] = [];
+  // Resolve and validate every owned export/callee before invoking the first authored derive.
+  // A late failure therefore cannot follow either a framework binding write or an earlier derive
+  // execution in this state transaction (SPEC §6.6).
+  for (let index = 0; index < deriveBindings.length; index += 1) {
+    const binding = deriveBindings[index];
+    if (!binding) continue;
+    assertAllowedKovoDynamicImportRefForModule(binding.ref, importModule);
+    const mod = await importModule(binding.ref.url);
+    const runner = requireOwnDeriveRunner(mod, binding.ref.exportName, binding.refValue);
+    securityArrayAppend(
+      preparedDerives,
+      { binding, receiver: runner.receiver, run: runner.run },
+      'Browser prepared state derive callees',
+    );
+  }
+
+  const deriveOperations: PreparedStateBindingOperation[] = [];
+  for (let index = 0; index < preparedDerives.length; index += 1) {
+    const prepared = preparedDerives[index];
+    if (!prepared) continue;
+    const value = applySecurityIntrinsic(prepared.run, prepared.receiver, [state]);
+    securityArrayAppend(
+      deriveOperations,
+      stateBindingOperation(prepared.binding, value),
+      'Browser prepared state derive operations',
+    );
+  }
+
+  const operations = directOperations;
+  for (let index = 0; index < deriveOperations.length; index += 1) {
+    const operation = deriveOperations[index];
+    if (operation) {
+      securityArrayAppend(operations, operation, 'Browser prepared state binding operations');
+    }
+  }
+  return { operations };
+}
+
+/** @internal Apply a fully prepared state-binding transaction. */
+export function applyPreparedStateBindings(prepared: PreparedStateBindings): string[] {
+  const applied: string[] = [];
+  const operations = prepared.operations;
+  for (let index = 0; index < operations.length; index += 1) {
+    const operation = operations[index];
+    if (!operation) continue;
+    if (operation.kind === 'text') {
+      writeQueryPlanElement(operation.element, operation.rendered);
+    } else if (operation.kind === 'attribute') {
+      if (operation.value === undefined || operation.value === null) {
+        removeBoundAttribute(operation.element, operation.name);
+      } else {
+        setBoundAttribute(operation.element, operation.name, operation.value);
+      }
+    } else {
+      applyBindProp(operation.element, operation.name, operation.value);
+    }
+    securityArrayAppend(applied, operation.refValue, 'Browser applied state bindings');
+  }
+  return applied;
 }
 
 interface ApplyRootBindingsOptions extends ApplyQueryBindingsOptions {
@@ -641,140 +751,180 @@ function attributeBindingElements(
   return snapshotDenseArray(elements, 'query attribute-binding index');
 }
 
-async function applyStateDeriveBindings(
+type StateDeriveBinding =
+  | {
+      element: QueryBindingElement;
+      kind: 'attribute';
+      name: string;
+      ref: KovoModuleRef<'derive'>;
+      refValue: string;
+    }
+  | {
+      element: QueryBindingElement;
+      kind: 'property';
+      name: string;
+      ref: KovoModuleRef<'derive'>;
+      refValue: string;
+    }
+  | {
+      element: QueryBindingElement;
+      kind: 'text';
+      ref: KovoModuleRef<'derive'>;
+      refValue: string;
+    };
+
+interface PreparedStateDerive {
+  binding: StateDeriveBinding;
+  receiver: object;
+  run: (state: unknown) => unknown;
+}
+
+function snapshotStateBindingTargets(
   root: QueryBindingRoot,
   state: unknown,
-  applied: string[],
   options: ApplyStateBindingsOptions,
-): Promise<string[]> {
-  const importModule = options.importModule;
-  if (!importModule) return applied;
-
-  type DeriveBinding =
-    | {
-        element: QueryBindingElement;
-        kind: 'attribute';
-        name: string;
-        ref: KovoModuleRef<'derive'>;
-        refValue: string;
-      }
-    | {
-        element: QueryBindingElement;
-        kind: 'property';
-        name: string;
-        ref: KovoModuleRef<'derive'>;
-        refValue: string;
-      }
-    | {
-        element: QueryBindingElement;
-        kind: 'text';
-        ref: KovoModuleRef<'derive'>;
-        refValue: string;
-      };
-  const bindings: DeriveBinding[] = [];
-
-  // Snapshot every DOM-selected derive reference before importing the first authored module. A
-  // derive may mutate attributes or DOM prototypes, but it cannot thereby redirect a later
-  // framework import/callee decision in the same state-commit pass (SPEC §6.6).
+  directOperations: PreparedStateBindingOperation[],
+  deriveBindings: StateDeriveBinding[],
+): void {
+  const bindingPrefix = 'state.';
+  // Snapshot every direct target and derive reference before the first authored module import.
+  // Import evaluation cannot redirect a later framework target/ref decision in this transaction.
   const textElements = dataBindElements(root, root);
   for (let elementIndex = 0; elementIndex < textElements.length; elementIndex += 1) {
     const element = textElements[elementIndex];
     if (!element) continue;
-    const refValue = readRuntimeElementAttribute(element, 'data-bind');
+    const refValue = readBindingAttribute(element, 'data-bind');
     if (!refValue) continue;
-
     const ref = parseDeriveReference(refValue);
-    if (!ref) continue;
-    securityArrayAppend(
-      bindings,
-      { element, kind: 'text', ref, refValue },
-      'Browser state derive binding snapshot',
-    );
+    if (ref) {
+      securityArrayAppend(
+        deriveBindings,
+        { element, kind: 'text', ref, refValue },
+        'Browser state derive binding snapshot',
+      );
+    } else if (
+      elementBelongsToQueryKey(element, options.queryKey) &&
+      securityStringStartsWith(refValue, bindingPrefix)
+    ) {
+      securityArrayAppend(
+        directOperations,
+        {
+          element,
+          kind: 'text',
+          refValue,
+          rendered: formatBoundValue(
+            valueAtPath(state, securityStringSlice(refValue, bindingPrefix.length)),
+          ),
+        },
+        'Browser prepared direct state text bindings',
+      );
+    }
   }
 
   const attributeElements = attributeBindingElements(root, { ...options, scopeRoot: root });
   for (let elementIndex = 0; elementIndex < attributeElements.length; elementIndex += 1) {
     const element = attributeElements[elementIndex];
-    if (!element) continue;
-    if (!elementBelongsToScope(element, root)) continue;
-
+    if (!element || !elementBelongsToScope(element, root)) continue;
+    const belongsToQueryKey = elementBelongsToQueryKey(element, options.queryKey);
     const attributes = bindingAttributes(element);
     for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
       const attribute = attributes[attributeIndex];
       if (!attribute) continue;
+      const name = securityStringSlice(attribute.name, 'data-bind:'.length);
       const ref = parseDeriveReference(attribute.value);
-      if (!ref) continue;
-      securityArrayAppend(
-        bindings,
-        {
-          element,
-          kind: 'attribute',
-          name: securityStringSlice(attribute.name, 'data-bind:'.length),
-          ref,
-          refValue: attribute.value,
-        },
-        'Browser state derive attribute snapshot',
-      );
+      if (ref) {
+        securityArrayAppend(
+          deriveBindings,
+          { element, kind: 'attribute', name, ref, refValue: attribute.value },
+          'Browser state derive attribute snapshot',
+        );
+      } else if (belongsToQueryKey && securityStringStartsWith(attribute.value, bindingPrefix)) {
+        securityArrayAppend(
+          directOperations,
+          {
+            element,
+            kind: 'attribute',
+            name,
+            refValue: attribute.value,
+            value: valueAtPath(state, securityStringSlice(attribute.value, bindingPrefix.length)),
+          },
+          'Browser prepared direct state attribute bindings',
+        );
+      }
     }
 
-    // SPEC §4.8 data-bind-prop: assign the live property for derive-bound stamps.
     const propertyAttributes = bindPropAttributes(element);
     for (let attributeIndex = 0; attributeIndex < propertyAttributes.length; attributeIndex += 1) {
       const attribute = propertyAttributes[attributeIndex];
       if (!attribute) continue;
+      const name = securityStringSlice(attribute.name, BIND_PROP_PREFIX.length);
       const ref = parseDeriveReference(attribute.value);
-      if (!ref) continue;
-      securityArrayAppend(
-        bindings,
-        {
-          element,
-          kind: 'property',
-          name: securityStringSlice(attribute.name, BIND_PROP_PREFIX.length),
-          ref,
-          refValue: attribute.value,
-        },
-        'Browser state derive property snapshot',
-      );
-    }
-  }
-
-  for (let index = 0; index < bindings.length; index += 1) {
-    const binding = bindings[index];
-    if (!binding) continue;
-    assertAllowedKovoDynamicImportRefForModule(binding.ref, importModule);
-    const mod = await importModule(binding.ref.url);
-    const value = runOwnDeriveExport(mod, binding.ref.exportName, state);
-    if (binding.kind === 'text') {
-      writeQueryPlanElement(binding.element, formatBoundValue(value));
-    } else if (binding.kind === 'attribute') {
-      if (value === undefined || value === null) {
-        removeBoundAttribute(binding.element, binding.name);
-      } else {
-        setBoundAttribute(binding.element, binding.name, value);
+      if (ref) {
+        securityArrayAppend(
+          deriveBindings,
+          { element, kind: 'property', name, ref, refValue: attribute.value },
+          'Browser state derive property snapshot',
+        );
+      } else if (belongsToQueryKey && securityStringStartsWith(attribute.value, bindingPrefix)) {
+        securityArrayAppend(
+          directOperations,
+          {
+            element,
+            kind: 'property',
+            name,
+            refValue: attribute.value,
+            value: valueAtPath(state, securityStringSlice(attribute.value, bindingPrefix.length)),
+          },
+          'Browser prepared direct state property bindings',
+        );
       }
-    } else {
-      applyBindProp(binding.element, binding.name, value);
     }
-    securityArrayAppend(applied, binding.refValue, 'Browser applied state derive bindings');
   }
-
-  return applied;
 }
 
-function runOwnDeriveExport(mod: object, exportName: string, state: unknown): unknown {
+function requireOwnDeriveRunner(
+  mod: object,
+  exportName: string,
+  refValue: string,
+): { receiver: object; run: (state: unknown) => unknown } {
   const deriveDescriptor = securityGetOwnPropertyDescriptor(mod, exportName);
-  if (!deriveDescriptor || !('value' in deriveDescriptor)) return undefined;
+  if (!deriveDescriptor || !('value' in deriveDescriptor)) {
+    throw new TypeError(`Kovo state derive export is missing or invalid: ${refValue}`);
+  }
   const derive = deriveDescriptor.value;
-  if (derive === null || typeof derive !== 'object') return undefined;
+  if (derive === null || typeof derive !== 'object') {
+    throw new TypeError(`Kovo state derive export is missing or invalid: ${refValue}`);
+  }
   const runDescriptor = securityGetOwnPropertyDescriptor(derive, 'run');
   if (!runDescriptor || !('value' in runDescriptor) || !isDeriveRunner(runDescriptor.value)) {
-    return undefined;
+    throw new TypeError(`Kovo state derive run export is missing or invalid: ${refValue}`);
   }
-  return applySecurityIntrinsic(runDescriptor.value, derive, [state]);
+  return { receiver: derive, run: runDescriptor.value };
 }
 
 function isDeriveRunner(value: unknown): value is (state: unknown) => unknown {
   return typeof value === 'function';
+}
+
+function stateBindingOperation(
+  binding: StateDeriveBinding,
+  value: unknown,
+): PreparedStateBindingOperation {
+  if (binding.kind === 'text') {
+    return {
+      element: binding.element,
+      kind: 'text',
+      refValue: binding.refValue,
+      rendered: formatBoundValue(value),
+    };
+  }
+  return {
+    element: binding.element,
+    kind: binding.kind,
+    name: binding.name,
+    refValue: binding.refValue,
+    value,
+  };
 }
 
 function parseDeriveReference(value: string): KovoModuleRef<'derive'> | null {

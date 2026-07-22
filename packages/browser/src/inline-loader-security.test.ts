@@ -670,7 +670,9 @@ describe('inline loader output security', () => {
           ['/c/client.js'],
         );
 
-        expect(element.attributes, tagName).toEqual([]);
+        expect(element.attributes, tagName).toEqual([
+          { name: 'kovo-state', value: JSON.stringify({ url: '/safe/account' }) },
+        ]);
       }
     });
 
@@ -740,7 +742,9 @@ describe('inline loader output security', () => {
           expect(
             element.attributes,
             `${transfer}/${targetFirst ? 'target-first' : 'value-first'}`,
-          ).toEqual([]);
+          ).toEqual([
+            { name: 'kovo-state', value: JSON.stringify({ payload, target: 'xlink:href' }) },
+          ]);
         }
       }
 
@@ -761,7 +765,9 @@ describe('inline loader output security', () => {
           installSource,
           ['/c/client.js'],
         );
-        expect(element.attributes, tagName).toEqual([]);
+        expect(element.attributes, tagName).toEqual([
+          { name: 'kovo-state', value: JSON.stringify({ payload: '0;1' }) },
+        ]);
       }
     });
 

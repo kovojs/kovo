@@ -15,11 +15,16 @@ import {
   type HandlerContext,
   type IslandSignalScope,
 } from './handler-context.js';
-import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
+import {
+  applyPreparedStateBindings,
+  prepareStateBindings,
+  supportsQueryBindings,
+} from './query-bindings.js';
 import { assertAllowedKovoDynamicImportRefForModule } from './dynamic-import-url.js';
 import {
   closestRuntimeElement,
   readRuntimeElementAttribute,
+  setRuntimeElementAttribute,
   snapshotRuntimeDelegatedEvent,
 } from './runtime-dom-security.js';
 import {
@@ -28,6 +33,7 @@ import {
   securityArrayAppend,
   securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
+  securityJsonStringify,
   securityObjectKeys,
   securityOwnArrayEntry,
   securityRegExpTest,
@@ -306,13 +312,24 @@ async function dispatchDelegatedEventForElement(
     handlerContext.context.state = snapshotHandlerStateJsonValue(handlerContext.context.state);
   }
 
-  // Exceptional import, lookup, invocation, or snapshot completion aborts the state transaction.
-  // In particular, do not serialize a partially mutated state graph or run effects queued by an
-  // otherwise-failed handler. This matches every generated inline-loader artifact.
-  handlerContext.commit();
-  if (supportsQueryBindings(stateHost)) {
-    await applyStateBindings(stateHost, handlerContext.context.state, { importModule });
+  // Serialize the candidate before any presentation write. Then prepare every direct/derive sink
+  // without writing the DOM, apply that closed operation list, and only after every write succeeds
+  // publish kovo-state. Import/export/derive/prepare failures therefore leave both the serialized
+  // state and all framework binding sinks unchanged; an arbitrary platform setter can still throw
+  // after an earlier prepared presentation write (SPEC §4.3/§4.8).
+  const candidateState = snapshotHandlerStateJsonValue(handlerContext.context.state);
+  handlerContext.context.state = candidateState;
+  const serializedState = securityJsonStringify(candidateState);
+  if (serializedState === undefined) {
+    throw new TypeError(
+      'KV449: handler state must serialize as bounded recursive own-data JsonValue.',
+    );
   }
+  const preparedBindings = supportsQueryBindings(stateHost)
+    ? await prepareStateBindings(stateHost, candidateState, { importModule })
+    : undefined;
+  if (preparedBindings) applyPreparedStateBindings(preparedBindings);
+  setRuntimeElementAttribute(stateHost, 'kovo-state', serializedState);
   drainPostCommitQueue(postCommitQueue);
 }
 

@@ -21,7 +21,9 @@ import {
 } from './runtime-test-fakes.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest([
+  '/c/a.js',
   '/c/accordion.client.js',
+  '/c/b.js',
   '/c/checkbox.client.js',
   '/c/disclosure.client.js',
   '/c/number-field.client.js',
@@ -906,13 +908,11 @@ describe('query binding helpers', () => {
       Accordion$output_text_derive: { run },
     }) as Record<string, unknown>;
 
-    await applyStateBindings(
-      host,
-      { value: 'safe' },
-      { importModule: async () => inheritedCarrier },
-    );
+    await expect(
+      applyStateBindings(host, { value: 'safe' }, { importModule: async () => inheritedCarrier }),
+    ).rejects.toThrow('Kovo state derive export is missing or invalid');
     expect(run).not.toHaveBeenCalled();
-    expect(output.textContent).toBe('');
+    expect(output.textContent).toBe('old');
 
     output.textContent = 'old';
     const getter = vi.fn(() => ({ run }));
@@ -921,14 +921,87 @@ describe('query binding helpers', () => {
       configurable: true,
       get: getter,
     });
-    await applyStateBindings(
-      host,
-      { value: 'safe' },
-      { importModule: async () => accessorCarrier },
-    );
+    await expect(
+      applyStateBindings(host, { value: 'safe' }, { importModule: async () => accessorCarrier }),
+    ).rejects.toThrow('Kovo state derive export is missing or invalid');
     expect(getter).not.toHaveBeenCalled();
     expect(run).not.toHaveBeenCalled();
-    expect(output.textContent).toBe('');
+    expect(output.textContent).toBe('old');
+  });
+
+  it('prepares every state binding before a late derive import can fail', async () => {
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":"old"}' });
+    const direct = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.value' },
+      { parent: host, textContent: 'old-direct' },
+    );
+    const firstDerived = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/a.js#first' },
+      { parent: host, textContent: 'old-derived' },
+    );
+    new FakeStatefulBindingElement(
+      { 'data-bind': '/c/b.js#second' },
+      { parent: host, textContent: 'old-second' },
+    );
+    const first = vi.fn(() => 'new-derived');
+
+    await expect(
+      applyStateBindings(
+        host,
+        { value: 'new' },
+        {
+          importModule: async (url) => {
+            if (url === '/c/a.js') return { first: { run: first } };
+            throw new Error('late derive import failed');
+          },
+        },
+      ),
+    ).rejects.toThrow('late derive import failed');
+
+    expect(first).not.toHaveBeenCalled();
+    expect(direct.textContent).toBe('old-direct');
+    expect(firstDerived.textContent).toBe('old-derived');
+  });
+
+  it('does not apply direct or earlier derived sinks when a later derive throws', async () => {
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":"old"}' });
+    const direct = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.value' },
+      { parent: host, textContent: 'old-direct' },
+    );
+    const firstDerived = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/a.js#first' },
+      { parent: host, textContent: 'old-derived' },
+    );
+    const secondDerived = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/b.js#second' },
+      { parent: host, textContent: 'old-second' },
+    );
+    const first = vi.fn(() => 'new-derived');
+
+    await expect(
+      applyStateBindings(
+        host,
+        { value: 'new' },
+        {
+          importModule: async (url) =>
+            url === '/c/a.js'
+              ? { first: { run: first } }
+              : {
+                  second: {
+                    run() {
+                      throw new Error('late derive run failed');
+                    },
+                  },
+                },
+        },
+      ),
+    ).rejects.toThrow('late derive run failed');
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(direct.textContent).toBe('old-direct');
+    expect(firstDerived.textContent).toBe('old-derived');
+    expect(secondDerived.textContent).toBe('old-second');
   });
 
   it('detects query binding roots by selector support', () => {

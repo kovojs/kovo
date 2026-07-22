@@ -210,11 +210,24 @@ bounds are 64 levels, 10,000 values, and 1,000,000 string/key code units. Non-en
 data is outside JSON and is discarded. This runtime check is defense-in-depth after the compiler's
 closed verdict, not a substitute for it.
 
-A delegated dispatch is one fail-closed state transaction. If module import/export resolution,
-handler invocation, or the post-handler state snapshot throws, the loader aborts the remaining
-chain, leaves the serialized state unchanged, and discards every post-commit callback collected by
-that dispatch. Modular and generated-inline runtimes use the same rollback rule. A later queued
-dispatch starts from the last successfully committed snapshot.
+A delegated dispatch is one fail-closed state transaction. After the final handler, the loader first
+snapshots and serializes the candidate state. It then prepares the complete state-binding update:
+every direct target and derive reference is snapshotted, every derive module is imported, every
+owned export and owned `run` function is strictly validated, every derive runs, and the results are
+materialized as a closed list of typed text/attribute/property sink operations. Preparation performs
+no framework DOM writes. Only after preparation succeeds does the loader apply that list, commit the
+serialized `kovo-state`, and drain post-commit callbacks, in that order. A missing or invalid derive
+export/`run` is a closed failure, never an implicit `undefined` binding value.
+
+If handler import/export resolution, handler invocation, the post-handler state snapshot or
+serialization, or binding preparation throws, the loader aborts the remaining transaction, performs
+no binding write, leaves serialized state unchanged, and discards every post-commit callback
+collected by that dispatch. If an arbitrary platform DOM setter throws while applying an already
+prepared list, an earlier presentation write in that list can remain applied: the web platform does
+not provide a general rollback transaction for setters. Kovo still leaves `kovo-state` unchanged and
+does not drain post-commit work because that commit happens only after every prepared write succeeds.
+Modular and all generated-inline runtimes use the same rule. A later queued dispatch starts from the
+last successfully committed state snapshot.
 
 ### 4.4 The loader
 

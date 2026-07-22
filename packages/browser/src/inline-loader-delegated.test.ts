@@ -277,9 +277,13 @@ describe('inline loader delegated handlers', () => {
         'kovo-state': '{"open":false}',
         'on:click': '/c/menu.js#open',
       });
+      const direct = new FakeStatefulBindingElement(
+        { 'data-bind': 'state.open' },
+        { parent: host, textContent: 'false' },
+      );
       const content = new FakeStatefulBindingElement(
-        { 'data-bind:hidden': '/c/menu.js#contentHidden', hidden: '' },
-        { parent: host },
+        { 'data-bind': '/c/menu.js#contentHidden' },
+        { parent: host, textContent: 'old-derived' },
       );
       const importModule = vi.fn(async () => ({
         open(_event: unknown, ctx: { state: { open: boolean } }) {
@@ -287,13 +291,17 @@ describe('inline loader delegated handlers', () => {
           (
             globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void }
           ).__kovo_postCommitSchedule?.(() => {
-            order.push(`focus:hidden=${content.getAttribute('hidden')}`);
+            order.push(
+              `post-commit:${host.getAttribute('kovo-state')}:${direct.textContent}:${content.textContent}`,
+            );
           });
         },
         contentHidden: {
           run(value: unknown) {
-            order.push('derive-unhide');
-            return (value as { open: boolean }).open ? null : '';
+            order.push(
+              `derive-prepare:${host.getAttribute('kovo-state')}:${direct.textContent}:${content.textContent}`,
+            );
+            return (value as { open: boolean }).open ? 'revealed' : 'hidden';
           },
         },
       }));
@@ -303,8 +311,11 @@ describe('inline loader delegated handlers', () => {
       await dispatchInlineDelegatedClick(host, importModule, installSource, ['/c/menu.js']);
 
       // Focus callback runs strictly after the un-hide, and sees a revealed menu.
-      expect(order).toEqual(['derive-unhide', 'focus:hidden=null']);
-      expect(content.getAttribute('hidden')).toBeNull();
+      expect(order).toEqual([
+        'derive-prepare:{"open":false}:false:old-derived',
+        'post-commit:{"open":true}:true:revealed',
+      ]);
+      expect(content.textContent).toBe('revealed');
       // The global hook is restored after dispatch (no cross-dispatch leak).
       expect(globalRecord.__kovo_postCommitSchedule).toBe(previousHook);
     },
@@ -342,6 +353,127 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'keeps the binding/state transaction closed across derive preparation failures through %s',
+    async (_name, installSource) => {
+      const makeHost = () => {
+        const deferredEffect = vi.fn();
+        const host = new FakeStatefulBindingElement({
+          'kovo-state': '{"value":"old"}',
+          'on:click': '/c/a.js#change',
+        });
+        const direct = new FakeStatefulBindingElement(
+          { 'data-bind': 'state.value' },
+          { parent: host, textContent: 'old-direct' },
+        );
+        const change = (_event: unknown, ctx: { state: { value: string } }) => {
+          ctx.state.value = 'new';
+          (
+            globalThis as { __kovo_postCommitSchedule?: (callback: () => void) => void }
+          ).__kovo_postCommitSchedule?.(deferredEffect);
+        };
+        return { change, deferredEffect, direct, host };
+      };
+      const expectClosed = (
+        host: FakeStatefulBindingElement,
+        direct: FakeStatefulBindingElement,
+        deferredEffect: ReturnType<typeof vi.fn>,
+        outputs: readonly FakeStatefulBindingElement[],
+      ) => {
+        expect(host.getAttribute('kovo-state')).toBe('{"value":"old"}');
+        expect(direct.textContent).toBe('old-direct');
+        for (const output of outputs) expect(output.textContent).toMatch(/^old-/u);
+        expect(deferredEffect).not.toHaveBeenCalled();
+      };
+
+      // A later import fails after an earlier derive callee has been found. No derive runs and no
+      // direct/framework sink is written.
+      {
+        const { change, deferredEffect, direct, host } = makeHost();
+        const first = new FakeStatefulBindingElement(
+          { 'data-bind': '/c/a.js#first' },
+          { parent: host, textContent: 'old-first' },
+        );
+        const second = new FakeStatefulBindingElement(
+          { 'data-bind': '/c/b.js#second' },
+          { parent: host, textContent: 'old-second' },
+        );
+        const firstRun = vi.fn(() => 'new-first');
+        await expect(
+          dispatchInlineDelegatedClick(
+            host,
+            async (url) => {
+              if (url === '/c/a.js') return { change, first: { run: firstRun } };
+              throw new Error('late derive import failed');
+            },
+            installSource,
+            ['/c/a.js', '/c/b.js'],
+          ),
+        ).rejects.toThrow('late derive import failed');
+        expect(firstRun).not.toHaveBeenCalled();
+        expectClosed(host, direct, deferredEffect, [first, second]);
+      }
+
+      // Missing/invalid owned exports and run functions are closed verdicts, never undefined
+      // binding values.
+      for (const deriveModule of [
+        {},
+        { derived: vi.fn() },
+        { derived: {} },
+        { derived: { run: 'not-a-function' } },
+      ]) {
+        const { change, deferredEffect, direct, host } = makeHost();
+        const output = new FakeStatefulBindingElement(
+          { 'data-bind': '/c/b.js#derived' },
+          { parent: host, textContent: 'old-output' },
+        );
+        await expect(
+          dispatchInlineDelegatedClick(
+            host,
+            async (url) => (url === '/c/a.js' ? { change } : deriveModule),
+            installSource,
+            ['/c/a.js', '/c/b.js'],
+          ),
+        ).rejects.toThrow('Kovo state derive export/run is missing or invalid');
+        expectClosed(host, direct, deferredEffect, [output]);
+      }
+
+      // A late derive body can throw only during preparation; earlier materialized operations have
+      // still not been applied.
+      {
+        const { change, deferredEffect, direct, host } = makeHost();
+        const first = new FakeStatefulBindingElement(
+          { 'data-bind': '/c/a.js#first' },
+          { parent: host, textContent: 'old-first' },
+        );
+        const second = new FakeStatefulBindingElement(
+          { 'data-bind': '/c/b.js#second' },
+          { parent: host, textContent: 'old-second' },
+        );
+        const firstRun = vi.fn(() => 'new-first');
+        await expect(
+          dispatchInlineDelegatedClick(
+            host,
+            async (url) =>
+              url === '/c/a.js'
+                ? { change, first: { run: firstRun } }
+                : {
+                    second: {
+                      run() {
+                        throw new Error('late derive run failed');
+                      },
+                    },
+                  },
+            installSource,
+            ['/c/a.js', '/c/b.js'],
+          ),
+        ).rejects.toThrow('late derive run failed');
+        expect(firstRun).toHaveBeenCalledTimes(1);
+        expectClosed(host, direct, deferredEffect, [first, second]);
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'rejects inherited inline derive outputs through %s',
     async (_name, installSource) => {
       const host = new FakeStatefulBindingElement({
@@ -358,10 +490,12 @@ describe('inline loader delegated handlers', () => {
         ctx.state.enabled = true;
       };
 
-      await dispatchInlineDelegatedClick(host, async () => carrier, installSource, ['/c/theme.js']);
+      await expect(
+        dispatchInlineDelegatedClick(host, async () => carrier, installSource, ['/c/theme.js']),
+      ).rejects.toThrow('Kovo state derive export/run is missing or invalid');
 
       expect(run).not.toHaveBeenCalled();
-      expect(output.textContent).toBe('');
+      expect(output.textContent).toBe('old');
     },
   );
 

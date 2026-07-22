@@ -671,10 +671,13 @@ function installInlineKovoLoader(im) {
     const value = oe(carrier, name);
     return typeof value === 'string' ? value : null;
   };
-  const dr = (mod, name, state) => {
+  const dr = (mod, name, source) => {
     const derive = oe(mod, name);
     const run = oe(derive, 'run');
-    return typeof run === 'function' ? bns.call(run, derive, [state]) : undefined;
+    if (derive === null || typeof derive !== 'object' || typeof run !== 'function') {
+      throw new TypeError('Kovo state derive export/run is missing or invalid: ' + source);
+    }
+    return [derive, run];
   };
   const sh = (el, host) =>
     el === host || bns.closestElement(el, '[kovo-state]') === host;
@@ -862,16 +865,6 @@ function installInlineKovoLoader(im) {
       bns.setElementProperty(el, 'scrollTop', ns(val) || 0);
     }
   };
-  const ws = (el, path, bt, state, root = 'state') => {
-    if (!path || bns.indexOf(path, root + '.') !== 0) return;
-    const val = vp(state, bns.slice(path, root.length + 1));
-    if (bt) {
-      wa(el, bt, val);
-    } else {
-      // SPEC §4.8: data-bind is textContent; form values use data-bind:value.
-      bns.setNodeTextContent(el, fb(val));
-    }
-  };
   // SPEC.md §4.8 data-bind-prop: exact branches keep the property-authoritative
   // allowlist closed even when app code pollutes Object.prototype. HTML parsers
   // lowercase attribute names; the camelcase spellings support synthetic roots.
@@ -899,8 +892,23 @@ function installInlineKovoLoader(im) {
       spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? ns(val) || 0 : fb(val),
     );
   };
-  const as = async (host, state) => {
+  const psb = async (host, state) => {
+    const operations = [];
     const derives = [];
+    const queueValue = (el, path, suffix, property) => {
+      if (!path || bns.indexOf(path, 'state.') !== 0) return;
+      const value = vp(state, bns.slice(path, 6));
+      bns.appendDenseSecurityValue(
+        operations,
+        {
+          el,
+          kind: property ? 2 : suffix ? 1 : 0,
+          suffix,
+          value: suffix || property ? value : fb(value),
+        },
+        'Inline prepared direct state binding',
+      );
+    };
     const queueDerive = (el, ref, suffix, property) => {
       let hi = ref.length - 1;
       while (hi >= 0 && bns.charCode(ref, hi) !== 35) hi -= 1;
@@ -919,7 +927,9 @@ function installInlineKovoLoader(im) {
       return true;
     };
     const hb = bns.readAttribute(host, 'data-bind');
-    if (!hb || !queueDerive(host, hb, undefined, false)) ws(host, hb, undefined, state);
+    if (!hb || !queueDerive(host, hb, undefined, false)) {
+      queueValue(host, hb, undefined, false);
+    }
     const textElements = qa(host, '[data-bind]');
     for (let index = 0; index < textElements.length; index += 1) {
       const el = textElements[index];
@@ -927,7 +937,7 @@ function installInlineKovoLoader(im) {
       if (sh(el, host)) {
         const binding = bns.readAttribute(el, 'data-bind');
         if (!binding || !queueDerive(el, binding, undefined, false)) {
-          ws(el, binding, undefined, state);
+          queueValue(el, binding, undefined, false);
         }
       }
     }
@@ -953,7 +963,7 @@ function installInlineKovoLoader(im) {
         if (!attr) continue;
         const suffix = bns.slice(attr.name, 'data-bind:'.length);
         if (!queueDerive(el, attr.value, suffix, false)) {
-          ws(el, attr.value, suffix, state);
+          queueValue(el, attr.value, suffix, false);
         }
       }
       // SPEC.md §4.8 data-bind-prop: live property write after the attribute pass.
@@ -962,25 +972,50 @@ function installInlineKovoLoader(im) {
         const attr = properties[propertyIndex];
         if (!attr) continue;
         const suffix = bns.slice(attr.name, 'data-bind-prop:'.length);
-        if (!queueDerive(el, attr.value, suffix, true) && bns.indexOf(attr.value, 'state.') === 0) {
-          wp(el, suffix, vp(state, bns.slice(attr.value, 6)));
+        if (!queueDerive(el, attr.value, suffix, true)) {
+          queueValue(el, attr.value, suffix, true);
         }
       }
     }
-    // SPEC §6.6: no authored derive module runs until every later import/callee reference in the
-    // same commit has been reduced to framework-owned URL/export data.
+    // SPEC §6.6: validate every owned derive export/run before invoking the first authored
+    // derive. No direct or derived framework binding write occurs during this preparation phase.
+    const preparedDerives = [];
     for (let index = 0; index < derives.length; index += 1) {
       const binding = derives[index];
       if (!binding) continue;
       const mod = await im(binding.url);
-      const value = dr(mod, binding.exportName, state);
-      if (binding.property) {
-        wp(binding.el, binding.suffix, value);
-      } else if (binding.suffix) {
-        wa(binding.el, binding.suffix, value);
-      } else {
-        bns.setNodeTextContent(binding.el, fb(value));
-      }
+      const runner = dr(mod, binding.exportName, binding.url + '#' + binding.exportName);
+      bns.appendDenseSecurityValue(
+        preparedDerives,
+        { binding, receiver: runner[0], run: runner[1] },
+        'Inline prepared state derive callee',
+      );
+    }
+    for (let index = 0; index < preparedDerives.length; index += 1) {
+      const prepared = preparedDerives[index];
+      if (!prepared) continue;
+      const binding = prepared.binding;
+      const value = bns.call(prepared.run, prepared.receiver, [state]);
+      bns.appendDenseSecurityValue(
+        operations,
+        {
+          el: binding.el,
+          kind: binding.property ? 2 : binding.suffix ? 1 : 0,
+          suffix: binding.suffix,
+          value: binding.suffix || binding.property ? value : fb(value),
+        },
+        'Inline prepared state derive binding',
+      );
+    }
+    return operations;
+  };
+  const apb = (operations) => {
+    for (let index = 0; index < operations.length; index += 1) {
+      const operation = operations[index];
+      if (!operation) continue;
+      if (operation.kind === 2) wp(operation.el, operation.suffix, operation.value);
+      else if (operation.kind === 1) wa(operation.el, operation.suffix, operation.value);
+      else bns.setNodeTextContent(operation.el, operation.value);
     }
   };
   const rd = (val) => {
@@ -2073,8 +2108,10 @@ function installInlineKovoLoader(im) {
       }
       state = sv(context.state);
       context.state = state;
-      bns.setElementAttribute(stateHost, 'kovo-state', js(state));
-      await as(stateHost, state);
+      const serializedState = js(state);
+      const preparedBindings = await psb(stateHost, state);
+      apb(preparedBindings);
+      bns.setElementAttribute(stateHost, 'kovo-state', serializedState);
       for (let index = 0; index < pc.length; index += 1) {
         const callback = pc[index];
         if (typeof callback !== 'function') continue;

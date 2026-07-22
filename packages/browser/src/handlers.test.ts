@@ -414,6 +414,127 @@ describe('delegated handler reference dispatch', () => {
     expect(output.textContent).toBe('3');
   });
 
+  it('keeps state, direct sinks, derives, and post-commit effects unchanged on a late derive import failure', async () => {
+    const deferredEffect = vi.fn();
+    const firstRun = vi.fn(() => 'new-first');
+    const host = new FakeStatefulBindingElement({
+      'kovo-state': '{"value":"old"}',
+      'on:click': '/c/a.js#change',
+    });
+    const direct = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.value' },
+      { parent: host, textContent: 'old-direct' },
+    );
+    const first = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/a.js#first' },
+      { parent: host, textContent: 'old-first' },
+    );
+    new FakeStatefulBindingElement(
+      { 'data-bind': '/c/b.js#second' },
+      { parent: host, textContent: 'old-second' },
+    );
+    const change = (_event: unknown, ctx: { state: { value: string } }) => {
+      ctx.state.value = 'new';
+      (
+        globalThis as { __kovo_postCommitSchedule?: (callback: () => void) => void }
+      ).__kovo_postCommitSchedule?.(deferredEffect);
+    };
+
+    await expect(
+      dispatchDelegatedEvent({ target: host, type: 'click' }, async (url) => {
+        if (url === '/c/a.js') return { change, first: { run: firstRun } };
+        throw new Error('late derive import failed');
+      }),
+    ).rejects.toThrow('late derive import failed');
+
+    expect(firstRun).not.toHaveBeenCalled();
+    expect(host.getAttribute('kovo-state')).toBe('{"value":"old"}');
+    expect(direct.textContent).toBe('old-direct');
+    expect(first.textContent).toBe('old-first');
+    expect(deferredEffect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing export', {}],
+    ['invalid export', { derived: vi.fn() }],
+    ['missing run', { derived: {} }],
+    ['invalid run', { derived: { run: 'not-a-function' } }],
+  ])('fails closed on a %s in the owned state derive module', async (_label, deriveModule) => {
+    const deferredEffect = vi.fn();
+    const host = new FakeStatefulBindingElement({
+      'kovo-state': '{"value":"old"}',
+      'on:click': '/c/a.js#change',
+    });
+    const output = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/b.js#derived' },
+      { parent: host, textContent: 'old-output' },
+    );
+    const change = (_event: unknown, ctx: { state: { value: string } }) => {
+      ctx.state.value = 'new';
+      (
+        globalThis as { __kovo_postCommitSchedule?: (callback: () => void) => void }
+      ).__kovo_postCommitSchedule?.(deferredEffect);
+    };
+
+    await expect(
+      dispatchDelegatedEvent({ target: host, type: 'click' }, async (url) =>
+        url === '/c/a.js' ? { change } : deriveModule,
+      ),
+    ).rejects.toThrow(/Kovo state derive (?:export|run export) is missing or invalid/u);
+
+    expect(host.getAttribute('kovo-state')).toBe('{"value":"old"}');
+    expect(output.textContent).toBe('old-output');
+    expect(deferredEffect).not.toHaveBeenCalled();
+  });
+
+  it('does not apply earlier direct/derive sinks or commit state when a later derive throws', async () => {
+    const deferredEffect = vi.fn();
+    const firstRun = vi.fn(() => 'new-first');
+    const host = new FakeStatefulBindingElement({
+      'kovo-state': '{"value":"old"}',
+      'on:click': '/c/a.js#change',
+    });
+    const direct = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.value' },
+      { parent: host, textContent: 'old-direct' },
+    );
+    const first = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/a.js#first' },
+      { parent: host, textContent: 'old-first' },
+    );
+    const second = new FakeStatefulBindingElement(
+      { 'data-bind': '/c/b.js#second' },
+      { parent: host, textContent: 'old-second' },
+    );
+    const change = (_event: unknown, ctx: { state: { value: string } }) => {
+      ctx.state.value = 'new';
+      (
+        globalThis as { __kovo_postCommitSchedule?: (callback: () => void) => void }
+      ).__kovo_postCommitSchedule?.(deferredEffect);
+    };
+
+    await expect(
+      dispatchDelegatedEvent({ target: host, type: 'click' }, async (url) =>
+        url === '/c/a.js'
+          ? { change, first: { run: firstRun } }
+          : {
+              second: {
+                run() {
+                  throw new Error('late derive run failed');
+                },
+              },
+            },
+      ),
+    ).rejects.toThrow('late derive run failed');
+
+    expect(firstRun).toHaveBeenCalledTimes(1);
+    expect(host.getAttribute('kovo-state')).toBe('{"value":"old"}');
+    expect(direct.textContent).toBe('old-direct');
+    expect(first.textContent).toBe('old-first');
+    expect(second.textContent).toBe('old-second');
+    expect(deferredEffect).not.toHaveBeenCalled();
+  });
+
   it('drains post-commit callbacks after the async derive binding flush (SPEC §4.3)', async () => {
     // Reproduces the menu focus race: a derive `data-bind` reveals content via
     // an awaited dynamic import (a later microtask). A callback scheduled during
@@ -426,9 +547,13 @@ describe('delegated handler reference dispatch', () => {
     });
     // A derive-style binding: `url#exportName` is resolved via importModule and
     // its derive.run() writes the revealed value, recording the flush ordering.
-    new FakeStatefulBindingElement(
+    const direct = new FakeStatefulBindingElement(
+      { 'data-bind': 'state.open' },
+      { parent: host, textContent: 'false' },
+    );
+    const derived = new FakeStatefulBindingElement(
       { 'data-bind': '/c/menu.js#hiddenDerive' },
-      { parent: host, textContent: '' },
+      { parent: host, textContent: 'old-derived' },
     );
 
     const open = vi.fn((_event, ctx: { state: { open: boolean } }) => {
@@ -438,12 +563,16 @@ describe('delegated handler reference dispatch', () => {
         .__kovo_postCommitSchedule;
       expect(typeof schedule).toBe('function');
       schedule?.(() => {
-        order.push('post-commit-focus');
+        order.push(
+          `post-commit:${host.getAttribute('kovo-state')}:${direct.textContent}:${derived.textContent}`,
+        );
       });
     });
     const hiddenDerive = {
       run() {
-        order.push('derive-flush');
+        order.push(
+          `derive-prepare:${host.getAttribute('kovo-state')}:${direct.textContent}:${derived.textContent}`,
+        );
         return 'revealed';
       },
     };
@@ -456,7 +585,10 @@ describe('delegated handler reference dispatch', () => {
     await dispatchDelegatedEvent({ target: host, type: 'click' }, importModule);
 
     // The deferred focus runs strictly after the binding/derive flush.
-    expect(order).toEqual(['derive-flush', 'post-commit-focus']);
+    expect(order).toEqual([
+      'derive-prepare:{"open":false}:false:old-derived',
+      'post-commit:{"open":true}:true:revealed',
+    ]);
     // The global hook is cleaned up after dispatch (no leak across dispatches).
     expect(
       (globalThis as { __kovo_postCommitSchedule?: unknown }).__kovo_postCommitSchedule,
