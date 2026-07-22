@@ -5,12 +5,12 @@
     {
       "route": "re-exported-bindings",
       "status": "modeled",
-      "evidence": "es-module-lexer static import/export records are resolved into exact certificate edges and covered by the missing-edge negative control"
+      "evidence": "the pinned Acorn parser consumes the complete module and every static import/re-export AST node is resolved into an exact certificate edge; the missing-edge and near-4 MiB hidden-tail controls fail if extraction is incomplete"
     },
     {
       "route": "computed-dynamic-import",
       "status": "modeled",
-      "evidence": "@kovojs/verify requires an exact opaque row for every non-literal dynamic import and fails an unledgered occurrence as coverage/computed-import"
+      "evidence": "the complete Acorn AST exposes every ImportExpression; @kovojs/verify requires an exact opaque row for every non-literal dynamic import and fails an unledgered occurrence as coverage/computed-import"
     },
     {
       "route": "eval",

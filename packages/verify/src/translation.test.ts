@@ -32,6 +32,38 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     );
   });
 
+  it('derives every client module acquisition from the complete AST and admits only named imports', () => {
+    for (const acquisition of [
+      'export { safeCall } from "./safe.client.js";',
+      'export * from "./safe.client.js";',
+      'import("./safe.client.js");',
+      'import safeCall from "./safe.client.js";',
+      'import "./safe.client.js";',
+    ]) {
+      const input = validTranslation();
+      artifact(input, 'client').source += `\n${acquisition}\n`;
+      expect(verifyEmittedTranslation(input).findings, acquisition).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'client-import-unreviewed',
+            relation: 'client-import-subset',
+          }),
+        ]),
+      );
+    }
+
+    const invalid = validTranslation();
+    artifact(invalid, 'client').source += '\nimport { broken from "./safe.client.js";\n';
+    expect(verifyEmittedTranslation(invalid).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-parse',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+  });
+
   it('rejects exact secret field tokens in client or registry output without substring false positives', () => {
     const safe = validTranslation();
     artifact(safe, 'registry').source += '\ninterface Safe { passwordHashDigest: string }\n';

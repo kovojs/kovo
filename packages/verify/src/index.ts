@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto';
 import { type BigIntStats, type Dirent, lstatSync, opendirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
-import { parse } from 'es-module-lexer/js';
-
 import { readBoundedRegularFileSnapshot } from './file-snapshot.js';
+import {
+  collectJavaScriptModuleReferences,
+  isJavaScriptAstNode,
+  type JavaScriptAstNode,
+  parseJavaScriptModule,
+} from './javascript-ast.js';
 
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MAX_CERTIFICATE_ROWS = 131_072;
@@ -1937,9 +1941,9 @@ function parseArtifact(
     findings.push(finding('coverage', 'artifact-utf8', `${module} is not valid UTF-8`));
     return { edges: [], localCapabilities: new Set(), opaque: [] };
   }
-  let imports: ReturnType<typeof parse>[0];
+  let program: JavaScriptAstNode;
   try {
-    [imports] = parse(source, module);
+    program = parseJavaScriptModule(source);
   } catch (error) {
     findings.push(
       finding(
@@ -1953,11 +1957,17 @@ function parseArtifact(
   const edges = new Map<string, readonly [string, string]>();
   const localCapabilities = new Set<KovoCertificateCapabilityKind>();
   const opaque = new Map<string, { module: string; reason: string }>();
-  for (const imported of imports) {
-    if (imported.d === -2 || imported.t === 3) continue;
-    const specifier = imported.n;
+  for (const imported of collectJavaScriptModuleReferences(program)) {
+    const specifier = imported.specifier;
     if (specifier === undefined) {
-      if (isNoSubstitutionTemplateDynamicImport(source, imported)) {
+      const importSource = imported.node.source;
+      if (
+        imported.kind === 'dynamic-import' &&
+        isJavaScriptAstNode(importSource) &&
+        importSource.type === 'TemplateLiteral' &&
+        Array.isArray(importSource.expressions) &&
+        importSource.expressions.length === 0
+      ) {
         findings.push(
           finding(
             'coverage',
@@ -1993,7 +2003,11 @@ function parseArtifact(
       };
       opaque.set(`${entry.module}\0${entry.reason}`, entry);
     }
-    const capability = classifyRawCapabilityImport(source, imported, specifier);
+    const capability = classifyRawCapabilityImport(
+      specifier,
+      imported.kind,
+      imported.importedNames,
+    );
     if (capability !== undefined) {
       localCapabilities.add(capability);
       continue;
@@ -2054,29 +2068,6 @@ function parseArtifact(
       compareStrings(`${left.module}\0${left.reason}`, `${right.module}\0${right.reason}`),
     ),
   };
-}
-
-function isNoSubstitutionTemplateDynamicImport(
-  source: string,
-  imported: ReturnType<typeof parse>[0][number],
-): boolean {
-  if (imported.d < 0) return false;
-  const raw = source.slice(imported.s, imported.e);
-  if (raw.length < 2 || raw[0] !== '`' || raw.at(-1) !== '`') return false;
-  let escaped = false;
-  for (let index = 1; index < raw.length - 1; index += 1) {
-    const character = raw[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === '\\') {
-      escaped = true;
-      continue;
-    }
-    if (character === '$' && raw[index + 1] === '{') return false;
-  }
-  return true;
 }
 
 function resolveArtifactSpecifier(
@@ -2343,29 +2334,21 @@ function classifyRawCapabilityModuleSpecifier(
 }
 
 function classifyRawCapabilityImport(
-  source: string,
-  imported: { d: number; s: number; ss: number },
   specifier: string,
+  kind: 'dynamic-import' | 'export' | 'import',
+  importedNames: readonly string[],
 ): KovoCertificateCapabilityKind | undefined {
   const withoutNode = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier;
   if (withoutNode !== 'crypto') return classifyRawCapabilityModuleSpecifier(specifier);
-  return imported.d === -1 && isExactDigestOnlyCryptoImport(source.slice(imported.ss, imported.s))
+  return kind !== 'dynamic-import' && isExactDigestOnlyCryptoImport(importedNames)
     ? 'digest'
     : 'crypto-acquisition';
 }
 
-function isExactDigestOnlyCryptoImport(prefix: string): boolean {
-  const match = /^\s*(?:import|export)\s*\{([\s\S]*)\}\s*from\s*['"]$/u.exec(prefix);
-  if (match === null) return false;
-  const importedNames = match[1];
-  if (importedNames === undefined) return false;
-  const entries = importedNames.split(',');
-  if (entries.at(-1)?.trim() === '') entries.pop();
+function isExactDigestOnlyCryptoImport(importedNames: readonly string[]): boolean {
   return (
-    entries.length > 0 &&
-    entries.every((entry) =>
-      /^(?:createHash|hash)(?:\s+as\s+[$A-Z_a-z][$\w]*)?$/u.test(entry.trim()),
-    )
+    importedNames.length > 0 &&
+    importedNames.every((importedName) => importedName === 'createHash' || importedName === 'hash')
   );
 }
 
