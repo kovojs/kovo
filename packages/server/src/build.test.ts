@@ -62,6 +62,11 @@ const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
+const declaredDeploySkewRetention = {
+  hours: 24,
+  immutableClientModules: 'retained',
+  priorTokenQueryReads: 'retained',
+} as const;
 
 function testClientModuleHref(path: string, source: string): string {
   return versionedClientModuleHref(path, clientModuleRepresentationDigest(source));
@@ -1653,9 +1658,19 @@ export default createRequestHandler(app);
       delete dynamicBuild.serverHandlerPath;
       delete dynamicBuild.staticOutput;
 
-      const nodeDiagnostics = node().inspect!(dynamicBuild, { declaredEnv: [] });
-      const vercelDiagnostics = vercel().inspect!(dynamicBuild, { declaredEnv: [] });
-      const cloudflareDiagnostics = await cloudflare().inspect!(dynamicBuild, { declaredEnv: [] });
+      const nodeDiagnostics = node({ retention: declaredDeploySkewRetention }).inspect!(
+        dynamicBuild,
+        {
+          declaredEnv: [],
+        },
+      );
+      const vercelDiagnostics = vercel({ retention: declaredDeploySkewRetention }).inspect!(
+        dynamicBuild,
+        { declaredEnv: [] },
+      );
+      const cloudflareDiagnostics = await cloudflare({
+        retention: declaredDeploySkewRetention,
+      }).inspect!(dynamicBuild, { declaredEnv: [] });
       const poisonHitsAfterInspection = poisonHits;
       Array.prototype.push = originalPush;
 
@@ -1719,9 +1734,11 @@ export default createRequestHandler(app);
       });
       expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
       expect(sqliteDurableTaskStoreError('node', 'receipt/send')).toMatchObject({ code: 'KV446' });
-      expect(node().inspect!(build, { declaredEnv: [] })).toEqual([]);
       expect(
-        node().inspect!(build, {
+        node({ retention: declaredDeploySkewRetention }).inspect!(build, { declaredEnv: [] }),
+      ).toEqual([]);
+      expect(
+        node({ retention: declaredDeploySkewRetention }).inspect!(build, {
           declaredEnv: [],
           readServerHandlerSource() {
             return "import { sqliteTable } from 'drizzle-orm/sqlite-core';\n";
@@ -1729,7 +1746,7 @@ export default createRequestHandler(app);
         }),
       ).toEqual([]);
       expect(
-        node().inspect!(build, {
+        node({ retention: declaredDeploySkewRetention }).inspect!(build, {
           declaredEnv: [],
           readServerHandlerSource() {
             return "import Database from 'better-sqlite3';\n";
@@ -1737,22 +1754,24 @@ export default createRequestHandler(app);
         }),
       ).toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
       await expect(
-        node().inspect!(build, {
+        node({ retention: declaredDeploySkewRetention }).inspect!(build, {
           declaredEnv: [],
           async readServerHandlerSource() {
             return "import Database from 'better-sqlite3';\n";
           },
         }),
       ).resolves.toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
-      expect(node({ jobRunner: false }).inspect!(build, { declaredEnv: [] })).toEqual([
-        missingJobRunnerError('node', 'receipt/send'),
-      ]);
-      expect(vercel().inspect!(build, { declaredEnv: [] })).toEqual([
-        missingJobRunnerError('vercel', 'receipt/send'),
-      ]);
-      await expect(cloudflare().inspect!(build, { declaredEnv: [] })).resolves.toEqual([
-        missingJobRunnerError('cloudflare', 'receipt/send'),
-      ]);
+      expect(
+        node({ jobRunner: false, retention: declaredDeploySkewRetention }).inspect!(build, {
+          declaredEnv: [],
+        }),
+      ).toEqual([missingJobRunnerError('node', 'receipt/send')]);
+      expect(
+        vercel({ retention: declaredDeploySkewRetention }).inspect!(build, { declaredEnv: [] }),
+      ).toEqual([missingJobRunnerError('vercel', 'receipt/send')]);
+      await expect(
+        cloudflare({ retention: declaredDeploySkewRetention }).inspect!(build, { declaredEnv: [] }),
+      ).resolves.toEqual([missingJobRunnerError('cloudflare', 'receipt/send')]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -1903,11 +1922,13 @@ export default createRequestHandler(app);
         staticOnly: false,
         tasks: [{ key: 'receipt/send' }],
       });
-      expect(vercel({ jobRunner: false }).inspect!(build, { declaredEnv: [] })).toEqual([
-        missingJobRunnerError('vercel', 'receipt/send'),
-      ]);
+      expect(
+        vercel({ jobRunner: false, retention: declaredDeploySkewRetention }).inspect!(build, {
+          declaredEnv: [],
+        }),
+      ).toEqual([missingJobRunnerError('vercel', 'receipt/send')]);
       const vercelOutDir = join(root, '.vercel/output');
-      await vercel().emit!(build, {
+      await vercel({ retention: declaredDeploySkewRetention }).emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: vercelOutDir,
@@ -1962,7 +1983,10 @@ export default createRequestHandler(app);
       });
 
       expect(
-        node({ jobRunner: { mode: 'runner-only' } }).inspect!(build, { declaredEnv: [] }),
+        node({
+          jobRunner: { mode: 'runner-only' },
+          retention: declaredDeploySkewRetention,
+        }).inspect!(build, { declaredEnv: [] }),
       ).toEqual([
         {
           code: 'node-runner-only-unsupported',
@@ -5446,7 +5470,9 @@ export default async function handler() {
       });
 
       await expect(
-        cloudflare().inspect!(build, { declaredEnv: ['DATABASE_URL'] }),
+        cloudflare({ retention: declaredDeploySkewRetention }).inspect!(build, {
+          declaredEnv: ['DATABASE_URL'],
+        }),
       ).resolves.toEqual([
         {
           code: 'cloudflare-tcp-database',
@@ -5511,10 +5537,15 @@ export default async function handler() {
         readServerHandlerSource: () => serverHandlerSource,
       };
 
-      expect(node().inspect!(inspectionBuild, inspectContext)).toEqual([
-        sqliteDurableTaskStoreError('node', 'receipt/send'),
-      ]);
-      await expect(cloudflare().inspect!(inspectionBuild, inspectContext)).resolves.toEqual([
+      expect(
+        node({ retention: declaredDeploySkewRetention }).inspect!(inspectionBuild, inspectContext),
+      ).toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
+      await expect(
+        cloudflare({ retention: declaredDeploySkewRetention }).inspect!(
+          inspectionBuild,
+          inspectContext,
+        ),
+      ).resolves.toEqual([
         missingJobRunnerError('cloudflare', 'receipt/send'),
         {
           code: 'cloudflare-unsupported-node-api',

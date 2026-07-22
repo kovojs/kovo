@@ -54,8 +54,13 @@ describe('page hints', () => {
   });
 
   it('renders versioned client module hrefs in page hints', () => {
-    const bootstrapScript = versionedClientModuleHref('/c/generated/app.client.js', 'build-1');
-    const cartModule = versionedClientModuleHref('/c/cart.client.js', 'cart-1');
+    const bootstrapDigest = 'a'.repeat(64);
+    const cartDigest = 'b'.repeat(64);
+    const bootstrapScript = versionedClientModuleHref(
+      '/c/generated/app.client.js',
+      bootstrapDigest,
+    );
+    const cartModule = versionedClientModuleHref('/c/cart.client.js', cartDigest);
 
     expect(
       renderPageHints({
@@ -64,16 +69,16 @@ describe('page hints', () => {
       }),
     ).toEqual({
       earlyHints: {
-        Link: '</c/__v/cart-1/cart.client.js>; rel=modulepreload, </c/__v/build-1/generated/app.client.js>; rel=modulepreload',
+        Link: `</c/__v/${cartDigest}/cart.client.js>; rel=modulepreload, </c/__v/${bootstrapDigest}/generated/app.client.js>; rel=modulepreload`,
       },
       html: [
-        '<link rel="modulepreload" href="/c/__v/cart-1/cart.client.js" data-kovo-module-allowlist>',
-        '<link rel="modulepreload" href="/c/__v/build-1/generated/app.client.js" data-kovo-module-allowlist>',
-        '<script type="module" src="/c/__v/build-1/generated/app.client.js"></script>',
+        `<link rel="modulepreload" href="/c/__v/${cartDigest}/cart.client.js" data-kovo-module-allowlist>`,
+        `<link rel="modulepreload" href="/c/__v/${bootstrapDigest}/generated/app.client.js" data-kovo-module-allowlist>`,
+        `<script type="module" src="/c/__v/${bootstrapDigest}/generated/app.client.js"></script>`,
       ].join(''),
     });
-    expect(versionedClientModuleHref('/c/cart.client.js#Cart$add', 'cart-1')).toBe(
-      '/c/__v/cart-1/cart.client.js#Cart$add',
+    expect(versionedClientModuleHref('/c/cart.client.js#Cart$add', cartDigest)).toBe(
+      `/c/__v/${cartDigest}/cart.client.js#Cart$add`,
     );
   });
 

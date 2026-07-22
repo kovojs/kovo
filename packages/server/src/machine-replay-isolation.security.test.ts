@@ -20,7 +20,9 @@ import { securitySha256Utf16LeHex } from './response-security-intrinsics.js';
 import { s } from './schema.js';
 
 type MachineRequest = Request;
-type MachineHandler = (request: Request) => Promise<Response>;
+type MachineHandler = ((request: Request) => Promise<Response>) & {
+  readonly buildToken: string;
+};
 
 function countingReplayStore(): {
   calls(): number;
@@ -77,9 +79,12 @@ function machineWrite(handlerCallers: string[]) {
 }
 
 function machineHandler(replayStore: MutationReplayStore, handlerCallers: string[]) {
-  return createRequestHandler(
-    createApp({ mutationReplayStore: replayStore, mutations: [machineWrite(handlerCallers)] }),
-  );
+  const app = createApp({
+    mutationReplayStore: replayStore,
+    mutations: [machineWrite(handlerCallers)],
+  });
+  const handler = createRequestHandler(app);
+  return Object.assign(handler, { buildToken: app.clientModules.buildToken() });
 }
 
 function submitMachine(
@@ -102,6 +107,7 @@ function submitMachine(
         ...(options.enhanced
           ? {
               'Kovo-Current-Url': 'https://api.example.test/',
+              'Kovo-Build': handler.buildToken,
               'Kovo-Fragment': 'true',
               'Kovo-Idem': options.idem,
             }

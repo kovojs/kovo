@@ -547,19 +547,20 @@ export const CartButton = component({
     expect(documentBodyA).toContain(`<meta name="kovo-build" content="${tokenA}">`);
     expect(queryB.headers.get('Kovo-Build')).not.toBe(tokenA);
 
-    const mutationRequest = () =>
+    const mutationRequest = (buildToken: string) =>
       new Request('https://example.test/_m/cart/add-token-proof', {
         body: JSON.stringify({ productId: 'p1' }),
         headers: {
           'Content-Type': 'application/json',
+          'Kovo-Build': buildToken,
           'Kovo-Fragment': 'true',
           'Kovo-Targets': 'cart-summary=cart',
         },
         method: 'POST',
       });
     const [mutationA, mutationB] = await Promise.all([
-      handlerA(mutationRequest()),
-      handlerB(mutationRequest()),
+      handlerA(mutationRequest(tokenA)),
+      handlerB(mutationRequest(tokenB)),
     ]);
     expect(mutationA.status).toBe(200);
     expect(mutationB.status).toBe(200);

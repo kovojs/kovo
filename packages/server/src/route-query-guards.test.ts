@@ -93,7 +93,7 @@ describe('route and query guard responses', () => {
         sessionProvider,
       }),
     ).resolves.toEqual({
-      body: '<kovo-query name="account">{"userId":"u1"}</kovo-query>',
+      body: '<kovo-query name="account" href="/_q/account">{"userId":"u1"}</kovo-query>',
       // H3 fix: /_q/ 200 responses now carry the private cache posture (SPEC §9.4:895).
       headers: {
         'Cache-Control': 'private, no-store',

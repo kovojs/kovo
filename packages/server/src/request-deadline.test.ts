@@ -436,19 +436,19 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
         }
       },
     });
-    const handle = createRequestHandler(
-      createApp({
-        mutationReplayStore: replayStore,
-        mutations: [slowMutation],
-        requestLimits: { deadlineMs: 30, maxInFlight: 1 },
-      }),
-    );
+    const app = createApp({
+      mutationReplayStore: replayStore,
+      mutations: [slowMutation],
+      requestLimits: { deadlineMs: 30, maxInFlight: 1 },
+    });
+    const handle = createRequestHandler(app);
 
     const response = await handle(
       new Request('https://app.test/_m/deadline/transaction', {
         body: '{}',
         headers: {
           'Content-Type': 'application/json',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Fragment': 'true',
           'Kovo-Idem': `v1_${Date.now()}_${'a'.repeat(32)}`,
         },
@@ -497,19 +497,19 @@ describe('mandatory request deadline and occupancy budget (SPEC §9.5)', () => {
         return value;
       },
     });
-    const handle = createRequestHandler(
-      createApp({
-        mutationReplayStore: replayStore,
-        mutations: [committedMutation],
-        requestLimits: { deadlineMs: 50, maxInFlight: 1 },
-      }),
-    );
+    const app = createApp({
+      mutationReplayStore: replayStore,
+      mutations: [committedMutation],
+      requestLimits: { deadlineMs: 50, maxInFlight: 1 },
+    });
+    const handle = createRequestHandler(app);
 
     const response = await handle(
       new Request('https://app.test/_m/deadline/post-commit', {
         body: '{}',
         headers: {
           'Content-Type': 'application/json',
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Fragment': 'true',
           'Kovo-Idem': `v1_${Date.now()}_${'b'.repeat(32)}`,
         },

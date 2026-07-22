@@ -1270,7 +1270,7 @@ describe('server node adapter', () => {
 
       const queryResponse = await server.fetch('/_q/cart');
       expect(queryResponse).toMatchObject({
-        body: '<kovo-query name="cart">{"count":0}</kovo-query>',
+        body: '<kovo-query name="cart" href="/_q/cart">{"count":0}</kovo-query>',
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
         }),
@@ -1303,7 +1303,7 @@ describe('server node adapter', () => {
 
       const refreshedQuery = await server.fetch('/_q/cart');
       expect(refreshedQuery).toMatchObject({
-        body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+        body: '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>',
         status: 200,
       });
     } finally {

@@ -189,7 +189,8 @@ describe('anonymous mutation-form document cache posture', () => {
 
   it('keeps the enhanced-submit path usable after the same conforming-cache selection', async () => {
     let submissions = 0;
-    const handler = createRequestHandler(anonymousFormApp(() => submissions++));
+    const app = anonymousFormApp(() => submissions++);
+    const handler = createRequestHandler(app);
     const attackerBinding = 'A'.repeat(43);
     const victimBinding = 'B'.repeat(43);
     const primed = await handler(
@@ -209,6 +210,7 @@ describe('anonymous mutation-form document cache posture', () => {
         }),
         headers: {
           Cookie: cookieHeader(victimBinding),
+          'Kovo-Build': app.clientModules.buildToken(),
           'Kovo-Current-Url': 'https://shop.example.test/login',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': idem,

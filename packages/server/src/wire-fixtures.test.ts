@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { encodeFrameworkLiveTargetHeader } from '@kovojs/core/internal/wire-input-grammar';
 
 import { mintIdemToken } from './csrf.js';
 import { renderDeferredStream } from './deferred-stream.js';
@@ -115,7 +116,7 @@ describe('server wire fixture contracts', () => {
             render: () => cartBadgeFragmentHtml,
           },
         ],
-        liveTargets: [{ deps: ['cart'], target: 'cart-badge' }],
+        liveTargets: [{ deps: [{ name: 'cart' }], target: 'cart-badge' }],
         rawInput: { productId: 'p1', quantity: 1 },
         request: {},
         targets: ['cart-badge'],
@@ -366,7 +367,9 @@ function attestedLiveTargetHeader(
     { component, props, target },
     { buildToken: wireFixtureLiveTargetAuthority.audience, request: {} },
   );
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
+  return encodeFrameworkLiveTargetHeader([
+    { attestation: token, component, propsSource: JSON.stringify(props), target },
+  ]);
 }
 
 function withoutHeader(headers: Record<string, string>, name: string): Record<string, string> {

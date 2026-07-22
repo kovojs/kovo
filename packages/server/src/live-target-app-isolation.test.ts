@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { encodeFrameworkLiveTargetHeader } from '@kovojs/core/internal/wire-input-grammar';
 
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleStore } from './client-modules.js';
@@ -115,7 +116,9 @@ describe('live-target app authority isolation', () => {
       }),
     ).toThrow(/requires a closed Kovo app owner/u);
     const tokenA = createAppLiveTargetAttestation(appA, descriptor, {});
-    const header = `shared#shared/card@${tokenA}:{}`;
+    const header = encodeFrameworkLiveTargetHeader([
+      { ...descriptor, attestation: tokenA, propsSource: '{}' },
+    ]);
 
     expect(
       mutationWireRequestFromHeaders({

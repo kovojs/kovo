@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createHash, createHmac } from 'node:crypto';
-import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
+import {
+  encodeFrameworkIdentityToken,
+  encodeFrameworkLiveTargetHeader,
+  encodeFrameworkTargetHeader,
+} from '@kovojs/core/internal/wire-input-grammar';
 
 import {
   MAX_MUTATION_WIRE_TARGET_HEADER_CHARACTERS,
@@ -29,9 +33,31 @@ describe('mutation wire headers', () => {
       readMutationWireHeaders({
         'kovo-fragment': 'true',
         'Kovo-Idem': ' idem_01HX ',
-        'Kovo-Live-Targets':
-          'cart-badge#components%2Fcart%2Fcart-badge%2Fcart-badge@tok_cart:{}; recommendations#components%2Frecommendations%2Frecommendations@tok_rec:{"productId":"p1;still-json"}; cart-badge#ignored@tok_ignored:{}',
-        'Kovo-Targets': 'cart-badge=cart; recommendations=product%3Ap1, cart-badge=cart',
+        'Kovo-Live-Targets': [
+          liveTargetHeader(
+            {
+              component: 'components/cart/cart-badge/cart-badge',
+              props: {},
+              target: 'cart-badge',
+            },
+            'tok_cart',
+          ),
+          liveTargetHeader(
+            {
+              component: 'components/recommendations/recommendations',
+              props: { productId: 'p1;still-json' },
+              target: 'recommendations',
+            },
+            'tok_rec',
+          ),
+        ].join('; '),
+        'Kovo-Targets': encodeFrameworkTargetHeader([
+          { deps: [{ name: 'cart' }], target: 'cart-badge' },
+          {
+            deps: [{ key: 'product:p1', name: 'product' }],
+            target: 'recommendations',
+          },
+        ]),
       }),
     ).toEqual({
       fragment: true,
@@ -51,8 +77,11 @@ describe('mutation wire headers', () => {
         },
       ],
       liveTargets: [
-        { deps: ['cart'], target: 'cart-badge' },
-        { deps: ['product:p1'], target: 'recommendations' },
+        { deps: [{ name: 'cart' }], target: 'cart-badge' },
+        {
+          deps: [{ key: 'product:p1', name: 'product' }],
+          target: 'recommendations',
+        },
       ],
       stream: false,
       targets: ['cart-badge', 'recommendations'],
@@ -114,7 +143,15 @@ describe('mutation wire headers', () => {
           ['Kovo-Idem', 'idem_01HY'],
           ['Kovo-Stream', 'true'],
           ['Kovo-Live-Targets', liveTargetHeader(descriptor, token)],
-          ['Kovo-Targets', 'product-form%3Ap1=product%3Ap1'],
+          [
+            'Kovo-Targets',
+            encodeFrameworkTargetHeader([
+              {
+                deps: [{ key: 'product:p1', name: 'product' }],
+                target: 'product-form:p1',
+              },
+            ]),
+          ],
         ]),
         rawInput: { productId: 'p1', quantity: 99 },
         replayStore,
@@ -134,7 +171,12 @@ describe('mutation wire headers', () => {
           target: 'product-form:p1',
         },
       ],
-      liveTargets: [{ deps: ['product:p1'], target: 'product-form:p1' }],
+      liveTargets: [
+        {
+          deps: [{ key: 'product:p1', name: 'product' }],
+          target: 'product-form:p1',
+        },
+      ],
       rawInput: { productId: 'p1', quantity: 99 },
       replayStore,
       request: { sessionId: 's1' },
@@ -644,13 +686,36 @@ describe('mutation wire headers', () => {
   // K2 (SPEC §9.5): client-supplied Kovo-Live-Targets / Kovo-Targets headers must be
   // count-capped at parse time so one mutation cannot amplify into thousands of
   // component renders + O(N·M) selection (a >1000× DoS).
-  it('K2: caps parsed live-target and descriptor counts at MAX_MUTATION_WIRE_TARGETS', () => {
+  it('K2: accepts the exact target cap and rejects excess entries atomically', () => {
+    const exactTargets = Array.from({ length: MAX_MUTATION_WIRE_TARGETS }, (_, i) => ({
+      deps: [{ name: `d${i}` }],
+      target: `t${i}`,
+    }));
+    const exactDescriptors = Array.from({ length: MAX_MUTATION_WIRE_TARGETS }, (_, i) => ({
+      attestation: `a${i}`,
+      component: 'x',
+      propsSource: '{}',
+      target: `t${i}`,
+    }));
+    const exact = readMutationWireHeaders({
+      'Kovo-Fragment': 'true',
+      'Kovo-Live-Targets': encodeFrameworkLiveTargetHeader(exactDescriptors),
+      'Kovo-Targets': encodeFrameworkTargetHeader(exactTargets),
+    });
+
+    expect(exact.liveTargets).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+    expect(exact.liveTargetDescriptors).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+    expect(exact.targets).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+
     const count = MAX_MUTATION_WIRE_TARGETS + 32;
-    const liveTargetsHeader = Array.from({ length: count }, (_, i) => `t${i}=dep${i}`).join(',');
-    const descriptorsHeader = Array.from(
-      { length: count },
-      (_, i) => `t${i}#components%2Fx%2Fx@tok${i}:{"i":${i}}`,
-    ).join(';');
+    const liveTargetsHeader = Array.from({ length: count }, (_, i) =>
+      encodeFrameworkTargetHeader([{ deps: [{ name: `d${i}` }], target: `t${i}` }]),
+    ).join('; ');
+    const descriptorsHeader = Array.from({ length: count }, (_, i) =>
+      encodeFrameworkLiveTargetHeader([
+        { attestation: `a${i}`, component: 'x', propsSource: '{}', target: `t${i}` },
+      ]),
+    ).join('; ');
 
     const headers = readMutationWireHeaders({
       'Kovo-Fragment': 'true',
@@ -659,9 +724,9 @@ describe('mutation wire headers', () => {
     });
 
     expect(MAX_MUTATION_WIRE_TARGETS).toBeLessThan(count);
-    expect(headers.liveTargets).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
-    expect(headers.liveTargetDescriptors).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
-    expect(headers.targets).toHaveLength(MAX_MUTATION_WIRE_TARGETS);
+    expect(headers.liveTargets).toEqual([]);
+    expect(headers.liveTargetDescriptors).toEqual([]);
+    expect(headers.targets).toEqual([]);
   });
 
   it('K2: rejects oversized target headers before scanning or retaining an entry', () => {

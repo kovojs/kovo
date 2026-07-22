@@ -122,7 +122,7 @@ describe('mutation wire intrinsic security', () => {
         ],
         liveTargetDescriptors: [],
         liveTargetRenderers: [],
-        liveTargets: [{ deps: ['cart'], target: 'cart-summary' }],
+        liveTargets: [{ deps: [{ name: 'cart' }], target: 'cart-summary' }],
         registryFacts: { queries: [] },
         rerunQueries: [{ key: 'cart' }],
         targets: ['cart-summary'],
@@ -147,7 +147,7 @@ describe('mutation wire intrinsic security', () => {
     });
   });
 
-  it('pins header parsing, descriptor JSON, and dedup after late scalar and collection poisoning', () => {
+  it('pins header parsing, descriptor JSON, and exact target admission after late poisoning', () => {
     const request = { sessionId: 'victim' };
     const csrf = {
       secret: 'mutation-wire-security-secret-0123456789abcdef',
@@ -167,7 +167,7 @@ describe('mutation wire intrinsic security', () => {
       'Kovo-Fragment': 'TRUE',
       'Kovo-Form-Target': 'public-panel',
       'Kovo-Live-Targets': `public-panel#components%2Fpublic%2Fpublic@${token}:{"id":"safe"}`,
-      'Kovo-Targets': 'public-panel=public; public-panel=admin',
+      'Kovo-Targets': 'public-panel=public',
     };
     const originalJsonParse = JSON.parse;
     const originalCharCodeAt = String.prototype.charCodeAt;
@@ -219,7 +219,7 @@ describe('mutation wire intrinsic security', () => {
 
     expect(parsedHeaders).toMatchObject({
       fragment: true,
-      liveTargets: [{ deps: ['public'], target: 'public-panel' }],
+      liveTargets: [{ deps: [{ name: 'public' }], target: 'public-panel' }],
       submittedFormTarget: 'public-panel',
       targets: ['public-panel'],
     });
