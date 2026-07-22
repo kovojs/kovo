@@ -452,32 +452,39 @@ describe('client-handler dynamic-code boundary', () => {
     });
   }
 
-  for (const [label, handlerBody] of [
+  for (const [label, handlerBody, closedDetail] of [
     [
       'local Function',
       `const Function = (source) => () => source; return Function('safe value')();`,
+      'local helper Function is outside the finite handler language',
     ],
     [
       'local setTimeout',
       `const setTimeout = (source) => source; return setTimeout('safe value', 0);`,
+      'local helper setTimeout is outside the finite handler language',
     ],
     [
       'local globalThis object',
       `const globalThis = { Function: (source) => () => source, setTimeout: (source) => source }; return globalThis.Function('safe value')() + globalThis.setTimeout('safe value', 0);`,
+      'local member helper <anonymous-member> is outside the finite handler language',
     ],
     [
       'local window object',
       `const window = { eval: (source) => source, setInterval: (source) => source }; return window.eval('safe value') + window.setInterval('safe value', 0);`,
+      'local member helper <anonymous-member> is outside the finite handler language',
     ],
   ] as const) {
-    it(`does not confuse ${label} with a global dynamic-code identity`, () => {
+    it(`keeps ${label} distinct from global dynamic code while closing local helpers`, () => {
       const result = compile(`
         import { component } from '@kovojs/core';
         export const Page = component({
           render: () => <button onClick={() => { ${handlerBody} }}>Go</button>,
         });
       `);
-      expectOpen(result, ['safe value']);
+      expect(errorCodes(result)).toContain('KV449');
+      expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+        closedDetail,
+      );
     });
   }
 
@@ -511,19 +518,18 @@ describe('client-handler dynamic-code boundary', () => {
     }
   });
 
-  it('allows global timers only with a syntactically proven callback function', () => {
+  it('allows global timers only with a proven callback that does not capture handler state', () => {
     for (const handlerBody of [
-      `return setTimeout(() => { state.callbackRan = true; }, 0);`,
-      `return globalThis.setInterval(function () { state.callbackRan = true; }, 10);`,
+      `return setTimeout(() => { clearTimeout(0); }, 0);`,
+      `return setInterval(() => { clearInterval(0); }, 10);`,
     ]) {
       const result = compile(`
         import { component } from '@kovojs/core';
         export const Page = component({
-          state: () => ({ callbackRan: false }),
           render: () => <button onClick={() => { ${handlerBody} }}>Go</button>,
         });
       `);
-      expectOpen(result, ['set', 'callbackRan']);
+      expectOpen(result, ['set', 'clear']);
     }
   });
 });
@@ -583,12 +589,12 @@ describe('JSX intrinsic/component lexical boundary', () => {
     it(`preserves intrinsic host grammar ${tag}`, () => {
       const result = compile(`
         import { component } from '@kovojs/core';
-        import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
         export const Page = component({
-          render: () => <${tag} onClick={() => tabsKeyDown()}>Go</${tag}>,
+          state: () => ({ count: 0 }),
+          render: () => <${tag} onClick={() => { state.count += 1; }}>Go</${tag}>,
         });
       `);
-      expectOpen(result, ['@kovojs/headless-ui/generated', 'tabsKeyDown()']);
+      expectOpen(result, ['state.count += 1']);
     });
   }
 

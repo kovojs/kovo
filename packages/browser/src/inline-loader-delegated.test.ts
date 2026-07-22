@@ -172,7 +172,7 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
-    'does not stamp state onto stateless delegated handler elements through %s',
+    'commits newly created state onto the fallback handler element through %s',
     async (_name, installSource) => {
       const element = new InlineTriggerElement({
         'on:click': '/c/theme.js#toggle',
@@ -186,7 +186,7 @@ describe('inline loader delegated handlers', () => {
       ]);
 
       expect(toggle).toHaveBeenCalledTimes(1);
-      expect(element.getAttribute('kovo-state')).toBeNull();
+      expect(element.getAttribute('kovo-state')).toBe('{"opened":true}');
     },
   );
 

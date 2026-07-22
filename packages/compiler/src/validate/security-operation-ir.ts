@@ -49,6 +49,26 @@ export const validateFiniteBrowserSecurityOperations = securityClassifier(
   function (diagnostics: DiagnosticFactory, model: ComponentModuleModel): CompilerDiagnostic[] {
     const found: CompilerDiagnostic[] = [];
     const analysis = analyzeClientCaptures(model);
+    const components = model.components;
+    const componentLength = compilerArrayLength(components, 'Security-IR components');
+    for (let componentIndex = 0; componentIndex < componentLength; componentIndex += 1) {
+      const component = compilerOwnDataValue(
+        components,
+        componentIndex,
+        'Security-IR components',
+      ) as ComponentModuleModel['components'][number] | undefined;
+      if (!component)
+        compilerFailClosed(`Security-IR components[${componentIndex}] must be dense.`);
+      const nonJsonValueSpan = component.stateReturnObject?.nonJsonValueSpan;
+      if (nonJsonValueSpan !== undefined) {
+        appendFiniteIrDiagnostic(
+          found,
+          diagnostics,
+          nonJsonValueSpan,
+          'component state initializer contains a value that cannot inhabit JsonValue.',
+        );
+      }
+    }
     const elements = jsxElements(model);
     const elementLength = compilerArrayLength(elements, 'Security-IR JSX elements');
     for (let elementIndex = 0; elementIndex < elementLength; elementIndex += 1) {

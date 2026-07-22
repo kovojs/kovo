@@ -984,6 +984,12 @@ function emitHandlerBody(handler: HandlerLowering): string {
 
   const arrowBody = handler.arrowBody;
   if (!arrowBody) return '// unsupported handler expression was preserved as a diagnostic surface';
+  // Some rejected roots cannot be re-emitted safely inside Kovo's synchronous generated ABI (for
+  // example async syntax or an over-budget effect manifest). Keep the diagnostic artifact valid
+  // JavaScript without retaining any authored executable body.
+  if (arrowBody.runtimeOmitted === true) {
+    return 'throw new TypeError("KV449: browser handler omitted from synchronous output.");';
+  }
   if (arrowBody.kind === 'block') {
     return lowerHandlerArrowBody(arrowBody, handler.params);
   }

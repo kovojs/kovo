@@ -437,6 +437,8 @@ export interface ZeroArgArrowModel {
   callArguments?: readonly string[];
   documentElementAction?: DocumentElementActionModel;
   references: readonly string[];
+  /** Roots that cannot inhabit a sync wrapper are retained for diagnostics but omitted at runtime. */
+  runtimeOmitted?: true;
   securityOperations?: readonly BrowserSecurityOperationModel[];
   securityOperationViolations?: readonly SecurityOperationViolationModel[];
 }
@@ -487,6 +489,8 @@ export interface RenderInputModel {
 export interface StateReturnObjectModel {
   end: number;
   entries: readonly ObjectLiteralEntry[];
+  /** First parser-proven value that cannot inhabit JsonValue (SPEC §4.3). */
+  nonJsonValueSpan?: SourceSpan;
   staticValue?: Record<string, StaticLiteralValue>;
   start: number;
 }

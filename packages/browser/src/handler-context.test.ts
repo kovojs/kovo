@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   createDelegatedHandlerContext,
@@ -6,6 +6,7 @@ import {
   readElementParams,
   readElementState,
   readElementStateHost,
+  snapshotHandlerStateJsonValue,
   writeElementState,
 } from './handler-context.js';
 import type { EventElementLike } from './events.js';
@@ -151,5 +152,132 @@ describe('handler context module', () => {
 
     expect(stateHost.getAttribute('kovo-state')).toBe('{"count":2}');
     expect(button.getAttribute('kovo-state')).toBe(null);
+  });
+
+  it('canonicalizes handler state to recursive own data without inherited capabilities', () => {
+    const shared = { value: 1 };
+    const input = JSON.parse(
+      '{"__proto__":{"admin":true},"items":[{"value":1}],"nested":{"value":2}}',
+    ) as Record<string, unknown>;
+    input.left = shared;
+    input.right = shared;
+
+    const snapshot = snapshotHandlerStateJsonValue(input) as Record<string, unknown>;
+    const nested = snapshot.nested as Record<string, unknown>;
+    const protoData = snapshot['__proto__'] as Record<string, unknown>;
+    const items = snapshot.items as Array<Record<string, unknown>>;
+
+    expect(Object.getPrototypeOf(snapshot)).toBeNull();
+    expect(Object.getPrototypeOf(nested)).toBeNull();
+    expect(Object.getPrototypeOf(protoData)).toBeNull();
+    expect(Object.getPrototypeOf(items[0])).toBeNull();
+    expect(Object.hasOwn(snapshot, '__proto__')).toBe(true);
+    expect(snapshot.toString).toBeUndefined();
+    expect(snapshot.constructor).toBeUndefined();
+    expect(protoData.admin).toBe(true);
+    expect(snapshot.left).not.toBe(snapshot.right);
+    expect(snapshot).toEqual(input);
+  });
+
+  it('rejects executable, opaque, accessor, cyclic, sparse, deep, and oversized state', () => {
+    const getter = vi.fn(() => 'not data');
+    const accessor = {};
+    Object.defineProperty(accessor, 'value', { enumerable: true, get: getter });
+
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+
+    let deep: Record<string, unknown> = {};
+    for (let depth = 0; depth < 65; depth += 1) deep = { child: deep };
+
+    const hostileProxy = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error('hostile ownKeys trap');
+        },
+      },
+    );
+
+    const invalidValues: unknown[] = [
+      () => undefined,
+      class OpaqueState {},
+      new Date(),
+      undefined,
+      1n,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      accessor,
+      new Array(1),
+      cyclic,
+      deep,
+      Array.from({ length: 10_000 }, () => 0),
+      'x'.repeat(1_000_001),
+      hostileProxy,
+    ];
+
+    for (const value of invalidValues) {
+      expect(() => snapshotHandlerStateJsonValue(value)).toThrow(
+        'KV449: handler state must be bounded recursive own-data JsonValue.',
+      );
+    }
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it('normalizes a transparent proxy into a fresh non-proxy state snapshot', () => {
+    const target = { nested: { value: 1 } };
+    const snapshot = snapshotHandlerStateJsonValue(new Proxy(target, {})) as Record<
+      string,
+      unknown
+    >;
+
+    expect(snapshot).not.toBe(target);
+    expect(Object.getPrototypeOf(snapshot)).toBeNull();
+    expect(Object.getPrototypeOf(snapshot.nested)).toBeNull();
+    expect(snapshot).toEqual(target);
+  });
+
+  it('reconstructs only JSON-visible enumerable string-keyed own data', () => {
+    const input: Record<PropertyKey, unknown> = { visible: true };
+    Object.defineProperty(input, 'hidden', { value: () => undefined });
+    input[Symbol('hidden')] = () => undefined;
+
+    const snapshot = snapshotHandlerStateJsonValue(input) as Record<string, unknown>;
+
+    expect(snapshot).toEqual({ visible: true });
+    expect(Object.hasOwn(snapshot, 'hidden')).toBe(false);
+    expect(Object.getOwnPropertySymbols(snapshot)).toEqual([]);
+  });
+
+  it('canonicalizes serialized state before the first delegated handler observes it', () => {
+    const element = new FakeElement({
+      'kovo-state': '{"__proto__":{"admin":true},"nested":{"value":1}}',
+    });
+    const delegated = createDelegatedHandlerContext(element, element, createIslandSignalScope());
+    const state = delegated.context.state as Record<string, unknown>;
+
+    expect(Object.getPrototypeOf(state)).toBeNull();
+    expect(Object.getPrototypeOf(state.nested)).toBeNull();
+    expect(Object.hasOwn(state, '__proto__')).toBe(true);
+    expect(state.toString).toBeUndefined();
+    expect(state.constructor).toBeUndefined();
+  });
+
+  it('reads and commits the already-selected state host after the target moves', () => {
+    const selectedHost = new FakeElement({ 'kovo-state': '{"count":1}' });
+    const movedHost = new FakeElement({ 'kovo-state': '{"count":99}' });
+    const movedTarget = new FakeElement({}, movedHost);
+    const delegated = createDelegatedHandlerContext(
+      movedTarget,
+      selectedHost,
+      createIslandSignalScope(),
+    );
+    const state = delegated.context.state as { count: number };
+
+    expect(state.count).toBe(1);
+    state.count += 1;
+    delegated.commit();
+    expect(selectedHost.getAttribute('kovo-state')).toBe('{"count":2}');
+    expect(movedHost.getAttribute('kovo-state')).toBe('{"count":99}');
   });
 });

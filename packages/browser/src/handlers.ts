@@ -10,6 +10,7 @@ import {
   createDelegatedHandlerContext,
   defaultIslandSignalScope,
   readElementStateHost,
+  snapshotHandlerStateJsonValue,
   type ElementParamValue,
   type HandlerContext,
   type IslandSignalScope,
@@ -43,15 +44,16 @@ export type ImportHandlerModule = (url: string) => Promise<Record<string, unknow
 export type { ElementParamValue, HandlerContext, IslandSignalScope } from './handler-context.js';
 
 /**
- * A client event handler: receives the DOM `event` and a typed island `HandlerContext`.
+ * A synchronous client event handler: receives the DOM `event` and a typed island
+ * `HandlerContext`, mutates state during that call frame, and returns `void` (SPEC §4.3).
  */
 export type ClientHandler<State = unknown, Params = Record<string, ElementParamValue>> = (
   event: Event,
   ctx: HandlerContext<State, Params>,
-) => void | Promise<void>;
+) => void;
 
 /**
- * Type a client event handler for an island. The handler receives the DOM event
+ * Type a synchronous client event handler for an island. The handler receives the DOM event
  * and a `HandlerContext` exposing the island's typed `state` and element params.
  * The compiler links it to an `on:event` binding and loads its module on first
  * interaction (SPEC §4.3). Identity function at runtime; it exists for typing.
@@ -67,8 +69,13 @@ export type ClientHandler<State = unknown, Params = Record<string, ElementParamV
  *   ctx.state.count += 1;
  * });
  */
-export function handler<State = unknown, Params = Record<string, ElementParamValue>>(
-  fn: ClientHandler<State, Params>,
+export function handler<
+  State = unknown,
+  Params = Record<string, ElementParamValue>,
+  Result = undefined,
+>(
+  fn: ((event: Event, ctx: HandlerContext<State, Params>) => Result) &
+    ([Result] extends [void] ? unknown : never),
 ): ClientHandler<State, Params> {
   return fn;
 }
@@ -289,13 +296,15 @@ async function dispatchDelegatedEventForElement(
       // Install the post-commit scheduler only around the handler's synchronous
       // call frame: primitives register deferred work synchronously, and a
       // synchronous-scoped hook avoids leaking into concurrent dispatches.
-      const result = withPostCommitQueue(postCommitQueue, () =>
+      withPostCommitQueue(postCommitQueue, () =>
         applySecurityIntrinsic<ReturnType<ClientHandler>>(fn, undefined, [
           event,
           handlerContext.context,
         ]),
       );
-      await result;
+      // SPEC §4.3/§5.2: one handler may not hand executable/opaque state to the next handler in
+      // the same delegated chain. Replace it with a canonical own-data snapshot at every boundary.
+      handlerContext.context.state = snapshotHandlerStateJsonValue(handlerContext.context.state);
     }
   } finally {
     handlerContext.commit();

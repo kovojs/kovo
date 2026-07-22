@@ -13,6 +13,7 @@ import {
 
 class BoundTriggerElement {
   attributes: Array<{ name: string; value: string }>;
+  stateHost: BoundTriggerElement | null = null;
 
   constructor(
     private readonly attrs: Record<string, string>,
@@ -22,7 +23,9 @@ class BoundTriggerElement {
   }
 
   closest(selector: string): BoundTriggerElement | null {
-    if (selector === '[kovo-state]') return Object.hasOwn(this.attrs, 'kovo-state') ? this : null;
+    if (selector === '[kovo-state]') {
+      return Object.hasOwn(this.attrs, 'kovo-state') ? this : this.stateHost;
+    }
     const trigger = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
     return trigger && Object.hasOwn(this.attrs, `on:${trigger}`) ? this : null;
   }
@@ -50,6 +53,302 @@ class BoundTriggerElement {
 
 describe('inline loader output security', () => {
   for (const [label, installSource] of inlineSourceInstallCases) {
+    it(`${label}: gives every chained handler a fresh own-data state snapshot`, async () => {
+      let firstCalls = 0;
+      let secondCalls = 0;
+      const element = new BoundTriggerElement({
+        'kovo-state': '{"__proto__":{"admin":true},"nested":{"value":1}}',
+        'on:click': '/c/client.js#first /c/client.js#second',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({
+          first(_event: unknown, context: { state: Record<string, unknown> }) {
+            firstCalls += 1;
+            expect(Object.getPrototypeOf(context.state)).toBeNull();
+            expect(Object.getPrototypeOf(context.state.nested)).toBeNull();
+            expect(Object.hasOwn(context.state, '__proto__')).toBe(true);
+            expect(context.state.toString).toBeUndefined();
+            expect(context.state.constructor).toBeUndefined();
+            expect((context.state['__proto__'] as Record<string, unknown>).admin).toBe(true);
+            context.state = { count: 2 };
+          },
+          second(_event: unknown, context: { state: Record<string, unknown> }) {
+            secondCalls += 1;
+            expect(Object.getPrototypeOf(context.state)).toBeNull();
+            expect(context.state.constructor).toBeUndefined();
+            context.state.count = 3;
+          },
+        }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(firstCalls).toBe(1);
+      expect(secondCalls).toBe(1);
+      expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
+    });
+
+    it(`${label}: never assimilates a synchronous handler return as a thenable`, async () => {
+      let secondCalls = 0;
+      let thenCalls = 0;
+      const element = new BoundTriggerElement({
+        'kovo-state': '{"count":0}',
+        'on:click': '/c/client.js#first /c/client.js#second',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({
+          first(_event: unknown, context: { state: { count: number } }) {
+            context.state.count += 1;
+            return {
+              then() {
+                thenCalls += 1;
+                throw new Error('handler thenable executed');
+              },
+            };
+          },
+          second(_event: unknown, context: { state: { count: number } }) {
+            secondCalls += 1;
+            context.state.count += 1;
+          },
+        }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(thenCalls).toBe(0);
+      expect(secondCalls).toBe(1);
+      expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
+    });
+
+    it(`${label}: serializes same-island state before a gated module import`, async () => {
+      let releaseFirstImport: (() => void) | undefined;
+      const firstImportCanFinish = new Promise<void>((resolve) => {
+        releaseFirstImport = resolve;
+      });
+      let importCalls = 0;
+      const observations: number[] = [];
+      const element = new BoundTriggerElement({
+        'kovo-state': '{"count":0}',
+        'on:click': '/c/client.js#increment',
+      });
+
+      const pending = dispatchInlineDelegatedClick(
+        element,
+        async () => {
+          importCalls += 1;
+          if (importCalls === 1) await firstImportCanFinish;
+          return {
+            increment(_event: unknown, context: { state: { count: number } }) {
+              observations.push(context.state.count);
+              context.state.count += 1;
+            },
+          };
+        },
+        installSource,
+        ['/c/client.js'],
+        undefined,
+        2,
+      );
+
+      await Promise.resolve();
+      expect(importCalls).toBe(1);
+      releaseFirstImport?.();
+      await pending;
+
+      expect(observations).toEqual([0, 1]);
+      expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
+    });
+
+    it(`${label}: keeps queued state pinned when the event target moves to another host`, async () => {
+      let releaseFirstImport: (() => void) | undefined;
+      const firstImportCanFinish = new Promise<void>((resolve) => {
+        releaseFirstImport = resolve;
+      });
+      let importCalls = 0;
+      const observations: number[] = [];
+      const selectedHost = new BoundTriggerElement({ 'kovo-state': '{"count":0}' });
+      const movedHost = new BoundTriggerElement({ 'kovo-state': '{"count":99}' });
+      const element = new BoundTriggerElement({ 'on:click': '/c/client.js#move' });
+      element.stateHost = selectedHost;
+
+      const pending = dispatchInlineDelegatedClick(
+        element,
+        async () => {
+          importCalls += 1;
+          if (importCalls === 1) await firstImportCanFinish;
+          return {
+            move(_event: unknown, context: { state: { count: number } }) {
+              observations.push(context.state.count);
+              context.state.count += 1;
+              if (observations.length === 1) element.stateHost = movedHost;
+            },
+          };
+        },
+        installSource,
+        ['/c/client.js'],
+        undefined,
+        2,
+      );
+
+      await Promise.resolve();
+      expect(importCalls).toBe(1);
+      releaseFirstImport?.();
+      await pending;
+
+      expect(observations).toEqual([0, 1]);
+      expect(selectedHost.getAttribute('kovo-state')).toBe('{"count":2}');
+      expect(movedHost.getAttribute('kovo-state')).toBe('{"count":99}');
+    });
+
+    it(`${label}: commits newly created state to a handler element without an initial state stamp`, async () => {
+      const element = new BoundTriggerElement({
+        'on:click': '/c/client.js#initialize',
+      });
+
+      await dispatchInlineDelegatedClick(
+        element,
+        async () => ({
+          initialize(_event: unknown, context: { state: Record<string, unknown> }) {
+            context.state.count = 1;
+          },
+        }),
+        installSource,
+        ['/c/client.js'],
+      );
+
+      expect(element.getAttribute('kovo-state')).toBe('{"count":1}');
+    });
+
+    it(`${label}: re-reads handler refs after a queued predecessor changes them`, async () => {
+      let releaseFirstImport: (() => void) | undefined;
+      const firstImportCanFinish = new Promise<void>((resolve) => {
+        releaseFirstImport = resolve;
+      });
+      let importCalls = 0;
+      let handlerCalls = 0;
+      const element = new BoundTriggerElement({
+        'kovo-state': '{"count":0}',
+        'on:click': '/c/client.js#increment',
+      });
+
+      const pending = dispatchInlineDelegatedClick(
+        element,
+        async () => {
+          importCalls += 1;
+          if (importCalls === 1) await firstImportCanFinish;
+          return {
+            increment(_event: unknown, context: { state: { count: number } }) {
+              handlerCalls += 1;
+              context.state.count += 1;
+              element.removeAttribute('on:click');
+            },
+          };
+        },
+        installSource,
+        ['/c/client.js'],
+        undefined,
+        2,
+      );
+
+      await Promise.resolve();
+      expect(importCalls).toBe(1);
+      releaseFirstImport?.();
+      await pending;
+
+      expect(handlerCalls).toBe(1);
+      expect(importCalls).toBe(1);
+      expect(element.getAttribute('kovo-state')).toBe('{"count":1}');
+    });
+
+    it(`${label}: fails closed before a later handler can observe invalid state`, async () => {
+      let accessorCalls = 0;
+      const invalidStateFactories: Array<[string, () => unknown]> = [
+        ['function', () => () => undefined],
+        ['class instance', () => new Date()],
+        ['undefined', () => undefined],
+        ['BigInt', () => 1n],
+        ['non-finite number', () => Number.POSITIVE_INFINITY],
+        [
+          'accessor',
+          () => {
+            const value = {};
+            Object.defineProperty(value, 'secret', {
+              enumerable: true,
+              get() {
+                accessorCalls += 1;
+                return 'secret';
+              },
+            });
+            return value;
+          },
+        ],
+        ['sparse array', () => new Array(1)],
+        [
+          'cycle',
+          () => {
+            const value: Record<string, unknown> = {};
+            value.self = value;
+            return value;
+          },
+        ],
+        [
+          'deep graph',
+          () => {
+            let value: Record<string, unknown> = {};
+            for (let depth = 0; depth < 65; depth += 1) value = { child: value };
+            return value;
+          },
+        ],
+        ['value budget', () => Array.from({ length: 10_000 }, () => 0)],
+        ['text budget', () => 'x'.repeat(1_000_001)],
+        [
+          'hostile proxy',
+          () =>
+            new Proxy(
+              {},
+              {
+                ownKeys() {
+                  throw new Error('hostile ownKeys trap');
+                },
+              },
+            ),
+        ],
+      ];
+
+      for (const [invalidLabel, createInvalidState] of invalidStateFactories) {
+        accessorCalls = 0;
+        let secondCalls = 0;
+        const element = new BoundTriggerElement({
+          'kovo-state': '{"safe":true}',
+          'on:click': '/c/client.js#first /c/client.js#second',
+        });
+
+        await expect(
+          dispatchInlineDelegatedClick(
+            element,
+            async () => ({
+              first(_event: unknown, context: { state: unknown }) {
+                context.state = createInvalidState();
+              },
+              second() {
+                secondCalls += 1;
+              },
+            }),
+            installSource,
+            ['/c/client.js'],
+          ),
+          invalidLabel,
+        ).rejects.toThrow('KV449: handler state must be bounded recursive own-data JsonValue.');
+        expect(secondCalls, invalidLabel).toBe(0);
+        expect(element.getAttribute('kovo-state'), invalidLabel).toBe('{"safe":true}');
+        expect(accessorCalls, invalidLabel).toBe(0);
+      }
+    });
+
     it(`${label}: applies boolean-presence data-bind false/null/true parity`, async () => {
       for (const name of ['hidden', 'disabled', 'checked'] as const) {
         for (const value of [false, null, true]) {

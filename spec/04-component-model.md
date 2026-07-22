@@ -116,7 +116,13 @@ You author inline closures; the compiler lowers them (§5). The lowered form is 
 
 ```tsx
 // Authoring (sugar)
-<button onClick={() => removeItem(state, item.id)}>×</button>
+<button
+  onClick={() => {
+    state.pendingRemovalId = String(item.id);
+  }}
+>
+  ×
+</button>
 ```
 
 ```js
@@ -125,12 +131,9 @@ import { securityHandler } from '@kovojs/browser/generated';
 
 /** captures: item.id → element params */
 export const Cart$removeItem = securityHandler(
-  [
-    { door: 'compiler-state', kind: 'browser.state.read', target: 'state.items' },
-    { door: 'compiler-state', kind: 'browser.state.write', target: 'state.items' },
-  ],
+  [{ door: 'compiler-state', kind: 'browser.state.write', target: 'state.pendingRemovalId' }],
   (event, ctx) => {
-    ctx.state.items = ctx.state.items.filter((i) => i.id !== ctx.params.itemId);
+    ctx.state.pendingRemovalId = String(ctx.params.itemId);
   },
 );
 ```
@@ -146,17 +149,66 @@ export const Cart$removeItem = securityHandler(
 **Capture channels (exhaustive):** component/query state (via `ctx`), element params (`data-p-*`, typed — attribute values arrive as strings, so non-string params declare coercion once, schema-style, exactly like form fields §6.3), module scope (shared, not captured). Anything else is compile error `KV201`, whose message shows what the closure _would have_ compiled to and the three fixes.
 
 **Finite browser effects (normative).** Every serialized handler is classified before emission into
-the closed `kovo-security-operation-ir/v1` vocabulary: component state read/write; delegated-event
-scalar read/control; compiler-reviewed DOM focus; dialog open/close; form reset/submit; reviewed
-framework-client calls; and timer schedule/cancel. The generated `securityHandler(operations, fn)`
-wrapper carries that exact compiler-derived list into the immutable client module. It is a generated
-ABI and audit witness, not a public authoring helper and not an opcode interpreter. App source cannot
-construct, widen, or suppress the list. A raw browser global, unreviewed DOM property write/method,
-computed terminal operation, or authority-bearing receiver that escapes through an alias, mutable
-container, constructor, or unreviewed call is **KV449**. Scalar event/form reads and results returned
-from a reviewed operation remain ordinary data; they do not mint DOM authority. Named exceptional
-doors and the server half of this vocabulary are defined in §6.6, while §5.2 owns lowering and
-fixpoint behavior.
+the closed `kovo-security-operation-ir/v1` vocabulary. Authored inline handlers currently admit
+static component-state reads/writes and exact timer schedule/cancel operations; compiler-generated
+primitive handler references retain their separately reviewed event/DOM behavior. The generated
+`securityHandler(operations, fn)` wrapper carries the exact compiler-derived list into the immutable
+client module. It is a generated ABI and audit witness, not a public authoring helper and not an
+opcode interpreter. App source cannot construct, widen, or suppress the list.
+
+A native event and every object reached from it remain capability-bearing. Property or method names
+such as `target`, `value`, `preventDefault`, or `focus` are not authority proofs: a synthetic event
+can own-shadow them and invoke attacker-selected getters or functions. Authored raw event/DOM member
+reads and calls are therefore **KV449** until lowering targets a framework-pinned operation rather
+than dispatching through the raw receiver. The same rule closes raw browser globals, computed
+terminal operations, and authority that escapes through an alias, destructuring, mutable container,
+constructor, or unreviewed call. Exact framework import identity alone does not summarize argument
+positions, callback-bearing containers, or return authority, so authored inline framework-helper
+calls are also **KV449** until that export has a generated exact summary. Direct primitive handler
+references remain the supported path. Named exceptional doors and the server vocabulary are defined
+in §6.6, while §5.2 owns lowering and fixpoint behavior.
+
+**Closed handler language (normative).** A browser handler is synchronous and its public function
+type returns `void`. A concise body or explicit return may evaluate only closed JSON/scalar data or
+an exact finite effect; the loader discards that value. Authority-bearing, executable, or thenable
+outcomes are **KV449**. `async`, generators, `await`, `yield`, exception control
+(`try`/`catch`/`finally`/`throw`), constructors, `instanceof`, and every tagged template are outside
+the language. The loader never performs `PromiseResolve`, reads a returned `then`, or awaits a
+handler return. Asynchronous work must use an explicit finite operation such as a timer whose
+callback is an exact reviewed zero-parameter callable; source-text timer callbacks and callback
+parameters/defaults/destructuring are forbidden. Timer cancellation accepts exactly one
+compiler-proven primitive handle or the exact result of a finite timer schedule. Promise factories
+and other asynchronous global work are outside the synchronous language. A handler may contain at
+most 256 distinct finite operations, matching the generated runtime manifest bound. A timer callback cannot
+read, write, or capture handler state, including through an immutable alias: synchronous dispatch
+has already committed and retired that state snapshot before the callback runs. Delayed state work
+requires a future framework-owned scheduled operation that re-enters the state-host queue and
+performs a fresh snapshot/validate/commit transaction.
+
+State may be read and written only through static member targets. Computed or destructured state
+targets, binding or assignment default initializers, spreads, `for...of`, `this`, authority-bearing
+computed keys or scalar coercions, opaque call/callback results, accessors, constructors/classes, and
+implicit object protocols are outside the language. `Object.assign` cannot hide a state mutation
+from the compiler-owned state-write IR. A state write expression is built from JSON literals and
+dense literal containers, immutable aliases of those values, static state reads, ordinary scalar
+operators, and the compiler's exact scalar intrinsics. The callable state-method vocabulary is
+closed to `pop`, `push`, `reverse`, `shift`, `unshift`, `endsWith`, `includes`, `indexOf`,
+`lastIndexOf`, `replace`, `replaceAll`, `startsWith`, `toLowerCase`, `toUpperCase`, `trim`, `trimEnd`,
+and `trimStart`; replacement callbacks are not accepted. The only callback transform on local data
+is `map` over an exact dense array literal or its immutable alias, with an exact reviewed callback.
+Adding a method requires a SPEC change and adversarial proof of its callbacks, coercions, return
+provenance, and mutation semantics; a familiar JavaScript method name is not evidence.
+
+State is also a runtime boundary. Before module import and the first state snapshot, the loader
+serializes dispatches per state host so overlapping events cannot read the same stale base. Before
+the first handler and after every handler in a chain, it replaces `ctx.state` with a fresh recursive
+own-data `JsonValue` snapshot. Arrays must be
+dense and use the intrinsic array prototype; records must use `Object.prototype` or `null`; only
+enumerable string-keyed data properties are copied; enumerable accessors, cycles, non-finite
+numbers, non-JSON values, exotic prototypes, and over-budget graphs fail with **KV449**. The current
+bounds are 64 levels, 10,000 values, and 1,000,000 string/key code units. Non-enumerable and symbol
+data is outside JSON and is discarded. This runtime check is defense-in-depth after the compiler's
+closed verdict, not a substitute for it.
 
 ### 4.4 The loader
 
@@ -172,7 +224,10 @@ first-interaction or post-paint trigger.
 Deferred runtime responsibilities:
 
 - **Event delegation** (capture phase) for all `on:*` events — including chained refs (§4.6) and the execution triggers `on:visible` (one shared IntersectionObserver) / `on:idle` / `on:load` (§4.7).
-- **Ref resolution:** parse `url#export`, `import()` the URL, invoke with `(event, ctx)`.
+- **Ref resolution:** parse `url#export`, `import()` the URL, invoke synchronously with
+  `(event, ctx)`, discard the return value without thenable inspection, and snapshot `ctx.state`
+  before invoking the next ref. Module loading and the later update plan may be asynchronous; the
+  handler call frame is not.
 - **Per-island `AbortSignal`** (`ctx.signal`), aborted when the morph layer removes the island (§4.7); no mount/unmount callbacks.
 - **Enhanced form interception** (§9) and **query-data hydration** from `kovo-query` scripts.
 - **Update plan** (bindings → derives → stamps, §4.8) on query/state change, by walking the self-describing attributes.
@@ -298,7 +353,7 @@ Headless primitives decorate author-owned elements through three spellings of on
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `class`                                                                                                                                                                                                                      | Concatenate (primitive first, author last), dedupe, stable order                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `style`                                                                                                                                                                                                                      | Concatenate; author declarations last (later wins per property)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `on:<event>`                                                                                                                                                                                                                 | **Chain**: space-separated refs, author's first, then primitive's; the loader invokes left-to-right, sequentially awaited; `defaultPrevented` does **not** stop the chain (platform semantics) — primitive handlers contractually no-op when `event.defaultPrevented` (linted in the primitive package, not the loader)                                                                                                                                                                                                                                                                                                                                             |
+| `on:<event>`                                                                                                                                                                                                                 | **Chain**: space-separated refs, author's first, then primitive's; after each module resolves, the loader invokes its handler synchronously left-to-right, discards its return without thenable inspection, and replaces `ctx.state` with a fresh bounded own-data JSON snapshot before the next ref. `defaultPrevented` does **not** stop the chain (platform semantics) — primitive handlers contractually no-op when `event.defaultPrevented` (linted in the primitive package, not the loader)                                                                                                                                                                  |
 | `id`                                                                                                                                                                                                                         | Author wins; the primitive rewires its IDREF references to the surviving id (KV221 validates the result)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | IDREF attrs (`commandfor`, `popovertarget`, `for`, `aria-controls`, …)                                                                                                                                                       | Both set → **error KV231** (double-wired relationships are ambiguity, not composition)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Descriptive `aria-*` (`aria-label`, `aria-labelledby`, `aria-describedby`, `aria-roledescription`), `role`                                                                                                                   | Author wins, **lint KV232** (the escape hatch stays open; the override stays visible). These are not runtime-driven, so author authority cannot freeze a live value.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

@@ -130,12 +130,11 @@ export const DisclosureDemo = component({
       fileName: 'cart-badge.tsx',
       source: `
 import { component } from '@kovojs/core';
-import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
   render: () => (
-    <button onClick={() => tabsTriggerClick()}>
+    <button onClick={() => {}}>
       <span data-bind="cart.count">2</span>
     </button>
   ),
@@ -150,7 +149,7 @@ export const CartBadge = component({
         length: 5,
         message: kv210.message,
         severity: kv210.severity,
-        start: { column: 13, line: 8 },
+        start: { column: 13, line: 7 },
       },
     ]);
   });
@@ -410,9 +409,9 @@ export const CartBadge = component({
     <input
       value={state.value}
       onInput={() => {
-        const raw = event.target?.value ?? '';
+        const raw = state.value;
         state.n = Number(raw) + parseInt(String(raw || '0'), 10);
-        state.label = JSON.stringify(Array.from(new Set([Boolean(raw)])));
+        state.label = JSON.stringify([Boolean(raw)]);
         state.enabled = isFinite(state.n) && !isNaN(state.n);
       }}
     />
@@ -425,7 +424,7 @@ export const CartBadge = component({
 
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
     expect(clientSource).toContain("ctx.state.n = Number(raw) + parseInt(String(raw || '0'), 10);");
-    expect(clientSource).toContain('JSON.stringify(Array.from(new Set([Boolean(raw)])))');
+    expect(clientSource).toContain('JSON.stringify([Boolean(raw)])');
     expect(clientSource).toContain(
       'ctx.state.enabled = isFinite(ctx.state.n) && !isNaN(ctx.state.n);',
     );
@@ -447,24 +446,25 @@ export const CartBadge = component({
 `,
     });
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV210',
+      'KV201',
+      'KV449',
+    ]);
   });
 
-  it('allows state, element params, reviewed imports, and audited static module constants', () => {
+  it('allows state and scalarized element params in the finite handler language', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
-import { component, publishToClient } from '@kovojs/core';
-import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
-
-const LABEL = 'cart';
+import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  state: () => ({ count: 0 }),
+  state: () => ({ count: 0, label: '' }),
   render: ({ quantity }) => (
     <button onClick={() => {
-      state.count += quantity;
-      tabsTriggerClick(publishToClient(LABEL, { reason: 'public label' }), event.type, state.count);
+      state.count += Number(quantity);
+      state.label = String(state.count);
     }}>Track</button>
   ),
 });
@@ -476,26 +476,19 @@ export const CartBadge = component({
 
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
     expect(serverSource).toContain('data-p-quantity="{quantity}"');
-    expect(clientSource).toContain(
-      'import { tabsTriggerClick } from "@kovojs/headless-ui/generated";',
-    );
-    expect(clientSource).toContain("const LABEL = 'cart';");
-    expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
-    expect(clientSource).toContain(
-      "tabsTriggerClick(publishToClient(LABEL, { reason: 'public label' }), event.type, ctx.state.count);",
-    );
+    expect(clientSource).toContain('ctx.state.count += Number(ctx.params.quantity);');
+    expect(clientSource).toContain('ctx.state.label = String(ctx.state.count);');
   });
 
   it('passes a model-backed capture context through handler lowering', () => {
     const fileName = 'components/cart/cart-actions.tsx';
     const source = `
 import { component } from '@kovojs/core';
-import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 
 export const CartActions = component({
   state: () => ({ count: 0 }),
   render: () => (
-    <button onClick={() => tabsTriggerClick(state.count)}>Track</button>
+    <button onClick={() => { state.count += 1; }}>Track</button>
   ),
 });
 `;
@@ -508,7 +501,7 @@ export const CartActions = component({
     expect(handler?.diagnostics?.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
   });
 
-  it('allows standard expression roots without treating them as captures', () => {
+  it('allows synchronous finite expression roots without treating them as captures', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
       source: `
@@ -516,13 +509,11 @@ export const CartBadge = component({
   state: () => ({ value: '' }),
   render: () => (
     <button onClick={() => {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          state.value = Object(event)['target']?.value?.toString?.() ?? undefined;
-          clearTimeout(undefined);
-          resolve(undefined);
-        }, 0);
-      });
+      const value = String(state.value);
+      state.value = value;
+      setTimeout(() => {
+        clearTimeout(undefined);
+      }, 0);
     }}>Track</button>
   ),
 });
@@ -532,10 +523,7 @@ export const CartBadge = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210']);
-    expect(clientSource).toContain(
-      "ctx.state.value = Object(event)['target']?.value?.toString?.() ?? undefined;",
-    );
-    expect(clientSource).toContain('return new Promise((resolve) => {');
+    expect(clientSource).toContain('ctx.state.value = value;');
     expect(clientSource).toContain('setTimeout(() => {');
     expect(clientSource).toContain('clearTimeout(undefined);');
   });

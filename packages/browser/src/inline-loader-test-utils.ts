@@ -74,6 +74,7 @@ export async function dispatchInlineDelegatedClick(
   installSource: InlineSourceInstall,
   allowedModuleUrls: readonly string[] = [],
   afterInstall?: () => void,
+  concurrentDispatches = 1,
 ): Promise<void> {
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   const originals = {
@@ -96,10 +97,13 @@ export async function dispatchInlineDelegatedClick(
     installSource(importModule, globalRecord);
     afterInstall?.();
 
-    await listeners.get('click')?.({
-      target: element,
-      type: 'click',
-    });
+    const listener = listeners.get('click');
+    const dispatches: Promise<void>[] = [];
+    for (let index = 0; index < concurrentDispatches; index += 1) {
+      const dispatched = listener?.({ target: element, type: 'click' });
+      if (dispatched) dispatches.push(dispatched);
+    }
+    await Promise.all(dispatches);
   } finally {
     Object.assign(globalRecord, {
       addEventListener: originals.addEventListener,

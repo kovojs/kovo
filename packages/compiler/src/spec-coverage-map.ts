@@ -44,7 +44,7 @@ export const compilerSpecCoverageMap = [
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',
         testName:
-          'allows state, element params, reviewed imports, and audited static module constants',
+          'requires parsed model facts to allow module imports and constants as serializable captures',
       },
       {
         file: 'packages/compiler/src/handler-lowering.test.ts',

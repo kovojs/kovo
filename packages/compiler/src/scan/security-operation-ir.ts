@@ -21,6 +21,7 @@ import type {
   ServerSecurityOperationKind,
 } from '@kovojs/core/internal/security-operation-ir';
 
+import { reviewedCanonicalClientHandlerImportTarget } from '../client-handler-import-policy.js';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -75,6 +76,7 @@ import { serverPrecisionGrant } from './security-provenance-precision-grants.js'
 
 interface SecurityOperationScanResult<Operation> {
   readonly operations: readonly Operation[];
+  readonly runtimeOmitted?: true;
   readonly semanticRoot?: SecuritySemanticRoot;
   readonly violations: readonly SecurityOperationViolationModel[];
 }
@@ -116,6 +118,7 @@ const PUBLIC_SCOPED_KEY_IDENTITIES = [
 const SCOPED_KEY_IDENTITY = frameworkExport('@kovojs/server', 'scopedKey');
 const DERIVED_IDENTITY = frameworkExport('@kovojs/server', 'derived');
 const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
+const PUBLISH_TO_CLIENT_IDENTITY = frameworkExport('@kovojs/core', 'publishToClient');
 const SERVER_STORAGE_FACTORY_IDENTITIES = [
   frameworkExport('@kovojs/core', 'createFileSystemStorage'),
   frameworkExport('@kovojs/core', 'createS3CompatibleStorage'),
@@ -191,6 +194,22 @@ const browserPureGlobalCalls = finiteStringSet([
   'Boolean',
   'Number',
   'Object',
+  'String',
+  'isFinite',
+  'isNaN',
+  'parseFloat',
+  'parseInt',
+]);
+const browserReviewedAmbientGlobalNames = finiteStringSet([
+  'Array',
+  'BigInt',
+  'Boolean',
+  'Date',
+  'JSON',
+  'Math',
+  'Number',
+  'Object',
+  'Promise',
   'String',
   'isFinite',
   'isNaN',
@@ -500,10 +519,12 @@ const browserPureGlobalMemberCalls = finiteStringSet([
   'String.fromCharCode',
   'String.fromCodePoint',
 ]);
-const browserEventControlMethods = finiteStringSet([
-  'preventDefault',
-  'stopImmediatePropagation',
-  'stopPropagation',
+const browserAsynchronousGlobalMemberCalls = finiteStringSet([
+  'Promise.all',
+  'Promise.allSettled',
+  'Promise.race',
+  'Promise.reject',
+  'Promise.resolve',
 ]);
 const serverCallbackInvokingMemberCalls = finiteStringSet([
   'catch',
@@ -539,86 +560,33 @@ const serverImplicitObjectProtocolMembers = finiteStringSet([
   'toString',
   'valueOf',
 ]);
-const browserEventScalarMembers = finiteStringSet([
-  'altKey',
-  'animationName',
-  'bubbles',
-  'button',
-  'buttons',
-  'cancelable',
-  'clientX',
-  'clientY',
-  'code',
-  'ctrlKey',
-  'data',
-  'defaultPrevented',
-  'deltaMode',
-  'deltaX',
-  'deltaY',
-  'deltaZ',
-  'detail',
-  'elapsedTime',
-  'inputType',
-  'isComposing',
-  'isTrusted',
-  'key',
-  'location',
-  'metaKey',
-  'movementX',
-  'movementY',
-  'offsetX',
-  'offsetY',
-  'pageX',
-  'pageY',
-  'pointerId',
-  'pressure',
-  'repeat',
-  'screenX',
-  'screenY',
-  'shiftKey',
-  'timeStamp',
-  'type',
-  'which',
+// The delegated handler currently receives the native event carrier. A property name alone is not
+// a scalar proof: CustomEvent.detail is arbitrary, and a synthetic event can shadow names such as
+// clientX with opaque own data. Event values therefore remain capability-bearing until a future
+// compiler/runtime operation snapshots an exact primitive through boot-pinned platform getters.
+const browserStateMutatorMethods = finiteStringSet(['pop', 'push', 'reverse', 'shift', 'unshift']);
+// SPEC §4.3/§5.2: browser state is JSON data. Calls through a state value are admitted only for
+// this finite intrinsic data-method vocabulary; an arbitrary `state.saved()` is never a reviewed
+// state read. A JSON own property can shadow one of these names and cause a TypeError, but cannot
+// carry executable identity across the state channel.
+const browserStateReadMethods = finiteStringSet([
+  'endsWith',
+  'includes',
+  'indexOf',
+  'lastIndexOf',
+  'replace',
+  'replaceAll',
+  'startsWith',
+  'toLowerCase',
+  'toUpperCase',
+  'trim',
+  'trimEnd',
+  'trimStart',
 ]);
-const browserDomScalarMembers = finiteStringSet([
-  'checked',
-  'disabled',
-  'hidden',
-  'id',
-  'innerHTML',
-  'name',
-  'open',
-  'outerHTML',
-  'selected',
-  'selectionDirection',
-  'selectionEnd',
-  'selectionStart',
-  'textContent',
-  'type',
-  'value',
-]);
-const browserDomReadMethods = finiteStringSet([
-  'checkValidity',
-  'closest',
-  'getAttribute',
-  'hasAttribute',
-  'matches',
-  'querySelector',
-  'querySelectorAll',
-  'toString',
-  'valueOf',
-]);
-const browserStateMutatorMethods = finiteStringSet([
-  'copyWithin',
-  'fill',
-  'pop',
-  'push',
-  'reverse',
-  'shift',
-  'sort',
-  'splice',
-  'unshift',
-]);
+const browserReviewedLocalArrayCallbackMethods = finiteStringSet(['map']);
+const BROWSER_SECURITY_OPERATION_LIMIT = 256;
+// Authored inline calls to reviewed framework helpers stay closed until the generated registry owns
+// an exact per-export argument/container/return summary. Import identity alone is not such a proof.
 const rawBrowserGlobalNames = finiteStringSet([
   'document',
   'globalThis',
@@ -1123,6 +1091,7 @@ export function scanBrowserSecurityOperations(
 ): SecurityOperationScanResult<BrowserSecurityOperationModel> {
   const operations: BrowserSecurityOperationModel[] = [];
   const violations: SecurityOperationViolationModel[] = [];
+  const stateWriteValues: BrowserStateWriteValueCandidate[] = [];
   const locals = localBindingNames(body);
   const aliases = browserAliasProvenance(body);
 
@@ -1166,9 +1135,266 @@ export function scanBrowserSecurityOperations(
       'Browser security-operation violations',
     );
   };
+  const appendStateWriteValue = (node: ts.Expression, detail: string) => {
+    compilerArrayAppend(stateWriteValues, { detail, node }, 'Browser state-write JSON values');
+  };
+
+  const handlerOwner = isSecurityIrFunctionScope(body.parent) ? body.parent : undefined;
+  if (handlerOwner && browserFunctionIsAsyncOrGenerator(handlerOwner)) {
+    appendViolation(
+      handlerOwner,
+      'computed-security-operation',
+      'async and generator browser handlers are outside the synchronous finite handler IR',
+    );
+  }
+  if (!ts.isBlock(body) && !browserHandlerOutcomeIsReviewed(sourceFile, body, body, aliases)) {
+    appendViolation(
+      body,
+      'computed-security-operation',
+      'concise browser handler outcomes must be closed data or an exact finite operation',
+    );
+  }
 
   const visit = (node: ts.Node): void => {
+    if (
+      node !== handlerOwner &&
+      isSecurityIrFunctionScope(node) &&
+      browserFunctionIsAsyncOrGenerator(node)
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'async and generator helpers are outside the synchronous finite handler IR',
+      );
+    }
+    if (ts.isAwaitExpression(node) || ts.isYieldExpression(node)) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'await and yield are outside the synchronous finite handler IR',
+      );
+    }
+    if (
+      ts.isReturnStatement(node) &&
+      node.expression !== undefined &&
+      browserReturnBelongsToHandler(node, body) &&
+      !browserHandlerOutcomeIsReviewed(sourceFile, body, node.expression, aliases)
+    ) {
+      appendViolation(
+        node.expression,
+        'computed-security-operation',
+        'browser handler returns must be closed data and cannot carry authority or thenables',
+      );
+    }
+    if (
+      ts.isBindingElement(node) &&
+      node.propertyName !== undefined &&
+      ts.isComputedPropertyName(node.propertyName)
+    ) {
+      appendViolation(
+        node.propertyName,
+        'computed-security-operation',
+        'computed destructuring keys are outside the finite handler IR',
+      );
+    }
+    if (
+      (ts.isBindingElement(node) && node.initializer !== undefined) ||
+      (ts.isParameter(node) && node.initializer !== undefined) ||
+      (ts.isShorthandPropertyAssignment(node) && node.objectAssignmentInitializer !== undefined) ||
+      (ts.isBinaryExpression(node) && browserBinaryExpressionIsAssignmentPatternDefault(node))
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'binding and assignment default initializers are outside the finite handler IR',
+      );
+    }
+    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'class definitions can execute heritage and computed-key protocols and are outside the finite handler IR',
+      );
+    }
+    if (ts.isTryStatement(node)) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'try/catch/finally control is outside the finite handler IR because exception values have no closed provenance',
+      );
+    }
+    if (ts.isThrowStatement(node)) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'throw transfers an unreviewed exception value outside the finite handler IR',
+      );
+    }
+    if (node.kind === ts.SyntaxKind.ThisKeyword) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'this is an ambient receiver and is outside the finite handler IR',
+      );
+    }
+    if (ts.isForOfStatement(node) || ts.isForInStatement(node)) {
+      appendViolation(
+        node.expression,
+        'computed-security-operation',
+        'for-in/of iteration invokes an unreviewed iterator or property protocol',
+      );
+    }
+    if (
+      (ts.isSpreadElement(node) &&
+        !ts.isCallExpression(node.parent) &&
+        !ts.isNewExpression(node.parent)) ||
+      ts.isSpreadAssignment(node)
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'spread syntax invokes an unreviewed iterator or property protocol',
+      );
+    }
+    if (ts.isComputedPropertyName(node)) {
+      const unsafeKey = browserScalarizationInputEscapeNode(
+        sourceFile,
+        body,
+        node.expression,
+        aliases,
+        compilerCreateSet<string>(),
+      );
+      if (unsafeKey !== undefined) {
+        appendViolation(
+          unsafeKey,
+          'computed-security-operation',
+          'an authority-bearing computed property key can execute an unreviewed coercion protocol',
+        );
+      }
+    }
+    if (
+      ts.isElementAccessExpression(node) &&
+      node.argumentExpression !== undefined &&
+      staticMember(node) === undefined
+    ) {
+      if (browserExpressionProvenance(node.expression, aliases, body) === 'state') {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'computed state read targets are outside the finite handler IR',
+        );
+      }
+      const unsafeKey = browserScalarizationInputEscapeNode(
+        sourceFile,
+        body,
+        node.argumentExpression,
+        aliases,
+        compilerCreateSet<string>(),
+      );
+      if (unsafeKey !== undefined) {
+        appendViolation(
+          unsafeKey,
+          'computed-security-operation',
+          'an authority-bearing computed member key can execute an unreviewed coercion protocol',
+        );
+      }
+    }
+    if (ts.isTemplateSpan(node)) {
+      const unsafeValue = browserScalarizationInputEscapeNode(
+        sourceFile,
+        body,
+        node.expression,
+        aliases,
+        compilerCreateSet<string>(),
+      );
+      if (unsafeValue !== undefined) {
+        appendViolation(
+          unsafeValue,
+          'computed-security-operation',
+          'template interpolation cannot coerce an authority-bearing value',
+        );
+      }
+    }
+    if (
+      ts.isPrefixUnaryExpression(node) &&
+      (node.operator === ts.SyntaxKind.PlusToken ||
+        node.operator === ts.SyntaxKind.MinusToken ||
+        node.operator === ts.SyntaxKind.TildeToken)
+    ) {
+      const unsafeOperand = browserScalarizationInputEscapeNode(
+        sourceFile,
+        body,
+        node.operand,
+        aliases,
+        compilerCreateSet<string>(),
+      );
+      if (unsafeOperand !== undefined) {
+        appendViolation(
+          unsafeOperand,
+          'computed-security-operation',
+          'unary arithmetic cannot coerce an authority-bearing value',
+        );
+      }
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      serverBinaryOperatorExecutesCoercion(node.operatorToken.kind)
+    ) {
+      const unsafeOperand =
+        browserScalarizationInputEscapeNode(
+          sourceFile,
+          body,
+          node.left,
+          aliases,
+          compilerCreateSet<string>(),
+        ) ??
+        browserScalarizationInputEscapeNode(
+          sourceFile,
+          body,
+          node.right,
+          aliases,
+          compilerCreateSet<string>(),
+        );
+      if (unsafeOperand !== undefined) {
+        appendViolation(
+          unsafeOperand,
+          'computed-security-operation',
+          'binary coercion cannot consume an authority-bearing value',
+        );
+      }
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InKeyword) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'the in operator can invoke an unreviewed property protocol and is outside the finite handler IR',
+      );
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      !ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      (browserProvenanceCarriesAuthority(
+        browserExpressionProvenance(node.initializer, aliases, body),
+      ) ||
+        expressionContainsBrowserAuthority(node.initializer, aliases, body))
+    ) {
+      appendViolation(
+        node,
+        'computed-security-operation',
+        'browser authority cannot escape through a destructuring binding',
+      );
+    }
+    const executableStateUse = browserExecutableStateUse(sourceFile, body, node, aliases, locals);
+    if (executableStateUse !== undefined) {
+      appendViolation(
+        executableStateUse.node,
+        'computed-security-operation',
+        executableStateUse.detail,
+      );
+    }
     if (ts.isCallExpression(node)) {
+      appendBrowserSpreadArgumentViolations(node.arguments, appendViolation);
       classifyBrowserCall(
         sourceFile,
         body,
@@ -1177,66 +1403,71 @@ export function scanBrowserSecurityOperations(
         aliases,
         appendOperation,
         appendViolation,
+        appendStateWriteValue,
       );
     } else if (ts.isNewExpression(node)) {
-      const constructor = unwrapExpression(node.expression);
-      const reviewedConstructor =
-        ts.isIdentifier(constructor) &&
-        (compilerSetHas(locals, constructor.text) ||
-          compilerSetHas(browserPureConstructors, constructor.text));
-      if (!reviewedConstructor) {
-        appendViolation(
-          node,
-          'unknown-security-operation',
-          `browser constructor ${nodeName(constructor)} is outside the finite handler IR`,
-        );
-      } else if (browserArgumentsContainAuthority(node.arguments ?? [], aliases, body)) {
-        appendViolation(
-          node,
-          'computed-security-operation',
-          `browser constructor ${nodeName(constructor)} cannot receive browser authority`,
-        );
-      }
+      appendBrowserSpreadArgumentViolations(node.arguments ?? [], appendViolation);
+      appendViolation(
+        node,
+        'computed-security-operation',
+        `browser constructor ${nodeName(unwrapExpression(node.expression))} is outside the finite handler IR`,
+      );
     } else if (ts.isTaggedTemplateExpression(node)) {
       const tag = unwrapExpression(node.tag);
-      const reviewedLocalTag =
-        ts.isIdentifier(tag) &&
-        compilerSetHas(locals, tag.text) &&
-        !browserLocalCallableAliasIsOpaque(body, tag.text, compilerCreateSet<string>());
-      if (!reviewedLocalTag) {
-        appendViolation(
-          node.tag,
-          'computed-security-operation',
-          `browser template tag ${nodeName(tag)} is outside the finite handler IR`,
-        );
-      }
+      appendViolation(
+        node,
+        'computed-security-operation',
+        `browser template tag ${nodeName(tag)} is outside the finite handler IR`,
+      );
     } else if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword
     ) {
       const constructor = unwrapExpression(node.right);
-      const reviewedConstructor =
-        ts.isIdentifier(constructor) &&
-        ((compilerSetHas(locals, constructor.text) &&
-          !browserLocalCallableAliasIsOpaque(
-            body,
-            constructor.text,
-            compilerCreateSet<string>(),
-          )) ||
-          (compilerSetHas(browserPureConstructors, constructor.text) &&
-            !identifierIsShadowedWithinBoundary(constructor, body)));
-      if (!reviewedConstructor) {
-        appendViolation(
-          node.right,
-          'computed-security-operation',
-          `browser instanceof target ${nodeName(constructor)} is outside the finite handler IR`,
-        );
-      }
+      appendViolation(
+        node,
+        'computed-security-operation',
+        `browser instanceof target ${nodeName(constructor)} is outside the finite handler IR`,
+      );
     } else if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      const destructuredStateTarget =
+        (ts.isArrayLiteralExpression(unwrapExpression(node.left)) ||
+          ts.isObjectLiteralExpression(unwrapExpression(node.left))) &&
+        browserAssignmentPatternContainsStateTarget(node.left, aliases, body);
+      const stateTarget = destructuredStateTarget
+        ? 'computed'
+        : browserStateMutationTargetKind(node.left, aliases, body);
       const provenance = browserMutationTargetProvenance(node.left, aliases, body);
-      if (provenance === 'state') {
-        appendOperation('browser.state.write', node.left, browserExpressionTarget(node.left));
-      } else if (browserProvenanceCarriesAuthority(provenance)) {
+      const mutationReceiver = browserMutationTargetReceiver(node.left);
+      const wrappedStateTarget =
+        stateTarget === 'none' &&
+        mutationReceiver !== undefined &&
+        browserExpressionMayCarryState(mutationReceiver, aliases, body);
+      const wrappedAuthorityTarget =
+        !wrappedStateTarget &&
+        mutationReceiver !== undefined &&
+        expressionContainsBrowserAuthority(mutationReceiver, aliases, body);
+      if (destructuredStateTarget) {
+        appendViolation(
+          node.left,
+          'computed-security-operation',
+          'destructuring state writes are outside the finite handler IR',
+        );
+      } else if (stateTarget === 'computed' || wrappedStateTarget) {
+        appendViolation(
+          node.left,
+          'computed-security-operation',
+          'computed state write targets are outside the finite handler IR',
+        );
+      } else if (stateTarget === 'static') {
+        appendOperation(
+          'browser.state.write',
+          node.left,
+          browserCanonicalStateTarget(sourceFile, node.left, aliases, body) ??
+            browserExpressionTarget(node.left),
+        );
+        appendStateWriteValue(node.right, 'state assignment');
+      } else if (browserProvenanceCarriesAuthority(provenance) || wrappedAuthorityTarget) {
         appendViolation(
           node.left,
           provenance === 'raw-browser' || provenance === 'unknown-authority'
@@ -1253,14 +1484,15 @@ export function scanBrowserSecurityOperations(
       }
       const rightProvenance = browserExpressionProvenance(node.right, aliases, body);
       if (
-        provenance !== 'state' &&
-        (browserProvenanceCarriesAuthority(rightProvenance) ||
+        stateTarget === 'none' &&
+        (browserExpressionMayCarryState(node.right, aliases, body) ||
+          browserProvenanceCarriesAuthority(rightProvenance) ||
           expressionContainsBrowserAuthority(node.right, aliases, body))
       ) {
         appendViolation(
           node.right,
           'computed-security-operation',
-          'browser authority cannot move through a mutable or computed alias',
+          'browser authority or state JSON cannot move through a mutable or computed alias',
         );
       }
     } else if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) {
@@ -1270,9 +1502,30 @@ export function scanBrowserSecurityOperations(
       ) {
         const operand = node.operand;
         const provenance = browserMutationTargetProvenance(operand, aliases, body);
-        if (provenance === 'state') {
-          appendOperation('browser.state.write', operand, browserExpressionTarget(operand));
-        } else if (browserProvenanceCarriesAuthority(provenance)) {
+        const stateTarget = browserStateMutationTargetKind(operand, aliases, body);
+        const mutationReceiver = browserMutationTargetReceiver(operand);
+        const wrappedStateTarget =
+          stateTarget === 'none' &&
+          mutationReceiver !== undefined &&
+          browserExpressionMayCarryState(mutationReceiver, aliases, body);
+        const wrappedAuthorityTarget =
+          !wrappedStateTarget &&
+          mutationReceiver !== undefined &&
+          expressionContainsBrowserAuthority(mutationReceiver, aliases, body);
+        if (stateTarget === 'computed' || wrappedStateTarget) {
+          appendViolation(
+            operand,
+            'computed-security-operation',
+            'computed state update targets are outside the finite handler IR',
+          );
+        } else if (stateTarget === 'static') {
+          appendOperation(
+            'browser.state.write',
+            operand,
+            browserCanonicalStateTarget(sourceFile, operand, aliases, body) ??
+              browserExpressionTarget(operand),
+          );
+        } else if (browserProvenanceCarriesAuthority(provenance) || wrappedAuthorityTarget) {
           appendViolation(
             operand,
             'raw-dom-operation',
@@ -1288,13 +1541,30 @@ export function scanBrowserSecurityOperations(
       }
     } else if (ts.isDeleteExpression(node)) {
       const provenance = browserMutationTargetProvenance(node.expression, aliases, body);
-      if (provenance === 'state') {
+      const stateTarget = browserStateMutationTargetKind(node.expression, aliases, body);
+      const mutationReceiver = browserMutationTargetReceiver(node.expression);
+      const wrappedStateTarget =
+        stateTarget === 'none' &&
+        mutationReceiver !== undefined &&
+        browserExpressionMayCarryState(mutationReceiver, aliases, body);
+      const wrappedAuthorityTarget =
+        !wrappedStateTarget &&
+        mutationReceiver !== undefined &&
+        expressionContainsBrowserAuthority(mutationReceiver, aliases, body);
+      if (stateTarget === 'computed' || wrappedStateTarget) {
+        appendViolation(
+          node.expression,
+          'computed-security-operation',
+          'computed state delete targets are outside the finite handler IR',
+        );
+      } else if (stateTarget === 'static') {
         appendOperation(
           'browser.state.write',
           node.expression,
-          browserExpressionTarget(node.expression),
+          browserCanonicalStateTarget(sourceFile, node.expression, aliases, body) ??
+            browserExpressionTarget(node.expression),
         );
-      } else if (browserProvenanceCarriesAuthority(provenance)) {
+      } else if (browserProvenanceCarriesAuthority(provenance) || wrappedAuthorityTarget) {
         appendViolation(
           node,
           'raw-dom-operation',
@@ -1312,11 +1582,40 @@ export function scanBrowserSecurityOperations(
       !browserMemberUseIsOwnedByParent(node)
     ) {
       const receiverProvenance = browserExpressionProvenance(node.expression, aliases, body);
-      if (receiverProvenance === 'raw-browser' || receiverProvenance === 'unknown-authority') {
+      const receiverMayCarryState =
+        receiverProvenance !== 'state' &&
+        browserExpressionMayCarryState(node.expression, aliases, body);
+      const receiverMayCarryOtherAuthority =
+        !receiverMayCarryState &&
+        receiverProvenance !== 'state' &&
+        expressionContainsBrowserAuthority(node.expression, aliases, body);
+      if (receiverMayCarryState) {
+        appendViolation(
+          node,
+          'computed-security-operation',
+          'state JSON cannot be projected through an unreviewed wrapper before a member read',
+        );
+      } else if (
+        receiverProvenance === 'raw-browser' ||
+        receiverProvenance === 'unknown-authority' ||
+        receiverMayCarryOtherAuthority
+      ) {
         appendViolation(
           node,
           'computed-security-operation',
           `raw browser member ${browserExpressionTarget(node) ?? 'computed'} is outside the finite handler IR`,
+        );
+      } else if (receiverProvenance === 'event') {
+        appendViolation(
+          node,
+          'raw-dom-operation',
+          'raw event members require a framework-pinned operation and are outside authored handlers',
+        );
+      } else if (isDomProvenance(receiverProvenance)) {
+        appendViolation(
+          node,
+          'raw-dom-operation',
+          'raw DOM members require a framework-pinned operation and are outside authored handlers',
         );
       }
     }
@@ -1325,10 +1624,1118 @@ export function scanBrowserSecurityOperations(
   };
   visit(body);
 
-  return {
-    operations: dedupeBrowserOperations(operations),
-    violations: dedupeViolations(violations),
+  const stateWriteSnapshot = compilerSnapshotDenseArray(
+    stateWriteValues,
+    'Browser state-write JSON values',
+  );
+  for (let index = 0; index < stateWriteSnapshot.length; index += 1) {
+    const candidate = stateWriteSnapshot[index]!;
+    const unsafe = browserStateWriteExecutableEscapeNode(
+      sourceFile,
+      body,
+      candidate.node,
+      aliases,
+      compilerCreateSet<string>(),
+    );
+    if (unsafe !== undefined) {
+      appendViolation(
+        unsafe,
+        'computed-security-operation',
+        `${candidate.detail} is outside the compiler's closed JSON/scalar state vocabulary; runtime validation separately enforces recursive JsonValue data`,
+      );
+    }
+  }
+
+  const dedupedOperations = dedupeBrowserOperations(operations);
+  if (dedupedOperations.length > BROWSER_SECURITY_OPERATION_LIMIT) {
+    appendViolation(
+      body,
+      'computed-security-operation',
+      `browser handlers may contain at most ${BROWSER_SECURITY_OPERATION_LIMIT} distinct finite operations`,
+    );
+    return {
+      operations: [],
+      runtimeOmitted: true,
+      violations: dedupeViolations(violations),
+    };
+  }
+  return { operations: dedupedOperations, violations: dedupeViolations(violations) };
+}
+
+function browserFunctionIsAsyncOrGenerator(node: ts.FunctionLikeDeclaration): boolean {
+  const modifiers = compilerSnapshotDenseArray(
+    ts.canHaveModifiers(node) ? (ts.getModifiers(node) ?? []) : [],
+    'Finite browser-handler modifiers',
+  );
+  for (let index = 0; index < modifiers.length; index += 1) {
+    if (modifiers[index]!.kind === ts.SyntaxKind.AsyncKeyword) return true;
+  }
+  return (
+    (ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isMethodDeclaration(node)) &&
+    node.asteriskToken !== undefined
+  );
+}
+
+function browserExpressionIsVoidOutcome(expression: ts.Expression, boundary: ts.Node): boolean {
+  const current = unwrapExpression(expression);
+  return (
+    ts.isVoidExpression(current) ||
+    (ts.isIdentifier(current) &&
+      current.text === 'undefined' &&
+      !identifierIsShadowedWithinBoundary(current, boundary))
+  );
+}
+
+function browserHandlerOutcomeIsReviewed(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): boolean {
+  if (browserExpressionIsVoidOutcome(expression, boundary)) return true;
+  const current = unwrapExpression(expression);
+  if (ts.isCallExpression(current)) {
+    const callee = unwrapExpression(current.expression);
+    if (
+      browserOperationProvenanceKind(browserExpressionProvenance(callee, aliases, boundary)) !==
+        undefined ||
+      browserExpressionIsReviewedFrameworkCall(sourceFile, callee) ||
+      browserReviewedStateMethodCall(callee, aliases, boundary) !== undefined ||
+      browserReviewedLocalArrayMethodCall(sourceFile, callee, boundary, aliases) !== undefined
+    ) {
+      return true;
+    }
+    // Call admission is classified exactly once by the CallExpression visitor below. Treating an
+    // unreviewed call as a second outcome violation obscures the precise closed sink.
+    return true;
+  }
+  // Constructor admission is likewise classified exactly once by the NewExpression branch.
+  if (ts.isNewExpression(current) || ts.isTaggedTemplateExpression(current)) return true;
+  if (
+    ts.isBinaryExpression(current) &&
+    isAssignmentOperator(current.operatorToken.kind) &&
+    browserStateMutationTargetKind(current.left, aliases, boundary) === 'static'
+  ) {
+    return true;
+  }
+  if (
+    (ts.isPrefixUnaryExpression(current) || ts.isPostfixUnaryExpression(current)) &&
+    (current.operator === ts.SyntaxKind.PlusPlusToken ||
+      current.operator === ts.SyntaxKind.MinusMinusToken) &&
+    browserStateMutationTargetKind(current.operand, aliases, boundary) === 'static'
+  ) {
+    return true;
+  }
+  return (
+    browserStateWriteExecutableEscapeNode(
+      sourceFile,
+      boundary,
+      current,
+      aliases,
+      compilerCreateSet<string>(),
+    ) === undefined
+  );
+}
+
+function browserReturnBelongsToHandler(node: ts.ReturnStatement, body: ts.ConciseBody): boolean {
+  let cursor: ts.Node | undefined = node.parent;
+  while (cursor && cursor !== body) {
+    if (isSecurityIrFunctionScope(cursor)) return false;
+    cursor = cursor.parent;
+  }
+  return cursor === body;
+}
+
+function appendBrowserSpreadArgumentViolations(
+  argumentsList: readonly ts.Expression[],
+  appendViolation: (
+    node: ts.Node,
+    kind: SecurityOperationViolationModel['kind'],
+    detail: string,
+  ) => void,
+): void {
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    argumentsList,
+    'Finite browser-handler call arguments',
+  );
+  for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+    const argument = argumentsSnapshot[index]!;
+    if (!ts.isSpreadElement(argument)) continue;
+    appendViolation(
+      argument,
+      'computed-security-operation',
+      'spread call arguments invoke an unreviewed iterator protocol',
+    );
+  }
+}
+
+type BrowserStateMutationTargetKind = 'computed' | 'none' | 'static';
+
+function browserStateMutationTargetKind(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+): BrowserStateMutationTargetKind {
+  let current = unwrapExpression(expression);
+  let computed = false;
+  while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    if (ts.isElementAccessExpression(current) && staticMember(current) === undefined) {
+      computed = true;
+    }
+    current = unwrapExpression(current.expression);
+  }
+  return browserExpressionProvenance(current, aliases, boundary) === 'state'
+    ? computed
+      ? 'computed'
+      : 'static'
+    : 'none';
+}
+
+function browserMutationTargetReceiver(expression: ts.Expression): ts.Expression | undefined {
+  const current = unwrapExpression(expression);
+  return ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)
+    ? current.expression
+    : undefined;
+}
+
+function browserBinaryExpressionIsAssignmentPatternDefault(node: ts.BinaryExpression): boolean {
+  if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return false;
+  let current: ts.Node = node;
+  let parent = current.parent;
+  while (
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isObjectLiteralExpression(parent) ||
+    (ts.isPropertyAssignment(parent) && parent.initializer === current) ||
+    ts.isParenthesizedExpression(parent)
+  ) {
+    current = parent;
+    parent = current.parent;
+  }
+  return (
+    ts.isBinaryExpression(parent) &&
+    isAssignmentOperator(parent.operatorToken.kind) &&
+    parent.left === current
+  );
+}
+
+function browserAssignmentPatternContainsStateTarget(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (browserStateMutationTargetKind(current, aliases, boundary) !== 'none') return true;
+  if (ts.isArrayLiteralExpression(current)) {
+    const elements = compilerSnapshotDenseArray(
+      current.elements,
+      'Finite browser state assignment pattern',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (
+        !ts.isOmittedExpression(element) &&
+        browserAssignmentPatternContainsStateTarget(
+          ts.isSpreadElement(element) ? element.expression : element,
+          aliases,
+          boundary,
+        )
+      )
+        return true;
+    }
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    const properties = compilerSnapshotDenseArray(
+      current.properties,
+      'Finite browser state assignment pattern',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      const target = ts.isPropertyAssignment(property)
+        ? property.initializer
+        : ts.isShorthandPropertyAssignment(property)
+          ? property.name
+          : ts.isSpreadAssignment(property)
+            ? property.expression
+            : undefined;
+      if (target && browserAssignmentPatternContainsStateTarget(target, aliases, boundary)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+interface BrowserExecutableStateUse {
+  readonly detail: string;
+  readonly node: ts.Node;
+}
+
+interface BrowserStateWriteValueCandidate {
+  readonly detail: string;
+  readonly node: ts.Expression;
+}
+
+/**
+ * SPEC §4.3/§5.2: state is a JSON data channel. These are the syntax positions that ask the JS
+ * runtime to obtain or invoke executable behavior from a value. The fact is consumed both by the
+ * finite browser-IR verdict and by element-param lowering, so a scalar cannot be laundered through
+ * a state write before reaching one of these positions.
+ */
+function browserExecutableStateUse(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  node: ts.Node,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  locals: ReadonlySet<string>,
+): BrowserExecutableStateUse | undefined {
+  const executable = (expression: ts.Expression): boolean =>
+    browserExpressionMayCarryState(expression, aliases, boundary);
+  const result = (target: ts.Node, detail: string): BrowserExecutableStateUse => ({
+    detail,
+    node: target,
+  });
+
+  if (ts.isCallExpression(node)) {
+    const callee = unwrapExpression(node.expression);
+    const calleeProvenance = browserExpressionProvenance(callee, aliases, boundary);
+    const operationKind = browserOperationProvenanceKind(calleeProvenance);
+    if (operationKind === 'browser.timer.schedule') {
+      const callback = node.arguments[0];
+      return callback !== undefined && executable(callback)
+        ? result(callback, 'state-derived JSON cannot be used as a timer callback')
+        : undefined;
+    }
+    if (operationKind !== undefined) return undefined;
+
+    const stateMethod = browserReviewedStateMethodCall(callee, aliases, boundary);
+    if (stateMethod !== undefined) {
+      const argumentsSnapshot = compilerSnapshotDenseArray(
+        node.arguments,
+        `State ${stateMethod} executable arguments`,
+      );
+      for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+        const argumentKind = browserStateMethodExecutableArgumentKind(stateMethod, index);
+        if (
+          argumentKind !== undefined &&
+          executable(argumentsSnapshot[index]!) &&
+          !browserStateExecutableArgumentIsReviewed(
+            sourceFile,
+            boundary,
+            argumentsSnapshot[index]!,
+            argumentKind,
+            locals,
+            aliases,
+          )
+        ) {
+          return result(
+            argumentsSnapshot[index]!,
+            `state-derived JSON cannot be used in executable state.${stateMethod} argument ${index}`,
+          );
+        }
+      }
+      return undefined;
+    }
+
+    const sameFileCallable = resolveSameFileSecurityIrCallable(sourceFile, callee);
+    if (sameFileCallable !== undefined) {
+      const argumentsSnapshot = compilerSnapshotDenseArray(
+        node.arguments,
+        'State executable helper arguments',
+      );
+      for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+        const argument = argumentsSnapshot[index]!;
+        if (executable(argument)) {
+          return result(argument, 'state-derived JSON cannot pass through an unsummarized helper');
+        }
+      }
+      return undefined;
+    }
+    if (ts.isIdentifier(callee) && !compilerSetHas(locals, callee.text)) return undefined;
+
+    if (
+      executable(callee) &&
+      !browserCallbackIsReviewedExecutable(boundary, callee, locals, aliases)
+    ) {
+      return result(callee, 'state-derived JSON cannot be used as a browser call target');
+    }
+
+    return undefined;
+  }
+
+  if (ts.isNewExpression(node) && executable(node.expression)) {
+    return result(node.expression, 'state-derived JSON cannot be used as a constructor');
+  }
+  if (ts.isTaggedTemplateExpression(node) && executable(node.tag)) {
+    return result(node.tag, 'state-derived JSON cannot be used as a template tag');
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
+    executable(node.right)
+  ) {
+    return result(node.right, 'state-derived JSON cannot be an instanceof target');
+  }
+  if (
+    ts.isExpressionWithTypeArguments(node) &&
+    ts.isHeritageClause(node.parent) &&
+    node.parent.token === ts.SyntaxKind.ExtendsKeyword &&
+    executable(node.expression)
+  ) {
+    return result(node.expression, 'state-derived JSON cannot be a class heritage constructor');
+  }
+  return undefined;
+}
+
+function browserExpressionMayCarryState(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+): boolean {
+  const active = compilerCreateSet<string>();
+  const visitExpression = (candidate: ts.Expression): boolean => {
+    const current = unwrapExpression(candidate);
+    const sourceFile = current.getSourceFile();
+    const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+    if (compilerSetHas(active, key)) return false;
+    compilerSetAdd(active, key);
+    try {
+      if (browserExpressionProvenance(current, aliases, boundary) === 'state') return true;
+      if (ts.isIdentifier(current)) {
+        const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+        if (initializer !== undefined && visitExpression(initializer)) return true;
+      }
+      let found = false;
+      ts.forEachChild(current, (child) => {
+        if (!found && ts.isExpression(child) && visitExpression(child)) found = true;
+      });
+      return found;
+    } finally {
+      compilerSetDelete(active, key);
+    }
   };
+  return visitExpression(expression);
+}
+
+function browserReviewedStateMethodCall(
+  callee: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+): string | undefined {
+  const member = staticMember(callee);
+  if (!member || !browserExpressionIsReviewedStateData(member.receiver, aliases, boundary)) {
+    return undefined;
+  }
+  if (
+    !compilerSetHas(browserStateReadMethods, member.name) &&
+    !compilerSetHas(browserStateMutatorMethods, member.name)
+  ) {
+    return undefined;
+  }
+  return member.name;
+}
+
+function browserReviewedLocalArrayMethodCall(
+  sourceFile: ts.SourceFile,
+  callee: ts.Expression,
+  boundary: ts.ConciseBody,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): string | undefined {
+  const member = staticMember(callee);
+  if (
+    !member ||
+    !compilerSetHas(browserReviewedLocalArrayCallbackMethods, member.name) ||
+    !browserExpressionIsReviewedLocalArrayData(
+      sourceFile,
+      member.receiver,
+      boundary,
+      aliases,
+      compilerCreateSet<string>(),
+    )
+  )
+    return undefined;
+  return member.name;
+}
+
+function browserExpressionIsReviewedLocalArrayData(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  boundary: ts.ConciseBody,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): boolean {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+  if (compilerSetHas(active, key)) return false;
+  compilerSetAdd(active, key);
+  try {
+    if (ts.isArrayLiteralExpression(current)) {
+      const elements = compilerSnapshotDenseArray(current.elements, 'Reviewed local array data');
+      for (let index = 0; index < elements.length; index += 1) {
+        const element = elements[index]!;
+        if (
+          ts.isOmittedExpression(element) ||
+          ts.isSpreadElement(element) ||
+          browserExpressionMayCarryState(element, aliases, boundary) ||
+          expressionContainsBrowserAuthority(element, aliases, boundary) ||
+          browserStateWriteExecutableEscapeNode(
+            sourceFile,
+            boundary,
+            element,
+            aliases,
+            compilerCreateSet<string>(),
+          )
+        )
+          return false;
+      }
+      return true;
+    }
+    if (ts.isIdentifier(current)) {
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      return (
+        initializer !== undefined &&
+        browserExpressionIsReviewedLocalArrayData(
+          sourceFile,
+          initializer,
+          boundary,
+          aliases,
+          active,
+        )
+      );
+    }
+    if (ts.isCallExpression(current)) {
+      return (
+        browserReviewedLocalArrayMethodCall(
+          sourceFile,
+          unwrapExpression(current.expression),
+          boundary,
+          aliases,
+        ) !== undefined
+      );
+    }
+    return false;
+  } finally {
+    compilerSetDelete(active, key);
+  }
+}
+
+function browserExpressionIsReviewedStateData(
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (browserExpressionProvenance(current, aliases, boundary) === 'state') {
+    return expressionPath(current) !== 'state';
+  }
+  if (!ts.isCallExpression(current)) return false;
+  const member = staticMember(unwrapExpression(current.expression));
+  return (
+    member !== undefined &&
+    (compilerSetHas(browserStateReadMethods, member.name) ||
+      compilerSetHas(browserStateMutatorMethods, member.name)) &&
+    browserExpressionIsReviewedStateData(member.receiver, aliases, boundary)
+  );
+}
+
+type BrowserStateExecutableArgumentKind = 'scalar' | 'stored-json';
+
+function browserStateMethodExecutableArgumentKind(
+  method: string,
+  index: number,
+): BrowserStateExecutableArgumentKind | undefined {
+  if (method === 'push' || method === 'unshift') return 'stored-json';
+  if (
+    (method === 'endsWith' ||
+      method === 'includes' ||
+      method === 'indexOf' ||
+      method === 'lastIndexOf' ||
+      method === 'replace' ||
+      method === 'replaceAll' ||
+      method === 'startsWith') &&
+    index < 2
+  ) {
+    return 'scalar';
+  }
+  return undefined;
+}
+
+function browserStateExecutableArgumentIsReviewed(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  kind: BrowserStateExecutableArgumentKind,
+  locals: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): boolean {
+  void locals;
+  if (kind === 'scalar') {
+    return browserStateMethodScalarArgumentIsReviewed(
+      sourceFile,
+      boundary,
+      expression,
+      aliases,
+      compilerCreateSet<string>(),
+    );
+  }
+  return (
+    browserStateWriteExecutableEscapeNode(
+      sourceFile,
+      boundary,
+      expression,
+      aliases,
+      compilerCreateSet<string>(),
+    ) === undefined
+  );
+}
+
+function browserStateMethodScalarArgumentIsReviewed(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): boolean {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+  if (compilerSetHas(active, key)) return false;
+  compilerSetAdd(active, key);
+  try {
+    if (
+      ts.isStringLiteralLike(current) ||
+      ts.isNumericLiteral(current) ||
+      current.kind === ts.SyntaxKind.TrueKeyword ||
+      current.kind === ts.SyntaxKind.FalseKeyword ||
+      current.kind === ts.SyntaxKind.NullKeyword
+    )
+      return true;
+    if (ts.isIdentifier(current)) {
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      return (
+        initializer !== undefined &&
+        browserStateMethodScalarArgumentIsReviewed(
+          sourceFile,
+          boundary,
+          initializer,
+          aliases,
+          active,
+        )
+      );
+    }
+    if (ts.isCallExpression(current)) {
+      const callee = unwrapExpression(current.expression);
+      return (
+        ts.isIdentifier(callee) &&
+        (callee.text === 'Boolean' || callee.text === 'Number' || callee.text === 'String') &&
+        !identifierIsShadowedWithinBoundary(callee, boundary) &&
+        browserScalarCallResultIsReviewed(sourceFile, boundary, current, aliases, active)
+      );
+    }
+    return false;
+  } finally {
+    compilerSetDelete(active, key);
+  }
+}
+
+function browserStateMethodStoredArguments(
+  call: ts.CallExpression,
+  method: string,
+): readonly ts.Expression[] {
+  if (method === 'push' || method === 'unshift') {
+    return compilerSnapshotDenseArray(call.arguments, `State ${method} insertions`);
+  }
+  if (method === 'splice') {
+    const argumentsSnapshot = compilerSnapshotDenseArray(call.arguments, 'State splice insertions');
+    const values: ts.Expression[] = [];
+    for (let index = 2; index < argumentsSnapshot.length; index += 1) {
+      compilerArrayAppend(values, argumentsSnapshot[index]!, 'State splice insertions');
+    }
+    return values;
+  }
+  const first = method === 'fill' ? call.arguments[0] : undefined;
+  return first === undefined ? [] : [first];
+}
+
+/**
+ * SPEC §4.3/§5.2 static half of the state-data boundary. Keep this deliberately finite: reject
+ * values that syntax/provenance proves are executable or browser capabilities, including values
+ * nested in literal containers and immutable aliases. The browser runtime separately validates the
+ * complete recursive JsonValue invariant after every handler.
+ */
+function browserStateWriteExecutableEscapeNode(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): ts.Node | undefined {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+  if (compilerSetHas(active, key)) return current;
+  compilerSetAdd(active, key);
+  try {
+    if (
+      ts.isStringLiteralLike(current) ||
+      ts.isNumericLiteral(current) ||
+      current.kind === ts.SyntaxKind.TrueKeyword ||
+      current.kind === ts.SyntaxKind.FalseKeyword ||
+      current.kind === ts.SyntaxKind.NullKeyword
+    )
+      return undefined;
+    if (
+      ts.isArrowFunction(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isClassExpression(current) ||
+      ts.isRegularExpressionLiteral(current) ||
+      ts.isBigIntLiteral(current) ||
+      ts.isNewExpression(current) ||
+      ts.isAwaitExpression(current) ||
+      ts.isYieldExpression(current) ||
+      ts.isVoidExpression(current)
+    )
+      return current;
+
+    if (ts.isIdentifier(current)) {
+      if (current.text === 'undefined' && !identifierIsShadowedWithinBoundary(current, boundary)) {
+        return current;
+      }
+      if (browserExpressionUsesDirectModuleImport(sourceFile, current)) return current;
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      if (initializer !== undefined) {
+        return browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          boundary,
+          initializer,
+          aliases,
+          active,
+        );
+      }
+      const provenance = browserExpressionProvenance(current, aliases, boundary);
+      if (provenance === 'state') return undefined;
+      if (
+        provenance === 'raw-browser' ||
+        provenance === 'event' ||
+        provenance === 'dom' ||
+        provenance === 'form' ||
+        provenance === 'unknown-authority' ||
+        browserOperationProvenanceKind(provenance) !== undefined
+      ) {
+        return current;
+      }
+      return current;
+    }
+
+    if (ts.isObjectLiteralExpression(current)) {
+      const properties = compilerSnapshotDenseArray(
+        current.properties,
+        'State executable-escape object properties',
+      );
+      for (let index = 0; index < properties.length; index += 1) {
+        const property = properties[index]!;
+        if (ts.isSpreadAssignment(property)) return property;
+        if (
+          ts.isMethodDeclaration(property) ||
+          ts.isGetAccessor(property) ||
+          ts.isSetAccessor(property) ||
+          staticPropertyName(property.name) === undefined
+        ) {
+          return property;
+        }
+        const value = ts.isPropertyAssignment(property)
+          ? property.initializer
+          : ts.isShorthandPropertyAssignment(property)
+            ? (property.objectAssignmentInitializer ?? property.name)
+            : undefined;
+        if (value === undefined) return property;
+        const unsafe = browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          boundary,
+          value,
+          aliases,
+          active,
+        );
+        if (unsafe !== undefined) return unsafe;
+      }
+      return undefined;
+    }
+
+    if (ts.isArrayLiteralExpression(current)) {
+      const elements = compilerSnapshotDenseArray(
+        current.elements,
+        'State executable-escape array elements',
+      );
+      for (let index = 0; index < elements.length; index += 1) {
+        const element = elements[index]!;
+        if (ts.isOmittedExpression(element) || ts.isSpreadElement(element)) return element;
+        const unsafe = browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          boundary,
+          element,
+          aliases,
+          active,
+        );
+        if (unsafe !== undefined) return unsafe;
+      }
+      return undefined;
+    }
+
+    if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      if (browserExpressionUsesDirectModuleImport(sourceFile, current)) return current;
+      if (resolveSameFileSecurityIrCallable(sourceFile, current) !== undefined) return current;
+      const provenance = browserExpressionProvenance(current, aliases, boundary);
+      if (provenance === 'state') return undefined;
+      const member = staticMember(current);
+      if (!member) return current;
+      const receiver = unwrapExpression(member.receiver);
+      if (
+        member.name === 'length' &&
+        ts.isCallExpression(receiver) &&
+        browserReviewedLocalArrayMethodCall(
+          sourceFile,
+          unwrapExpression(receiver.expression),
+          boundary,
+          aliases,
+        ) !== undefined
+      )
+        return undefined;
+      if (ts.isIdentifier(receiver)) {
+        const initializer = securityIrImmutableBindingInitializer(sourceFile, receiver);
+        if (initializer && ts.isObjectLiteralExpression(unwrapExpression(initializer))) {
+          const property = browserStaticObjectPropertyValue(initializer, member.name);
+          return property
+            ? browserStateWriteExecutableEscapeNode(sourceFile, boundary, property, aliases, active)
+            : current;
+        }
+      }
+      return current;
+    }
+
+    if (ts.isConditionalExpression(current)) {
+      return (
+        browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          boundary,
+          current.whenTrue,
+          aliases,
+          active,
+        ) ??
+        browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          boundary,
+          current.whenFalse,
+          aliases,
+          active,
+        )
+      );
+    }
+
+    if (ts.isBinaryExpression(current)) {
+      if (current.operatorToken.kind === ts.SyntaxKind.CommaToken) {
+        return browserStateWriteExecutableEscapeNode(
+          sourceFile,
+          boundary,
+          current.right,
+          aliases,
+          active,
+        );
+      }
+      if (
+        current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+        current.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+        current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+      ) {
+        return (
+          browserStateWriteExecutableEscapeNode(
+            sourceFile,
+            boundary,
+            current.left,
+            aliases,
+            active,
+          ) ??
+          browserStateWriteExecutableEscapeNode(
+            sourceFile,
+            boundary,
+            current.right,
+            aliases,
+            active,
+          )
+        );
+      }
+      if (
+        current.operatorToken.kind === ts.SyntaxKind.InKeyword ||
+        current.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword ||
+        isAssignmentOperator(current.operatorToken.kind)
+      )
+        return current;
+      return (
+        browserScalarizationInputEscapeNode(sourceFile, boundary, current.left, aliases, active) ??
+        browserScalarizationInputEscapeNode(sourceFile, boundary, current.right, aliases, active)
+      );
+    }
+
+    if (ts.isPrefixUnaryExpression(current)) {
+      return browserScalarizationInputEscapeNode(
+        sourceFile,
+        boundary,
+        current.operand,
+        aliases,
+        active,
+      );
+    }
+    if (ts.isTypeOfExpression(current)) {
+      return browserScalarizationInputEscapeNode(
+        sourceFile,
+        boundary,
+        current.expression,
+        aliases,
+        active,
+      );
+    }
+    if (ts.isTemplateExpression(current)) {
+      const spans = compilerSnapshotDenseArray(current.templateSpans, 'State JSON template spans');
+      for (let index = 0; index < spans.length; index += 1) {
+        const unsafe = browserScalarizationInputEscapeNode(
+          sourceFile,
+          boundary,
+          spans[index]!.expression,
+          aliases,
+          active,
+        );
+        if (unsafe) return unsafe;
+      }
+      return undefined;
+    }
+    if (ts.isCallExpression(current)) {
+      const publishToClientSummary = browserPublishToClientSummary(
+        sourceFile,
+        boundary,
+        current,
+        aliases,
+      );
+      if (publishToClientSummary !== undefined) {
+        return publishToClientSummary.returnValue === undefined
+          ? (publishToClientSummary.violation?.node ?? current)
+          : browserStateWriteExecutableEscapeNode(
+              sourceFile,
+              boundary,
+              publishToClientSummary.returnValue,
+              aliases,
+              active,
+            );
+      }
+      if (browserScalarCallResultIsReviewed(sourceFile, boundary, current, aliases, active)) {
+        return undefined;
+      }
+      const stateMethod = browserReviewedStateMethodCall(
+        unwrapExpression(current.expression),
+        aliases,
+        boundary,
+      );
+      if (stateMethod && !compilerSetHas(browserStateMutatorMethods, stateMethod)) {
+        const argumentsSnapshot = compilerSnapshotDenseArray(
+          current.arguments,
+          `State ${stateMethod} JSON result arguments`,
+        );
+        for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+          const kind = browserStateMethodExecutableArgumentKind(stateMethod, index);
+          if (
+            kind === undefined ||
+            !browserStateExecutableArgumentIsReviewed(
+              sourceFile,
+              boundary,
+              argumentsSnapshot[index]!,
+              kind,
+              localBindingNames(boundary),
+              aliases,
+            )
+          )
+            return argumentsSnapshot[index]!;
+        }
+        return undefined;
+      }
+      return current;
+    }
+    return current;
+  } finally {
+    compilerSetDelete(active, key);
+  }
+}
+
+function browserStaticObjectPropertyValue(
+  expression: ts.Expression,
+  name: string,
+): ts.Expression | undefined {
+  const current = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(current)) return undefined;
+  const properties = compilerSnapshotDenseArray(
+    current.properties,
+    'State JSON static object properties',
+  );
+  let value: ts.Expression | undefined;
+  for (let index = 0; index < properties.length; index += 1) {
+    const property = properties[index]!;
+    if (staticPropertyName(property.name) !== name) continue;
+    if (value !== undefined) return undefined;
+    value = ts.isPropertyAssignment(property)
+      ? property.initializer
+      : ts.isShorthandPropertyAssignment(property)
+        ? (property.objectAssignmentInitializer ?? property.name)
+        : undefined;
+  }
+  return value;
+}
+
+function browserScalarizationInputEscapeNode(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): ts.Node | undefined {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    if (browserExpressionUsesDirectModuleImport(sourceFile, current)) return current;
+    const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+    if (initializer) {
+      return browserScalarizationInputEscapeNode(
+        sourceFile,
+        boundary,
+        initializer,
+        aliases,
+        active,
+      );
+    }
+    const provenance = browserExpressionProvenance(current, aliases, boundary);
+    if (browserProvenanceCarriesAuthority(provenance) && provenance !== 'state') return current;
+    return undefined;
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    if (browserExpressionUsesDirectModuleImport(sourceFile, current)) return current;
+    const provenance = browserExpressionProvenance(current, aliases, boundary);
+    if (browserProvenanceCarriesAuthority(provenance) && provenance !== 'state') return current;
+    const member = staticMember(current);
+    if (!member) return current;
+    const receiverProvenance = browserExpressionProvenance(member.receiver, aliases, boundary);
+    if (
+      receiverProvenance !== 'state' &&
+      (browserExpressionMayCarryState(member.receiver, aliases, boundary) ||
+        expressionContainsBrowserAuthority(member.receiver, aliases, boundary))
+    ) {
+      return current;
+    }
+    return ts.isCallExpression(unwrapExpression(member.receiver)) ? current : undefined;
+  }
+  if (ts.isCallExpression(current)) {
+    const publishToClientSummary = browserPublishToClientSummary(
+      sourceFile,
+      boundary,
+      current,
+      aliases,
+    );
+    if (publishToClientSummary !== undefined) {
+      return publishToClientSummary.returnValue === undefined
+        ? (publishToClientSummary.violation?.node ?? current)
+        : browserScalarizationInputEscapeNode(
+            sourceFile,
+            boundary,
+            publishToClientSummary.returnValue,
+            aliases,
+            active,
+          );
+    }
+    return browserScalarCallResultIsReviewed(sourceFile, boundary, current, aliases, active)
+      ? undefined
+      : current;
+  }
+  if (ts.isNewExpression(current)) return current;
+  return browserStateWriteExecutableEscapeNode(sourceFile, boundary, current, aliases, active);
+}
+
+function browserScalarCallResultIsReviewed(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): boolean {
+  const callee = unwrapExpression(call.expression);
+  const scalarIdentifier =
+    ts.isIdentifier(callee) &&
+    (callee.text === 'Boolean' ||
+      callee.text === 'Number' ||
+      callee.text === 'String' ||
+      callee.text === 'isFinite' ||
+      callee.text === 'isNaN' ||
+      callee.text === 'parseFloat' ||
+      callee.text === 'parseInt') &&
+    !identifierIsShadowedWithinBoundary(callee, boundary);
+  const member = staticMember(callee);
+  const globalMember = member ? `${rootIdentifier(member.receiver)}.${member.name}` : undefined;
+  const globalRoot = member ? rootIdentifierNode(member.receiver) : undefined;
+  const scalarMember =
+    globalMember !== undefined &&
+    (globalMember === 'Array.isArray' ||
+      globalMember === 'Date.now' ||
+      globalMember === 'JSON.stringify' ||
+      compilerStringStartsWith(globalMember, 'Math.') ||
+      compilerStringStartsWith(globalMember, 'Number.') ||
+      globalMember === 'Object.hasOwn' ||
+      globalMember === 'Object.is' ||
+      globalMember === 'String.fromCharCode' ||
+      globalMember === 'String.fromCodePoint') &&
+    globalRoot !== undefined &&
+    !identifierIsShadowedWithinBoundary(globalRoot, boundary);
+  if (!scalarIdentifier && !scalarMember) return false;
+  if (globalMember === 'Date.now' && call.arguments.length === 0) return true;
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    call.arguments,
+    'State scalar call arguments',
+  );
+  for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+    if (
+      browserScalarizationInputEscapeNode(
+        sourceFile,
+        boundary,
+        argumentsSnapshot[index]!,
+        aliases,
+        active,
+      )
+    )
+      return false;
+  }
+  return true;
+}
+
+function browserExpressionUsesDirectModuleImport(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  if (!securityIrExpressionUsesDirectImportBinding(sourceFile, expression)) return false;
+  const root = securityIrLeftmostExecutableRoot(expression);
+  return root !== undefined && securityIrIdentifierBindingScope(sourceFile, root) === 'module';
+}
+
+function browserCallbackIsReviewedExecutable(
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  locals: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) return true;
+  if (!ts.isIdentifier(current)) return false;
+  if (
+    compilerSetHas(browserPureGlobalCalls, current.text) &&
+    !identifierIsShadowedWithinBoundary(current, boundary)
+  ) {
+    return true;
+  }
+  return (
+    compilerSetHas(locals, current.text) &&
+    resolveSameFileSecurityIrCallable(current.getSourceFile(), current) !== undefined &&
+    !browserLocalCallableAliasIsOpaque(boundary, current.text, compilerCreateSet<string>())
+  );
 }
 
 function browserMemberUseIsOwnedByParent(
@@ -1360,6 +2767,396 @@ function browserTimerCallbackIsSourceText(expression: ts.Expression | undefined)
   );
 }
 
+function browserTimerCallbackIsReviewed(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  expression: ts.Expression | undefined,
+  locals: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): boolean {
+  if (
+    expression === undefined ||
+    browserTimerCallbackIsSourceText(expression) ||
+    !browserCallbackIsReviewedExecutable(body, expression, locals, aliases)
+  ) {
+    return false;
+  }
+  const current = unwrapExpression(expression);
+  const callable =
+    ts.isArrowFunction(current) || ts.isFunctionExpression(current)
+      ? current
+      : resolveSameFileSecurityIrCallable(sourceFile, current)?.declaration;
+  return callable !== undefined && callable.parameters.length === 0;
+}
+
+function browserTimerCallbackStateCaptureNode(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): ts.Node | undefined {
+  const current = unwrapExpression(expression);
+  const callable =
+    ts.isArrowFunction(current) || ts.isFunctionExpression(current)
+      ? { body: current.body, declaration: current }
+      : resolveSameFileSecurityIrCallable(sourceFile, current);
+  if (!callable) return expression;
+  let captured: ts.Node | undefined;
+  const visit = (node: ts.Node): void => {
+    if (captured !== undefined) return;
+    if (
+      ts.isIdentifier(node) &&
+      browserIdentifierIsValueReference(node) &&
+      !identifierIsShadowedWithinBoundary(node, callable.declaration) &&
+      browserExpressionMayCarryState(node, aliases, body)
+    ) {
+      captured = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(callable.body);
+  return captured;
+}
+
+function browserIdentifierIsValueReference(identifier: ts.Identifier): boolean {
+  const parent = identifier.parent;
+  if (
+    (ts.isPropertyAccessExpression(parent) && parent.name === identifier) ||
+    (ts.isPropertyAssignment(parent) && parent.name === identifier) ||
+    (ts.isMethodDeclaration(parent) && parent.name === identifier) ||
+    (ts.isGetAccessorDeclaration(parent) && parent.name === identifier) ||
+    (ts.isSetAccessorDeclaration(parent) && parent.name === identifier) ||
+    (ts.isVariableDeclaration(parent) && parent.name === identifier) ||
+    (ts.isParameter(parent) && parent.name === identifier) ||
+    (ts.isBindingElement(parent) && parent.name === identifier) ||
+    ((ts.isFunctionDeclaration(parent) ||
+      ts.isFunctionExpression(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isClassExpression(parent)) &&
+      parent.name === identifier) ||
+    ts.isPropertySignature(parent) ||
+    ts.isTypeReferenceNode(parent) ||
+    ts.isTypeQueryNode(parent) ||
+    ts.isQualifiedName(parent) ||
+    ts.isLabeledStatement(parent) ||
+    ts.isBreakStatement(parent) ||
+    ts.isContinueStatement(parent)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function browserTimerCallViolation(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  call: ts.CallExpression,
+  locals: ReadonlySet<string>,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+):
+  | {
+      readonly detail: string;
+      readonly kind: SecurityOperationViolationModel['kind'];
+      readonly node: ts.Node;
+    }
+  | undefined {
+  const callback = call.arguments[0];
+  if (browserTimerCallbackIsSourceText(callback)) {
+    return {
+      detail: 'string timer callbacks execute source text and are outside the finite handler IR',
+      kind: 'raw-dom-operation',
+      node: callback!,
+    };
+  }
+  if (!browserTimerCallbackIsReviewed(sourceFile, body, callback, locals, aliases)) {
+    return {
+      detail:
+        'timer callbacks must be exact zero-parameter reviewed local executables, never source text',
+      kind: 'computed-security-operation',
+      node: callback ?? call,
+    };
+  }
+  const stateCapture = browserTimerCallbackStateCaptureNode(sourceFile, body, callback!, aliases);
+  if (stateCapture !== undefined) {
+    return {
+      detail:
+        'deferred timer callbacks cannot read, write, or capture handler state without a queued state transaction',
+      kind: 'computed-security-operation',
+      node: stateCapture,
+    };
+  }
+  if (call.arguments.length !== 2) {
+    return {
+      detail: 'timers require exactly one reviewed callback and one primitive delay',
+      kind: 'computed-security-operation',
+      node: call,
+    };
+  }
+  const delay = call.arguments[1]!;
+  if (
+    !browserStateMethodScalarArgumentIsReviewed(
+      sourceFile,
+      body,
+      delay,
+      aliases,
+      compilerCreateSet<string>(),
+    )
+  ) {
+    return {
+      detail: 'timer delay must be an exact reviewed primitive without coercion protocols',
+      kind: 'computed-security-operation',
+      node: delay,
+    };
+  }
+  return undefined;
+}
+
+function browserTimerCancelCallViolation(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+):
+  | {
+      readonly detail: string;
+      readonly kind: SecurityOperationViolationModel['kind'];
+      readonly node: ts.Node;
+    }
+  | undefined {
+  if (call.arguments.length !== 1) {
+    return {
+      detail: 'timer cancellation requires exactly one reviewed primitive timer handle',
+      kind: 'computed-security-operation',
+      node: call,
+    };
+  }
+  const handle = call.arguments[0]!;
+  if (
+    browserTimerHandleIsReviewed(sourceFile, body, handle, aliases, compilerCreateSet<string>())
+  ) {
+    return undefined;
+  }
+  return {
+    detail:
+      'timer cancellation handle must be primitive or the exact result of a finite timer schedule',
+    kind: 'computed-security-operation',
+    node: handle,
+  };
+}
+
+function browserTimerHandleIsReviewed(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): boolean {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+  if (compilerSetHas(active, key)) return false;
+  if (browserExpressionIsVoidOutcome(current, body)) return true;
+  if (
+    browserStateMethodScalarArgumentIsReviewed(
+      sourceFile,
+      body,
+      current,
+      aliases,
+      compilerCreateSet<string>(),
+    )
+  ) {
+    return true;
+  }
+  compilerSetAdd(active, key);
+  try {
+    if (ts.isIdentifier(current)) {
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      return (
+        initializer !== undefined &&
+        browserTimerHandleIsReviewed(sourceFile, body, initializer, aliases, active)
+      );
+    }
+    return (
+      ts.isCallExpression(current) &&
+      browserOperationProvenanceKind(
+        browserExpressionProvenance(unwrapExpression(current.expression), aliases, body),
+      ) === 'browser.timer.schedule'
+    );
+  } finally {
+    compilerSetDelete(active, key);
+  }
+}
+
+function browserPureCallUnsafeArgument(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): ts.Expression | undefined {
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    call.arguments,
+    'Finite browser intrinsic arguments',
+  );
+  for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+    const argument = argumentsSnapshot[index]!;
+    if (
+      ts.isSpreadElement(argument) ||
+      browserScalarizationInputEscapeNode(
+        sourceFile,
+        body,
+        argument,
+        aliases,
+        compilerCreateSet<string>(),
+      ) !== undefined
+    ) {
+      return argument;
+    }
+  }
+  return undefined;
+}
+
+function browserExpressionIsReviewedFrameworkCall(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const identity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    unwrapExpression(expression),
+  );
+  return (
+    identity !== undefined &&
+    reviewedCanonicalClientHandlerImportTarget(identity.module, identity.exportName) !== undefined
+  );
+}
+
+interface BrowserPublishToClientSummary {
+  readonly matched: true;
+  readonly returnValue?: ts.Expression;
+  readonly violation?: { readonly detail: string; readonly node: ts.Node };
+}
+
+/**
+ * Exact finite summary for the one authored framework call whose runtime contract is a primitive
+ * identity. Import identity alone never opens a helper: the positional value, closed options
+ * container, and return transfer are all pinned here and independently enforced at runtime.
+ */
+function browserPublishToClientSummary(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  call: ts.CallExpression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+): BrowserPublishToClientSummary | undefined {
+  const identity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    unwrapExpression(call.expression),
+  );
+  if (!identity || !frameworkExportEquals(identity, PUBLISH_TO_CLIENT_IDENTITY)) return undefined;
+  const argumentsSnapshot = compilerSnapshotDenseArray(
+    call.arguments,
+    'publishToClient finite summary arguments',
+  );
+  if (argumentsSnapshot.length !== 2) {
+    return {
+      matched: true,
+      violation: {
+        detail: 'publishToClient requires exactly value and a closed literal reason object',
+        node: call,
+      },
+    };
+  }
+  const value = argumentsSnapshot[0]!;
+  const options = unwrapExpression(argumentsSnapshot[1]!);
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 1) {
+    return {
+      matched: true,
+      violation: {
+        detail: 'publishToClient options must be exactly { reason: <non-empty string literal> }',
+        node: argumentsSnapshot[1]!,
+      },
+    };
+  }
+  const reason = options.properties[0]!;
+  if (
+    !ts.isPropertyAssignment(reason) ||
+    staticPropertyName(reason.name) !== 'reason' ||
+    !ts.isStringLiteralLike(reason.initializer) ||
+    compilerStringTrim(reason.initializer.text).length === 0
+  ) {
+    return {
+      matched: true,
+      violation: {
+        detail: 'publishToClient options must be exactly { reason: <non-empty string literal> }',
+        node: reason,
+      },
+    };
+  }
+  const unsafeValue = browserPublishedPrimitiveEscapeNode(
+    sourceFile,
+    boundary,
+    value,
+    aliases,
+    compilerCreateSet<string>(),
+  );
+  if (unsafeValue !== undefined) {
+    return {
+      matched: true,
+      violation: {
+        detail: 'publishToClient value must be a compiler-proven primitive literal snapshot',
+        node: unsafeValue,
+      },
+    };
+  }
+  return { matched: true, returnValue: value };
+}
+
+function browserPublishedPrimitiveEscapeNode(
+  sourceFile: ts.SourceFile,
+  boundary: ts.ConciseBody,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  active: Set<string>,
+): ts.Node | undefined {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+  if (compilerSetHas(active, key)) return current;
+  compilerSetAdd(active, key);
+  try {
+    if (
+      ts.isStringLiteralLike(current) ||
+      ts.isNumericLiteral(current) ||
+      current.kind === ts.SyntaxKind.TrueKeyword ||
+      current.kind === ts.SyntaxKind.FalseKeyword ||
+      current.kind === ts.SyntaxKind.NullKeyword
+    )
+      return undefined;
+    if (ts.isIdentifier(current)) {
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      return initializer
+        ? browserPublishedPrimitiveEscapeNode(sourceFile, boundary, initializer, aliases, active)
+        : current;
+    }
+    if (
+      ts.isPrefixUnaryExpression(current) &&
+      (current.operator === ts.SyntaxKind.PlusToken ||
+        current.operator === ts.SyntaxKind.MinusToken) &&
+      ts.isNumericLiteral(unwrapExpression(current.operand))
+    ) {
+      return undefined;
+    }
+    if (
+      ts.isCallExpression(current) &&
+      browserScalarCallResultIsReviewed(sourceFile, boundary, current, aliases, active)
+    ) {
+      return undefined;
+    }
+    return current;
+  } finally {
+    compilerSetDelete(active, key);
+  }
+}
+
 function classifyBrowserCall(
   sourceFile: ts.SourceFile,
   body: ts.ConciseBody,
@@ -1372,13 +3169,55 @@ function classifyBrowserCall(
     kind: SecurityOperationViolationModel['kind'],
     detail: string,
   ) => void,
+  appendStateWriteValue: (node: ts.Expression, detail: string) => void,
 ): void {
   const callee = unwrapExpression(call.expression);
+  const publishToClientSummary = browserPublishToClientSummary(sourceFile, body, call, aliases);
+  if (publishToClientSummary !== undefined) {
+    if (publishToClientSummary.violation !== undefined) {
+      appendViolation(
+        publishToClientSummary.violation.node,
+        'computed-security-operation',
+        publishToClientSummary.violation.detail,
+      );
+      return;
+    }
+    appendOperation('browser.framework.call', call, 'publishToClient');
+    return;
+  }
   if (ts.isIdentifier(callee)) {
     const provenance = browserExpressionProvenance(callee, aliases, body);
     const operationKind = browserOperationProvenanceKind(provenance);
     if (operationKind !== undefined) {
+      if (operationKind === 'browser.timer.schedule') {
+        const violation = browserTimerCallViolation(sourceFile, body, call, locals, aliases);
+        if (violation) {
+          appendViolation(violation.node, violation.kind, violation.detail);
+          return;
+        }
+      } else if (operationKind === 'browser.timer.cancel') {
+        const violation = browserTimerCancelCallViolation(sourceFile, body, call, aliases);
+        if (violation) {
+          appendViolation(violation.node, violation.kind, violation.detail);
+          return;
+        }
+      } else if (operationKind === 'browser.framework.call') {
+        appendViolation(
+          call,
+          'computed-security-operation',
+          'authored inline framework-helper calls require an exact per-export security summary',
+        );
+        return;
+      }
       appendOperation(operationKind, call, callee.text);
+      return;
+    }
+    if (compilerSetHas(locals, callee.text)) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `local helper ${callee.text} is outside the finite handler language; inline the finite expression`,
+      );
       return;
     }
     if (browserProvenanceCarriesAuthority(provenance)) {
@@ -1393,6 +3232,11 @@ function classifyBrowserCall(
       (callee.text === 'setTimeout' || callee.text === 'setInterval') &&
       !identifierIsShadowedWithinBoundary(callee, body)
     ) {
+      const violation = browserTimerCallViolation(sourceFile, body, call, locals, aliases);
+      if (violation) {
+        appendViolation(violation.node, violation.kind, violation.detail);
+        return;
+      }
       appendOperation('browser.timer.schedule', call, callee.text);
       return;
     }
@@ -1403,28 +3247,25 @@ function classifyBrowserCall(
       appendOperation('browser.timer.cancel', call, callee.text);
       return;
     }
-    if (compilerSetHas(locals, callee.text)) {
-      if (browserLocalCallableAliasIsOpaque(body, callee.text, compilerCreateSet<string>())) {
+    if (
+      compilerSetHas(browserPureGlobalCalls, callee.text) &&
+      !identifierIsShadowedWithinBoundary(callee, body)
+    ) {
+      const unsafeArgument = browserPureCallUnsafeArgument(sourceFile, body, call, aliases);
+      if (unsafeArgument !== undefined) {
         appendViolation(
-          callee,
+          unsafeArgument,
           'computed-security-operation',
-          `browser callable alias ${callee.text} is outside the finite handler IR`,
-        );
-        return;
-      }
-      if (callArgumentsContainBrowserAuthority(call, aliases, body)) {
-        appendViolation(
-          call,
-          'computed-security-operation',
-          `browser authority cannot pass through local helper ${callee.text}`,
+          `${callee.text} cannot invoke coercion or object protocols on an unproved browser value`,
         );
       }
       return;
     }
-    if (compilerSetHas(browserPureGlobalCalls, callee.text)) {
-      return;
-    }
-    appendOperation('browser.framework.call', call, callee.text);
+    appendViolation(
+      call,
+      'unknown-security-operation',
+      `browser call ${callee.text} has no exact reviewed finite identity`,
+    );
     return;
   }
 
@@ -1444,83 +3285,132 @@ function classifyBrowserCall(
     browserExpressionProvenance(callee, aliases, body),
   );
   if (calleeOperationKind !== undefined) {
+    if (member.name === 'call' || member.name === 'apply' || member.name === 'bind') {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `browser operation ${member.name} indirection is outside the exact finite call shape`,
+      );
+      return;
+    }
+    if (calleeOperationKind === 'browser.timer.schedule') {
+      const violation = browserTimerCallViolation(sourceFile, body, call, locals, aliases);
+      if (violation) {
+        appendViolation(violation.node, violation.kind, violation.detail);
+        return;
+      }
+    } else if (calleeOperationKind === 'browser.timer.cancel') {
+      const violation = browserTimerCancelCallViolation(sourceFile, body, call, aliases);
+      if (violation) {
+        appendViolation(violation.node, violation.kind, violation.detail);
+        return;
+      }
+    } else if (calleeOperationKind === 'browser.framework.call') {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        'authored inline framework-helper calls require an exact per-export security summary',
+      );
+      return;
+    }
     appendOperation(calleeOperationKind, call, browserExpressionTarget(callee) ?? member.name);
     return;
   }
 
-  // `Object(element)['focus']?.call(element)` is the safe focus idiom used by reviewed primitives.
-  const callableMember = staticMember(unwrapExpression(member.receiver));
-  if (member.name === 'call' && callableMember) {
-    const callableProvenance = browserExpressionProvenance(callableMember.receiver, aliases, body);
-    if (callableMember.name === 'focus' && isDomProvenance(callableProvenance)) {
-      appendOperation('browser.dom.focus', call, browserExpressionTarget(callableMember.receiver));
-      return;
+  const localArrayMethod = browserReviewedLocalArrayMethodCall(sourceFile, callee, body, aliases);
+  if (localArrayMethod !== undefined) {
+    const callback = call.arguments[0];
+    if (
+      call.arguments.length !== 1 ||
+      callback === undefined ||
+      !browserCallbackIsReviewedExecutable(body, callback, locals, aliases)
+    ) {
+      appendViolation(
+        call,
+        'computed-security-operation',
+        `local array ${localArrayMethod} requires one exact reviewed callback`,
+      );
     }
+    return;
   }
 
-  const provenance = browserExpressionProvenance(member.receiver, aliases, body);
-  if (provenance === 'state') {
+  const stateMethod = browserReviewedStateMethodCall(callee, aliases, body);
+  if (stateMethod !== undefined) {
+    const argumentsSnapshot = compilerSnapshotDenseArray(
+      call.arguments,
+      `State ${stateMethod} executable arguments`,
+    );
+    for (let index = 0; index < argumentsSnapshot.length; index += 1) {
+      const kind = browserStateMethodExecutableArgumentKind(stateMethod, index);
+      if (
+        kind === undefined ||
+        !browserStateExecutableArgumentIsReviewed(
+          sourceFile,
+          body,
+          argumentsSnapshot[index]!,
+          kind,
+          locals,
+          aliases,
+        )
+      ) {
+        appendViolation(
+          argumentsSnapshot[index]!,
+          'computed-security-operation',
+          `state ${stateMethod} argument ${index} is outside the closed own-data/scalar vocabulary`,
+        );
+        return;
+      }
+    }
     appendOperation(
-      compilerSetHas(browserStateMutatorMethods, member.name)
+      compilerSetHas(browserStateMutatorMethods, stateMethod)
         ? 'browser.state.write'
         : 'browser.state.read',
       call,
-      member.name,
+      browserCanonicalStateTarget(sourceFile, callee, aliases, body) ?? stateMethod,
+    );
+    const storedArguments = browserStateMethodStoredArguments(call, stateMethod);
+    for (let index = 0; index < storedArguments.length; index += 1) {
+      appendStateWriteValue(storedArguments[index]!, `state.${stateMethod} insertion`);
+    }
+    return;
+  }
+
+  const provenance = browserExpressionProvenance(member.receiver, aliases, body);
+  const reviewedLocalMember = resolveSameFileSecurityIrCallable(sourceFile, callee);
+  if (reviewedLocalMember !== undefined) {
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `local member helper ${reviewedLocalMember.name} is outside the finite handler language`,
+    );
+    return;
+  }
+  if (provenance === 'state') {
+    appendViolation(
+      callee,
+      'computed-security-operation',
+      `state JSON member ${member.name} is not a reviewed callable data method`,
     );
     return;
   }
   if (provenance === 'event') {
-    if (compilerSetHas(browserEventControlMethods, member.name)) {
-      appendOperation('browser.event.control', call, member.name);
-      return;
-    }
-    if (compilerSetHas(browserDomReadMethods, member.name)) {
-      appendOperation('browser.event.read', call, member.name);
-      return;
-    }
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `raw event operation ${member.name} has no framework-pinned receiver and is outside the finite handler IR`,
+    );
+    return;
   }
   if (isDomProvenance(provenance)) {
-    if (compilerSetHas(browserDomReadMethods, member.name)) {
-      appendOperation('browser.event.read', call, member.name);
-      return;
-    }
-    if (member.name === 'focus') {
-      appendOperation('browser.dom.focus', call, browserExpressionTarget(member.receiver));
-      return;
-    }
-    if (member.name === 'reset') {
-      appendOperation('browser.form.reset', call, 'reset');
-      return;
-    }
-    if (member.name === 'requestSubmit') {
-      appendOperation('browser.form.submit', call, 'requestSubmit');
-      return;
-    }
-    if (member.name === 'showModal' || member.name === 'showPopover') {
-      appendOperation('browser.dialog.open', call, member.name);
-      return;
-    }
-    if (
-      member.name === 'close' ||
-      member.name === 'requestClose' ||
-      member.name === 'hidePopover'
-    ) {
-      appendOperation('browser.dialog.close', call, member.name);
-      return;
-    }
     appendViolation(
       call,
       'raw-dom-operation',
-      `DOM method ${member.name} is outside the finite handler IR`,
+      `raw DOM method ${member.name} has no framework-pinned receiver and is outside the finite handler IR`,
     );
     return;
   }
 
   const root = rootIdentifier(member.receiver);
-  if (provenance === 'raw-browser' && root === 'document' && member.name === 'getElementById') {
-    appendOperation('browser.event.read', call, 'document.getElementById');
-    return;
-  }
   if (provenance === 'raw-browser' || provenance === 'unknown-authority') {
     appendViolation(
       call,
@@ -1531,12 +3421,6 @@ function classifyBrowserCall(
   }
 
   if (root && !compilerSetHas(locals, root) && compilerSetHas(rawBrowserGlobalNames, root)) {
-    // A literal document lookup is only a carrier. Its eventual dialog/focus/form operation is
-    // classified at the outer call; all other document/global methods close here.
-    if (root === 'document' && member.name === 'getElementById') {
-      appendOperation('browser.event.read', call, 'document.getElementById');
-      return;
-    }
     appendViolation(
       call,
       'raw-dom-operation',
@@ -1545,14 +3429,11 @@ function classifyBrowserCall(
     return;
   }
 
-  if (
-    (provenance === 'local' || (root !== undefined && compilerSetHas(locals, root))) &&
-    callArgumentsContainBrowserAuthority(call, aliases, body)
-  ) {
+  if (provenance === 'local' || (root !== undefined && compilerSetHas(locals, root))) {
     appendViolation(
       call,
       'computed-security-operation',
-      `browser authority cannot pass through local call ${member.name}`,
+      `local member call ${member.name} is outside the finite handler language`,
     );
     return;
   }
@@ -1561,13 +3442,39 @@ function classifyBrowserCall(
   if (
     provenance === 'unknown' &&
     globalMember !== undefined &&
+    compilerSetHas(browserAsynchronousGlobalMemberCalls, globalMember)
+  ) {
+    appendViolation(
+      call,
+      'computed-security-operation',
+      `${globalMember} creates asynchronous work outside the synchronous finite handler IR`,
+    );
+    return;
+  }
+  if (
+    provenance === 'unknown' &&
+    globalMember === 'Object.assign' &&
+    call.arguments[0] !== undefined &&
+    browserExpressionMayCarryState(call.arguments[0], aliases, body)
+  ) {
+    appendViolation(
+      call.arguments[0],
+      'computed-security-operation',
+      'Object.assign cannot mutate state outside an exact compiler-owned state-write operation',
+    );
+    return;
+  }
+  if (
+    provenance === 'unknown' &&
+    globalMember !== undefined &&
     compilerSetHas(browserPureGlobalMemberCalls, globalMember)
   ) {
-    if (callArgumentsContainBrowserAuthority(call, aliases, body)) {
+    const unsafeArgument = browserPureCallUnsafeArgument(sourceFile, body, call, aliases);
+    if (unsafeArgument !== undefined) {
       appendViolation(
-        call,
+        unsafeArgument,
         'computed-security-operation',
-        `${globalMember} cannot receive browser authority in the finite handler IR`,
+        `${globalMember} cannot invoke callbacks, coercion, or object protocols on an unproved value`,
       );
     }
     return;
@@ -1588,16 +3495,19 @@ function browserLocalCallableAliasIsOpaque(
   seen: Set<string>,
 ): boolean {
   if (compilerSetHas(seen, name)) return true;
+  if (moduleBindingIsAssigned(body.getSourceFile(), name)) return true;
   compilerSetAdd(seen, name);
   let foundBinding = false;
   let opaque = false;
   const visit = (node: ts.Node): void => {
     if (opaque) return;
-    if (
-      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
-      node.name?.text === name
-    ) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === name) {
       foundBinding = true;
+      return;
+    }
+    if (ts.isClassDeclaration(node) && node.name?.text === name) {
+      foundBinding = true;
+      opaque = true;
       return;
     }
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
@@ -6308,12 +8218,21 @@ function browserAliasProvenance(body: ts.ConciseBody): ReadonlyMap<string, Brows
         const derived = initializer
           ? browserExpressionProvenance(initializer, aliases, body)
           : 'local';
-        const authority: BrowserValueProvenance =
-          derived !== 'unknown'
-            ? derived
-            : initializer && expressionContainsBrowserAuthority(initializer, aliases, body)
-              ? 'unknown-authority'
-              : 'unknown';
+        const containsAuthority =
+          initializer !== undefined &&
+          !browserDirectImportedCallResultIsData(body.getSourceFile(), initializer) &&
+          expressionContainsBrowserAuthority(initializer, aliases, body);
+        const plainContainer =
+          initializer !== undefined &&
+          (ts.isObjectLiteralExpression(unwrapExpression(initializer)) ||
+            ts.isArrayLiteralExpression(unwrapExpression(initializer)));
+        const authority: BrowserValueProvenance = browserProvenanceCarriesAuthority(derived)
+          ? derived
+          : containsAuthority
+            ? 'unknown-authority'
+            : derived === 'unknown' && plainContainer
+              ? 'local'
+              : derived;
         const provenance =
           isConstVariableDeclaration(node) || !browserProvenanceCarriesAuthority(authority)
             ? authority
@@ -6321,10 +8240,56 @@ function browserAliasProvenance(body: ts.ConciseBody): ReadonlyMap<string, Brows
         if (provenance !== 'unknown' && bindBrowserAliasPattern(node.name, provenance, aliases)) {
           changed = true;
         }
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      ) {
+        const left = unwrapExpression(node.left);
+        // A member write mutates the container; it does not rebind the receiver. Teaching the root
+        // the RHS provenance would turn a captured unknown receiver into a trusted local alias.
+        const target = ts.isIdentifier(left) ? left.text : undefined;
+        const derived = browserExpressionProvenance(node.right, aliases, body);
+        const authority =
+          derived !== 'unknown'
+            ? derived
+            : expressionContainsBrowserAuthority(node.right, aliases, body)
+              ? 'unknown-authority'
+              : 'unknown';
+        const provenance = browserProvenanceCarriesAuthority(authority)
+          ? 'unknown-authority'
+          : authority;
+        if (
+          target !== undefined &&
+          target !== 'state' &&
+          target !== 'event' &&
+          provenance !== 'unknown' &&
+          joinBrowserAlias(target, provenance, aliases)
+        ) {
+          changed = true;
+        }
+      } else if (ts.isCallExpression(node)) {
+        const member = staticMember(unwrapExpression(node.expression));
+        const target = member ? rootIdentifier(member.receiver) : undefined;
+        const targetProvenance = target ? compilerMapGet(aliases, target) : undefined;
+        if (
+          member !== undefined &&
+          (member.name === 'push' ||
+            member.name === 'unshift' ||
+            member.name === 'splice' ||
+            member.name === 'fill') &&
+          target !== undefined &&
+          target !== 'state' &&
+          target !== 'event' &&
+          targetProvenance !== undefined &&
+          browserArgumentsContainAuthority(node.arguments, aliases, body) &&
+          joinBrowserAlias(target, 'unknown-authority', aliases)
+        ) {
+          changed = true;
+        }
       } else if (ts.isParameter(node)) {
         if (bindBrowserAliasPattern(node.name, 'local', aliases)) changed = true;
       } else if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-        if (joinBrowserAlias(node.name.text, 'local', aliases)) changed = true;
+        if (joinBrowserAlias(node.name.text, 'unknown-authority', aliases)) changed = true;
       }
       ts.forEachChild(node, visit);
     };
@@ -6333,12 +8298,30 @@ function browserAliasProvenance(body: ts.ConciseBody): ReadonlyMap<string, Brows
   return aliases;
 }
 
+function browserDirectImportedCallResultIsData(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const current = unwrapExpression(expression);
+  return (
+    ts.isCallExpression(current) &&
+    browserExpressionUsesDirectModuleImport(sourceFile, current.expression)
+  );
+}
+
 function browserExpressionProvenance(
   expression: ts.Expression,
   aliases: ReadonlyMap<string, BrowserValueProvenance>,
   boundary: ts.ConciseBody,
 ): BrowserValueProvenance {
   const current = unwrapExpression(expression);
+  if (
+    ts.isArrowFunction(current) ||
+    ts.isFunctionExpression(current) ||
+    ts.isClassExpression(current)
+  ) {
+    return 'unknown-authority';
+  }
   if (
     ts.isStringLiteralLike(current) ||
     ts.isNumericLiteral(current) ||
@@ -6350,6 +8333,12 @@ function browserExpressionProvenance(
     return 'local';
   }
   if (ts.isIdentifier(current)) {
+    if (
+      (current.text === 'state' || current.text === 'event') &&
+      identifierIsShadowedWithinBoundary(current, boundary)
+    ) {
+      return 'local';
+    }
     if (
       (current.text === 'setTimeout' || current.text === 'setInterval') &&
       !identifierIsShadowedWithinBoundary(current, boundary)
@@ -6368,7 +8357,20 @@ function browserExpressionProvenance(
     ) {
       return 'raw-browser';
     }
-    return compilerMapGet(aliases, current.text) ?? 'unknown';
+    if (browserExpressionIsReviewedFrameworkCall(current.getSourceFile(), current)) {
+      return browserOperationProvenance('browser.framework.call');
+    }
+    const seededAlias = compilerMapGet(aliases, current.text);
+    if (seededAlias !== undefined) return seededAlias;
+    const bindingScope = securityIrIdentifierBindingScope(current.getSourceFile(), current);
+    if (
+      bindingScope === 'module' ||
+      (bindingScope === 'unresolved' &&
+        !compilerSetHas(browserReviewedAmbientGlobalNames, current.text))
+    ) {
+      return 'unknown-authority';
+    }
+    return 'unknown';
   }
   if (ts.isCallExpression(current)) {
     const callee = unwrapExpression(current.expression);
@@ -6412,21 +8414,10 @@ function browserExpressionProvenance(
     if (receiver === 'event') {
       if (member.name === 'form') return 'form';
       if (member.name === 'target' || member.name === 'currentTarget') return 'dom';
-      if (compilerSetHas(browserEventControlMethods, member.name)) {
-        return browserOperationProvenance('browser.event.control');
-      }
-      if (compilerSetHas(browserDomReadMethods, member.name)) {
-        return browserOperationProvenance('browser.event.read');
-      }
-      if (compilerSetHas(browserEventScalarMembers, member.name)) return 'local';
       return 'event';
     }
     if (receiver === 'dom' || receiver === 'form') {
       if (member.name === 'form') return 'form';
-      if (compilerSetHas(browserDomReadMethods, member.name)) {
-        return browserOperationProvenance('browser.event.read');
-      }
-      if (compilerSetHas(browserDomScalarMembers, member.name)) return 'local';
       return receiver;
     }
     if (receiver === 'raw-browser') {
@@ -6464,7 +8455,12 @@ function bindBrowserAliasPattern(
   provenance: BrowserValueProvenance,
   aliases: Map<string, BrowserValueProvenance>,
 ): boolean {
-  if (ts.isIdentifier(name)) return joinBrowserAlias(name.text, provenance, aliases);
+  if (ts.isIdentifier(name)) {
+    // `state` and `event` are seeded handler roots. Same-spelled callback/block bindings are
+    // resolved lexically at each use and must never poison the outer root's name-keyed summary.
+    if (name.text === 'state' || name.text === 'event') return false;
+    return joinBrowserAlias(name.text, provenance, aliases);
+  }
   let changed = false;
   const elements = compilerSnapshotDenseArray(name.elements, 'Security-IR browser bindings');
   for (let index = 0; index < elements.length; index += 1) {
@@ -6523,6 +8519,27 @@ function expressionContainsBrowserAuthority(
   let found = false;
   const visit = (node: ts.Node): void => {
     if (found) return;
+    if (
+      ts.isExpression(node) &&
+      securityIrExpressionUsesDirectImportBinding(node.getSourceFile(), node)
+    ) {
+      const importedRoot = securityIrLeftmostExecutableRoot(node);
+      if (
+        importedRoot !== undefined &&
+        securityIrIdentifierBindingScope(node.getSourceFile(), importedRoot) === 'module'
+      ) {
+        found = true;
+        return;
+      }
+    }
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isClassExpression(node)) {
+      found = true;
+      return;
+    }
+    if (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) {
+      found = true;
+      return;
+    }
     if (
       node !== expression &&
       ts.isExpression(node) &&
@@ -6749,9 +8766,13 @@ function staticMember(
 }
 
 function rootIdentifier(expression: ts.Expression): string | undefined {
+  return rootIdentifierNode(expression)?.text;
+}
+
+function rootIdentifierNode(expression: ts.Expression): ts.Identifier | undefined {
   let current = unwrapExpression(expression);
   while (true) {
-    if (ts.isIdentifier(current)) return current.text;
+    if (ts.isIdentifier(current)) return current;
     if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
       current = unwrapExpression(current.expression);
       continue;
@@ -6778,6 +8799,65 @@ function expressionPath(expression: ts.Expression): string | undefined {
 
 function browserExpressionTarget(expression: ts.Expression): string | undefined {
   return expressionPath(expression);
+}
+
+function browserCanonicalStateTarget(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  aliases: ReadonlyMap<string, BrowserValueProvenance>,
+  boundary: ts.ConciseBody,
+  active: Set<string> = compilerCreateSet<string>(),
+): string | undefined {
+  const current = unwrapExpression(expression);
+  const key = `${current.getStart(sourceFile)}:${current.getEnd()}`;
+  if (compilerSetHas(active, key)) return undefined;
+  compilerSetAdd(active, key);
+  try {
+    if (ts.isIdentifier(current)) {
+      if (current.text === 'state' && !identifierIsShadowedWithinBoundary(current, boundary)) {
+        return 'state';
+      }
+      if (browserExpressionProvenance(current, aliases, boundary) !== 'state') return undefined;
+      const initializer = securityIrImmutableBindingInitializer(sourceFile, current);
+      return initializer
+        ? browserCanonicalStateTarget(sourceFile, initializer, aliases, boundary, active)
+        : undefined;
+    }
+    const member = staticMember(current);
+    if (member !== undefined) {
+      const receiver = browserCanonicalStateTarget(
+        sourceFile,
+        member.receiver,
+        aliases,
+        boundary,
+        active,
+      );
+      return receiver ? `${receiver}.${member.name}` : undefined;
+    }
+    if (ts.isCallExpression(current)) {
+      const callee = unwrapExpression(current.expression);
+      if (
+        ts.isIdentifier(callee) &&
+        callee.text === 'Object' &&
+        !identifierIsShadowedWithinBoundary(callee, boundary) &&
+        current.arguments.length === 1
+      ) {
+        return browserCanonicalStateTarget(
+          sourceFile,
+          current.arguments[0]!,
+          aliases,
+          boundary,
+          active,
+        );
+      }
+      if (browserReviewedStateMethodCall(callee, aliases, boundary) !== undefined) {
+        return browserCanonicalStateTarget(sourceFile, callee, aliases, boundary, active);
+      }
+    }
+    return undefined;
+  } finally {
+    compilerSetDelete(active, key);
+  }
 }
 
 function nodeName(node: ts.Node): string {

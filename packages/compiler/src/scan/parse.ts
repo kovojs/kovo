@@ -19,6 +19,7 @@ import type { SessionAuthorityFact } from '@kovojs/core/internal/graph';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
+import { reviewedCanonicalClientHandlerImportTarget } from '../client-handler-import-policy.js';
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   compilerArrayAppend,
@@ -79,6 +80,7 @@ import type {
   AgentDefinitionModel,
   AgentToolModel,
   ArrowFunctionPartsModel,
+  BrowserSecurityOperationModel,
   CallExpressionModel,
   ConditionalExpressionModel,
   ComponentIdentityAssignmentModel,
@@ -6299,6 +6301,7 @@ function handlerElementParamUseIsEligible(
   if (handlerElementParamAccessIsUnsafe(node)) return false;
 
   let current = node;
+  let scalarized = false;
   while (current !== context.root) {
     const parent = current.parent;
 
@@ -6308,6 +6311,7 @@ function handlerElementParamUseIsEligible(
     }
 
     if (ts.isTemplateSpan(parent) && parent.expression === current) {
+      scalarized = true;
       current = parent.parent;
       continue;
     }
@@ -6317,12 +6321,20 @@ function handlerElementParamUseIsEligible(
         parent.operator !== ts.SyntaxKind.ExclamationToken &&
         parent.operator !== ts.SyntaxKind.PlusToken &&
         parent.operator !== ts.SyntaxKind.MinusToken &&
-        parent.operator !== ts.SyntaxKind.TildeToken &&
-        parent.operator !== ts.SyntaxKind.TypeOfKeyword &&
-        parent.operator !== ts.SyntaxKind.VoidKeyword
+        parent.operator !== ts.SyntaxKind.TildeToken
       ) {
         return false;
       }
+      scalarized = true;
+      current = parent;
+      continue;
+    }
+
+    if (
+      (ts.isTypeOfExpression(parent) || ts.isVoidExpression(parent)) &&
+      parent.expression === current
+    ) {
+      scalarized = true;
       current = parent;
       continue;
     }
@@ -6333,11 +6345,21 @@ function handlerElementParamUseIsEligible(
     if (ts.isBinaryExpression(parent) && (parent.left === current || parent.right === current)) {
       const operator = parent.operatorToken.kind;
       if (handlerIsAssignmentOperator(operator)) {
+        if (operator !== ts.SyntaxKind.EqualsToken) scalarized = true;
         return (
-          parent.right === current && handlerAssignmentTargetIsReviewedState(parent.left, context)
+          scalarized &&
+          parent.right === current &&
+          handlerAssignmentTargetIsReviewedState(parent.left, context)
         );
       }
       if (!handlerIsScalarBinaryOperator(operator)) return false;
+      if (
+        operator !== ts.SyntaxKind.AmpersandAmpersandToken &&
+        operator !== ts.SyntaxKind.BarBarToken &&
+        operator !== ts.SyntaxKind.QuestionQuestionToken
+      ) {
+        scalarized = true;
+      }
       current = parent;
       continue;
     }
@@ -6353,10 +6375,15 @@ function handlerElementParamUseIsEligible(
       if (parent.expression === current) return false;
       if (!handlerCallHasDirectArgument(parent, current)) return false;
       if (handlerCallIsPureScalar(context.sourceFile, parent)) {
+        scalarized = true;
         current = parent;
         continue;
       }
-      return handlerCallIsReviewedScalarSink(parent, context);
+      // Once an inner finite coercion/comparison has produced a primitive, passing that result to
+      // any call cannot transport the original opaque server value as executable identity. A raw
+      // element member remains ineligible regardless of whether the outer call has a reviewed IR
+      // operation; operation admission does not summarize argument semantics.
+      return scalarized || !handlerCallRequiresScalarCapture(parent, context);
     }
 
     if (
@@ -6494,48 +6521,38 @@ function handlerCallHasDirectArgument(call: ts.CallExpression, node: ts.Node): b
   return false;
 }
 
-function handlerCallIsReviewedScalarSink(
+function handlerCallRequiresScalarCapture(
   call: ts.CallExpression,
   context: HandlerElementParamClassificationContext,
 ): boolean {
   const callee = unwrapExpression(call.expression);
-  if (ts.isIdentifier(callee)) {
-    // Browser security-IR classifies a direct non-local identifier call as a reviewed framework
-    // edge; capture analysis separately proves an imported executable's exact package identity.
-    // Exact same-file helpers need a parameter summary that this finite language does not have, so
-    // reject them alongside handler-local helpers. Resolve locality at this use site so an
-    // unrelated same-name binding in a sibling block cannot change the verdict.
-    return (
-      !handlerBindingCoversIdentifier(context.bindings, callee) &&
-      resolveSameFileSecurityIrCallable(context.sourceFile, callee) === undefined
-    );
+  if (resolveSameFileSecurityIrCallable(context.sourceFile, callee) !== undefined) return true;
+  if (ts.isIdentifier(callee) && handlerBindingCoversIdentifier(context.bindings, callee))
+    return true;
+  const path = ts.isPropertyAccessExpression(callee)
+    ? propertyAccessPath(callee)
+    : ts.isElementAccessExpression(callee)
+      ? elementAccessRootPath(callee)
+      : undefined;
+  if (path === 'state' || (typeof path === 'string' && compilerStringStartsWith(path, 'state.'))) {
+    return true;
   }
-  const start = call.getStart(context.sourceFile);
-  const end = call.getEnd();
-  const length = compilerArrayLength(
-    context.securityOperations,
-    'Handler scalar-sink security operations',
+  const identity = canonicalFrameworkExportForExpression(
+    ts as FrameworkIdentityTypeScript,
+    context.sourceFile,
+    callee,
   );
-  for (let index = 0; index < length; index += 1) {
-    const operation = compilerOwnDataValue(
-      context.securityOperations,
-      index,
-      'Handler scalar-sink security operations',
-    ) as BrowserSecurityOperationModel | undefined;
-    if (!operation) {
-      throw new TypeError(`Handler scalar-sink security operations[${index}] must be own data.`);
-    }
-    if (operation.span.start === start && operation.span.end === end) return true;
-  }
-  return false;
+  return (
+    identity !== undefined &&
+    reviewedCanonicalClientHandlerImportTarget(identity.module, identity.exportName) !== undefined
+  );
 }
 
 function handlerCallIsPureScalar(sourceFile: ts.SourceFile, call: ts.CallExpression): boolean {
   const callee = unwrapExpression(call.expression);
   if (ts.isIdentifier(callee)) {
     return (
-      (callee.text === 'BigInt' ||
-        callee.text === 'Boolean' ||
+      (callee.text === 'Boolean' ||
         callee.text === 'Number' ||
         callee.text === 'String' ||
         callee.text === 'isFinite' ||
@@ -6608,7 +6625,11 @@ function handlerElementParamUnsafeRoots(
         : elementAccessRootPath(node);
       record(
         path
-          ? compilerOwnDataValue(compilerStringSplit(path, '.'), 0, 'Handler element-param root')
+          ? (compilerOwnDataValue(
+              compilerStringSplit(path, '.'),
+              0,
+              'Handler element-param root',
+            ) as string | undefined)
           : undefined,
         handlerElementParamUseIsEligible(node, context),
       );
@@ -8143,6 +8164,11 @@ function zeroArgArrowModel(
       ...(callArguments === undefined ? {} : { callArguments }),
       ...documentElementActionModel(sourceFile, body),
       references: referenceIdentifiers(body, true, bodyTypeScriptFacts.erasures),
+      ...(hasModifier(expression, ts.SyntaxKind.AsyncKeyword) ||
+      browserHandlerBodyRequiresRuntimeOmission(body) ||
+      securityOperations.runtimeOmitted === true
+        ? { runtimeOmitted: true as const }
+        : {}),
       ...(securityOperations.operations.length === 0
         ? {}
         : { securityOperations: securityOperations.operations }),
@@ -8151,6 +8177,21 @@ function zeroArgArrowModel(
         : { securityOperationViolations: securityOperations.violations }),
     },
   };
+}
+
+function browserHandlerBodyRequiresRuntimeOmission(body: ts.ConciseBody): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== body && isFunctionScopeNode(node)) return;
+    if (ts.isAwaitExpression(node) || ts.isYieldExpression(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return found;
 }
 
 // SPEC §5.2: the scanner is the only phase allowed to interpret authored TypeScript syntax.
@@ -8866,12 +8907,131 @@ function arrowReturnObjectSource(
 
   const start = body.getStart(sourceFile);
   const end = body.getEnd();
+  const nonJsonValueSpan = hasModifier(expression, ts.SyntaxKind.AsyncKeyword)
+    ? { end: expression.getEnd(), start: expression.getStart(sourceFile) }
+    : stateReturnNonJsonValueSpan(sourceFile, body);
   return {
     end,
     entries: objectLiteralEntries(sourceFile, source, body),
+    ...(nonJsonValueSpan === undefined ? {} : { nonJsonValueSpan }),
     ...stateReturnStaticValue(body),
     start,
   };
+}
+
+function stateReturnNonJsonValueSpan(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  active: Set<string> = compilerCreateSet<string>(),
+): SourceSpan | undefined {
+  const current = unwrapExpression(expression);
+  const span = { end: current.getEnd(), start: current.getStart(sourceFile) };
+  const key = `${span.start}:${span.end}`;
+  if (compilerSetHas(active, key)) return undefined;
+  compilerSetAdd(active, key);
+  try {
+    if (
+      ts.isArrowFunction(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isClassExpression(current) ||
+      ts.isRegularExpressionLiteral(current) ||
+      ts.isBigIntLiteral(current) ||
+      ts.isNewExpression(current) ||
+      ts.isVoidExpression(current)
+    ) {
+      return span;
+    }
+    if (ts.isIdentifier(current)) {
+      if (
+        identifierResolvesToUnshadowedGlobal(sourceFile, current, 'undefined') ||
+        identifierResolvesToUnshadowedGlobal(sourceFile, current, 'NaN') ||
+        identifierResolvesToUnshadowedGlobal(sourceFile, current, 'Infinity') ||
+        identifierResolvesToUnshadowedGlobal(sourceFile, current, 'Symbol') ||
+        identifierResolvesToUnshadowedGlobal(sourceFile, current, 'BigInt') ||
+        resolveSameFileSecurityIrCallable(sourceFile, current) !== undefined
+      ) {
+        return span;
+      }
+      return undefined;
+    }
+    if (ts.isObjectLiteralExpression(current)) {
+      const properties = compilerSnapshotDenseArray(
+        current.properties,
+        'Component state JsonValue properties',
+      );
+      for (let index = 0; index < properties.length; index += 1) {
+        const property = properties[index]!;
+        if (
+          ts.isMethodDeclaration(property) ||
+          ts.isGetAccessor(property) ||
+          ts.isSetAccessor(property)
+        ) {
+          return { end: property.getEnd(), start: property.getStart(sourceFile) };
+        }
+        const value = ts.isSpreadAssignment(property)
+          ? property.expression
+          : ts.isPropertyAssignment(property)
+            ? property.initializer
+            : ts.isShorthandPropertyAssignment(property)
+              ? (property.objectAssignmentInitializer ?? property.name)
+              : undefined;
+        if (value === undefined) continue;
+        const unsafe = stateReturnNonJsonValueSpan(sourceFile, value, active);
+        if (unsafe !== undefined) return unsafe;
+      }
+      return undefined;
+    }
+    if (ts.isArrayLiteralExpression(current)) {
+      const elements = compilerSnapshotDenseArray(
+        current.elements,
+        'Component state JsonValue array elements',
+      );
+      for (let index = 0; index < elements.length; index += 1) {
+        const element = elements[index]!;
+        if (ts.isOmittedExpression(element)) {
+          return { end: element.getEnd(), start: element.getStart(sourceFile) };
+        }
+        const unsafe = stateReturnNonJsonValueSpan(
+          sourceFile,
+          ts.isSpreadElement(element) ? element.expression : element,
+          active,
+        );
+        if (unsafe !== undefined) return unsafe;
+      }
+      return undefined;
+    }
+    if (ts.isConditionalExpression(current)) {
+      return (
+        stateReturnNonJsonValueSpan(sourceFile, current.whenTrue, active) ??
+        stateReturnNonJsonValueSpan(sourceFile, current.whenFalse, active)
+      );
+    }
+    if (
+      ts.isBinaryExpression(current) &&
+      (current.operatorToken.kind === ts.SyntaxKind.CommaToken ||
+        current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+        current.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+        current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+    ) {
+      return (
+        stateReturnNonJsonValueSpan(sourceFile, current.left, active) ??
+        stateReturnNonJsonValueSpan(sourceFile, current.right, active)
+      );
+    }
+    if (ts.isCallExpression(current)) {
+      const callee = unwrapExpression(current.expression);
+      if (
+        ts.isIdentifier(callee) &&
+        (identifierResolvesToUnshadowedGlobal(sourceFile, callee, 'Symbol') ||
+          identifierResolvesToUnshadowedGlobal(sourceFile, callee, 'BigInt'))
+      ) {
+        return span;
+      }
+    }
+    return resolveSameFileSecurityIrCallable(sourceFile, current) === undefined ? undefined : span;
+  } finally {
+    compilerSetDelete(active, key);
+  }
 }
 
 function unwrapStateReturnExpression(expression: ts.Expression): ts.Expression {

@@ -91,7 +91,7 @@ describe('compiler SPEC coverage map', () => {
       [
         {
           "accepted": [
-            "allows state, element params, reviewed imports, and audited static module constants",
+            "requires parsed model facts to allow module imports and constants as serializable captures",
             "emits executable handler bodies with stable unique anonymous names",
             "declares boolean coercion for boolean-ish captured handler params",
           ],

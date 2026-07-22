@@ -228,14 +228,123 @@ function installInlineKovoLoader(im) {
   const intrinsicArrayIsArray = intrinsicArray.isArray;
   const intrinsicEncodeURIComponent = encodeURIComponent;
   const intrinsicObject = Object;
+  const intrinsicObjectCreate = intrinsicObject.create;
   const intrinsicObjectDefineProperty = intrinsicObject.defineProperty;
+  const intrinsicObjectGetPrototypeOf = intrinsicObject.getPrototypeOf;
+  const intrinsicObjectKeys = intrinsicObject.keys;
+  const intrinsicObjectPrototype = intrinsicObject.prototype;
+  const intrinsicWeakMap = WeakMap;
+  const intrinsicWeakMapPrototype = intrinsicWeakMap.prototype;
+  const intrinsicWeakMapGet = intrinsicWeakMapPrototype.get;
+  const intrinsicWeakMapSet = intrinsicWeakMapPrototype.set;
+  const intrinsicWeakMapDelete = intrinsicWeakMapPrototype.delete;
+  const intrinsicArrayPrototype = intrinsicArray.prototype;
   const intrinsicReflect = Reflect;
   const intrinsicReflectDeleteProperty = intrinsicReflect.deleteProperty;
   const intrinsicString = String;
+  const intrinsicTypeError = TypeError;
+  const delegatedStateQueues = new intrinsicWeakMap();
+  const queueGet = (key) => bns.call(intrinsicWeakMapGet, delegatedStateQueues, [key]);
+  const queueSet = (key, value) => bns.call(intrinsicWeakMapSet, delegatedStateQueues, [key, value]);
+  const queueDelete = (key) => bns.call(intrinsicWeakMapDelete, delegatedStateQueues, [key]);
   const js = (value) => bns.call(intrinsicJsonStringify, intrinsicJson, [value]);
   const ns = (value) => bns.call(intrinsicNumber, undefined, [value]);
   const ss = (value) => bns.call(intrinsicString, undefined, [value]);
   const ec = (value) => bns.call(intrinsicEncodeURIComponent, undefined, [value]);
+  const nr = () => {
+    const output = bns.call(intrinsicObjectCreate, intrinsicObject, [null]);
+    if (bns.call(intrinsicObjectGetPrototypeOf, intrinsicObject, [output]) !== null) {
+      throw new intrinsicTypeError('KV449: handler state null-record control failed.');
+    }
+    return output;
+  };
+  // SPEC §4.3/§5.2: canonicalize state between every chained handler and before serialization.
+  // Descriptor reads reject accessors; fresh containers prevent a proxy/later mutation from
+  // changing the value observed at the next boundary.
+  const sv = (input) => {
+    const active = [];
+    let textBudget = 0;
+    let valueBudget = 0;
+    const fail = () => {
+      throw new intrinsicTypeError(
+        'KV449: handler state must be bounded recursive own-data JsonValue.',
+      );
+    };
+    const copy = (value, depth) => {
+      valueBudget += 1;
+      if (valueBudget > 10000) fail();
+      if (value === null || typeof value === 'boolean') return value;
+      if (typeof value === 'string') {
+        textBudget += value.length;
+        if (textBudget > 1000000) fail();
+        return value;
+      }
+      if (typeof value === 'number') {
+        if (value !== value || value === Infinity || value === -Infinity) fail();
+        return value;
+      }
+      if (typeof value !== 'object' || depth >= 64) fail();
+      for (let index = 0; index < active.length; index += 1) {
+        if (active[index] === value) fail();
+      }
+      bns.appendDenseSecurityValue(active, value, 'Inline handler-state active path');
+      try {
+        const prototype = bns.call(intrinsicObjectGetPrototypeOf, intrinsicObject, [value]);
+        const keys = bns.call(intrinsicObjectKeys, intrinsicObject, [value]);
+        if (keys.length > 10000 - valueBudget) fail();
+        if (bns.call(intrinsicArrayIsArray, intrinsicArray, [value])) {
+          const lengthDescriptor = bns.getOwnSecurityPropertyDescriptor(value, 'length');
+          if (
+            prototype !== intrinsicArrayPrototype ||
+            !lengthDescriptor ||
+            !('value' in lengthDescriptor) ||
+            typeof lengthDescriptor.value !== 'number' ||
+            lengthDescriptor.value < 0 ||
+            lengthDescriptor.value % 1 !== 0 ||
+            lengthDescriptor.value > 10000 ||
+            keys.length !== lengthDescriptor.value
+          ) fail();
+          const output = [];
+          for (let index = 0; index < keys.length; index += 1) {
+            const keyEntry = bns.getOwnSecurityPropertyDescriptor(keys, index);
+            if (!keyEntry || !('value' in keyEntry) || keyEntry.value !== ss(index)) fail();
+            const descriptor = bns.getOwnSecurityPropertyDescriptor(value, keyEntry.value);
+            if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) fail();
+            bns.appendDenseSecurityValue(
+              output,
+              copy(descriptor.value, depth + 1),
+              'Inline handler-state JSON array',
+            );
+          }
+          return output;
+        }
+        if (prototype !== null && prototype !== intrinsicObjectPrototype) fail();
+        const output = nr();
+        for (let index = 0; index < keys.length; index += 1) {
+          const keyEntry = bns.getOwnSecurityPropertyDescriptor(keys, index);
+          if (!keyEntry || !('value' in keyEntry) || typeof keyEntry.value !== 'string') fail();
+          textBudget += keyEntry.value.length;
+          if (textBudget > 1000000) fail();
+          const descriptor = bns.getOwnSecurityPropertyDescriptor(value, keyEntry.value);
+          if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) fail();
+          sov(
+            output,
+            keyEntry.value,
+            copy(descriptor.value, depth + 1),
+            'Inline handler-state JSON record',
+          );
+        }
+        return output;
+      } finally {
+        active.length -= 1;
+      }
+    };
+    try {
+      return copy(input, 0);
+    } catch {
+      fail();
+    }
+  };
   // SPEC §4.8/§5.2: state/query values may update visible attributes, but may not mint or replace
   // compiler-owned lowered IR. These arrays are generated from core's single semantic manifest so
   // the always-loaded bootstrap, modular runtime, and compiler output gate share one denominator.
@@ -339,10 +448,10 @@ function installInlineKovoLoader(im) {
   const rh = (el) =>
     bns.closestElement(el, '[kovo-state]') ??
     (bns.readAttribute(el, 'kovo-state') === null ? null : el);
-  const rs = (el) => {
+  const rs = (stateHost) => {
     try {
       return bns.call(intrinsicJsonParse, intrinsicJson, [
-        bns.readAttribute(rh(el), 'kovo-state') ?? '{}',
+        bns.readAttribute(stateHost, 'kovo-state') ?? '{}',
       ]);
     } catch {
       return {};
@@ -1917,51 +2026,70 @@ function installInlineKovoLoader(im) {
       bns.preventDelegatedEventDefault(event);
       event.kovoNativeDefaultManaged = true;
     }
-    const params = {};
-    const pt = rp(el);
-    const state = rs(el);
     const st = rh(el);
-    const context = { params, state, signal: hs(el) };
-    const attributes = bns.snapshotElementAttributes(el);
-    for (let index = 0; index < attributes.length; index += 1) {
-      const attr = attributes[index];
-      if (!attr || bns.indexOf(attr.name, 'data-p-') !== 0) continue;
-      const name = pn(bns.slice(attr.name, 'data-p-'.length));
-      const type = rpt(pt, name);
-      const val = attr.value;
-      sov(params, name, type === 'number' ? ns(val) : type === 'boolean' ? val === 'true' : val);
-    }
-    const pc = [];
-    const references = mrs(refs);
-    for (let index = 0; index < references.length; index += 1) {
-      const reference = references[index];
-      if (!reference) continue;
-      const mod = await im(reference.url);
-      const fn = oe(mod, reference.exportName);
-      if (typeof fn !== 'function') throw Error('Handler export not found: ' + reference.source);
-      const scheduleKey = '__kovo_postCommitSchedule';
-      const previousSchedule = bns.getOwnSecurityPropertyDescriptor(globalThis, scheduleKey);
-      const scheduler = (callback) => {
-        if (typeof callback === 'function') {
-          bns.appendDenseSecurityValue(pc, callback, 'Inline post-commit callback snapshot');
-        }
-      };
-      sov(globalThis, scheduleKey, scheduler, 'Inline post-commit scheduler');
-      let run;
-      try {
-        run = bns.call(fn, undefined, [event, context]);
-      } finally {
-        rod(globalThis, scheduleKey, previousSchedule, 'Inline post-commit scheduler');
+    const stateHost = st || el;
+    const previousDispatch = queueGet(stateHost);
+    const currentDispatch = (async () => {
+      if (previousDispatch) {
+        try { await previousDispatch; } catch {}
       }
-      await run;
-    }
-    if (st) bns.setElementAttribute(st, 'kovo-state', js(state));
-    if (st) await as(st, state);
-    for (let index = 0; index < pc.length; index += 1) {
-      const callback = pc[index];
-      if (typeof callback !== 'function') continue;
-      try { bns.call(callback, undefined, []); } catch {}
-    }
+      const params = nr();
+      const pt = rp(el);
+      let state = sv(rs(stateHost));
+      const context = { params, state, signal: hs(el) };
+      const attributes = bns.snapshotElementAttributes(el);
+      for (let index = 0; index < attributes.length; index += 1) {
+        const attr = attributes[index];
+        if (!attr || bns.indexOf(attr.name, 'data-p-') !== 0) continue;
+        const name = pn(bns.slice(attr.name, 'data-p-'.length));
+        const type = rpt(pt, name);
+        const val = attr.value;
+        sov(params, name, type === 'number' ? ns(val) : type === 'boolean' ? val === 'true' : val);
+      }
+      const pc = [];
+      const queuedRefs = bns.readAttribute(el, 'on:' + eventType);
+      const references = queuedRefs ? mrs(queuedRefs) : [];
+      for (let index = 0; index < references.length; index += 1) {
+        const reference = references[index];
+        if (!reference) continue;
+        const mod = await im(reference.url);
+        const fn = oe(mod, reference.exportName);
+        if (typeof fn !== 'function') throw Error('Handler export not found: ' + reference.source);
+        const scheduleKey = '__kovo_postCommitSchedule';
+        const previousSchedule = bns.getOwnSecurityPropertyDescriptor(globalThis, scheduleKey);
+        const scheduler = (callback) => {
+          if (typeof callback === 'function') {
+            bns.appendDenseSecurityValue(pc, callback, 'Inline post-commit callback snapshot');
+          }
+        };
+        sov(globalThis, scheduleKey, scheduler, 'Inline post-commit scheduler');
+        try {
+          bns.call(fn, undefined, [event, context]);
+        } finally {
+          rod(globalThis, scheduleKey, previousSchedule, 'Inline post-commit scheduler');
+        }
+        state = sv(context.state);
+        context.state = state;
+      }
+      state = sv(context.state);
+      context.state = state;
+      bns.setElementAttribute(stateHost, 'kovo-state', js(state));
+      await as(stateHost, state);
+      for (let index = 0; index < pc.length; index += 1) {
+        const callback = pc[index];
+        if (typeof callback !== 'function') continue;
+        try { bns.call(callback, undefined, []); } catch {}
+      }
+    })();
+    let queueContinuation;
+    queueContinuation = (async () => {
+      try { await currentDispatch; } catch {}
+      finally {
+        if (queueGet(stateHost) === queueContinuation) queueDelete(stateHost);
+      }
+    })();
+    queueSet(stateHost, queueContinuation);
+    await currentDispatch;
   };
   const trigger = (type, target) => {
     void dispatch({ target, type });

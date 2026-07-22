@@ -28,12 +28,12 @@ import type { HmrImpactMetadata } from './types.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
-import { tabsTriggerClick as removeItem } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
   queries: { cart: {} },
+  state: () => ({ count: 0 }),
   render: ({ cart }) => (
-    <button onClick={() => removeItem(state, item.id)}>
+    <button onClick={() => { state.count += 1; }}>
       <span>{cart.count}</span>
     </button>
   ),
@@ -870,11 +870,10 @@ export const RealKv236 = component({
         fileName: 'src/real-kv437.tsx',
         source: `
 import { component } from '@kovojs/core';
-import { tabsTriggerClick as sendPayment } from '@kovojs/headless-ui/tabs';
 import { STRIPE_SECRET_KEY } from './secrets';
 
 export const RealKv437 = component({
-  render: () => <button onClick={() => sendPayment(STRIPE_SECRET_KEY)}>Pay</button>,
+  render: () => <button onClick={() => { void STRIPE_SECRET_KEY; }}>Pay</button>,
 });
 `,
       },
@@ -909,7 +908,7 @@ export const RealKv437 = component({
         help: SPEC §1 and §5.2 require compiler output to be auditable; unsafe output contexts cannot depend on implicit browser or runtime sanitization.",
         "Kovo Vite transform failed with 1 error diagnostic.
 
-      KV437 src/real-kv437.tsx:7:52 Server-only value captured into a client handler reaches the client bundle. import="STRIPE_SECRET_KEY" from="./secrets" form=named
+      KV437 src/real-kv437.tsx:6:47 Server-only value captured into a client handler reaches the client bundle. import="STRIPE_SECRET_KEY" from="./secrets" form=named
         help: Would lower to: a client handler module whose captured imports and same-file module constants are explicitly proven client-safe before emission.
         help: Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, any cross-module import not provably client-safe, or a same-file literal not explicitly public) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
         help: Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
@@ -1286,7 +1285,7 @@ export const RealKv437 = component({
     expect(res.body).not.toContain("from '/@id/@kovojs/browser/generated'");
     expect(res.body).not.toContain("from '@kovojs/browser/generated'");
     expect(res.body).toContain('export const CartBadge$button_click');
-    expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
+    expect(res.body).toContain('ctx.state.count += 1;');
   });
 
   it('serves Vite dev client modules through the shared URL ABI request key', async () => {

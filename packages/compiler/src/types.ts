@@ -594,6 +594,8 @@ export interface HandlerArrowBody {
   kind: 'block' | 'expression';
   propertyAccesses: readonly HandlerArrowBodyPropertyAccess[];
   references: readonly HandlerArrowBodyReference[];
+  /** The scanner found syntax that cannot inhabit a sync ABI; emission must omit the authored body. */
+  runtimeOmitted?: true;
   source: string;
   sourceStart: number;
 }

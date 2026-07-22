@@ -3346,10 +3346,10 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'realistic-reviewed-browser-operations',
         file: 'packages/compiler/src/security-operation-ir.security.test.ts',
         snippets: [
-          'accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects',
-          'tabsTriggerClick',
-          "Object(next)['focus']?.call(next)",
-          'requestSubmit',
+          'accepts synchronous state and timer effects without deferred state capture',
+          'state.open = true',
+          'setTimeout(() => { clearTimeout(timer); }, 0)',
+          'rejects deferred state access without a queued state transaction',
         ],
       },
       {
@@ -3512,7 +3512,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'string timer callbacks execute source text',
           'semantic root=serialized-browser-handler:onClick@',
           'closes a captured unknown receiver mutation instead of silently treating it as scalar code',
-          'verdict=closed:unknown-operation',
+          'verdict=closed:opaque-transfer',
         ],
       },
       {

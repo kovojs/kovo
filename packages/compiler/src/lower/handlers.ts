@@ -155,6 +155,9 @@ export function lowerEventHandlers(
                 kind: eventAttribute.zeroArgArrow.bodyKind,
                 propertyAccesses: loweredArrowPropertyAccesses(eventAttribute.zeroArgArrow),
                 references: loweredArrowReferences(eventAttribute.zeroArgArrow),
+                ...(eventAttribute.zeroArgArrow.runtimeOmitted === true
+                  ? { runtimeOmitted: true as const }
+                  : {}),
                 source: eventAttribute.zeroArgArrow.body,
                 sourceStart: eventAttribute.zeroArgArrow.bodySourceStart,
               },
@@ -642,7 +645,16 @@ export function capturesUnserializableReferences(
   appendAllowedStrings(allowed, SAFE_HANDLER_GLOBAL_REFERENCES, 'Safe handler globals');
   appendAllowedStrings(
     allowed,
-    ['clearTimeout', 'ctx', 'event', 'setTimeout', 'state', 'undefined'],
+    [
+      'clearInterval',
+      'clearTimeout',
+      'ctx',
+      'event',
+      'setInterval',
+      'setTimeout',
+      'state',
+      'undefined',
+    ],
     'Framework handler globals',
   );
   appendAllowedStrings(

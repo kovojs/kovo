@@ -423,7 +423,7 @@ export const ScalarCapture = component({
 
   it('allows the finite globalThis timer door without making globalThis blanket-safe', () => {
     const allowed = compile(
-      'return globalThis.setInterval(function () { state.count += 1; }, 10);',
+      'state.count += 1; globalThis.setInterval(() => { clearInterval(0); }, 10);',
     );
     const allowedCodes = allowed.diagnostics.map((diagnostic) => diagnostic.code);
     expect(allowedCodes).not.toContain('KV201');

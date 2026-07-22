@@ -1315,8 +1315,8 @@ export const sendReceipt = defineTask('email/send-receipt', {
   it('records zero-argument JSX arrow attribute body facts', () => {
     const source = `
 export const CartActions = component({
-  render: () => (
-    <button onClick={() => { log('item.id'); state.count += item.quantity; }}>Add</button>
+  render: ({ item }) => (
+    <button onClick={() => { state.count += Number(item.quantity); }}>Add</button>
   ),
 });
 `;
@@ -1325,7 +1325,7 @@ export const CartActions = component({
 
     expect(click?.domEventName).toBe('click');
     expect(click?.zeroArgArrow).toEqual({
-      body: "log('item.id'); state.count += item.quantity;",
+      body: 'state.count += Number(item.quantity);',
       bodyEnd: source.indexOf(' }}>Add') + 1,
       bodyKind: 'block',
       bodyLocalNames: [],
@@ -1341,7 +1341,6 @@ export const CartActions = component({
         {
           elementParamEligible: true,
           end: source.indexOf('item.quantity') + 'item.quantity'.length,
-          inferredType: 'number',
           path: 'item.quantity',
           start: source.indexOf('item.quantity'),
           terminalName: 'quantity',
@@ -1350,15 +1349,15 @@ export const CartActions = component({
       bodyReferences: [
         {
           elementParamEligible: false,
-          end: source.indexOf('log(') + 'log'.length,
-          name: 'log',
-          start: source.indexOf('log('),
-        },
-        {
-          elementParamEligible: false,
           end: source.indexOf('state.count') + 'state'.length,
           name: 'state',
           start: source.indexOf('state.count'),
+        },
+        {
+          elementParamEligible: false,
+          end: source.indexOf('Number(') + 'Number'.length,
+          name: 'Number',
+          start: source.indexOf('Number('),
         },
         {
           elementParamEligible: false,
@@ -1367,21 +1366,12 @@ export const CartActions = component({
           start: source.indexOf('item.quantity'),
         },
       ],
-      bodyStart: source.indexOf(" log('item.id');"),
-      bodySourceStart: source.indexOf("log('item.id');"),
+      bodyStart: source.indexOf(' state.count += Number(item.quantity);'),
+      bodySourceStart: source.indexOf('state.count += Number(item.quantity);'),
       bodyTypeScriptErasures: [],
       bodyUnsupportedTypeScript: [],
-      references: ['log', 'state', 'item'],
+      references: ['state', 'Number', 'item'],
       securityOperations: [
-        {
-          door: 'reviewed-client-export',
-          kind: 'browser.framework.call',
-          span: {
-            end: source.indexOf("log('item.id')") + "log('item.id')".length,
-            start: source.indexOf("log('item.id')"),
-          },
-          target: 'log',
-        },
         {
           door: 'compiler-state',
           kind: 'browser.state.write',

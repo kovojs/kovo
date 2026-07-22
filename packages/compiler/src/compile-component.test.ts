@@ -351,7 +351,7 @@ export const AddToCartForm = component({
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  meterRootAttributes,
+  meterValueState as meterRootAttributes,
   meterValueState as _meterValueState,
   type MeterDataState,
 } from '@kovojs/headless-ui/meter';
@@ -371,12 +371,11 @@ export const GalleryMeterDemo = component({
       />
       <button
         type="button"
-        onClick={() => {
-          state.dataState = _meterValueState({ value: state.value }).state;
-        }}
+        onClick={meterRootAttributes}
       >
         Optimize capacity
       </button>
+      <button type="button" onClick={_meterValueState}>Recalculate</button>
     </section>
   ),
 });
@@ -385,8 +384,11 @@ export const GalleryMeterDemo = component({
 
     const server = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(result.diagnostics.every((diagnostic) => diagnostic.code === 'KV210')).toBe(true);
-    expect(server).not.toContain('meterRootAttributes');
+    expect(
+      result.diagnostics.every((diagnostic) => diagnostic.code === 'KV210'),
+      JSON.stringify(result.diagnostics),
+    ).toBe(true);
+    expect(server).not.toContain('meterValueState as meterRootAttributes');
     expect(server).not.toContain('meterValueState as _meterValueState');
     expect(server).toContain('type MeterDataState');
   });

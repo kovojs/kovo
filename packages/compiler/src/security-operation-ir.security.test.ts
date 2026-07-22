@@ -57,7 +57,7 @@ import { component } from '@kovojs/core';
 import { endpoint } from '@kovojs/server';
 export const Demo = component({
   state: () => ({ count: 0 }),
-  render: () => <button onClick={() => { event.preventDefault(); state.count += 1; }}>Run</button>,
+  render: () => <button onClick={() => { state.count += 1; }}>Run</button>,
 });
 export const api = endpoint('/api', {
   async handler(_input, ctx) {
@@ -71,7 +71,7 @@ export const api = endpoint('/api', {
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
     expect(browserSource).toContain(
-      'securityHandler([{"door":"delegated-event","kind":"browser.event.control","target":"event.preventDefault"},{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}],',
+      'securityHandler([{"door":"compiler-state","kind":"browser.state.write","target":"state.count"}],',
     );
     expect(serverSource).toContain('__kovoSecurityOperationManifest_v1');
     expect(serverSource).toContain('kovo-security-operation-ir/v1');
@@ -418,25 +418,932 @@ export const Typed = component({
     expect(serverSource).toContain('on:visible=');
   });
 
-  it('accepts realistic state, delegated-event, reviewed primitive, focus, form, and timer effects', () => {
+  it('accepts synchronous state and timer effects without deferred state capture', () => {
     const result = compile(`
-import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
 export const Demo = component({
   state: () => ({ open: false, value: '' }),
   render: () => <form onSubmit={() => {
-    const nextState = tabsTriggerClick(Object(event), { disabled: false, value: state.value });
-    state.open = nextState?.selected === true;
-    const root = Object(event)['target']?.closest?.('[data-demo]');
-    const next = Object(root)?.querySelector?.('[data-next]');
-    Object(next)['focus']?.call(next);
-    Object(event)['target']?.requestSubmit?.();
-    const timer = setTimeout(() => { state.value = 'ready'; }, 0);
+    state.open = true;
+    const timer = setTimeout(() => { clearTimeout(timer); }, 0);
     clearTimeout(timer);
-  }}><button data-next>Save</button></form>,
+  }} id="demo-form"><button id="next">Save</button></form>,
 });
 `);
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+  });
+
+  it.each([
+    "setTimeout('state.count += 1', 0)",
+    'setInterval(`state.count += ${1}`, 0)',
+    "window.setInterval('state.count += 1', 0)",
+    'window.setTimeout(`state.count += 1`, 0)',
+    "globalThis.setTimeout('state.count += 1', 0)",
+    'globalThis.setInterval(`state.count += ${1}`, 0)',
+  ])('rejects source-text timer callback execution: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "setTimeout((node) => node.replaceChildren('owned'), 0, event.target)",
+    'setInterval(() => {}, event.detail)',
+    'window.setTimeout(() => {}, 0, state.value)',
+    'globalThis.setInterval(() => {}, Number(state.delay), event.target)',
+    'setTimeout((value = event) => { String(value); }, 1)',
+    'setTimeout(({ target } = event) => { void target; }, 1)',
+    'setTimeout((value = state) => { Object.assign(value.profile, { admin: true }); }, 1)',
+    'setTimeout(function () { void this.pwn; }, 1)',
+    'setTimeout(function () { const receiver = this; void receiver.pwn; }, 1)',
+  ])('rejects unclosed timer delay or variadic callback arguments: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ delay: 0, value: '' }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'clearTimeout()',
+    'clearTimeout(1, 2)',
+    'clearTimeout(event)',
+    'const cancel = clearInterval; cancel(event)',
+    'window.clearTimeout(event)',
+  ])('rejects unclosed timer cancellation handles: %s', (operation) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'timer cancellation',
+    );
+  });
+
+  it.each(['clearTimeout.bind(undefined)(event)', 'clearInterval.call(undefined, event)'])(
+    'rejects timer invocation indirection: %s',
+    (operation) => {
+      expect(
+        kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each(['Promise.resolve(1)', "void Promise.reject('expected')", 'Promise.all([1])'])(
+    'rejects asynchronous global work in synchronous handlers: %s',
+    (operation) => {
+      expect(
+        kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    'state',
+    'state.profile',
+    'true ? state.profile : {}',
+    '(state.profile, state.profile)',
+    'Object(state.profile)',
+  ])('rejects state mutation hidden behind Object.assign target %s', (target) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0, profile: { admin: false } }),
+  render: () => <button onClick={() => { Object.assign(${target}, { admin: true }); }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    '`value:${foreign}`',
+    '+foreign',
+    '({ [foreign]: 1 })',
+    '({})[foreign]',
+    '[...foreign]',
+    'for (let value of foreign) { void value; }',
+    'for (let key in foreign) { void key; }',
+    'class Derived extends foreign {}',
+  ])('rejects imported authority in implicit executable protocols: %s', (operation) => {
+    expect(
+      kv449(`
+import { foreign } from './foreign.client.js';
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "event + ''",
+    '`${event}`',
+    '({ [event]: 1 })',
+    '({})[event]',
+    '[...event]',
+    '({ ...event })',
+    'for (let value of event) { void value; }',
+    'for (let key in event) { void key; }',
+    "'target' in event",
+    '+event',
+    'class Derived extends event {}',
+  ])('rejects raw event authority in implicit executable protocols: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'void (true ? event : {}).pwn',
+    'void (event || {}).pwn',
+    'void (0, event).pwn',
+    'void ({ value: event }.value).pwn',
+    'void ([event][0]).pwn',
+    'String((true ? event : {}).pwn)',
+  ])('rejects event authority projected through expression wrappers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'if ((true ? state.profile : {}).admin) state.open = true',
+    'if ((state.profile || {}).admin) state.open = true',
+    'if ((0, state.profile).admin) state.open = true',
+    'if (({ value: state.profile }.value).admin) state.open = true',
+    'if ([state.profile][0].admin) state.open = true',
+  ])('rejects state reads projected through expression wrappers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ open: false, profile: { admin: false } }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    '(true ? state.profile : {})[key] = true',
+    '(0, state.profile)[key] = true',
+    '(state.profile || {})[key] = true',
+    '(true ? state.profile : {})[key]++',
+    'delete (true ? state.profile : {})[key]',
+  ])('rejects state mutation projected through expression wrappers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ profile: { admin: false } }),
+  render: () => <button onClick={() => { const key = 'admin'; ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'const { profile } = true ? state : {}; profile.admin = true',
+    'const [profile] = true ? state.items : []; profile.admin = true',
+    'let profile; ({ profile } = (0, state)); profile.admin = true',
+    'let profile; [profile] = (state.items || []); profile.admin = true',
+  ])('rejects hidden state aliases destructured from expression wrappers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ items: [{ admin: false }], profile: { admin: false } }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    '[state.profile].map((profile) => { profile.admin = true; })',
+    'const profiles = [state.profile]; profiles.map((profile) => { profile.admin = true; })',
+  ])('rejects state aliases smuggled through reviewed local-array callbacks: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ profile: { admin: false } }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('canonicalizes state aliases and method receivers in the emitted audit witness', () => {
+    const result = compile(`
+export const Demo = component({
+  state: () => ({ profile: { count: 0 }, rows: [] }),
+  render: () => <button onClick={() => {
+    const model = state;
+    model.profile.count = 1;
+    model.rows.push(2);
+  }}>Run</button>,
+});
+`);
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
+    expect(clientSource).toContain('"target":"state.profile.count"');
+    expect(clientSource).toContain('"target":"state.rows.push"');
+    expect(clientSource).not.toContain('"target":"model.profile.count"');
+  });
+
+  it('matches the generated runtime limit of 256 distinct browser operations', () => {
+    const source = (count: number) => `
+export const Demo = component({
+  state: () => ({}),
+  render: () => <button onClick={() => {
+    ${Array.from({ length: count }, (_, index) => `state.value${index} = ${index};`).join('\n')}
+  }}>Run</button>,
+});
+`;
+    expect(kv449(source(256))).toEqual([]);
+
+    const overflow = compile(source(257));
+    const clientSource = overflow.files.find((file) => file.kind === 'client')?.source ?? '';
+    expect(
+      overflow.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === 'KV449' && diagnostic.message.includes('at most 256 distinct'),
+      ),
+    ).toBe(true);
+    expect(clientSource).toContain('browser handler omitted from synchronous output');
+    expect(clientSource).not.toContain('"target":"state.value256"');
+  });
+
+  it.each([
+    '(true ? event : {})[key] = 1',
+    '(0, event)[key] = 1',
+    '(event || {})[key] = 1',
+    '(true ? event : {})[key]++',
+    'delete (true ? event : {})[key]',
+  ])('rejects event mutation projected through expression wrappers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { const key = 'pwn'; ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'try { throw event } catch (error) { state.value = String(error); }',
+    "try { throw event } catch (error) { state.value = error + ''; }",
+    'try { throw event } catch ({ target }) { void target; }',
+    'try { throw event } catch ([value]) { void value; }',
+    "try { state.value = 'x'; } finally { state.value = 'y'; }",
+    'throw event',
+  ])('rejects exception-control provenance laundering: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ value: '' }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'const { x = state.profile } = {}; x.admin = true',
+    'const [x = state.profile] = []; x.admin = true',
+    'let x = {}; ({ x = state.profile } = {}); x.admin = true',
+    'let x = {}; [x = state.profile] = []; x.admin = true',
+    'const { x = event } = {}; String(x)',
+    '[{}].map(({ x = state.profile }) => { x.admin = true; })',
+    '[{}].map(({ x = event }) => String(x))',
+    '[{}].map((value) => { const { x = state.profile } = value; x.admin = true; })',
+    '[{}].map((value = event) => String(value))',
+  ])('rejects provenance laundering through default initializers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ profile: { admin: false } }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "const x = event.target.valueOf(); x.replaceChildren('owned')",
+    "event.target.toString(); event.target.replaceChildren('owned')",
+    "event.target.querySelectorAll('*').item(0)?.replaceChildren('owned')",
+    "event.target.querySelectorAll('*')[0]?.replaceChildren('owned')",
+  ])('rejects DOM authority laundered through non-scalar read results: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'String(event.detail)',
+    'Number(event.detail)',
+    'Boolean(event.detail)',
+    'Object(event.detail)',
+    'isFinite(event.detail)',
+    "String({ toString() { state.count += 1; return ''; } })",
+    "JSON.stringify({ toJSON() { state.count += 1; return ''; } })",
+  ])('rejects unproved coercion or object protocols through reviewed globals: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'event.detail()',
+    'event.detail?.()',
+    'event.detail.call(undefined)',
+    'event.detail.apply(undefined, [])',
+    'event.detail.run()',
+    'const run = event.detail; run()',
+    'const box = { run: event.detail }; box.run()',
+    'const values = [event.detail]; values[0]()',
+  ])('rejects direct or transitively contained event-payload execution: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "const box = { node: event.target }; box.node.replaceChildren('owned')",
+    "const values = [event.target]; values[0].replaceChildren('owned')",
+    "let box; box = { node: event.target }; box.node.replaceChildren('owned')",
+  ])('rejects DOM authority laundered through local containers: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "const box = { send: fetch }; box.send('/admin')",
+    "const output = console; output.log('owned')",
+    'queueMicrotask(() => {})',
+    'const enqueue = queueMicrotask; enqueue(() => {})',
+  ])('rejects unknown ambient executables and their local aliases: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "const C = WebSocket; new C('wss://example.test')",
+    "new EventSource('/events')",
+    'new XMLHttpRequest()',
+    "new Worker('/worker.js')",
+    "new BroadcastChannel('updates')",
+  ])('rejects browser constructor execution and constructor aliases: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "const get = () => event.target; const node = get(); node.replaceChildren('owned')",
+    'const get = () => event.detail; get()()',
+  ])('rejects local-call return authority without an exact finite summary: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    ['ambient callback', '', 'console.log'],
+    ['imported callback', "import { report } from './report.client.js';", 'report'],
+    ['state-derived callback', '', 'state.onChange'],
+  ])(
+    'rejects %s hidden in reviewed framework callback options',
+    (_label, declaration, callback) => {
+      expect(
+        kv449(`
+${declaration}
+import { toggleTriggerClick } from '@kovojs/headless-ui/toggle';
+export const Demo = component({
+  state: () => ({ count: 0, onChange: null }),
+  render: () => <button onClick={() => {
+    toggleTriggerClick(event, { pressed: false }, { onPressedChange: ${callback} });
+  }}>Run</button>,
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it('rejects inline framework calls until their exact export summary is generated', () => {
+    expect(
+      kv449(`
+import { toggleTriggerClick } from '@kovojs/headless-ui/toggle';
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => {
+    toggleTriggerClick(event, { pressed: false }, {
+      onPressedChange: () => { state.count += 1; },
+    });
+  }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('does not confuse import identity with a positional/container security summary', () => {
+    expect(
+      kv449(`
+import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
+export const Demo = component({
+  render: () => <button onClick={() => {
+    tabsTriggerClick(event, { itemValue: 'x' }, event);
+  }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('rejects every tagged template while ordinary template data stays finite', () => {
+    expect(
+      kv449(`
+export const Demo = component({
+  render: () => <button onClick={() => {
+    const { ['set' + 'Timeout']: tag } = event.target.ownerDocument.defaultView;
+    tag\`globalThis.__kovoPwned = 1\`;
+  }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 1, label: '' }),
+  render: () => <button onClick={() => {
+    state.label = \`count:\${state.count}\`;
+  }}>Run</button>,
+});
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    'event.preventDefault()',
+    'event.target.focus()',
+    "event.target.getAttribute('data-value')",
+    'event.target.form?.requestSubmit()',
+    'state.value = event.target.value',
+  ])('rejects raw event/DOM dispatch that a synthetic event can own-shadow: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ value: '' }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'state.saved()',
+    'state.saved?.()',
+    "state['saved']()",
+    'state.saved.call(undefined)',
+    'state.saved.apply(undefined, [])',
+    'state.saved.bind(undefined)()',
+    'setTimeout(state.saved, 0)',
+    'function invoke(value) { value(); } invoke(state.saved)',
+  ])('closes state-derived executable use: %s', (operation) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(
+      diagnostics.some((diagnostic) => diagnostic.message.includes('state-derived JSON')),
+    ).toBe(true);
+  });
+
+  it('keeps closed scalar state methods and JSON insertions in the finite language', () => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  state: () => ({ items: ['b', 'a'], label: 'aba', needle: 'a', open: false, value: 'x' }),
+  render: () => <button onClick={() => {
+    state.items.push(String(state.value));
+    state.open = state.items.includes('a');
+    state.label = state.label.replaceAll(String(state.needle), String(state.value));
+  }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it.each([
+    "state.label.replace(item.fn, 'x')",
+    "state.label.replace('x', item.fn)",
+    "state.label.replaceAll(item.fn, 'x')",
+    "state.label.replaceAll('x', item.fn)",
+    'state.items.includes(item.fn)',
+    'state.items.with(0, item.fn)',
+    'state.items.toSpliced(0, 0, item.fn)',
+  ])('does not treat reviewed state-call arguments as scalar capture proof: %s', (operation) => {
+    const result = compile(`
+export const Demo = component({
+  state: () => ({ items: [], label: 'a' }),
+  render: ({ item }) => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(true);
+    expect(sources).not.toContain('data-p-fn');
+    expect(sources).not.toContain('ctx.params.fn');
+  });
+
+  it.each(["state.label.replace('x', state.saved)", "state.label.replaceAll('x', state.saved)"])(
+    'closes state-derived replace executable positions: %s',
+    (operation) => {
+      expect(
+        kv449(`
+export const Demo = component({
+  state: () => ({ label: 'a', saved: null }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it('accepts explicitly scalarized captured arguments at closed scalar sinks', () => {
+    const result = compile(`
+export const Demo = component({
+  state: () => ({ items: ['a'], label: 'a' }),
+  render: ({ item }) => <button onClick={() => {
+    state.label = state.label.replaceAll('a', String(item.id));
+    state.items.includes(String(item.id));
+  }}>Run</button>,
+});
+`);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(false);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV449')).toBe(false);
+    expect(sources).toContain('data-p-id');
+    expect(sources).toContain('ctx.params.id');
+  });
+
+  it('does not treat an imported helper parameter as scalar without an explicit coercion', () => {
+    const result = compile(`
+import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
+export const Demo = component({
+  render: ({ item }) => <button onClick={() => { tabsTriggerClick(item.fn); }}>Run</button>,
+});
+`);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(true);
+    expect(sources).not.toContain('data-p-fn');
+    expect(sources).not.toContain('ctx.params.fn');
+  });
+
+  it.each([
+    'state.saved = true && item.fn',
+    'state.saved = item.fn ?? null',
+    'state.saved = item.enabled ? item.fn : null',
+    'const saved = item.fn ?? null; state.saved = saved',
+    'state.saved = { nested: item.fn }',
+  ])('does not scalarize opaque captures through value-preserving syntax: %s', (operation) => {
+    const result = compile(`
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: ({ item }) => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(true);
+    expect(sources).not.toContain('data-p-fn');
+    expect(sources).not.toContain('ctx.params.fn');
+  });
+
+  it.each([
+    "state.saved = event.target.closest('form')",
+    'function make() { return () => undefined; } state.saved = make()',
+    'function make() { return { value: 1 }; } state.saved = make().value',
+    'state.saved = Proxy.revocable({}, {}).proxy',
+  ])('rejects opaque call results written into state: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    "state.items.join({ toString() { state.count += 1; return ','; } })",
+    'state.items.slice({ valueOf() { state.count += 1; return 0; } })',
+    "state.label.localeCompare('b', undefined, { get sensitivity() { state.count += 1; return 'base'; } })",
+    'state.items.map((value) => value)',
+  ])('rejects state methods outside the closed scalar vocabulary: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0, items: ['a'], label: 'a' }),
+  render: () => <button onClick={() => { ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('keeps exact local-array transforms separate from opaque local receivers', () => {
+    const reviewed = kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => {
+    const values = [1, 2];
+    state.count = values.map((value) => value + 1).length;
+  }}>Run</button>,
+});
+`);
+    const opaque = kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => {
+    const values = event.detail;
+    state.count = values.map((value) => value).length;
+  }}>Run</button>,
+});
+`);
+
+    expect(reviewed).toEqual([]);
+    expect(opaque).not.toEqual([]);
+  });
+
+  it('keeps state/event roots tied to lexical scope rather than same-spelled locals', () => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={() => {
+    const values = [1];
+    state.count = values.map((state) => state + 1).length;
+    { const event = 'local'; String(event); }
+  }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it.each([
+    '[state.count] = [1]',
+    '({ value: state.count } = { value: 1 })',
+    'state[key] = 1',
+    'delete state[key]',
+    'state.items.push(...event.detail)',
+  ])('rejects computed, destructured, and spread-protocol state operations: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ count: 0, items: [] }),
+  render: () => <button onClick={() => { const key = 'count'; ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    'void state[key]',
+    'if (state[key]) state.open = true',
+    'const model = state; void model[key]',
+  ])('rejects computed state reads: %s', (operation) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ open: false }),
+  render: () => <button onClick={() => { const key = 'open'; ${operation}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it.each(['event.detail', 'event.clientX', 'event.data'])(
+    'does not treat raw event field names as JSON scalar proof: %s',
+    (eventValue) => {
+      expect(
+        kv449(`
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: () => <button onClick={() => { state.saved = ${eventValue}; }}>Run</button>,
+});
+`),
+      ).not.toEqual([]);
+    },
+  );
+
+  it.each([
+    ['async handler', 'async () => { state.count += 1; }'],
+    ['await', 'async () => { await state.count; }'],
+    ['returned thenable', '() => ({ then() { state.count += 1; } })'],
+    ['explicit value return', '() => { return event.detail; }'],
+  ])('rejects %s outside synchronous-void handler semantics', (_label, handler) => {
+    const diagnostics = kv449(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={${handler}}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+  });
+
+  it('omits a rejected async root instead of emitting await into the synchronous client ABI', () => {
+    const result = compile(`
+export const Demo = component({
+  state: () => ({ count: 0 }),
+  render: () => <button onClick={async () => { await state.count; }}>Run</button>,
+});
+`);
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV449')).toBe(true);
+    expect(clientSource).toContain('browser handler omitted from synchronous output');
+    expect(clientSource).not.toContain('await state.count');
+  });
+
+  it.each([
+    ['top-level await', 'await Promise.resolve()'],
+    ['top-level yield', 'yield 1'],
+  ])('omits rejected %s syntax from the synchronous diagnostic artifact', (_label, body) => {
+    const result = compile(`
+export const Demo = component({
+  render: () => <button onClick={() => { ${body}; }}>Run</button>,
+});
+`);
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV449')).toBe(true);
+    expect(clientSource).toContain('browser handler omitted from synchronous output');
+    expect(clientSource).not.toContain(body);
+  });
+
+  it.each([
+    'state.saved = helper',
+    'state.saved = globalThis.fetch',
+    'state.saved = { nested: [true ? helper : null] }',
+    'state.items.push(helper)',
+    'state.items.unshift(helper)',
+    'state.items.splice(0, 0, helper)',
+    'state.items.fill(helper)',
+  ])('closes executable values inserted into state: %s', (write) => {
+    const diagnostics = kv449(`
+function helper() { return 1; }
+export const Demo = component({
+  state: () => ({ items: [], saved: null }),
+  render: () => <button onClick={() => { ${write}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(
+      diagnostics.some(
+        (diagnostic) =>
+          diagnostic.message.includes(
+            "outside the compiler's closed JSON/scalar state vocabulary",
+          ) ||
+          diagnostic.message.includes('is not a reviewed callable data method') ||
+          diagnostic.message.includes('outside the closed own-data/scalar vocabulary'),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      'imported executable',
+      "import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';",
+      'state.saved = tabsTriggerClick',
+    ],
+    [
+      'nested callable shadow container',
+      'const helpers = { map(value) { return value; } };',
+      'state.saved = { map: helpers.map }',
+    ],
+  ])('closes %s written to state', (_label, setup, write) => {
+    const diagnostics = kv449(`
+${setup}
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: () => <button onClick={() => { ${write}; }}>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+  });
+
+  it('does not let a state write terminate element-param proof before executable state use', () => {
+    const result = compile(`
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: ({ item }) => <button onClick={() => {
+    state.saved = item.fn;
+    state.saved();
+  }}>Run</button>,
+});
+`);
+    const sources = result.files.map((file) => file.source).join('\n');
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV201')).toBe(true);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'KV449')).toBe(true);
+    expect(sources).not.toContain('data-p-fn');
+    expect(sources).not.toContain('ctx.params.fn');
+  });
+
+  it.each([
+    'const carrier = new Proxy({}, {}); state.saved = carrier',
+    'const carrier = Proxy.revocable({}, {}); state.saved = carrier.proxy',
+  ])('statically excludes direct Proxy construction from handler state: %s', (write) => {
+    expect(
+      kv449(`
+export const Demo = component({
+  state: () => ({ saved: null }),
+  render: () => <button onClick={() => { ${write}; }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('rejects parser-proven non-JsonValue component initial state', () => {
+    const diagnostics = kv449(`
+const helper = () => 1;
+export const Demo = component({
+  state: () => ({ nested: { saved: helper }, missing: undefined }),
+  render: () => <button>Run</button>,
+});
+`);
+
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics[0]?.message).toContain('component state initializer');
+    expect(diagnostics[0]?.message).toContain('cannot inhabit JsonValue');
   });
 
   it.each([
@@ -526,20 +1433,25 @@ export const Demo = component({
     ).not.toEqual([]);
   });
 
-  it('tracks finite timer operations while preserving scalar event reads', () => {
+  it.each([
+    `setTimeout(() => { state.value = 'ready'; }, 0);`,
+    `const model = state; setTimeout(() => { model.value = 'ready'; }, 0);`,
+    `const value = String(state.value); setTimeout(() => { void value; }, 0);`,
+    `function later() { state.value = 'ready'; } setTimeout(later, 0);`,
+  ])('rejects deferred state access without a queued state transaction: %s', (operation) => {
     const result = compile(`
 export const Demo = component({
     state: () => ({ value: '' }),
     render: () => <input onInput={() => {
-      const value = event.target?.value ?? '';
-      setTimeout(() => { state.value = String(value); }, 0);
+      ${operation}
   }} />,
 });
 `);
-    const browserSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
-
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449')).toEqual([]);
-    expect(browserSource).toContain('"kind":"browser.timer.schedule"');
+    const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV449');
+    expect(diagnostics).not.toEqual([]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'without a queued state transaction',
+    );
   });
 
   it.each([
@@ -570,7 +1482,7 @@ export const Demo = component({
 
     expect(diagnostics).not.toEqual([]);
     expect(diagnostics[0]?.message).toContain('browser assignment element.innerHTML');
-    expect(diagnostics[0]?.message).toContain('verdict=closed:unknown-operation');
+    expect(diagnostics[0]?.message).toContain('verdict=closed:opaque-transfer');
   });
 
   it('accepts exact structured server operations and named justified exceptional doors', () => {

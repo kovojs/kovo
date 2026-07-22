@@ -4,7 +4,9 @@ import type { EventElementLike } from './events.js';
 import {
   applySecurityIntrinsic,
   securityArrayAppend,
+  securityArrayIsArray,
   securityGetOwnPropertyDescriptor,
+  securityGetPrototypeOf,
   securityMap,
   securityMapDelete,
   securityMapForEach,
@@ -14,6 +16,7 @@ import {
   securityJsonStringify,
   securityNullRecord,
   securityNumber,
+  securityObjectKeys,
   securityRegExpExec,
   securityRegExpTest,
   securitySet,
@@ -39,6 +42,12 @@ import {
 const IslandAbortController = globalThis.AbortController;
 const IslandAbortSignal = globalThis.AbortSignal;
 const IslandAbortTypeError = globalThis.TypeError;
+const HandlerStateTypeError = globalThis.TypeError;
+const HandlerStateArrayPrototype = globalThis.Array.prototype;
+const HandlerStateObjectPrototype = globalThis.Object.prototype;
+const HANDLER_STATE_MAX_DEPTH = 64;
+const HANDLER_STATE_VALUE_BUDGET = 10_000;
+const HANDLER_STATE_TEXT_BUDGET = 1_000_000;
 const islandAbort = securityGetOwnPropertyDescriptor(
   IslandAbortController.prototype,
   'abort',
@@ -87,7 +96,7 @@ export function abortIslandSignalScope(scope: IslandSignalScope): void {
 
 export interface DelegatedHandlerContext {
   commit(): void;
-  context: HandlerContext;
+  context: HandlerContext<JsonValue>;
 }
 
 export function createDelegatedHandlerContext(
@@ -95,17 +104,21 @@ export function createDelegatedHandlerContext(
   stateHost: EventElementLike,
   islandSignalScope: IslandSignalScope,
 ): DelegatedHandlerContext {
-  const state = readElementState(element);
+  const context: HandlerContext<JsonValue> = {
+    params: readElementParams(element),
+    signal: createHandlerSignal(element, islandSignalScope),
+    // JSON.parse creates Object.prototype-backed records. Canonicalize before handler one so the
+    // state data channel never supplies inherited constructor/toString capabilities.
+    // Read from the already-selected queue/commit host. The target may be reparented while this
+    // dispatch waits behind an earlier state writer; re-resolving closest() would cross hosts.
+    state: snapshotHandlerStateJsonValue(readElementStateValue(stateHost)),
+  };
 
   return {
     commit() {
-      writeElementState(stateHost, state);
+      writeElementState(stateHost, context.state);
     },
-    context: {
-      params: readElementParams(element),
-      signal: createHandlerSignal(element, islandSignalScope),
-      state,
-    },
+    context,
   };
 }
 
@@ -162,7 +175,11 @@ function coerceElementParam(value: string, type: string | undefined): ElementPar
 /** @internal Read an island element's serialized `kovo-state`, defaulting malformed state to `{}` (SPEC §4.3). */
 export function readElementState(element: EventElementLike): JsonValue {
   const stateHost = readElementStateHost(element);
-  const state = stateHost ? readRuntimeElementAttribute(stateHost, 'kovo-state') : null;
+  return stateHost ? readElementStateValue(stateHost) : {};
+}
+
+function readElementStateValue(stateHost: EventElementLike): JsonValue {
+  const state = readRuntimeElementAttribute(stateHost, 'kovo-state');
   if (!state) return {};
 
   try {
@@ -174,8 +191,129 @@ export function readElementState(element: EventElementLike): JsonValue {
 
 /** @internal Serialize island state back onto the element's `kovo-state` attribute (SPEC §4.3). */
 export function writeElementState(element: EventElementLike, state: JsonValue): void {
-  const serialized = securityJsonStringify(state);
+  const serialized = securityJsonStringify(snapshotHandlerStateJsonValue(state));
   if (serialized !== undefined) setRuntimeElementAttribute(element, 'kovo-state', serialized);
+}
+
+interface HandlerStateSnapshotBudget {
+  text: number;
+  values: number;
+}
+
+/**
+ * Canonicalize one handler-produced state graph to bounded recursive own-data JsonValue.
+ *
+ * SPEC §4.3/§5.2: state is the only cross-handler data channel. Reading descriptors instead of
+ * properties rejects accessors, while copying into fresh arrays/null-prototype records prevents a
+ * proxy or later mutation from changing the value observed by the next handler or serializer.
+ */
+export function snapshotHandlerStateJsonValue(value: unknown): JsonValue {
+  try {
+    return snapshotHandlerStateJsonValueAt(
+      value,
+      securityWeakMap<object, true>(),
+      { text: 0, values: 0 },
+      0,
+    );
+  } catch {
+    throw new HandlerStateTypeError(
+      'KV449: handler state must be bounded recursive own-data JsonValue.',
+    );
+  }
+}
+
+function snapshotHandlerStateJsonValueAt(
+  value: unknown,
+  active: WeakMap<object, true>,
+  budget: HandlerStateSnapshotBudget,
+  depth: number,
+): JsonValue {
+  budget.values += 1;
+  if (budget.values > HANDLER_STATE_VALUE_BUDGET) throw new HandlerStateTypeError();
+
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    budget.text += value.length;
+    if (budget.text > HANDLER_STATE_TEXT_BUDGET) throw new HandlerStateTypeError();
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (value !== value || value === Infinity || value === -Infinity) {
+      throw new HandlerStateTypeError();
+    }
+    return value;
+  }
+  if (typeof value !== 'object' || depth >= HANDLER_STATE_MAX_DEPTH) {
+    throw new HandlerStateTypeError();
+  }
+  if (securityWeakMapGet(active, value) === true) throw new HandlerStateTypeError();
+  securityWeakMapSet(active, value, true);
+  try {
+    const prototype = securityGetPrototypeOf(value);
+    const keys = securityObjectKeys(value);
+    if (keys.length > HANDLER_STATE_VALUE_BUDGET - budget.values) {
+      throw new HandlerStateTypeError();
+    }
+
+    if (securityArrayIsArray(value)) {
+      const lengthDescriptor = securityGetOwnPropertyDescriptor(value, 'length');
+      if (
+        prototype !== HandlerStateArrayPrototype ||
+        lengthDescriptor === undefined ||
+        !('value' in lengthDescriptor) ||
+        typeof lengthDescriptor.value !== 'number' ||
+        lengthDescriptor.value < 0 ||
+        lengthDescriptor.value % 1 !== 0 ||
+        lengthDescriptor.value > HANDLER_STATE_VALUE_BUDGET ||
+        keys.length !== lengthDescriptor.value
+      ) {
+        throw new HandlerStateTypeError();
+      }
+      const output: JsonValue[] = [];
+      for (let index = 0; index < keys.length; index += 1) {
+        const keyEntry = securityGetOwnPropertyDescriptor(keys, index);
+        if (keyEntry === undefined || !('value' in keyEntry) || keyEntry.value !== `${index}`) {
+          throw new HandlerStateTypeError();
+        }
+        const descriptor = securityGetOwnPropertyDescriptor(value, keyEntry.value);
+        if (descriptor === undefined || !descriptor.enumerable || !('value' in descriptor)) {
+          throw new HandlerStateTypeError();
+        }
+        securityArrayAppend(
+          output,
+          snapshotHandlerStateJsonValueAt(descriptor.value, active, budget, depth + 1),
+          'Handler state JSON array',
+        );
+      }
+      return output;
+    }
+
+    if (prototype !== null && prototype !== HandlerStateObjectPrototype) {
+      throw new HandlerStateTypeError();
+    }
+    const output = securityNullRecord<JsonValue>();
+    for (let index = 0; index < keys.length; index += 1) {
+      const keyEntry = securityGetOwnPropertyDescriptor(keys, index);
+      if (keyEntry === undefined || !('value' in keyEntry) || typeof keyEntry.value !== 'string') {
+        throw new HandlerStateTypeError();
+      }
+      budget.text += keyEntry.value.length;
+      if (budget.text > HANDLER_STATE_TEXT_BUDGET) throw new HandlerStateTypeError();
+      const descriptor = securityGetOwnPropertyDescriptor(value, keyEntry.value);
+      if (descriptor === undefined || !descriptor.enumerable || !('value' in descriptor)) {
+        throw new HandlerStateTypeError();
+      }
+      output[keyEntry.value] = snapshotHandlerStateJsonValueAt(
+        descriptor.value,
+        active,
+        budget,
+        depth + 1,
+      );
+    }
+    return output;
+  } finally {
+    securityWeakMapDelete(active, value);
+  }
 }
 
 export function readElementStateHost(element: EventElementLike): EventElementLike | null {

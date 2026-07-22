@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import * as runtime from './client.js';
-import { dispatchDelegatedEvent, securityHandler } from './handlers.js';
+import { dispatchDelegatedEvent, handler, securityHandler } from './handlers.js';
+import type { HandlerContext } from './handler-context.js';
 import {
   FakeElement,
   FakeStatefulBindingElement,
@@ -21,6 +22,27 @@ const restoreClientModuleManifest = installTestClientModuleManifest([
   '/c/pass.client.js',
 ]);
 afterAll(restoreClientModuleManifest);
+
+// SPEC §4.3: the authoring helper rejects promise-like and value-returning implementations even
+// though TypeScript intentionally permits those shapes when assigning directly to a void callback.
+if (false) {
+  const sync = (_event: Event, _ctx: HandlerContext<unknown>) => {};
+  handler(sync);
+  handler<{ count: number }>((_event, ctx) => {
+    ctx.state.count += 1;
+  });
+  // @ts-expect-error Browser handlers cannot create an async continuation.
+  handler(async () => {});
+  // @ts-expect-error Explicit state typing must not reopen async handler returns.
+  handler<{ count: number }>(async () => {});
+  // @ts-expect-error A directly returned promise is asynchronous even without async syntax.
+  handler(() => Promise.resolve());
+  const maybeAsync = (): void | Promise<void> => {};
+  // @ts-expect-error Maybe-async implementations are not synchronous handler proofs.
+  handler(maybeAsync);
+  // @ts-expect-error Browser handler outcomes are discarded and must remain void.
+  handler(() => 1);
+}
 
 describe('generated finite security-operation manifest', () => {
   const invokeGeneratedHandler = (operations: unknown) =>
@@ -240,6 +262,135 @@ describe('delegated handler reference dispatch', () => {
     expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
   });
 
+  it('gives every chained handler a fresh own-data state snapshot', async () => {
+    const first = vi.fn((_event, ctx: { state: Record<string, unknown> }) => {
+      expect(Object.getPrototypeOf(ctx.state)).toBeNull();
+      expect(Object.getPrototypeOf(ctx.state.nested)).toBeNull();
+      expect(Object.hasOwn(ctx.state, '__proto__')).toBe(true);
+      expect(ctx.state.toString).toBeUndefined();
+      expect(ctx.state.constructor).toBeUndefined();
+      expect((ctx.state['__proto__'] as Record<string, unknown>).admin).toBe(true);
+      ctx.state = { count: 2 };
+    });
+    const second = vi.fn((_event, ctx: { state: Record<string, unknown> }) => {
+      expect(Object.getPrototypeOf(ctx.state)).toBeNull();
+      expect(ctx.state.constructor).toBeUndefined();
+      ctx.state.count = 3;
+    });
+    const importModule = vi.fn(async () => ({ first, second }));
+    const element = new FakeElement({
+      'kovo-state': '{"__proto__":{"admin":true},"nested":{"value":1}}',
+      'on:click': '/c/a.js#first /c/b.js#second',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).toHaveBeenCalledOnce();
+    expect(element.getAttribute('kovo-state')).toBe('{"count":3}');
+  });
+
+  it('never assimilates a synchronous handler return as a thenable', async () => {
+    const then = vi.fn(() => {
+      throw new Error('handler thenable executed');
+    });
+    const first = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+      return { then };
+    });
+    const second = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async () => ({ first, second }));
+    const element = new FakeElement({
+      'kovo-state': '{"count":0}',
+      'on:click': '/c/a.js#first /c/b.js#second',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+    expect(then).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
+    expect(element.getAttribute('kovo-state')).toBe('{"count":2}');
+  });
+
+  it('fails closed before a later chained handler can observe invalid state', async () => {
+    let accessorCalls = 0;
+    const invalidStateFactories: Array<[string, () => unknown]> = [
+      ['function', () => () => undefined],
+      ['class instance', () => new Date()],
+      ['undefined', () => undefined],
+      ['BigInt', () => 1n],
+      ['non-finite number', () => Number.POSITIVE_INFINITY],
+      [
+        'accessor',
+        () => {
+          const value = {};
+          Object.defineProperty(value, 'secret', {
+            enumerable: true,
+            get() {
+              accessorCalls += 1;
+              return 'secret';
+            },
+          });
+          return value;
+        },
+      ],
+      ['sparse array', () => new Array(1)],
+      [
+        'cycle',
+        () => {
+          const value: Record<string, unknown> = {};
+          value.self = value;
+          return value;
+        },
+      ],
+      [
+        'deep graph',
+        () => {
+          let value: Record<string, unknown> = {};
+          for (let depth = 0; depth < 65; depth += 1) value = { child: value };
+          return value;
+        },
+      ],
+      ['value budget', () => Array.from({ length: 10_000 }, () => 0)],
+      ['text budget', () => 'x'.repeat(1_000_001)],
+      [
+        'hostile proxy',
+        () =>
+          new Proxy(
+            {},
+            {
+              ownKeys() {
+                throw new Error('hostile ownKeys trap');
+              },
+            },
+          ),
+      ],
+    ];
+
+    for (const [label, createInvalidState] of invalidStateFactories) {
+      accessorCalls = 0;
+      const second = vi.fn();
+      const first = (_event: unknown, context: { state: unknown }) => {
+        context.state = createInvalidState();
+      };
+      const importModule = vi.fn(async () => ({ first, second }));
+      const element = new FakeElement({
+        'kovo-state': '{"safe":true}',
+        'on:click': '/c/a.js#first /c/b.js#second',
+      });
+
+      await expect(
+        dispatchDelegatedEvent({ target: element, type: 'click' }, importModule),
+        label,
+      ).rejects.toThrow('KV449: handler state must be bounded recursive own-data JsonValue.');
+      expect(second, label).not.toHaveBeenCalled();
+      expect(element.getAttribute('kovo-state'), label).toBe('{"safe":true}');
+      expect(accessorCalls, label).toBe(0);
+    }
+  });
+
   it('applies state bindings from the final state after chained handlers run', async () => {
     const host = new FakeStatefulBindingElement({
       'kovo-state': '{"count":1}',
@@ -313,19 +464,21 @@ describe('delegated handler reference dispatch', () => {
   });
 
   it('serializes overlapping delegated state writes for the same island', async () => {
-    let releaseFirst: (() => void) | undefined;
-    const firstCanFinish = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
+    let releaseFirstImport: (() => void) | undefined;
+    const firstImportCanFinish = new Promise<void>((resolve) => {
+      releaseFirstImport = resolve;
     });
     const calls: number[] = [];
-    const handler = vi.fn(async (_event, ctx: { state: { count: number } }) => {
+    const handler = vi.fn((_event, ctx: { state: { count: number } }) => {
       calls.push(ctx.state.count);
-      if (calls.length === 1) {
-        await firstCanFinish;
-      }
       ctx.state.count += 1;
     });
-    const importModule = vi.fn(async () => ({ increment: handler }));
+    let importCalls = 0;
+    const importModule = vi.fn(async () => {
+      importCalls += 1;
+      if (importCalls === 1) await firstImportCanFinish;
+      return { increment: handler };
+    });
     const element = new FakeElement({
       'kovo-state': '{"count":0}',
       'on:click': '/c/counter.client.js#increment',
@@ -333,10 +486,10 @@ describe('delegated handler reference dispatch', () => {
 
     const first = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
     const second = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
-    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(importModule).toHaveBeenCalledTimes(1));
 
-    expect(handler).toHaveBeenCalledTimes(1);
-    releaseFirst?.();
+    expect(handler).not.toHaveBeenCalled();
+    releaseFirstImport?.();
     await Promise.all([first, second]);
 
     expect(calls).toEqual([0, 1]);
@@ -399,17 +552,19 @@ describe('delegated handler reference dispatch', () => {
   });
 
   it('does not serialize delegated state writes across different islands', async () => {
-    let releaseFirst: (() => void) | undefined;
-    const firstCanFinish = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
+    let releaseFirstImport: (() => void) | undefined;
+    const firstImportCanFinish = new Promise<void>((resolve) => {
+      releaseFirstImport = resolve;
     });
-    const handler = vi.fn(async (_event, ctx: { state: { count: number } }) => {
-      if (ctx.state.count === 0) {
-        await firstCanFinish;
-      }
+    const handler = vi.fn((_event, ctx: { state: { count: number } }) => {
       ctx.state.count += 1;
     });
-    const importModule = vi.fn(async () => ({ increment: handler }));
+    let importCalls = 0;
+    const importModule = vi.fn(async () => {
+      importCalls += 1;
+      if (importCalls === 1) await firstImportCanFinish;
+      return { increment: handler };
+    });
     const firstElement = new FakeElement({
       'kovo-state': '{"count":0}',
       'on:click': '/c/counter.client.js#increment',
@@ -421,25 +576,20 @@ describe('delegated handler reference dispatch', () => {
 
     const first = dispatchDelegatedEvent({ target: firstElement, type: 'click' }, importModule);
     const second = dispatchDelegatedEvent({ target: secondElement, type: 'click' }, importModule);
-    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
 
-    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenCalledTimes(1);
     await second;
     expect(secondElement.getAttribute('kovo-state')).toBe('{"count":11}');
 
-    releaseFirst?.();
+    releaseFirstImport?.();
     await first;
     expect(firstElement.getAttribute('kovo-state')).toBe('{"count":1}');
   });
 
   it('continues the delegated state queue after a handler rejects', async () => {
-    let releaseFirst: (() => void) | undefined;
-    const firstCanFinish = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
-    });
-    const first = vi.fn(async (_event, ctx: { state: { count: number } }) => {
+    const first = vi.fn((_event, ctx: { state: { count: number } }) => {
       ctx.state.count += 1;
-      await firstCanFinish;
       throw new Error('boom');
     });
     const second = vi.fn((_event, ctx: { state: { count: number } }) => {
@@ -454,12 +604,12 @@ describe('delegated handler reference dispatch', () => {
     });
 
     const failed = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    const failure = expect(failed).rejects.toThrow('boom');
     await vi.waitFor(() => expect(first).toHaveBeenCalledTimes(1));
     element.setAttribute('on:click', '/c/pass.client.js#second');
     const passed = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
 
-    releaseFirst?.();
-    await expect(failed).rejects.toThrow('boom');
+    await failure;
     await passed;
 
     expect(element.getAttribute('kovo-state')).toBe('{"count":2}');

@@ -14,8 +14,9 @@ import { component } from '@kovojs/core';
 
 export const CartBadge = component({
   queries: { cart: {} },
+  state: () => ({ count: 0 }),
   render: () => (
-    <button onClick={() => removeItem(state, item.id)}>
+    <button onClick={() => { state.count += 1; }}>
       <span data-bind="cart.count">2</span>
     </button>
   ),
@@ -603,13 +604,14 @@ export const ProductGrid = component({
         domName: 'cart-badge',
         exportName: 'CartBadge',
         fragments: ['components/cart/cart-badge/cart-badge'],
+        mutableLocalState: true,
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
         securityOperations: [
           {
-            door: 'reviewed-client-export',
-            kind: 'browser.framework.call',
-            target: 'removeItem',
+            door: 'compiler-state',
+            kind: 'browser.state.write',
+            target: 'state.count',
           },
         ],
       },
@@ -632,13 +634,14 @@ export const ProductGrid = component({
         domName: 'cart-badge',
         exportName: 'CartBadge',
         fragments: ['components/cart/cart-badge/cart-badge'],
+        mutableLocalState: true,
         name: 'components/cart/cart-badge/cart-badge',
         queries: ['cart'],
         securityOperations: [
           {
-            door: 'reviewed-client-export',
-            kind: 'browser.framework.call',
-            target: 'removeItem',
+            door: 'compiler-state',
+            kind: 'browser.state.write',
+            target: 'state.count',
           },
         ],
       },
@@ -665,6 +668,7 @@ export const ProductGrid = component({
         'cart/add': ['cart'],
       },
       routes: ['/cart'],
+      statefulComponents: ['components/cart/cart-badge/cart-badge'],
     });
   });
 

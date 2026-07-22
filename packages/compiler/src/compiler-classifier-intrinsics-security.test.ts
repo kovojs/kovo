@@ -1826,9 +1826,9 @@ export const HandlerGuidanceProbe = component({
     }
 
     const diagnostic = result?.diagnostics.find((candidate) => candidate.code === 'KV201');
-    // A raw-global call is not a reviewed scalar sink, so the positive element-param language
-    // withholds item.id before rendering fail-closed guidance (SPEC §4.3/§5.2).
-    expect(diagnostic?.help).toContain('Element params: -');
+    // The scalar capture is safe to serialize even though the raw-global sink is independently
+    // rejected by KV449. Poisoned traversal still cannot forge the emitted guidance.
+    expect(diagnostic?.help).toContain('Element params: data-p-id');
     expect(diagnostic?.help).not.toContain('KOVO_KV201_GUIDANCE_INJECTION');
     expect(poisonHits).toBe(0);
   });
